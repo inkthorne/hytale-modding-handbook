@@ -155,7 +155,7 @@ Each chain step can specify a `RunTime` to control animation duration:
 
 **Using Replace for variable substitution:**
 
-Chains often use Replace interactions to swap variables between steps:
+Chains often use Replace interactions to inject a step's behavior via a context variable, falling back to a default:
 
 ```json
 {
@@ -164,15 +164,17 @@ Chains often use Replace interactions to swap variables between steps:
   "Next": [
     {
       "Type": "Replace",
-      "Variable": "SwingDirection",
-      "Value": "Left",
-      "Next": "Sword_Swing"
+      "Var": "Swing_Left",
+      "DefaultValue": {
+        "Interactions": ["Sword_Swing_Left"]
+      }
     },
     {
       "Type": "Replace",
-      "Variable": "SwingDirection",
-      "Value": "Right",
-      "Next": "Sword_Swing"
+      "Var": "Swing_Right",
+      "DefaultValue": {
+        "Interactions": ["Sword_Swing_Right"]
+      }
     }
   ]
 }
@@ -245,9 +247,9 @@ A separate interaction can set these flags:
   "Type": "Chaining",
   "ChainingAllowance": 2,
   "Next": [
-    "hytale:interactions/weapons/sword/swing_left",
-    "hytale:interactions/weapons/sword/swing_right",
-    "hytale:interactions/weapons/sword/swing_overhead"
+    "interactions/weapons/sword/swing_left",
+    "interactions/weapons/sword/swing_right",
+    "interactions/weapons/sword/swing_overhead"
   ]
 }
 ```
@@ -264,7 +266,7 @@ A separate interaction can set these flags:
       "RunTime": 0.5,
       "Effects": {
         "ItemAnimationId": "dagger_stab_1",
-        "WorldSoundEventId": "hytale:sounds/weapons/dagger_swoosh"
+        "WorldSoundEventId": "sounds/weapons/dagger_swoosh"
       },
       "Next": "Dagger_Damage_Light"
     },
@@ -329,14 +331,14 @@ NPCs use high `ChainingAllowance` values since AI timing is less precise:
     {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "Delay", "Duration": 0.3 },
+        { "Type": "Simple", "RunTime": 0.3 },
         "NPC_Skeleton_Swing_1"
       ]
     },
     {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "Delay", "Duration": 0.5 },
+        { "Type": "Simple", "RunTime": 0.5 },
         "NPC_Skeleton_Swing_2"
       ]
     }
@@ -576,9 +578,9 @@ The `Next` property is a map where **keys are charge time thresholds** (in secon
   "Type": "Charging",
   "AllowIndefiniteHold": true,
   "Next": {
-    "0": "hytale:interactions/weapons/bow_cancel",
-    "0.3": "hytale:interactions/weapons/bow_fire_weak",
-    "1.0": "hytale:interactions/weapons/bow_fire_full"
+    "0": "interactions/weapons/bow_cancel",
+    "0.3": "interactions/weapons/bow_fire_weak",
+    "1.0": "interactions/weapons/bow_fire_full"
   }
 }
 ```
@@ -602,7 +604,7 @@ The `Effects` object configures visual and audio feedback during the charging ph
 {
   "Particles": [
     {
-      "ParticleSystemId": "hytale:particles/charge_buildup",
+      "ParticleSystemId": "particles/charge_buildup",
       "NodeId": "weapon_tip",
       "Position": [0, 0, 0],
       "Rotation": [0, 0, 0],
@@ -626,11 +628,11 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "MouseSensitivityAdjustmentDuration": 0.3,
   "Effects": {
     "ItemAnimationId": "bow_draw",
-    "WorldSoundEventId": "hytale:sounds/weapons/bow_draw",
+    "WorldSoundEventId": "sounds/weapons/bow_draw",
     "ClearSoundEventOnFinish": true,
     "Particles": [
       {
-        "ParticleSystemId": "hytale:particles/bow_tension",
+        "ParticleSystemId": "particles/bow_tension",
         "NodeId": "string_center"
       }
     ]
@@ -639,20 +641,20 @@ The `Effects` object configures visual and audio feedback during the charging ph
     "0": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ClearItemAnimation" }
+        { "Type": "Simple", "Effects": { "ClearAnimationOnFinish": true } }
       ]
     },
     "0.5": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeAmmo", "AmmoType": "arrow" },
+        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
         { "Type": "LaunchProjectile", "ProjectileId": "arrow", "Speed": 30 }
       ]
     },
     "1.2": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeAmmo", "AmmoType": "arrow" },
+        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
         { "Type": "LaunchProjectile", "ProjectileId": "arrow", "Speed": 60 }
       ]
     }
@@ -670,11 +672,11 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "HorizontalSpeedMultiplier": 0.4,
   "Effects": {
     "ItemAnimationId": "sword_charge",
-    "LocalSoundEventId": "hytale:sounds/weapons/charge_hum",
+    "LocalSoundEventId": "sounds/weapons/charge_hum",
     "ClearAnimationOnFinish": true,
     "Particles": [
       {
-        "ParticleSystemId": "hytale:particles/weapon_glow",
+        "ParticleSystemId": "particles/weapon_glow",
         "NodeId": "blade_edge",
         "Scale": [1.5, 1.5, 1.5]
       }
@@ -685,22 +687,22 @@ The `Effects` object configures visual and audio feedback during the charging ph
     "0.8": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeStamina", "Amount": 20 },
-        { "Type": "PlayAnimation", "AnimationId": "sword_heavy_swing" },
+        { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
+        { "Type": "Simple", "Effects": { "ItemAnimationId": "sword_heavy_swing" } },
         {
           "Type": "DamageEntity",
-          "DamageParameters": { "DamageAmount": 25, "DamageType": "melee" }
+          "DamageCalculator": { "BaseDamage": { "Physical": 25 } }
         }
       ]
     },
     "1.5": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeStamina", "Amount": 40 },
-        { "Type": "PlayAnimation", "AnimationId": "sword_power_swing" },
+        { "Type": "ChangeStat", "StatModifiers": { "Stamina": -40 } },
+        { "Type": "Simple", "Effects": { "ItemAnimationId": "sword_power_swing" } },
         {
           "Type": "DamageEntity",
-          "DamageParameters": { "DamageAmount": 50, "DamageType": "melee" }
+          "DamageCalculator": { "BaseDamage": { "Physical": 50 } }
         }
       ]
     }
@@ -719,12 +721,12 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "HorizontalSpeedMultiplier": 0.3,
   "Effects": {
     "ItemAnimationId": "eat_food",
-    "LocalSoundEventId": "hytale:sounds/player/eating"
+    "LocalSoundEventId": "sounds/player/eating"
   },
   "Failed": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "PlaySound", "SoundId": "hytale:sounds/ui/action_canceled" }
+      { "Type": "Simple", "Effects": { "LocalSoundEventId": "sounds/ui/action_canceled" } }
     ]
   },
   "Next": {
@@ -732,8 +734,8 @@ The `Effects` object configures visual and audio feedback during the charging ph
     "2.0": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeItem", "Count": 1 },
-        { "Type": "ApplyStatusEffect", "EffectId": "satiated", "Duration": 120 }
+        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
+        { "Type": "ApplyEffect", "EffectId": "satiated" }
       ]
     }
   }
@@ -750,7 +752,7 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "Effects": {
     "ItemAnimationId": "staff_channel",
     "Particles": [
-      { "ParticleSystemId": "hytale:particles/magic_gather", "NodeId": "staff_orb" }
+      { "ParticleSystemId": "particles/magic_gather", "NodeId": "staff_orb" }
     ]
   },
   "Next": {
@@ -1073,10 +1075,7 @@ When the `Counter` flag triggers, it executes the counter attack and then resets
 {
   "Type": "Serial",
   "Interactions": [
-    {
-      "Type": "Dodge",
-      "Direction": "Back"
-    },
+    "Dodge",
     {
       "Type": "CancelChain",
       "ChainId": "Sword_Primary"
@@ -1085,7 +1084,7 @@ When the `Counter` flag triggers, it executes the counter attack and then resets
 }
 ```
 
-Dodging cancels any active combo chain, letting the player reset their attack pattern.
+Dodging (a referenced dodge interaction) cancels any active combo chain, letting the player reset their attack pattern.
 
 **Mode switch reset:**
 
@@ -1105,9 +1104,10 @@ When a weapon has multiple modes (e.g., one-handed vs two-handed grip), switchin
     },
     {
       "Type": "Replace",
-      "Variable": "GripMode",
-      "Value": "TwoHanded",
-      "Next": "Switch_Grip_Animation"
+      "Var": "GripMode",
+      "DefaultValue": {
+        "Interactions": ["Switch_Grip_Animation"]
+      }
     }
   ]
 }

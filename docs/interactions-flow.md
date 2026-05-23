@@ -11,16 +11,15 @@
 | [Condition](#condition) | Game mode and movement state branching |
 | [StatsCondition](#statscondition) | Branch based on entity stat values |
 | [EffectCondition](#effectcondition) | Branch based on active status effects |
-| [BlockCondition](#blockcondition) | Branch based on block type/state/tag |
+| [BlockCondition](#blockcondition) | Branch based on block type/state |
 | [CooldownCondition](#cooldowncondition) | Branch based on cooldown completion |
 | [TriggerCooldown](#triggercooldown) | Start a cooldown timer |
 | [ResetCooldown](#resetcooldown) | Reset a cooldown timer |
 | [MovementCondition](#movementcondition) | Direction-based input branching |
-| [DestroyCondition](#destroycondition) | Check if block is destroyable |
 | [PlacementCountCondition](#placementcountcondition) | Branch based on block placement count |
 | [Repeat](#repeat) | Loop execution of interactions |
 | [Replace](#replace) | Variable substitution for templates |
-| [Target Selectors](#target-selectors) | AOE, raycast, and sweep targeting |
+| [Target Selectors](#target-selectors) | AOE, raycast, and stab targeting |
 
 ---
 
@@ -51,8 +50,8 @@ The `Interactions` property accepts an array where each entry can be:
 {
   "Type": "Serial",
   "Interactions": [
-    { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 5 } },
-    { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Duration": 3 }
+    { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 5 } } },
+    { "Type": "ApplyEffect", "EffectId": "Stamina_Broken" }
   ]
 }
 ```
@@ -77,7 +76,7 @@ The `Interactions` property accepts an array where each entry can be:
   "Type": "Serial",
   "Interactions": [
     "Prepare_Animation",
-    { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 10 } },
+    { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 10 } } },
     "Cleanup_Effects"
   ]
 }
@@ -133,26 +132,23 @@ Serial interactions can be nested within other control flow structures for compl
       "Type": "Serial",
       "Interactions": [
         { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "ApplyEffect", "EffectId": "hytale:regeneration", "Duration": 30 }
+        { "Type": "ApplyEffect", "EffectId": "Regeneration" }
       ]
     }
   }
 }
 ```
 
-**Serial inside `Then`/`Else` blocks (Condition):**
+**Serial inside `Next`/`Failed` blocks (StatsCondition):**
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Health",
-  "Operator": "LessThan",
-  "Value": 25,
-  "ValueType": "Percent",
-  "Then": {
+  "Costs": { "Stamina": 25 },
+  "Next": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 999 } },
+      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 999 } } },
       { "Type": "SendMessage", "Message": "Executed!" }
     ]
   }
@@ -168,8 +164,7 @@ Serial interactions can be nested within other control flow structures for compl
   "Failed": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "PlaySound", "SoundId": "action_canceled" },
-      { "Type": "ClearItemAnimation" }
+      { "Type": "Simple", "Effects": { "LocalSoundEventId": "action_canceled" } }
     ]
   },
   "Next": { "1.0": "Consume_Complete" }
@@ -202,7 +197,7 @@ Serial interactions can be nested within other control flow structures for compl
 
 ### Complete Examples
 
-**Dodge Mechanic (from Dodge_Left.json):**
+**Dodge Mechanic:**
 
 A dodge combines movement, animation, effects, and stat changes in sequence:
 
@@ -214,28 +209,23 @@ A dodge combines movement, animation, effects, and stat changes in sequence:
       "Type": "Simple",
       "RunTime": 0.4,
       "Effects": {
-        "AnimationTreeParameter": {
-          "ParameterId": "DodgeDirection",
-          "Value": "Left"
-        },
-        "TriggerAnimation": "Dodge",
-        "LocalSoundEventId": "hytale:sounds/player/dodge_whoosh"
+        "ItemAnimationId": "Dodge",
+        "LocalSoundEventId": "SFX_Dodge_Whoosh"
       },
       "Next": {
-        "Type": "ApplyMovementImpulse",
-        "Direction": "Left",
+        "Type": "ApplyForce",
+        "Direction": { "X": -1, "Y": 0, "Z": 0 },
+        "AdjustVertical": false,
         "Force": 8.0
       }
     },
     {
       "Type": "ApplyEffect",
-      "EffectId": "hytale:invulnerable",
-      "Duration": 0.3
+      "EffectId": "Invulnerable"
     },
     {
-      "Type": "ModifyStat",
-      "Stat": "Stamina",
-      "Amount": -15
+      "Type": "ChangeStat",
+      "StatModifiers": { "Stamina": -15 }
     }
   ]
 }
@@ -243,41 +233,37 @@ A dodge combines movement, animation, effects, and stat changes in sequence:
 
 **Double Jump (from Double_Jump.json):**
 
-Sequential checks and actions for an aerial ability:
+A stamina-gated aerial boost. The real asset uses a `StatsCondition` with a `Costs`
+map (which both checks and deducts the cost) and branches with `Next`:
 
 ```json
 {
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "StatsCondition",
-      "Stat": "Jumps",
-      "Operator": "GreaterThan",
-      "Value": 0,
-      "Then": {
-        "Type": "Serial",
-        "Interactions": [
-          {
-            "Type": "ApplyMovementImpulse",
-            "Direction": "Up",
-            "Force": 6.5
-          },
-          {
-            "Type": "ModifyStat",
-            "Stat": "Jumps",
-            "Amount": -1
-          },
-          {
-            "Type": "Simple",
-            "Effects": {
-              "TriggerAnimation": "DoubleJump",
-              "WorldSoundEventId": "hytale:sounds/player/jump"
-            }
-          }
-        ]
+  "Type": "StatsCondition",
+  "Costs": { "Stamina": 2.01 },
+  "Next": {
+    "Type": "Serial",
+    "Interactions": [
+      {
+        "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 2, "Z": 0 },
+        "AdjustVertical": false,
+        "WaitForGround": false,
+        "Force": 15
+      },
+      {
+        "Type": "ChangeStat",
+        "StatModifiers": { "Stamina": -2 }
+      },
+      {
+        "Type": "Simple",
+        "RunTime": 1,
+        "Effects": {
+          "LocalSoundEventId": "SFX_Chicken_Alerted",
+          "WorldSoundEventId": "SFX_Chicken_Alerted"
+        }
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
@@ -299,18 +285,16 @@ A consumable that requires holding, then executes multiple effects:
       },
       "Next": {
         "0": {
-          "Type": "Serial",
-          "Interactions": [
-            { "Type": "ClearItemAnimation" }
-          ]
+          "Type": "Simple",
+          "Effects": { "ClearAnimationOnFinish": true }
         },
         "2.0": {
           "Type": "Serial",
           "Interactions": [
             { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-            { "Type": "ApplyEffect", "EffectId": "hytale:satiated", "Duration": 120 },
-            { "Type": "ModifyStat", "Stat": "Health", "Amount": 20 },
-            { "Type": "PlaySound", "SoundId": "hytale:sounds/player/eat_finish" }
+            { "Type": "ApplyEffect", "EffectId": "Satiated" },
+            { "Type": "ChangeStat", "StatModifiers": { "Health": 20 } },
+            { "Type": "Simple", "Effects": { "LocalSoundEventId": "SFX_Eat_Finish" } }
           ]
         }
       }
@@ -319,52 +303,46 @@ A consumable that requires holding, then executes multiple effects:
 }
 ```
 
-**Signature Ability (from Weapon_Sword_Signature_Vortexstrike.json):**
+**Signature Ability:**
 
-A powerful ability with stamina cost, animation, damage, and cleanup:
+A powerful ability with a signature-energy cost, animation, AOE damage, and cleanup.
+The `StatsCondition.Costs` map both checks for and deducts the energy, and an AOE
+`Selector` finds entities to damage:
 
 ```json
 {
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "StatsCondition",
-      "Stat": "SignatureEnergy",
-      "Operator": "GreaterOrEqual",
-      "Value": 100,
-      "Then": {
-        "Type": "Serial",
-        "Interactions": [
-          { "Type": "ModifyStat", "Stat": "SignatureEnergy", "Amount": -100 },
-          {
-            "Type": "Simple",
-            "RunTime": 1.2,
-            "Effects": {
-              "ItemAnimationId": "Vortexstrike",
-              "WorldSoundEventId": "hytale:sounds/weapons/sword_signature"
-            },
-            "Next": {
-              "Type": "DamageEntity",
-              "TargetSelector": {
-                "Type": "AOECircle",
-                "Radius": 4.0,
-                "Center": "Self"
-              },
-              "DamageParameters": {
-                "DamageAmount": 35,
-                "DamageCauseId": "Physical"
-              }
-            }
-          },
-          { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Target": "Self", "Duration": 0.5 }
-        ]
+  "Type": "StatsCondition",
+  "Costs": { "SignatureEnergy": 100 },
+  "Next": {
+    "Type": "Serial",
+    "Interactions": [
+      {
+        "Type": "Simple",
+        "RunTime": 1.2,
+        "Effects": {
+          "ItemAnimationId": "Vortexstrike",
+          "WorldSoundEventId": "SFX_Sword_Signature"
+        }
       },
-      "Else": {
-        "Type": "SendMessage",
-        "Message": "Not enough energy!"
-      }
-    }
-  ]
+      {
+        "Type": "Selector",
+        "Selector": { "Id": "AOECircle", "Range": 4.0 },
+        "HitEntity": {
+          "Interactions": [
+            {
+              "Type": "DamageEntity",
+              "DamageCalculator": { "BaseDamage": { "Physical": 35 } }
+            }
+          ]
+        }
+      },
+      { "Type": "ApplyEffect", "EffectId": "Slow", "Entity": "User" }
+    ]
+  },
+  "Failed": {
+    "Type": "SendMessage",
+    "Message": "Not enough energy!"
+  }
 }
 ```
 
@@ -381,7 +359,7 @@ A charged ability that fires multiple projectiles in sequence:
     "1.5": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ConsumeAmmo", "AmmoType": "arrow", "Count": 5 },
+        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -5 },
         {
           "Type": "Repeat",
           "Repeat": 5,
@@ -393,14 +371,12 @@ A charged ability that fires multiple projectiles in sequence:
                 "Interactions": [
                   {
                     "Type": "LaunchProjectile",
-                    "ProjectileId": "arrow",
-                    "Speed": 45,
-                    "SpreadAngle": 15
+                    "ProjectileId": "Arrow_FullCharge"
                   },
                   {
                     "Type": "Simple",
                     "Effects": {
-                      "WorldSoundEventId": "hytale:sounds/weapons/bow_release"
+                      "WorldSoundEventId": "SFX_Bow_T2_Shoot"
                     }
                   }
                 ]
@@ -448,9 +424,9 @@ A charged ability that fires multiple projectiles in sequence:
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "hytale:burning", "Duration": 5 },
-    { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Duration": 5 },
-    { "Type": "PlaySound", "SoundId": "fire_ignite" }
+    { "Type": "ApplyEffect", "EffectId": "burning" },
+    { "Type": "ApplyEffect", "EffectId": "slow" },
+    { "Type": "Simple", "Effects": { "LocalSoundEventId": "fire_ignite" } }
   ]
 }
 ```
@@ -532,8 +508,8 @@ The `Interactions` property accepts an array where each entry can be:
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "hytale:burning", "Duration": 5 },
-    { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Duration": 5 }
+    { "Type": "ApplyEffect", "EffectId": "Burn" },
+    { "Type": "ApplyEffect", "EffectId": "Slow" }
   ]
 }
 ```
@@ -611,8 +587,8 @@ Understanding context duplication is critical for advanced Parallel usage:
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ModifyStat", "Stat": "Health", "Amount": -10 },
-    { "Type": "ModifyStat", "Stat": "Health", "Amount": -10 }
+    { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } },
+    { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } }
   ]
 }
 ```
@@ -634,7 +610,7 @@ Parallel interactions can be nested within other control flow structures.
 {
   "Type": "Serial",
   "Interactions": [
-    { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -20 },
+    { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
     {
       "Type": "Parallel",
       "Interactions": [
@@ -642,28 +618,25 @@ Parallel interactions can be nested within other control flow structures.
         "Attack_Visual_Effects"
       ]
     },
-    { "Type": "ClearItemAnimation" }
+    { "Type": "Simple", "Effects": { "ClearAnimationOnFinish": true } }
   ]
 }
 ```
 
 This pattern ensures stamina is consumed first, then damage and visuals happen concurrently, then cleanup occurs after.
 
-**Parallel inside `Then`/`Else` blocks (Condition):**
+**Parallel inside `Next`/`Failed` blocks (StatsCondition):**
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Health",
-  "Operator": "LessThan",
-  "Value": 50,
-  "ValueType": "Percent",
-  "Then": {
+  "Costs": { "Stamina": 50 },
+  "Next": {
     "Type": "Parallel",
     "Interactions": [
-      { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 50 } },
-      { "Type": "ApplyEffect", "EffectId": "hytale:bleeding", "Duration": 10 },
-      { "Type": "PlaySound", "SoundId": "critical_hit" }
+      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 50 } } },
+      { "Type": "ApplyEffect", "EffectId": "Bleeding" },
+      { "Type": "Simple", "Effects": { "LocalSoundEventId": "critical_hit" } }
     ]
   }
 }
@@ -679,12 +652,12 @@ This pattern ensures stamina is consumed first, then damage and visuals happen c
     "1.5": {
       "Type": "Parallel",
       "Interactions": [
-        { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 25 } },
+        { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 25 } } },
         {
           "Type": "Simple",
           "Effects": {
             "WorldSoundEventId": "heavy_attack",
-            "TriggerAnimation": "Slam"
+            "ItemAnimationId": "Slam"
           }
         }
       ]
@@ -703,9 +676,9 @@ Apply multiple status effects simultaneously:
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "hytale:burning", "Duration": 5 },
-    { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Duration": 5 },
-    { "Type": "PlaySound", "SoundId": "fire_ignite" }
+    { "Type": "ApplyEffect", "EffectId": "burning" },
+    { "Type": "ApplyEffect", "EffectId": "slow" },
+    { "Type": "Simple", "Effects": { "LocalSoundEventId": "fire_ignite" } }
   ]
 }
 ```
@@ -728,15 +701,19 @@ This pattern separates damage logic from visual effects, a common design in Hyta
           "RunTime": 0.3
         },
         {
-          "Type": "DamageEntity",
-          "TargetSelector": {
-            "Type": "Horizontal",
-            "Range": 2.5,
-            "Angle": 90
+          "Type": "Selector",
+          "Selector": {
+            "Id": "Horizontal",
+            "EndDistance": 2.5,
+            "Length": 90
           },
-          "DamageParameters": {
-            "DamageAmount": 15,
-            "DamageCauseId": "Physical"
+          "HitEntity": {
+            "Interactions": [
+              {
+                "Type": "DamageEntity",
+                "DamageCalculator": { "BaseDamage": { "Physical": 15 } }
+              }
+            ]
           }
         }
       ]
@@ -748,8 +725,7 @@ This pattern separates damage logic from visual effects, a common design in Hyta
           "Type": "Simple",
           "RunTime": 0.8,
           "Effects": {
-            "TriggerAnimation": "Attack_Swing",
-            "TrailEffectId": "weapon_trail"
+            "ItemAnimationId": "Attack_Swing"
           }
         },
         {
@@ -782,36 +758,27 @@ A powerful ground slam that combines damage with visual feedback:
   "Type": "Parallel",
   "Interactions": [
     {
-      "Type": "DamageEntity",
-      "TargetSelector": {
-        "Type": "AOECircle",
-        "Radius": 4.0,
-        "Center": "Self",
-        "IncludeSelf": false
+      "Type": "Selector",
+      "Selector": {
+        "Id": "AOECircle",
+        "Range": 4.0
       },
-      "DamageParameters": {
-        "DamageAmount": 30,
-        "DamageCauseId": "Physical",
-        "KnockbackForce": 8.0
+      "HitEntity": {
+        "Interactions": [
+          {
+            "Type": "DamageEntity",
+            "DamageCalculator": { "BaseDamage": { "Physical": 30 } }
+          },
+          { "Type": "ApplyEffect", "EffectId": "Stagger", "Entity": "Target" }
+        ]
       }
     },
     {
       "Type": "Simple",
       "Effects": {
-        "TriggerAnimation": "Stomp",
         "WorldSoundEventId": "ground_slam",
-        "ParticleEffectId": "dust_explosion"
+        "Particles": [ { "SystemId": "Explosion_Medium" } ]
       }
-    },
-    {
-      "Type": "ApplyEffect",
-      "TargetSelector": {
-        "Type": "AOECircle",
-        "Radius": 4.0,
-        "Center": "Self"
-      },
-      "EffectId": "hytale:stagger",
-      "Duration": 1.5
     }
   ]
 }
@@ -859,17 +826,14 @@ When a projectile hits, apply damage, effects, and visuals simultaneously:
   "Interactions": [
     {
       "Type": "DamageEntity",
-      "DamageParameters": {
-        "DamageAmount": 20,
-        "DamageCauseId": "Projectile"
-      }
+      "DamageCalculator": { "BaseDamage": { "Physical": 20 } }
     },
-    { "Type": "ApplyEffect", "EffectId": "hytale:slow", "Duration": 3 },
-    { "Type": "ApplyEffect", "EffectId": "hytale:poison", "Duration": 5 },
+    { "Type": "ApplyEffect", "EffectId": "slow" },
+    { "Type": "ApplyEffect", "EffectId": "poison" },
     {
       "Type": "Simple",
       "Effects": {
-        "ParticleEffectId": "poison_splash",
+        "Particles": [ { "SystemId": "poison_splash" } ],
         "WorldSoundEventId": "poison_impact"
       }
     }
@@ -1022,14 +986,22 @@ Special attack that only works while jumping:
     "Type": "Serial",
     "Interactions": [
       {
-        "Type": "ApplyMovementImpulse",
-        "Direction": "Down",
+        "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": -1, "Z": 0 },
+        "AdjustVertical": false,
         "Force": 15.0
       },
       {
-        "Type": "DamageEntity",
-        "TargetSelector": { "Type": "AOECircle", "Radius": 3.0 },
-        "DamageParameters": { "DamageAmount": 40 }
+        "Type": "Selector",
+        "Selector": { "Id": "AOECircle", "Range": 3.0 },
+        "HitEntity": {
+          "Interactions": [
+            {
+              "Type": "DamageEntity",
+              "DamageCalculator": { "BaseDamage": { "Physical": 40 } }
+            }
+          ]
+        }
       }
     ]
   },
@@ -1047,8 +1019,7 @@ Faster swimming when already in water:
   "Swimming": true,
   "Next": {
     "Type": "ApplyEffect",
-    "EffectId": "hytale:dolphins_grace",
-    "Duration": 10
+    "EffectId": "dolphins_grace"
   }
 }
 ```
@@ -1063,11 +1034,11 @@ Bonus damage when attacking from crouch:
   "Crouching": true,
   "Next": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 50, "DamageCauseId": "Physical" }
+    "DamageCalculator": { "BaseDamage": { "Physical": 50 } }
   },
   "Failed": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 20, "DamageCauseId": "Physical" }
+    "DamageCalculator": { "BaseDamage": { "Physical": 20 } }
   }
 }
 ```
@@ -1085,7 +1056,7 @@ Momentum-based damage scaling:
     "Interactions": [
       {
         "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 35, "KnockbackForce": 12.0 }
+        "DamageCalculator": { "BaseDamage": { "Physical": 35 } }
       },
       {
         "Type": "Simple",
@@ -1126,55 +1097,41 @@ This checks: Survival mode AND sprinting AND NOT jumping.
 
 **Package:** `config/none/StatsConditionInteraction`
 
-Branch based on entity stat values. Compares a stat against a threshold value using configurable operators. Supports both absolute values and percentages of maximum. Essential for resource gating, execute mechanics, and stat-based ability variations.
+Branch based on whether an entity can afford a set of stat costs. Each entry in the `Costs` map names a stat and the amount required; when all costs are satisfiable the interaction deducts them and branches to `Next`, otherwise it branches to `Failed`. Essential for resource gating (stamina, signature energy) and stat-based ability variations.
 
 ### Core Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"StatsCondition"` |
-| `Stat` | string | Required | Stat identifier to check |
-| `Operator` | string | Required | Comparison operator |
-| `Value` | float | Required | Value to compare against |
-| `ValueType` | string | `"Absolute"` | How to interpret `Value` |
-| `Lenient` | boolean | `false` | If true, passes when stat doesn't exist |
-| `Then` | interaction | `null` | Interaction when condition is true |
-| `Else` | interaction | `null` | Interaction when condition is false |
-
-### Operator Reference
-
-| Operator | Symbol | Description |
-|----------|--------|-------------|
-| `LessThan` | `<` | Stat value is less than threshold |
-| `GreaterThan` | `>` | Stat value is greater than threshold |
-| `Equals` | `==` | Stat value equals threshold |
-| `LessOrEqual` | `<=` | Stat value is less than or equal to threshold |
-| `GreaterOrEqual` | `>=` | Stat value is greater than or equal to threshold |
+| `Costs` | object | Required | Map of stat name to required amount (deducted when the check passes) |
+| `ValueType` | string | `"Absolute"` | How to interpret the cost amounts (`Absolute` or `Percent`) |
+| `Lenient` | boolean | `false` | If true, passes when a referenced stat doesn't exist on the entity |
+| `Next` | interaction | `null` | Interaction when the costs can be paid (and are deducted) |
+| `Failed` | interaction | `null` | Interaction when the costs cannot be paid |
 
 ### ValueType Reference
 
 | ValueType | Description |
 |-----------|-------------|
-| `Absolute` | Compare against the raw stat value |
-| `Percent` | Compare against percentage of maximum (0-100) |
+| `Absolute` | Cost amounts are raw stat values |
+| `Percent` | Cost amounts are a percentage of the stat's maximum (0-100) |
 
 ### Lenient Mode
 
-When `Lenient` is `true`, the condition passes if the stat doesn't exist on the entity. This is useful for optional stats that not all entities have.
+When `Lenient` is `true`, the condition passes if a referenced stat doesn't exist on the entity. This is useful for optional stats that not all entities have.
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "CustomAbilityCharge",
-  "Operator": "GreaterOrEqual",
-  "Value": 100,
+  "Costs": { "CustomAbilityCharge": 100 },
   "Lenient": true,
-  "Then": "Execute_Ability",
-  "Else": "Charge_More"
+  "Next": "Execute_Ability",
+  "Failed": "Charge_More"
 }
 ```
 
-If an entity doesn't have `CustomAbilityCharge`, it will execute `Then` instead of failing.
+If an entity doesn't have `CustomAbilityCharge`, it will execute `Next` instead of failing.
 
 ### Common Stats
 
@@ -1183,62 +1140,30 @@ If an entity doesn't have `CustomAbilityCharge`, it will execute `Then` instead 
 | `Health` | Current health points |
 | `Stamina` | Current stamina points |
 | `SignatureEnergy` | Signature ability charge |
-| `Mana` | Magic resource (if applicable) |
-| `Hunger` | Hunger level |
-| `Temperature` | Entity temperature |
+| `StaminaRegenDelay` | Delay before stamina begins regenerating |
 
 ### Examples
 
-**Execute Mechanic (Low Health Finisher):**
+**Stamina Cost Check (from Double_Jump.json):**
+
+The `Costs` map both checks for and deducts the stamina, so no separate `ChangeStat` is needed for the cost itself:
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Health",
-  "Operator": "LessThan",
-  "Value": 25,
-  "ValueType": "Percent",
-  "Then": {
+  "Costs": { "Stamina": 2.01 },
+  "Next": {
     "Type": "Serial",
     "Interactions": [
       {
-        "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 999, "DamageCauseId": "Physical" }
-      },
-      {
-        "Type": "Simple",
-        "Effects": {
-          "WorldSoundEventId": "execute_sound",
-          "ParticleEffectId": "execute_particles"
-        }
+        "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 2, "Z": 0 },
+        "AdjustVertical": false,
+        "Force": 15
       }
     ]
   },
-  "Else": {
-    "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 20, "DamageCauseId": "Physical" }
-  }
-}
-```
-
-**Stamina Cost Check:**
-
-Verify stamina before executing ability:
-
-```json
-{
-  "Type": "StatsCondition",
-  "Stat": "Stamina",
-  "Operator": "GreaterOrEqual",
-  "Value": 25,
-  "Then": {
-    "Type": "Serial",
-    "Interactions": [
-      { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -25 },
-      "Dodge_Execute"
-    ]
-  },
-  "Else": {
+  "Failed": {
     "Type": "SendMessage",
     "Message": "Not enough stamina!"
   }
@@ -1250,82 +1175,44 @@ Verify stamina before executing ability:
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "SignatureEnergy",
-  "Operator": "GreaterOrEqual",
-  "Value": 100,
-  "Then": {
-    "Type": "Serial",
-    "Interactions": [
-      { "Type": "ModifyStat", "Stat": "SignatureEnergy", "Amount": -100 },
-      "Signature_Ability_Execute"
-    ]
-  },
-  "Else": {
+  "Costs": { "SignatureEnergy": 100 },
+  "Next": "Signature_Ability_Execute",
+  "Failed": {
     "Type": "Simple",
     "Effects": { "WorldSoundEventId": "ability_not_ready" }
   }
 }
 ```
 
-**Full Health Check:**
+**Percent Cost:**
+
+Interpret the cost as a percentage of the stat's maximum:
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Health",
-  "Operator": "Equals",
-  "Value": 100,
+  "Costs": { "Health": 20 },
   "ValueType": "Percent",
-  "Then": "Apply_Full_Health_Bonus",
-  "Else": "Apply_Normal_Effect"
+  "Next": "Apply_Blood_Magic",
+  "Failed": "Apply_Normal_Effect"
 }
 ```
 
-**Critical Health Warning:**
+**Nested Cost Checks:**
+
+Multiple resource requirements, each checked (and deducted) in turn:
 
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Health",
-  "Operator": "LessOrEqual",
-  "Value": 20,
-  "ValueType": "Percent",
-  "Then": {
-    "Type": "Parallel",
-    "Interactions": [
-      { "Type": "ApplyEffect", "EffectId": "hytale:critical_health_warning", "Duration": 5 },
-      { "Type": "Simple", "Effects": { "WorldSoundEventId": "heartbeat_warning" } }
-    ]
-  }
-}
-```
-
-**Nested Stats Checks:**
-
-Multiple resource requirements:
-
-```json
-{
-  "Type": "StatsCondition",
-  "Stat": "Stamina",
-  "Operator": "GreaterOrEqual",
-  "Value": 50,
-  "Then": {
+  "Costs": { "Stamina": 50 },
+  "Next": {
     "Type": "StatsCondition",
-    "Stat": "Mana",
-    "Operator": "GreaterOrEqual",
-    "Value": 30,
-    "Then": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -50 },
-        { "Type": "ModifyStat", "Stat": "Mana", "Amount": -30 },
-        "Hybrid_Ability_Execute"
-      ]
-    },
-    "Else": { "Type": "SendMessage", "Message": "Not enough mana!" }
+    "Costs": { "SignatureEnergy": 30 },
+    "Next": "Hybrid_Ability_Execute",
+    "Failed": { "Type": "SendMessage", "Message": "Not enough energy!" }
   },
-  "Else": { "Type": "SendMessage", "Message": "Not enough stamina!" }
+  "Failed": { "Type": "SendMessage", "Message": "Not enough stamina!" }
 }
 ```
 
@@ -1333,7 +1220,7 @@ Multiple resource requirements:
 
 - [Condition](#condition) - Game mode and movement state branching
 - [EffectCondition](#effectcondition) - Branch based on active effects
-- [ModifyStat](interactions-combat.md#changestat) - Modify stat values
+- [ChangeStat](interactions-combat.md#changestat) - Modify stat values
 
 ---
 
@@ -1350,9 +1237,9 @@ Branch based on whether an entity has active status effects. Supports checking f
 | `Type` | string | Required | Always `"EffectCondition"` |
 | `EntityEffectIds` | array | Required | List of effect IDs to check |
 | `Match` | string | `"All"` | Match mode: `"All"` or `"None"` |
-| `EntityTarget` | string | `"Self"` | Which entity to check (`"Self"`, `"Target"`) |
-| `Then` | interaction | `null` | Interaction when condition is true |
-| `Else` | interaction | `null` | Interaction when condition is false |
+| `Entity` | string | `"User"` | Which entity to check (e.g. `"User"`, `"Target"`) |
+| `Next` | interaction | `null` | Interaction when the match condition holds |
+| `Failed` | interaction | `null` | Interaction when the match condition does not hold |
 
 ### Match Modes
 
@@ -1361,11 +1248,11 @@ Branch based on whether an entity has active status effects. Supports checking f
 | `All` | Entity must have ALL specified effects |
 | `None` | Entity must have NONE of the specified effects |
 
-### EntityTarget Reference
+### Entity Reference
 
-| Target | Description |
+| Entity | Description |
 |--------|-------------|
-| `Self` | Check the entity executing the interaction |
+| `User` | Check the entity executing the interaction |
 | `Target` | Check the target entity (from context) |
 
 ### Execution Behavior
@@ -1373,18 +1260,18 @@ Branch based on whether an entity has active status effects. Supports checking f
 ```
 EffectCondition Evaluation
     │
-    ├─► Resolve EntityTarget (Self or Target)
+    ├─► Resolve Entity (User or Target)
     │
     ├─► For each effect in EntityEffectIds:
     │       └─► Check if entity has effect
     │
     ├─► Match Mode: All
-    │       └─► ALL effects present? → Then
-    │       └─► ANY effect missing? → Else
+    │       └─► ALL effects present? → Next
+    │       └─► ANY effect missing? → Failed
     │
     └─► Match Mode: None
-            └─► NO effects present? → Then
-            └─► ANY effect present? → Else
+            └─► NO effects present? → Next
+            └─► ANY effect present? → Failed
 ```
 
 ### Examples
@@ -1394,16 +1281,15 @@ EffectCondition Evaluation
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:burning"],
-  "EntityTarget": "Target",
-  "Then": {
+  "EntityEffectIds": ["burning"],
+  "Entity": "Target",
+  "Next": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 30, "DamageCauseId": "Fire" }
+    "DamageCalculator": { "BaseDamage": { "Physical": 30 } }
   },
-  "Else": {
+  "Failed": {
     "Type": "ApplyEffect",
-    "EffectId": "hytale:burning",
-    "Duration": 5
+    "EffectId": "burning"
   }
 }
 ```
@@ -1417,23 +1303,23 @@ Combo system requiring multiple debuffs:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:burning", "hytale:poisoned", "hytale:frozen"],
+  "EntityEffectIds": ["burning", "poisoned", "frozen"],
   "Match": "All",
-  "EntityTarget": "Target",
-  "Then": {
+  "Entity": "Target",
+  "Next": {
     "Type": "Serial",
     "Interactions": [
       {
         "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 100, "DamageCauseId": "Elemental" }
+        "DamageCalculator": { "BaseDamage": { "Physical": 100 } }
       },
-      { "Type": "ClearEntityEffect", "EffectId": "hytale:burning" },
-      { "Type": "ClearEntityEffect", "EffectId": "hytale:poisoned" },
-      { "Type": "ClearEntityEffect", "EffectId": "hytale:frozen" },
-      { "Type": "Simple", "Effects": { "ParticleEffectId": "elemental_explosion" } }
+      { "Type": "ClearEntityEffect", "EffectId": "burning" },
+      { "Type": "ClearEntityEffect", "EffectId": "poisoned" },
+      { "Type": "ClearEntityEffect", "EffectId": "frozen" },
+      { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "elemental_explosion" } ] } }
     ]
   },
-  "Else": "Normal_Attack"
+  "Failed": "Normal_Attack"
 }
 ```
 
@@ -1444,15 +1330,14 @@ Prevent effect stacking:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:immunity"],
+  "EntityEffectIds": ["immunity"],
   "Match": "None",
-  "EntityTarget": "Target",
-  "Then": {
+  "Entity": "Target",
+  "Next": {
     "Type": "ApplyEffect",
-    "EffectId": "hytale:stun",
-    "Duration": 3
+    "EffectId": "stun"
   },
-  "Else": {
+  "Failed": {
     "Type": "Simple",
     "Effects": { "WorldSoundEventId": "ability_blocked" }
   }
@@ -1468,25 +1353,25 @@ Check for food buff tiers:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:well_fed_tier3"],
+  "EntityEffectIds": ["well_fed_tier3"],
   "Match": "None",
-  "EntityTarget": "Self",
-  "Then": {
+  "Entity": "User",
+  "Next": {
     "Type": "EffectCondition",
-    "EntityEffectIds": ["hytale:well_fed_tier2"],
+    "EntityEffectIds": ["well_fed_tier2"],
     "Match": "None",
-    "EntityTarget": "Self",
-    "Then": {
+    "Entity": "User",
+    "Next": {
       "Type": "EffectCondition",
-      "EntityEffectIds": ["hytale:well_fed_tier1"],
+      "EntityEffectIds": ["well_fed_tier1"],
       "Match": "None",
-      "EntityTarget": "Self",
-      "Then": "Apply_Tier1_Buff",
-      "Else": "Upgrade_To_Tier2"
+      "Entity": "User",
+      "Next": "Apply_Tier1_Buff",
+      "Failed": "Upgrade_To_Tier2"
     },
-    "Else": "Upgrade_To_Tier3"
+    "Failed": "Upgrade_To_Tier3"
   },
-  "Else": "Refresh_Tier3"
+  "Failed": "Refresh_Tier3"
 }
 ```
 
@@ -1497,17 +1382,17 @@ Only allow ability if not already buffed:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:enraged"],
+  "EntityEffectIds": ["enraged"],
   "Match": "None",
-  "EntityTarget": "Self",
-  "Then": {
+  "Entity": "User",
+  "Next": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyEffect", "EffectId": "hytale:enraged", "Duration": 30 },
-      { "Type": "Simple", "Effects": { "TriggerAnimation": "Enrage" } }
+      { "Type": "ApplyEffect", "EffectId": "enraged" },
+      { "Type": "Simple", "Effects": { "ItemAnimationId": "Enrage" } }
     ]
   },
-  "Else": {
+  "Failed": {
     "Type": "SendMessage",
     "Message": "Already enraged!"
   }
@@ -1521,19 +1406,19 @@ Bonus damage against debuffed targets:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["hytale:wet"],
+  "EntityEffectIds": ["wet"],
   "Match": "All",
-  "EntityTarget": "Target",
-  "Then": {
+  "Entity": "Target",
+  "Next": {
     "Type": "Parallel",
     "Interactions": [
-      { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 40, "DamageCauseId": "Lightning" } },
-      { "Type": "ApplyEffect", "EffectId": "hytale:shocked", "Duration": 3 }
+      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 40 } } },
+      { "Type": "ApplyEffect", "EffectId": "shocked" }
     ]
   },
-  "Else": {
+  "Failed": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 20, "DamageCauseId": "Lightning" }
+    "DamageCalculator": { "BaseDamage": { "Physical": 20 } }
   }
 }
 ```
@@ -1551,7 +1436,7 @@ Bonus damage against debuffed targets:
 
 **Package:** `config/client/BlockConditionInteraction`
 
-Branch based on block type, state, or tag at a target position. Uses a `Matchers` array with `BlockMatcher` objects that can check block IDs, block states, and tags. Supports face-specific matching for directional placement logic.
+Branch based on block type and state at a target position. Uses a `Matchers` array where each matcher nests block identity in a `Block` object and may add face-specific options for directional placement logic. Branches with `Next` (any matcher succeeds) and `Failed` (all matchers fail).
 
 ### Core Properties
 
@@ -1559,21 +1444,20 @@ Branch based on block type, state, or tag at a target position. Uses a `Matchers
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"BlockCondition"` |
 | `Matchers` | array | Required | List of `BlockMatcher` objects |
-| `Then` | interaction | `null` | Interaction when any matcher succeeds |
-| `Else` | interaction | `null` | Interaction when all matchers fail |
+| `Next` | interaction | `null` | Interaction when any matcher succeeds |
+| `Failed` | interaction | `null` | Interaction when all matchers fail |
 
 ### BlockMatcher Structure
 
-Each `BlockMatcher` in the array has:
+Each `BlockMatcher` in the array nests block identity in a `Block` object, with optional face siblings:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
+| `Block` | object | Required | Block matcher: `{ "Id": ..., "State": ... }` |
+| `Block.Id` | string | `null` | Exact block ID to match |
+| `Block.State` | string | `null` | Block state name to match (e.g. `"default"`) |
 | `Face` | string | `"None"` | Which face to check relative to target |
 | `StaticFace` | boolean | `false` | If true, face is absolute; if false, face is relative to player |
-| `Id` | string | `null` | Exact block ID to match |
-| `State` | object | `null` | Block state properties to match |
-| `Tag` | string | `null` | Block tag to match |
-| `TagIndex` | int | `null` | Specific tag index for multi-tag blocks |
 
 ### Face Reference
 
@@ -1596,115 +1480,80 @@ Each `BlockMatcher` in the array has:
 
 ### Examples
 
-**Seed Planting Validation:**
+**Specific Block ID Check (from Lantern_Yellow.json):**
 
-Check if target block is farmland before planting:
+Only act when the target block is a specific lantern, then change its state:
 
 ```json
 {
   "Type": "BlockCondition",
   "Matchers": [
     {
-      "Face": "Down",
-      "Tag": "hytale:farmland"
+      "Block": {
+        "Id": "Furniture_Human_Ruins_Lantern"
+      }
     }
   ],
-  "Then": {
-    "Type": "Serial",
-    "Interactions": [
-      { "Type": "PlaceBlock", "BlockId": "hytale:wheat_seeds" },
-      { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 }
-    ]
+  "Next": {
+    "Type": "ChangeState",
+    "Changes": { "default": "Yellow" }
   },
-  "Else": {
-    "Type": "SendMessage",
-    "Message": "Seeds must be planted on farmland!"
-  }
+  "Failed": "Block_Secondary"
 }
 ```
 
-**Specific Block ID Check:**
+**Block + State + Face Check (from Half_Block.json):**
 
-Only interact with specific block type:
+Check that the block on the `Up` face is stone in its `default` state before placing:
 
 ```json
 {
   "Type": "BlockCondition",
   "Matchers": [
     {
-      "Id": "hytale:crafting_table"
+      "Block": {
+        "Id": "Rock_Stone",
+        "State": "default"
+      },
+      "Face": "Up",
+      "StaticFace": false
     }
   ],
-  "Then": {
-    "Type": "OpenPage",
-    "PageId": "crafting_ui"
-  }
-}
-```
-
-**Block State Check:**
-
-Check for specific block state (e.g., open door):
-
-```json
-{
-  "Type": "BlockCondition",
-  "Matchers": [
-    {
-      "Id": "hytale:wooden_door",
-      "State": { "open": "true" }
+  "Next": {
+    "Type": "ChangeState",
+    "Changes": { "default": "Block" },
+    "Next": {
+      "Type": "ModifyInventory",
+      "AdjustHeldItemQuantity": -1,
+      "RequiredGameMode": "Adventure"
     }
-  ],
-  "Then": "Close_Door_Interaction",
-  "Else": "Open_Door_Interaction"
+  },
+  "Failed": "Block_Secondary"
 }
 ```
 
 **Multiple Matchers (OR logic):**
 
-Plant can be placed on multiple soil types:
+Succeed if the target matches any of several block types:
 
 ```json
 {
   "Type": "BlockCondition",
   "Matchers": [
-    { "Face": "Down", "Tag": "hytale:farmland" },
-    { "Face": "Down", "Tag": "hytale:grass" },
-    { "Face": "Down", "Id": "hytale:dirt" }
+    { "Block": { "Id": "Soil_Farmland" } },
+    { "Block": { "Id": "Soil_Grass" } },
+    { "Block": { "Id": "Soil_Dirt" } }
   ],
-  "Then": "Plant_Seed",
-  "Else": {
+  "Next": "Plant_Seed",
+  "Failed": {
     "Type": "SendMessage",
     "Message": "Cannot plant here!"
   }
 }
 ```
 
-**Wall Placement Check:**
-
-Check for solid block behind for wall-mounted items:
-
-```json
-{
-  "Type": "BlockCondition",
-  "Matchers": [
-    {
-      "Face": "Back",
-      "StaticFace": false,
-      "Tag": "hytale:solid"
-    }
-  ],
-  "Then": "Place_Wall_Torch",
-  "Else": {
-    "Type": "SendMessage",
-    "Message": "Requires a solid wall behind!"
-  }
-}
-```
-
 ### Related Interactions
 
-- [DestroyCondition](#destroycondition) - Check if block is destroyable
 - [PlacementCountCondition](#placementcountcondition) - Check block placement limits
 - [Block Interactions](interactions-world.md#block-interactions) - Break or place blocks
 
@@ -1771,18 +1620,17 @@ Check if poison cooldown has elapsed before applying poison effect:
       },
       {
         "Type": "ApplyEffect",
-        "EffectId": "hytale:poison",
-        "Duration": 4
+        "EffectId": "poison"
       },
       {
         "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 5 }
+        "DamageCalculator": { "BaseDamage": { "Physical": 5 } }
       }
     ]
   },
   "Failed": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 5 }
+    "DamageCalculator": { "BaseDamage": { "Physical": 5 } }
   }
 }
 ```
@@ -1825,7 +1673,7 @@ Apply bonus damage only when cooldown is ready:
     "Interactions": [
       {
         "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 25 }
+        "DamageCalculator": { "BaseDamage": { "Physical": 25 } }
       },
       {
         "Type": "TriggerCooldown",
@@ -1838,7 +1686,7 @@ Apply bonus damage only when cooldown is ready:
   },
   "Failed": {
     "Type": "DamageEntity",
-    "DamageParameters": { "DamageAmount": 10 }
+    "DamageCalculator": { "BaseDamage": { "Physical": 10 } }
   }
 }
 ```
@@ -2032,7 +1880,7 @@ Successful parry resets attack cooldown:
   "Interactions": [
     {
       "Type": "DamageEntity",
-      "DamageParameters": { "DamageAmount": 100, "Lethal": true }
+      "DamageCalculator": { "BaseDamage": { "Physical": 100 } }
     },
     {
       "Type": "ResetCooldown",
@@ -2141,15 +1989,21 @@ Left  ←       →  Right
   "Forward": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Forward", "Force": 5.0 },
-      { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 25 } }
+      { "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 0, "Z": 1 },
+        "AdjustVertical": false,
+        "Force": 5.0 },
+      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 25 } } }
     ]
   },
   "Back": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Back", "Force": 3.0 },
-      { "Type": "DamageEntity", "DamageParameters": { "DamageAmount": 15 } }
+      { "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 0, "Z": -1 },
+        "AdjustVertical": false,
+        "Force": 3.0 },
+      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 15 } } }
     ]
   },
   "Left": "Slash_Left",
@@ -2168,33 +2022,45 @@ Only handle cardinal directions, default others to Failed:
   "Forward": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Forward", "Force": 8.0 },
-      { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -20 },
-      { "Type": "ApplyEffect", "EffectId": "hytale:invulnerable", "Duration": 0.3 }
+      { "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 0, "Z": 1 },
+        "AdjustVertical": false,
+        "Force": 8.0 },
+      { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
+      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
     ]
   },
   "Back": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Back", "Force": 8.0 },
-      { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -20 },
-      { "Type": "ApplyEffect", "EffectId": "hytale:invulnerable", "Duration": 0.3 }
+      { "Type": "ApplyForce",
+        "Direction": { "X": 0, "Y": 0, "Z": -1 },
+        "AdjustVertical": false,
+        "Force": 8.0 },
+      { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
+      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
     ]
   },
   "Left": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Left", "Force": 8.0 },
-      { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -20 },
-      { "Type": "ApplyEffect", "EffectId": "hytale:invulnerable", "Duration": 0.3 }
+      { "Type": "ApplyForce",
+        "Direction": { "X": -1, "Y": 0, "Z": 0 },
+        "AdjustVertical": false,
+        "Force": 8.0 },
+      { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
+      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
     ]
   },
   "Right": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyMovementImpulse", "Direction": "Right", "Force": 8.0 },
-      { "Type": "ModifyStat", "Stat": "Stamina", "Amount": -20 },
-      { "Type": "ApplyEffect", "EffectId": "hytale:invulnerable", "Duration": 0.3 }
+      { "Type": "ApplyForce",
+        "Direction": { "X": 1, "Y": 0, "Z": 0 },
+        "AdjustVertical": false,
+        "Force": 8.0 },
+      { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
+      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
     ]
   },
   "Failed": {
@@ -2209,10 +2075,8 @@ Only handle cardinal directions, default others to Failed:
 ```json
 {
   "Type": "StatsCondition",
-  "Stat": "Stamina",
-  "Operator": "GreaterOrEqual",
-  "Value": 15,
-  "Then": {
+  "Costs": { "Stamina": 15 },
+  "Next": {
     "Type": "MovementCondition",
     "Forward": "Lunge_Attack",
     "Back": "Retreating_Slash",
@@ -2220,7 +2084,7 @@ Only handle cardinal directions, default others to Failed:
     "Right": "Sidestep_Right_Attack",
     "Failed": "Standing_Attack"
   },
-  "Else": {
+  "Failed": {
     "Type": "SendMessage",
     "Message": "Not enough stamina!"
   }
@@ -2230,116 +2094,7 @@ Only handle cardinal directions, default others to Failed:
 ### Related Interactions
 
 - [Condition](#condition) - Movement state branching (jumping, running, etc.)
-- [ApplyMovementImpulse](interactions-combat.md#applyforce) - Apply movement forces
-
----
-
-## DestroyCondition
-
-**Package:** `config/server/DestroyConditionInteraction`
-
-Server-side condition that checks if a block at the target position is destroyable. Used to validate block breaking operations before execution, preventing invalid destruction attempts.
-
-**Inheritance:** `DestroyConditionInteraction` → `SimpleBlockInteraction` → `SimpleInteraction` → `Interaction`
-
-### Core Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Type` | string | Required | Always `"DestroyCondition"` |
-| `Next` | interaction | `null` | Interaction when block is destroyable |
-| `Failed` | interaction | `null` | Interaction when block is not destroyable |
-| `UseLatestTarget` | boolean | `false` | Use the most recent block target from context |
-
-### Execution Flow
-
-```
-DestroyCondition
-    │
-    ▼
-┌─────────────────────────┐
-│ Check block destroyable │
-└─────────────────────────┘
-    │
-    ├─► Destroyable ──► Execute Next
-    │
-    └─► Not destroyable ──► Execute Failed
-```
-
-DestroyCondition performs server-side validation:
-
-1. Reads target block position from interaction context
-2. Checks if block exists and is marked as destroyable
-3. Considers block properties, protection zones, and game rules
-4. Branches to `Next` if destruction is allowed, `Failed` if blocked
-
-### Examples
-
-**Break Container (Real - from Break_Container.json):**
-
-```json
-{
-  "Type": "DestroyCondition",
-  "Next": {
-    "Type": "Parallel",
-    "Interactions": [
-      {
-        "Interactions": [
-          {
-            "Type": "Simple",
-            "RunTime": 0.1,
-            "Effects": { "ItemAnimationId": "AttackLeft" }
-          }
-        ]
-      },
-      {
-        "Interactions": [
-          {
-            "Type": "Simple",
-            "RunTime": 0.1,
-            "Effects": { "ItemAnimationId": "SwingLeft" },
-            "Next": { "Type": "BreakBlock" }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-**Simple Destroy Check:**
-
-```json
-{
-  "Type": "DestroyCondition",
-  "Next": {
-    "Type": "BreakBlock"
-  },
-  "Failed": {
-    "Type": "Simple",
-    "Effects": { "WorldSoundEventId": "action_denied" }
-  }
-}
-```
-
-**With UseLatestTarget:**
-
-```json
-{
-  "Type": "DestroyCondition",
-  "UseLatestTarget": true,
-  "Next": {
-    "Type": "BreakBlock",
-    "UseLatestTarget": true
-  }
-}
-```
-
-### Related Interactions
-
-- [BlockCondition](#blockcondition) - Check block type/state
-- [Block Interactions](interactions-world.md#block-interactions) - Break or place blocks
-- [Condition](#condition) - General condition branching (also uses `Next`/`Failed`)
+- [ApplyForce](interactions-combat.md#applyforce) - Apply movement forces
 
 ---
 
@@ -2483,7 +2238,6 @@ Different memory states can unlock higher placement limits:
 
 ### Related Interactions
 
-- [DestroyCondition](#destroycondition) - Check if block is destroyable (also uses `Next`/`Failed`)
 - [CooldownCondition](#cooldowncondition) - Check cooldown state (also uses `Next`/`Failed`)
 - [MemoriesCondition](#memoriescondition) - Branch based on player memory states
 - [Block Interactions](interactions-world.md#block-interactions) - PlaceBlock interaction for actual placement
@@ -2507,7 +2261,7 @@ Loop execution of interactions with timing control and optional interruption.
     "Interactions": [
       {
         "Type": "DamageEntity",
-        "DamageParameters": { "DamageAmount": 5 }
+        "DamageCalculator": { "BaseDamage": { "Physical": 5 } }
       }
     ]
   },
@@ -2559,7 +2313,7 @@ Loop execution of interactions with timing control and optional interruption.
   },
   "ForkInteractions": {
     "Interactions": [
-      { "Type": "AddStat", "StatId": "Ammo", "Amount": 1 }
+      { "Type": "ChangeStat", "StatModifiers": { "Ammo": 1 } }
     ]
   },
   "Failed": {

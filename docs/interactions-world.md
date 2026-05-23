@@ -10,8 +10,7 @@
 | [RemoveEntity](#removeentity) | Despawn entities from the world |
 | [LaunchProjectile](#launchprojectile) | Fire projectiles |
 | [SendMessage](#sendmessage) | Send chat messages to players |
-| [RunRootInteraction](#runrootinteraction) | Dynamically execute another root interaction |
-| [UI Interactions](#ui-interactions) | Open UI pages (OpenPage, OpenCustomUI) |
+| [UI Interactions](#ui-interactions) | Open custom UI pages (OpenCustomUI) |
 | [Inventory Interactions](#inventory-interactions) | Manage inventory and equipment |
 | [Block Interactions](#block-interactions) | Break or place blocks |
 | [ChangeState](#changestate) | Change entity state machine state |
@@ -74,8 +73,7 @@ Despawns/removes entities from the world.
 ```json
 {
   "Type": "RemoveEntity",
-  "Target": "Target",
-  "Delay": 0
+  "Entity": "User"
 }
 ```
 
@@ -83,8 +81,21 @@ Despawns/removes entities from the world.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Target` | string | `Self` or `Target` |
-| `Delay` | float | Delay before removal (seconds) |
+| `Entity` | string | Which entity to remove (e.g. `User`, `Target`) |
+| `Effects` | object | Optional sound/particle effects played on removal |
+
+### Example: Projectile self-removal (from Bomb_Popberry.json)
+
+```json
+{
+  "Type": "RemoveEntity",
+  "Entity": "User",
+  "Effects": {
+    "WorldSoundEventId": "SFX_Goblin_Lobber_Bomb_Death",
+    "LocalSoundEventId": "SFX_Goblin_Lobber_Bomb_Death"
+  }
+}
+```
 
 ---
 
@@ -133,9 +144,7 @@ Sends chat messages to players.
 ```json
 {
   "Type": "SendMessage",
-  "Message": "Critical Hit!",
-  "Target": "Self",
-  "MessageType": "ActionBar"
+  "Message": "Critical Hit!"
 }
 ```
 
@@ -143,235 +152,14 @@ Sends chat messages to players.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Message` | string | Text to display |
-| `Target` | string | `Self`, `Target`, or `All` |
-| `MessageType` | string | `Chat`, `ActionBar`, or `Title` |
+| `Message` | string | Literal text to display |
+| `Key` | string | Localization key to display (alternative to `Message`) |
 
----
-
-## RunRootInteraction
-
-**Package:** `config/none/RunRootInteraction`
-
-**Class hierarchy:** `RunRootInteraction` → `SimpleInstantInteraction` → `SimpleInteraction` → `Interaction`
-
-**Protocol class:** `RunRootInteraction` (handles client-server synchronization)
-
-Dynamically executes another RootInteraction by its string ID. This acts as a redirect/delegation mechanism, allowing one interaction to programmatically invoke a completely different root interaction defined elsewhere. Unlike inline interactions or string references within a chain, RunRootInteraction explicitly triggers a full root interaction with its own cooldowns, settings, and interaction chain.
-
-### Core Properties
-
-| Property | Type | Default | Validator | Description |
-|----------|------|---------|-----------|-------------|
-| `Type` | string | Required | - | Always `"RunRootInteraction"` |
-| `RootInteraction` | string | Required | `nonNull`, late validator | ID of the root interaction to execute |
-
-The `RootInteraction` validator ensures:
-1. The property cannot be null or empty (`nonNull`)
-2. The ID must reference a valid RootInteraction asset (late validation against `RootInteraction.VALIDATOR_CACHE`)
-
-### How RunRoot Works
-
-When `RunRootInteraction` executes, the following steps occur internally:
-
-1. **State finalization** - Sets the current interaction state to `Finished`
-2. **Root lookup** - Retrieves the target RootInteraction using `RootInteraction.getRootInteractionOrUnknown(rootInteraction)`
-3. **Execution** - Calls `context.execute(RootInteraction)` to run the referenced root interaction
-
-```
-RunRootInteraction executes:
-┌─────────────────────────────────────────────────────────────┐
-│ Current Chain: Weapon_Special_Ability                       │
-│   └─> RunRootInteraction { RootInteraction: "Root_Dodge" }  │
-│                    │                                        │
-│                    ▼                                        │
-│   1. Set state = Finished                                   │
-│   2. Lookup "Root_Dodge" from RootInteraction assets        │
-│   3. context.execute(Root_Dodge)                            │
-│                    │                                        │
-│                    ▼                                        │
-│ New Chain: Root_Dodge                                       │
-│   └─> Interactions: ["Dodge"]                               │
-│       └─> Cooldown, RequireNewClick, etc. from Root_Dodge   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Key behavior:** The referenced root interaction executes with its own configuration (cooldowns, settings, rules). This is different from simply referencing an interaction by string ID within a chain, which would use the parent chain's configuration.
-
-### When to Use RunRoot
-
-- **Mode/stance switching** - Switch between different combat modes that have separate root interaction configurations
-- **NPC behavior delegation** - AI systems that need to trigger player-style root interactions
-- **Plugin integration** - Plugins that define custom root interactions and need to invoke them from other interactions
-- **Fallback behavior** - When a condition fails, delegate to a different root interaction entirely
-- **Cross-item interactions** - Allow one item's interaction to invoke another item's root interaction pattern
-
-### Complete Examples
-
-**Basic usage - trigger dodge from ability:**
-
-```json
-{
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "ApplyEffect",
-      "EffectId": "hytale:invulnerability",
-      "Duration": 0.5
-    },
-    {
-      "Type": "RunRootInteraction",
-      "RootInteraction": "Dodge"
-    }
-  ]
-}
-```
-
-This grants brief invulnerability, then executes the Dodge root interaction with all its configured cooldowns and settings.
-
-**Conditional mode switch:**
-
-```json
-{
-  "Type": "StatsCondition",
-  "Stat": "SignatureEnergy",
-  "Operator": "GreaterOrEqual",
-  "Value": 100,
-  "ValueType": "Absolute",
-  "Then": {
-    "Type": "Serial",
-    "Interactions": [
-      {
-        "Type": "ChangeStat",
-        "StatModifiers": { "SignatureEnergy": -100 }
-      },
-      {
-        "Type": "RunRootInteraction",
-        "RootInteraction": "Root_Weapon_Sword_Signature_Vortexstrike"
-      }
-    ]
-  },
-  "Else": {
-    "Type": "SendMessage",
-    "Message": "Not enough signature energy!"
-  }
-}
-```
-
-When signature energy is full, consumes it and switches to the signature ability's root interaction.
-
-**NPC attack delegation:**
-
-```json
-{
-  "Type": "Select",
-  "Interactions": [
-    {
-      "Weight": 3,
-      "Interaction": {
-        "Type": "RunRootInteraction",
-        "RootInteraction": "Root_NPC_Attack_Melee"
-      }
-    },
-    {
-      "Weight": 1,
-      "Interaction": {
-        "Type": "RunRootInteraction",
-        "RootInteraction": "Root_NPC_Shield_Block"
-      }
-    }
-  ]
-}
-```
-
-NPC randomly selects between attack and block behaviors, each with their own root interaction configuration.
-
-**Combo finisher with root switch:**
-
-```json
-{
-  "Type": "Chaining",
-  "ChainId": "Sword_Primary",
-  "ChainingAllowance": 2,
-  "Next": [
-    "Sword_Swing_1",
-    "Sword_Swing_2",
-    {
-      "Type": "FirstClick",
-      "Click": "Sword_Swing_3",
-      "Held": {
-        "Type": "Serial",
-        "Interactions": [
-          {
-            "Type": "RunRootInteraction",
-            "RootInteraction": "Root_Weapon_Sword_Secondary_Guard"
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-On the third combo hit, holding switches to the guard root interaction instead of continuing the attack.
-
-### Common Patterns
-
-| Pattern | Use Case | Implementation |
-|---------|----------|----------------|
-| **Signature ability** | Full energy triggers special move | StatsCondition → ChangeStat → RunRoot |
-| **Stance switch** | Toggle between attack/defense modes | RunRoot to different weapon root |
-| **NPC behavior tree** | AI delegates to player-style attacks | Select/Condition → RunRoot |
-| **Combo branch** | Final hit branches to different root | Chaining → FirstClick → RunRoot |
-| **Fallback action** | Default behavior when main fails | Condition Else → RunRoot |
-
-### Technical Notes
-
-- **Instant execution** - RunRootInteraction extends `SimpleInstantInteraction`, meaning it executes immediately with no duration. The target root interaction then manages its own timing.
-
-- **Context preservation** - The `InteractionContext` is preserved when executing the target root interaction, maintaining entity references, held item info, and meta data.
-
-- **Network synchronization** - The protocol class handles syncing the root interaction ID (as an integer index) between client and server.
-
-- **Cooldown independence** - The target root interaction uses its own cooldown configuration, not the cooldown of the interaction that contains RunRoot.
-
-- **Unknown handling** - If the RootInteraction ID doesn't exist, `getRootInteractionOrUnknown()` returns an "unknown" placeholder rather than crashing, though the late validator should catch this at asset load time.
-
-### Related Interactions
-
-- [Root Interaction Configuration](interactions.md#root-interaction-configuration) - The target type that RunRoot invokes
-- [Replace](interactions-flow.md#replace) - Alternative for variable-based interaction substitution within the same chain
-- [Serial](interactions-flow.md#serial) - Often wraps RunRoot with setup/teardown interactions
-- [StatsCondition](interactions-flow.md#statscondition) - Common guard before RunRoot to check resource availability
+`SendMessage` is used heavily in the debug interactions (e.g. `Debug_Combo_Primary.json`) with a literal `Message`, and in system interactions (e.g. `Teleporter_Try_Place.json`) with a localization `Key`.
 
 ---
 
 ## UI Interactions
-
-### OpenPage
-
-**Package:** `config/server/OpenPageInteraction`
-
-Opens a built-in UI page.
-
-```json
-{
-  "Type": "OpenPage",
-  "PageId": "Inventory"
-}
-```
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `PageId` | string | Built-in page identifier |
-
-**Available PageIds:**
-
-| PageId | Description |
-|--------|-------------|
-| `Inventory` | Player inventory |
-| `Map` | World map |
-| `Bench` | Crafting bench |
 
 ### OpenCustomUI
 
@@ -443,23 +231,29 @@ Equips an item to an equipment slot.
 
 **Package:** `config/server/ModifyInventoryInteraction`
 
-Adds or removes items from inventory.
+Adjusts the quantity of the currently held item. Used to consume items on use (e.g. placing a block, eating food).
 
 ```json
 {
   "Type": "ModifyInventory",
-  "Operation": "Add",
-  "ItemId": "hytale:gold_coin",
-  "Count": 10
+  "AdjustHeldItemQuantity": -1
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Operation` | string | `Add`, `Remove`, or `Set` |
-| `ItemId` | string | Item ID |
-| `Count` | int | Item count |
-| `Slot` | int | Specific slot (optional) |
+| `AdjustHeldItemQuantity` | int | Amount to add to (positive) or remove from (negative) the held stack |
+| `RequiredGameMode` | string | Optional game mode gate (e.g. `Adventure`) for the adjustment to apply |
+
+### Example: Consume one item only in Adventure mode (from Half_Block.json)
+
+```json
+{
+  "Type": "ModifyInventory",
+  "AdjustHeldItemQuantity": -1,
+  "RequiredGameMode": "Adventure"
+}
+```
 
 ---
 
@@ -782,8 +576,10 @@ The `Forks` system allows branching to different interactions while blocking is 
 "Forks": {
   "Primary": {
     "Type": "Replace",
-    "Variable": "Weapon",
-    "Next": "Guard_Bash"
+    "Var": "Weapon",
+    "DefaultValue": {
+      "Interactions": ["Guard_Bash"]
+    }
   }
 }
 ```
@@ -801,11 +597,9 @@ The Primary fork typically uses Replace to select the correct bash animation bas
 "Forks": {
   "Primary": {
     "Type": "Replace",
-    "Variable": "Weapon",
-    "Next": {
-      "Sword": "Sword_Guard_Bash",
-      "Shield": "Shield_Guard_Bash",
-      "Battleaxe": "Battleaxe_Guard_Bash"
+    "Var": "Weapon",
+    "DefaultValue": {
+      "Interactions": ["Sword_Guard_Bash"]
     }
   }
 }
@@ -909,8 +703,10 @@ A parry is a short-duration wielding that triggers special interactions on block
       },
       {
         "Type": "ApplyForce",
-        "Target": "Attacker",
-        "Force": [0, 5, -15]
+        "Entity": "Target",
+        "Direction": { "X": 0, "Y": 5, "Z": -15 },
+        "AdjustVertical": false,
+        "Force": 15
       },
       {
         "Type": "ChainFlag",
@@ -930,13 +726,12 @@ Interactions triggered when stamina is depleted while blocking:
 "Failed": {
   "Interactions": [
     {
-      "Type": "ChangeState",
-      "StateId": "Staggered",
-      "Duration": 1.0
+      "Type": "ApplyEffect",
+      "EffectId": "Stamina_Broken"
     },
     {
-      "Type": "PlaySound",
-      "SoundId": "SFX_Guard_Break"
+      "Type": "Simple",
+      "Effects": { "WorldSoundEventId": "SFX_Guard_Break" }
     }
   ]
 }
@@ -1010,16 +805,17 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
   "Forks": {
     "Primary": {
       "Type": "Replace",
-      "Variable": "Weapon",
-      "Next": "Sword_Guard_Bash"
+      "Var": "Weapon",
+      "DefaultValue": {
+        "Interactions": ["Sword_Guard_Bash"]
+      }
     }
   },
   "Failed": {
     "Interactions": [
       {
-        "Type": "ChangeState",
-        "StateId": "Staggered",
-        "Duration": 0.8
+        "Type": "ApplyEffect",
+        "EffectId": "Stamina_Broken"
       }
     ]
   },
@@ -1071,14 +867,15 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
         "Interactions": [
           {
             "Type": "ApplyForce",
-            "Target": "Attacker",
-            "Force": [0, 3, -12]
+            "Entity": "Target",
+            "Direction": { "X": 0, "Y": 3, "Z": -12 },
+            "AdjustVertical": false,
+            "Force": 12
           },
           {
-            "Type": "ChangeState",
-            "Target": "Attacker",
-            "StateId": "Staggered",
-            "Duration": 0.5
+            "Type": "ApplyEffect",
+            "Entity": "Target",
+            "EffectId": "Stamina_Broken"
           },
           {
             "Type": "ChainFlag",

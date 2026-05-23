@@ -6,15 +6,15 @@ Hytale's audio system is defined through JSON assets in `Server/Audio/`. The sys
 
 | Section | Directory | Files | Description |
 |---------|-----------|-------|-------------|
-| [SoundEvents](#soundevents) | `SoundEvents/` | 1,155 | Individual sound definitions with layers |
-| [AudioCategories](#audiocategories) | `AudioCategories/` | 92 | Volume/mixing groups with inheritance |
-| [AmbienceFX](#ambiencefx) | `AmbienceFX/` | 166 | Ambient soundscapes with conditions |
+| [SoundEvents](#soundevents) | `SoundEvents/` | 1,176 | Individual sound definitions with layers |
+| [AudioCategories](#audiocategories) | `AudioCategories/` | 95 | Volume/mixing groups with inheritance |
+| [AmbienceFX](#ambiencefx) | `AmbienceFX/` | 175 | Ambient soundscapes with conditions |
 | [EQ](#eq-equalizer) | `EQ/` | 2 | Equalizer presets |
-| [Reverb](#reverb) | `Reverb/` | 22 | Environment reverb settings |
-| [ItemSounds](#itemsounds) | `ItemSounds/` | 37 | Inventory drag/drop sounds |
+| [Reverb](#reverb) | `Reverb/` | 21 | Environment reverb settings |
+| [ItemSounds](#itemsounds) | `ItemSounds/` | 36 | Inventory drag/drop sounds |
 | [SoundSets](#soundsets) | `SoundSets/` | 1 | Named sound event collections |
 
-**Total: 1,413 audio asset files**
+**Total: 1,506 audio asset files**
 
 ---
 
@@ -28,24 +28,32 @@ Sound events are the core audio units. Each defines one or more sound layers, vo
 
 ```
 SoundEvents/
-├── BlockSounds/     - Per-block break/build/walk/land sounds
-├── SFX/             - Player, NPC, weapons, UI, effects
-│   ├── Animals/
-│   ├── Combat/
-│   ├── Interactions/
-│   ├── NPCs/
+├── BlockSounds/     - Per-material break/build/hit/harvest/walk/land sounds
+├── SFX/             - Player, NPC, weapons, UI, effects, etc.
+│   ├── Chests/
+│   ├── Crafting/
+│   ├── CreativePlay/
+│   ├── Deployables/
+│   ├── Effects/
+│   ├── Items/
+│   ├── Magic/
+│   ├── NPC/
 │   ├── Player/
+│   ├── Projectiles/
+│   ├── Test/
+│   ├── Tools/
 │   ├── UI/
+│   ├── Utility/
 │   └── Weapons/
-└── Environments/    - Environmental emitters
+├── Environments/    - Environmental emitters
+└── SFX_Attn_*.json  - Shared attenuation parent presets (see Parent Inheritance)
 ```
 
 ### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Layers` | array | Multiple concurrent sound layers (see below) |
-| `Files` | array | Direct file references (shorthand for single layer) |
+| `Layers` | array | One or more concurrent sound layers (see below). Sound files are referenced only via `Files` inside a layer — there is no top-level `Files` field |
 | `Volume` | float | Base volume in dB (default: 0) |
 | `RandomSettings` | object | Pitch/volume variation |
 | `Looping` | boolean | Whether sound loops continuously |
@@ -61,27 +69,47 @@ SoundEvents/
 
 ### Layer System
 
-Sound events can have multiple concurrent layers, each with independent files and settings:
+Every sound event holds its files in one or more layers. Each layer has its own
+`Files` array plus optional per-layer `Volume`, `RandomSettings`, `StartDelay`, and
+`Looping`. Layers play concurrently (e.g. an impact layer plus a debris layer):
 
 ```json
 {
   "Layers": [
     {
-      "Files": ["Sounds/SFX/Weapons/Battleaxe/Swing/Battleaxe_Swing_01.ogg"],
-      "Volume": -3,
+      "Files": [
+        "Sounds/Blocks/Stone/Stone_Break_01.ogg",
+        "Sounds/Blocks/Stone/Stone_Break_02.ogg"
+      ],
       "RandomSettings": {
-        "MinPitch": 0.95,
-        "MaxPitch": 1.05
-      }
+        "MinVolume": -1,
+        "MinPitch": -3,
+        "MaxPitch": 3
+      },
+      "StartDelay": 0,
+      "Volume": 6
     },
     {
-      "Files": ["Sounds/SFX/Combat/Whoosh/Combat_Whoosh_Heavy_01.ogg"],
-      "Volume": -6
+      "Files": [
+        "Sounds/Blocks/Stone/Stone_Break_Debris_01.ogg",
+        "Sounds/Blocks/Stone/Stone_Break_Debris_03.ogg"
+      ],
+      "StartDelay": 0.1,
+      "Volume": -4
     }
   ],
-  "AudioCategory": "AudioCat_Weapons_Battleaxe"
+  "Volume": 0,
+  "PreventSoundInterruption": true,
+  "Parent": "SFX_Attn_Quiet"
 }
 ```
+
+Sound file paths are rooted at `Common/Sounds/`. Real top-level prefixes include
+`Sounds/Blocks`, `Sounds/Weapons`, `Sounds/NPC`, `Sounds/Environments`,
+`Sounds/PlayerActions`, `Sounds/Items`, `Sounds/Movement`, `Sounds/Projectiles`,
+`Sounds/UI`, `Sounds/Tools`, `Sounds/Magic`, `Sounds/Effects`, `Sounds/Deployables`,
+`Sounds/CreativePlay`, and `Sounds/Crafting`. There is no `SFX/` segment in any
+sound file path.
 
 ### RandomSettings
 
@@ -96,20 +124,32 @@ Add variation to prevent repetitive sounds:
 
 ### Parent Inheritance
 
-Sound events can inherit from presets to share attenuation settings:
+Sound events can inherit from presets to share attenuation settings (`MaxDistance` /
+`StartAttenuationDistance`). The shared attenuation presets live as `SFX_Attn_*.json`
+files at the root of `SoundEvents/`:
 
 ```json
 {
-  "Parent": "SFX_Attn_Large",
-  "Files": ["Sounds/SFX/Weapons/Mace/Impact/Mace_Impact_01.ogg"],
-  "Volume": -2
+  "Layers": [
+    {
+      "Files": ["Sounds/Weapons/Mace/Mace_Impact_01.ogg"],
+      "Volume": -2
+    }
+  ],
+  "Parent": "SFX_Attn_Loud"
 }
 ```
 
-Common attenuation presets:
-- `SFX_Attn_Large` - Large radius (explosions, loud impacts)
-- `SFX_Attn_Medium` - Medium radius (combat, interactions)
-- `SFX_Attn_Small` - Small radius (footsteps, UI)
+Real attenuation presets (quietest to loudest):
+- `SFX_Attn_ExtremelyQuiet`
+- `SFX_Attn_VeryQuiet`
+- `SFX_Attn_Quiet`
+- `SFX_Attn_Moderate`
+- `SFX_Attn_Loud`
+- `SFX_Attn_VeryLoud`
+
+`SFX_Attn_Moderate` and `SFX_Attn_Quiet` account for the large majority of `Parent`
+references. A sound event may also inherit from another concrete sound event.
 
 ### Examples
 
@@ -117,52 +157,68 @@ Common attenuation presets:
 
 ```json
 {
-  "Files": [
-    "Sounds/SFX/Materials/Bone/Break/Bone_Break_01.ogg",
-    "Sounds/SFX/Materials/Bone/Break/Bone_Break_02.ogg",
-    "Sounds/SFX/Materials/Bone/Break/Bone_Break_03.ogg"
+  "Layers": [
+    {
+      "Files": [
+        "Sounds/Blocks/Glass/Glass_Break_01.ogg",
+        "Sounds/Blocks/Glass/Glass_Break_02.ogg",
+        "Sounds/Blocks/Glass/Glass_Break_03.ogg",
+        "Sounds/Blocks/Glass/Glass_Break_04.ogg"
+      ],
+      "Volume": 6.0,
+      "RandomSettings": {
+        "MinPitch": -1,
+        "MaxPitch": 1,
+        "MinVolume": -1
+      }
+    }
   ],
+  "PreventSoundInterruption": true,
   "Volume": 0,
-  "RandomSettings": {
-    "MinPitch": 0.9,
-    "MaxPitch": 1.1
-  },
-  "RoundRobinHistorySize": 2,
-  "AudioCategory": "AudioCat_BlockDestruction"
+  "Parent": "SFX_Attn_Quiet"
 }
 ```
 
-**Weapon Swing (multi-layer):**
+**Attenuation Preset (defines distance falloff for children):**
 
 ```json
 {
   "Layers": [
     {
-      "Files": [
-        "Sounds/SFX/Weapons/Battleaxe/Swing/Battleaxe_Swing_01.ogg",
-        "Sounds/SFX/Weapons/Battleaxe/Swing/Battleaxe_Swing_02.ogg"
-      ],
-      "Volume": -3,
+      "Files": ["Sounds/TEST/SFX_Test_Blip_A.ogg"],
       "RandomSettings": {
-        "MinPitch": 0.95,
-        "MaxPitch": 1.05
-      }
+        "MinPitch": 0,
+        "MaxPitch": 0,
+        "MinVolume": 0
+      },
+      "Volume": 6.0
     }
   ],
-  "AudioCategory": "AudioCat_Weapons_Battleaxe"
+  "Volume": 0,
+  "MaxDistance": 45,
+  "StartAttenuationDistance": 15
 }
 ```
 
-**Looping Environmental Sound:**
+**Looping Sound:**
 
 ```json
 {
-  "Files": ["Sounds/SFX/Environments/Water/Waterfall_Loop.ogg"],
-  "Volume": -6,
-  "Looping": true,
-  "MaxDistance": 50,
-  "StartAttenuationDistance": 10,
-  "AudioCategory": "AudioCat_Environment"
+  "Layers": [
+    {
+      "Files": ["Sounds/Items/Candle/Candle_Loop_01.ogg"],
+      "Volume": -6.0,
+      "RandomSettings": {
+        "MinPitch": 0,
+        "MaxPitch": 0,
+        "MinVolume": 0,
+        "MaxStartOffset": 10
+      },
+      "Looping": true
+    }
+  ],
+  "Volume": 0,
+  "Parent": "SFX_Attn_VeryQuiet"
 }
 ```
 
@@ -178,8 +234,10 @@ Audio categories define volume mixing groups with hierarchical inheritance. They
 
 ```
 AudioCategories/
-├── NPC/         - Per-NPC audio categories
-└── Weapons/     - Per-weapon audio categories
+├── AudioCat_*.json  - Root mixing groups (Music, UI, NPC, Footsteps, ...)
+├── NPC/             - Per-NPC audio categories (AudioCat_NPC_Wolf, ...)
+├── UI/              - UI sub-categories
+└── Weapons/         - Per-weapon audio categories (AudioCat_Sword, ...)
 ```
 
 ### Properties
@@ -206,17 +264,23 @@ AudioCategories/
 
 ### Common Categories
 
+Root categories (top of `AudioCategories/`):
+
 | Category | Purpose |
 |----------|---------|
 | `AudioCat_Music` | Background music |
-| `AudioCat_SFX` | General sound effects |
-| `AudioCat_Environment` | Environmental sounds |
 | `AudioCat_UI` | User interface sounds |
-| `AudioCat_Combat` | Combat sounds |
-| `AudioCat_BlockDestruction` | Block breaking sounds |
 | `AudioCat_Footsteps` | Footstep sounds |
 | `AudioCat_NPC` | NPC vocalizations |
-| `AudioCat_Weapons_*` | Per-weapon-type categories |
+| `AudioCat_Weapons` | Weapon sounds |
+| `AudioCat_Discovery` | Discovery / progression stingers |
+| `AudioCat_Inventory` | Inventory interaction sounds |
+
+Sub-categories inherit via `Parent`. Examples:
+
+- `AudioCat_NPC_*` (e.g. `AudioCat_NPC_Wolf`, `AudioCat_NPC_Dragon`) inherit `AudioCat_NPC`
+- Per-weapon categories (e.g. `AudioCat_Sword`, `AudioCat_Battleaxe`, `AudioCat_Mace`, `AudioCat_Daggers`, `AudioCat_Shield`, `AudioCat_Shortbow`, `AudioCat_Magic_Staff`) inherit `AudioCat_Weapons`
+- `AudioCat_UI_Sleep` inherits `AudioCat_UI`
 
 ---
 
@@ -230,16 +294,14 @@ Ambient audio defines soundscapes that play based on environmental conditions. I
 
 ```
 AmbienceFX/
-├── Ambience/    - Zone-specific ambient soundscapes
-│   ├── Zone1/
-│   │   ├── Environments/
-│   │   │   ├── Forest/
-│   │   │   ├── Desert/
-│   │   │   └── Cave/
-│   │   └── Weather/
-│   └── Global/
-└── Music/       - Background music tracks
-    └── Global/
+├── Ambience/      - Ambient soundscapes (beds + emitters)
+│   ├── Global/      - Cave, Lava, Dungeon, Mineshaft, Underwater, Weather, ...
+│   ├── Zone1/ ... Zone4/  - Per-zone Environments/ and Global/
+│   └── Unique/      - Named locations (Forgotten_Temple, Dread_Wade, ...)
+├── Music/         - Background music (Global/, Zone0/ ... Zone4/, Unique/)
+├── ReverbZones/   - Reverb zone definitions (Forest, Mountain, Plains, Swamp, Underground, Prefabs)
+├── AmbFX_*.json   - Top-level ambience definitions (e.g. AmbFX_Void)
+└── Z2_Dungeon.json
 ```
 
 ### Properties
@@ -250,6 +312,8 @@ AmbienceFX/
 | `AmbientBed` | object | Continuous background sound |
 | `Sounds` | array | Triggered emitter sounds |
 | `Music` | object | Background music configuration |
+| `AudioCategory` | string | Mixing category (commonly `AudioCat_Music`) |
+| `Priority` | int | Selection priority when multiple definitions match |
 
 ### Conditions System
 
@@ -260,67 +324,72 @@ Conditions determine when ambient audio plays:
 | `EnvironmentIds` | array | Specific environment IDs |
 | `EnvironmentTagPattern` | object | Tag pattern matching (see below) |
 | `WeatherTagPattern` | object | Weather condition matching |
-| `SunLightLevel` | object | Light level range (Min/Max) |
-| `DayTime` | object | Time of day range (Min/Max, 0.0-1.0) |
+| `SunLightLevel` | object | Light level range (Min/Max, 0-15) |
+| `DayTime` | object | Time of day range (Min/Max, hours; Min may be greater than Max to wrap past midnight) |
 | `Altitude` | object | Height range (Min/Max) |
+| `Walls` | object | Range (Min/Max) for the number of surrounding walls (enclosure) |
 
 ### Tag Patterns
 
-Tag patterns use boolean logic to match conditions:
+Tag patterns use boolean logic to match environment/weather tags. Each node has an
+`Op` field; the rest of the node depends on the operator:
 
 ```json
 {
   "EnvironmentTagPattern": {
-    "And": [
-      { "Equals": "Forest" },
-      { "Not": { "Equals": "Dense" } }
+    "Op": "And",
+    "Patterns": [
+      { "Op": "Equals", "Tag": "Zone3" },
+      { "Op": "Not", "Pattern": { "Op": "Equals", "Tag": "Dungeons" } }
     ]
   }
 }
 ```
 
 **Operators:**
-- `Equals` - Exact tag match
-- `And` - All conditions must match
-- `Or` - Any condition must match
-- `Not` - Inverts the condition
+- `Equals` - Exact tag match; uses a `Tag` string
+- `And` - All sub-patterns must match; uses a `Patterns` array
+- `Or` - Any sub-pattern must match; uses a `Patterns` array
+- `Not` - Inverts a single nested `Pattern`
 
 ### AmbientBed
 
-Continuous looping background sound:
+Continuous looping background sound. The bed references an `.ogg` file directly via
+`Track` (not a sound event):
 
 ```json
 {
   "AmbientBed": {
-    "SoundEventId": "Amb_Forest_Day_Bed",
-    "Volume": -12,
-    "FadeInTime": 2.0,
-    "FadeOutTime": 2.0
+    "Track": "Sounds/Environments/Zone3/Environments/Frozen/Night/Z3_Frozen_Night_Stereo_LOOP.ogg",
+    "Volume": 3.0
   }
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `SoundEventId` | string | Sound event to loop |
+| `Track` | string | Path to the looping `.ogg` file (rooted at `Common/Sounds/`) |
 | `Volume` | float | Volume in dB |
-| `FadeInTime` | float | Fade in duration (seconds) |
-| `FadeOutTime` | float | Fade out duration (seconds) |
 
 ### Emitter Sounds
 
-Periodic triggered sounds with spatial positioning:
+Periodic triggered sounds with spatial positioning. Each entry references a sound
+event by `SoundEventId` and uses `Frequency` and `Radius` ranges (each an
+object with `Min`/`Max`):
 
 ```json
 {
   "Sounds": [
     {
-      "SoundEventId": "Amb_Forest_Bird_Chirp",
-      "MinDelay": 5.0,
-      "MaxDelay": 15.0,
-      "MinRadius": 10,
-      "MaxRadius": 30,
-      "Probability": 0.7
+      "SoundEventId": "SFX_Z3_Forest_Day_Birds",
+      "Frequency": {
+        "Min": 2,
+        "Max": 5
+      },
+      "Radius": {
+        "Min": 3,
+        "Max": 10
+      }
     }
   ]
 }
@@ -329,83 +398,61 @@ Periodic triggered sounds with spatial positioning:
 | Property | Type | Description |
 |----------|------|-------------|
 | `SoundEventId` | string | Sound event to trigger |
-| `MinDelay` | float | Minimum time between triggers |
-| `MaxDelay` | float | Maximum time between triggers |
-| `MinRadius` | float | Minimum spawn distance from player |
-| `MaxRadius` | float | Maximum spawn distance from player |
-| `Probability` | float | Chance to play when triggered |
+| `Frequency` | object | `Min`/`Max` range controlling how often the sound triggers |
+| `Radius` | object | `Min`/`Max` spawn distance range from the player |
 
 ### Music Configuration
 
-Background music track playlists:
+Background music track playlists. `Tracks` is an array of plain `.ogg` file path
+strings (rooted at `Common/Sounds/`, typically under `Music/`). Music definitions
+usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Priority`:
 
 ```json
 {
+  "Conditions": {
+    "Altitude": { "Min": 0, "Max": 150 },
+    "EnvironmentTagPattern": {
+      "Op": "And",
+      "Patterns": [
+        { "Op": "Equals", "Tag": "Zone3" },
+        { "Op": "Equals", "Tag": "Dungeons" }
+      ]
+    }
+  },
   "Music": {
     "Tracks": [
-      {
-        "SoundEventId": "Mus_Zone1_Forest_Day_01",
-        "Weight": 1.0
-      },
-      {
-        "SoundEventId": "Mus_Zone1_Forest_Day_02",
-        "Weight": 1.0
-      }
-    ],
-    "MinDelay": 60,
-    "MaxDelay": 180,
-    "FadeInTime": 3.0,
-    "FadeOutTime": 3.0
-  }
+      "Music/Zone3/Z3D-OutlanderDungeon.ogg"
+    ]
+  },
+  "AudioCategory": "AudioCat_Music",
+  "Priority": 80
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Tracks` | array | Weighted track list |
-| `MinDelay` | float | Minimum silence between tracks |
-| `MaxDelay` | float | Maximum silence between tracks |
-| `FadeInTime` | float | Track fade in duration |
-| `FadeOutTime` | float | Track fade out duration |
+| `Tracks` | array | List of `.ogg` file path strings |
+| `Volume` | float | Optional volume in dB |
 
 ### Complete Example
 
 ```json
 {
   "Conditions": {
-    "EnvironmentTagPattern": {
-      "And": [
-        { "Equals": "Forest" },
-        { "Equals": "Zone1" }
-      ]
+    "SunLightLevel": { "Min": 10, "Max": 15 },
+    "DayTime": { "Min": 5, "Max": 19 },
+    "EnvironmentIds": ["Env_Zone3_Mountains"],
+    "WeatherTagPattern": {
+      "Op": "Not",
+      "Pattern": { "Op": "Equals", "Tag": "Rain" }
     },
-    "DayTime": {
-      "Min": 0.25,
-      "Max": 0.75
-    }
-  },
-  "AmbientBed": {
-    "SoundEventId": "Amb_Zone1_Forest_Day_Bed",
-    "Volume": -9,
-    "FadeInTime": 2.0,
-    "FadeOutTime": 2.0
+    "Walls": { "Min": 0, "Max": 3 }
   },
   "Sounds": [
     {
-      "SoundEventId": "Amb_Zone1_Forest_Bird_01",
-      "MinDelay": 8.0,
-      "MaxDelay": 20.0,
-      "MinRadius": 15,
-      "MaxRadius": 40,
-      "Probability": 0.8
-    },
-    {
-      "SoundEventId": "Amb_Zone1_Forest_Rustle",
-      "MinDelay": 10.0,
-      "MaxDelay": 30.0,
-      "MinRadius": 5,
-      "MaxRadius": 20,
-      "Probability": 0.5
+      "SoundEventId": "SFX_Z3_Forest_Day_Birds",
+      "Frequency": { "Min": 2, "Max": 5 },
+      "Radius": { "Min": 3, "Max": 10 }
     }
   ]
 }
@@ -419,48 +466,40 @@ Background music track playlists:
 
 Equalizer presets for audio filtering, typically used for environmental effects like underwater audio.
 
+There are two EQ presets: `EQ_Default` and `EQ_Underwater`.
+
 ### Properties
 
-4-band parametric equalizer with Low, LowMid, HighMid, and High bands:
+A 4-band parametric equalizer (low shelf, two mid peaking bands, high shelf) defined
+with flat fields — there are no nested band objects:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Low` | object | Low frequency band |
-| `LowMid` | object | Low-mid frequency band |
-| `HighMid` | object | High-mid frequency band |
-| `High` | object | High frequency band |
+| `LowGain` | float | Low shelf gain in dB |
+| `LowCutOff` | float | Low shelf cutoff frequency (Hz) |
+| `LowMidGain` | float | Low-mid peaking gain in dB |
+| `LowMidCenter` | float | Low-mid center frequency (Hz) |
+| `LowMidWidth` | float | Low-mid bandwidth |
+| `HighMidGain` | float | High-mid peaking gain in dB |
+| `HighMidCenter` | float | High-mid center frequency (Hz) |
+| `HighMidWidth` | float | High-mid bandwidth |
+| `HighGain` | float | High shelf gain in dB |
+| `HighCutOff` | float | High shelf cutoff frequency (Hz) |
 
-### Band Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Gain` | float | Volume adjustment in dB |
-| `CutOff` | float | Cutoff frequency (Hz) for Low/High |
-| `Center` | float | Center frequency (Hz) for mid bands |
-| `Width` | float | Bandwidth (octaves) for mid bands |
-
-### Example (Underwater EQ)
+### Example (EQ_Underwater)
 
 ```json
 {
-  "Low": {
-    "Gain": 0,
-    "CutOff": 200
-  },
-  "LowMid": {
-    "Gain": -3,
-    "Center": 500,
-    "Width": 1.5
-  },
-  "HighMid": {
-    "Gain": -9,
-    "Center": 2000,
-    "Width": 2.0
-  },
-  "High": {
-    "Gain": -18,
-    "CutOff": 4000
-  }
+  "LowGain": 0,
+  "LowCutOff": 300,
+  "LowMidGain": -17.19,
+  "LowMidCenter": 1000,
+  "LowMidWidth": 1,
+  "HighMidGain": -17.9,
+  "HighMidCenter": 1500,
+  "HighMidWidth": 1,
+  "HighGain": -17.9,
+  "HighCutOff": 4000
 }
 ```
 
@@ -470,54 +509,66 @@ Equalizer presets for audio filtering, typically used for environmental effects 
 
 **Location:** `Server/Audio/Reverb/`
 
-Reverb presets simulate acoustic environments like caves, rooms, and outdoor spaces.
+Reverb presets simulate acoustic environments. They are organized by biome/zone and
+special locations rather than generic room shapes.
 
 ### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `DryGain` | float | Dry (unprocessed) signal gain in dB |
+| `ModalDensity` | float | Modal density (texture of the reverb) |
+| `Diffusion` | float | Echo density / diffusion |
+| `Gain` | float | Overall reverb gain in dB |
+| `HighFrequencyGain` | float | High-frequency gain in dB |
 | `DecayTime` | float | Reverb tail duration (seconds) |
-| `Diffusion` | float | Echo density (0.0-1.0) |
-| `Density` | float | Modal density (0.0-1.0) |
-| `LowShelfFrequency` | float | Low frequency shelf (Hz) |
-| `LowShelfGain` | float | Low frequency adjustment (dB) |
-| `HighCut` | float | High frequency rolloff (Hz) |
-| `EarlyDelay` | float | Pre-delay time (ms) |
-| `LateDelay` | float | Late reflection delay (ms) |
-| `Reflections` | float | Early reflection level (dB) |
-| `LateReverb` | float | Late reverb level (dB) |
-| `HFReference` | float | High frequency reference (Hz) |
-| `HFDecayRatio` | float | HF decay relative to mid (0.0-1.0) |
+| `HighFrequencyDecayRatio` | float | HF decay relative to mid frequencies |
+| `ReflectionGain` | float | Early reflection gain in dB |
+| `ReflectionDelay` | float | Early reflection delay (seconds) |
+| `LateReverbGain` | float | Late reverb gain in dB |
+| `LateReverbDelay` | float | Late reverb delay (seconds) |
+| `RoomRolloffFactor` | float | Distance-based attenuation factor |
+| `AirAbsorbptionHighFrequencyGain` | float | Air absorption HF gain (field spelled as in the assets) |
+| `LimitDecayHighFrequency` | boolean | Clamp HF decay time |
 
-### Example (Cave Reverb)
+### Example (Rev_Cave)
 
 ```json
 {
-  "DecayTime": 2.5,
-  "Diffusion": 0.8,
-  "Density": 0.9,
-  "LowShelfFrequency": 250,
-  "LowShelfGain": 0,
-  "HighCut": 8000,
-  "EarlyDelay": 20,
-  "LateDelay": 40,
-  "Reflections": -6,
-  "LateReverb": -3,
-  "HFReference": 5000,
-  "HFDecayRatio": 0.6
+  "DryGain": 0,
+  "ModalDensity": 1,
+  "Diffusion": 1,
+  "Gain": -10,
+  "HighFrequencyGain": -8,
+  "DecayTime": 3,
+  "HighFrequencyDecayRatio": 1.3,
+  "ReflectionGain": -10.4,
+  "ReflectionDelay": 0.015,
+  "LateReverbGain": -3,
+  "LateReverbDelay": 0.02,
+  "RoomRolloffFactor": 0,
+  "AirAbsorbptionHighFrequencyGain": -0.05,
+  "LimitDecayHighFrequency": false
 }
 ```
 
-### Common Presets
+### Presets
+
+The 21 presets are biome/zone and location based:
 
 | Preset | Description |
 |--------|-------------|
-| `Rev_Cave` | Large cave with long decay |
-| `Rev_Cave_Small` | Small cave or tunnel |
-| `Rev_Room` | Indoor room |
-| `Rev_Hall` | Large hall or chamber |
-| `Rev_Outdoor` | Open outdoor space |
-| `Rev_Underwater` | Muffled underwater acoustics |
+| `Rev_Default` | Default fallback reverb |
+| `Rev_Cave` | Cave acoustics |
+| `Rev_Forest`, `Rev_Forest_Desert`, `Rev_Forest_Fog`, `Rev_Forest_Snow` | Forest biome variants |
+| `Rev_Mountain`, `Rev_Mountain_Fog`, `Rev_Mountain_Snow` | Mountain biome variants |
+| `Rev_Plains`, `Rev_Plains_Desert`, `Rev_Plains_Fog`, `Rev_Plains_Snow` | Plains biome variants |
+| `Rev_Swamp`, `Rev_Swamp_Foggy` | Swamp biome variants |
+| `Rev_Mineshaft` | Mineshaft interiors |
+| `Rev_Temple`, `Rev_Temple_Grand` | Temple interiors |
+| `Rev_Village` | Village ambience |
+| `Rev_Mage_Tower` | Mage Tower interior |
+| `Rev_Reflective_Slap` | Hard reflective slap-back |
 
 ---
 
@@ -525,32 +576,39 @@ Reverb presets simulate acoustic environments like caves, rooms, and outdoor spa
 
 **Location:** `Server/Audio/ItemSounds/`
 
-Item sounds define drag and drop sounds for inventory interactions. Items reference these via `ItemSoundSetId`.
+Item sounds define drag and drop sounds for inventory interactions. Items reference
+these via `ItemSoundSetId` (1,645 references across the server assets). The files are
+named `ISS_*.json` (e.g. `ISS_Armor_Cloth.json`, `ISS_Items_Metal.json`,
+`ISS_Weapons_Wood.json`, `ISS_Default.json`).
 
 ### Properties
 
+The `Drag` and `Drop` sound-event references are nested under a `SoundEvents` object:
+
 | Property | Type | Description |
 |----------|------|-------------|
-| `Drag` | string | Sound event when picking up item |
-| `Drop` | string | Sound event when placing item |
+| `SoundEvents.Drop` | string | Sound event when placing/dropping the item |
+| `SoundEvents.Drag` | string | Sound event when picking up the item |
 
-### Example
+### Example (`ISS_Armor_Cloth.json`)
 
 ```json
 {
-  "Drag": "SFX_UI_Inventory_Drag_Metal",
-  "Drop": "SFX_UI_Inventory_Drop_Metal"
+  "SoundEvents": {
+    "Drop": "SFX_Drop_Armor_Cloth",
+    "Drag": "SFX_Drag_Armor_Cloth"
+  }
 }
 ```
 
 ### Integration with Items
 
-In item definitions (`Server/Item/`):
+In item definitions (`Server/Item/`), the `ItemSoundSetId` matches an `ISS_*` set name:
 
 ```json
 {
   "Name": "Iron Sword",
-  "ItemSoundSetId": "ItemSounds_Metal"
+  "ItemSoundSetId": "ISS_Items_Metal"
 }
 ```
 
@@ -560,15 +618,25 @@ In item definitions (`Server/Item/`):
 
 **Location:** `Server/Audio/SoundSets/`
 
-Sound sets group related sound events under named keys for easy reference by other systems.
+Sound sets group related sound events under named keys for reference by other systems.
+The named keys are nested under a `SoundEvents` object, alongside a top-level
+`Category` field naming the audio category. The only sound set is
+`CreativePlayDefaults.json`.
 
-### Example
+### Example (`CreativePlayDefaults.json`, truncated)
 
 ```json
 {
-  "Attack": "SFX_Sword_Swing",
-  "Impact": "SFX_Sword_Impact",
-  "Block": "SFX_Sword_Block"
+  "SoundEvents": {
+    "Error": "SFX_Creative_Play_Error",
+    "Rotate_Yaw": "SFX_Rotate_Yaw_Default",
+    "Rotate_Pitch": "SFX_Rotate_Pitch_Default",
+    "Eyedropper_Select": "SFX_Creative_Play_Eyedropper_Select",
+    "Brush_Paint": "SFX_Creative_Play_Brush_Paint_Base",
+    "Brush_Erase": "SFX_Creative_Play_Brush_Erase",
+    "Paste": "SFX_Creative_Play_Paste"
+  },
+  "Category": "UI"
 }
 ```
 
@@ -585,14 +653,19 @@ BlockSounds/
 ├── Bone/
 │   ├── SFX_Bone_Break.json
 │   ├── SFX_Bone_Build.json
-│   ├── SFX_Bone_Walk.json
-│   └── SFX_Bone_Land.json
+│   ├── SFX_Bone_Hit.json
+│   ├── SFX_Bone_Land.json
+│   └── SFX_Bone_Walk.json
 ├── Stone/
 │   ├── SFX_Stone_Break.json
+│   ├── SFX_Stone_Harvest.json
 │   └── ...
 └── Wood/
     └── ...
 ```
+
+Material directories include `Stone`, `Wood`, `Dirt`, `Grass`, `Sand`, `Gravel`,
+`Metal`, `Glass`, `Ice`, `Snow`, `Mud`, `Leaves`, `Cloth`, `Bone`, and many more.
 
 Block types specify their material in their definition, and the audio system automatically loads the corresponding sounds.
 
@@ -605,8 +678,8 @@ Interactions can trigger sounds via `WorldSoundEventId` (spatial, heard by all n
   "Type": "Simple",
   "RunTime": 0.2,
   "Effects": {
-    "WorldSoundEventId": "SFX_Sword_Swing",
-    "LocalSoundEventId": "SFX_UI_Click"
+    "WorldSoundEventId": "SFX_Sword_T1_Swing_Down",
+    "LocalSoundEventId": "SFX_Sword_T1_Swing_Down_Local"
   }
 }
 ```
@@ -624,7 +697,7 @@ NPCs reference sound events in their animation definitions. Animation events can
     {
       "Time": 0.2,
       "Type": "Sound",
-      "SoundEventId": "SFX_Wolf_Attack"
+      "SoundEventId": "SFX_Zombie_Attack_Bite"
     }
   ]
 }
@@ -636,12 +709,13 @@ Weapons define their audio category for mixing control:
 
 ```json
 {
-  "ItemId": "Battleaxe_T1",
-  "AudioCategory": "AudioCat_Weapons_Battleaxe"
+  "ItemId": "Sword_T1",
+  "AudioCategory": "AudioCat_Sword"
 }
 ```
 
-The category hierarchy allows adjusting all battleaxe sounds together while still inheriting from the parent weapons category.
+The category hierarchy allows adjusting all sword sounds together (via `AudioCat_Sword`)
+while still inheriting from the parent `AudioCat_Weapons` category.
 
 ---
 
@@ -657,7 +731,7 @@ All audio assets use JSON format:
 | Music | `AmbienceFX/Music/*.json` | Background music |
 | EQ Preset | `EQ/*.json` | Equalizer settings |
 | Reverb Preset | `Reverb/*.json` | Reverb environments |
-| Item Sounds | `ItemSounds/*.json` | Inventory sounds |
+| Item Sounds | `ItemSounds/ISS_*.json` | Inventory sounds |
 | Sound Set | `SoundSets/*.json` | Named sound groups |
 
 Sound files themselves are `.ogg` format located in `Common/Sounds/`.

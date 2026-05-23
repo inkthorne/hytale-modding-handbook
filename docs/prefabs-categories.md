@@ -1,6 +1,6 @@
 # Prefab Categories
 
-Hytale includes 2,455+ prefab files organized into 9 major categories for world generation. This reference documents the complete taxonomy of prefab types, naming conventions, and directory structures.
+Hytale includes ~7,824 prefab files organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 
 > **See also:** [Prefabs API](prefabs.md) for Java API and file format documentation
 
@@ -10,17 +10,19 @@ Hytale includes 2,455+ prefab files organized into 9 major categories for world 
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Trees](#trees) | ~492 | Growth stages, species, biome variants |
-| [Rock Formations](#rock-formations) | ~676 | Rocks, arches, fossils, pillars, mushrooms |
-| [NPC Structures](#npc-structures) | ~452 | Faction buildings, villages, outposts |
-| [Monuments](#monuments) | ~231 | Towers, temples, encounters, camps |
-| [Mineshafts](#mineshafts) | ~117 | Modular mine components |
-| [Dungeons](#dungeons) | ~84 | Modular dungeon rooms |
-| [Caves](#caves) | ~180 | Formations, nests, nodes |
-| [Plants](#plants) | ~205 | Bushes, cacti, coral, driftwood |
-| [Spawn](#spawn) | ~18 | Player spawn layouts |
+| [Trees](#trees) | ~1126 | Growth stages, species, biome variants |
+| [Rock Formations](#rock-formations) | ~1676 | Rocks, arches, fossils, pillars, mushrooms |
+| [NPC Structures](#npc-structures) | ~856 | Faction buildings, villages, outposts |
+| [Monuments](#monuments) | ~806 | Towers, temples, encounters, camps |
+| [Mineshafts](#mineshafts) | ~1160 | Modular mine components |
+| [Dungeons](#dungeons) | ~858 | Modular dungeon rooms |
+| [Caves](#caves) | ~492 | Formations, nests, nodes |
+| [Plants](#plants) | ~555 | Bushes, cacti, coral, driftwood |
+| [Spawn](#spawn) | ~20 | Player spawn layouts |
 
-**Location:** `Assets.zip > Prefabs/`
+Additional top-level directories include `Mineshaft_Drift`, `Unique`, `Blocksets`, `Testing`, and `TestTree`.
+
+**Location:** `Assets.zip > Server/Prefabs/`
 
 ---
 
@@ -31,14 +33,14 @@ Prefab files follow consistent naming patterns that encode category, type, varia
 ### General Pattern
 
 ```
-{Category}_{Type}_{Variant}_{Size}_{Number}.prefab.json.lpf
+{Category}_{Type}_{Variant}_{Size}_{Number}.prefab.json
 ```
 
 ### Common Patterns
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
-| `{Tree}_Stage_{N}` | `Oak_Stage_2` | Tree growth stage (0-3) |
+| `{Tree}_Stage{N}_{NNN}` | `Oak_Stage2_001` | Tree growth stage (0-7+) |
 | `{Type}_{Biome}` | `Rock_Desert` | Biome-specific variant |
 | `{Type}_{Material}` | `Rock_Basalt` | Material variant |
 | `{Type}_{Size}` | `Rock_Large` | Size variant (Small, Medium, Large) |
@@ -47,12 +49,15 @@ Prefab files follow consistent naming patterns that encode category, type, varia
 
 ### Growth Stage Naming (Trees)
 
+Each species directory contains one **subdirectory per growth stage** (`Stage_0`, `Stage_1`, ... up to `Stage_7` for some species, plus optional `Stage_00` and `Stumps`). Each subdirectory holds numbered prefab files, e.g. `Trees/Oak/Stage_2/Oak_Stage2_001.prefab.json`.
+
 | Stage | Age | Description |
 |-------|-----|-------------|
 | `Stage_0` | Sapling | Newly planted, small |
 | `Stage_1` | Young | Growing, moderate size |
-| `Stage_2` | Mature | Full-grown, standard |
-| `Stage_3` | Ancient | Large, may have special features |
+| `Stage_2`-`Stage_3` | Mature | Full-grown, standard |
+| `Stage_4`-`Stage_7` | Ancient | Large, may have special features |
+| `Stumps` | Remnant | Cut/decayed stumps |
 
 ### Biome Variant Suffixes
 
@@ -71,50 +76,55 @@ Prefab files follow consistent naming patterns that encode category, type, varia
 ## Trees
 
 **Location:** `Prefabs/Trees/`
-**Count:** ~492 files
+**Count:** ~1126 files
 
-Trees are organized by species, with each species having multiple growth stages and biome variants.
+Trees are organized by species. Each species directory contains growth-stage subdirectories (`Stage_0`, `Stage_1`, ...), each holding numbered prefab files.
 
 ### Directory Structure
 
 ```
 Prefabs/Trees/
 ├── Oak/
-│   ├── Oak_Stage_0.prefab.json.lpf
-│   ├── Oak_Stage_1.prefab.json.lpf
-│   ├── Oak_Stage_2.prefab.json.lpf
-│   └── Oak_Stage_3.prefab.json.lpf
+│   ├── Stage_0/
+│   │   ├── Oak_Stage0_001.prefab.json
+│   │   └── ...
+│   ├── Stage_1/
+│   ├── Stage_2/
+│   │   ├── Oak_Stage2_001.prefab.json
+│   │   ├── Oak_Stage2_002.prefab.json
+│   │   └── ...
+│   ├── ...
+│   └── Stumps/
 ├── Birch/
 ├── Fir/
 ├── Palm/
 ├── Banyan/
 ├── Willow/
-├── Pine/
 ├── Maple/
-├── Cherry/
-├── Acacia/
+├── Redwood/
+├── Jungle/
+├── Boab/
 └── ...
 ```
 
 ### Tree Species
 
-| Species | Stages | Biomes | Notes |
-|---------|--------|--------|-------|
-| `Oak` | 0-3 | Temperate | Common forest tree |
-| `Birch` | 0-3 | Temperate, Winter | White bark |
-| `Fir` | 0-3 | Temperate, Winter | Coniferous |
-| `Pine` | 0-3 | Temperate, Winter | Tall coniferous |
-| `Palm` | 0-3 | Desert, Tropical | Coastal regions |
-| `Banyan` | 0-3 | Tropical | Large canopy |
-| `Willow` | 0-3 | Swamp, Temperate | Drooping branches |
-| `Maple` | 0-3 | Temperate | Autumn colors |
-| `Cherry` | 0-3 | Temperate | Flowering |
-| `Acacia` | 0-3 | Savanna, Desert | Flat canopy |
-| `Mangrove` | 0-3 | Swamp | Water roots |
-| `Redwood` | 0-3 | Temperate | Giant trees |
-| `Cypress` | 0-3 | Swamp | Swamp tree |
-| `Baobab` | 0-3 | Savanna | Thick trunk |
-| `Jungle` | 0-3 | Tropical | Dense canopy |
+Real species directories (partial list of ~80) under `Prefabs/Trees/`:
+
+| Species | Notes |
+|---------|-------|
+| `Oak` | Common forest tree; also `Oak_Moss`, `Oak_Stumps` |
+| `Birch` | White bark |
+| `Fir` | Coniferous; many variants (`Fir_Snow`, `Fir_Autumn`, `Fir_Dead`, `Fir_Logs`) |
+| `Palm` | Coastal; also `Palm_Green` |
+| `Banyan` | Large canopy |
+| `Willow` | Drooping branches |
+| `Maple` | Autumn colors; also `Maple_Stumps` |
+| `Redwood` | Giant trees; also `Redwood_Logs`, `Redwood_Stumps` |
+| `Jungle` | Dense canopy; many variants (`Jungle1`-`Jungle3`, `Jungle_Crystal`, `Jungle_Mushroom`) |
+| `Boab` | Thick trunk (savanna) |
+| `Ash` | Many variants (`Ash_Dead`, `Ash_swamp`, `Ash_twisted`, ...) |
+| `Aspen`, `Beech`, `Cedar`, `Crystal`, `Petrified`, `Wisteria` | Additional species |
 
 ### Tree Variants
 
@@ -128,7 +138,7 @@ Prefabs/Trees/
 
 ### Example: Oak Tree at Stage 2
 
-**File:** `Prefabs/Trees/Oak/Oak_Stage_2_01.prefab.json.lpf`
+**File:** `Prefabs/Trees/Oak/Stage_2/Oak_Stage2_001.prefab.json`
 
 This prefab contains:
 - Trunk blocks with appropriate rotations
@@ -141,9 +151,9 @@ This prefab contains:
 ## Rock Formations
 
 **Location:** `Prefabs/Rock_Formations/`
-**Count:** ~676 files
+**Count:** ~1676 files
 
-Rock formations provide natural terrain features including standalone rocks, arches, fossils, pillars, and geological features.
+Rock formations provide natural terrain features including standalone rocks, arches, fossils, pillars, and geological features. Material variants live in subdirectories under `Rocks/`.
 
 ### Directory Structure
 
@@ -151,44 +161,55 @@ Rock formations provide natural terrain features including standalone rocks, arc
 Prefabs/Rock_Formations/
 ├── Rocks/
 │   ├── Stone/
-│   │   ├── Rock_Stone_Small_01.prefab.json.lpf
-│   │   ├── Rock_Stone_Medium_01.prefab.json.lpf
-│   │   └── Rock_Stone_Large_01.prefab.json.lpf
-│   ├── Basalt/
 │   ├── Sandstone/
 │   ├── Quartzite/
-│   └── Volcanic/
+│   ├── Volcanic/
+│   ├── Basalt/
+│   ├── Calcite/
+│   ├── Chalk/
+│   ├── Gems/
+│   ├── Geodes/
+│   ├── Frozenstone/
+│   └── ...
 ├── Arches/
-├── Fossils/
 ├── Pillars/
-├── Mushrooms/
+├── Dolmen/
+├── Fossils/
+├── Ice_Formations/
+├── Crystal_Pattern/
+├── Crystal_Pits/
 ├── Hotsprings/
-└── Crystals/
+├── Crystals/
+├── Mushrooms/
+└── Stalactites/
 ```
 
 ### Subcategories
 
 | Subcategory | Count | Description |
 |-------------|-------|-------------|
-| `Rocks/` | ~300 | Standard rock formations |
-| `Arches/` | ~40 | Natural stone arches |
-| `Fossils/` | ~50 | Exposed fossil formations |
-| `Pillars/` | ~80 | Tall stone columns |
-| `Mushrooms/` | ~60 | Giant mushroom formations |
+| `Rocks/` | ~944 | Standard rock formations (by material) |
+| `Arches/` | ~275 | Natural stone arches |
+| `Pillars/` | ~215 | Tall stone columns |
+| `Fossils/` | ~72 | Exposed fossil formations |
+| `Mushrooms/` | ~33 | Giant mushroom formations |
 | `Hotsprings/` | ~30 | Geothermal features |
-| `Crystals/` | ~100 | Crystal clusters |
+| `Stalactites/` | ~23 | Hanging rock formations |
+| `Ice_Formations/` | ~17 | Frozen formations |
 
-### Material Variants
+### Material Variants (`Rocks/` subdirectories)
 
 | Material | Biomes | Appearance |
 |----------|--------|------------|
 | `Stone` | Universal | Gray, standard rock |
-| `Basalt` | Volcanic | Dark, columnar |
-| `Sandstone` | Desert | Tan, layered |
+| `Sandstone` | Desert | Tan, layered (also `Sandstone_Red`, `Sandstone_White`) |
 | `Quartzite` | Mountains | White, crystalline |
-| `Granite` | Mountains | Speckled gray |
-| `Limestone` | Caves | Light gray, porous |
-| `Obsidian` | Volcanic | Black, glassy |
+| `Volcanic` | Volcanic | Dark, igneous |
+| `Basalt` | Volcanic | Dark, columnar |
+| `Calcite` | Caves | Light, crystalline |
+| `Chalk` | Coastal | White, soft |
+| `Gems` / `Geodes` | Caves | Gem-bearing rock |
+| `Frozenstone` | Winter | Icy stone |
 
 ### Size Variants
 
@@ -201,7 +222,7 @@ Prefabs/Rock_Formations/
 
 ### Example: Sandstone Arch
 
-**File:** `Prefabs/Rock_Formations/Arches/Arch_Sandstone_01.prefab.json.lpf`
+**File:** `Prefabs/Rock_Formations/Arches/Arch_Sandstone_01.prefab.json`
 
 Contains sandstone blocks arranged in an arch formation, with anchor at the base center for proper terrain integration.
 
@@ -210,27 +231,29 @@ Contains sandstone blocks arranged in an arch formation, with anchor at the base
 ## NPC Structures
 
 **Location:** `Prefabs/Npc/`
-**Count:** ~452 files
+**Count:** ~856 files
 
-NPC structures represent buildings and camps for various factions. Each faction has distinct architectural styles and building types.
+NPC structures represent buildings and camps for various factions. Each faction directory is further organized by biome/material theme (e.g. `Oak`, `Redwood`, `Swamp`).
 
 ### Directory Structure
 
 ```
 Prefabs/Npc/
 ├── Kweebec/
-│   ├── Houses/
-│   │   ├── Kweebec_House_Small_01.prefab.json.lpf
-│   │   ├── Kweebec_House_Medium_01.prefab.json.lpf
-│   │   └── Kweebec_House_Large_01.prefab.json.lpf
-│   ├── Shops/
-│   ├── Wells/
-│   └── Decorations/
-├── Scarak/
+│   ├── Oak/
+│   │   ├── Kweebec_Oak_Well_001.prefab.json
+│   │   └── ...
+│   ├── Redwood/
+│   ├── Swamp/
+│   └── ...
 ├── Trork/
-├── Yeti/
 ├── Feran/
-└── Outlander/
+├── Outlander/
+├── Scarak/
+├── Yeti/
+├── Dragons/
+├── Slothian/
+└── Hedera/
 ```
 
 ### Factions
@@ -238,11 +261,14 @@ Prefabs/Npc/
 | Faction | Style | Biomes | Notes |
 |---------|-------|--------|-------|
 | `Kweebec` | Organic, wood | Forest | Friendly forest dwellers |
-| `Scarak` | Hive, organic | Underground | Insectoid structures |
 | `Trork` | Crude, bone | Swamp, Forest | Tribal camps |
-| `Yeti` | Ice, stone | Winter | Mountain dwellings |
 | `Feran` | Refined, stone | Varied | Wolf-like humanoids |
 | `Outlander` | Human, varied | Varied | Human settlements |
+| `Scarak` | Hive, organic | Underground | Insectoid structures |
+| `Yeti` | Ice, stone | Winter | Mountain dwellings |
+| `Dragons` | Lair structures | Varied | Dragon-related sites |
+| `Slothian` | Organic | Varied | Slothian structures |
+| `Hedera` | Plant, vine | Varied | Hedera structures |
 
 ### Building Types
 
@@ -265,9 +291,9 @@ Prefabs/Npc/
 | `Medium` | 3-4 rooms | 2-4 |
 | `Large` | 5+ rooms | 4+ |
 
-### Example: Kweebec House
+### Example: Kweebec Well
 
-**File:** `Prefabs/Npc/Kweebec/Houses/Kweebec_House_Medium_01.prefab.json.lpf`
+**File:** `Prefabs/Npc/Kweebec/Oak/Kweebec_Oak_Well_001.prefab.json`
 
 Contains:
 - Wood and leaf block walls
@@ -281,39 +307,46 @@ Contains:
 ## Monuments
 
 **Location:** `Prefabs/Monuments/`
-**Count:** ~231 files
+**Count:** ~806 files
 
-Monuments are unique or semi-unique structures including towers, temples, encounter areas, and points of interest.
+Monuments are unique or semi-unique structures including towers, temples, encounter areas, and points of interest. Top-level categories are `Challenge`, `Encounter`, `Incidental`, `Story`, and `Unique`. Special structures such as Mage Towers and Temples live under `Unique/`.
 
 ### Directory Structure
 
 ```
 Prefabs/Monuments/
-├── Mage_Towers/
-│   ├── Mage_Tower_Fire.prefab.json.lpf
-│   ├── Mage_Tower_Ice.prefab.json.lpf
-│   └── Mage_Tower_Lightning.prefab.json.lpf
-├── Temples/
 ├── Challenge/
 ├── Encounter/
 ├── Incidental/
-│   ├── Camps/
-│   ├── Farms/
-│   ├── Ruins/
-│   └── Shipwrecks/
+│   ├── Shipwrecks/
+│   ├── Treasure_Rooms/
+│   ├── Grasslands/
+│   └── ... (biome/material themes)
+├── Story/
 └── Unique/
+    ├── Mage_Towers/
+    │   ├── Quartzite/
+    │   │   ├── Tier_2/
+    │   │   │   └── Monuments_MageTower_Quartzite_Tier2_001.prefab.json
+    │   │   └── Tier_3/
+    │   ├── Shale/
+    │   ├── Volcanic/
+    │   └── Sandstone/
+    ├── Temple/
+    ├── Start_Camp/
+    ├── World_Portal/
+    └── ...
 ```
 
 ### Categories
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| `Mage_Towers/` | ~12 | Elemental wizard towers |
-| `Temples/` | ~20 | Religious/ancient structures |
-| `Challenge/` | ~40 | Combat encounter arenas |
-| `Encounter/` | ~60 | Multi-zone progressions |
-| `Incidental/` | ~80 | Camps, farms, ruins |
-| `Unique/` | ~20 | One-of-a-kind structures |
+| `Encounter/` | ~305 | Multi-zone encounter progressions |
+| `Incidental/` | ~252 | Camps, shipwrecks, treasure rooms (by biome) |
+| `Unique/` | ~240 | One-of-a-kind structures (Mage Towers, Temples, Start Camp, World Portal) |
+| `Challenge/` | ~6 | Combat encounter arenas |
+| `Story/` | ~3 | Story-related structures |
 
 ### Encounter Types
 
@@ -327,22 +360,23 @@ Prefabs/Monuments/
 
 ### Incidental Structures
 
-| Type | Description |
+`Incidental/` is organized by biome/material theme, plus a few special subdirectories:
+
+| Subdirectory | Description |
 |------|-------------|
-| `Camp` | Abandoned or hostile camps |
-| `Farm` | Ruined or active farms |
-| `Ruins` | Ancient collapsed structures |
-| `Shipwreck` | Wrecked ships on coast |
-| `Graveyard` | Cemetery areas |
-| `Shrine` | Small religious sites |
+| `Shipwrecks` | Wrecked ships |
+| `Treasure_Rooms` | Hidden loot rooms |
+| `Grasslands`, `Sandstone`, `Volcanic`, ... | Biome/material-themed incidental structures |
 
 ### Example: Mage Tower
 
-**File:** `Prefabs/Monuments/Mage_Towers/Mage_Tower_Fire.prefab.json.lpf`
+Mage Towers live under `Unique/`, organized by material and tier:
+
+**File:** `Prefabs/Monuments/Unique/Mage_Towers/Quartzite/Tier_2/Monuments_MageTower_Quartzite_Tier2_001.prefab.json`
 
 Contains:
 - Multi-story tower structure
-- Elemental-themed block materials
+- Material-themed block work (e.g. Quartzite, Shale, Volcanic, Sandstone)
 - Interior rooms with furniture
 - Loot containers with rare drops
 - Potential boss spawn areas
@@ -352,43 +386,35 @@ Contains:
 ## Mineshafts
 
 **Location:** `Prefabs/Mineshaft/`
-**Count:** ~117 files
+**Count:** ~1160 files
 
-Mineshafts use a modular system where different components connect to form complete mine networks.
+Mineshafts use a modular system where different components connect to form complete mine networks. (A separate `Prefabs/Mineshaft_Drift/` directory holds ~117 additional drift-mine prefabs.)
 
 ### Directory Structure
 
 ```
 Prefabs/Mineshaft/
 ├── Shaft/
-│   ├── Shaft_Straight_01.prefab.json.lpf
-│   ├── Shaft_Corner_01.prefab.json.lpf
-│   ├── Shaft_T_Junction_01.prefab.json.lpf
-│   └── Shaft_Crossroad_01.prefab.json.lpf
+│   ├── Mineshaft_Shaft_Surface_001.prefab.json
+│   └── ...
 ├── Slope/
-│   ├── Slope_Down_01.prefab.json.lpf
-│   └── Slope_Up_01.prefab.json.lpf
+│   ├── Mineshaft_Slope_Surface_001.prefab.json
+│   └── ...
 ├── Surface/
-│   ├── Surface_Entrance_01.prefab.json.lpf
-│   └── Surface_Building_01.prefab.json.lpf
-└── Features/
-    ├── Feature_Cart_01.prefab.json.lpf
-    ├── Feature_Ore_Vein_01.prefab.json.lpf
-    └── Feature_Support_01.prefab.json.lpf
+│   ├── Mineshaft_Surface_001.prefab.json
+│   └── ...
+├── Fir/
+└── Dry/
 ```
 
 ### Component Types
 
 | Component | Description |
 |-----------|-------------|
-| `Shaft_Straight` | Linear tunnel section |
-| `Shaft_Corner` | 90-degree turn |
-| `Shaft_T_Junction` | Three-way intersection |
-| `Shaft_Crossroad` | Four-way intersection |
-| `Shaft_Cap` | Dead end |
-| `Slope_Down` | Descending section |
-| `Slope_Up` | Ascending section |
-| `Surface_Entrance` | Above-ground entrance |
+| `Shaft` | Tunnel sections |
+| `Slope` | Ascending/descending sections |
+| `Surface` | Above-ground entrances and buildings |
+| `Fir` / `Dry` | Biome/material-themed mineshaft variants |
 
 ### Connection System
 
@@ -397,9 +423,9 @@ Mineshaft components use standardized connection points:
 - Matching dimensions for seamless connection
 - Anchor points at center of floor
 
-### Example: T-Junction
+### Example: Surface Shaft
 
-**File:** `Prefabs/Mineshaft/Shaft/Shaft_T_Junction_01.prefab.json.lpf`
+**File:** `Prefabs/Mineshaft/Shaft/Mineshaft_Shaft_Surface_001.prefab.json`
 
 Contains:
 - Tunnel walls and ceiling
@@ -413,23 +439,29 @@ Contains:
 ## Dungeons
 
 **Location:** `Prefabs/Dungeon/`
-**Count:** ~84 files
+**Count:** ~858 files
 
-Dungeons use modular room systems similar to mineshafts, creating varied dungeon layouts.
+Dungeons use modular room systems similar to mineshafts, creating varied dungeon layouts. Top-level directories mix themed dungeons and material variants.
 
 ### Directory Structure
 
 ```
 Prefabs/Dungeon/
 ├── Goblin_Lair/
-│   ├── Room_Straight_01.prefab.json.lpf
-│   ├── Room_Corner_01.prefab.json.lpf
-│   ├── Room_T_Junction_01.prefab.json.lpf
-│   ├── Room_Large_01.prefab.json.lpf
-│   └── Room_Boss_01.prefab.json.lpf
+│   ├── Goblin_Lair_Empty.prefab.json
+│   ├── Goblin_Lair_Stairs_U_Turn_001.prefab.json
+│   └── ...
 ├── Cursed_Crypt/
+├── Labyrinth/
+├── Sewer/
+├── Rift/
+├── Magic_Ruins/
+├── Outlander_Temple/
+├── Challenge_Gate/
 ├── Stone/
-└── Ancient/
+├── Slate/
+├── Shale/
+└── Sandstone/
 ```
 
 ### Dungeon Types
@@ -438,40 +470,33 @@ Prefabs/Dungeon/
 |------|-------|---------|
 | `Goblin_Lair` | Cave, crude construction | Goblins |
 | `Cursed_Crypt` | Stone, dark | Undead |
-| `Stone` | Ancient stone | Varied |
-| `Ancient` | Mysterious, magical | Magical creatures |
+| `Labyrinth` | Maze-like | Varied |
+| `Sewer` | Underground waterways | Varied |
+| `Rift` | Magical | Magical creatures |
+| `Magic_Ruins` | Ancient, magical | Varied |
+| `Outlander_Temple` | Human ruins | Outlanders |
+| `Stone` / `Slate` / `Shale` / `Sandstone` | Material-themed | Varied |
 
 ### Room Types
 
-| Room | Description |
-|------|-------------|
-| `Cap` | Dead end room |
-| `Corner` | 90-degree turn |
-| `Straight` | Corridor section |
-| `T_Junction` | Three-way split |
-| `Crossroad` | Four-way intersection |
-| `Large` | Expanded encounter room |
-| `Boss` | Boss encounter chamber |
-| `Treasure` | Loot room |
-| `Trap` | Hazard room |
+Dungeon room prefabs use descriptive names rather than a fixed component set, e.g. `Goblin_Lair_Stairs_U_Turn_001`, `Goblin_Lair_Entrance_Library_Layout_001`, `Goblin_Lair_Empty`.
 
-### Example: Goblin Lair Boss Room
+### Example: Goblin Lair Room
 
-**File:** `Prefabs/Dungeon/Goblin_Lair/Room_Boss_01.prefab.json.lpf`
+**File:** `Prefabs/Dungeon/Goblin_Lair/Goblin_Lair_Stairs_U_Turn_001.prefab.json`
 
 Contains:
-- Large room with high ceiling
 - Goblin-themed decorations
-- Multiple loot containers with boss drops
-- Entity spawn points for boss and minions
-- Entrance and potential exit openings
+- Loot containers
+- Entity spawn points for minions
+- Entrance and exit openings for connection
 
 ---
 
 ## Caves
 
 **Location:** `Prefabs/Cave/`
-**Count:** ~180 files
+**Count:** ~492 files
 
 Cave prefabs include geological formations, creature nests, and resource nodes found underground.
 
@@ -480,17 +505,19 @@ Cave prefabs include geological formations, creature nests, and resource nodes f
 ```
 Prefabs/Cave/
 ├── Formations/
-│   ├── Stalactite_01.prefab.json.lpf
-│   ├── Stalagmite_01.prefab.json.lpf
-│   └── Column_01.prefab.json.lpf
-├── Klops_Nests/
+│   ├── Rock_Volcanic_Ceiling_Formation_001.prefab.json
+│   ├── Rock_Volcanic_Floor_Formation_001.prefab.json
+│   └── ...
+├── Klops/
+│   ├── Klops_Oak_Entrance_001.prefab.json
+│   └── ...
 ├── Nodes/
-│   ├── Node_Iron_01.prefab.json.lpf
-│   ├── Node_Copper_01.prefab.json.lpf
-│   └── Node_Crystal_01.prefab.json.lpf
-└── Features/
-    ├── Pool_01.prefab.json.lpf
-    └── Mushroom_Cluster_01.prefab.json.lpf
+│   ├── Node_Shale_Deep_Fossil_001.prefab.json
+│   └── ...
+├── Organics/
+├── Stalagmites/
+├── Geysers/
+└── Hive/
 ```
 
 ### Categories
@@ -498,36 +525,23 @@ Prefabs/Cave/
 | Category | Description |
 |----------|-------------|
 | `Formations/` | Stalactites, stalagmites, columns |
-| `Klops_Nests/` | Creature nest structures |
-| `Nodes/` | Ore and crystal deposits |
-| `Features/` | Pools, mushrooms, unique features |
-
-### Formation Types
-
-| Formation | Description |
-|-----------|-------------|
-| `Stalactite` | Hanging from ceiling |
-| `Stalagmite` | Rising from floor |
-| `Column` | Floor to ceiling |
-| `Flowstone` | Wall formations |
-| `Crystal_Cluster` | Gem formations |
+| `Klops/` | Klops nest structures and entrances |
+| `Nodes/` | Ore, fossil, and crystal deposits |
+| `Organics/` | Organic cave growths |
+| `Stalagmites/` | Floor formations |
+| `Geysers/` | Geothermal vents |
+| `Hive/` | Insectoid hive structures |
 
 ### Resource Nodes
 
-| Node Type | Resources |
-|-----------|-----------|
-| `Node_Iron` | Iron ore blocks |
-| `Node_Copper` | Copper ore blocks |
-| `Node_Gold` | Gold ore blocks |
-| `Node_Crystal` | Crystal blocks |
-| `Node_Gem` | Gem-bearing rock |
+Node prefabs encode material, depth, and feature in their names, e.g. `Node_Shale_Deep_Fossil_001`, `Node_Shale_Shallow_Crypt_002`.
 
 ---
 
 ## Plants
 
 **Location:** `Prefabs/Plants/`
-**Count:** ~205 files
+**Count:** ~555 files
 
 Plant prefabs include bushes, cacti, coral, and other vegetation beyond trees.
 
@@ -536,13 +550,15 @@ Plant prefabs include bushes, cacti, coral, and other vegetation beyond trees.
 ```
 Prefabs/Plants/
 ├── Bush/
-│   ├── Bush_Berry_01.prefab.json.lpf
-│   ├── Bush_Flower_01.prefab.json.lpf
-│   └── Bush_Thorns_01.prefab.json.lpf
+│   ├── Bush_Brambles_005.prefab.json
+│   └── ...
 ├── Cacti/
-│   ├── Cactus_Small_01.prefab.json.lpf
-│   ├── Cactus_Large_01.prefab.json.lpf
-│   └── Cactus_Flowering_01.prefab.json.lpf
+│   ├── Cacti_Flat_Stage_0_002.prefab.json
+│   └── ...
+├── Mushroom_Rings/
+├── Mushroom_Large/
+├── Jungle/
+├── Vines/
 ├── Seaweed/
 ├── Driftwood/
 ├── Coral/
@@ -553,71 +569,56 @@ Prefabs/Plants/
 
 | Category | Biomes | Description |
 |----------|--------|-------------|
-| `Bush/` | Varied | Berry, flower, decorative bushes |
-| `Cacti/` | Desert | Desert plants |
+| `Bush/` | Varied | Berry, bramble, decorative bushes |
+| `Cacti/` | Desert | Desert plants (staged growth) |
+| `Mushroom_Rings/` | Varied | Mushroom ring clusters |
+| `Mushroom_Large/` | Varied | Large mushroom formations |
+| `Jungle/` | Tropical | Jungle vegetation |
+| `Vines/` | Varied | Hanging vines |
 | `Seaweed/` | Underwater | Aquatic vegetation |
 | `Driftwood/` | Coastal | Washed-up wood |
 | `Coral/` | Underwater | Coral formations |
 | `Twisted_Wood/` | Corrupted | Dark, twisted plants |
-
-### Bush Variants
-
-| Variant | Description |
-|---------|-------------|
-| `Berry` | Harvestable berries |
-| `Flower` | Decorative flowers |
-| `Thorns` | Damaging thorns |
-| `Fern` | Fern plants |
-| `Tall_Grass` | Grass clumps |
-
-### Coral Types
-
-| Type | Appearance |
-|------|------------|
-| `Brain` | Rounded, brain-like |
-| `Branch` | Branching structure |
-| `Fan` | Flat, fan-shaped |
-| `Tube` | Tubular formations |
 
 ---
 
 ## Spawn
 
 **Location:** `Prefabs/Spawn/`
-**Count:** ~18 files
+**Count:** ~20 files
 
-Spawn prefabs define player spawn point layouts and initial pathway structures.
+Spawn prefabs define player spawn layouts, pathways, rooms, and prefab spawners used at the start area.
 
 ### Directory Structure
 
 ```
 Prefabs/Spawn/
-├── Spawn_Point_01.prefab.json.lpf
-├── Spawn_Point_02.prefab.json.lpf
-├── Spawn_Area_Small.prefab.json.lpf
-├── Spawn_Area_Large.prefab.json.lpf
-└── Spawn_Path_01.prefab.json.lpf
+├── Layouts/
+├── Pathways/
+├── Room/
+├── Room_Goblin/
+├── Spawners_Trees_Oak/
+│   ├── Prefabspawner_OakT2.prefab.json
+│   └── ...
+├── Spawners_Trees_Birch/
+└── Spawners_Rocks_Stone/
 ```
 
 ### Types
 
-| Type | Description |
+| Subdirectory | Description |
 |------|-------------|
-| `Spawn_Point` | Single spawn location |
-| `Spawn_Area` | Spawn zone with safe area |
-| `Spawn_Path` | Initial player pathway |
-| `Spawn_Shelter` | Starting shelter structure |
+| `Layouts/` | Spawn-area layouts |
+| `Pathways/` | Initial player pathways |
+| `Room/` / `Room_Goblin/` | Spawn rooms |
+| `Spawners_*` | Prefab spawners for trees and rocks |
 
-### Example: Spawn Area
+### Example: Spawn Tree Spawner
 
-**File:** `Prefabs/Spawn/Spawn_Area_Small.prefab.json.lpf`
+**File:** `Prefabs/Spawn/Spawners_Trees_Oak/Prefabspawner_OakT2.prefab.json`
 
 Contains:
-- Flattened terrain blocks
-- Torch/light placement
-- Basic shelter blocks
-- Chest with starter items
-- Clear path markers
+- A prefab spawner definition placing Oak trees at tier 2 around the spawn area
 
 ---
 
@@ -625,47 +626,44 @@ Contains:
 
 World generation references prefabs through PrefabList files that group related prefabs by category and biome.
 
-### Example: Forest Trees PrefabList
+### Example: Birch Trees PrefabList
 
-**File:** `Server/PrefabList/Trees_Forest.json`
+**File:** `Server/PrefabList/Trees_Birch.json`
 
 ```json
 {
   "Prefabs": [
     {
       "RootDirectory": "Asset",
-      "Path": "Trees/Oak/",
+      "Path": "Trees/Birch/Stage_0/",
       "Recursive": true
     },
     {
       "RootDirectory": "Asset",
-      "Path": "Trees/Birch/",
+      "Path": "Trees/Birch/Stage_1/",
       "Recursive": true
     },
     {
       "RootDirectory": "Asset",
-      "Path": "Trees/Maple/",
+      "Path": "Trees/Birch/Stumps/",
       "Recursive": true
     }
   ]
 }
 ```
 
-### Example: Desert Rocks PrefabList
+(Other tree lists include `Trees_Fir.json`, `Trees_Oak.json`, `Trees_Redwood.json`, etc.)
 
-**File:** `Server/PrefabList/Rocks_Desert.json`
+### Example: Boulders PrefabList
+
+**File:** `Server/PrefabList/ForestBrush_Boulders.json`
 
 ```json
 {
   "Prefabs": [
     {
       "RootDirectory": "Asset",
-      "Path": "Rock_Formations/Rocks/Sandstone/",
-      "Recursive": true
-    },
-    {
-      "RootDirectory": "Asset",
-      "Path": "Rock_Formations/Arches/Sandstone/",
+      "Path": "Rock_Formations/Rocks/Stone/Small/",
       "Recursive": true
     }
   ]

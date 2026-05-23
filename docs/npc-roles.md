@@ -12,7 +12,7 @@ The NPC system is organized into several directories:
 
 | Directory | Description |
 |-----------|-------------|
-| `Server/NPC/Roles/` | 897 NPC role definitions (templates and variants) |
+| `Server/NPC/Roles/` | 952 NPC role definitions (templates and variants) |
 | `Server/NPC/Attitude/` | Relationship definitions between NPC groups |
 | `Server/NPC/Groups/` | NPC group collections for spawning |
 | `Server/NPC/Flocks/` | Flock size configurations |
@@ -26,67 +26,81 @@ The NPC system is organized into several directories:
 
 ### Abstract Templates
 
-Templates define common behaviors and properties that concrete NPCs inherit from. Found in `Server/NPC/Roles/_Core/Templates/`.
+Templates define common behaviors and properties that concrete NPCs inherit from. They use `"Type": "Abstract"` and expose configurable values in their `Parameters` block. The shared core templates are found in `Server/NPC/Roles/_Core/Templates/`.
 
-**Core Templates:**
+**Core Templates** (`Roles/_Core/Templates/`):
 
 | Template | Description |
 |----------|-------------|
+| `Template_Animal_Neutral` | Neutral wild animal base (used by Cow, etc.) |
+| `Template_Livestock` | Farm livestock base |
 | `Template_Predator` | Base predator behavior with hunting AI |
+| `Template_Intelligent` | Intelligent humanoid base |
+| `Template_Spirit` | Spirit/ethereal base |
 | `Template_Birds_Passive` | Flying passive bird behavior |
-| `Template_Birds_Aggressive` | Flying aggressive bird behavior |
-| `Template_Aquatic_Surface` | Surface-swimming creature |
-| `Template_Aquatic_Submerged` | Underwater creature |
-| `Template_Critter` | Small passive creatures |
+| `Template_Swimming_Passive` | Passive swimming creature base |
+| `Template_Swimming_Aggressive` | Aggressive swimming creature base |
+| `Template_Edible_Critter` | Small edible critter base |
+| `Template_Beasts_Passive_Critter` | Passive beast critter base |
+| `Template_Summoned_Ally` | Summoned allied NPC base |
 
-**Faction Templates:**
-
-| Template | Description |
-|----------|-------------|
-| `Template_Goblin` | Goblin faction base |
-| `Template_Trork` | Trork faction base |
-| `Template_Kweebec` | Kweebec faction base |
-| `Template_Feran` | Feran faction base |
-| `Template_Scarak` | Scarak faction base |
-| `Template_Outlander` | Outlander faction base |
+Faction-specific templates live alongside their faction roles rather than in the shared `_Core/Templates/` folder. For example, Goblin templates are in `Roles/Intelligent/Aggressive/Goblin/Templates/` (`Template_Goblin`, `Template_Goblin_Scrapper`, `Template_Goblin_Ogre`, `Template_Goblin_Lobber`, and others). Trork, Kweebec, Feran, and Scarak templates follow the same convention under their own faction directories.
 
 ### Variants
 
-Variants are concrete NPC definitions that inherit from templates. They use `Reference` to specify the parent template and `Modify` to override properties.
+Variants are concrete NPC definitions that inherit from a template. They use `"Type": "Variant"`, a `Reference` naming the parent template (by short name, resolved across the role tree), and `Modify` to override properties. Overridden numeric properties are usually plain values, not `{Value, Description}` objects (that form is only used inside a template's `Parameters` block). A variant may add its own `Parameters` block to supply values consumed by the template's `Compute` expressions.
 
-**Example: Cow (Simple Variant)**
+**Example: Cow (`Roles/Creature/Livestock/Cow.json`, abridged)**
 
 ```json
 {
-    "Reference": "Creature/Livestock/_Core/Template_Livestock",
+    "Type": "Variant",
+    "Reference": "Template_Animal_Neutral",
     "Modify": {
-        "Appearance": "Cow/Cow",
-        "MaxHealth": {
-            "Value": 20,
-            "Description": "Default health"
-        },
-        "NameTranslationKey": "npc.cow",
-        "DropList": "Creature/Livestock/Cow"
+        "Appearance": "Cow",
+        "AttitudeGroup": "PreyBig",
+        "FlockArray": [ "Cow", "Cow_Calf" ],
+        "DropList": "Drop_Cow",
+        "MaxHealth": 103,
+        "ViewRange": 15,
+        "ViewSector": 340,
+        "HearingRange": 9,
+        "AbsoluteDetectionRange": 2,
+        "Attack": "Root_NPC_Attack_Melee",
+        "IsTameable": true,
+        "TameRoleChange": "Tamed_Cow",
+        "IsMemory": true,
+        "NameTranslationKey": { "Compute": "NameTranslationKey" }
+    },
+    "Parameters": {
+        "NameTranslationKey": {
+            "Value": "server.npcRoles.Cow.name",
+            "Description": "Translation key for NPC name display"
+        }
     }
 }
 ```
 
-**Example: Goblin Scrapper (Complex Variant)**
+**Example: Goblin Scrapper (`Roles/Intelligent/Aggressive/Goblin/Goblin_Scrapper.json`)**
+
+A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field; combat abilities, attack distances, and instructions all come from the referenced template and CAE rather than being inlined here.
 
 ```json
 {
-    "Reference": "Intelligent/Aggressive/Goblin/_Core/Template_Goblin_Melee",
+    "Type": "Variant",
+    "Reference": "Template_Goblin_Scrapper",
     "Modify": {
-        "Appearance": "Goblin/Goblin_Scrapper",
-        "MaxHealth": {
-            "Value": 30,
-            "Description": "Combat NPC health"
-        },
-        "Attack": "Goblin_Scrapper_Attack",
-        "AttackDistance": 2.5,
-        "CombatActionEvaluator": "Intelligent/CAE_Goblin_Scrapper",
-        "Instructions": {
-            "Reference": "Intelligent/Aggressive/Goblin/_Core/Component_Instruction_Goblin_Combat"
+        "_CombatConfig": "CAE_Goblin_Scrapper",
+        "MaxHealth": 38,
+        "IsMemory": true,
+        "MemoriesCategory": "Goblin",
+        "MemoriesNameOverride": "Goblin_Scrapper",
+        "NameTranslationKey": { "Compute": "NameTranslationKey" }
+    },
+    "Parameters": {
+        "NameTranslationKey": {
+            "Value": "server.npcRoles.Goblin_Scrapper.name",
+            "Description": "Translation key for NPC name display"
         }
     }
 }
@@ -96,39 +110,38 @@ Variants are concrete NPC definitions that inherit from templates. They use `Ref
 
 ## Parameters System
 
-NPCs use a parameters system for configurable values with descriptions and computed expressions.
+Templates declare configurable values in a `Parameters` block, each with a `Value` and a `Description`. Elsewhere in the role those parameters are read back with `{ "Compute": "..." }` expressions. Variants override the underlying values either by plain assignment in `Modify` or by supplying their own `Parameters` block.
 
 ### Value and Description
+
+These come from a template's `Parameters` block (from `Template_Animal_Neutral`):
 
 ```json
 {
     "MaxHealth": {
         "Value": 100,
-        "Description": "Maximum health points"
+        "Description": "The maximum health of the NPC."
     },
-    "MaxSpeed": {
-        "Value": 5.0,
-        "Description": "Movement speed in blocks per second"
+    "ViewRange": {
+        "Value": 16,
+        "Description": "The view distance of the NPC, in blocks."
     }
 }
 ```
 
 ### Computed Values
 
-Use `Compute` for runtime-evaluated expressions:
+Use `Compute` to read a parameter (or evaluate an expression over parameters) at the point of use:
 
 ```json
 {
-    "FlockSize": {
-        "Compute": "!isEmptyStringArray(FlockArray)",
-        "Description": "Whether NPC is part of a flock"
-    },
-    "ViewRange": {
-        "Compute": "BaseViewRange * AlertnessMultiplier",
-        "Description": "Dynamic view range based on alertness"
-    }
+    "MaxHealth": { "Compute": "MaxHealth" },
+    "Appearance": { "Compute": "Appearance" },
+    "Enabled": { "Compute": "!isEmptyStringArray(FlockArray)" }
 }
 ```
+
+Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `randomInRange` are available inside `Compute` expressions.
 
 ---
 
@@ -148,10 +161,10 @@ Use `Compute` for runtime-evaluated expressions:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `MotionControllerList` | Array | Movement controllers (Walk, Fly, Swim) |
-| `MaxSpeed` | Number | Maximum movement speed |
+| `MotionControllerList` | Array | Movement controllers (`Walk` or `Fly`) |
+| `MaxSpeed` | Number | Maximum movement speed (parameter; fed into `MaxWalkSpeed`) |
 | `WanderRadius` | Number | Random movement range from home |
-| `ClimbHeight` | Number | Maximum block height for climbing |
+| `ClimbHeight` | Number | Maximum block height for climbing (fed into `MaxClimbHeight`) |
 | `JumpHeight` | Number | Vertical jump capability |
 
 ### Detection Properties
@@ -167,20 +180,19 @@ Use `Compute` for runtime-evaluated expressions:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `AttitudeGroup` | String | NPC's attitude group membership |
-| `DefaultPlayerAttitude` | String | Default stance toward players |
-| `Attack` | String | Attack definition reference |
+| `AttitudeGroup` | String | NPC's attitude group membership (e.g. `Prey`, `PreyBig`, `Predators`) |
+| `DefaultPlayerAttitude` | String | Default stance toward players (`Hostile`, `Ignore`, `Neutral`) |
+| `Attack` | String | Attack interaction reference |
 | `AttackDistance` | Number | Melee attack range |
-| `CombatActionEvaluator` | String | CAE file for intelligent combat |
+| `_CombatConfig` | String | CAE file name for intelligent combat (e.g. `CAE_Goblin_Scrapper`) |
 
 ### Behavior Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `StartState` | String | Initial AI state |
-| `AlwaysSleepAtNight` | Boolean | Force sleep during night |
-| `DayTimePeriod` | String | Active time period |
-| `Instructions` | Object | Behavior tree definition |
+| `DayTimePeriod` | Array | `[startHour, endHour]` range considered daytime |
+| `Instructions` | Array | Behavior tree definition |
 
 ### Memory Properties
 
@@ -193,43 +205,40 @@ Use `Compute` for runtime-evaluated expressions:
 
 ## Attitude System
 
-Attitudes define relationships between NPC groups. Found in `Server/NPC/Attitude/`.
+Attitudes define relationships between NPC groups. Found in `Server/NPC/Attitude/`. The file name (e.g. `Predators.json`) is the attitude group that the file describes, and its contents map each attitude value to the list of other groups treated that way.
 
-### Attitude Types
+### Attitude Values
 
 | Attitude | Description |
 |----------|-------------|
-| `Friendly` | Allied groups, will not attack |
-| `Hostile` | Will attack on sight |
-| `Ignore` | Neutral, neither ally nor enemy |
+| `Friendly` | Allied groups |
+| `Hostile` | Will attack |
+| `Neutral` | Will react/defend but not attack on sight |
+| `Ignore` | No reaction, neither ally nor enemy |
 | `Revered` | Special respect (leaders, chieftains) |
 
-### Attitude Definition Example
+### Attitude Definition Structure
+
+Each file is a single object with a `Groups` key. Under `Groups`, each attitude value maps to an array of group names. Groups not listed use a default (typically `Ignore`).
+
+**Example: `Attitude/Roles/Predators.json`**
 
 ```json
 {
-    "Type": "AttitudeGroup",
-    "AttitudeGroup": "Predators",
-    "Attitudes": {
-        "Prey": "Hostile",
-        "Predators": "Ignore",
-        "Player": "Hostile"
+    "Groups": {
+        "Hostile": [ "Predators", "PredatorsBig", "Void" ],
+        "Ignore": [ "Prey", "PreyBig", "Critters", "Vermin" ]
     }
 }
 ```
 
-### Role-Based Attitudes
+**Example: `Attitude/Roles/Prey.json`**
 
 ```json
 {
-    "Type": "AttitudeRoles",
-    "Roles": [
-        "Creature/Mammal/Wolf",
-        "Creature/Mammal/Bear"
-    ],
-    "Attitudes": {
-        "Livestock": "Hostile",
-        "Critters": "Hostile"
+    "Groups": {
+        "Neutral": [ "Prey" ],
+        "Ignore": [ "Predators", "PreyBig" ]
     }
 }
 ```
@@ -300,42 +309,53 @@ NPCs are organized into a hierarchical category structure:
 
 ## Motion Controllers
 
-Motion controllers define how NPCs move through the world.
+Motion controllers define how NPCs move through the world. They are listed in `MotionControllerList`. Two controller types appear in real role files:
 
-### Controller Types
+| Controller | Usage | Description |
+|------------|-------|-------------|
+| `Walk` | common | Ground-based movement |
+| `Fly` | rare | Aerial movement |
 
-| Controller | Description |
-|------------|-------------|
-| `Walk` | Ground-based movement with pathfinding |
-| `Fly` | Aerial movement with 3D pathfinding |
-| `Swim` | Aquatic movement (surface or submerged) |
+Many controller fields accept `{ "Compute": "..." }` so they can read template parameters.
 
-### Configuration Example
+### Walk Configuration Example
+
+From `Template_Animal_Neutral`:
 
 ```json
 {
     "MotionControllerList": [
         {
             "Type": "Walk",
-            "MaxSpeed": 5.0,
-            "Acceleration": 10.0,
-            "TurnSpeed": 180.0
+            "MaxWalkSpeed": { "Compute": "MaxSpeed" },
+            "Gravity": 15,
+            "MaxFallSpeed": 15,
+            "JumpHeight": 0.1,
+            "MaxRotationSpeed": { "Compute": "MaxRotationSpeed" },
+            "Acceleration": 100,
+            "RunThreshold": { "Compute": "RunThreshold" },
+            "MaxClimbHeight": { "Compute": "ClimbHeight" }
         }
     ]
 }
 ```
 
-### Flying NPC Example
+### Fly Configuration Example
 
 ```json
 {
     "MotionControllerList": [
         {
             "Type": "Fly",
-            "MaxSpeed": 8.0,
-            "HoverHeight": 5.0,
-            "AscentSpeed": 3.0,
-            "DescentSpeed": 4.0
+            "MaxHorizontalSpeed": 50,
+            "MaxSinkSpeed": 10,
+            "MaxClimbSpeed": 10,
+            "MinAirSpeed": 10,
+            "Acceleration": 10,
+            "MinHeightOverGround": 40,
+            "MaxHeightOverGround": 45,
+            "MaxRollAngle": 80,
+            "MaxTurnSpeed": 45
         }
     ]
 }
@@ -345,88 +365,105 @@ Motion controllers define how NPCs move through the world.
 
 ## Behavior System (Instructions)
 
-The behavior system uses a state machine with instruction trees for AI decision-making.
+The behavior system uses a state machine driven by nested instruction nodes. `Instructions` is an array of nodes; nodes may have a `Sensor` (the condition to evaluate), `Actions` (what to run on match), `BodyMotion`/`HeadMotion` (movement behavior), nested `Instructions`, and flags such as `Continue`, `Enabled` (often a `{ "Compute": ... }`), `ActionsBlocking`, and `Weight`/`Type: "Random"` for weighted random selection.
 
 ### States
+
+States are freeform strings, set with the `State` action and tested with the `State` sensor. Sub-states are addressed with a leading dot (e.g. `Flee.Switch`, `Sleep.Nap`, `.Default`). Commonly used states include:
 
 | State | Description |
 |-------|-------------|
 | `Idle` | Default passive state |
 | `Sleep` | Sleeping/inactive |
 | `Alerted` | Noticed potential threat |
-| `Combat` | Active combat engagement |
 | `Search` | Looking for lost target |
 | `ReturnHome` | Returning to spawn area |
 | `Flee` | Running from threat |
 | `Panic` | Panicked escape behavior |
 
+Individual roles define whatever additional states they need; there is no fixed enum.
+
 ### Sensors
 
-Sensors detect game state changes:
+A node's `Sensor` is an object with a `Type`. Sensors can be composed with `And`, `Or`, and `Not`. Common sensor types:
 
-| Sensor | Description |
-|--------|-------------|
-| `State` | Current AI state |
-| `Any` | Matches any condition |
-| `Target` | Target acquisition/loss |
-| `Damage` | Received damage |
-| `Player` | Player proximity |
-| `Mob` | Other NPC proximity |
-| `Leash` | Distance from home |
-| `Time` | Time of day |
-| `Health` | Health thresholds |
+| Sensor Type | Description |
+|-------------|-------------|
+| `State` | Matches a given AI state (`"State": "Idle"`) |
+| `Any` | Always matches (optionally `"Once": true`) |
+| `Target` | A valid target exists in range |
+| `Damage` | Received damage (optionally `"Combat": true`) |
+| `Mob` | Other NPCs nearby (with `Filters`) |
+| `Leash` | Distance from home exceeds `Range` |
+| `Time` | Time of day within `Period` |
+| `Block` / `DroppedItem` | Nearby block set or dropped items |
+| `Beacon` / `Alarm` / `Timer` | Flock beacons, alarms, named timers |
 
 ### Actions
 
-| Action | Description |
-|--------|-------------|
-| `State` | Change AI state |
-| `PlayAnimation` | Trigger animation |
-| `Attack` | Execute attack |
-| `JoinFlock` | Join nearby flock |
-| `Timeout` | Wait for duration |
-| `Sound` | Play sound effect |
+Each entry in `Actions` is an object whose `Type` is the action. Common action types:
+
+| Action Type | Description |
+|-------------|-------------|
+| `State` | Change AI state (`{ "Type": "State", "State": "Alerted" }`) |
+| `PlayAnimation` | Trigger an animation in a slot |
+| `Attack` | Execute the configured attack |
+| `JoinFlock` | Join a nearby flock |
+| `Timeout` | Wait for a `Delay` (optionally run a nested `Action`) |
+| `SetAlarm` / `TimerStart` | Schedule alarms and timers |
+| `OverrideAttitude` | Temporarily change attitude toward a target |
+| `Nothing` | No-op |
 
 ### BodyMotion
 
-| Motion | Description |
-|--------|-------------|
-| `Wander` | Random movement |
+A node's `BodyMotion` is an object with a `Type`. Confirmed types include:
+
+| Motion Type | Description |
+|-------------|-------------|
+| `Wander` / `WanderInCircle` | Random movement |
 | `Seek` | Move toward target |
 | `Flee` | Move away from target |
-| `MaintainDistance` | Keep distance from target |
+| `MaintainDistance` | Keep a desired distance from target |
+| `Sequence` | Run a sequence of motions (optionally `Looped`) |
 | `Nothing` | Stand still |
 
 ### Instruction Tree Example
 
+Real instruction nodes carry the action via `Type` (there is no separate `Action` field on the node). This pattern matches the structure in `Template_Animal_Neutral`:
+
 ```json
 {
-    "Instructions": {
-        "Type": "Selector",
-        "Children": [
-            {
-                "Type": "Sequence",
-                "Sensor": "Damage",
-                "Children": [
-                    { "Type": "Action", "Action": "State", "State": "Alerted" },
-                    { "Type": "Action", "Action": "Sound", "Sound": "Alert" }
-                ]
-            },
-            {
-                "Type": "Sequence",
-                "Sensor": "Target",
-                "Children": [
-                    { "Type": "Action", "Action": "State", "State": "Combat" },
-                    { "Type": "BodyMotion", "Motion": "Seek" }
-                ]
-            },
-            {
-                "Type": "Leaf",
-                "Sensor": "Any",
-                "BodyMotion": "Wander"
-            }
-        ]
-    }
+    "Instructions": [
+        {
+            "Sensor": { "Type": "State", "State": "Idle" },
+            "Instructions": [
+                {
+                    "Sensor": { "Type": "Damage", "Combat": true },
+                    "Actions": [
+                        { "Type": "State", "State": "Alerted" }
+                    ]
+                },
+                {
+                    "Sensor": {
+                        "Type": "Leash",
+                        "Range": { "Compute": "LeashDistance" }
+                    },
+                    "ActionsBlocking": true,
+                    "Actions": [
+                        { "Type": "Timeout", "Delay": [ 15, 20 ] },
+                        { "Type": "State", "State": "ReturnHome" }
+                    ]
+                },
+                {
+                    "BodyMotion": {
+                        "Type": "WanderInCircle",
+                        "Radius": { "Compute": "WanderRadius" },
+                        "RelativeSpeed": 0.18
+                    }
+                }
+            ]
+        }
+    ]
 }
 ```
 
@@ -434,36 +471,52 @@ Sensors detect game state changes:
 
 ## Components
 
-Reusable behavior components allow shared logic across NPCs.
+Reusable behavior components allow shared logic across NPCs. They are referenced by short name with `Reference`, optionally adjusted with `Modify` (whose fields commonly use `{ "Compute": ... }`). Component files use the prefixes `Component_Sensor_*`, `Component_Instruction_*`, and `Component_ActionList_*`.
 
 ### Sensor Components
 
+A sensor component can be referenced directly in a node's `Sensor` field:
+
 ```json
 {
-    "Reference": "_Core/Components/Component_Sensor_PlayerDetection",
-    "Modify": {
-        "ViewRange": 20
+    "Sensor": {
+        "Reference": "Component_Sensor_Standard_Detection",
+        "Modify": {
+            "ViewRange": { "Compute": "ViewRange" },
+            "ViewSector": { "Compute": "ViewSector" },
+            "HearingRange": { "Compute": "HearingRange" },
+            "AbsoluteDetectionRange": { "Compute": "AbsoluteDetectionRange" },
+            "Attitudes": [ "Hostile", "Neutral" ]
+        }
     }
 }
 ```
 
 ### Instruction Components
 
+An instruction node can pull in a shared subtree:
+
 ```json
 {
-    "Reference": "Intelligent/Aggressive/Goblin/_Core/Component_Instruction_Goblin_Combat"
+    "Reference": "Component_Instruction_Damage_Check",
+    "Modify": {
+        "_ExportStates": [ "Flee.Switch", "Panic" ],
+        "AlertedRange": { "Compute": "AlertedRange" }
+    }
 }
 ```
 
 ### Action List Components
 
+State transitions can reference shared action lists:
+
 ```json
 {
-    "ActionList": {
-        "Reference": "_Core/Components/Component_ActionList_FleeOnLowHealth",
-        "Modify": {
-            "HealthThreshold": 0.25
-        }
+    "States": [
+        { "From": [ "Idle" ], "To": [ "Sleep" ] }
+    ],
+    "Actions": {
+        "Reference": "Component_ActionList_Sleep"
     }
 }
 ```
@@ -472,73 +525,54 @@ Reusable behavior components allow shared logic across NPCs.
 
 ## Groups
 
-Groups define collections of NPC roles for spawning. Found in `Server/NPC/Groups/`.
+Groups define named collections of NPC roles, referenced elsewhere (attitudes, flock filters, spawn filters). Found in `Server/NPC/Groups/`. The file name is the group name. Group files have no `Type` field; they directly contain an `IncludeRoles` array. Role names may use trailing-wildcard patterns (`Fox*`). An `ExcludeRoles` array is supported but rarely used.
 
 ### Group Definition
 
+**Example: `Groups/Predators.json`**
+
 ```json
 {
-    "Type": "NPCGroup",
     "IncludeRoles": [
-        "Creature/Livestock/Cow",
-        "Creature/Livestock/Sheep",
-        "Creature/Livestock/Pig"
+        "Fox*",
+        "Hyena*",
+        "Fen_Stalker",
+        "Spark*",
+        "Toad*"
     ]
 }
 ```
 
-### Wildcard Patterns
-
-```json
-{
-    "Type": "NPCGroup",
-    "IncludeRoles": [
-        "Creature/Critter/*"
-    ],
-    "ExcludeRoles": [
-        "Creature/Critter/Butterfly"
-    ]
-}
-```
+Plain role names (without a wildcard) match a single role, while a name ending in `*` matches every role sharing that prefix.
 
 ---
 
 ## Flocks
 
-Flocks configure group sizes for spawned NPCs. Found in `Server/NPC/Flocks/`.
-
-### Fixed Size
-
-```json
-{
-    "Type": "Flock",
-    "Size": 5
-}
-```
-
-### Size Range
-
-```json
-{
-    "Type": "Flock",
-    "MinSize": 3,
-    "MaxSize": 8
-}
-```
+Flocks configure how many NPCs spawn together. Found in `Server/NPC/Flocks/`. Real flock files use `"Type": "Weighted"`, a `MinSize`, and a flat `SizeWeights` array. Each weight corresponds to a size starting at `MinSize`: the first weight is for `MinSize`, the second for `MinSize + 1`, and so on. Weights are relative.
 
 ### Weighted Sizes
 
+**Example: `Flocks/Group_Small.json`** (sizes 3, 4, 5 with weights 60/25/15)
+
 ```json
 {
-    "Type": "Flock",
-    "MinSize": 2,
-    "SizeWeights": [
-        { "Size": 2, "Weight": 1 },
-        { "Size": 3, "Weight": 2 },
-        { "Size": 4, "Weight": 3 },
-        { "Size": 5, "Weight": 2 },
-        { "Size": 6, "Weight": 1 }
-    ]
+    "Type": "Weighted",
+    "MinSize": 3,
+    "SizeWeights": [ 60, 25, 15 ]
+}
+```
+
+An optional `MaxGrowSize` caps how large a flock may grow over time:
+
+**Example: `Flocks/Parent_And_Young_75_25.json`**
+
+```json
+{
+    "Type": "Weighted",
+    "MinSize": 1,
+    "SizeWeights": [ 75, 25 ],
+    "MaxGrowSize": 8
 }
 ```
 
@@ -546,145 +580,179 @@ Flocks configure group sizes for spawned NPCs. Found in `Server/NPC/Flocks/`.
 
 ## Spawn Beacons
 
-Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/NPC/Spawn/Beacons/`.
+Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/NPC/Spawn/Beacons/`. A beacon is a plain object (no `Type` wrapper). NPC entries in the `NPCs` array reference roles by an `Id` field, not `Role`.
 
 ### Beacon Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Environments` | Array | Biome/environment filters |
+| `Environments` | Array | Biome/environment filters (e.g. `Env_Zone1_Caves_Volcanic_T1`) |
 | `MinDistanceFromPlayer` | Number | Minimum player distance for spawning |
 | `MaxSpawnedNPCs` | Number | Maximum concurrent spawns |
+| `ConcurrentSpawnsRange` | Array | `[min, max]` NPCs spawned per cycle |
+| `SpawnAfterGameTimeRange` | Array | `[min, max]` game-time durations before spawning (e.g. `PT20M`) |
+| `NPCSpawnState` | String | State the NPC starts in when spawned |
 | `SpawnRadius` | Number | Spawn area radius |
 | `BeaconRadius` | Number | Beacon activation radius |
-| `NPCs` | Array | NPC spawn definitions |
-| `LightRanges` | Object | Light level requirements |
+| `NPCs` | Array | NPC spawn entries (`Id`, `Weight`, optional `SpawnBlockSet`) |
+| `LightRanges` | Object | Light level requirements (`Light: [min, max]`) |
+| `Weight` | Number | Per-entry spawn weight |
 
 ### Beacon Example
 
+**Example: `Spawn/Beacons/Zone1/Zone1_Cave_Tier1/Zone1_Cave_Volcanic_T1_Goblin.json`**
+
 ```json
 {
-    "Type": "SpawnBeacon",
-    "Environments": ["Cave", "Underground"],
-    "MinDistanceFromPlayer": 24,
-    "MaxSpawnedNPCs": 5,
-    "SpawnRadius": 16,
-    "BeaconRadius": 48,
+    "Environments": [ "Env_Zone1_Caves_Volcanic_T1" ],
+    "MinDistanceFromPlayer": 15,
+    "MaxSpawnedNPCs": 2,
+    "ConcurrentSpawnsRange": [ 1, 2 ],
+    "SpawnAfterGameTimeRange": [ "PT20M", "PT60M" ],
+    "BeaconRadius": 70,
+    "SpawnRadius": 50,
     "NPCs": [
-        {
-            "Role": "Intelligent/Aggressive/Goblin/Goblin_Scrapper",
-            "Weight": 3,
-            "Flock": "Group_Small"
-        },
-        {
-            "Role": "Intelligent/Aggressive/Goblin/Goblin_Archer",
-            "Weight": 2,
-            "Flock": "Group_Small"
-        },
-        {
-            "Role": "Intelligent/Aggressive/Goblin/Goblin_Shaman",
-            "Weight": 1
-        }
+        { "Weight": 75, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Scrapper" },
+        { "Weight": 15, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Lobber" },
+        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Hermit" },
+        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Miner" }
     ],
     "LightRanges": {
-        "Min": 0,
-        "Max": 7
+        "Light": [ 0, 7 ]
     }
+}
+```
+
+A minimal beacon can also start an NPC in a chosen state:
+
+```json
+{
+    "Environments": [],
+    "NPCs": [
+        { "Weight": 1, "Id": "Edible_Goblin_Scrapper" }
+    ],
+    "SpawnAfterGameTimeRange": [ "PT5M", "PT10M" ],
+    "NPCSpawnState": "Seek"
 }
 ```
 
 ### Zone-Based Organization
 
-Spawn beacons are organized by zone:
+Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories:
 
 ```
 Server/NPC/Spawn/Beacons/
 ├── Zone1/
-│   ├── Zone1_Surface/
-│   ├── Zone1_Cave/
-│   └── Zone1_Dungeon/
+│   ├── Zone1_Cave_Tier1/
+│   ├── Zone1_Cave_Tier2/
+│   └── ...
 ├── Zone2/
 ├── Zone3/
-└── Zone4/
+├── Zone4/
+├── Portals/
+└── Tests/
 ```
 
 ---
 
 ## Combat Action Evaluator (CAE)
 
-The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`.
+The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the Goblin Scrapper variant above).
 
 ### CAE Structure
+
+A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evaluation logic in a nested `CombatActionEvaluator` object. That object holds:
+
+- `RunConditions`: conditions that gate whether the evaluator runs at all.
+- `MinRunUtility` / `MinActionUtility`: utility thresholds.
+- `AvailableActions`: an object keyed by action name. Each action has a `Type` (commonly `Ability`), a `Target`, an `Ability` reference, an `AttackDistanceRange`, optional `InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
+- `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` and an `Actions` list of available action names.
 
 ```json
 {
     "Type": "CombatActionEvaluator",
-    "AvailableActions": {
-        "LightAttack": {
-            "Animation": "Attack_Light",
-            "Damage": 5,
-            "Cooldown": 0.5
+    "TargetMemoryDuration": 5,
+    "CombatActionEvaluator": {
+        "RunConditions": [
+            {
+                "Type": "TimeSinceLastUsed",
+                "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 5 ] }
+            },
+            { "Type": "Randomiser", "MinValue": 0.9, "MaxValue": 1 }
+        ],
+        "MinRunUtility": 0.5,
+        "MinActionUtility": 0.01,
+        "AvailableActions": {
+            "Melee": {
+                "Type": "Ability",
+                "WeaponSlot": 0,
+                "SubState": "Default",
+                "Ability": "Goblin_Scrapper_Attack",
+                "Target": "Hostile",
+                "AttackDistanceRange": [ 2.5, 2.5 ],
+                "Conditions": [
+                    {
+                        "Type": "TimeSinceLastUsed",
+                        "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 1 ] }
+                    }
+                ]
+            },
+            "Ranged": {
+                "Type": "Ability",
+                "WeaponSlot": 0,
+                "SubState": "Ranged",
+                "Ability": "Goblin_Scrapper_Rubble_Throw",
+                "Target": "Hostile",
+                "AttackDistanceRange": [ 15, 15 ],
+                "Conditions": [
+                    {
+                        "Type": "TargetDistance",
+                        "Curve": { "ResponseCurve": "SimpleLogistic", "XRange": [ 0, 15 ] }
+                    }
+                ]
+            }
         },
-        "HeavyAttack": {
-            "Animation": "Attack_Heavy",
-            "Damage": 15,
-            "Cooldown": 2.0
-        },
-        "Block": {
-            "Animation": "Block",
-            "Duration": 1.5
-        }
-    },
-    "ActionSets": [
-        {
-            "Name": "Aggressive",
-            "Actions": ["LightAttack", "LightAttack", "HeavyAttack"]
-        },
-        {
-            "Name": "Defensive",
-            "Actions": ["Block", "LightAttack"]
-        }
-    ],
-    "Conditions": {
-        "UseAggressive": {
-            "Type": "UtilityCurve",
-            "Input": "TargetHealthPercent",
-            "Curve": "Linear",
-            "Min": 0.5,
-            "Max": 1.0
-        },
-        "UseDefensive": {
-            "Type": "UtilityCurve",
-            "Input": "SelfHealthPercent",
-            "Curve": "InverseLinear",
-            "Min": 0.0,
-            "Max": 0.3
+        "ActionSets": {
+            "Default": {
+                "BasicAttacks": {
+                    "Attacks": [ "Goblin_Scrapper_Attack" ],
+                    "MaxRange": 2.5,
+                    "Timeout": 0.5,
+                    "CooldownRange": [ 0.001, 0.001 ]
+                },
+                "Actions": [ "SwingDown", "Ranged" ]
+            }
         }
     }
 }
 ```
 
-### Utility Curves
+### Response Curves
 
-CAE uses utility curves to evaluate action priorities:
+Conditions evaluate an input through a `Curve` object whose `ResponseCurve` selects the shape:
 
-| Curve Type | Description |
-|------------|-------------|
-| `Linear` | Direct proportion |
-| `InverseLinear` | Inverse proportion |
-| `Quadratic` | Squared scaling |
-| `Sigmoid` | S-curve transition |
+| Response Curve | Description |
+|----------------|-------------|
+| `Linear` | Direct proportion across `XRange` |
+| `InverseExponential` | Exponential falloff |
+| `SimpleLogistic` | Ascending S-curve |
+| `SimpleDescendingLogistic` | Descending S-curve |
 
-### Input Variables
+A few test files instead use a bare `"Curve": "ReverseLinear"` string, or a `"Type": "Switch"` curve with a `SwitchPoint` for step-function behavior.
 
-| Variable | Description |
-|----------|-------------|
-| `SelfHealthPercent` | NPC's current health ratio |
-| `TargetHealthPercent` | Target's current health ratio |
-| `DistanceToTarget` | Distance in blocks |
-| `CombatDuration` | Time in combat |
-| `AlliesNearby` | Count of nearby allies |
-| `EnemiesNearby` | Count of nearby enemies |
+### Condition Types
+
+Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. Common types:
+
+| Condition Type | Description |
+|----------------|-------------|
+| `TimeSinceLastUsed` | Time elapsed since the action last ran |
+| `TargetDistance` | Distance to the current target |
+| `Randomiser` | Random value between `MinValue` and `MaxValue` |
+| `OwnStatPercent` / `OwnStatAbsolute` | NPC's own stat as a percentage / absolute value |
+| `TargetStatPercent` | Target's stat as a percentage |
+| `RecentSustainedDamage` | Damage taken recently |
+| `NearbyCount` / `KnownTargetCount` | Counts of nearby/known entities |
 
 ---
 
@@ -694,10 +762,10 @@ CAE uses utility curves to evaluate action priorities:
 
 | File Type | Path |
 |-----------|------|
-| Templates | `Server/NPC/Roles/_Core/Templates/` |
+| Core Templates | `Server/NPC/Roles/_Core/Templates/` |
 | Creatures | `Server/NPC/Roles/Creature/` |
 | Intelligent | `Server/NPC/Roles/Intelligent/` |
-| Attitudes | `Server/NPC/Attitude/` |
+| Attitudes | `Server/NPC/Attitude/Roles/` |
 | Spawn Beacons | `Server/NPC/Spawn/Beacons/` |
 | Combat Balance | `Server/NPC/Balancing/` |
 | Groups | `Server/NPC/Groups/` |
@@ -707,9 +775,10 @@ CAE uses utility curves to evaluate action priorities:
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Total Roles | 897 | NPC behavior definitions |
-| Templates | ~50 | Abstract base templates |
-| Attitude Files | ~30 | Relationship definitions |
-| Group Files | ~80 | Spawn group collections |
-| Spawn Beacons | ~100 | Spawn configurations |
-| CAE Files | ~30 | Combat balancing |
+| Total Roles | 952 | NPC role definitions (templates + variants) |
+| Templates (`Template_*`) | 51 | Abstract base templates (13 in `_Core/Templates/`) |
+| Attitude Files | 26 | Relationship definitions (`Attitude/Roles/`) |
+| Group Files | 70 | NPC role collections |
+| Flock Files | 8 | Flock size configurations |
+| Spawn Beacons | 75 | Spawn configurations |
+| CAE Files | 28 | Combat balancing |

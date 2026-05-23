@@ -32,16 +32,22 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 
 **DamageResistance example:**
 
+`DamageResistance` maps each damage type to an array of modifier objects (`{ CalculationType, Amount }`):
+
 ```json
 {
   "DamageResistance": {
-    "Fire": 1.0,
-    "Physical": 0.5
+    "Fire": [
+      { "Amount": 1.0, "CalculationType": "Multiplicative" }
+    ],
+    "Physical": [
+      { "CalculationType": "Multiplicative", "Amount": 0.05 }
+    ]
   }
 }
 ```
 
-Values represent resistance multiplier (1.0 = immune, 0.5 = 50% reduction, 0 = no resistance).
+For `Multiplicative`, `Amount` is the fraction of damage removed (1.0 = immune, 0.05 = 5% reduction, 0 = no resistance).
 
 ### Model Transformation
 
@@ -54,10 +60,12 @@ Values represent resistance multiplier (1.0 = immune, 0.5 = 50% reduction, 0 = n
 ```json
 {
   "Duration": 60,
-  "ModelChange": "Creatures/Kweebec/Kweebec",
-  "RemovalBehavior": "Duration"
+  "ModelChange": "Corgi",
+  "OverlapBehavior": "Overwrite"
 }
 ```
+
+`ModelChange` is the model/creature identifier to morph into (e.g. `"Corgi"`), not a file path.
 
 ---
 
@@ -85,22 +93,24 @@ For basic stat changes with optional percentage-based values:
 
 #### RawStatModifiers
 
-For complex stat changes with calculation control:
+For complex stat changes with calculation control. `RawStatModifiers` maps each stat name to an array of modifier objects:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Amount` | number | Value to apply |
+| `Amount` | number | Value to apply (for `Multiplicative`, a factor such as `1.15` = +15%) |
 | `CalculationType` | string | How to calculate (`Additive`, `Multiplicative`) |
 | `Target` | string | Which value to target (`Max`, `Current`) |
 
 ```json
 {
   "RawStatModifiers": {
-    "Health": {
-      "Amount": 5,
-      "CalculationType": "Additive",
-      "Target": "Max"
-    }
+    "Health": [
+      {
+        "Amount": 1.15,
+        "CalculationType": "Multiplicative",
+        "Target": "Max"
+      }
+    ]
   }
 }
 ```
@@ -195,61 +205,82 @@ Effects triggered each time stat modifiers tick:
 
 #### Simple Buff (Food Effect)
 
-From `Server/Entity/Effects/Meat_Buff_T1.json`:
+From `Server/Entity/Effects/Food/Buff/Meat_Buff_T1.json`:
 
 ```json
 {
-  "Duration": 60,
-  "OverlapBehavior": "Extend",
-  "Debuff": false,
-  "StatusEffectIcon": "UI/Icons/Effects/Food_Buff",
-  "StatModifiers": {
-    "HealthRegenRate": 1.5
+  "RawStatModifiers": {
+    "Health": [
+      {
+        "Amount": 1.05,
+        "CalculationType": "Multiplicative",
+        "Target": "Max"
+      }
+    ]
   },
-  "ValueType": "Percent"
+  "OverlapBehavior": "Overwrite",
+  "Duration": 45,
+  "StatusEffectIcon": "UI/StatusEffects/AddHealth/Tiny.png"
 }
 ```
 
 #### Regeneration Potion
 
-From `Server/Entity/Effects/Potion/Potion_Health_Lesser_Regen.json`:
+From `Server/Entity/Effects/Potion/Potion_Health_Regen_Lesser.json`:
 
 ```json
 {
-  "Duration": 30,
-  "OverlapBehavior": "Overwrite",
-  "StatusEffectIcon": "UI/Icons/Effects/Regen",
   "StatModifiers": {
-    "Health": 1
+    "Health": 15
   },
-  "DamageCalculatorCooldown": 1.0,
+  "ValueType": "Percent",
+  "DamageCalculatorCooldown": 5,
+  "Duration": 5.05,
+  "OverlapBehavior": "Overwrite",
+  "StatusEffectIcon": "Icons/ItemsGenerated/Potion_Health_Lesser.png",
+  "ApplicationEffects": {
+    "Particles": [
+      {
+        "SystemId": "Potion_Health_Heal",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "Pelvis"
+      }
+    ]
+  },
   "StatModifierEffects": {
     "WorldParticles": [
-      { "SystemId": "Regen_Hearts" }
-    ]
+      {
+        "SystemId": "Potion_Health_Implosion",
+        "PositionOffset": { "Y": 1.0 }
+      }
+    ],
+    "WorldSoundEventId": "SFX_Deployable_Totem_Heal_Despawn"
   }
 }
 ```
 
 #### Stun Effect (Bomb)
 
-From `Server/Entity/Effects/Bomb_Explode_Stun.json`:
+From `Server/Entity/Effects/Projectiles/Bomb/Bomb_Explode_Stun.json`:
 
 ```json
 {
-  "Duration": 3,
-  "Debuff": true,
-  "StatusEffectIcon": "UI/Icons/Effects/Stunned",
   "ApplicationEffects": {
+    "EntityTopTint": "#008000",
+    "EntityBottomTint": "#000000",
+    "ScreenEffect": "ScreenEffects/Poison.png",
+    "Particles": [
+      { "SystemId": "Effect_Poison" }
+    ],
     "MovementEffects": {
       "DisableAll": true
     },
     "AbilityEffects": {
       "Disabled": ["Primary", "Secondary"]
-    },
-    "EntityTopTint": "#FFFF00",
-    "WorldSoundEventId": "SFX_Stun_Apply"
-  }
+    }
+  },
+  "Duration": 5,
+  "OverlapBehavior": "Extend"
 }
 ```
 
@@ -259,50 +290,40 @@ From `Server/Entity/Effects/Potion/Potion_Morph_Dog.json`:
 
 ```json
 {
-  "Duration": 120,
+  "StatusEffectIcon": "Icons/ItemsGenerated/Potion_Purify.png",
   "OverlapBehavior": "Overwrite",
-  "StatusEffectIcon": "UI/Icons/Effects/Morph",
-  "ModelChange": "Creatures/Dog/Dog",
+  "Duration": 60,
+  "ModelChange": "Corgi",
   "ApplicationEffects": {
-    "WorldSoundEventId": "SFX_Morph_Transform",
     "Particles": [
-      { "SystemId": "Morph_Smoke" }
-    ]
-  },
-  "RemovalBehavior": "Duration"
+      { "SystemId": "Potion_Morph_Burst" }
+    ],
+    "WorldSoundEventId": "SFX_Wolf_Alerted"
+  }
 }
 ```
 
 #### Damage Immunity (Dodge Invulnerability)
 
-From `Server/Entity/Effects/Dodge_Invulnerability.json`:
+From `Server/Entity/Effects/Movement/Dodge_Invulnerability.json`:
 
 ```json
 {
-  "Duration": 0.3,
-  "Infinite": false,
-  "Invulnerable": true,
-  "ApplicationEffects": {
-    "EntityTopTint": "#FFFFFF88",
-    "EntityBottomTint": "#FFFFFF88"
-  }
+  "Duration": 0.25,
+  "Invulnerable": true
 }
 ```
 
 #### Damage Resistance (Fire Immunity)
 
-From `Server/Entity/Effects/Immunity_Fire.json`:
+From `Server/Entity/Effects/Immunity/Immunity_Fire.json`:
 
 ```json
 {
-  "Duration": 30,
-  "StatusEffectIcon": "UI/Icons/Effects/Fire_Resist",
+  "Infinite": true,
   "DamageResistance": {
-    "Fire": 1.0
-  },
-  "ApplicationEffects": {
-    "Particles": [
-      { "SystemId": "Fire_Shield_Aura" }
+    "Fire": [
+      { "Amount": 1.0, "CalculationType": "Multiplicative" }
     ]
   }
 }
@@ -371,12 +392,13 @@ The `Regenerating` array defines automatic stat recovery/drain rules. Each entry
 
 ### Condition Types
 
-Conditions control when regeneration rules apply. Multiple conditions in an array must ALL be true.
+Conditions control when regeneration rules apply. Each condition object is keyed by `Id`. Multiple conditions in an array must ALL be true.
 
-| Condition ID | Properties | Description |
+| Condition Id | Properties | Description |
 |--------------|------------|-------------|
 | `Alive` | - | Entity must be alive |
-| `Player` | `GameMode` | Player must be in specified game mode |
+| `IsPlayer` | `Inverse` | Entity is (or, inverted, is not) a player |
+| `CheckPlayerGameMode` | `GameMode` | Player must be in specified game mode |
 | `Stat` | `Stat`, `Amount`, `Comparison` | Another stat must meet a threshold |
 | `NoDamageTaken` | `Delay` | No damage received for X seconds |
 | `Suffocating` | - | Entity is suffocating in a block |
@@ -390,7 +412,7 @@ All conditions support an `Inverse` property to negate the check:
 
 ```json
 {
-  "Condition": "Sprinting",
+  "Id": "Sprinting",
   "Inverse": true
 }
 ```
@@ -408,7 +430,7 @@ For `Stat` conditions:
 
 ```json
 {
-  "Condition": "Stat",
+  "Id": "Stat",
   "Stat": "Stamina",
   "Amount": 0,
   "Comparison": "Gte"
@@ -475,41 +497,35 @@ From `Server/Entity/Stats/Health.json`:
   "ResetType": "MaxValue",
   "Regenerating": [
     {
-      "Interval": 1.0,
-      "Amount": 1,
-      "RegenType": "Additive",
+      "$Comment": "NPC",
+      "Interval": 0.5,
+      "Amount": 0.05,
+      "RegenType": "Percentage",
       "Conditions": [
-        { "Condition": "Alive" },
-        { "Condition": "RegenHealth" },
-        { "Condition": "NoDamageTaken", "Delay": 5.0 }
+        { "Id": "Alive" },
+        { "Id": "IsPlayer", "Inverse": true },
+        { "Id": "NoDamageTaken", "Delay": 15 },
+        { "Id": "RegenHealth" }
       ]
     },
     {
+      "$Comment": "Player in creative mode",
       "Interval": 0.5,
-      "Amount": 10,
-      "RegenType": "Additive",
+      "Amount": 1.0,
+      "RegenType": "Percentage",
       "Conditions": [
-        { "Condition": "Alive" },
-        { "Condition": "Player", "GameMode": "Creative" }
+        { "Id": "Alive" },
+        { "Id": "CheckPlayerGameMode", "GameMode": "Creative" }
       ]
     }
-  ],
-  "MinValueEffects": {
-    "TriggerAtZero": true,
-    "Interactions": {
-      "Interactions": [
-        { "Type": "Kill" }
-      ]
-    }
-  }
+  ]
 }
 ```
 
 This health stat:
 - Starts and caps at 100
-- Regenerates 1 HP/second when alive, regen enabled, and no damage taken for 5 seconds
-- Regenerates 10 HP/0.5s in Creative mode (fast regen)
-- Triggers death when reaching zero
+- Regenerates 5%/0.5s for non-player entities when alive, regen enabled, and no damage taken for 15 seconds
+- Regenerates 100%/0.5s for players in Creative mode (instant regen)
 
 #### Stamina Stat
 
@@ -517,29 +533,31 @@ From `Server/Entity/Stats/Stamina.json`:
 
 ```json
 {
-  "InitialValue": 100,
-  "Min": 0,
-  "Max": 100,
+  "InitialValue": 10,
+  "Min": -4,
+  "Max": 10,
   "Shared": false,
   "Regenerating": [
     {
+      "$Comment": "Positive stamina regeneration values",
       "Interval": 0.1,
-      "Amount": 3,
+      "Amount": 0.3,
       "RegenType": "Additive",
       "Conditions": [
-        { "Condition": "Alive" },
-        { "Condition": "Sprinting", "Inverse": true },
-        { "Condition": "Wielding", "Inverse": true },
-        { "Condition": "Charging", "Inverse": true }
+        { "Id": "Stat", "Stat": "StaminaRegenDelay", "Amount": 0 },
+        { "Id": "Stat", "Stat": "Stamina", "Amount": 0, "Comparison": "Gte" },
+        { "Id": "Wielding", "Inverse": true },
+        { "Id": "Sprinting", "Inverse": true },
+        { "Id": "Gliding", "Inverse": true }
       ]
     },
     {
       "Interval": 0.1,
-      "Amount": -5,
-      "RegenType": "Additive",
+      "Amount": -0.1,
       "ClampAtZero": true,
+      "RegenType": "Additive",
       "Conditions": [
-        { "Condition": "Sprinting" }
+        { "Id": "Sprinting" }
       ]
     }
   ],
@@ -547,10 +565,12 @@ From `Server/Entity/Stats/Stamina.json`:
     "TriggerAtZero": true,
     "Interactions": {
       "Interactions": [
-        { "Type": "Stagger" },
+        "Stamina_Bar_Flash",
+        "Stamina_Broken_Check",
         {
-          "Type": "ApplyEffect",
-          "EffectId": "Exhausted"
+          "Type": "ChangeStat",
+          "Behaviour": "Set",
+          "StatModifiers": { "StaminaRegenDelay": -0.5 }
         }
       ]
     }
@@ -560,7 +580,7 @@ From `Server/Entity/Stats/Stamina.json`:
       "Interactions": [
         {
           "Type": "ClearEntityEffect",
-          "EffectId": "Exhausted"
+          "EntityEffectId": "Stamina_Broken"
         }
       ]
     }
@@ -568,11 +588,12 @@ From `Server/Entity/Stats/Stamina.json`:
 }
 ```
 
-This stamina stat:
-- Regenerates 3/tick when not sprinting, wielding, or charging
-- Drains 5/tick while sprinting
-- Triggers stagger and exhaustion effect at zero
-- Clears exhaustion when reaching full
+This stamina stat (the real file includes additional creative-mode, overdrawn, and gliding-drain rules, omitted here for brevity):
+- Caps at 10 with a `-4` overdrawn floor
+- Regenerates 0.3/tick when stamina is non-negative, the `StaminaRegenDelay` gate has elapsed, and the entity is not wielding, sprinting, or gliding
+- Drains 0.1/tick while sprinting
+- On hitting zero, flashes the bar, runs the broken check, and sets a regen delay
+- Clears the `Stamina_Broken` effect when reaching full
 
 #### Mana Stat
 
@@ -580,19 +601,20 @@ From `Server/Entity/Stats/Mana.json`:
 
 ```json
 {
-  "InitialValue": 100,
+  "InitialValue": 0,
   "Min": 0,
-  "Max": 100,
+  "Max": 0,
   "Shared": false,
+  "ResetType": "MaxValue",
   "Regenerating": [
     {
-      "Interval": 1.0,
-      "Amount": 5,
+      "Interval": 0.2,
+      "Amount": 1,
       "RegenType": "Additive",
       "Conditions": [
-        { "Condition": "Alive" },
-        { "Condition": "NoDamageTaken", "Delay": 3.0 },
-        { "Condition": "Charging", "Inverse": true }
+        { "Id": "Alive" },
+        { "Id": "NoDamageTaken", "Delay": 6 },
+        { "Id": "Charging", "Inverse": true }
       ]
     }
   ]
@@ -600,7 +622,8 @@ From `Server/Entity/Stats/Mana.json`:
 ```
 
 This mana stat:
-- Regenerates 5/second when alive, not recently damaged, and not charging
+- Defaults to a 0 cap (raised by gear/effects that grant max mana)
+- Regenerates 1/0.2s when alive, not damaged for 6 seconds, and not charging
 
 #### Oxygen Stat
 
@@ -615,40 +638,37 @@ From `Server/Entity/Stats/Oxygen.json`:
   "Regenerating": [
     {
       "Interval": 0.5,
-      "Amount": 10,
+      "Amount": 25,
       "RegenType": "Additive",
       "Conditions": [
-        { "Condition": "Suffocating", "Inverse": true }
+        { "Id": "Alive" },
+        { "Id": "Suffocating", "Inverse": true }
       ]
     },
     {
-      "Interval": 1.0,
-      "Amount": -10,
-      "RegenType": "Additive",
-      "ClampAtZero": true,
+      "$Comment": "Player in creative mode",
+      "Interval": 0.5,
+      "Amount": 1.0,
+      "RegenType": "Percentage",
       "Conditions": [
-        { "Condition": "Suffocating" }
+        { "Id": "Alive" },
+        { "Id": "CheckPlayerGameMode", "GameMode": "Creative" }
+      ]
+    },
+    {
+      "Interval": 0.5,
+      "Amount": -3,
+      "RegenType": "Additive",
+      "Conditions": [
+        { "Id": "Alive" },
+        { "Id": "Suffocating" }
       ]
     }
-  ],
-  "MinValueEffects": {
-    "TriggerAtZero": true,
-    "Interactions": {
-      "Interactions": [
-        {
-          "Type": "DamageEntity",
-          "DamageParameters": {
-            "DamageAmount": 10,
-            "DamageCauseId": "Drowning"
-          }
-        }
-      ]
-    }
-  }
+  ]
 }
 ```
 
 This oxygen stat:
-- Regenerates quickly when not suffocating
-- Drains when suffocating
-- Deals drowning damage when depleted
+- Regenerates quickly (25/0.5s) when alive and not suffocating
+- Refills instantly for players in Creative mode
+- Drains 3/0.5s while suffocating

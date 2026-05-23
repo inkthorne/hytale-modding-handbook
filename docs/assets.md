@@ -44,10 +44,13 @@ AssetRegistry getAssetRegistry()
 
 `HytaleAssetStore` - Central asset storage for the server.
 
+Assets are not retrieved directly from `HytaleAssetStore`. Each asset type's config class exposes a static `getAssetMap()`, and the returned `AssetMap` (`com.hypixel.hytale.assetstore.AssetMap`) provides the lookup:
+
 ```java
-// Access registered assets
-<K, T extends JsonAssetWithMap<K, M>, M extends AssetMap<K, T>>
-T getAsset(Class<T> assetClass, K key)
+// Retrieval pattern: <ConfigClass>.getAssetMap().getAsset(key)
+// AssetMap exposes:
+T getAsset(K key)                    // returns null if the key is absent
+T getAsset(String assetPack, K key)  // pack-scoped lookup
 ```
 
 ---
@@ -160,7 +163,7 @@ static Model createScaledModel(ModelAsset asset, float scale, Map<String, String
 ### Usage Example
 ```java
 // Get model from a projectile config
-ProjectileConfig config = ProjectileConfig.getAssetMap().get("arrow");
+ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset("arrow");
 Model model = config.getModel();
 
 // Access model properties
@@ -540,15 +543,20 @@ protected void setup() {
 
 ## Built-in Asset Access
 
-Access built-in Hytale assets through the server's asset store:
+Built-in Hytale assets are retrieved through each asset type's static `getAssetMap()`, then `getAsset(key)`:
 
 ```java
-// Get item definition
-ItemDefinition itemDef = HytaleAssetStore.getItemDefinition("hytale:wooden_sword");
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 
-// Get block type
-BlockType blockType = HytaleAssetStore.getBlockType("hytale:stone");
+// Get a block type by key
+BlockType stone = BlockType.getAssetMap().getAsset("stone");
+
+// Get an item definition by key (the item config class is named Item)
+Item sword = Item.getAssetMap().getAsset("sword");
 ```
+
+`getAsset(key)` returns `null` if the key is absent. A pack-scoped overload `getAsset(String assetPack, K key)` is also available.
 
 ---
 
@@ -584,7 +592,6 @@ Events related to asset pack lifecycle, loading, and file monitoring.
 | `AssetPackRegisterEvent` | `...core.asset` | `Void` | Asset pack registered |
 | `AssetPackUnregisterEvent` | `...core.asset` | `Void` | Asset pack unregistered |
 | `LoadAssetEvent` | `...core.asset` | `Void` | Assets loaded (has priority constants) |
-| `GenerateSchemaEvent` | `...core.asset` | `Void` | Schema generation |
 | `CommonAssetMonitorEvent` | `...core.asset.common.events` | `Void` | Common asset file monitoring |
 | `SendCommonAssetsEvent` | `...core.asset.common.events` | `Void` | Async - sending assets to client |
 | `PathEvent` | `...core.asset.monitor` | N/A | File path change monitoring |
@@ -634,21 +641,6 @@ Fired during asset loading phase. Supports priority-based loading order.
 | `PRIORITY_LOAD_COMMON` | Load common assets first |
 | `PRIORITY_LOAD_REGISTRY` | Load registry assets |
 | `PRIORITY_LOAD_LATE` | Load late-stage assets |
-
----
-
-### GenerateSchemaEvent
-
-**Package:** `com.hypixel.hytale.server.core.asset`
-
-Fired during schema generation for assets.
-
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `getContext()` | `SchemaContext` | Schema context |
-| `getVsCodeConfig()` | `BsonDocument` | VSCode config document |
-| `addSchemaLink(String, List<String>, String)` | `void` | Add schema link |
-| `addSchema(String, Schema)` | `void` | Add schema |
 
 ---
 

@@ -51,6 +51,19 @@ unzip -q -o ~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/pa
 
 Then read assets directly from `~/.cache/hytale-assets/` (`Common/` holds blockymodel/blockyanim/UI formats). The cache lives outside the repo, so it is never committed. Re-run the command (~10s) if the install updates.
 
+## Verifying documentation
+
+The `docs/` were fact-checked against game **build-12** (API docs via `javap` on `HytaleServer.jar`; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them.
+
+Run the regression checker after any game update (or before trusting/extending a doc):
+
+```bash
+./scripts/verify-docs.sh          # full run (hard gates + advisories)
+./scripts/verify-docs.sh --no-build   # skip example compilation (faster)
+```
+
+It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`, all intra-doc anchor links resolve, and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `baseline/CommonAssetsIndex.hashes`** (which Common assets changed since build-12 — re-verify docs referencing those). See `baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
+
 ## Architecture
 
 ### Plugin Structure

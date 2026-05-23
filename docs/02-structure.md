@@ -114,6 +114,41 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 }
 ```
 
+### ServerVersion (target server version)
+
+> Verified against build-12 (`com.hypixel.hytale.server.core.asset.AssetModule`). The literal value below is build-specific — see the caveat.
+
+Any mod with `"IncludesAssetPack": true` should declare the server build it targets, or the server logs a warning when the pack registers:
+
+```
+Plugin '<name>' does not specify a target server version. You may encounter issues,
+please check for plugin updates. This will be a hard error in the future
+```
+
+Add the `ServerVersion` field (a plain string, not a semver):
+
+```json
+{
+  "Group": "MyGroup",
+  "Name": "My Plugin",
+  "Version": "1.0.0",
+  "Main": "com.example.MyPlugin",
+  "ServerVersion": "2026.03.26-89796e57b",
+  "IncludesAssetPack": true
+}
+```
+
+The value must **exactly equal** the server's own version string (`AssetModule` compares with `String.equals`). That string is the running `HytaleServer.jar`'s `Implementation-Version` manifest attribute — on build-12 it is `2026.03.26-89796e57b`. Read the current value with:
+
+```bash
+unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
+```
+
+Caveats:
+- The string embeds the build's git short-SHA, so it changes every game update. A mismatch downgrades the message to `Plugin '<name>' targets a different server version <v>...` — still a warning. There is **no permanent value**: `"*"` and any non-matching string both still warn (the wildcard falls into the "does not specify" branch). Re-pin this field after each game update.
+- `-Dhytale.allow_outdated_mods` only suppresses the separate SEVERE "one or more asset packs are targeting an older server version" failure — not this per-plugin warning.
+- Packs **without** `IncludesAssetPack` (code-only plugins) are not checked, but the example plugins set it anyway for forward-compatibility ("will be a hard error in the future").
+
 ## Server/ vs Common/ Directories
 
 Assets are organized into two directories based on where they're used:
@@ -191,9 +226,12 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.ui.UIPlugin",
+  "ServerVersion": "2026.03.26-89796e57b",
   "IncludesAssetPack": true
 }
 ```
+
+(See [ServerVersion](#serverversion-target-server-version) — the example mods pin the build-12 value.)
 
 ## Examples
 

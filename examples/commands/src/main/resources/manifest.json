@@ -7,5 +7,6 @@
       "Name": "inkthorne"
     }
   ],
-  "Main": "hytale.examples.commands.CommandsPlugin"
+  "Main": "hytale.examples.commands.CommandsPlugin",
+  "ServerVersion": "2026.03.26-89796e57b"
 }

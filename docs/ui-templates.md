@@ -8,7 +8,8 @@ Advanced DSL features for reusable UI components and localization.
 
 | Topic | Description |
 |-------|-------------|
-| [File Imports](#file-imports) | Include external .ui files |
+| [File Imports](#file-imports) | Import external .ui files |
+| [Template Instantiation](#template-instantiation) | Instantiate named templates from imports |
 | [Variables](#variables) | Define and use variables |
 | [Spread Operator](#spread-operator) | Compose styles and properties |
 | [Localization](#localization) | Translatable text strings |
@@ -21,7 +22,9 @@ Advanced DSL features for reusable UI components and localization.
 
 ## File Imports
 
-Import external `.ui` files as variables for reuse across your UI.
+Import an external `.ui` file into a variable, then access the named templates and
+values it defines via member access (`$File.@Member`). This is how the built-in
+`Common.ui` library is reused across nearly every page.
 
 ### Syntax
 
@@ -34,58 +37,129 @@ $VarName = "path/to/file.ui";
 Paths are relative to the current `.ui` file location:
 
 ```
-$Common = "../Common.ui";           // Parent directory
-$Shared = "Shared/Components.ui";   // Subdirectory
-$Styles = "./Styles.ui";            // Same directory (explicit)
+$Common = "../Common.ui";              // Parent directory
+$C = "../../../Common.ui";             // Several levels up
+$Sounds = "Sounds.ui";                 // Same directory
+$CV = "../CodeViewer.ui";              // Sibling file
 ```
 
-### Example
+> An imported file is **not** itself an element. You do not write
+> `$VarName #Id { ... }`. Instead you reach into it with `.@Name` to instantiate a
+> named template or read a value defined inside that file.
 
-**Components/Button.ui:**
+### Accessing Members of an Import
+
+A file like `Common.ui` defines many named members with `@Name = ...`. After import,
+reference them with `$File.@Name`:
+
 ```
-TextButton {
-    Anchor: (Width: 120, Height: 40);
-    Style: (
-        Default: (
-            Background: (Color: #3498db),
-            LabelStyle: (FontSize: 16, TextColor: #ffffff, HorizontalAlignment: Center)
-        ),
-        Hovered: (
-            Background: (Color: #5dade2),
-            LabelStyle: (FontSize: 16, TextColor: #ffffff, HorizontalAlignment: Center)
-        )
-    );
+$C = "../Common.ui";
+
+// Read a value/style defined in Common.ui
+Style: (...$C.@DefaultLabelStyle, RenderBold: true);
+TextColor: $C.@ColorGrayCaption;
+Style: $C.@DefaultColorPickerDropdownBoxStyle;
+```
+
+---
+
+## Template Instantiation
+
+Importing a file gives you access to its **named element templates**. A template is a
+file member whose value is an element block, for example in `Common.ui`:
+
+```
+@TextButton = TextButton {
+    @Anchor = Anchor();
+    @Text = "";
+    Style: ( ...@DefaultTextButtonStyle );
+    Anchor: (...@Anchor, Height: @DefaultButtonHeight);
+    Text: @Text;
+};
+```
+
+### Syntax
+
+Instantiate a template by writing `$File.@Template` as if it were an element type,
+optionally giving the instance an ID and a body:
+
+```
+$C.@TemplateName #InstanceId {
+    @PropName = value;   // override a template parameter
+    Property: value;     // set/override a normal element property
 }
 ```
 
+The `@PropName = value;` form (no `:`) overrides a **template parameter** — one of the
+`@Var = ...` declarations at the top of the template's body (such as `@Anchor`, `@Text`,
+`@Title`, `@Checked`). The `Property: value;` form sets a normal element property the
+same way as on any element.
+
+### Example
+
 **Pages/MyPage.ui:**
 ```
-$PrimaryButton = "Components/Button.ui";
+$C = "../Common.ui";
 
-Group {
-    LayoutMode: CenterMiddle;
-
-    Group #Panel {
-        Anchor: (Width: 400, Height: 200);
-        LayoutMode: Center;
-
-        // Use imported button component
-        $PrimaryButton #SaveButton {
-            Text: "Save";
+$C.@PageOverlay {
+    $C.@DecoratedContainer {
+        $C.@Title {
+            @Text = %server.customUI.myPage.title;
         }
 
-        $PrimaryButton #CancelButton {
-            Text: "Cancel";
+        $C.@TextButton #SaveButton {
+            @Anchor = (Width: 220);
+            @Text = %server.customUI.myPage.save;
+        }
+
+        $C.@CheckBoxWithLabel #EnableOption {
+            @Text = %server.customUI.myPage.enable;
+            @Checked = true;
         }
     }
 }
 ```
 
-### Notes
+### Common Templates in `Common.ui`
 
-- Imported files become element templates
-- You can override properties when instantiating
-- Import paths are resolved at parse time
+These are real templates available via `$C.@Name` after `$C = "../Common.ui";`:
+
+| Template | Purpose |
+|----------|---------|
+| `@TextButton` / `@SecondaryTextButton` / `@TertiaryTextButton` | Styled text buttons (parameters: `@Anchor`, `@Text`, `@Sounds`) |
+| `@Button` / `@SecondaryButton` / `@CancelButton` | Styled icon buttons |
+| `@Title` / `@Subtitle` | Title and subtitle labels (parameter: `@Text`, `@Alignment`) |
+| `@CheckBox` / `@CheckBoxWithLabel` | Checkbox (parameters: `@Checked`, `@Text`, `@LabelStyle`) |
+| `@TextField` / `@NumberField` / `@MultilineTextField` | Input fields (parameter: `@Anchor`) |
+| `@DropdownBox` | Dropdown (parameter: `@Anchor`) |
+| `@Slider` / `@FloatSlider` | Sliders (parameter: `@Anchor`) |
+| `@ProgressBar` / `@CircularProgressBar` | Progress indicators (parameters: `@Anchor`, `@Size`) |
+| `@Container` / `@DecoratedContainer` / `@SimpleContainer` | Panels with `#Title`/`#Content` slots |
+| `@PageOverlay` | Dimmed full-screen overlay backdrop |
+| `@BackButton` / `@DefaultSpinner` | Back button row, animated spinner |
+
+### Filling Template Slots
+
+Some container templates (such as `@Container` and `@DecoratedContainer`) define named
+inner regions like `#Title` and `#Content`. Target them by ID inside the instance body
+to inject children:
+
+```
+$C.@Container {
+    Anchor: (Width: 400, Height: 110);
+
+    #Title {
+        $C.@Title { @Text = %server.customUI.myPage.title; }
+    }
+
+    #Content {
+        Label {
+            Text: %server.customUI.myPage.body;
+            Style: (FontSize: 13, TextColor: $C.@ColorDefaultLabel, Wrap: true);
+        }
+    }
+}
+```
 
 ---
 
@@ -141,6 +215,32 @@ Define reusable values for consistency across your UI.
     )
 );
 ```
+
+### Typed Constructors
+
+Many variables are not bare values but **typed constructors** — the value is the name of
+a style/data type followed by its arguments in parentheses. This is the dominant form for
+styling values in `Common.ui`. Examples taken from real files:
+
+```
+@DefaultLabelStyle = (FontSize: 16, TextColor: #96a9be);          // anonymous object
+
+@SubtitleStyle = LabelStyle(FontSize: 15, RenderUppercase: true, TextColor: #96a9be);
+@InputBoxBackground = PatchStyle(TexturePath: "Common/InputBox.png", Border: 16);
+@DefaultTextButtonStyle = TextButtonStyle(
+    Default: (Background: @DefaultButtonDefaultBackground, LabelStyle: @DefaultButtonLabelStyle),
+    Hovered: (Background: @DefaultButtonHoveredBackground, LabelStyle: @DefaultButtonLabelStyle)
+);
+@DefaultDropdownBoxStyle = DropdownBoxStyle( /* ... */ );
+@ContentPadding = Padding(Full: 17, Top: 8);
+@TopTabAnchor = Anchor(Width: 82, Height: 62, Right: 5, Bottom: -14);
+```
+
+Common constructor types seen in `Common.ui` include `LabelStyle`, `PatchStyle`,
+`ButtonStyle`, `TextButtonStyle`, `DropdownBoxStyle`, `SliderStyle`, `ScrollbarStyle`,
+`CheckBoxStyle`, `ColorPickerStyle`, `TabStyleState`, `TabNavigationStyle`,
+`TextTooltipStyle`, `Anchor`, and `Padding`. An anonymous `(...)` object (no type name)
+is also valid where the type can be inferred from the property it is assigned to.
 
 ### Using Variables
 
@@ -206,7 +306,20 @@ Spread properties from a variable into an element.
 ### Syntax
 
 ```
-...@VariableName
+...@VariableName            // spread a local variable
+...$File.@VariableName      // spread a member of an imported file
+```
+
+The cross-file form `...$File.@Var` is common — it spreads a style or property object
+defined in an imported file (e.g. `Common.ui` or `Sounds.ui`) into the current object:
+
+```
+$C = "../Common.ui";
+
+Style: (
+    ...$C.@DefaultTextButtonStyle,
+    Sounds: ( ...$Sounds.@ButtonsLight )
+);
 ```
 
 ### Example
@@ -488,20 +601,23 @@ Create a theme file for consistent styling:
 ```
 
 **Using the theme:**
+
+Members defined in another file are accessed with the `$File.@Name` form, not bare `@Name`:
+
 ```
 $Theme = "../Theme.ui";
 
 Group {
-    Background: (Color: @ColorBackground(0.95));
-    Padding: (Full: @SpacingLarge);
+    Background: (Color: $Theme.@ColorBackground(0.95));
+    Padding: (Full: $Theme.@SpacingLarge);
 
     Label #Title {
-        Style: @TitleStyle;
+        Style: $Theme.@TitleStyle;
         Text: "Settings";
     }
 
     Label #Description {
-        Style: @MutedTextStyle;
+        Style: $Theme.@MutedTextStyle;
         Text: "Configure your preferences";
     }
 }

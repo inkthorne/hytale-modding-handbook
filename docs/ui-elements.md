@@ -9,12 +9,20 @@ Comprehensive reference for all UI element types in Hytale's DSL.
 | Category | Elements |
 |----------|----------|
 | [Container](#container-elements) | Group |
-| [Text](#text-elements) | Label, TimerLabel |
-| [Button](#button-elements) | Button, TextButton, BackButton |
-| [Input](#input-elements) | TextField, CompactTextField, NumberField, CheckBox, Slider, DropdownBox |
+| [Text](#text-elements) | Label, TimerLabel, HotkeyLabel |
+| [Button](#button-elements) | Button, TextButton, BackButton, ActionButton |
+| [Input](#input-elements) | TextField, CompactTextField, MultilineTextField, NumberField, CheckBox, Slider, FloatSlider, DropdownBox, ColorPickerDropdownBox |
 | [Display](#display-elements) | Sprite, AssetImage, ItemSlot, ProgressBar, CircularProgressBar |
+| [Navigation](#navigation-elements) | TabNavigation, TabButton |
 
 **Related:** [Styling & Layout](ui-styling.md) | [Templates & Variables](ui-templates.md) | [Java API](ui-api.md) | [UI Overview](ui.md)
+
+> **Templates vs. bare elements.** Several controls (checkboxes, dropdowns, input fields,
+> sliders, progress bars, styled buttons) are almost always used through the named
+> templates in `Common.ui` — e.g. `$C.@CheckBox`, `$C.@DropdownBox`, `$C.@TextField` —
+> rather than as bare element tags. The template supplies the required style/background.
+> Sections below show both the underlying element's properties and the template form.
+> See [Templates & Variables](ui-templates.md#template-instantiation).
 
 ---
 
@@ -94,20 +102,39 @@ Label #WelcomeText {
 
 ### TimerLabel
 
-Label that displays countdown/timer values.
+Label that counts down from a number of seconds.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Text` | String | Timer format string |
+| `Seconds` | Number | Countdown duration in seconds (expressions allowed, e.g. `15 * 60`) |
 | `Style` | Style | Text styling |
 | `Anchor` | Anchor | Position and size |
-| `Duration` | Number | Timer duration in seconds |
 
-**Example:**
+**Example** (from `Common/UI/Custom/Hud/TimeLeft.ui`):
 ```
-TimerLabel #Countdown {
-    Style: (FontSize: 32, TextColor: #ff0000, HorizontalAlignment: Center);
-    Duration: 60;
+TimerLabel #TimeLabel {
+    Style: (FontSize: 32, Alignment: Center);
+    Seconds: 15 * 60;
+}
+```
+
+---
+
+### HotkeyLabel
+
+Displays the key currently bound to an input binding (auto-updates with the player's
+keybind settings).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `InputBindingKey` | String | Name of the input binding to display |
+| `Anchor` | Anchor | Position and size |
+| `Style` | Style | Text styling |
+
+**Example** (from the builder tools legend UI):
+```
+HotkeyLabel #ToggleLegendKey {
+    InputBindingKey: "ToggleBuilderToolsLegend";
 }
 ```
 
@@ -192,28 +219,54 @@ BackButton #Back {
 }
 ```
 
+**Note:** `Common.ui` provides a `@BackButton` template (a positioned row containing a
+`BackButton`). Instantiate it with `$C.@BackButton { ... }`.
+
+---
+
+### ActionButton
+
+Button paired with a keybinding label, used for paged/legend controls.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `KeyBindingLabel` | String | Key text shown on the button (e.g. `"J"`) |
+| `Disabled` | Boolean | Disabled state |
+| `Anchor` | Anchor | Position and size |
+
+**Example** (from the builder tools legend UI):
+```
+ActionButton #PreviousPage {
+    Disabled: true;
+    KeyBindingLabel: "J";
+}
+```
+
 ---
 
 ## Input Elements
 
 ### TextField
 
-Single-line text input field.
+Single-line text input field. In practice it is instantiated through the `Common.ui`
+`@TextField` template, which supplies the background and placeholder styling; the
+template parameter is `@Anchor`.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Placeholder` | String | Placeholder text |
-| `Value` | String | Current value |
-| `MaxLength` | Number | Maximum character length |
-| `Style` | Style | Input styling |
+| `PlaceholderText` | String / loc key | Placeholder text shown when empty |
+| `Style` | Style | Input text styling |
+| `PlaceholderStyle` | Style | Placeholder text styling |
+| `Background` | Background | Field background (supplied by template) |
 
-**Example:**
+**Example** (template form, from the UI gallery):
 ```
-TextField #NameInput {
-    Anchor: (Width: 200, Height: 36);
-    Placeholder: "Enter your name...";
-    MaxLength: 32;
+$C = "../Common.ui";
+
+$C.@TextField #TextField1 {
+    @Anchor = (Width: 300, Right: 20);
+    PlaceholderText: %server.customUI.inputs.textFieldPlaceholder;
 }
 ```
 
@@ -223,20 +276,51 @@ TextField #NameInput {
 
 ### CompactTextField
 
-Smaller text input variant.
+Smaller text input that can collapse to an icon and expand on focus (used for search
+boxes).
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Placeholder` | String | Placeholder text |
-| `Value` | String | Current value |
-| `MaxLength` | Number | Maximum character length |
+| `CollapsedWidth` | Number | Width when collapsed |
+| `ExpandedWidth` | Number | Width when expanded |
+| `PlaceholderText` | String / loc key | Placeholder text |
+| `Style` | Style | Input text styling |
+| `PlaceholderStyle` | Style | Placeholder text styling |
+| `Decoration` | Object | Per-state icon / clear-button decoration |
 
 **Example:**
 ```
 CompactTextField #SearchInput {
-    Anchor: (Width: 150, Height: 28);
-    Placeholder: "Search...";
+    Anchor: (Height: 30, Width: 200);
+    CollapsedWidth: 34;
+    ExpandedWidth: 200;
+    PlaceholderText: %server.customUI.searchPlaceholder;
+    Style: (FontSize: 14);
+    PlaceholderStyle: (TextColor: #3d5a85, RenderUppercase: true, FontSize: 12);
+}
+```
+
+---
+
+### MultilineTextField
+
+Multi-line text input with its own scrollbar. Instantiated through the `@MultilineTextField`
+template (parameter `@Anchor`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Anchor` | Anchor | Position and size |
+| `PlaceholderText` | String / loc key | Placeholder text |
+| `Style` | Style | Input text styling |
+| `PlaceholderStyle` | Style | Placeholder text styling |
+| `ScrollbarStyle` | ScrollbarStyle | Scrollbar styling (supplied by template) |
+
+**Example:**
+```
+$C.@MultilineTextField #MultilineField {
+    @Anchor = (Width: 400, Height: 80, Bottom: 8, Left: 0);
+    PlaceholderText: %server.customUI.inputs.multilinePlaceholder;
 }
 ```
 
@@ -244,24 +328,21 @@ CompactTextField #SearchInput {
 
 ### NumberField
 
-Numeric input field.
+Numeric input field. Instantiated through the `@NumberField` template (parameter
+`@Anchor`).
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
 | `Value` | Number | Current numeric value |
-| `Min` | Number | Minimum allowed value |
-| `Max` | Number | Maximum allowed value |
-| `Step` | Number | Increment/decrement step |
+| `Format` | Object | Numeric formatting, e.g. `(MaxDecimalPlaces: 3, Step: 0.1)` |
+| `Style` | Style | Input text styling |
 
 **Example:**
 ```
-NumberField #QuantityInput {
-    Anchor: (Width: 100, Height: 36);
-    Value: 1;
-    Min: 1;
-    Max: 64;
-    Step: 1;
+$C.@NumberField #NumberField1 {
+    @Anchor = (Width: 150, Right: 20);
+    Value: 10;
 }
 ```
 
@@ -269,20 +350,28 @@ NumberField #QuantityInput {
 
 ### CheckBox
 
-Boolean toggle checkbox.
+Boolean toggle checkbox. The checked state property is `Value` (boolean). Instantiated
+through the `@CheckBox` template, or `@CheckBoxWithLabel` for a checkbox with an adjacent
+text label.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Checked` | Boolean | Current checked state |
-| `Label` | String | Associated label text |
+| `Value` | Boolean | Current checked state |
+| `Style` | CheckBoxStyle | Checkbox styling (supplied by template) |
 
-**Example:**
+**`@CheckBox` example:**
 ```
-CheckBox #EnableSound {
-    Anchor: (Width: 200, Height: 24);
-    Checked: true;
-    Label: "Enable Sound Effects";
+$C.@CheckBox #CheckBox1 {
+    Value: true;
+}
+```
+
+**`@CheckBoxWithLabel` example** (parameters `@Text`, `@Checked`, `@LabelStyle`):
+```
+$C.@CheckBoxWithLabel #EnableFeature {
+    @Text = %server.customUI.enableFeature;
+    @Checked = true;
 }
 ```
 
@@ -290,24 +379,37 @@ CheckBox #EnableSound {
 
 ### Slider
 
-Range slider control.
+Range slider control. Instantiated through the `@Slider` template (parameter `@Anchor`).
+For fractional/float values use [`FloatSlider`](#floatslider).
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Value` | Number | Current value |
-| `Min` | Number | Minimum value |
-| `Max` | Number | Maximum value |
-| `Step` | Number | Value increment |
+| `Style` | SliderStyle | Slider styling (supplied by template) |
 
 **Example:**
 ```
-Slider #VolumeSlider {
-    Anchor: (Width: 200, Height: 24);
-    Value: 50;
-    Min: 0;
-    Max: 100;
-    Step: 1;
+$C.@Slider #VolumeSlider {
+    @Anchor = (Width: 200);
+}
+```
+
+---
+
+### FloatSlider
+
+Slider variant for floating-point values. Instantiated through the `@FloatSlider`
+template (parameter `@Anchor`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Anchor` | Anchor | Position and size |
+| `Style` | SliderStyle | Slider styling (supplied by template) |
+
+**Example:**
+```
+$C.@FloatSlider #OpacitySlider {
+    @Anchor = (Width: 200);
 }
 ```
 
@@ -315,24 +417,67 @@ Slider #VolumeSlider {
 
 ### DropdownBox
 
-Dropdown selection menu.
+Dropdown selection menu. Instantiated through the `@DropdownBox` template (parameter
+`@Anchor`). Options are declared inline as `DropdownEntry` child elements; the current
+selection is set with `Value`.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Options` | Array | List of selectable options |
-| `SelectedIndex` | Number | Currently selected index |
-| `Style` | Style | Dropdown styling |
+| `Value` | String | Value of the currently selected entry |
+| `Style` | DropdownBoxStyle | Dropdown styling (supplied by template) |
 
 **Example:**
 ```
-DropdownBox #DifficultySelect {
-    Anchor: (Width: 180, Height: 36);
-    SelectedIndex: 0;
+$C.@DropdownBox #Dropdown1 {
+    @Anchor = (Width: 250, Right: 20);
+    Value: "Option_2";
+
+    DropdownEntry {
+        Value: "Option_1";
+        Text: %server.customUI.option1;
+    }
+    DropdownEntry {
+        Value: "Option_2";
+        Text: %server.customUI.option2;
+    }
 }
 ```
 
-**Note:** Options are typically populated server-side via `UICommandBuilder.set()`.
+**Note:** Options can also be populated/updated server-side via `UICommandBuilder`.
+
+---
+
+### DropdownEntry
+
+A single selectable entry inside a `DropdownBox`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Value` | String | Entry value (matched against the dropdown's `Value`) |
+| `Text` | String / loc key | Display label |
+
+---
+
+### ColorPickerDropdownBox
+
+A color swatch that opens a color-picker panel. Uses the `@DefaultColorPickerDropdownBoxStyle`
+style from `Common.ui`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Anchor` | Anchor | Position and size |
+| `Color` | Color | Current/selected color |
+| `Style` | ColorPickerDropdownBoxStyle | Picker styling |
+
+**Example:**
+```
+ColorPickerDropdownBox #ColorPicker1 {
+    Anchor: (Width: 32, Height: 32, Right: 15);
+    Style: $C.@DefaultColorPickerDropdownBoxStyle;
+    Color: #ff5555;
+}
+```
 
 ---
 
@@ -361,19 +506,20 @@ Sprite #Logo {
 
 ### AssetImage
 
-Asset-based image display for dynamic content.
+Image display that resolves a texture by path, with a fallback when missing.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `AssetPath` | String | Asset path reference |
+| `TexturePath` | String | Texture/asset path to display |
+| `FallbackTexturePath` | String | Texture shown when the asset is unavailable |
 | `Visible` | Boolean | Visibility state |
 
-**Example:**
+**Example** (from the Memories UI):
 ```
-AssetImage #ItemIcon {
-    Anchor: (Width: 64, Height: 64);
-    AssetPath: "Items/Sword.png";
+AssetImage #Icon {
+    Anchor: (Width: 128, Height: 128);
+    FallbackTexturePath: "UI/Custom/Pages/Memories/MissingIcon.png";
 }
 ```
 
@@ -381,22 +527,21 @@ AssetImage #ItemIcon {
 
 ### ItemSlot
 
-Inventory item slot display.
+Inventory item slot display. Renders the slot background, optional quality background, and
+the item icon.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `SlotIndex` | Number | Inventory slot index |
-| `ShowQuantity` | Boolean | Display item count |
-| `Interactive` | Boolean | Allow interaction |
+| `ShowQuantity` | Boolean | Display the item count |
+| `ShowQualityBackground` | Boolean | Show the rarity/quality background |
 
-**Example:**
+**Example** (from `DroppedItemSlot.ui`):
 ```
-ItemSlot #InventorySlot0 {
-    Anchor: (Width: 48, Height: 48);
-    SlotIndex: 0;
-    ShowQuantity: true;
-    Interactive: true;
+ItemSlot #ItemIcon {
+    Anchor: (Full: 0, Height: 64, Width: 64);
+    ShowQualityBackground: true;
+    ShowQuantity: false;
 }
 ```
 
@@ -406,22 +551,26 @@ ItemSlot #InventorySlot0 {
 
 ### ProgressBar
 
-Horizontal progress bar display.
+Horizontal progress bar. Texture-driven (it uses fill/background/effect textures rather
+than plain colors). Instantiated through the `@ProgressBar` template (parameter `@Anchor`),
+which supplies the textures.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
 | `Value` | Number | Current value (0.0 to 1.0) |
-| `FillColor` | Color | Fill color |
-| `BackgroundColor` | Color | Background color |
+| `Background` | Background | Track texture/background |
+| `BarTexturePath` | String | Fill texture |
+| `EffectTexturePath` | String | Optional effect overlay texture |
+| `EffectWidth` / `EffectHeight` / `EffectOffset` | Number | Effect overlay sizing/offset |
+| `Color` | Color | Tint color |
+| `Style` | Style | Bar styling |
 
-**Example:**
+**Example** (template form):
 ```
-ProgressBar #HealthBar {
-    Anchor: (Width: 200, Height: 20);
+$C.@ProgressBar #ProgressBar75 {
+    @Anchor = (Bottom: 4, Left: 0);
     Value: 0.75;
-    FillColor: #00ff00;
-    BackgroundColor: #333333;
 }
 ```
 
@@ -429,22 +578,78 @@ ProgressBar #HealthBar {
 
 ### CircularProgressBar
 
-Circular/radial progress indicator.
+Circular/radial progress indicator. Instantiated through the `@CircularProgressBar`
+template (parameters `@Anchor`, `@Size`), which supplies the mask texture.
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
 | `Value` | Number | Current value (0.0 to 1.0) |
-| `FillColor` | Color | Fill color |
-| `Thickness` | Number | Ring thickness |
+| `Background` | Color | Track/background color |
+| `Color` | Color | Fill color |
+| `MaskTexturePath` | String | Mask texture defining the ring shape |
 
 **Example:**
 ```
-CircularProgressBar #CooldownIndicator {
-    Anchor: (Width: 64, Height: 64);
-    Value: 0.5;
-    FillColor: #3498db;
-    Thickness: 8;
+$C.@CircularProgressBar #CircularProgress1 {
+    @Anchor = (Right: 20);
+    Value: 0.66;
+    Color: #4a7caa;
+}
+```
+
+Bare-element form (showing the underlying properties):
+```
+CircularProgressBar {
+    Anchor: (Width: 48, Height: 48);
+    Value: 0.66;
+    Background: #1a2030;
+    Color: #4a7caa;
+}
+```
+
+---
+
+## Navigation Elements
+
+### TabNavigation
+
+A tab bar plus the logic that switches the visible tab. Contains `TabButton` children and
+uses a `TabNavigationStyle` (e.g. `$C.@TopTabsStyle` or `$C.@HeaderTabsStyle`).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Anchor` | Anchor | Position and size |
+| `Style` | TabNavigationStyle | Tab styling |
+| `SelectedTab` | String | `Id` of the initially selected tab |
+
+### TabButton
+
+A single tab within a `TabNavigation`.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Id` | String | Tab identifier (referenced by `SelectedTab`) |
+| `Icon` | String | Tab icon texture path |
+| `TooltipText` | String / loc key | Hover tooltip |
+
+**Example** (from the UI gallery):
+```
+TabNavigation #TopTabs {
+    Anchor: (Height: 66, Left: 2, Right: 0);
+    Style: $C.@TopTabsStyle;
+    SelectedTab: "Tab1";
+
+    TabButton {
+        Icon: "Common/RecipesIcon.png";
+        TooltipText: %server.customUI.navigation.tabOne;
+        Id: "Tab1";
+    }
+    TabButton {
+        Icon: "Common/RecipesIcon.png";
+        TooltipText: %server.customUI.navigation.tabTwo;
+        Id: "Tab2";
+    }
 }
 ```
 

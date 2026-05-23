@@ -36,13 +36,20 @@ The `Anchor` property controls element positioning and sizing within its parent.
 | `MinWidth` | Number | Minimum width constraint |
 | `MaxWidth` | Number | Maximum width constraint |
 
-### Presets
+### Filling the Parent
 
-| Preset | Description |
-|--------|-------------|
-| `Full` | Fill parent completely |
-| `Horizontal` | Fill parent horizontally |
-| `Vertical` | Fill parent vertically |
+There is no standalone `Anchor: Full;` preset. To make an element fill its parent, use
+one of these real forms:
+
+- Set `LayoutMode: Full;` on the element, **or**
+- Use `Full` as an **Anchor key** inside the parentheses: `Anchor: (Full: 0);` (the value
+  is an inset; `Full: 0` means flush to all edges).
+
+```
+Anchor: (Full: 0);              // fill parent, no inset
+Anchor: (Full: 0, Width: 64, Height: 64);   // centered fixed box
+LayoutMode: Full;               // fill via layout mode
+```
 
 ### Examples
 
@@ -58,17 +65,7 @@ Anchor: (Width: 300, Height: 100, Top: 20);
 
 **Fill Parent:**
 ```
-Anchor: Full;
-```
-
-**Fill Horizontally:**
-```
-Anchor: Horizontal;
-```
-
-**Fill Vertically:**
-```
-Anchor: Vertical;
+Anchor: (Full: 0);
 ```
 
 **Position from Edges:**
@@ -133,7 +130,7 @@ Group #HorizontalContainer {
 ```
 Group {
     LayoutMode: CenterMiddle;
-    Anchor: Full;
+    Anchor: (Full: 0);
 
     Group #CenteredPanel {
         Anchor: (Width: 400, Height: 300);
@@ -230,23 +227,35 @@ Background: (Color: #000000(0.7));
 
 ### 9-Slice Patches (PatchStyle)
 
-For scalable UI elements like buttons and panels:
+For scalable UI elements like buttons and panels. A patch is authored either as a bare
+`(TexturePath: ..., Border: ...)` object on `Background`, or explicitly with the
+`PatchStyle(...)` constructor (common in `Common.ui`).
 
-**Uniform Border:**
+**Uniform Border** (single value applied to all four edges — the most common form):
 ```
-Background: (TexturePath: "Common/UI/Shared/ButtonBackground.png", Border: 20);
+Background: (TexturePath: "Common/ContainerPatch.png", Border: 23);
 ```
 
-**Individual Borders:**
+**Axis Borders** (separate horizontal and vertical insets):
 ```
 Background: (
-    TexturePath: "Common/UI/Shared/Panel.png",
-    BorderTop: 10,
-    BorderBottom: 10,
-    BorderLeft: 20,
-    BorderRight: 20
+    TexturePath: "Common/ContainerHeaderNoRunes.png",
+    HorizontalBorder: 35,
+    VerticalBorder: 0
 );
 ```
+
+**Explicit `PatchStyle` constructor** (as used for button backgrounds in `Common.ui`):
+```
+@DefaultButtonDefaultBackground = PatchStyle(
+    TexturePath: "Common/Buttons/Primary.png",
+    VerticalBorder: 12,
+    HorizontalBorder: 80
+);
+```
+
+> Only `Border` (uniform), `VerticalBorder`, and `HorizontalBorder` exist. There are no
+> per-side `BorderTop` / `BorderBottom` / `BorderLeft` / `BorderRight` keys.
 
 **Note:** 9-slice patches allow textures to scale without distorting corners or edges.
 
@@ -285,6 +294,20 @@ The `Style` property controls text and visual appearance for Label and other tex
 | Property | Type | Description |
 |----------|------|-------------|
 | `Wrap` | Boolean | Enable text wrapping |
+| `ShrinkTextToFit` | Boolean | Shrink font size to fit available space |
+| `MinShrinkTextToFitFontSize` | Number | Lower bound when `ShrinkTextToFit` is on |
+
+### Other Element-Level Styling Properties
+
+These appear directly on elements (not inside the font `Style` object) in real `.ui`
+files and are useful when authoring:
+
+| Property | Applies To | Description |
+|----------|-----------|-------------|
+| `MaskTexturePath` | Label, CircularProgressBar, etc. | Texture used to mask/gradient the element's render |
+| `PlaceholderStyle` | TextField, NumberField, MultilineTextField, CompactTextField | Style for placeholder text |
+| `TooltipText` | TabButton and other interactive elements | Hover tooltip text (string or loc key) |
+| `Sounds` | Inside an interactive `Style` block | Sound triggers (`Activate`, `MouseHover`) — see [Sound States](#sound-states) |
 
 ### Example
 
@@ -326,7 +349,9 @@ Label #Subtitle {
 
 Interactive elements like buttons can have different styles for different interaction states.
 
-### Available States
+### Available Visual States
+
+These keys appear inside a `Style: (...)` block to define per-state appearance:
 
 | State | Description |
 |-------|-------------|
@@ -334,8 +359,30 @@ Interactive elements like buttons can have different styles for different intera
 | `Hovered` | Mouse hovering over element |
 | `Pressed` | Element being clicked/pressed |
 | `Disabled` | Element is disabled |
-| `Focused` | Element has keyboard focus |
-| `Selected` | Element is selected |
+
+### Sound States
+
+Interactive styles can also carry a nested `Sounds: (...)` block. Its keys are **not** the
+visual states above — they are sound-event triggers:
+
+| Sound Key | Triggered When |
+|-----------|----------------|
+| `Activate` | The element is activated/clicked |
+| `MouseHover` | The pointer moves over the element |
+
+```
+Style: (
+    Default: (Background: "Common/Buttons/Primary.png"),
+    Hovered: (Background: "Common/Buttons/Primary_Hovered.png"),
+    Sounds: (
+        Activate: (SoundPath: "Sounds/ButtonsLightActivate.ogg", Volume: 4),
+        MouseHover: (SoundPath: "Sounds/ButtonsLightHover.ogg", Volume: 6)
+    )
+);
+```
+
+In `Common.ui`, button styles pull these in from `Sounds.ui`, e.g.
+`Sounds: $Sounds.@ButtonsLight`.
 
 ### Button Syntax
 
@@ -441,7 +488,7 @@ A panel demonstrating various styling concepts:
 
 Group {
     LayoutMode: CenterMiddle;
-    Anchor: Full;
+    Anchor: (Full: 0);
     Background: (Color: #000000(0.7));
 
     Group #MainPanel {

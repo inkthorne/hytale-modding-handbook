@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+#
+# verify-docs.sh — regression checks for docs/ and examples/ against the
+# installed Hytale game build. Catches outdated/fabricated documentation after
+# a game update.
+#
+# Usage:
+#   scripts/verify-docs.sh [--no-build] [--fields]
+#
+#   --no-build   Skip compiling the example projects (faster).
+#   --fields     Enable the (noisy, advisory) per-format field-existence check.
+#
+# Env overrides:
+#   HYTALE_JAR      Path to HytaleServer.jar
+#   HYTALE_ASSETS   Path to the extracted Assets.zip dir (default ~/.cache/hytale-assets)
+#
+# Exit code: non-zero if any HARD check fails. Advisory/INFO checks never fail
+# the run (they print findings for human review).
+
+set -u
+cd "$(dirname "$0")/.." || exit 2
+REPO="$(pwd)"
+
+NO_BUILD=0
+DO_FIELDS=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-build) NO_BUILD=1 ;;
+    --fields)   DO_FIELDS=1 ;;
+    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+  esac
+done
+
+HARD_FAILS=0
+section() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
+pass()    { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
+fail()    { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; HARD_FAILS=$((HARD_FAILS+1)); }
+warn()    { printf '  \033[33mWARN\033[0m  %s\n' "$1"; }
+info()    { printf '  INFO  %s\n' "$1"; }
+
+# ---- resolve the Hytale install (mirrors examples/hytale-paths.gradle) ----
+if [ -n "${APPDATA:-}" ]; then
+  ROOT="$APPDATA/Hytale"
+elif [ -d "$HOME/.var/app/com.hypixel.HytaleLauncher/data/Hytale" ]; then
+  ROOT="$HOME/.var/app/com.hypixel.HytaleLauncher/data/Hytale"
+else
+  ROOT="$HOME/AppData/Roaming/Hytale"
+fi
+JAR="${HYTALE_JAR:-$ROOT/install/release/package/game/latest/Server/HytaleServer.jar}"
+ASSETS="${HYTALE_ASSETS:-$HOME/.cache/hytale-assets}"
+
+section "Environment"
+if [ -f "$JAR" ]; then info "jar:    $JAR"; else warn "jar not found: $JAR (jar-based checks will be skipped)"; fi
+if [ -d "$ASSETS" ]; then info "assets: $ASSETS"; else warn "assets not found: $ASSETS (asset checks skipped; see CLAUDE.md to extract)"; fi
+# report the installed build marker if present
+BUILD_MARKER="$(find "$ROOT/install/release/package/sig" -maxdepth 1 -name 'build-*' 2>/dev/null | head -1)"
+[ -n "$BUILD_MARKER" ] && info "build:  $(basename "$BUILD_MARKER")"
+
+# =====================================================================
+section "[HARD] Class references resolve via javap"
+# Every com.hypixel.* class named in docs/ must exist in the jar.
+if [ -f "$JAR" ] && command -v javap >/dev/null 2>&1; then
+  OUT="$(python3 - "$JAR" <<'PY'
+import re, subprocess, sys, glob
+jar = sys.argv[1]
+fqcn = re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
+refs = {}
+for f in glob.glob("docs/*.md"):
+    for m in fqcn.findall(open(f).read()):
+        refs.setdefault(m, set()).add(f.split('/')[-1])
+missing = []
+for c in sorted(refs):
+    if subprocess.run(["javap","-cp",jar,c],capture_output=True).returncode != 0:
+        a = c.rsplit(".",1)                       # try inner-class form Foo$Bar
+        if subprocess.run(["javap","-cp",jar,a[0]+"$"+a[1]],capture_output=True).returncode != 0:
+            missing.append((c, ", ".join(sorted(refs[c]))))
+print(f"CHECKED {len(refs)}")
+for c, files in missing:
+    print(f"MISSING {c}  ({files})")
+PY
+)"
+  CHECKED="$(echo "$OUT" | awk '/^CHECKED/{print $2}')"
+  MISS="$(echo "$OUT" | grep -c '^MISSING' || true)"
+  if [ "$MISS" -eq 0 ]; then
+    pass "$CHECKED class references all resolve"
+  else
+    fail "$MISS unresolved class reference(s):"
+    echo "$OUT" | grep '^MISSING' | sed 's/^MISSING/      /'
+  fi
+else
+  warn "skipped (no jar or javap)"
+fi
+
+# =====================================================================
+section "[HARD] Intra-doc anchor links resolve"
+OUT="$(python3 - <<'PY'
+import re, glob, os
+from collections import defaultdict
+def slug(t):
+    s=t.strip().lower(); s=re.sub(r"[^\w\- ]","",s); return s.replace(" ","-")
+anchors={}
+for f in glob.glob("docs/*.md"):
+    seen=defaultdict(int); a=set()
+    for line in open(f):
+        m=re.match(r"^#{1,6}\s+(.*?)\s*#*$",line)
+        if m:
+            b=slug(m.group(1)); n=seen[b]; seen[b]+=1; a.add(b if n==0 else f"{b}-{n}")
+    anchors[os.path.basename(f)]=a
+bad=0
+lr=re.compile(r"\[[^\]]*\]\(([a-zA-Z0-9_\-]+\.md)?#([a-zA-Z0-9_\-]+)\)")
+for f in glob.glob("docs/*.md"):
+    bn=os.path.basename(f)
+    for ln,line in enumerate(open(f),1):
+        for m in lr.finditer(line):
+            tf=m.group(1) or bn; an=m.group(2)
+            if tf not in anchors or an not in anchors[tf]:
+                bad+=1; print(f"BROKEN {bn}:{ln} -> {tf}#{an}")
+print(f"COUNT {bad}")
+PY
+)"
+BAD="$(echo "$OUT" | awk '/^COUNT/{print $2}')"
+if [ "$BAD" -eq 0 ]; then pass "all anchor links resolve"; else
+  fail "$BAD broken anchor link(s):"; echo "$OUT" | grep '^BROKEN' | sed 's/^BROKEN/      /'
+fi
+
+# =====================================================================
+section "[ADVISORY] Referenced asset files exist"
+# High-signal media references (.blockymodel/.blockyanim/.png/.ogg under
+# Common/Server). JSON paths are skipped — many are illustrative examples.
+if [ -d "$ASSETS" ]; then
+  OUT="$(python3 - "$ASSETS" <<'PY'
+import re, glob, os, sys
+assets=sys.argv[1]
+pat=re.compile(r'\b((?:Common|Server|Cosmetics)/[\w/\-]+\.(?:blockymodel|blockyanim|png|ogg|ui))')
+missing=set(); seen=0
+for f in glob.glob("docs/*.md"):
+    for p in pat.findall(open(f).read()):
+        seen+=1
+        if not os.path.exists(os.path.join(assets,p)): missing.add(p)
+print(f"SEEN {seen}")
+for p in sorted(missing): print(f"MISS {p}")
+PY
+)"
+  M="$(echo "$OUT" | grep -c '^MISS' || true)"
+  if [ "$M" -eq 0 ]; then pass "all referenced media asset paths exist"; else
+    warn "$M media path(s) not found (may be renamed/removed, or intentional examples):"
+    echo "$OUT" | grep '^MISS' | sed 's/^MISS/      /'
+  fi
+else
+  warn "skipped (no extracted assets)"
+fi
+
+# =====================================================================
+section "[INFO] Asset drift vs baseline"
+# Tells you exactly which Common assets changed since the baseline was captured.
+if [ -f baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
+  D="$(diff <(sort baseline/CommonAssetsIndex.hashes) <(sort "$ASSETS/CommonAssetsIndex.hashes") | grep -c '^[<>]' || true)"
+  if [ "$D" -eq 0 ]; then
+    info "0 changed Common assets — docs verified against this build still apply"
+  else
+    warn "$D changed line(s) vs baseline — re-verify docs referencing those assets"
+    info "see: diff baseline/CommonAssetsIndex.hashes \"$ASSETS/CommonAssetsIndex.hashes\""
+  fi
+else
+  warn "skipped (missing baseline or live index)"
+fi
+
+# =====================================================================
+section "[ADVISORY] JSON code blocks parse"
+# Note: these docs intentionally use fenced fragments (e.g. \"Field\": { ... });
+# non-parsing blocks are usually fragments, not errors. Reported for awareness.
+OUT="$(python3 - <<'PY'
+import re, glob, os
+bad=0
+for f in glob.glob("docs/*.md"):
+    for i,b in enumerate(re.findall(r'```json\n(.*?)```', open(f).read(), re.S)):
+        if "..." in b or "//" in b or "$" in b: continue
+        try:
+            import json; json.loads(b)
+        except Exception:
+            bad+=1
+print(f"FRAG {bad}")
+PY
+)"
+FRAG="$(echo "$OUT" | awk '/^FRAG/{print $2}')"
+info "$FRAG json block(s) are fragments / not standalone-parseable (expected for this doc style)"
+
+# =====================================================================
+if [ "$DO_FIELDS" -eq 1 ]; then
+section "[ADVISORY] Documented JSON fields appear in real assets"
+if [ -d "$ASSETS" ]; then
+  python3 - "$ASSETS" <<'PY'
+import re, glob, os, sys, subprocess
+assets=sys.argv[1]
+# doc -> asset dir mapping (format docs only)
+m = {
+  "items.md":"Server/Item","items-blocks.md":"Server/Item","items-tools.md":"Server/Item",
+  "items-weapons.md":"Server/Item","items-consumables.md":"Server/Item","items-crafting.md":"Server/Item",
+  "drops.md":"Server/Drops","audio.md":"Server/Audio","npc-roles.md":"Server/NPC",
+  "effects-stats.md":"Server/Entity","prefabs-categories.md":"Server/Prefabs",
+}
+key_re = re.compile(r'"([A-Za-z][A-Za-z0-9_]+)"\s*:')
+for doc,adir in m.items():
+    p=f"docs/{doc}"
+    if not os.path.exists(p): continue
+    keys=set()
+    for b in re.findall(r'```json\n(.*?)```', open(p).read(), re.S):
+        keys.update(key_re.findall(b))
+    d=os.path.join(assets,adir)
+    suspect=[]
+    for k in sorted(keys):
+        r=subprocess.run(["grep","-rl",f'"{k}"',d],capture_output=True)
+        if r.returncode!=0: suspect.append(k)
+    if suspect:
+        print(f"  {doc}: {len(suspect)} documented key(s) absent from {adir} (review — may be example/user-defined):")
+        print("      "+", ".join(suspect))
+    else:
+        print(f"  {doc}: all documented keys present in {adir}")
+PY
+else
+  warn "skipped (no extracted assets)"
+fi
+fi
+
+# =====================================================================
+if [ "$NO_BUILD" -eq 0 ]; then
+section "[HARD] Example projects compile against the jar"
+if [ -f "$JAR" ]; then
+  for d in examples/*/; do
+    [ -f "$d/build.gradle" ] || continue
+    name="$(basename "$d")"
+    if ( cd "$d" && ./gradlew -q jar >/tmp/vd-$name.log 2>&1 ); then
+      pass "$name builds"
+    else
+      fail "$name failed to build (see /tmp/vd-$name.log):"
+      grep -iE "error:" "/tmp/vd-$name.log" | head -5 | sed 's/^/      /'
+    fi
+  done
+else
+  warn "skipped (no jar)"
+fi
+else
+  section "[HARD] Example builds"; info "skipped (--no-build)"
+fi
+
+# =====================================================================
+section "Summary"
+if [ "$HARD_FAILS" -eq 0 ]; then
+  printf '  \033[32mAll hard checks passed.\033[0m Review any WARN items above.\n'
+  exit 0
+else
+  printf '  \033[31m%d hard check(s) failed.\033[0m\n' "$HARD_FAILS"
+  exit 1
+fi

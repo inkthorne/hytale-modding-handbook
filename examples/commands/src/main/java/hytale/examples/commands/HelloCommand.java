@@ -19,6 +19,15 @@ public class HelloCommand extends AbstractPlayerCommand {
         super("hello", "Sends a friendly greeting");
     }
 
+    // By default each command auto-generates a permission node (here "hello")
+    // that only ops hold (the OP group carries the '*' wildcard), so a normal
+    // player gets "no permission". Returning false skips node generation, leaving
+    // the command open to everyone. Use requirePermission("...") to gate instead.
+    @Override
+    protected boolean canGeneratePermission() {
+        return false;
+    }
+
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {

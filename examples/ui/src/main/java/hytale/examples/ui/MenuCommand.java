@@ -20,6 +20,13 @@ public class MenuCommand extends AbstractPlayerCommand {
         super("menu", "Opens a custom menu");
     }
 
+    // Skip the auto-generated permission node so any player can run this example
+    // (otherwise it requires op). See commands example's HelloCommand for details.
+    @Override
+    protected boolean canGeneratePermission() {
+        return false;
+    }
+
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {

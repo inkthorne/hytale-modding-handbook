@@ -158,6 +158,41 @@ MatchResult matches(String input, String alias, int depth)  // Check if input ma
 
 > **See also:** [Permissions API](permissions.md#permissionholder)
 
+### Permission model (why a new command says "no permission")
+
+> Verified against build-12 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
+
+When a command is registered, `setOwner()` runs:
+
+```java
+if (this.permission == null && canGeneratePermission())   // canGeneratePermission() defaults to true
+    this.permission = generatePermission();                // node = command name lowercased, e.g. "menu"
+```
+
+So **every command auto-generates a permission node by default**, and `hasPermission(sender)` only passes if the node is `null`, or the sender holds it. A normal player holds nothing, so a freshly written `/menu` replies *"no permission"* until you do one of:
+
+| Option | How | When to use |
+|--------|-----|-------------|
+| **Open the command** | Override `canGeneratePermission()` to return `false` (leaves the node `null` → everyone passes) | Examples / commands meant for all players |
+| **Explicit node** | Call `requirePermission("ui.menu")` in the constructor, then grant that node | Real permission-gated commands |
+| **Become op** | Run `/op` in-game; the `OP` group carries the `*` wildcard, satisfying every node | Testing/admin |
+
+```java
+public MenuCommand() {
+    super("menu", "Opens a custom menu");
+}
+
+// Opt out of the auto-generated node so any player can run this command.
+@Override
+protected boolean canGeneratePermission() {
+    return false;
+}
+```
+
+Notes:
+- `/op` (self) is itself gated: it works in local/singleplayer, but a dedicated server requires the `--allow-op` launch arg or your UUID in `permissions.json`.
+- The example plugins all override `canGeneratePermission()` so they run without op.
+
 ## AbstractAsyncCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
 

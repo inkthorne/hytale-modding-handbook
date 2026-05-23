@@ -15,19 +15,25 @@ Refer to `docs/00-overview.md` for guidance when implementing Java code for plug
 From an example's directory (e.g., `examples/commands/`), run:
 
 ```bash
-./build.bat    # Build the plugin
-./deploy.bat   # Build and deploy to Hytale mods folder
+# Windows
+./build.bat     # Build the plugin
+./deploy.bat    # Build and deploy to Hytale mods folder
+
+# Linux / bash
+./gradlew build # Build the plugin
+./deploy.sh     # Build (if needed) and deploy to Hytale mods folder
 ```
 
-Note: Use `./` prefix when running from bash.
+Note: Use `./` prefix when running from bash. There is no `build.sh` — `./gradlew build` is the portable build entry point that `build.bat` itself wraps.
 
-Mods directory: `%APPDATA%\Hytale\UserData\Mods\`
+Mods directory: `%APPDATA%\Hytale\UserData\Mods\` (Windows); on Linux the Flatpak install resolves to `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`.
 
 ### Path Configuration
 
-Hytale paths are centralized in shared configuration files:
+Hytale paths are centralized in shared configuration files. All three resolve the same way — explicit `APPDATA` first, then the Linux Flatpak install, then a fallback:
 - `examples/hytale-paths.gradle` - Used by build.gradle files for `hytaleServerJar` and `hytaleModsDir`
 - `examples/hytale-paths.bat` - Used by deploy.bat scripts for `HYTALE_MODS_DIR`
+- `examples/hytale-paths.sh` - Used by deploy.sh scripts for `HYTALE_MODS_DIR`
 
 ## Requirements
 

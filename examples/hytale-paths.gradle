@@ -1,7 +1,15 @@
 // Shared Hytale path configuration for all example projects
 ext {
-    def appData = System.getenv("APPDATA") ?: "${System.getProperty('user.home')}/AppData/Roaming"
-    hytaleRoot = "${appData}/Hytale"
+    def home = System.getProperty('user.home')
+    def appData = System.getenv("APPDATA")
+    def flatpakRoot = "${home}/.var/app/com.hypixel.HytaleLauncher/data/Hytale"
+    if (appData) {
+        hytaleRoot = "${appData}/Hytale"                    // Windows / explicit override
+    } else if (file(flatpakRoot).exists()) {
+        hytaleRoot = flatpakRoot                            // Linux Flatpak launcher
+    } else {
+        hytaleRoot = "${home}/AppData/Roaming/Hytale"       // original fallback
+    }
     hytaleServerJar = file("${hytaleRoot}/install/release/package/game/latest/Server/HytaleServer.jar")
     hytaleModsDir = file("${hytaleRoot}/UserData/Mods")
 }

@@ -2,87 +2,113 @@
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 >
-> **See also:** [Drop System](drops.md) for container loot tables
+> **See also:** [Drop System](drops.md) for `DropList` loot tables
+>
+> All structures and examples below are taken directly from real asset files under
+> `Server/Item/Items/`. Counts cited (e.g. "~2344 blocks") are from the shipped assets.
 
 ## Quick Navigation
 
-| Category | Count | Examples | Key Features |
-|----------|-------|----------|--------------|
-| [Basic Blocks](#basic-blocks) | 100+ | Rock_Stone, Cloth_Block_Wool_Blue | DrawType: Cube, Textures |
-| [Furniture & Lighting](#furniture--lighting) | 50+ | Torch, Lantern, Candle | Light, Particles, On/Off states |
-| [Doors & Ladders](#doors--ladders) | 20+ | Furniture_Crude_Door, Ladder | IsDoor, IsClimbable, ConnectedBlockRuleSet |
-| [Containers](#containers) | 15+ | Chest_Small, Chest_Large | State: container, Capacity |
-| [Crafting Benches](#crafting-benches) | 10+ | Furnace, WorkBench | Bench config, Processing |
-| [Farming Blocks](#farming-blocks) | 20+ | Template_Crop_Block | Farming stages, Growth modifiers |
+| Category | Examples | Key Features |
+|----------|----------|--------------|
+| [Basic Blocks](#basic-blocks) | Build_Grey_Cube, Soil_Dirt | `DrawType: Cube`, `Textures`, `Gathering` |
+| [Furniture & Lighting](#furniture--lighting) | Deco_Lantern | `DrawType: Model`, `Light`, `State` On/Off |
+| [Doors & Ladders](#doors--ladders) | Furniture_Temple_Wind_Door_Large, Ladders | `IsDoor`, `MovementSettings`, `ConnectedBlockRuleSet` |
+| [Containers](#containers) | Furniture_Kweebec_Chest_Large | `BlockEntity` → `ItemContainerBlock` |
+| [Benches](#benches) | Bench_Tannery | `BlockEntity` → `BenchBlock` / `ProcessingBenchBlock` |
+| [Farming & Soil](#farming--soil) | Soil_Dirt_Tilled, Plant_Sapling_Camphor | `Farming.SoilConfig`, `Farming.Stages` |
 
 ---
 
 ## BlockType Properties
 
-Items with placeable blocks define their block configuration in the `BlockType` property. This section covers all core BlockType properties.
+Items with placeable blocks define their block configuration in the `BlockType` property.
+Many block items use `Parent` to inherit a template (e.g. `"Parent": "Template_Soil"`), so
+a given file may only specify the fields it overrides.
 
 ### Core Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Material` | string | Block material type: `Solid` (collision) or `Empty` (no collision) |
-| `DrawType` | string | How the block is rendered: `Cube`, `Model`, or `Invisible` |
-| `Opacity` | string | Light blocking: `Opaque`, `Transparent`, or `Translucent` |
+| `Material` | string | Collision: `Solid` or `Empty` |
+| `DrawType` | string | Rendering: `Cube`, `Model`, `CubeWithModel`, or `Empty` |
+| `Opacity` | string | Light/draw mode: `Solid`, `Transparent`, `Cutout`, `Semitransparent` |
+| `HitboxType` | string | Named hitbox shape (see [HitboxType](#hitboxtype)) |
+| `Group` | string | Internal grouping tag (e.g. `Dev`) |
+| `Flags` | object | Item/block flags (see [Flags](#flags)) |
+| `ParticleColor` | string | Hex tint for break/impact particles |
 | `BlockSoundSetId` | string | Sound set for footsteps and impacts |
 | `BlockParticleSetId` | string | Particle set for breaking effects |
+| `CubeShadingMode` | string | Cube shading: `Standard`, `Flat`, `Fullbright`, `Reflective` |
+| `Gathering` | object | How the block is broken/harvested and what it drops |
 
 ### Material
 
-Determines collision behavior:
-
-```json
-{
-  "BlockType": {
-    "Material": "Solid"
-  }
-}
-```
-
 | Material | Description |
 |----------|-------------|
-| `Empty` | No collision, entities pass through |
-| `Solid` | Full collision, blocks entity movement |
+| `Solid` | Full collision (most blocks) |
+| `Empty` | No collision (plants, some furniture) |
+
+```json
+{ "BlockType": { "Material": "Solid" } }
+```
 
 ### DrawType
 
-Controls block rendering method:
+| DrawType | Description |
+|----------|-------------|
+| `Cube` | Standard voxel cube using `Textures` |
+| `Model` | Custom `.blockymodel` (most furniture, plants, doors) |
+| `CubeWithModel` | A cube combined with a model overlay |
+| `Empty` | Not rendered |
 
 ```json
-{
-  "BlockType": {
-    "DrawType": "Cube"
-  }
-}
+{ "BlockType": { "DrawType": "Cube" } }
 ```
-
-| DrawType | Description | Use Case |
-|----------|-------------|----------|
-| `Cube` | Standard 6-face cube | Rock, dirt, wood blocks |
-| `Model` | Custom 3D model | Furniture, torches, plants |
-| `Invisible` | No rendering | Trigger blocks, air |
 
 ### Opacity
 
-Controls light transmission:
-
-```json
-{
-  "BlockType": {
-    "Opacity": "Transparent"
-  }
-}
-```
-
 | Opacity | Description |
 |---------|-------------|
-| `Opaque` | Blocks all light |
-| `Transparent` | Allows full light through |
-| `Translucent` | Partially blocks light |
+| `Solid` | Fully opaque (blocks light) |
+| `Transparent` | Drawn with transparency (models, glass) |
+| `Cutout` | Alpha-tested cutout (foliage) |
+| `Semitransparent` | Partial transparency |
+
+### HitboxType
+
+`HitboxType` (~1715 blocks) selects a named, predefined collision/selection shape rather
+than describing one inline. `Full` is the standard whole-block hitbox; the rest are
+shape- or asset-specific names.
+
+```json
+{ "BlockType": { "HitboxType": "Full" } }
+```
+
+Common values include `Full`, `Block_Half`, `Block_Vertical_Flat`, `Stairs`, `Door`,
+`Ladder`, `Window`, `Chest_Small`, `Chest_Large`, `Fence`, `Branch`, `Plant_Full`,
+`Plant_Medium`, `Torch`, and many model-specific names (e.g. `Door_Temple_Wind_Large`).
+
+### Flags
+
+`Flags` (~1280 blocks) is usually `{}` but may carry boolean behavior flags:
+
+```json
+{ "BlockType": { "Flags": { "IsUsable": true } } }
+```
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `IsUsable` | boolean | Whether the block responds to the Use interaction |
+| `IsStackable` | boolean | Whether the item form stacks |
+
+### ParticleColor
+
+`ParticleColor` (~2706 blocks) is a hex string used to tint break/impact particles:
+
+```json
+{ "BlockType": { "ParticleColor": "#969696" } }
+```
 
 ---
 
@@ -90,7 +116,9 @@ Controls light transmission:
 
 ### Cube Textures
 
-For `DrawType: Cube`, textures are defined per face:
+For `DrawType: Cube`, `Textures` is an **array** of texture entries. Each entry uses the
+**face name as the key** (not a `"Face"`/`"Texture"` pair) plus a `Weight`. Multiple
+entries provide weighted random variation per placed block.
 
 ```json
 {
@@ -98,113 +126,164 @@ For `DrawType: Cube`, textures are defined per face:
     "DrawType": "Cube",
     "Textures": [
       {
-        "Face": "All",
-        "Texture": "Blocks/Stone/Rock_Stone.png"
+        "Weight": 1,
+        "Sides": "BlockTextures/Dev_Grey_Neutral_Side.png",
+        "UpDown": "BlockTextures/Dev_Grey_Neutral_Top.png"
       }
     ]
   }
 }
 ```
 
-**Face Values:**
+**Face keys** (only these appear inside `Textures` entries):
 
-| Face | Description |
-|------|-------------|
-| `All` | Apply to all faces |
-| `Top` | Top face (+Y) |
-| `Bottom` | Bottom face (-Y) |
-| `North`, `South`, `East`, `West` | Side faces |
-| `Sides` | All four side faces |
+| Key | Description |
+|-----|-------------|
+| `Weight` | Selection weight when several entries are listed (not a face) |
+| `All` | Apply one texture to every face |
+| `Sides` | The four side faces |
+| `UpDown` | Both top and bottom faces |
+| `Up` | Top face (+Y) only |
+| `Down` | Bottom face (-Y) only |
+| `North` / `South` / `East` / `West` | Individual side faces (rare; debug blocks) |
 
-**Multi-Face Example (Grass Block):**
+> There is no `Top`, `Bottom`, or `Face`/`Texture` key. Use `UpDown` (or `Up`/`Down`)
+> for vertical faces.
+
+**Single texture (e.g. `Soil_Dirt`):**
+
+```json
+{ "BlockType": { "Textures": [ { "All": "BlockTextures/Soil_Dirt.png", "Weight": 1 } ] } }
+```
+
+**Distinct sides vs. top/bottom (`Soil_Dirt_Crystal`):**
 
 ```json
 {
   "BlockType": {
-    "DrawType": "Cube",
     "Textures": [
-      { "Face": "Top", "Texture": "Blocks/Soil/Grass_Top.png" },
-      { "Face": "Bottom", "Texture": "Blocks/Soil/Dirt.png" },
-      { "Face": "Sides", "Texture": "Blocks/Soil/Grass_Side.png" }
+      {
+        "Sides": "BlockTextures/Soil_Dirt_Crystal_Side.png",
+        "Weight": 1,
+        "Up": "BlockTextures/Soil_Dirt_Crystal.png",
+        "Down": "BlockTextures/Soil_Dirt_Crystal_Side.png"
+      }
     ]
   }
 }
 ```
 
+Soil-type cube blocks may also define `TransitionTexture` for blending with neighbors.
+
 ### Custom Models
 
-For `DrawType: Model`, specify a 3D model:
+For `DrawType: Model`, a `.blockymodel` is referenced and textured via
+`CustomModelTexture` (also an array of weighted entries, here keyed by `Texture`).
 
 ```json
 {
   "BlockType": {
     "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/Torch.blockymodel",
-    "CustomModelScale": 1.0,
+    "CustomModel": "Blocks/Decorative_Sets/Village/Lantern.blockymodel",
     "CustomModelTexture": [
-      { "Texture": "Blocks/Furniture/Torch_Texture.png" }
-    ]
+      { "Weight": 1, "Texture": "Blocks/Decorative_Sets/Village/Lantern_Texture.png" }
+    ],
+    "CustomModelScale": 0.8
   }
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `CustomModel` | string | Path to .blockymodel file |
+| `CustomModel` | string | Path to `.blockymodel` file |
+| `CustomModelTexture` | array | Weighted `{ "Weight", "Texture" }` entries |
 | `CustomModelScale` | float | Model scale multiplier |
-| `CustomModelAnimation` | string | Default animation to play |
-| `CustomModelTexture` | array | Texture(s) for the model |
+| `CustomModelAnimation` | string | `.blockyanim` to play (often set per state, see [Block States](#block-states)) |
 
 ---
 
-## Light Emission
+## Gathering & Drops
 
-Blocks can emit colored light:
+`Gathering` (~2344 blocks) defines how a block is broken/harvested and what it produces.
+It groups by interaction mode; `Breaking` is the most common.
 
 ```json
 {
   "BlockType": {
-    "Light": {
-      "Color": "#FFAA44",
-      "Radius": 12
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks",
+        "DropList": "Rubble_Lime"
+      }
     }
   }
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Color` | string | Hex color of emitted light |
-| `Radius` | int | Light range in blocks (0-15) |
+| Sub-key | Description |
+|---------|-------------|
+| `Breaking` | Breaking with a tool/hand |
+| `Soft` | Soft/instant gathering |
+| `Harvest` | Harvesting (e.g. mature crops) |
+| `Physics` | Physics-driven gathering |
+| `Tools` | Tool-specific gathering rules |
+| `UseDefaultDropWhenPlaced` | Use the default drop for placed instances |
 
-**Shorthand:**
+Inside a gathering mode:
+
+| Field | Description |
+|-------|-------------|
+| `GatherType` | Required gathering category (see below) |
+| `ItemId` | Item produced directly |
+| `DropList` | Drop table reference (string) or inline drop definition (object) — see [Drop System](drops.md) |
+| `Quality` | Quality override on the produced item |
+
+**`GatherType` values:** `Rocks`, `Woods`, `SoftBlocks`, `Soils`, `VolcanicRocks`,
+`Benches`, `SoftWoods`, `Unbreakable`, and ore tiers (`OreIron`, `OreGold`, `OreCopper`,
+`OreSilver`, `OreThorium`, `OreCobalt`, `OreAdamantite`, `OreMithril`).
+
+`DropList` can be an inline object (used by chests to drop their item form):
 
 ```json
 {
-  "BlockType": {
-    "LightEmission": 12
+  "Gathering": {
+    "Breaking": {
+      "GatherType": "SoftBlocks",
+      "DropList": {
+        "Container": {
+          "Type": "Single",
+          "Item": { "ItemId": "Furniture_Kweebec_Chest_Small", "QuantityMin": 2, "QuantityMax": 2 }
+        }
+      }
+    }
   }
 }
 ```
 
-Uses default warm light color with specified radius.
-
 ---
 
-## Particles
+## Light & Particles
 
-Attach particle systems to blocks:
+### Light
+
+Blocks may emit colored light. `Color` is a hex string; `Radius` controls range (a
+`Radius` of `0` lets the configured falloff/state logic drive it).
+
+```json
+{ "BlockType": { "Light": { "Color": "#dca", "Radius": 0 } } }
+```
+
+A state may set `"Light": null` to turn emission off (see [Block States](#block-states)).
+
+### Particles
+
+`Particles` is an array of attached particle systems:
 
 ```json
 {
   "BlockType": {
     "Particles": [
-      {
-        "SystemId": "Torch_Flame",
-        "TargetNodeName": "Flame_Point",
-        "Scale": 1.0,
-        "Color": "#FF8800"
-      }
+      { "SystemId": "Block_Gem_Sparks", "Color": "#ffce76", "TargetEntityPart": "Entity" }
     ]
   }
 }
@@ -213,10 +292,13 @@ Attach particle systems to blocks:
 | Property | Type | Description |
 |----------|------|-------------|
 | `SystemId` | string | Particle system ID |
+| `Scale` | float | Scale multiplier |
+| `Color` | string | Tint color |
 | `TargetNodeName` | string | Model node to attach to |
-| `Scale` | float | Particle scale multiplier |
-| `Color` | string | Particle tint color |
-| `PositionOffset` | object | Position offset from node |
+| `PositionOffset` | object | Offset from the node |
+| `RotationOffset` | object | `{ "Pitch", "Yaw" }` rotation offset |
+| `TargetEntityPart` | string | Entity part to attach to |
+| `DetachedFromModel` | boolean | Whether the system is detached from the model |
 
 ---
 
@@ -224,36 +306,30 @@ Attach particle systems to blocks:
 
 ### VariantRotation
 
-Controls automatic rotation variants:
+Controls which rotation variants a block supports.
 
 ```json
-{
-  "BlockType": {
-    "VariantRotation": "NESW"
-  }
-}
+{ "BlockType": { "VariantRotation": "NESW" } }
 ```
 
 | VariantRotation | Description |
 |-----------------|-------------|
 | `None` | No rotation variants |
-| `NESW` | 4 rotations (North, East, South, West) |
-| `YawStep1` | 90-degree increments on yaw |
+| `NESW` | Four horizontal facings |
+| `UpDownNESW` | Horizontal facings plus up/down |
+| `UpDown` | Vertical orientation only |
+| `Wall` | Wall-mounted orientations |
+| `Pipe` / `DoublePipe` | Pipe-style connections |
+| `All` | All orientations |
 
 ### PlacementSettings
-
-Configure how blocks are placed:
 
 ```json
 {
   "BlockType": {
     "PlacementSettings": {
-      "RotationMode": "BlockNormal",
-      "PlaceInEmptyBlocks": true,
-      "AllowRotationKey": true,
-      "WallPlacementOverrideBlockId": "Wood_Torch_Wall",
-      "CeilingPlacementOverrideBlockId": "Wood_Torch_Ceiling",
-      "FloorPlacementOverrideBlockId": "Wood_Torch_Floor"
+      "RotationMode": "StairFacingPlayer",
+      "CeilingPlacementOverrideBlockId": "Deco_Lantern_Ceiling"
     }
   }
 }
@@ -261,145 +337,79 @@ Configure how blocks are placed:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `RotationMode` | string | How rotation is determined on placement |
-| `PlaceInEmptyBlocks` | boolean | Allow placement in air blocks |
-| `AllowRotationKey` | boolean | Allow player to rotate with key |
-| `WallPlacementOverrideBlockId` | string | Different block when placed on wall |
-| `CeilingPlacementOverrideBlockId` | string | Different block when placed on ceiling |
-| `FloorPlacementOverrideBlockId` | string | Different block when placed on floor |
-
-**RotationMode Values:**
-
-| RotationMode | Description |
-|--------------|-------------|
-| `None` | No automatic rotation |
-| `BlockNormal` | Align to surface normal |
-| `YawStep1` | Rotate based on player yaw |
-| `PlayerFacing` | Face toward player |
+| `RotationMode` | string | `StairFacingPlayer` or `BlockNormal` |
+| `PlaceInEmptyBlocks` | boolean | Allow placement into empty/air blocks |
+| `AllowBreakReplace` | boolean | Allow replacing a breakable block on placement |
+| `AllowRotationKey` | boolean | Allow the player to rotate while placing |
+| `WallPlacementOverrideBlockId` | string | Block placed when targeting a wall |
+| `CeilingPlacementOverrideBlockId` | string | Block placed on a ceiling |
+| `FloorPlacementOverrideBlockId` | string | Block placed on a floor |
+| `BlockPreviewVisibility` | string | Preview visibility control |
 
 ---
 
 ## Support System
 
-Blocks can require support from neighboring blocks to remain placed.
-
-### Directional Support
-
-```json
-{
-  "BlockType": {
-    "Support": {
-      "Down": [{ "FaceType": "Full" }],
-      "Up": [{ "FaceType": "Full" }]
-    }
-  }
-}
-```
-
-**Support Directions:**
-
-| Direction | Description |
-|-----------|-------------|
-| `Down` | Block below (-Y) |
-| `Up` | Block above (+Y) |
-| `North`, `South`, `East`, `West` | Adjacent blocks |
-
-### FaceType Support
+Blocks can require support from neighboring blocks. `Support` maps direction names to
+arrays of accepted support entries (any one entry satisfies that direction).
 
 ```json
 {
   "BlockType": {
     "Support": {
-      "Down": [{ "FaceType": "Full" }]
+      "Down": [
+        { "FaceType": "Full" },
+        { "FaceType": "Branch" },
+        { "FaceType": "Fence" },
+        { "BlockTypeId": "Deco_Iron_Chain_Small" }
+      ],
+      "Up": [ { "FaceType": "Full", "Filler": [] } ]
     }
   }
 }
 ```
 
-| FaceType | Description |
-|----------|-------------|
-| `Full` | Full solid face required |
-| `Branch` | Branch-shaped support |
-| `Fence` | Fence-type support |
-| `Wall` | Wall-type support |
-| `Beam` | Beam-type support |
-| `Rope` | Rope connection |
+**Support directions:** `Down`, `Up`, `North`, `South`, `East`, `West`.
 
-### Tag-Based Support
+**Support entry forms:**
 
-Support based on block tags:
+| Form | Description |
+|------|-------------|
+| `{ "FaceType": "Full" }` | Requires a face of the given type |
+| `{ "FaceType": "Full", "Filler": [] }` | Face type plus optional filler shapes |
+| `{ "BlockTypeId": "..." }` | Requires a specific block type as the supporter |
 
-```json
-{
-  "BlockType": {
-    "Support": {
-      "Down": [{
-        "Tags": {
-          "Type": "Soil",
-          "SubType": "Planter"
-        }
-      }]
-    }
-  }
-}
-```
-
-### BlockTypeId Support
-
-Support from specific block types:
-
-```json
-{
-  "BlockType": {
-    "Support": {
-      "Down": [{ "BlockTypeId": "Soil_Dirt_Tilled" }]
-    }
-  }
-}
-```
-
-### SupportDropType
-
-What happens when support is lost:
-
-```json
-{
-  "BlockType": {
-    "SupportDropType": "Drop"
-  }
-}
-```
-
-| SupportDropType | Description |
-|-----------------|-------------|
-| `Drop` | Drop as item |
-| `Destroy` | Destroy without drop |
-| `None` | Remain floating |
+**`FaceType` values:** `Full`, `Branch`, `Rock_Beam`, `Wood_Beam`, `Shelf`, `Window`,
+`Wall`, `Wall_Corner`, `Fence`, `Fence_Corner`, `Rail`, `Bushes`, `BushBase`, `Platform`,
+`Rope`, `Vines`, `Barrel`.
 
 ---
 
 ## Block States
 
-Blocks can have multiple states (on/off, open/close, growth stages).
+Blocks with multiple states declare them under `State.Definitions`. Each named definition
+overrides specific fields (model animation, hitbox, light, particles, sounds, hints) for
+that state. There is no `StateType`/`DefaultState`/`States` wrapper.
 
-### State Definition
+### On / Off (lights)
+
+`Deco_Lantern`:
 
 ```json
 {
   "BlockType": {
     "State": {
-      "StateType": "OnOff",
-      "DefaultState": "On",
-      "States": {
+      "Definitions": {
         "On": {
-          "Light": { "Color": "#FFAA44", "Radius": 12 },
-          "Particles": [{ "SystemId": "Torch_Flame" }],
-          "CustomModel": "Blocks/Furniture/Torch_Lit.blockymodel"
+          "AmbientSoundEventId": "SFX_Torch_Default_Loop"
         },
         "Off": {
+          "InteractionHint": "server.interactionHints.turnon",
           "Light": null,
-          "Particles": [],
-          "CustomModel": "Blocks/Furniture/Torch_Unlit.blockymodel"
+          "Particles": null,
+          "InteractionSoundEventId": "SFX_Torch_Off",
+          "AmbientSoundEventId": null,
+          "CustomModelAnimation": "Blocks/Animations/Light/Light_Off.blockyanim"
         }
       }
     }
@@ -407,126 +417,223 @@ Blocks can have multiple states (on/off, open/close, growth stages).
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `StateType` | string | Type of state system |
-| `DefaultState` | string | Initial state when placed |
-| `States` | object | State-specific property overrides |
+### Open / Close (chests, windows)
 
-**Common StateTypes:**
-
-| StateType | States | Use Case |
-|-----------|--------|----------|
-| `OnOff` | On, Off | Torches, lanterns |
-| `OpenClose` | Open, Close | Doors, chests |
-| `Growth` | Stage_0 through Stage_N | Crops |
-| `Container` | Empty, Filled | Storage |
-
-### State-Specific Properties
-
-States can override any BlockType property:
+Chest-style blocks use `OpenWindow` / `CloseWindow`:
 
 ```json
 {
-  "States": {
-    "Open": {
-      "CustomModel": "Blocks/Door_Open.blockymodel",
-      "Material": "Empty",
-      "HitboxType": "None"
-    },
-    "Close": {
-      "CustomModel": "Blocks/Door_Closed.blockymodel",
-      "Material": "Solid",
-      "HitboxType": "Door"
+  "BlockType": {
+    "State": {
+      "Definitions": {
+        "OpenWindow": {
+          "InteractionSoundEventId": "SFX_Chest_Wooden_Open",
+          "CustomModelAnimation": "Blocks/Animations/Chest/Chest_Open.blockyanim"
+        },
+        "CloseWindow": {
+          "InteractionSoundEventId": "SFX_Chest_Wooden_Close",
+          "CustomModelAnimation": "Blocks/Animations/Chest/Chest_Close.blockyanim"
+        }
+      }
     }
   }
 }
 ```
+
+### Doors and trapdoors
+
+Doors use directional open/close states; a state may change the `HitboxType` while open:
+
+```json
+{
+  "BlockType": {
+    "State": {
+      "Definitions": {
+        "OpenDoorOut": {
+          "HitboxType": "Door_Temple_Wind_Large_Open",
+          "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim",
+          "InteractionSoundEventId": "SFX_Door_Temple_Light_Open"
+        },
+        "CloseDoorOut": {
+          "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim",
+          "InteractionSoundEventId": "SFX_Door_Temple_Light_Close"
+        }
+      }
+    }
+  }
+}
+```
+
+**Commonly used state names** in assets: `On`/`Off`, `OpenWindow`/`CloseWindow`,
+`OpenDoorIn`/`CloseDoorIn`, `OpenDoorOut`/`CloseDoorOut`, `DoorBlocked`, connected-block
+shape states (`Corner_Left`, `Corner_Right`, `Inverted_Corner_Left`,
+`Inverted_Corner_Right`, `Straight`/`Block`, `Topper`, `T`, `Cross`), and crop stages
+(`Stage1`…`StageFinal`).
 
 ---
 
 ## Connected Blocks
 
-Blocks that visually connect to neighbors (chests, fences, doors).
+Blocks that connect to neighbors (stairs, roofs, walls/bars, doors) use
+`ConnectedBlockRuleSet` (~554 blocks). Its shape depends on `Type`.
 
-### ConnectedBlockRuleSet
+### Stair
 
-```json
-{
-  "BlockType": {
-    "ConnectedBlockRuleSet": {
-      "TemplateShapeAssetId": "ChestConnectedBlockTemplate",
-      "MergeMode": "Horizontal",
-      "MaxMergeCount": 2
-    }
-  }
-}
-```
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `TemplateShapeAssetId` | string | Template defining connection rules |
-| `MergeMode` | string | How blocks merge: `Horizontal`, `Vertical`, `All` |
-| `MaxMergeCount` | int | Maximum blocks that can merge |
-
-**Double Chest Example:**
-
-Small chests merge horizontally into double chests:
+`Build_White_Stairs`:
 
 ```json
 {
   "BlockType": {
     "ConnectedBlockRuleSet": {
-      "TemplateShapeAssetId": "ChestConnectedBlockTemplate",
-      "MergeMode": "Horizontal",
-      "MaxMergeCount": 2,
-      "MergedBlockId": "Furniture_Ancient_Chest_Double"
+      "Type": "Stair",
+      "Straight": { "State": "default" },
+      "Corner_Left": { "State": "Corner_Left" },
+      "Corner_Right": { "State": "Corner_Right" },
+      "Inverted_Corner_Left": { "State": "Inverted_Corner_Left" },
+      "Inverted_Corner_Right": { "State": "Inverted_Corner_Right" }
     }
   }
 }
 ```
+
+### Roof
+
+Roofs nest the shape states under `Regular`, name the material via `MaterialName`, and
+add a `Topper`; some declare a `Width`:
+
+```json
+{
+  "BlockType": {
+    "ConnectedBlockRuleSet": {
+      "Type": "Roof",
+      "MaterialName": "Roof",
+      "Regular": {
+        "Straight": { "State": "default" },
+        "Corner_Right": { "State": "Corner_Right" },
+        "Corner_Left": { "State": "Corner_Left" },
+        "Inverted_Corner_Right": { "State": "Inverted_Corner_Right" },
+        "Inverted_Corner_Left": { "State": "Inverted_Corner_Left" }
+      },
+      "Topper": { "State": "Topper" }
+    }
+  }
+}
+```
+
+A shallow roof variant: `{ "Type": "Roof", "Width": 2, "MaterialName": "Roof_Shallow" }`.
+
+### CustomTemplate
+
+Walls, bars, and doors reference an external template asset and map shape patterns to
+block IDs (a `*` prefix references another block's state definitions):
+
+```json
+{
+  "BlockType": {
+    "ConnectedBlockRuleSet": {
+      "Type": "CustomTemplate",
+      "TemplateShapeAssetId": "WallConnectedBlockTemplate",
+      "TemplateShapeBlockPatterns": {
+        "Straight": "Deco_Iron_Bars",
+        "Corner": "Deco_Iron_Bars_Corner",
+        "T_Junction": "*Deco_Iron_Bars_State_Definitions_T",
+        "Cross_Junction": "*Deco_Iron_Bars_State_Definitions_Cross"
+      }
+    }
+  }
+}
+```
+
+| Key | Description |
+|-----|-------------|
+| `Type` | `Stair`, `Roof`, or `CustomTemplate` |
+| `Regular` / shape keys | Per-shape `{ "State": "<state name>" }` mappings |
+| `MaterialName` | Material/group name (Roof) |
+| `Topper` | Top-piece state (Roof) |
+| `Width` | Optional width (Roof) |
+| `TemplateShapeAssetId` | External template asset (CustomTemplate) |
+| `TemplateShapeBlockPatterns` | Shape → block-ID/state-ref map (CustomTemplate) |
 
 ---
 
 ## Block Interactions
 
-Blocks can define interactions for player use.
+A block's primary use is configured via `BlockType.Interactions.Use`. It is either a
+**named interaction reference** (a string) or an **inline interaction object**.
 
-### Use Interaction
+### Named Use references
+
+```json
+{ "BlockType": { "Interactions": { "Use": "Open_Container" } } }
+```
+
+| `Use` value | Behavior | Example |
+|-------------|----------|---------|
+| `Open_Container` | Open a container UI | Chests |
+| `Open_Treasure_Container` | Open a treasure container | Treasure chests |
+| `Door` | Toggle a door | Doors |
+| `Door_Horizontal` | Toggle a horizontal door/trapdoor | Trapdoors |
+| `Block_Seat` | Sit on the block | Chairs, stools |
+| `Open_Processing_Bench` | Open a processing bench UI | Benches |
+
+### Inline Use (ChangeState)
+
+`Deco_Lantern` toggles its own state inline:
 
 ```json
 {
   "BlockType": {
     "Interactions": {
-      "Use": "Block_Use_Toggle_OnOff"
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "ChangeState",
+            "Changes": { "default": "Off", "On": "Off", "Off": "On" }
+          }
+        ]
+      }
     }
   }
 }
 ```
 
-### ChangeState Interaction
+`InteractionHint` (on the block or per state) supplies the localized prompt string, e.g.
+`"server.interactionHints.openDoor"`.
 
-Toggle block state:
+The top-level item also wires placement interactions in its own `Interactions` map:
+
+```json
+{ "Interactions": { "Primary": "Block_Primary", "Secondary": "Block_Secondary" } }
+```
+
+---
+
+## Block Entity Components
+
+Blocks with server-side state (containers, benches, farming soil, spawners, etc.) declare
+it under `BlockType.BlockEntity.Components` (~160 blocks).
 
 ```json
 {
-  "Type": "ChangeState",
-  "Target": "TargetBlock",
-  "States": {
-    "On": "Off",
-    "Off": "On"
+  "BlockType": {
+    "BlockEntity": {
+      "Components": {
+        "ItemContainerBlock": { "Capacity": 36 }
+      }
+    }
   }
 }
 ```
 
-### Common Block Interactions
+**Component types seen in assets:** `FarmingBlock`, `ItemContainerBlock`, `BenchBlock`,
+`ProcessingBenchBlock`, `RespawnBlock`, `TreasureChest`, `SpawnMarkerBlock`,
+`BlockSpawner`, `PrefabSpawner`, `Teleporter`, `Portal`, `LaunchPad`, `Coop`,
+`TilledSoil`, `TrackedPlacement`, `BlockMapMarker`, `InstanceConfig`.
 
-| Interaction | Description | Example Block |
-|-------------|-------------|---------------|
-| `Block_Use_Toggle_OnOff` | Toggle on/off state | Torch, lantern |
-| `Block_Use_Open_Container` | Open container UI | Chest |
-| `Block_Use_Open_Door` | Toggle door open/close | Door |
-| `Block_Use_Craft` | Open crafting UI | Workbench, furnace |
+> Note: container capacity lives at
+> `BlockType.BlockEntity.Components.ItemContainerBlock.Capacity` — not under a
+> `container` component. The break drop (e.g. dropping the item form) is configured via
+> `Gathering.Breaking.DropList`, not as a sibling of `Components`.
 
 ---
 
@@ -534,179 +641,168 @@ Toggle block state:
 
 ### IsDoor
 
-Marks a block as a door for pathfinding and AI:
+Marks a block as a door (~46 blocks), used together with the `Door` Use interaction and
+the directional door states:
 
 ```json
-{
-  "BlockType": {
-    "IsDoor": true
-  }
-}
+{ "BlockType": { "IsDoor": true } }
 ```
 
-### IsClimbable
+### MovementSettings (climbable)
 
-Marks a block as climbable (ladders, vines):
+Ladders and similar blocks set climb behavior under `MovementSettings`:
 
 ```json
-{
-  "BlockType": {
-    "MovementSettings": {
-      "IsClimbable": true,
-      "ClimbSpeed": 4.0
-    }
-  }
-}
+{ "BlockType": { "MovementSettings": { "IsClimbable": true } } }
 ```
 
-### Bench Configuration
+---
 
-For crafting stations:
+## Farming & Soil
 
-```json
-{
-  "BlockType": {
-    "Bench": {
-      "Type": "Crafting",
-      "Categories": ["Weapon_Sword", "Tool"],
-      "TierLevel": 1,
-      "ProcessingTime": 1.0
-    }
-  }
-}
-```
+There are two distinct `Farming` shapes in the assets.
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Type` | string | Bench type: `Crafting`, `Smelting`, `Cooking` |
-| `Categories` | array | Recipe categories this bench supports |
-| `TierLevel` | int | Bench tier (1-3) |
-| `ProcessingTime` | float | Base crafting speed multiplier |
+### SoilConfig (tilled soil)
 
-### Farming Configuration
-
-For crop blocks:
+`Soil_Dirt_Tilled` defines a lifetime range (in ticks) and the block it reverts to:
 
 ```json
 {
   "BlockType": {
     "Farming": {
-      "GrowthStages": 5,
-      "GrowthTime": 120.0,
-      "RequiresWater": true,
-      "WaterRadius": 4,
-      "HarvestDrops": [
-        { "ItemId": "Plant_Crop_Carrot", "Quantity": [1, 3] },
-        { "ItemId": "Plant_Crop_Carrot_Seed", "Quantity": [0, 2] }
-      ]
-    }
-  }
-}
-```
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `GrowthStages` | int | Number of growth stages |
-| `GrowthTime` | float | Base time in seconds per stage |
-| `RequiresWater` | boolean | Needs water block nearby |
-| `WaterRadius` | int | Maximum water detection distance |
-| `HarvestDrops` | array | Items dropped when harvested |
-
-### Container Configuration
-
-For storage blocks:
-
-```json
-{
-  "BlockType": {
-    "State": {
-      "StateType": "container"
-    },
-    "Components": {
-      "container": {
-        "ItemContainer": {
-          "Capacity": 18
-        },
-        "Droplist": "Drop_Chest_Contents"
+      "SoilConfig": {
+        "Lifetime": { "Min": 103680, "Max": 129600 },
+        "TargetBlock": "Soil_Mud_Dry"
       }
     }
   }
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Capacity` | int | Number of inventory slots |
-| `Droplist` | string | What drops when destroyed (see [Drop System](drops.md)) |
+| Field | Description |
+|-------|-------------|
+| `Lifetime` | `{ "Min", "Max" }` lifetime range before reverting |
+| `TargetBlock` | Block ID this soil becomes after its lifetime |
+
+### Stages (growing plants/crops)
+
+Growing plants list growth `Stages` keyed by stage set, a `StartingStageSet`, and the
+modifiers that affect growth. Each stage entry has a `Type` (`BlockType` or `Prefab`), a
+`Duration` range, and the block/prefab to display.
+
+`Plant_Sapling_Camphor` (abridged):
+
+```json
+{
+  "BlockType": {
+    "Farming": {
+      "StartingStageSet": "Default",
+      "ActiveGrowthModifiers": ["Fertilizer", "Water", "LightLevel"],
+      "Stages": {
+        "Default": [
+          {
+            "Type": "BlockType",
+            "Block": "Plant_Sapling_Camphor",
+            "Duration": { "Min": 40000, "Max": 60000 }
+          },
+          {
+            "Type": "Prefab",
+            "Prefabs": [ { "Path": "Trees/Camphor/Stage_00/Camphor_Stage00_001.prefab.json", "Weight": 1 } ],
+            "Duration": { "Min": 40000, "Max": 60000 },
+            "ReplaceMaskTags": ["Soil"],
+            "SoundEventId": "SFX_Crops_Grow"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `StartingStageSet` | Which stage set to begin in |
+| `Stages` | Stage-set name → ordered array of stage entries |
+| `ActiveGrowthModifiers` | Modifiers that affect growth (`Fertilizer`, `Water`, `LightLevel`) |
+| `StageSetAfterHarvest` | Stage set to switch to after harvesting |
+
+Stage entry fields: `Type` (`BlockType`/`Prefab`), `Block` or `Prefabs[]`,
+`Duration { Min, Max }`, optional `ReplaceMaskTags`, `SoundEventId`.
 
 ---
 
 ## Basic Blocks
 
-Simple solid cube blocks for building.
+Simple cube blocks for building.
 
-### Rock_Stone
+### Build_Grey_Cube
 
-**Location:** `Server/Item/Items/Rock/Stone/Rock_Stone.json`
+**Location:** `Server/Item/Items/Build/Build_Grey/Build_Grey_Cube.json`
 
-Basic stone block with cube rendering.
+A standard textured cube.
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Rock_Stone.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 99,
-  "Categories": ["Items.Blocks"],
+  "TranslationProperties": { "Name": "server.items.Build_Grey_Cube.name" },
+  "ItemLevel": 10,
+  "MaxStack": 100,
+  "Icon": "Icons/ItemsGenerated/Build_Grey_Cube.png",
+  "Categories": ["Tool.TechnicalBlocks"],
+  "SubCategory": "BlockSets",
+  "PlayerAnimationsId": "Block",
+  "Set": "Build",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
-    "Opacity": "Opaque",
+    "Group": "Dev",
+    "HitboxType": "Full",
+    "Flags": {},
+    "Gathering": { "Breaking": { "GatherType": "SoftBlocks" } },
+    "BlockParticleSetId": "Dust",
     "Textures": [
-      { "Face": "All", "Texture": "Blocks/Stone/Rock_Stone.png" }
+      {
+        "Weight": 1,
+        "Sides": "BlockTextures/Dev_Grey_Neutral_Side.png",
+        "UpDown": "BlockTextures/Dev_Grey_Neutral_Top.png"
+      }
     ],
-    "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Stone"
+    "ParticleColor": "#969696",
+    "BlockSoundSetId": "Soft",
+    "CubeShadingMode": "Standard"
+  },
+  "Tags": { "Type": ["Soil"], "Family": ["Build"] },
+  "Quality": "Technical",
+  "ItemSoundSetId": "ISS_Blocks_Stone",
+  "IconProperties": {
+    "Scale": 0.58823,
+    "Rotation": [22.5, 45, 22.5],
+    "Translation": [0, -13.5]
   }
 }
 ```
 
-### Cloth_Block_Wool_Blue
+### Soil_Dirt (template child)
 
-**Location:** `Server/Item/Items/Cloth/Wool/Cloth_Block_Wool_Blue.json`
+**Location:** `Server/Item/Items/Soil/Dirt/Soil_Dirt.json`
 
-Colored wool block with recipe.
+Inherits most of its block config from `Template_Soil` and only overrides texture and
+particle color.
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Cloth_Block_Wool_Blue.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 99,
-  "Categories": ["Items.Blocks"],
+  "TranslationProperties": { "Name": "server.items.Soil_Dirt.name" },
+  "ItemLevel": 10,
+  "Parent": "Template_Soil",
+  "Icon": "Icons/ItemsGenerated/Soil_Dirt.png",
   "BlockType": {
-    "Material": "Solid",
-    "DrawType": "Cube",
-    "Opacity": "Opaque",
-    "Textures": [
-      { "Face": "All", "Texture": "Blocks/Cloth/Wool_Blue.png" }
-    ],
-    "BlockSoundSetId": "Cloth",
-    "BlockParticleSetId": "Cloth"
+    "Textures": [ { "All": "BlockTextures/Soil_Dirt.png", "Weight": 1 } ],
+    "ParticleColor": "#98743b",
+    "TransitionTexture": "BlockTextures/Transition_Soil_Dirt.png"
   },
-  "Recipe": {
-    "TimeSeconds": 2.0,
-    "Input": [
-      { "ItemId": "Ingredient_Wool", "Quantity": 4 },
-      { "ItemId": "Ingredient_Dye_Blue", "Quantity": 1 }
-    ],
-    "BenchRequirement": [{
-      "Type": "Crafting",
-      "Categories": ["Cloth"],
-      "Id": "Loom_Bench"
-    }]
+  "Tags": {
+    "Type": ["Soil"],
+    "Family": ["Dirt"],
+    "Spreadable": ["Grass"]
   }
 }
 ```
@@ -715,162 +811,80 @@ Colored wool block with recipe.
 
 ## Furniture & Lighting
 
-Decorative blocks with light emission and particle effects.
-
-### Furniture_Crude_Torch
-
-**Location:** `Server/Item/Items/Furniture/Crude/Unique/Furniture_Crude_Torch.json`
-
-Light source with on/off states and wall placement override.
-
-```json
-{
-  "TranslationProperties": {
-    "Name": "server.items.Furniture_Crude_Torch.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 25,
-  "Categories": ["Items.Furniture"],
-  "BlockType": {
-    "Material": "Empty",
-    "DrawType": "Model",
-    "Opacity": "Transparent",
-    "CustomModel": "Blocks/Furniture/Crude/Torch.blockymodel",
-    "CustomModelTexture": [
-      { "Texture": "Blocks/Furniture/Crude/Torch_Texture.png" }
-    ],
-    "PlacementSettings": {
-      "RotationMode": "BlockNormal",
-      "PlaceInEmptyBlocks": true,
-      "WallPlacementOverrideBlockId": "Wood_Torch_Wall"
-    },
-    "Support": {
-      "Down": [{ "FaceType": "Full" }]
-    },
-    "State": {
-      "StateType": "OnOff",
-      "DefaultState": "On",
-      "States": {
-        "On": {
-          "Light": { "Color": "#FFAA44", "Radius": 12 },
-          "Particles": [
-            { "SystemId": "Torch_Flame", "TargetNodeName": "Flame" },
-            { "SystemId": "Torch_Smoke", "TargetNodeName": "Flame" }
-          ]
-        },
-        "Off": {
-          "Light": null,
-          "Particles": []
-        }
-      }
-    },
-    "Interactions": {
-      "Use": "Block_Use_Toggle_OnOff"
-    },
-    "BlockSoundSetId": "Wood",
-    "BlockParticleSetId": "Wood"
-  },
-  "Recipe": {
-    "TimeSeconds": 1.0,
-    "Input": [
-      { "ResourceTypeId": "Wood_Trunk", "Quantity": 1 },
-      { "ItemId": "Ingredient_Coal", "Quantity": 1 }
-    ]
-  }
-}
-```
-
-### Wood_Torch_Wall
-
-**Location:** `Server/Item/Items/Wood/Wood_Torch_Wall.json`
-
-Wall-mounted torch variant (placed automatically when torch targets wall).
-
-```json
-{
-  "TranslationProperties": {
-    "Name": "server.items.Wood_Torch_Wall.name"
-  },
-  "Quality": "Technical",
-  "BlockType": {
-    "Material": "Empty",
-    "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/Crude/Torch_Wall.blockymodel",
-    "VariantRotation": "NESW",
-    "Support": {
-      "West": [{ "FaceType": "Full" }]
-    },
-    "State": {
-      "StateType": "OnOff",
-      "DefaultState": "On",
-      "States": {
-        "On": {
-          "Light": { "Color": "#FFAA44", "Radius": 12 },
-          "Particles": [{ "SystemId": "Torch_Flame", "TargetNodeName": "Flame" }]
-        },
-        "Off": {
-          "Light": null,
-          "Particles": []
-        }
-      }
-    },
-    "Interactions": {
-      "Use": "Block_Use_Toggle_OnOff"
-    }
-  }
-}
-```
-
 ### Deco_Lantern
 
 **Location:** `Server/Item/Items/Deco/Deco_Lantern.json`
 
-Ceiling/floor lantern with complex support options.
+A model block with light, an On/Off state toggled by an inline `ChangeState` use
+interaction, and a long list of support options.
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Deco_Lantern.name"
+  "TranslationProperties": { "Name": "server.items.Deco_Lantern.name" },
+  "Icon": "Icons/ItemsGenerated/Deco_Lantern.png",
+  "Categories": ["Blocks.Deco", "Furniture.Lighting", "Blocks.Deco"],
+  "Recipe": {
+    "Input": [
+      { "ResourceTypeId": "Wood_Trunk", "Quantity": 2 },
+      { "ItemId": "Furniture_Crude_Candle", "Quantity": 1 },
+      { "ItemId": "Ingredient_Tree_Sap", "Quantity": 4 }
+    ],
+    "BenchRequirement": [
+      { "Type": "Crafting", "Categories": ["Furniture_Lighting"], "Id": "Furniture_Bench" }
+    ]
   },
-  "Quality": "Common",
-  "MaxStack": 25,
-  "Categories": ["Items.Furniture"],
   "BlockType": {
-    "Material": "Empty",
+    "PlacementSettings": { "CeilingPlacementOverrideBlockId": "Deco_Lantern_Ceiling" },
+    "Material": "Solid",
     "DrawType": "Model",
     "Opacity": "Transparent",
-    "CustomModel": "Blocks/Deco/Lantern_Floor.blockymodel",
-    "PlacementSettings": {
-      "RotationMode": "YawStep1",
-      "AllowRotationKey": true,
-      "CeilingPlacementOverrideBlockId": "Deco_Lantern_Ceiling"
-    },
+    "CustomModelTexture": [
+      { "Weight": 1, "Texture": "Blocks/Decorative_Sets/Village/Lantern_Texture.png" }
+    ],
+    "HitboxType": "Plant_Full",
+    "Light": { "Radius": 0, "Color": "#dca" },
+    "Flags": {},
+    "Gathering": { "Soft": {} },
+    "BlockParticleSetId": "Dust",
+    "BlockSoundSetId": "Wood",
     "Support": {
       "Down": [
         { "FaceType": "Full" },
+        { "FaceType": "Branch" },
         { "FaceType": "Fence" },
-        { "FaceType": "Wall" }
-      ]
+        { "FaceType": "Wall" },
+        { "FaceType": "Rope" },
+        { "BlockTypeId": "Deco_Iron_Chain_Small" }
+      ],
+      "Up": [ { "FaceType": "Full", "Filler": [] }, { "FaceType": "Rope" } ]
     },
-    "Light": { "Color": "#FFE4AA", "Radius": 14 },
-    "Particles": [
-      { "SystemId": "Lantern_Glow", "TargetNodeName": "Light_Point" }
-    ],
-    "BlockSoundSetId": "Metal",
-    "BlockParticleSetId": "Metal"
+    "CustomModel": "Blocks/Decorative_Sets/Village/Lantern.blockymodel",
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          { "Type": "ChangeState", "Changes": { "default": "Off", "On": "Off", "Off": "On" } }
+        ]
+      }
+    },
+    "State": {
+      "Definitions": {
+        "On": { "AmbientSoundEventId": "SFX_Torch_Default_Loop" },
+        "Off": {
+          "InteractionHint": "server.interactionHints.turnon",
+          "Light": null,
+          "Particles": null,
+          "InteractionSoundEventId": "SFX_Torch_Off",
+          "AmbientSoundEventId": null,
+          "CustomModelAnimation": "Blocks/Animations/Light/Light_Off.blockyanim"
+        }
+      }
+    },
+    "InteractionHint": "server.interactionHints.turnoff",
+    "CustomModelScale": 0.8
   },
-  "Recipe": {
-    "TimeSeconds": 3.0,
-    "Input": [
-      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 2 },
-      { "ItemId": "Ingredient_Glass", "Quantity": 1 }
-    ],
-    "BenchRequirement": [{
-      "Type": "Crafting",
-      "Categories": ["Furniture"],
-      "Id": "Furniture_Bench"
-    }]
-  }
+  "PlayerAnimationsId": "Block",
+  "Tags": { "Type": ["Deco"] },
+  "ItemSoundSetId": "ISS_Blocks_Wood"
 }
 ```
 
@@ -878,116 +892,65 @@ Ceiling/floor lantern with complex support options.
 
 ## Doors & Ladders
 
-Interactive blocks for navigation.
+### Furniture_Temple_Wind_Door_Large
 
-### Furniture_Crude_Door
+**Location:** `Server/Item/Items/Furniture/Temple_Wind/Unique/Furniture_Temple_Wind_Door_Large.json`
 
-**Location:** `Server/Item/Items/Furniture/Crude/Furniture_Crude_Door.json`
-
-Door with open/close states and connected block support.
+A door: `IsDoor: true`, the `Door` use interaction, directional door states (each open
+state swaps in an open hitbox), and a `CustomTemplate` connected-block rule set.
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Furniture_Crude_Door.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 10,
-  "Categories": ["Items.Furniture"],
+  "TranslationProperties": { "Name": "server.items.Furniture_Temple_Wind_Door_Large.name" },
+  "PlayerAnimationsId": "Block",
+  "Categories": ["Furniture.Doors"],
+  "Set": "Furniture_Temple_Wind",
+  "Interactions": { "Primary": "Block_Primary", "Secondary": "Block_Secondary" },
   "BlockType": {
-    "Material": "Solid",
+    "BlockParticleSetId": "Stone",
+    "CustomModel": "Blocks/Decorative_Sets/Temple_Wind/Door_Large.blockymodel",
+    "CustomModelTexture": [ { "Texture": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Texture.png" } ],
     "DrawType": "Model",
-    "IsDoor": true,
-    "CustomModel": "Blocks/Furniture/Crude/Door_Closed.blockymodel",
-    "VariantRotation": "NESW",
-    "PlacementSettings": {
-      "RotationMode": "PlayerFacing"
-    },
-    "Support": {
-      "Down": [{ "FaceType": "Full" }]
-    },
-    "ConnectedBlockRuleSet": {
-      "TemplateShapeAssetId": "DoorConnectedBlockTemplate",
-      "MergeMode": "Vertical",
-      "MaxMergeCount": 2
-    },
+    "Gathering": { "Breaking": { "GatherType": "Rocks" } },
+    "Material": "Solid",
     "State": {
-      "StateType": "OpenClose",
-      "DefaultState": "Close",
-      "States": {
-        "Open": {
-          "Material": "Empty",
-          "CustomModel": "Blocks/Furniture/Crude/Door_Open.blockymodel",
-          "CustomModelAnimation": "Open"
-        },
-        "Close": {
-          "Material": "Solid",
-          "CustomModel": "Blocks/Furniture/Crude/Door_Closed.blockymodel"
-        }
+      "Definitions": {
+        "CloseDoorIn":  { "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Close" },
+        "CloseDoorOut": { "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Close" },
+        "OpenDoorIn":   { "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open" },
+        "OpenDoorOut":  { "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open" }
       }
     },
-    "Interactions": {
-      "Use": "Block_Use_Open_Door"
-    },
-    "BlockSoundSetId": "Wood_Door",
-    "BlockParticleSetId": "Wood"
+    "VariantRotation": "NESW",
+    "HitboxType": "Door_Temple_Wind_Large",
+    "BlockSoundSetId": "Stone",
+    "InteractionHint": "server.interactionHints.openDoor",
+    "IsDoor": true,
+    "Interactions": { "Use": "Door" },
+    "ParticleColor": "#cca159",
+    "ConnectedBlockRuleSet": {
+      "Type": "CustomTemplate",
+      "TemplateShapeAssetId": "DoorConnectedBlockTemplate",
+      "TemplateShapeBlockPatterns": { "Default": "Furniture_Temple_Wind_Door_Large" }
+    }
   },
-  "Recipe": {
-    "TimeSeconds": 2.0,
-    "Input": [
-      { "ResourceTypeId": "Wood_Trunk", "Quantity": 6 }
-    ],
-    "BenchRequirement": [{
-      "Type": "Crafting",
-      "Categories": ["Furniture"],
-      "Id": "Furniture_Bench"
-    }]
-  }
+  "Icon": "Icons/ItemsGenerated/Furniture_Temple_Wind_Door_Large.png",
+  "Tags": { "Type": ["Furniture"], "Family": ["Temple"] },
+  "ItemSoundSetId": "ISS_Blocks_Stone"
 }
 ```
 
-### Furniture_Ancient_Ladder
+### Ladders
 
-**Location:** `Server/Item/Items/Furniture/Ancient/Furniture_Ancient_Ladder.json`
+**Example:** `Server/Item/Items/Furniture/Desert/Furniture_Desert_Ladder.json`
 
-Climbable ladder with BlockNormal rotation.
+Ladders use a `Ladder` hitbox and `MovementSettings.IsClimbable`:
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Furniture_Ancient_Ladder.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 25,
-  "Categories": ["Items.Furniture"],
   "BlockType": {
-    "Material": "Empty",
-    "DrawType": "Model",
-    "Opacity": "Transparent",
-    "CustomModel": "Blocks/Furniture/Ancient/Ladder.blockymodel",
-    "VariantRotation": "NESW",
-    "PlacementSettings": {
-      "RotationMode": "BlockNormal"
-    },
-    "Support": {
-      "West": [{ "FaceType": "Full" }]
-    },
-    "MovementSettings": {
-      "IsClimbable": true,
-      "ClimbSpeed": 4.0
-    },
-    "ConnectedBlockRuleSet": {
-      "TemplateShapeAssetId": "LadderConnectedBlockTemplate",
-      "MergeMode": "Vertical"
-    },
-    "BlockSoundSetId": "Wood",
-    "BlockParticleSetId": "Wood"
-  },
-  "Recipe": {
-    "TimeSeconds": 1.5,
-    "Input": [
-      { "ResourceTypeId": "Wood_Trunk", "Quantity": 3 }
-    ]
+    "HitboxType": "Ladder",
+    "MovementSettings": { "IsClimbable": true }
   }
 }
 ```
@@ -996,82 +959,39 @@ Climbable ladder with BlockNormal rotation.
 
 ## Containers
 
-Storage blocks with inventory.
+### Furniture_Kweebec_Chest_Large
 
-### Furniture_Ancient_Chest_Small
+**Location:** `Server/Item/Items/Container/Furniture_Kweebec_Chest_Large.json`
 
-**Location:** `Server/Item/Items/Furniture/Ancient/Furniture_Ancient_Chest_Small.json`
-
-Small chest that merges into double chest.
+A container: `ItemContainerBlock` capacity, `Open_Container` use, open/close window
+states, and a `DropList` (under `Gathering.Breaking`) that drops two small chests when
+broken.
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Furniture_Ancient_Chest_Small.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 1,
-  "Categories": ["Items.Furniture"],
+  "Categories": ["Furniture.Containers"],
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/Ancient/Chest_Small.blockymodel",
-    "VariantRotation": "NESW",
-    "PlacementSettings": {
-      "RotationMode": "PlayerFacing"
-    },
-    "Support": {
-      "Down": [{ "FaceType": "Full" }]
-    },
-    "ConnectedBlockRuleSet": {
-      "TemplateShapeAssetId": "ChestConnectedBlockTemplate",
-      "MergeMode": "Horizontal",
-      "MaxMergeCount": 2,
-      "MergedBlockId": "Furniture_Ancient_Chest_Double"
+    "HitboxType": "Chest_Large",
+    "Interactions": { "Use": "Open_Container" },
+    "BlockEntity": {
+      "Components": { "ItemContainerBlock": { "Capacity": 36 } }
     },
     "State": {
-      "StateType": "container"
-    },
-    "Components": {
-      "container": {
-        "ItemContainer": {
-          "Capacity": 18
-        },
-        "Droplist": "Drop_Container_Contents"
+      "Definitions": {
+        "OpenWindow":  { "InteractionSoundEventId": "SFX_Chest_Wooden_Open",  "CustomModelAnimation": "Blocks/Animations/Chest/Chest_Open.blockyanim" },
+        "CloseWindow": { "InteractionSoundEventId": "SFX_Chest_Wooden_Close", "CustomModelAnimation": "Blocks/Animations/Chest/Chest_Close.blockyanim" }
       }
     },
-    "Interactions": {
-      "Use": "Block_Use_Open_Container"
-    },
-    "BlockSoundSetId": "Wood_Chest",
-    "BlockParticleSetId": "Wood"
-  },
-  "Recipe": {
-    "TimeSeconds": 3.0,
-    "Input": [
-      { "ResourceTypeId": "Wood_Trunk", "Quantity": 8 },
-      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 1 }
-    ],
-    "BenchRequirement": [{
-      "Type": "Crafting",
-      "Categories": ["Furniture"],
-      "Id": "Furniture_Bench"
-    }]
-  }
-}
-```
-
-### Double Chest
-
-When two small chests are placed adjacent horizontally, they merge:
-
-```json
-{
-  "BlockType": {
-    "Components": {
-      "container": {
-        "ItemContainer": {
-          "Capacity": 36
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "SoftBlocks",
+        "DropList": {
+          "Container": {
+            "Type": "Single",
+            "Item": { "ItemId": "Furniture_Kweebec_Chest_Small", "QuantityMin": 2, "QuantityMax": 2 }
+          }
         }
       }
     }
@@ -1079,301 +999,113 @@ When two small chests are placed adjacent horizontally, they merge:
 }
 ```
 
----
-
-## Crafting Benches
-
-Interactive stations for crafting.
-
-### Bench_Furnace
-
-**Location:** `Server/Item/Items/Bench/Bench_Furnace.json`
-
-Smelting station with processing states.
+Treasure chests add a `TreasureChest` component and use the `Open_Treasure_Container`
+interaction:
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Bench_Furnace.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 1,
-  "Categories": ["Items.Furniture"],
   "BlockType": {
-    "Material": "Solid",
-    "DrawType": "Model",
-    "CustomModel": "Blocks/Bench/Furnace.blockymodel",
-    "VariantRotation": "NESW",
-    "PlacementSettings": {
-      "RotationMode": "PlayerFacing"
-    },
-    "Support": {
-      "Down": [{ "FaceType": "Full" }]
-    },
-    "Bench": {
-      "Type": "Smelting",
-      "Categories": ["Smelting"],
-      "TierLevel": 1,
-      "ProcessingTime": 1.0,
-      "FuelRequired": true,
-      "FuelSlots": 1
-    },
-    "State": {
-      "StateType": "Processing",
-      "DefaultState": "Idle",
-      "States": {
-        "Idle": {
-          "Light": null,
-          "Particles": []
-        },
-        "Active": {
-          "Light": { "Color": "#FF6622", "Radius": 8 },
-          "Particles": [
-            { "SystemId": "Furnace_Fire", "TargetNodeName": "Fire_Point" },
-            { "SystemId": "Furnace_Smoke", "TargetNodeName": "Chimney" }
-          ],
-          "CustomModelAnimation": "Working"
-        }
-      }
-    },
-    "Interactions": {
-      "Use": "Block_Use_Craft"
-    },
-    "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Stone"
-  },
-  "Recipe": {
-    "TimeSeconds": 5.0,
-    "Input": [
-      { "ItemId": "Rock_Stone", "Quantity": 20 },
-      { "ItemId": "Ingredient_Coal", "Quantity": 5 }
-    ]
+    "BlockEntity": {
+      "Components": { "ItemContainerBlock": { "Capacity": 36 }, "TreasureChest": {} }
+    }
   }
 }
 ```
 
-### Bench Configuration Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Type` | string | `Crafting`, `Smelting`, `Cooking`, `Alchemy` |
-| `Categories` | array | Recipe categories this bench supports |
-| `TierLevel` | int | Bench tier (1-3, affects available recipes) |
-| `ProcessingTime` | float | Speed multiplier (lower = faster) |
-| `FuelRequired` | boolean | Requires fuel to operate |
-| `FuelSlots` | int | Number of fuel item slots |
-
 ---
 
-## Farming Blocks
+## Benches
 
-Crop blocks with growth stages.
+### Bench_Tannery
 
-### Template_Crop_Block
+**Location:** `Server/Item/Items/Bench/Bench_Tannery.json`
 
-**Location:** `Server/Item/Items/Plant/Crop/_Template/Template_Crop_Block.json`
-
-Base template for all crop blocks.
-
-```json
-{
-  "Quality": "Template",
-  "BlockType": {
-    "Material": "Empty",
-    "DrawType": "Model",
-    "Opacity": "Transparent",
-    "Support": {
-      "Down": [{
-        "Tags": {
-          "Type": "Soil",
-          "SubType": "Tilled"
-        }
-      }]
-    },
-    "SupportDropType": "Drop",
-    "Farming": {
-      "GrowthStages": 4,
-      "GrowthTime": 180.0,
-      "RequiresWater": true,
-      "WaterRadius": 4,
-      "GrowthModifiers": {
-        "Watered": 2.0,
-        "Fertilized": 1.5
-      }
-    },
-    "State": {
-      "StateType": "Growth",
-      "DefaultState": "Stage_0",
-      "States": {
-        "Stage_0": {
-          "CustomModel": "Blocks/Plant/Crop/Crop_Stage_0.blockymodel"
-        },
-        "Stage_1": {
-          "CustomModel": "Blocks/Plant/Crop/Crop_Stage_1.blockymodel"
-        },
-        "Stage_2": {
-          "CustomModel": "Blocks/Plant/Crop/Crop_Stage_2.blockymodel"
-        },
-        "Stage_3": {
-          "CustomModel": "Blocks/Plant/Crop/Crop_Stage_3.blockymodel"
-        }
-      }
-    },
-    "TickProcedure": "Crop_Growth_Tick",
-    "BlockSoundSetId": "Plant",
-    "BlockParticleSetId": "Plant"
-  }
-}
-```
-
-### Growth Modifiers
-
-| Modifier | Multiplier | Description |
-|----------|------------|-------------|
-| `Watered` | 2.0 | Growth speed when watered |
-| `Fertilized` | 1.5 | Growth speed when fertilized |
-| `Sunlight` | 1.2 | Growth speed in direct light |
-
-### Example Child: Plant_Crop_Carrot_Block
+Processing benches combine the `Open_Processing_Bench` use with `BenchBlock` /
+`ProcessingBenchBlock` components.
 
 ```json
 {
-  "Parent": "Template_Crop_Block",
-  "TranslationProperties": {
-    "Name": "server.items.Plant_Crop_Carrot_Block.name"
-  },
-  "Quality": "Technical",
   "BlockType": {
-    "Farming": {
-      "GrowthStages": 4,
-      "GrowthTime": 120.0,
-      "HarvestDrops": [
-        { "ItemId": "Plant_Crop_Carrot", "Quantity": [1, 3] },
-        { "ItemId": "Plant_Crop_Carrot_Seed", "Quantity": [0, 2], "Chance": 0.5 }
-      ]
-    },
-    "State": {
-      "States": {
-        "Stage_0": { "CustomModel": "Blocks/Plant/Crop/Carrot/Carrot_Stage_0.blockymodel" },
-        "Stage_1": { "CustomModel": "Blocks/Plant/Crop/Carrot/Carrot_Stage_1.blockymodel" },
-        "Stage_2": { "CustomModel": "Blocks/Plant/Crop/Carrot/Carrot_Stage_2.blockymodel" },
-        "Stage_3": { "CustomModel": "Blocks/Plant/Crop/Carrot/Carrot_Stage_3.blockymodel" }
+    "Interactions": { "Use": "Open_Processing_Bench" },
+    "BlockEntity": {
+      "Components": {
+        "BenchBlock": {},
+        "ProcessingBenchBlock": {}
       }
     }
   }
 }
 ```
+
+Bench recipes and categories are defined in the recipe/bench assets, not inside
+`BlockType` (there is no inline `Bench` config block).
 
 ---
 
 ## Block Item Patterns
 
-### Creating Custom Solid Blocks
+### Custom solid cube block
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.My_Custom_Block.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 99,
-  "Categories": ["Items.Blocks"],
-  "Icon": "Icons/Blocks/My_Block.png",
+  "TranslationProperties": { "Name": "server.items.My_Custom_Block.name" },
+  "MaxStack": 100,
+  "Icon": "Icons/ItemsGenerated/My_Custom_Block.png",
+  "Categories": ["Blocks.Rocks"],
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
-    "Opacity": "Opaque",
-    "Textures": [
-      { "Face": "All", "Texture": "Blocks/Custom/My_Block.png" }
-    ],
+    "HitboxType": "Full",
+    "Flags": {},
+    "Gathering": { "Breaking": { "GatherType": "Rocks", "ItemId": "My_Custom_Block" } },
+    "Textures": [ { "All": "BlockTextures/My_Custom_Block.png", "Weight": 1 } ],
+    "ParticleColor": "#888888",
+    "BlockParticleSetId": "Stone",
     "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Stone"
+    "CubeShadingMode": "Standard"
   }
 }
 ```
 
-### Creating Furniture with States
+### Toggleable model light
 
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.My_Lamp.name"
-  },
-  "Quality": "Common",
-  "MaxStack": 10,
-  "Categories": ["Items.Furniture"],
   "BlockType": {
-    "Material": "Empty",
+    "Material": "Solid",
     "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/My_Lamp.blockymodel",
-    "PlacementSettings": {
-      "RotationMode": "YawStep1",
-      "AllowRotationKey": true
-    },
-    "Support": {
-      "Down": [{ "FaceType": "Full" }]
-    },
-    "State": {
-      "StateType": "OnOff",
-      "DefaultState": "On",
-      "States": {
-        "On": {
-          "Light": { "Color": "#FFFFFF", "Radius": 14 }
-        },
-        "Off": {
-          "Light": null
-        }
+    "CustomModel": "Blocks/My_Lamp.blockymodel",
+    "Light": { "Color": "#ffffff", "Radius": 0 },
+    "Support": { "Down": [ { "FaceType": "Full" } ] },
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          { "Type": "ChangeState", "Changes": { "default": "Off", "On": "Off", "Off": "On" } }
+        ]
       }
     },
-    "Interactions": {
-      "Use": "Block_Use_Toggle_OnOff"
+    "State": {
+      "Definitions": {
+        "On": { "AmbientSoundEventId": "SFX_Torch_Default_Loop" },
+        "Off": { "Light": null, "InteractionHint": "server.interactionHints.turnon" }
+      }
     }
   }
 }
 ```
 
-### Creating Light Sources
-
-```json
-{
-  "BlockType": {
-    "Material": "Empty",
-    "DrawType": "Model",
-    "Light": {
-      "Color": "#FFAA44",
-      "Radius": 12
-    },
-    "Particles": [
-      {
-        "SystemId": "Fire_Small",
-        "TargetNodeName": "Flame_Point"
-      }
-    ]
-  }
-}
-```
-
-### Creating Interactive Containers
+### Interactive container
 
 ```json
 {
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",
-    "CustomModel": "Blocks/Container/My_Box.blockymodel",
-    "State": {
-      "StateType": "container"
-    },
-    "Components": {
-      "container": {
-        "ItemContainer": {
-          "Capacity": 27
-        },
-        "Droplist": "Drop_Container_Contents"
-      }
-    },
-    "Interactions": {
-      "Use": "Block_Use_Open_Container"
+    "CustomModel": "Blocks/My_Box.blockymodel",
+    "HitboxType": "Chest_Small",
+    "Interactions": { "Use": "Open_Container" },
+    "BlockEntity": {
+      "Components": { "ItemContainerBlock": { "Capacity": 27 } }
     }
   }
 }
@@ -1385,22 +1117,25 @@ Base template for all crop blocks.
 
 **Location:** `Server/Item/Interactions/Block_Secondary.json`
 
-Default interaction for block placement:
+The interaction referenced by an item's `Secondary` slot. It attempts to use the targeted
+block first, and on failure falls back to placing the held block:
 
 ```json
 {
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "PlaceBlock",
-      "Target": "TargetBlock",
-      "ConsumeItem": true
+  "Type": "UseBlock",
+  "Failed": {
+    "Type": "PlaceBlock",
+    "RunTime": 0.125,
+    "Effects": {
+      "WaitForAnimationToFinish": false,
+      "ItemAnimationId": "Build"
     }
-  ]
+  }
 }
 ```
 
-This interaction is assigned to the `Secondary` slot for most placeable items.
+A matching root interaction (`Server/Item/RootInteractions/Block_Secondary.json`) wraps it
+with a cooldown and creative settings and references the interaction by name.
 
 ---
 
@@ -1408,7 +1143,7 @@ This interaction is assigned to the `Secondary` slot for most placeable items.
 
 - [Items Reference](items.md) - Common properties and systems
 - [Blocks API](blocks.md) - BlockType class and events
-- [Drop System](drops.md) - Loot tables for containers and blocks
+- [Drop System](drops.md) - `DropList` loot tables for blocks and containers
 - [Interactions API](interactions.md) - Block interactions
 - [Entity & World Interactions](interactions-world.md) - PlaceBlock, BreakBlock
 - [Tools Reference](items-tools.md) - Block-breaking tools

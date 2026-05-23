@@ -39,7 +39,7 @@ All items support these core properties:
 | `Tags` | object | Classification tags for filtering |
 | `MaxStack` | int | Maximum stack size (default: 1 for weapons/tools) |
 | `Consumable` | boolean | Whether the item is consumed on use |
-| `Utility` | object | Utility slot configuration for equippable items |
+| `Utility` | object | Utility-slot flag (`Compatible` or `Usable` boolean) |
 | `MaxDurability` | int | Maximum durability points |
 | `DurabilityLossOnHit` | float | Durability lost per use |
 
@@ -141,17 +141,22 @@ For complete documentation, see [Block Items](items-blocks.md).
 
 ### Utility
 
-Configures items that can be equipped in the player's utility slot. Utility items provide passive effects or special abilities when equipped.
+Marks how an item behaves with the player's utility slot. The `Utility` object holds a single boolean flag.
 
 ```json
 {
   "Utility": {
-    "Slot": "Accessory"
+    "Compatible": true
   }
 }
 ```
 
-The utility slot is accessed via `UtilitySlotSelector` in the HUD and managed through the inventory's `getUtility()` container. See [Inventory API](inventory.md) for programmatic access.
+| Property | Type | Description |
+|----------|------|-------------|
+| `Compatible` | boolean | Item may be placed in the utility slot (82 items use this) |
+| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (27 items use this) |
+
+Either `Compatible` or `Usable` is present; both are plain booleans.
 
 ---
 
@@ -370,7 +375,7 @@ Categories organize items in the Creative Library UI:
 }
 ```
 
-**Category hierarchy** (from `Server/Item/Category/CreativeLibrary/Items.json`):
+**Category hierarchy** (declared in `Server/Item/Category/CreativeLibrary/Items.json`):
 
 | Category ID | Display Name |
 |-------------|--------------|
@@ -381,6 +386,14 @@ Categories organize items in the Creative Library UI:
 | `Items.Potions` | Potions |
 | `Items.Recipes` | Recipes |
 | `Items.Ingredients` | Ingredients |
+
+Additional `Items.*` category IDs appear directly on item files even though they are not listed as children in `Items.json`:
+
+| Category ID | Items Using It |
+|-------------|----------------|
+| `Items.Utility` | 3 |
+| `Items.Consumables` | 1 |
+| `Items.Debug` | 3 |
 
 ---
 

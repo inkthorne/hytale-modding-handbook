@@ -27,16 +27,20 @@ Unlike weapons which use formal Templates with signature abilities, tools inheri
 
 ### Tool.Specs
 
-Defines power and efficiency for different block types:
+Defines power and efficiency for different block types. Each tool lists a spec for every gather type it can affect; this example is taken from `Tool_Pickaxe_Iron`:
 
 ```json
 {
   "Tool": {
     "Specs": [
-      { "Power": 3.0, "GatherType": "Rocks" },
-      { "Power": 1.5, "GatherType": "VolcanicRocks" },
-      { "Power": 1.0, "GatherType": "SoftBlocks" },
-      { "Power": 1.0, "GatherType": "Benches", "HitSoundLayer": "Bench_Wood" }
+      { "Power": 1, "GatherType": "SoftBlocks" },
+      { "Power": 0.5, "GatherType": "Soils" },
+      { "Power": 0.05, "GatherType": "Woods" },
+      { "Power": 0.5, "GatherType": "Rocks", "Quality": 3 },
+      { "Power": 0.5, "GatherType": "Benches" },
+      { "Power": 0.17, "GatherType": "VolcanicRocks" },
+      { "Power": 0.5, "GatherType": "OreCopper" },
+      { "Power": 0.25, "GatherType": "OreIron" }
     ]
   }
 }
@@ -46,7 +50,8 @@ Defines power and efficiency for different block types:
 |----------|------|-------------|
 | `Power` | float | Breaking speed multiplier (higher = faster) |
 | `GatherType` | string | Block category this spec applies to |
-| `HitSoundLayer` | string | Optional sound override for this gather type |
+| `Quality` | int | Optional gather-quality level for this spec (controls which blocks the tool can break, e.g. higher-tier ore) |
+| `HitSoundLayer` | string | Optional impact sound override (a `SFX_*` event id) |
 
 ### GatherTypes
 
@@ -57,20 +62,33 @@ Defines power and efficiency for different block types:
 | `Woods` | Hatchet | Wood blocks, tree trunks |
 | `Rocks` | Pickaxe | Stone, rock formations |
 | `VolcanicRocks` | Pickaxe (low power) | Volcanic stone, obsidian |
-| `Ores` | Pickaxe | Metal ore deposits |
 | `Benches` | Most tools | Crafting stations, furniture |
+
+Ore deposits use granular per-metal gather types (there is no single `Ores` gather type in tool specs):
+
+| GatherType | Metal |
+|------------|-------|
+| `OreCopper` | Copper |
+| `OreIron` | Iron |
+| `OreSilver` | Silver |
+| `OreGold` | Gold |
+| `OreThorium` | Thorium |
+| `OreCobalt` | Cobalt |
+| `OreAdamantite` | Adamantite |
+| `OreMithril` | Mithril |
 
 ### Tool.DurabilityLossBlockTypes
 
-Configures durability loss per block type:
+Configures durability loss per block set. This example is taken from `Tool_Pickaxe_Iron`:
 
 ```json
 {
   "Tool": {
     "DurabilityLossBlockTypes": [
-      { "BlockSetIds": ["Stone", "Rock", "Brick"], "DurabilityLoss": 1.0 },
-      { "BlockSetIds": ["Ores"], "DurabilityLoss": 1.5 },
-      { "BlockSetIds": ["SandStone", "Limestone"], "DurabilityLoss": 0.5 }
+      {
+        "BlockSets": ["Stone", "Rock", "Ores", "Soil", "Wood"],
+        "DurabilityLossOnHit": 0.25
+      }
     ]
   }
 }
@@ -78,8 +96,8 @@ Configures durability loss per block type:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `BlockSetIds` | array | Block sets this rule applies to |
-| `DurabilityLoss` | float | Durability points lost per block |
+| `BlockSets` | array | Block sets this rule applies to |
+| `DurabilityLossOnHit` | float | Durability points lost per hit on these blocks |
 
 ### Tool.Speed
 
@@ -121,35 +139,38 @@ Mining tool optimized for rocks, stone, and ore extraction.
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 3 |
+| `ItemLevel` | 5 |
 | `PlayerAnimationsId` | Pickaxe |
-| `MaxDurability` | 100 |
+| `MaxDurability` | 150 |
 | `Categories` | Items.Tools |
 
-### Tool.Specs
+### Tool.Specs (Tool_Pickaxe_Crude)
 
 | GatherType | Power | Description |
 |------------|-------|-------------|
-| `Rocks` | 1.5 | Primary use - stone blocks |
-| `VolcanicRocks` | 0.5 | Volcanic/obsidian (reduced) |
-| `SoftBlocks` | 1.0 | General soft blocks |
-| `Benches` | 1.0 | Crafting stations |
+| `SoftBlocks` | 1 | General soft blocks |
+| `Soils` | 0.35 | Dirt, sand |
+| `Woods` | 0.05 | Wood (very inefficient) |
+| `Rocks` | 0.25 | Primary use - stone blocks (`Quality: 1`) |
+| `Benches` | 0.5 | Crafting stations |
+| `VolcanicRocks` | 0.084 | Volcanic/obsidian (reduced) |
+| `OreCopper` | 0.125 | Copper ore |
+| `OreIron` | 0.084 | Iron ore |
+
+(Crude also defines low-power specs for `OreSilver`, `OreGold`, `OreThorium`, `OreCobalt`, `OreAdamantite`, and `OreMithril`.)
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Pickaxe_Primary | Block breaking swing |
-
-Uses `BreakBlock` interaction with `Tool: "Pickaxe"` specification.
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Primary` | Pickaxe_Attack | Block breaking swing |
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Pickaxe"]
+    "Type": ["Tool"]
   }
 }
 ```
@@ -160,51 +181,65 @@ Uses `BreakBlock` interaction with `Tool: "Pickaxe"` specification.
 {
   "Parent": "Tool_Pickaxe_Crude",
   "TranslationProperties": {
-    "Name": "server.items.Tool_Pickaxe_Iron.name"
+    "Name": "server.items.Tool_Pickaxe_Iron.name",
+    "Description": "server.items.Tool_Pickaxe_Crude.description"
   },
-  "Model": "Items/Tools/Pickaxe/Iron.blockymodel",
-  "Texture": "Items/Tools/Pickaxe/Iron_Texture.png",
   "Icon": "Icons/ItemsGenerated/Tool_Pickaxe_Iron.png",
   "Quality": "Uncommon",
   "ItemLevel": 20,
-  "MaxDurability": 250,
-  "Tool": {
-    "Specs": [
-      { "Power": 3.0, "GatherType": "Rocks" },
-      { "Power": 1.5, "GatherType": "VolcanicRocks" },
-      { "Power": 1.0, "GatherType": "SoftBlocks" },
-      { "Power": 1.0, "GatherType": "Benches", "HitSoundLayer": "Bench_Wood" }
-    ],
-    "DurabilityLossBlockTypes": [
-      { "BlockSetIds": ["Stone", "Rock", "Brick"], "DurabilityLoss": 1.0 },
-      { "BlockSetIds": ["Ite_Ore_Copper", "Ite_Ore_Coal"], "DurabilityLoss": 1.0 }
-    ]
-  },
+  "Model": "Items/Tools/Pickaxe/Iron.blockymodel",
+  "Texture": "Items/Tools/Pickaxe/Iron_Texture.png",
   "Recipe": {
-    "TimeSeconds": 2.5,
+    "TimeSeconds": 3.5,
     "Input": [
-      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 4 },
-      { "ResourceTypeId": "Wood_Trunk", "Quantity": 2 }
+      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 5 },
+      { "ItemId": "Ingredient_Leather_Light", "Quantity": 2 },
+      { "ItemId": "Ingredient_Fabric_Scrap_Linen", "Quantity": 2 }
     ],
     "BenchRequirement": [{
+      "Id": "Workbench",
       "Type": "Crafting",
-      "Categories": ["Tool"],
-      "Id": "Tool_Bench"
+      "Categories": ["Workbench_Tools"]
     }]
-  }
+  },
+  "Tool": {
+    "Specs": [
+      { "Power": 1, "GatherType": "SoftBlocks" },
+      { "Power": 0.5, "GatherType": "Soils" },
+      { "Power": 0.05, "GatherType": "Woods" },
+      { "Power": 0.5, "GatherType": "Rocks", "Quality": 3 },
+      { "Power": 0.5, "GatherType": "Benches" },
+      { "Power": 0.17, "GatherType": "VolcanicRocks" },
+      { "Power": 0.5, "GatherType": "OreCopper" },
+      { "Power": 0.25, "GatherType": "OreIron" },
+      { "Power": 0.25, "GatherType": "OreSilver" },
+      { "Power": 0.25, "GatherType": "OreGold" },
+      { "Power": 0.125, "GatherType": "OreThorium" },
+      { "Power": 0.125, "GatherType": "OreCobalt" },
+      { "Power": 0.084, "GatherType": "OreAdamantite" },
+      { "Power": 0.063, "GatherType": "OreMithril" }
+    ],
+    "DurabilityLossBlockTypes": [
+      {
+        "BlockSets": ["Stone", "Rock", "Ores", "Soil", "Wood"],
+        "DurabilityLossOnHit": 0.25
+      }
+    ]
+  },
+  "MaxDurability": 250
 }
 ```
 
 ### Power Scaling by Tier
 
-| Pickaxe | Quality | ItemLevel | Rocks | VolcanicRocks | Durability |
-|---------|---------|-----------|-------|---------------|------------|
-| Crude | Common | 3 | 1.5 | 0.5 | 100 |
-| Copper | Common | 10 | 2.0 | 1.0 | 150 |
-| Iron | Uncommon | 20 | 3.0 | 1.5 | 250 |
-| Cobalt | Rare | 30 | 4.0 | 2.0 | 300 |
-| Mithril | Rare | 35 | 4.5 | 2.5 | 325 |
-| Adamantite | Rare | 40 | 5.0 | 3.0 | 400 |
+Verified `Crude` and `Iron` values from the real asset files; intermediate tiers are illustrative.
+
+| Pickaxe | Quality | ItemLevel | Rocks (Power / Quality) | VolcanicRocks | Durability |
+|---------|---------|-----------|-------------------------|---------------|------------|
+| Crude | Common | 5 | 0.25 / 1 | 0.084 | 150 |
+| Iron | Uncommon | 20 | 0.5 / 3 | 0.17 | 250 |
+
+Higher-tier pickaxes raise the `Rocks` spec `Quality` (gating which ore tiers are mineable) and increase individual `Ore*` powers rather than scaling a single number.
 
 ### All Pickaxe Variants
 
@@ -223,39 +258,44 @@ Woodcutting tool optimized for trees and wood blocks.
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 3 |
+| `ItemLevel` | 4 |
 | `PlayerAnimationsId` | Hatchet |
-| `MaxDurability` | 100 |
+| `MaxDurability` | 150 |
 | `Categories` | Items.Tools |
 
-### Tool.Specs
+### Tool.Specs (Tool_Hatchet_Crude)
 
 | GatherType | Power | Description |
 |------------|-------|-------------|
-| `Woods` | 1.5 | Primary use - wood blocks |
-| `SoftBlocks` | 1.0 | General soft blocks |
-| `Benches` | 1.0 | Crafting stations |
+| `SoftBlocks` | 1 | General soft blocks |
+| `Soils` | 0.05 | Dirt, sand (very inefficient) |
+| `Woods` | 0.15 | Primary use - wood blocks |
+| `Rocks` | 0.05 | Stone (very inefficient) |
+| `Benches` | 0.5 | Crafting stations |
+| `VolcanicRocks` | 0.017 | Volcanic/obsidian |
+| `OreCopper` | 0.036 | Copper ore |
+
+(Crude also defines low-power specs for `OreIron`, `OreSilver`, `OreGold`, `OreThorium`, `OreCobalt`, `OreAdamantite`, and `OreMithril`.)
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Hatchet_Primary | Block breaking swing |
-
-Uses `BreakBlock` interaction with `Tool: "Hatchet"` specification.
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Primary` | Hatchet_Attack | Block breaking swing |
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Hatchet"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### Example Child: Iron Hatchet
+
+The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound override (taken from the real `Tool_Hatchet_Iron`):
 
 ```json
 {
@@ -271,24 +311,38 @@ Uses `BreakBlock` interaction with `Tool: "Hatchet"` specification.
   "MaxDurability": 250,
   "Tool": {
     "Specs": [
-      { "Power": 3.0, "GatherType": "Woods" },
-      { "Power": 1.0, "GatherType": "SoftBlocks" },
-      { "Power": 1.0, "GatherType": "Benches", "HitSoundLayer": "Bench_Wood" }
+      { "Power": 1, "GatherType": "SoftBlocks" },
+      { "Power": 0.05, "GatherType": "Soils" },
+      { "Power": 0.3, "GatherType": "Woods", "HitSoundLayer": "SFX_Hatchet_T2_Impact_Nice" },
+      { "Power": 0.05, "GatherType": "Rocks" },
+      { "Power": 0.5, "GatherType": "Benches", "HitSoundLayer": "SFX_Hatchet_T2_Impact_Nice" },
+      { "Power": 0.017, "GatherType": "VolcanicRocks" }
     ]
+  },
+  "Recipe": {
+    "TimeSeconds": 3.5,
+    "Input": [
+      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 5 },
+      { "ItemId": "Ingredient_Leather_Light", "Quantity": 2 },
+      { "ItemId": "Ingredient_Fabric_Scrap_Linen", "Quantity": 2 }
+    ],
+    "BenchRequirement": [{
+      "Type": "Crafting",
+      "Categories": ["Workbench_Tools"],
+      "Id": "Workbench"
+    }]
   }
 }
 ```
 
 ### Power Scaling by Tier
 
+Verified `Crude` and `Iron` `Woods` values from the real asset files; higher tiers raise the `Woods` power and add `HitSoundLayer` overrides.
+
 | Hatchet | Quality | ItemLevel | Woods | Durability |
 |---------|---------|-----------|-------|------------|
-| Crude | Common | 3 | 1.5 | 100 |
-| Copper | Common | 10 | 2.0 | 150 |
-| Iron | Uncommon | 20 | 3.0 | 250 |
-| Cobalt | Rare | 30 | 4.0 | 300 |
-| Mithril | Rare | 35 | 4.5 | 325 |
-| Adamantite | Rare | 40 | 5.0 | 400 |
+| Crude | Common | 4 | 0.15 | 150 |
+| Iron | Uncommon | 20 | 0.3 | 250 |
 
 ### All Hatchet Variants
 
@@ -309,49 +363,45 @@ Digging tool optimized for soil, sand, and dirt blocks.
 | `Quality` | Common |
 | `ItemLevel` | 3 |
 | `PlayerAnimationsId` | Shovel |
-| `MaxDurability` | 100 |
+| `MaxDurability` | 150 |
 | `Categories` | Items.Tools |
 
-### Tool.Specs
+### Tool.Specs (Tool_Shovel_Crude)
 
 | GatherType | Power | Description |
 |------------|-------|-------------|
-| `Soils` | 1.5 | Primary use - dirt, sand |
-| `SoftBlocks` | 1.0 | General soft blocks |
-| `Benches` | 1.0 | Crafting stations |
+| `Soils` | 0.4 | Primary use - dirt, sand |
+
+(Crude also defines a `SoftBlocks` spec plus low-power specs for the various `Ore*` types.)
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Shovel_Primary | Block breaking dig |
-
-Uses `BreakBlock` interaction with `Tool: "Shovel"` specification.
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Primary` | Shovel_Attack | Block breaking dig |
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Shovel"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### Power Scaling by Tier
 
+Verified `Crude` and `Iron` `Soils` values from the real asset files. The Iron `Soils` spec also adds `"HitSoundLayer": "SFX_Shovel_T2_Impact_Nice"`.
+
 | Shovel | Quality | ItemLevel | Soils | Durability |
 |--------|---------|-----------|-------|------------|
-| Crude | Common | 3 | 1.5 | 100 |
-| Copper | Common | 10 | 2.0 | 150 |
-| Iron | Uncommon | 20 | 3.0 | 250 |
-| Steel | Rare | 30 | 4.0 | 300 |
-| Adamantite | Rare | 40 | 5.0 | 400 |
+| Crude | Common | 3 | 0.4 | 150 |
+| Iron | Uncommon | 20 | 0.5 | 250 |
 
 ### All Shovel Variants
 
-Tool_Shovel_Crude, Tool_Shovel_Copper, Tool_Shovel_Iron, Tool_Shovel_Steel, Tool_Shovel_Adamantite
+Tool_Shovel_Crude, Tool_Shovel_Copper, Tool_Shovel_Iron, Tool_Shovel_Cobalt, Tool_Shovel_Thorium
 
 ---
 
@@ -366,27 +416,35 @@ Farming tool that converts soil blocks for planting.
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 3 |
+| `ItemLevel` | 1 |
 | `PlayerAnimationsId` | Hoe |
-| `MaxDurability` | 150 |
+| `MaxDurability` | 100 |
 | `Categories` | Items.Tools |
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Hoe_Primary | Till soil block |
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Primary` | Hoe_Attack | Melee swing |
+| `Secondary` | Hoe_Till | Till soil block |
 
-Uses `ChangeBlock` interaction to convert blocks:
+The `Hoe_Till` interaction uses `ChangeBlock`, whose `Changes` is a map of source block to result block (excerpt from the real `Hoe_Till` interaction):
 
 ```json
 {
   "Type": "ChangeBlock",
-  "Changes": [
-    { "From": "Soil_Grass", "To": "Soil_Dirt_Tilled" },
-    { "From": "Soil_Dirt", "To": "Soil_Dirt_Tilled" },
-    { "From": "Soil_Dirt_Tilled", "To": "Soil_Dirt" }
-  ]
+  "RunTime": 0.233,
+  "RequireNotBroken": true,
+  "Changes": {
+    "Soil_Dirt": "Soil_Dirt_Tilled",
+    "Soil_Grass": "Soil_Dirt_Tilled",
+    "Soil_Mud": "Soil_Dirt_Tilled"
+  },
+  "WorldSoundEventId": "SFX_Hoe_T1_Till",
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1
+  }
 }
 ```
 
@@ -395,15 +453,14 @@ Uses `ChangeBlock` interaction to convert blocks:
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Hoe"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Hoe Variants
 
-Tool_Hoe_Crude, Tool_Hoe_Iron, Tool_Hoe_Adamantite
+Tool_Hoe_Crude, Tool_Hoe_Copper, Tool_Hoe_Iron, Tool_Hoe_Thorium
 
 ---
 
@@ -510,72 +567,105 @@ Tool_Shears
 
 ## Watering Can
 
-**Location:** `Server/Item/Items/Tool/WateringCan/`
+**Location:** `Server/Item/Items/Tool/Watering_Can/`
 
-Farming tool for irrigating crops. Uses a state system with empty/filled variants.
+Farming tool for irrigating crops. A single item (`Tool_Watering_Can`) uses the `State` system to switch between its empty and filled appearances rather than being two separate items.
 
-### Base Properties (Tool_WateringCan_Empty)
+### Base Properties (Tool_Watering_Can)
 
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 5 |
-| `PlayerAnimationsId` | WateringCan |
-| `MaxDurability` | - |
-| `Categories` | Items.Tools |
+| `ItemLevel` | 10 |
+| `PlayerAnimationsId` | Watering_Can |
+| `Scale` | 2 |
+| `Parent` | Template_Tool_Watering_Can |
 
 ### State System
 
-The watering can uses item states to track water level:
-
-| Item | State | Primary Action |
-|------|-------|----------------|
-| `Tool_WateringCan_Empty` | Empty | Fill from water source |
-| `Tool_WateringCan_Filled` | Filled | Water crops |
-
-### Interactions (Empty)
-
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_WateringCan_Fill | Fill from water block |
+A `State` block defines the filled variant. The empty model is the item's base `Model`; the `Filled_Water` state swaps in the filled model, durability, and a watering interaction (excerpt from the real `Tool_Watering_Can`):
 
 ```json
 {
-  "Type": "FillFromBlock",
-  "BlockTypes": ["Water"],
-  "ResultItem": "Tool_WateringCan_Filled"
+  "State": {
+    "Filled_Water": {
+      "Variant": true,
+      "Model": "Items/Tools/Watering_Can/Watering_Can.blockymodel",
+      "PlayerAnimationsId": "Watering_Can",
+      "Interactions": {
+        "Secondary": "Watering_Can_Filled_Use"
+      },
+      "MaxDurability": 50,
+      "DurabilityLossOnDeath": false
+    }
+  }
 }
 ```
 
-### Interactions (Filled)
+### Fill and Water Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_WateringCan_Water | Water crop block |
+Filling uses the `RefillContainer` interaction type, gated by the source fluid (from the real `Watering_Can_Fill` interaction):
 
 ```json
 {
-  "Type": "WaterBlock",
-  "Range": 4.0,
-  "UsesPerFill": 8,
-  "EmptyItem": "Tool_WateringCan_Empty"
+  "Type": "RefillContainer",
+  "States": {
+    "Filled_Water": {
+      "AllowedFluids": ["Water_Source", "Water"]
+    }
+  },
+  "Next": {
+    "Type": "Simple",
+    "Effects": {
+      "ItemAnimationId": "Water",
+      "WorldSoundEventId": "SFX_Water_MoveIn"
+    },
+    "RunTime": 0.5
+  }
 }
 ```
 
-### Tags
+Watering crops uses the `UseWateringCan` interaction type (from the real `Watering_Can_Use` interaction):
 
 ```json
 {
-  "Tags": {
-    "Type": ["Tool"],
-    "Family": ["WateringCan"]
+  "Type": "UseWateringCan",
+  "UseLatestTarget": true,
+  "RadiusX": 1,
+  "RadiusZ": 1,
+  "RefreshModifiers": ["Water"],
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1,
+    "BrokenItem": "Tool_Watering_Can"
+  },
+  "Failed": "Watering_Can_No_Effect"
+}
+```
+
+### Recipe
+
+Crafted at the `Farmingbench` (category `Farming`):
+
+```json
+{
+  "Recipe": {
+    "TimeSeconds": 1,
+    "Input": [
+      { "ItemId": "Ingredient_Bar_Iron", "Quantity": 3 }
+    ],
+    "BenchRequirement": [{
+      "Type": "Crafting",
+      "Categories": ["Farming"],
+      "Id": "Farmingbench"
+    }]
   }
 }
 ```
 
 ### All Watering Can Variants
 
-Tool_WateringCan_Empty, Tool_WateringCan_Filled
+Tool_Watering_Can (with `Template_Tool_Watering_Can` as its parent template)
 
 ---
 
@@ -823,55 +913,54 @@ Tool_Fertilizer
 
 ### BreakBlock Interaction
 
-Most gathering tools use `BreakBlock` with a tool type specification:
+Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g. `Pickaxe_Attack`) whose chain falls through to a `BreakBlock` step. Which blocks a tool can break, and how fast, is driven by the item's `Tool.Specs` gather types — there is no `Tool` field on the `BreakBlock` interaction itself. This excerpt is from the real `Block_Break` interaction:
 
 ```json
 {
-  "Type": "BreakBlock",
-  "Tool": "Pickaxe",
-  "Range": 4.5,
-  "Effects": {
-    "WorldSoundEventId": "SFX_Pickaxe_Impact",
-    "Particles": [{ "SystemId": "Block_Break" }]
+  "Type": "UseBlock",
+  "Failed": {
+    "Type": "BreakBlock",
+    "UseLatestTarget": true
   }
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Tool` | string | Tool type required (Pickaxe, Hatchet, Shovel) |
-| `Range` | float | Maximum block interaction distance |
-
 ### ChangeBlock Interaction
 
-Used by hoes and similar tools to transform blocks:
+Used by hoes to transform blocks. `Changes` is a map of source block to result block:
 
 ```json
 {
   "Type": "ChangeBlock",
-  "Changes": [
-    { "From": "Soil_Grass", "To": "Soil_Dirt_Tilled" }
-  ],
-  "DurabilityLossOnUse": 1.0
+  "Changes": {
+    "Soil_Grass": "Soil_Dirt_Tilled",
+    "Soil_Dirt": "Soil_Dirt_Tilled"
+  },
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1
+  }
 }
 ```
 
 ### Tool Durability
 
-Tools lose durability based on block type:
+Tools lose durability based on the block set hit, via `DurabilityLossBlockTypes` (excerpt from the real `Tool_Pickaxe_Iron`):
 
 ```json
 {
   "Tool": {
     "DurabilityLossBlockTypes": [
-      { "BlockSetIds": ["Stone"], "DurabilityLoss": 1.0 },
-      { "BlockSetIds": ["Ores"], "DurabilityLoss": 1.5 }
+      {
+        "BlockSets": ["Stone", "Rock", "Ores", "Soil", "Wood"],
+        "DurabilityLossOnHit": 0.25
+      }
     ]
   }
 }
 ```
 
-Default durability loss (if not specified in DurabilityLossBlockTypes) is defined by `DurabilityLossOnHit` in base properties.
+A separate top-level `DurabilityLossOnHit` (a common item property) provides the default per-hit loss when a block is not covered by `DurabilityLossBlockTypes`.
 
 ---
 

@@ -34,7 +34,7 @@ Base template for all prepared food items (bread, pies, kebabs, salads).
 
 | Slot | Root Interaction | Description |
 |------|------------------|-------------|
-| `Secondary` | Root_Consumable_Eat | Timed consumption |
+| `Secondary` | Root_Secondary_Consume_Food_T1 | Timed consumption |
 
 Food uses the `Secondary` (right-click) slot for consumption, leaving `Primary` available for other actions.
 
@@ -66,36 +66,39 @@ Child food items customize these variables:
   "InteractionVars": {
     "Consume_Charge": {
       "Interactions": [{
-        "Parent": "Consumable_Eat_Charge",
-        "ChargeTime": 1.5,
-        "FailOnDamage": true,
-        "HorizontalSpeedMultiplier": 0.5,
+        "Parent": "Consume_Charge_Food_T1_Inner",
         "Effects": {
-          "LocalSoundEventId": "SFX_Eating_Local"
+          "ItemAnimationId": "Consume"
         }
       }]
     },
     "Effect": {
       "Interactions": [{
         "Type": "ApplyEffect",
-        "EffectId": "Food_Instant_Heal_T1"
+        "EffectId": "Food_Health_Regen_Small"
       }]
     },
     "ConsumeSFX": {
       "Interactions": [{
-        "Type": "PlaySound",
-        "LocalSoundEventId": "SFX_Eating_Local"
+        "Parent": "Consume_SFX",
+        "Effects": {
+          "LocalSoundEventId": "SFX_Consume_Bread_Local"
+        }
       }]
     },
     "ConsumedSFX": {
       "Interactions": [{
-        "Type": "PlaySound",
-        "LocalSoundEventId": "SFX_Eating_Finish_Local"
+        "Parent": "Consumed_SFX",
+        "Effects": {
+          "LocalSoundEventId": "SFX_Consume_Bread_Local"
+        }
       }]
     }
   }
 }
 ```
+
+Each `InteractionVar` extends a shared parent interaction (e.g. `Consume_Charge_Food_T1_Inner`, `Consume_SFX`, `Consumed_SFX`) via the `Parent` field rather than declaring a `Type`.
 
 ---
 
@@ -251,16 +254,16 @@ Plant-based foods boost maximum stamina:
   "InteractionVars": {
     "Consume_Charge": {
       "Interactions": [{
-        "Parent": "Consumable_Eat_Charge",
-        "ChargeTime": 1.5,
-        "FailOnDamage": true,
-        "HorizontalSpeedMultiplier": 0.5
+        "Parent": "Consume_Charge_Food_T1_Inner",
+        "Effects": {
+          "ItemAnimationId": "Consume"
+        }
       }]
     },
     "Effect": {
       "Interactions": [{
         "Type": "ApplyEffect",
-        "EffectId": "Food_Instant_Heal_T1"
+        "EffectId": "Food_Health_Regen_Small"
       }]
     }
   }
@@ -337,7 +340,7 @@ Base template for all potion items.
 
 | Slot | Root Interaction | Description |
 |------|------------------|-------------|
-| `Secondary` | Root_Potion_Drink | Instant consumption with stat check |
+| `Secondary` | Root_Secondary_Consume_Potion | Instant consumption with stat check |
 
 #### Tags
 
@@ -351,14 +354,19 @@ Base template for all potion items.
 
 #### BlockType (Placeable)
 
-Potions can be placed as decorative light sources:
+Potions define a `BlockType` so they can be placed and emit colored light:
 
 ```json
 {
   "BlockType": {
-    "BlockPlaceProperties": {
-      "BlockId": "Potion_Placed",
-      "LightEmission": 8
+    "DrawType": "Model",
+    "CustomModel": "Items/Consumables/Potions/Potion.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Items/Consumables/Potions/Potion_Textures/Red.png", "Weight": 1 }
+    ],
+    "ParticleColor": "#ff3730",
+    "Light": {
+      "Color": "#522"
     }
   }
 }
@@ -366,17 +374,20 @@ Potions can be placed as decorative light sources:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `BlockId` | string | Block to place when using on ground |
-| `LightEmission` | int | Light level (0-15) |
+| `CustomModel` | string | `.blockymodel` used for the placed block |
+| `CustomModelTexture` | array | Weighted texture variants for the model |
+| `ParticleColor` | string | Hex color for block-break particles |
+| `Light.Color` | string | Hex color of the light the placed potion emits |
 
 #### InteractionVars
 
 | Variable | Purpose |
 |----------|---------|
-| `Effect` | ApplyEffect or ChangeStat interaction |
+| `Effect` | ApplyEffect / EffectCondition interaction |
 | `Stat_Check` | Condition for consumption (e.g., health not full) |
 | `RemoveEffect` | Effect to clear on consumption (e.g., poison) |
-| `DrinkSFX` | Sound when drinking |
+| `ConsumeSFX` | Sound while drinking |
+| `ConsumedSFX` | Sound when consumption completes |
 
 ---
 
@@ -411,11 +422,13 @@ Example: `Health: 100` with `LessThan: true` means "only drink if health < 100%"
 
 Restore health instantly with stat check to prevent waste.
 
-| Potion | Quality | Restore | Stat_Check |
-|--------|---------|---------|------------|
-| `Potion_Health` | Common | +30% HP | Health < 100% |
-| `Potion_Health_Greater` | Uncommon | +50% HP | Health < 100% |
-| `Potion_Health_Supreme` | Rare | +75% HP | Health < 100% |
+| Potion | Quality | EffectId(s) Applied |
+|--------|---------|---------------------|
+| `Potion_Health_Small` | Common | Potion_Health_Instant_Small, Potion_Health_Regen_Small |
+| `Potion_Health_Lesser` | Common | Potion_Health_Instant_Lesser, Potion_Health_Regen_Lesser |
+| `Potion_Health` | Common | Potion_Health_Instant, Potion_Health_Regen |
+| `Potion_Health_Greater` | Uncommon | Potion_Health_Instant_Greater, Potion_Health_Regen_Greater |
+| `Potion_Health_Large` | Rare | Potion_Health_Instant_Large, Potion_Health_Regen_Large |
 
 #### Example: Potion_Health
 
@@ -423,38 +436,49 @@ Restore health instantly with stat check to prevent waste.
 {
   "Parent": "Potion_Template",
   "TranslationProperties": {
-    "Name": "server.items.Potion_Health.name"
+    "Name": "server.items.Potion_Health.name",
+    "Description": "server.items.Potion_Health.description"
   },
-  "Model": "Items/Potions/Potion_Health.blockymodel",
-  "Texture": "Items/Potions/Potion_Health_Texture.png",
-  "Icon": "Icons/ItemsGenerated/Potion_Health.png",
   "Quality": "Common",
+  "ItemLevel": 7,
+  "Icon": "Icons/ItemsGenerated/Potion_Health.png",
   "Recipe": {
-    "TimeSeconds": 3.0,
     "Input": [
-      { "ItemId": "Ingredient_Bottle_Empty", "Quantity": 1 },
-      { "ItemId": "Plant_Herb_Healing", "Quantity": 2 }
+      { "ItemId": "Potion_Empty", "Quantity": 1 },
+      { "ItemId": "Plant_Fruit_Berries_Red", "Quantity": 12 },
+      { "ItemId": "Plant_Petals_Blood", "Quantity": 6 },
+      { "ItemId": "Plant_Crop_Health2", "Quantity": 1 }
     ],
     "BenchRequirement": [{
+      "Id": "Alchemybench",
       "Type": "Crafting",
-      "Categories": ["Potion"],
-      "Id": "Alchemy_Bench"
-    }]
+      "Categories": ["Alchemy_Potions"],
+      "RequiredTierLevel": 3
+    }],
+    "TimeSeconds": 1
   },
   "InteractionVars": {
-    "Stat_Check": {
-      "Interactions": [{
-        "Parent": "Stat_Check",
-        "Costs": { "Health": 100 },
-        "ValueType": "Percent",
-        "LessThan": true
-      }]
+    "RemoveEffect": {
+      "Interactions": [{ "Type": "Simple" }]
     },
     "Effect": {
       "Interactions": [{
-        "Type": "ChangeStat",
-        "StatModifiers": { "Health": 0.30 },
-        "ValueType": "Percent"
+        "Type": "EffectCondition",
+        "EntityEffectIds": [
+          "Potion_Health_Regen_Greater",
+          "Potion_Health_Regen_Large"
+        ],
+        "Match": "None",
+        "Next": {
+          "Type": "Serial",
+          "Interactions": [
+            { "Type": "ClearEntityEffect", "EntityEffectId": "Potion_Health_Regen_Lesser" },
+            { "Type": "ClearEntityEffect", "EntityEffectId": "Potion_Health_Regen_Small" },
+            { "Type": "ApplyEffect", "EffectId": "Potion_Health_Instant" },
+            { "Type": "ApplyEffect", "EffectId": "Potion_Health_Regen" }
+          ]
+        },
+        "Failed": { "Type": "Simple" }
       }]
     }
   }
@@ -465,43 +489,44 @@ Restore health instantly with stat check to prevent waste.
 
 ### Stamina Potions
 
-Restore stamina instantly with stat check.
+Restore stamina instantly and apply stamina regen effects.
 
-| Potion | Quality | Restore | Stat_Check |
-|--------|---------|---------|------------|
-| `Potion_Stamina` | Common | +40% Stamina | Stamina < 100% |
-| `Potion_Stamina_Greater` | Uncommon | +60% Stamina | Stamina < 100% |
-| `Potion_Stamina_Supreme` | Rare | +100% Stamina | Stamina < 100% |
+| Potion | Quality | EffectId(s) Applied |
+|--------|---------|---------------------|
+| `Potion_Stamina_Small` | Common | Potion_Stamina_Instant_Small, Potion_Stamina_Regen |
+| `Potion_Stamina_Lesser` | Common | Potion_Stamina_Instant_Lesser |
+| `Potion_Stamina` | Common | Potion_Stamina_Instant |
+| `Potion_Stamina_Greater` | Uncommon | Potion_Stamina_Instant_Greater |
+| `Potion_Stamina_Large` | Rare | Potion_Stamina_Instant_Large |
 
 ---
 
 ### Regeneration Potions
 
-Apply over-time healing effects.
+Apply over-time recovery effects.
 
-| Potion | Quality | Effect | Duration |
-|--------|---------|--------|----------|
-| `Potion_Regen_Health` | Uncommon | +2 HP/s | 30s |
-| `Potion_Regen_Health_Greater` | Rare | +4 HP/s | 45s |
-| `Potion_Regen_Stamina` | Uncommon | +3 Stamina/s | 30s |
-| `Potion_Regen_Stamina_Greater` | Rare | +5 Stamina/s | 45s |
+| Potion | Variants |
+|--------|----------|
+| `Potion_Regen_Health` | `Potion_Regen_Health_Small`, `Potion_Regen_Health`, `Potion_Regen_Health_Large` |
+| `Potion_Regen_Stamina` | `Potion_Regen_Stamina_Small`, `Potion_Regen_Stamina`, `Potion_Regen_Stamina_Large` |
+| `Potion_Regen_Mana` | `Potion_Regen_Mana_Small`, `Potion_Regen_Mana`, `Potion_Regen_Mana_Large` |
 
-#### Example: Potion_Regen_Health
+These regen potions inherit from `Decorative_Potion_Template` and override only `Icon` and `BlockType` (model/texture/light), reusing the parent's effect interactions:
 
 ```json
 {
-  "Parent": "Potion_Template",
+  "Parent": "Decorative_Potion_Template",
   "TranslationProperties": {
     "Name": "server.items.Potion_Regen_Health.name"
   },
-  "Quality": "Uncommon",
-  "InteractionVars": {
-    "Effect": {
-      "Interactions": [{
-        "Type": "ApplyEffect",
-        "EffectId": "Potion_HealthRegen_T2"
-      }]
-    }
+  "Icon": "Icons/ItemsGenerated/Potion_Regen_Health.png",
+  "BlockType": {
+    "CustomModel": "Items/Consumables/Potions/Potion.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Items/Consumables/Potions/Potion_Textures/Pink.png", "Weight": 1 }
+    ],
+    "ParticleColor": "#f977be",
+    "Light": { "Color": "#414" }
   }
 }
 ```
@@ -512,43 +537,25 @@ Apply over-time healing effects.
 
 Transform the player into creatures for exploration or stealth.
 
-| Potion | Quality | Form | Duration |
-|--------|---------|------|----------|
-| `Potion_Morph_Dog` | Rare | Dog | 120s |
-| `Potion_Morph_Frog` | Rare | Frog | 120s |
-| `Potion_Morph_Mouse` | Rare | Mouse | 120s |
-| `Potion_Morph_Pigeon` | Rare | Pigeon | 120s |
+| Potion | Quality | Form |
+|--------|---------|------|
+| `Potion_Morph_Dog` | Rare | Dog |
+| `Potion_Morph_Frog` | Rare | Frog |
+| `Potion_Morph_Mouse` | Rare | Mouse |
+| `Potion_Morph_Pigeon` | Rare | Pigeon |
 
 #### Morph Effect Structure
+
+The potion's `Effect` var simply applies an effect whose `EffectId` matches a morph effect asset. The transformation details (model, duration) live on the effect, not the item interaction:
 
 ```json
 {
   "Type": "ApplyEffect",
-  "EffectId": "Potion_Morph_Dog",
-  "EffectProperties": {
-    "ModelChange": {
-      "EntityTypeId": "Creature_Dog",
-      "Duration": 120.0
-    }
-  }
+  "EffectId": "Potion_Morph_Dog"
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `EntityTypeId` | string | Entity to transform into |
-| `Duration` | float | Morph duration in seconds |
-
-#### Morph Abilities
-
-Different morphs grant unique movement abilities:
-
-| Form | Special Ability |
-|------|-----------------|
-| Frog | High jump, swim speed |
-| Mouse | Small hitbox, fit through gaps |
-| Pigeon | Flight, perch on ledges |
-| Dog | Fast run speed, tracking scent |
+The corresponding effect (`Server/Entity/Effects/Potion/Potion_Morph_Dog.json`) sets `ModelChange` (e.g. `"Corgi"`) and `Duration`. See [Effects & Stats](effects-stats.md#model-transformation).
 
 ---
 
@@ -558,34 +565,42 @@ Special-purpose potions for specific situations.
 
 | Potion | Quality | Effect |
 |--------|---------|--------|
-| `Potion_Antidote` | Common | Clears Poison effect |
-| `Potion_Antidote_Greater` | Uncommon | Clears all negative effects |
-| `Potion_Invisibility` | Rare | Invisibility for 30s |
-| `Potion_NightVision` | Uncommon | See in dark for 120s |
-| `Potion_Featherfall` | Uncommon | Slow falling for 60s |
-| `Potion_WaterBreathing` | Uncommon | Breathe underwater for 180s |
+| `Potion_Antidote` | Common | Clears `Poison_T1`/`T2`/`T3`, applies `Antidote` |
+| `Potion_Purify` | - | Cleansing effect |
+| `Potion_Poison` / `Potion_Poison_Minor` / `Potion_Poison_Large` | - | Applies poison |
+| `Potion_Mana` / `Potion_Mana_Small` / `Potion_Mana_Large` | - | Restores mana |
 
 #### Example: Potion_Antidote
 
+The antidote clears each poison tier in sequence (via chained `ClearEntityEffect.Next`), then applies the `Antidote` effect:
+
 ```json
 {
-  "Parent": "Potion_Template",
   "TranslationProperties": {
     "Name": "server.items.Potion_Antidote.name"
   },
   "Quality": "Common",
+  "Consumable": true,
+  "Interactions": {
+    "Secondary": "Root_Secondary_Consume_Potion"
+  },
   "InteractionVars": {
-    "RemoveEffect": {
-      "Interactions": [{
-        "Type": "RemoveEffect",
-        "EffectId": "Debuff_Poison"
-      }]
-    },
     "Effect": {
       "Interactions": [{
-        "Type": "ApplyEffect",
-        "EffectId": "Potion_Antidote_Immunity",
-        "Duration": 30.0
+        "Type": "ClearEntityEffect",
+        "EntityEffectId": "Poison_T1",
+        "Next": {
+          "Type": "ClearEntityEffect",
+          "EntityEffectId": "Poison_T2",
+          "Next": {
+            "Type": "ClearEntityEffect",
+            "EntityEffectId": "Poison_T3",
+            "Next": {
+              "Type": "ApplyEffect",
+              "EffectId": "Antidote"
+            }
+          }
+        }
       }]
     }
   }
@@ -596,19 +611,21 @@ Special-purpose potions for specific situations.
 
 ### Signature Potions
 
-Weapon-specific potions that boost signature ability damage.
+Potions that affect signature energy/charges.
 
-| Potion | Quality | Effect | Duration |
-|--------|---------|--------|----------|
-| `Potion_Signature_Damage` | Rare | +25% Signature Damage | 60s |
-| `Potion_Signature_Energy` | Rare | +50% Signature Energy Gain | 60s |
-| `Potion_Signature_Cooldown` | Rare | -30% Signature Cooldown | 60s |
+| Potion | EffectId Applied |
+|--------|------------------|
+| `Potion_Signature_Small` | Potion_Signature_Regen_Small |
+| `Potion_Signature_Lesser` | Potion_Signature_Regen_Lesser |
+| `Potion_Signature` | Potion_Signature_Regen |
+| `Potion_Signature_Greater` | Potion_Signature_Regen_Greater |
+| `Potion_Signature_Large` | Potion_Signature_Regen_Large |
 
 ---
 
 ### All Potion Variants
 
-Potion_Antidote, Potion_Antidote_Greater, Potion_Featherfall, Potion_Health, Potion_Health_Greater, Potion_Health_Supreme, Potion_Invisibility, Potion_Morph_Dog, Potion_Morph_Frog, Potion_Morph_Mouse, Potion_Morph_Pigeon, Potion_NightVision, Potion_Regen_Health, Potion_Regen_Health_Greater, Potion_Regen_Stamina, Potion_Regen_Stamina_Greater, Potion_Signature_Cooldown, Potion_Signature_Damage, Potion_Signature_Energy, Potion_Stamina, Potion_Stamina_Greater, Potion_Stamina_Supreme, Potion_WaterBreathing
+Potion_Antidote, Potion_Empty, Potion_Empty_Small, Potion_Empty_Large, Potion_Health_Small, Potion_Health_Lesser, Potion_Health, Potion_Health_Greater, Potion_Health_Large, Potion_Mana_Small, Potion_Mana, Potion_Mana_Large, Potion_Morph_Dog, Potion_Morph_Frog, Potion_Morph_Mouse, Potion_Morph_Pigeon, Potion_Poison_Minor, Potion_Poison, Potion_Poison_Large, Potion_Purify, Potion_Regen_Health_Small, Potion_Regen_Health, Potion_Regen_Health_Large, Potion_Regen_Mana_Small, Potion_Regen_Mana, Potion_Regen_Mana_Large, Potion_Regen_Stamina_Small, Potion_Regen_Stamina, Potion_Regen_Stamina_Large, Potion_Signature_Small, Potion_Signature_Lesser, Potion_Signature, Potion_Signature_Greater, Potion_Signature_Large, Potion_Stamina_Small, Potion_Stamina_Lesser, Potion_Stamina, Potion_Stamina_Greater, Potion_Stamina_Large
 
 ---
 
@@ -665,35 +682,24 @@ For instant stat modifications without buff effects:
 | `StatModifiers` | object | Stat ID to value mapping |
 | `ValueType` | string | `"Percent"` (0.30 = 30%) or `"Absolute"` |
 
-### ChargingInteraction (Food)
+### Consume_Charge (Food)
 
-Food items use charging for timed consumption:
+Food items handle timed consumption by extending a shared charge interaction through the `Consume_Charge` var rather than declaring charge fields inline. The parent (`Consume_Charge_Food_T1_Inner`) defines the charge behavior; the child only supplies effects such as the consume animation:
 
 ```json
 {
-  "Type": "ChargingInteraction",
-  "ChargeTime": 1.5,
-  "FailOnDamage": true,
-  "HorizontalSpeedMultiplier": 0.5,
-  "CompleteInteraction": {
-    "Type": "Sequence",
-    "Interactions": [
-      { "Type": "Replace", "Var": "Effect" },
-      {
-        "Type": "ModifyInventory",
-        "ItemToRemove": { "Self": true, "Quantity": 1 }
+  "Consume_Charge": {
+    "Interactions": [{
+      "Parent": "Consume_Charge_Food_T1_Inner",
+      "Effects": {
+        "ItemAnimationId": "Consume"
       }
-    ]
+    }]
   }
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `ChargeTime` | float | Seconds to complete consumption |
-| `FailOnDamage` | boolean | Cancel on taking damage |
-| `HorizontalSpeedMultiplier` | float | Movement speed while consuming (0.5 = 50%) |
-| `CompleteInteraction` | object | Interaction to run when charge completes |
+The food tier templates (`Consume_Charge_Food_T1` / `_T2` / `_T3`) compose this via `Type: "Serial"` interactions that `Replace` the `ConsumeSFX` and `Consume_Charge` vars with their defaults.
 
 ### ModifyInventory Interaction
 
@@ -709,25 +715,22 @@ Removes consumed item from inventory:
 }
 ```
 
-### RemoveEffect Interaction
+### RemoveEffect / ClearEntityEffect Interaction
 
-Clears debuffs (used by antidotes):
-
-```json
-{
-  "Type": "RemoveEffect",
-  "EffectId": "Debuff_Poison"
-}
-```
-
-For clearing multiple effects:
+Clears active effects. Antidotes use `ClearEntityEffect` keyed on `EntityEffectId`, chaining additional removals through `Next`:
 
 ```json
 {
-  "Type": "RemoveEffect",
-  "EffectTags": ["Debuff"]
+  "Type": "ClearEntityEffect",
+  "EntityEffectId": "Poison_T1",
+  "Next": {
+    "Type": "ClearEntityEffect",
+    "EntityEffectId": "Poison_T2"
+  }
 }
 ```
+
+Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "Type": "Simple" }`) so children can override it when they need to strip an effect on consumption.
 
 ---
 
@@ -747,10 +750,10 @@ For clearing multiple effects:
   "InteractionVars": {
     "Consume_Charge": {
       "Interactions": [{
-        "Parent": "Consumable_Eat_Charge",
-        "ChargeTime": 2.0,
-        "FailOnDamage": true,
-        "HorizontalSpeedMultiplier": 0.4
+        "Parent": "Consume_Charge_Food_T1_Inner",
+        "Effects": {
+          "ItemAnimationId": "Consume"
+        }
       }]
     },
     "Effect": {

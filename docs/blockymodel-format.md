@@ -48,7 +48,7 @@ Each node in the hierarchy can contain geometry and/or child nodes:
 
 ```json
 {
-  "id": 1,
+  "id": "1",
   "name": "Body",
   "position": {"x": 0.0, "y": 0.0, "z": 0.0},
   "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
@@ -61,7 +61,7 @@ Each node in the hierarchy can contain geometry and/or child nodes:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | integer | Yes | Unique identifier for the node within the model |
+| `id` | string | Yes | Unique identifier for the node within the model. Stored as a quoted string even when numeric (e.g. `"146"`) |
 | `name` | string | Yes | Human-readable name (referenced by animations) |
 | `position` | object | No | 3D position offset `{x, y, z}` relative to parent's mesh center (parent node position + parent shape offset) |
 | `orientation` | object | No | Quaternion rotation `{x, y, z, w}` |
@@ -137,6 +137,8 @@ Structural nodes without visible geometry. Used for grouping, attachment points,
   "type": "none"
 }
 ```
+
+> **Note:** `{"type": "none"}` is the minimal logical form. In practice, none-shapes exported by the asset editor still carry the full set of shape fields (`offset`, `stretch`, `settings`, `visible`, `doubleSided`, `shadingMode`, `unwrapMode`, `textureLayout`) just like a box — only `type` distinguishes them. All none-shapes in the shipped assets include these fields.
 
 ## Shape Properties
 
@@ -217,7 +219,7 @@ A basic cube model:
 {
   "nodes": [
     {
-      "id": 1,
+      "id": "1",
       "name": "Cube",
       "shape": {
         "type": "box",
@@ -247,12 +249,12 @@ A chest with a separate lid for animation:
 {
   "nodes": [
     {
-      "id": 1,
+      "id": "1",
       "name": "R-Attachment",
       "shape": {"type": "none"},
       "children": [
         {
-          "id": 2,
+          "id": "2",
           "name": "Base",
           "position": {"x": 0.0, "y": 0.0, "z": 0.0},
           "shape": {
@@ -264,7 +266,7 @@ A chest with a separate lid for animation:
           }
         },
         {
-          "id": 3,
+          "id": "3",
           "name": "Lid",
           "position": {"x": 0.0, "y": 0.625, "z": -0.4375},
           "shape": {
@@ -276,7 +278,7 @@ A chest with a separate lid for animation:
           }
         },
         {
-          "id": 4,
+          "id": "4",
           "name": "Latch",
           "position": {"x": 0.0, "y": 0.375, "z": 0.5},
           "shape": {
@@ -301,12 +303,12 @@ A simple grass or flower using crossed quads:
 {
   "nodes": [
     {
-      "id": 1,
+      "id": "1",
       "name": "Plant",
       "shape": {"type": "none"},
       "children": [
         {
-          "id": 2,
+          "id": "2",
           "name": "Quad1",
           "orientation": {"x": 0, "y": 0.383, "z": 0, "w": 0.924},
           "shape": {
@@ -320,7 +322,7 @@ A simple grass or flower using crossed quads:
           }
         },
         {
-          "id": 3,
+          "id": "3",
           "name": "Quad2",
           "orientation": {"x": 0, "y": -0.383, "z": 0, "w": 0.924},
           "shape": {
@@ -347,12 +349,12 @@ A door model with nodes named for animation compatibility:
 {
   "nodes": [
     {
-      "id": 1,
+      "id": "1",
       "name": "R-Attachment",
       "shape": {"type": "none"},
       "children": [
         {
-          "id": 2,
+          "id": "2",
           "name": "Frame",
           "shape": {
             "type": "box",
@@ -363,7 +365,7 @@ A door model with nodes named for animation compatibility:
           }
         },
         {
-          "id": 3,
+          "id": "3",
           "name": "Door",
           "position": {"x": -0.5, "y": 0.0, "z": 0.0},
           "shape": {

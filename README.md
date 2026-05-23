@@ -142,6 +142,14 @@ Copy the built JAR from `build/libs/` to the mods folder:
 - **Windows:** `%APPDATA%\Hytale\UserData\Mods\`
 - **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`
 
+## Maintenance
+
+The [maintenance/](./maintenance/) directory holds maintainer-only tooling — a
+documentation regression checker and the asset baseline used to detect game-build
+drift. It is not needed to read the docs or build the examples; see
+[maintenance/README.md](./maintenance/README.md) if you're keeping the repo in
+sync with a new Hytale build.
+
 ## License
 
 MIT License - see [LICENSE](./LICENSE) for details.

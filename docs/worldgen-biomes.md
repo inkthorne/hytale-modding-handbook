@@ -1,851 +1,352 @@
 # Biome System
 
-Biomes define the visual and gameplay characteristics of terrain within zones. Each biome specifies terrain layers, surface covers, prefab placement, water generation, environment settings, and block tinting. Biomes use a container-based architecture where different aspects of generation are organized into specialized containers.
+A biome is a node-graph file under `Server/HytaleGenerator/Biomes/`. It defines the
+terrain heightfield, the materials that fill solid and empty space, optional scattered
+props, and optional environment and tint providers. Biomes are referenced by **name**
+from world structures (see [worldgen-zones.md](worldgen-zones.md)).
+
+See [worldgen.md](worldgen.md) for the node-graph vocabulary (`Type`, `Inputs`, `Skip`,
+`ExportAs`, `Imported`, noise parameters) that this document builds on.
 
 ## Quick Navigation
 
 | Section | Description |
 |---------|-------------|
-| [Biome Types](#biome-types) | TileBiome vs CustomBiome |
-| [LayerContainer](#layercontainer) | Terrain layers (see also [worldgen-terrain.md](worldgen-terrain.md)) |
-| [CoverContainer](#covercontainer) | Surface vegetation and debris |
-| [PrefabContainer](#prefabcontainer) | Structure placement |
-| [WaterContainer](#watercontainer) | Water and fluid generation |
-| [TintContainer](#tintcontainer) | Block color variations |
-| [EnvironmentContainer](#environmentcontainer) | Sky, lighting, weather |
-| [FadeContainer](#fadecontainer) | Biome transition effects |
-| [BiomeInterpolation](#biomeinterpolation) | Smooth biome blending |
+| [File Location & Naming](#file-location--naming) | Where biome files live |
+| [Top-Level Structure](#top-level-structure) | The keys every biome file uses |
+| [Terrain](#terrain) | The heightfield density graph (`DAOTerrain`) |
+| [MaterialProvider](#materialprovider) | Solid vs. empty block placement (`Solidity`) |
+| [Props](#props) | Scattered props / prefabs |
+| [EnvironmentProvider](#environmentprovider) | Sky / ambient environment |
+| [TintProvider](#tintprovider) | Block color tint |
+| [Minimal Biome](#minimal-biome-example) | Smallest complete example |
 
 ---
 
-## Biome Types
-
-Hytale has two biome implementations:
-
-### Class Hierarchy
+## File Location & Naming
 
 ```
-Biome (abstract)
-├── TileBiome      - Tile-based weighted selection
-└── CustomBiome    - Procedural/custom generation
+Server/HytaleGenerator/Biomes/
+├── Plains1/        Plains1_Oak.json, Plains1_River.json, Plains1_Shore.json, ...
+├── Desert1/        Desert1_Oasis.json, Desert1_River.json, ...
+├── Taiga1/         Taiga1_Redwood.json, Taiga1_Mountains.json, ...
+├── Volcanic1/      Volcanic1_Jungle.json, Volcanic1_Caldera.json, ...
+├── Ocean1/         Oceans.json
+├── Examples/       single-concept demo graphs
+├── Experimental/   work-in-progress biomes
+├── Generative/     generative structure biomes
+├── Default_Flat/   Default_Flat.json
+└── Void.json, Void_Buffer.json, Basic.json, ...
 ```
 
-### TileBiome
-
-Standard biome type using weighted random selection for covers and prefabs:
-
-```json
-{
-  "Type": "TileBiome",
-  "Id": "Biome_Forest",
-  "LayerContainer": { ... },
-  "CoverContainer": { ... },
-  "PrefabContainer": { ... }
-}
-```
-
-### CustomBiome
-
-Procedural biome with custom generation logic:
-
-```json
-{
-  "Type": "CustomBiome",
-  "Id": "Biome_Custom_Terrain",
-  "GeneratorClass": "com.example.CustomBiomeGenerator",
-  "Parameters": {
-    "NoiseScale": 0.02,
-    "Amplitude": 30
-  }
-}
-```
-
-### Common Properties
-
-All biome types share these base properties:
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `Type` | string | No | `"TileBiome"` (default) or `"CustomBiome"` |
-| `Id` | string | Yes | Unique biome identifier |
-| `Parent` | string | No | Parent biome to inherit from |
-| `LayerContainer` | object | No | Terrain layer configuration |
-| `CoverContainer` | object | No | Surface cover configuration |
-| `PrefabContainer` | object | No | Prefab placement configuration |
-| `WaterContainer` | object | No | Water generation configuration |
-| `TintContainer` | object | No | Block tint configuration |
-| `EnvironmentContainer` | object | No | Environment settings |
-| `FadeContainer` | object | No | Transition configuration |
-
-### File Location
-
-Biome files are stored in `Server/WorldGen/Biome/`:
-
-```
-Server/WorldGen/Biome/
-├── Zone1/
-│   ├── Biome_Forest.json
-│   ├── Biome_Meadow.json
-│   └── Biome_River.json
-├── Zone2/
-│   ├── Biome_Desert.json
-│   └── Biome_Oasis.json
-└── Common/
-    └── Biome_Water.json
-```
+The file's `Name` field is the display name; biomes are wired together by the **file
+name** (without extension), which is what a world structure's `Biome` entries reference
+(e.g. a structure entry `"Biome": "Plains1_Oak"` resolves to `Plains1/Plains1_Oak.json`).
 
 ---
 
-## LayerContainer
+## Top-Level Structure
 
-Controls terrain generation through filling blocks and layered surfaces.
+Biome files use these top-level keys (counts reflect how common each is across the
+shipped biomes):
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Filling` | string | Block type for base terrain fill |
-| `StaticLayers` | array | Fixed-height terrain layers |
-| `DynamicLayers` | array | Noise-based variable layers |
+| Key | Required | Description |
+|-----|----------|-------------|
+| `Name` | yes | Display name |
+| `Terrain` | yes | A `DAOTerrain` node wrapping a `Density` graph — the heightfield |
+| `MaterialProvider` | yes | A material graph (usually `Solidity`) choosing blocks |
+| `Density` | sometimes | A shared density graph (some biomes export terrain fields here) |
+| `Props` | optional | Array of prop-placement entries |
+| `EnvironmentProvider` | optional | Sky/ambient environment selection |
+| `TintProvider` | optional | Block color tint selection |
 
-### Basic Example
+> There is **no** `TileBiome` / `CustomBiome` distinction, no `LayerContainer`,
+> `CoverContainer`, `PrefabContainer`, `WaterContainer`, `FadeContainer`,
+> `EnvironmentContainer`, or `TintContainer`. Terrain and materials are node graphs;
+> water is just a fluid `Material` placed by the `Empty` branch of the material provider.
 
-```json
-{
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      { "Block": "Dirt", "Height": 4 },
-      { "Block": "Gravel", "Height": 1 }
-    ],
-    "DynamicLayers": [
-      { "Block": "Grass", "MinHeight": 1, "MaxHeight": 1 }
-    ]
-  }
-}
-```
-
-> **See also:** [Terrain Layers](worldgen-terrain.md) for complete layer documentation
+A biome file may be serialized in one of two equivalent styles (see
+[worldgen.md](worldgen.md#the-node-graph-model)): with `$NodeId` plus a
+`$NodeEditorMetadata` block, or with `$Title` / `$Position` editor keys. The
+generation-relevant content is identical.
 
 ---
 
-## CoverContainer
+## Terrain
 
-Defines surface vegetation, debris, and decorations placed on top of terrain.
+`Terrain` is a node of `Type` `DAOTerrain` whose `Density` child is a density graph that
+produces the heightfield. The root of that graph is typically a combiner
+(`Min`/`Max`/`Sum`/`Mix`) over noise and curve-mapped base-height nodes.
 
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Covers` | array | List of cover configurations |
-| `GlobalDensityModifier` | float | Multiplier for all cover densities |
-
-### Cover Entry Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Block` | string | - | Block type to place |
-| `Density` | float | 0.1 | Spawn density (0.0-1.0) |
-| `Conditions` | object | - | Placement conditions |
-| `ClusterSize` | int | 1 | Number of blocks per cluster |
-| `ClusterSpread` | int | 0 | Spread radius for clusters |
-| `YOffset` | int | 1 | Vertical offset from surface |
-| `RequiredBase` | array | - | Block types that can support this cover |
-| `Weight` | float | 1.0 | Selection weight when multiple covers compete |
-
-### Condition Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `SlopeMin` | float | Minimum terrain slope (degrees) |
-| `SlopeMax` | float | Maximum terrain slope (degrees) |
-| `HeightMin` | int | Minimum world height |
-| `HeightMax` | int | Maximum world height |
-| `LightMin` | int | Minimum light level (0-15) |
-| `LightMax` | int | Maximum light level (0-15) |
-| `NoiseMin` | float | Minimum noise value |
-| `NoiseMax` | float | Maximum noise value |
-| `RequiresSky` | boolean | Must have sky access |
-| `AvoidWater` | boolean | Cannot be near water |
-
-### Example: Forest Floor
+A simple terrain (from `Biomes/Examples/Example_CellNoise2D.json`) — cellular noise summed
+with a base-height curve:
 
 ```json
-{
-  "CoverContainer": {
-    "GlobalDensityModifier": 1.0,
-    "Covers": [
+"Terrain": {
+  "Type": "DAOTerrain",
+  "Density": {
+    "Type": "Sum",
+    "Skip": false,
+    "Inputs": [
       {
-        "Block": "Grass_Tall",
-        "Density": 0.35,
-        "Conditions": {
-          "SlopeMax": 30,
-          "RequiresSky": true
-        },
-        "RequiredBase": ["Grass"]
+        "Type": "CellNoise2D",
+        "ScaleX": 150,
+        "ScaleZ": 150,
+        "Jitter": 0.3,
+        "CellType": "Distance2Div",
+        "Octaves": 1,
+        "Seed": "A"
       },
       {
-        "Block": "Flower_Daisy",
-        "Density": 0.05,
-        "Conditions": {
-          "SlopeMax": 20,
-          "LightMin": 10
+        "Type": "CurveMapper",
+        "Curve": {
+          "Type": "Manual",
+          "Points": [
+            { "In": 0,  "Out": 1 },
+            { "In": 50, "Out": -1 }
+          ]
         },
-        "ClusterSize": 3,
-        "ClusterSpread": 2
-      },
-      {
-        "Block": "Mushroom_Red",
-        "Density": 0.02,
-        "Conditions": {
-          "LightMax": 8,
-          "RequiresSky": false
-        },
-        "RequiredBase": ["Grass", "Dirt", "Moss"]
-      },
-      {
-        "Block": "Fern",
-        "Density": 0.15,
-        "Conditions": {
-          "SlopeMax": 25,
-          "HeightMin": 65,
-          "HeightMax": 100
-        }
-      },
-      {
-        "Block": "Rock_Small",
-        "Density": 0.03,
-        "Conditions": {
-          "SlopeMin": 15,
-          "SlopeMax": 45
-        },
-        "Weight": 0.5
+        "Inputs": [
+          {
+            "Type": "BaseHeight",
+            "BaseHeightName": "Base",
+            "Distance": true
+          }
+        ]
       }
     ]
   }
 }
 ```
 
-### Example: Desert Surface
+Production biomes (e.g. `Plains1/Plains1_Oak.json`) nest many `Min`/`Max`/`Sum`/`Mix`,
+`Normalizer`, `Pow`, `Cache`, and `YOverride` nodes over several `SimplexNoise2D`
+sources, and pull in shared fields with `Imported` (e.g. a cave terrain field). A node can
+publish an intermediate result with `ExportAs` (e.g. `"ExportAs": "Plains1_Oak_Terrain_Field"`)
+so the material provider and prop graphs can sample the same field by `Imported` name.
 
-```json
-{
-  "CoverContainer": {
-    "Covers": [
-      {
-        "Block": "Cactus_Small",
-        "Density": 0.01,
-        "Conditions": {
-          "SlopeMax": 15
-        },
-        "RequiredBase": ["Sand"]
-      },
-      {
-        "Block": "Dead_Bush",
-        "Density": 0.02,
-        "Conditions": {
-          "SlopeMax": 25
-        }
-      },
-      {
-        "Block": "Bone_Scatter",
-        "Density": 0.005,
-        "ClusterSize": 2,
-        "ClusterSpread": 1
-      }
-    ]
-  }
-}
-```
-
-### Cluster Generation
-
-When `ClusterSize` > 1, covers spawn in groups:
-
-```
-ClusterSize: 5, ClusterSpread: 2
-
-        X
-      X X X
-        X
-
-  5 blocks spread within 2-block radius
-```
+`BaseHeight` references a named world constant defined by the world structure's
+`Framework` (commonly `"Base"`); see [worldgen-zones.md](worldgen-zones.md#framework).
 
 ---
 
-## PrefabContainer
+## MaterialProvider
 
-Controls placement of structures, trees, rocks, and other prefabs within the biome.
+`MaterialProvider` decides which block id occupies each cell. Terrain biomes use
+`Type` `Solidity`, which has two required branches:
 
-### Properties
+- `Solid` — materials placed where terrain is solid.
+- `Empty` — materials placed in open space (air, and any fluids such as water).
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Prefabs` | array | List of prefab placement rules |
-| `GlobalDensityModifier` | float | Multiplier for all prefab densities |
+A `Material` leaf carries a block id: `{"Solid": "Soil_Dirt"}`, `{"Solid": "Rock_Stone"}`,
+`{"Solid": "Empty"}`, or a fluid `{"Fluid": "Water_Source"}`.
 
-### Prefab Entry Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `PrefabList` | string | - | Reference to PrefabList file |
-| `PrefabId` | string | - | Single prefab file reference |
-| `Density` | float | 0.01 | Spawn density (0.0-1.0) |
-| `MinSpacing` | int | 4 | Minimum blocks between prefabs |
-| `MaxSpacing` | int | - | Maximum blocks between prefabs |
-| `Weight` | float | 1.0 | Selection weight |
-| `Conditions` | object | - | Placement conditions |
-| `FitHeightmap` | boolean | true | Adjust prefab to terrain height |
-| `AllowPartialPlacement` | boolean | false | Place even if partially blocked |
-| `RotationMode` | string | `"Random"` | Rotation selection mode |
-
-### Rotation Modes
-
-| Mode | Description |
-|------|-------------|
-| `"None"` | No rotation (always north-facing) |
-| `"Random"` | Random 90° rotation |
-| `"AlignToSlope"` | Rotate to match terrain slope |
-| `"FaceCenter"` | Rotate toward biome center |
-
-### Condition Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `SlopeMax` | float | Maximum terrain slope |
-| `HeightRange` | [min, max] | Valid height range |
-| `MinFlatArea` | int | Required flat area (blocks) |
-| `AvoidWater` | boolean | Cannot touch water |
-| `AvoidEdge` | int | Distance from biome edge |
-| `RequiredBiomes` | array | Adjacent biomes required |
-
-### Example: Forest Trees and Rocks
+Minimal solidity provider (from `Biomes/Examples/Example_CellNoise2D.json`):
 
 ```json
-{
-  "PrefabContainer": {
-    "GlobalDensityModifier": 1.0,
-    "Prefabs": [
+"MaterialProvider": {
+  "Type": "Solidity",
+  "Solid": {
+    "Type": "Queue",
+    "Queue": [
       {
-        "PrefabList": "Trees_Oak",
-        "Density": 0.04,
-        "MinSpacing": 5,
-        "Conditions": {
-          "SlopeMax": 25,
-          "MinFlatArea": 3
-        },
-        "RotationMode": "Random"
-      },
-      {
-        "PrefabList": "Trees_Pine",
-        "Density": 0.02,
-        "MinSpacing": 6,
-        "Conditions": {
-          "HeightRange": [80, 150],
-          "SlopeMax": 30
-        }
-      },
-      {
-        "PrefabList": "Rocks_Forest",
-        "Density": 0.015,
-        "MinSpacing": 8,
-        "Conditions": {
-          "SlopeMax": 40
-        },
-        "FitHeightmap": true
-      },
-      {
-        "PrefabId": "Structures/Forest/Fallen_Log",
-        "Density": 0.005,
-        "MinSpacing": 15,
-        "RotationMode": "Random"
+        "Type": "Constant",
+        "Material": { "Solid": "Soil_Dirt" }
       }
     ]
+  },
+  "Empty": {
+    "$Comment": "REQUIRED",
+    "Type": "Constant",
+    "Material": { "Solid": "Empty" }
   }
 }
 ```
 
-### PrefabList Reference
+### Provider node types
 
-PrefabLists are defined in `Server/PrefabList/`:
+| Type | Key fields | Purpose |
+|------|-----------|---------|
+| `Constant` | `Material` | Always place one block id |
+| `Queue` | `Queue[]` | Try child providers in order; first that matches wins |
+| `SimpleHorizontal` | `TopY`, `TopBaseHeight`, `BottomY`, `BottomBaseHeight`, `Material` | Apply a provider only within a Y band relative to a named base height |
+| `SpaceAndDepth` | `LayerContext`, `MaxExpectedDepth`, `Layers[]` | Stack materials by depth into the floor |
+| `FieldFunction` | `FieldFunction`, `Delimiters[]` | Choose material by where a sampled density falls (`From`/`To`) |
+
+`SpaceAndDepth` layers are `ConstantThickness` entries (`Thickness` + `Material`), and may
+carry a `Condition` (e.g. `GreaterThanCondition` on `SPACE_ABOVE_FLOOR`). `LayerContext`
+observed value: `"DEPTH_INTO_FLOOR"`.
+
+Surface layering example — grass on top, dirt below (from `Default_Flat/Default_Flat.json`):
 
 ```json
-{
-  "Prefabs": [
+"Type": "SpaceAndDepth",
+"LayerContext": "DEPTH_INTO_FLOOR",
+"MaxExpectedDepth": 4,
+"Layers": [
+  {
+    "Type": "ConstantThickness",
+    "Thickness": 1,
+    "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Grass" } }
+  },
+  {
+    "Type": "ConstantThickness",
+    "Thickness": 3,
+    "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt" } }
+  }
+]
+```
+
+Water is placed by the `Empty` branch as a fluid material within a Y band — e.g.
+`Plains1_Oak`'s empty queue places `{"Fluid": "Water_Source"}` between two `Base`-relative
+Y values, then falls through to `{"Solid": "Empty"}`.
+
+---
+
+## Props
+
+`Props` is an array of placement entries. Each entry pairs a set of `Positions` with the
+`Assignments` to place there, and may carry `Skip` and a `Runtime` ordering value.
+
+```json
+"Props": [
+  {
+    "Skip": false,
+    "Runtime": 0,
+    "Positions": {
+      "Type": "Mesh2D",
+      "PointsY": 0,
+      "PointGenerator": {
+        "Type": "Mesh",
+        "Jitter": 0.4,
+        "ScaleX": 20, "ScaleY": 20, "ScaleZ": 20,
+        "Seed": "A"
+      }
+    },
+    "Assignments": {
+      "Type": "Imported",
+      "Name": "Plains1_Oak_Pillars"
+    }
+  }
+]
+```
+
+- `Positions` defines candidate points. `Mesh2D` lays out a jittered grid via its
+  `PointGenerator` (`Mesh`, with `Jitter`, `ScaleX/Y/Z`, `Seed`). An `Occurrence` node may
+  wrap positions to gate them by a probability `FieldFunction`.
+- `Assignments` decides what to place. Most biomes use `{"Type":"Imported","Name":"..."}`
+  to reference a graph in `Assignments/` (see
+  [worldgen-zones.md](worldgen-zones.md) and the assignment files such as
+  `Assignments/Plains1/Plains1_Oak_Trees.json`).
+
+Assignment graphs themselves use `FieldFunction` (mapping a density to placement via
+`Delimiters` with `Min`/`Max`), `Weighted` (weighted random among `WeightedAssignments`),
+`Cluster` (grouped placement with a `DistanceCurve`), and `Prefab` nodes that name prefab
+paths via `WeightedPrefabPaths` (`Path`, `Weight`).
+
+---
+
+## EnvironmentProvider
+
+Selects the ambient environment for the biome. Two forms occur:
+
+**Constant** — a single named environment (the common case):
+
+```json
+"EnvironmentProvider": {
+  "Type": "Constant",
+  "Environment": "Env_Zone1_Plains"
+}
+```
+
+Observed environment names include `Env_Zone1_Plains`, `Env_Zone1_Shores`, `Env_Zone0`,
+`Env_Void`, `Env_Default_Flat`, `Env_Zone3_Glacial_Henges`.
+
+**DensityDelimited** — chooses among environments by where a `Density` value falls,
+using `Delimiters` each carrying an `Environment` and a `Range`. Used where the
+environment should vary within the biome (e.g. `Volcanic1/Volcanic1_Jungle.json`).
+
+---
+
+## TintProvider
+
+Selects a block tint color. Two forms occur:
+
+**Constant** — one color for the whole biome (from `Void.json`):
+
+```json
+"TintProvider": {
+  "Type": "Constant",
+  "Color": "#5b9e28"
+}
+```
+
+**DensityDelimited** — picks a tint per `Range` of a sampled `Density`. Each `Delimiter`
+holds a `Tint` (`{"Type":"Constant","Color":"#..."}`) and a `Range`
+(`MinInclusive` / `MaxExclusive`). Example from `Volcanic1/Volcanic1_Jungle.json`:
+
+```json
+"TintProvider": {
+  "Type": "DensityDelimited",
+  "Density": {
+    "Type": "SimplexNoise2D",
+    "Lacunarity": 5, "Persistence": 0.2, "Octaves": 2, "Scale": 100, "Seed": "tints"
+  },
+  "Delimiters": [
     {
-      "RootDirectory": "Asset",
-      "Path": "Trees/Oak/",
-      "Recursive": true
+      "Tint": { "Type": "Constant", "Color": "#508A29" },
+      "Range": { "MinInclusive": -1, "MaxExclusive": -0.33 }
+    },
+    {
+      "Tint": { "Type": "Constant", "Color": "#598D26" },
+      "Range": { "MinInclusive": -0.33, "MaxExclusive": 0.33 }
+    },
+    {
+      "Tint": { "Type": "Constant", "Color": "#5F8F26" },
+      "Range": { "MinInclusive": 0.33, "MaxExclusive": 1 }
     }
   ]
 }
 ```
 
-> **See also:** [Prefab API](prefabs.md#prefablist-files)
-
 ---
 
-## WaterContainer
+## Minimal Biome Example
 
-Controls water body generation within the biome.
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Enabled` | boolean | true | Enable water generation |
-| `FluidType` | string | `"Water"` | Fluid type to generate |
-| `SurfaceLevel` | int | 63 | Default water surface height |
-| `DynamicLevel` | boolean | false | Adjust level to terrain |
-| `LevelNoise` | object | - | Noise for variable water levels |
-| `ShoreBlend` | int | 3 | Shore transition distance |
-| `DepthTint` | boolean | true | Apply depth-based tinting |
-
-### Level Noise Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Scale` | float | Noise frequency |
-| `Amplitude` | int | Height variation range |
-| `Offset` | int | Base level offset |
-
-### Example: Standard Lake
+The smallest complete shape — flat-ish terrain, dirt fill, required empty branch:
 
 ```json
 {
-  "WaterContainer": {
-    "Enabled": true,
-    "FluidType": "Water",
-    "SurfaceLevel": 63,
-    "ShoreBlend": 4,
-    "DepthTint": true
-  }
-}
-```
-
-### Example: Swamp with Variable Water
-
-```json
-{
-  "WaterContainer": {
-    "Enabled": true,
-    "FluidType": "Water_Murky",
-    "DynamicLevel": true,
-    "LevelNoise": {
-      "Scale": 0.02,
-      "Amplitude": 3,
-      "Offset": 62
+  "Name": "Hills",
+  "Terrain": {
+    "Type": "DAOTerrain",
+    "Density": {
+      "Type": "Constant",
+      "Value": 0
+    }
+  },
+  "MaterialProvider": {
+    "Type": "Solidity",
+    "Solid": {
+      "Type": "Constant",
+      "Material": { "Solid": "Soil_Dirt" }
     },
-    "ShoreBlend": 6
-  }
-}
-```
-
-### Example: Lava Lake
-
-```json
-{
-  "WaterContainer": {
-    "Enabled": true,
-    "FluidType": "Lava",
-    "SurfaceLevel": 15,
-    "ShoreBlend": 1,
-    "DepthTint": false
-  }
-}
-```
-
----
-
-## TintContainer
-
-Applies color variations to blocks based on biome.
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Tints` | array | Block tint configurations |
-| `GlobalTint` | string | Hex color applied to all tintable blocks |
-
-### Tint Entry Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Block` | string | Block type to tint |
-| `Color` | string | Hex color value |
-| `Noise` | object | Optional noise for variation |
-| `BlendMode` | string | `"Multiply"`, `"Overlay"`, `"Replace"` |
-
-### Example: Autumn Forest Tints
-
-```json
-{
-  "TintContainer": {
-    "Tints": [
-      {
-        "Block": "Grass",
-        "Color": "#8B7355",
-        "BlendMode": "Multiply"
-      },
-      {
-        "Block": "Leaves_Oak",
-        "Color": "#FF6B35",
-        "Noise": {
-          "Scale": 0.1,
-          "Colors": ["#FF6B35", "#FFB347", "#FF4500"]
-        }
-      },
-      {
-        "Block": "Leaves_Maple",
-        "Color": "#DC143C"
-      }
-    ]
-  }
-}
-```
-
-### Example: Snowy Biome Tints
-
-```json
-{
-  "TintContainer": {
-    "GlobalTint": "#E8E8E8",
-    "Tints": [
-      {
-        "Block": "Grass",
-        "Color": "#FFFFFF",
-        "BlendMode": "Replace"
-      }
-    ]
-  }
-}
-```
-
----
-
-## EnvironmentContainer
-
-Controls sky, lighting, fog, and weather settings for the biome.
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `EnvironmentId` | string | Reference to environment preset |
-| `SkyColor` | string | Override sky color (hex) |
-| `FogColor` | string | Override fog color (hex) |
-| `FogDensity` | float | Fog density (0.0-1.0) |
-| `AmbientLight` | float | Ambient light level (0.0-1.0) |
-| `SunIntensity` | float | Sun brightness multiplier |
-| `Weather` | object | Weather configuration |
-
-### Weather Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Type` | string | `"Clear"`, `"Rain"`, `"Snow"`, `"Storm"` |
-| `Intensity` | float | Weather intensity (0.0-1.0) |
-| `Frequency` | float | How often weather occurs |
-| `Duration` | object | Duration range |
-
-### Example: Mystical Forest
-
-```json
-{
-  "EnvironmentContainer": {
-    "EnvironmentId": "Environment_Forest_Mystical",
-    "FogColor": "#4A6741",
-    "FogDensity": 0.3,
-    "AmbientLight": 0.7,
-    "Weather": {
-      "Type": "Rain",
-      "Frequency": 0.3,
-      "Duration": {
-        "Min": 300,
-        "Max": 900
-      }
+    "Empty": {
+      "$Comment": "REQUIRED",
+      "Type": "Constant",
+      "Material": { "Solid": "Empty" }
     }
   }
 }
 ```
 
-### Example: Desert Environment
-
-```json
-{
-  "EnvironmentContainer": {
-    "EnvironmentId": "Environment_Desert",
-    "SkyColor": "#87CEEB",
-    "FogColor": "#F5DEB3",
-    "FogDensity": 0.1,
-    "SunIntensity": 1.3,
-    "Weather": {
-      "Type": "Clear",
-      "Frequency": 0.95
-    }
-  }
-}
-```
-
----
-
-## FadeContainer
-
-Controls visual transitions when moving between biomes.
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Enabled` | boolean | true | Enable fade transitions |
-| `Distance` | int | 16 | Fade distance in blocks |
-| `FadeType` | string | `"Linear"` | Fade curve type |
-| `AffectsLayers` | boolean | true | Fade terrain layers |
-| `AffectsCovers` | boolean | true | Fade surface covers |
-| `AffectsTints` | boolean | true | Fade block tints |
-
-### Fade Types
-
-| Type | Description |
-|------|-------------|
-| `"Linear"` | Constant fade rate |
-| `"Smooth"` | Smooth ease in/out |
-| `"Sharp"` | Abrupt near boundary |
-
-### Example
-
-```json
-{
-  "FadeContainer": {
-    "Enabled": true,
-    "Distance": 24,
-    "FadeType": "Smooth",
-    "AffectsLayers": true,
-    "AffectsCovers": true,
-    "AffectsTints": true
-  }
-}
-```
-
----
-
-## BiomeInterpolation
-
-When multiple biomes meet, `BiomeInterpolation` blends their properties for smooth transitions.
-
-### How Interpolation Works
-
-At positions near biome boundaries, the world generator samples multiple biomes and blends their outputs:
-
-```
-Biome A ──────┬────────────────┬────── Biome B
-              │    Transition   │
-         100% A │ ← Blended → │ 100% B
-
-Position weights:
-  - Near A: [A: 0.9, B: 0.1]
-  - Middle: [A: 0.5, B: 0.5]
-  - Near B: [A: 0.1, B: 0.9]
-```
-
-### Interpolated Properties
-
-| Property | Interpolation Method |
-|----------|---------------------|
-| Terrain height | Weighted average |
-| Layer selection | Weighted random |
-| Cover density | Weighted probability |
-| Prefab placement | Nearest biome wins |
-| Tint colors | Color blending |
-| Water level | Weighted average |
-
-### Java Integration
-
-```java
-// BiomeInterpolation provides blending weights
-public class BiomeInterpolation {
-    // Get all contributing biomes at position
-    public List<BiomeWeight> getBiomesAt(int x, int z);
-
-    // Get primary biome (highest weight)
-    public Biome getPrimaryBiome(int x, int z);
-
-    // Get interpolated value
-    public float getInterpolatedHeight(int x, int z);
-
-    // Check if position is in transition zone
-    public boolean isInTransition(int x, int z);
-}
-
-// BiomeWeight holds a biome and its contribution weight
-public record BiomeWeight(Biome biome, float weight) {}
-```
-
-### Interpolation Example
-
-```java
-BiomeInterpolation interp = worldGen.getBiomeInterpolation();
-
-// At transition between Forest and Desert
-List<BiomeWeight> weights = interp.getBiomesAt(100, 200);
-// weights = [
-//   BiomeWeight(Biome_Forest, 0.65),
-//   BiomeWeight(Biome_Desert, 0.35)
-// ]
-
-// Terrain layer selection uses weighted random:
-// 65% chance: select from Forest layers
-// 35% chance: select from Desert layers
-
-// Tint color blends:
-// finalColor = Forest.tint * 0.65 + Desert.tint * 0.35
-```
-
----
-
-## Complete Biome Example
-
-A full biome definition with all containers:
-
-```json
-{
-  "Type": "TileBiome",
-  "Id": "Biome_Enchanted_Forest",
-
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      { "Block": "Dirt", "Height": 5 },
-      { "Block": "Dirt_Rich", "Height": 2 }
-    ],
-    "DynamicLayers": [
-      {
-        "Block": "Grass_Enchanted",
-        "MinHeight": 1,
-        "MaxHeight": 1
-      }
-    ]
-  },
-
-  "CoverContainer": {
-    "GlobalDensityModifier": 1.2,
-    "Covers": [
-      {
-        "Block": "Grass_Tall_Glowing",
-        "Density": 0.25,
-        "Conditions": {
-          "SlopeMax": 25,
-          "RequiresSky": true
-        }
-      },
-      {
-        "Block": "Flower_Luminous",
-        "Density": 0.08,
-        "ClusterSize": 4,
-        "ClusterSpread": 2,
-        "Conditions": {
-          "SlopeMax": 20
-        }
-      },
-      {
-        "Block": "Mushroom_Glowing",
-        "Density": 0.04,
-        "Conditions": {
-          "LightMax": 10
-        }
-      },
-      {
-        "Block": "Crystal_Small",
-        "Density": 0.01,
-        "Conditions": {
-          "SlopeMin": 10,
-          "SlopeMax": 40
-        }
-      }
-    ]
-  },
-
-  "PrefabContainer": {
-    "Prefabs": [
-      {
-        "PrefabList": "Trees_Enchanted",
-        "Density": 0.05,
-        "MinSpacing": 6,
-        "Conditions": {
-          "SlopeMax": 20,
-          "MinFlatArea": 4
-        }
-      },
-      {
-        "PrefabList": "Rocks_Crystal",
-        "Density": 0.01,
-        "MinSpacing": 12
-      },
-      {
-        "PrefabId": "Structures/Forest/Fairy_Ring",
-        "Density": 0.002,
-        "MinSpacing": 50,
-        "Conditions": {
-          "MinFlatArea": 8
-        }
-      }
-    ]
-  },
-
-  "WaterContainer": {
-    "Enabled": true,
-    "FluidType": "Water_Clear",
-    "SurfaceLevel": 63,
-    "ShoreBlend": 5,
-    "DepthTint": true
-  },
-
-  "TintContainer": {
-    "Tints": [
-      {
-        "Block": "Grass_Enchanted",
-        "Color": "#00FF7F",
-        "BlendMode": "Multiply"
-      },
-      {
-        "Block": "Leaves_Magic",
-        "Noise": {
-          "Scale": 0.15,
-          "Colors": ["#7FFFD4", "#00CED1", "#48D1CC"]
-        }
-      }
-    ]
-  },
-
-  "EnvironmentContainer": {
-    "EnvironmentId": "Environment_Enchanted",
-    "FogColor": "#E0FFFF",
-    "FogDensity": 0.15,
-    "AmbientLight": 0.85,
-    "Weather": {
-      "Type": "Clear",
-      "Frequency": 0.9
-    }
-  },
-
-  "FadeContainer": {
-    "Enabled": true,
-    "Distance": 32,
-    "FadeType": "Smooth",
-    "AffectsLayers": true,
-    "AffectsCovers": true,
-    "AffectsTints": true
-  }
-}
-```
+(`Void.json` is essentially this with a `Constant` density of `0`, an `Empty` material,
+and a `Constant` environment/tint.)
 
 ---
 
 ## Related Documentation
 
-- [World Generation Overview](worldgen.md) - Pipeline and priority system
-- [Zones](worldgen-zones.md) - Zone system and biome distribution
-- [Terrain Layers](worldgen-terrain.md) - Complete layer documentation
-- [Prefab API](prefabs.md) - Prefab loading and placement
-- [Block System](blocks.md) - Block types and properties
-- [Fluids](fluids.md) - Fluid types and behavior
+- [World Generation Overview](worldgen.md) — node-graph model and asset layout
+- [Zones / World Structures](worldgen-zones.md) — how biomes are assigned across the world
+- [Block System](blocks.md) — block ids used as materials

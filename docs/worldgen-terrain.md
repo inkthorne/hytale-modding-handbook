@@ -1,712 +1,367 @@
-# Terrain Layer System
+# Terrain Density Graphs
 
-Terrain layers define how blocks are stacked to create the ground. The layer system uses a filling block as the base, then applies static layers (fixed height) and dynamic layers (noise-based variable height) to create natural-looking terrain with different soil compositions.
+Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
+**node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
+a tree of math/noise nodes that, evaluated per world position, yields a scalar **density** value.
+Where density is `>= 0` the world is solid; where it is `< 0` the world is empty (air/fluid).
+A separate `MaterialProvider` then decides *which* block fills each solid (or empty) cell.
+
+This document describes the real format used by the asset files under
+`Server/HytaleGenerator/`.
 
 ## Quick Navigation
 
 | Section | Description |
 |---------|-------------|
-| [LayerContainer](#layercontainer) | Container structure for terrain layers |
-| [StaticLayer](#staticlayer) | Fixed-height terrain layers |
-| [DynamicLayer](#dynamiclayer) | Noise-based variable layers |
-| [Height Suppliers](#height-suppliers) | Noise functions for layer height |
-| [BlockPopulator](#blockpopulator) | Terrain generation pipeline |
-| [Block Priority](#block-priority) | Priority resolution system |
+| [Where terrain lives](#where-terrain-lives) | Canonical asset paths |
+| [Node anatomy](#node-anatomy) | `$NodeId`, `Type`, `Inputs`, `Skip` |
+| [The DAOTerrain node](#the-daoterrain-node) | Biome terrain entry point |
+| [Density node families](#density-node-families) | Sum / Min / Max / Mix / noise / curves |
+| [Noise nodes](#noise-nodes) | SimplexNoise2D / 3D and parameters |
+| [Shaping nodes](#shaping-nodes) | CurveMapper, Normalizer, Pow, Abs, Clamp |
+| [BaseHeight](#baseheight) | Referencing surface / bedrock height |
+| [Reuse: Cache, Exported, Imported](#reuse-cache-exported-imported) | Sharing fields across graphs |
+| [MaterialProvider](#materialprovider) | Turning density into blocks |
+| [Worked example](#worked-example-plains1_oak) | Plains1_Oak terrain |
 
 ---
 
-## LayerContainer
+## Where terrain lives
 
-The `LayerContainer` defines terrain composition for a biome. It specifies a filling block for the base terrain, then layers that build upward from the terrain surface.
+| Content | Path |
+|---------|------|
+| Biome definitions (contain `Terrain`) | `Server/HytaleGenerator/Biomes/**/<Biome>.json` |
+| Shared / map-level density fields | `Server/HytaleGenerator/Density/*.json` |
+| Generator settings | `Server/HytaleGenerator/Settings/Settings.json` |
 
-### Properties
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `Filling` | string | Yes | Block type for base terrain fill |
-| `FillingPriority` | int | No | Priority for filling blocks (default: 1) |
-| `StaticLayers` | array | No | Fixed-height layers from surface |
-| `DynamicLayers` | array | No | Variable-height noise-based layers |
-| `SubsurfaceLayers` | array | No | Layers below main terrain |
-| `HeightOffset` | int | No | Vertical offset for all layers |
-
-### Layer Stacking Order
-
-Layers are applied from the terrain surface downward:
-
-```
-Surface (y = terrain height)
-┌─────────────────────────────────────┐
-│ DynamicLayer: Grass (1 block)       │  ← Top layer (dynamic)
-├─────────────────────────────────────┤
-│ StaticLayer: Dirt (4 blocks)        │  ← Fixed depth
-├─────────────────────────────────────┤
-│ StaticLayer: Gravel (2 blocks)      │  ← Fixed depth
-├─────────────────────────────────────┤
-│ Filling: Stone (to bedrock)         │  ← Fills remaining space
-└─────────────────────────────────────┘
-Bedrock (y = 0)
-```
-
-### Basic Example
+A biome file (for example `Server/HytaleGenerator/Biomes/Plains1/Plains1_Oak.json`) has this
+top-level shape:
 
 ```json
 {
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      { "Block": "Dirt", "Height": 4 },
-      { "Block": "Gravel", "Height": 2 }
-    ],
-    "DynamicLayers": [
-      { "Block": "Grass", "MinHeight": 1, "MaxHeight": 1 }
+  "$NodeId": "Biome-fb9c6a20-0178-4045-86db-b9c078e694bc",
+  "Name": "Hills",
+  "Terrain":          { "...": "DAOTerrain node, see below" },
+  "MaterialProvider": { "...": "Solidity provider, see below" },
+  "Props":            [ "...prop placement entries..." ]
+}
+```
+
+The standalone files in `Density/` (such as `Map_Default.json`,
+`Plains1_Caves_Terrain.json`) are density graphs that are *exported by name* and then *imported*
+into biome terrain graphs.
+
+---
+
+## Node anatomy
+
+Every node in every graph is an object with at minimum:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `$NodeId` | string | Unique id, e.g. `"SumDensityNode-15164002-..."`. Editor-assigned. |
+| `Type` | string | Node kind, e.g. `"Sum"`, `"SimplexNoise2D"`, `"CurveMapper"`. |
+| `Inputs` | array | Child density nodes feeding this node (order matters for some types). |
+| `Skip` | bool | When `true` the node is bypassed. Present on most density nodes. |
+
+Optional fields seen on nodes:
+
+| Field | Meaning |
+|-------|---------|
+| `ExportAs` | Publishes this node's value under a name other graphs can `Imported`. |
+| `SingleInstance` | Evaluate once and share the result. |
+| `$NodeEditorMetadata` | Editor-only: node positions, groups, comments. **Ignored at runtime.** |
+
+> The deeply nested `Inputs` arrays in the asset files are how the graph edges are stored — there
+> is no separate adjacency list. A node's children are literally nested inside its `Inputs`.
+
+---
+
+## The DAOTerrain node
+
+A biome's `Terrain` is a single node of `Type: "DAOTerrain"`. Its one meaningful field is
+`Density`, the root of the density graph:
+
+```json
+"Terrain": {
+  "$NodeId": "Terrain-d4edd770-d325-42c5-99b7-335d50d612de",
+  "Type": "DAOTerrain",
+  "Density": {
+    "$NodeId": "MinDensityNode-c9a8caa1-...",
+    "Type": "Min",
+    "Skip": false,
+    "Inputs": [
+      { "Type": "Imported", "Name": "Plains1_Caves_Terrain" },
+      { "Type": "Mix", "ExportAs": "Plains1_Oak_Terrain_Field", "Inputs": [ ... ] }
     ]
   }
 }
 ```
 
+The example above (from `Plains1_Oak.json`) is the canonical terrain pattern: take the biome's
+own surface field (a `Mix` exported as `Plains1_Oak_Terrain_Field`) and combine it via `Min`
+with an imported cave density (`Plains1_Caves_Terrain`). `Min` keeps whichever value is smaller,
+so wherever the cave field goes negative it carves the solid terrain away. See
+[worldgen-caves.md](worldgen-caves.md) for the cave side.
+
 ---
 
-## StaticLayer
+## Density node families
 
-Static layers have a fixed height regardless of terrain shape. They're applied in order from the terrain surface downward.
+These are the node `Type` values observed across `Density/` and biome `Terrain` graphs. All take
+their children in `Inputs` unless noted.
 
-### Properties
+### Combiners
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Block` | string | - | Block type for this layer |
-| `Height` | int | 1 | Layer thickness in blocks |
-| `Priority` | int | 2 | Block priority level |
-| `Conditions` | object | - | Placement conditions |
+| Type | Behavior |
+|------|----------|
+| `Sum` | Adds all input values. |
+| `Min` | Smallest of inputs. Used to carve (caves) and to clip terrain. |
+| `Max` | Largest of inputs. Used to union shapes (raise terrain). |
+| `Mix` | Blends inputs; commonly the first input is the value field and later inputs modulate it. Seen mixing noise fields together and mixing in `Constant` values. |
 
-### Condition Properties
+### Unary math
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `SlopeMin` | float | Minimum terrain slope (degrees) |
-| `SlopeMax` | float | Maximum terrain slope (degrees) |
-| `HeightMin` | int | Minimum world height |
-| `HeightMax` | int | Maximum world height |
-| `NoiseMin` | float | Minimum noise threshold |
-| `NoiseMax` | float | Maximum noise threshold |
+| Type | Fields | Behavior |
+|------|--------|----------|
+| `Abs` | — | Absolute value of input (used to make ridges from noise). |
+| `Inverter` | — | Negates the input. |
+| `Pow` | `Exponent` | Raises input to a power (sharpens/softens a field). |
+| `Constant` | `Value` | A fixed value, no inputs. |
 
-### Example: Multi-Layer Soil
+### Range remapping
+
+| Type | Fields | Behavior |
+|------|--------|----------|
+| `Normalizer` | `FromMin`, `FromMax`, `ToMin`, `ToMax` | Linearly remaps `[FromMin,FromMax]` to `[ToMin,ToMax]`. |
+| `Clamp` | `WallA`, `WallB` | Clamps the input between the two walls. |
+
+Real `Normalizer` from `Map_Default.json`:
 
 ```json
 {
-  "StaticLayers": [
-    {
-      "Block": "Dirt_Rich",
-      "Height": 2,
-      "Conditions": {
-        "SlopeMax": 20
-      }
-    },
-    {
-      "Block": "Dirt",
-      "Height": 4
-    },
-    {
-      "Block": "Gravel",
-      "Height": 1,
-      "Conditions": {
-        "HeightMin": 50,
-        "HeightMax": 80
-      }
-    },
-    {
-      "Block": "Clay",
-      "Height": 2,
-      "Conditions": {
-        "HeightMax": 50
-      }
-    }
+  "Type": "Normalizer",
+  "FromMin": -1, "FromMax": 1,
+  "ToMin": -0.85, "ToMax": 0.85,
+  "Inputs": [ { "Type": "SimplexNoise2D", "Scale": 1500, "Seed": "A" } ]
+}
+```
+
+---
+
+## Noise nodes
+
+### SimplexNoise2D
+
+The workhorse. Produces a height-independent 2D noise field.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `Lacunarity` | number | Frequency multiplier per octave. |
+| `Persistence` | number | Amplitude falloff per octave. |
+| `Octaves` | int | Number of fractal octaves. |
+| `Scale` | number | Feature size in blocks (larger = broader features). |
+| `Seed` | **string** | Seed label, e.g. `"A"`, `"Plains1_Oak"`, `"Cave-Floor"`. Note it is a string, not a number. |
+
+```json
+{
+  "$NodeId": "SimplexNoise2DDensityNode-f2c2a89e-...",
+  "Type": "SimplexNoise2D",
+  "Lacunarity": 5,
+  "Persistence": 0.08,
+  "Octaves": 3,
+  "Scale": 400,
+  "Seed": "Plains1_Oak"
+}
+```
+
+### SimplexNoise3D
+
+Volumetric noise (used for ore veins and 3D carving). Same parameters but with separate
+horizontal/vertical scale:
+
+```json
+{
+  "Type": "SimplexNoise3D",
+  "Lacunarity": 2, "Persistence": 0.5, "Octaves": 1,
+  "ScaleXZ": 4, "ScaleY": 4,
+  "Seed": "A"
+}
+```
+
+### CellNoise2D
+
+Voronoi/cellular noise, seen in material selection (e.g. `Plains1_Oak.json` boulder pebbles).
+Fields observed: `ScaleX`, `ScaleZ`, `Jitter`, `CellType` (e.g. `"Distance2Div"`), `Octaves`,
+`Seed`.
+
+---
+
+## Shaping nodes
+
+### CurveMapper
+
+Maps an input value through a curve. The curve is a child object of `Type: "Manual"` whose
+`Points` are `{ "In": x, "Out": y }` pairs. The mapper interpolates between the points.
+
+```json
+{
+  "Type": "CurveMapper",
+  "Curve": {
+    "Type": "Manual",
+    "Points": [
+      { "In": -5, "Out": 1 },
+      { "In": 40, "Out": -1 }
+    ]
+  },
+  "Inputs": [ { "Type": "BaseHeight", "BaseHeightName": "Base", "Distance": true } ]
+}
+```
+
+This is how terrain is shaped by altitude: feed `BaseHeight` into a `CurveMapper` so density
+falls off above some height, producing a surface.
+
+### Distance
+
+Seen in `Map_Default.json` as a continent-shaping node; it carries its own `Curve` (a `Manual`
+curve mapping distance-in to density-out).
+
+---
+
+## BaseHeight
+
+`BaseHeight` injects a reference height into the graph instead of noise.
+
+| Field | Notes |
+|-------|-------|
+| `BaseHeightName` | Named reference, observed values: `"Base"` (the terrain surface) and `"Bedrock"`. |
+| `Distance` | When `true`, yields signed distance from that reference rather than the raw height. |
+
+```json
+{ "Type": "BaseHeight", "BaseHeightName": "Base", "Distance": true }
+```
+
+Feeding `BaseHeight` (`Distance: true`) into a `CurveMapper` is the standard way to make a field
+that is positive below the surface and negative above it.
+
+---
+
+## Reuse: Cache, Exported, Imported
+
+Large graphs avoid recomputation and share fields with three node types:
+
+| Type | Fields | Purpose |
+|------|--------|---------|
+| `Cache` | `Capacity` | Memoizes its input's result (cache size = `Capacity`). |
+| `Exported` | `ExportAs`, `SingleInstance` | Publishes its input under a name. Also appears as an `ExportAs` field directly on other nodes. |
+| `Imported` | `Name` | Pulls in a previously exported field by name. |
+| `YOverride` | `Value` | Forces the Y coordinate to a constant (used to make a 3D field behave as a flat 2D field). |
+| `Scale` | `ScaleX`, `ScaleY`, `ScaleZ` | Scales the sampling coordinates. |
+
+Example: `Plains1_Oak.json` imports the shared cave density and the map exports the biome map:
+
+```json
+{ "Type": "Imported", "Name": "Plains1_Caves_Terrain" }
+```
+
+```json
+{ "Type": "Exported", "ExportAs": "Biome-Map", "SingleInstance": true, "Inputs": [ ... ] }
+```
+
+---
+
+## MaterialProvider
+
+The density graph decides *where* terrain is solid. The biome's `MaterialProvider` decides *what
+block* goes there. The top-level provider is `Type: "Solidity"`, splitting into a `Solid` provider
+and an `Empty` provider:
+
+```json
+"MaterialProvider": {
+  "Type": "Solidity",
+  "Solid": { "Type": "Queue", "Queue": [ ... ] },
+  "Empty": { "Type": "Queue", "Queue": [ ... ] }
+}
+```
+
+### Provider types observed
+
+| Type | Fields | Purpose |
+|------|--------|---------|
+| `Solidity` | `Solid`, `Empty` | Routes to one provider for solid cells, another for empty cells. |
+| `Queue` | `Queue[]` | Tries each provider in order; first match wins. |
+| `SimpleHorizontal` | `TopY`, `TopBaseHeight`, `BottomY`, `BottomBaseHeight`, `Material` | Applies its material only in a vertical band defined relative to a named base height. |
+| `SpaceAndDepth` | `LayerContext`, `MaxExpectedDepth`, `Layers[]`, optional `Condition` | Stacks `ConstantThickness` layers measured by depth into the floor — this is the closest real analogue to "soil layers". |
+| `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. |
+| `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Selects material based on a noise/density value falling inside a `From`/`To` range. Used for scattered surface variation (pebbles, leaves, grass patches). |
+| `Constant` | `Material` | A single fixed material. |
+
+### Materials
+
+A `Material` node names a block via one of:
+
+| Key | Meaning | Examples |
+|-----|---------|----------|
+| `Solid` | A solid block id | `Rock_Stone`, `Rock_Bedrock`, `Rock_Marble`, `Soil_Dirt`, `Soil_Grass`, `Soil_Grass_Sunny`, `Soil_Pebbles`, `Soil_Leaves`, `Soil_Pathway`, `Ore_Iron_Stone`, `Empty` |
+| `Fluid` | A fluid id | `Water_Source` |
+
+`Empty` is itself a valid `Solid` value meaning "no block" — note the `"$Comment": "REQUIRED"`
+on the trailing `Empty` constant in the `Empty` queue of `Plains1_Oak.json`.
+
+Real soil stack from `Plains1_Oak.json` (a `SpaceAndDepth` with two `ConstantThickness` layers):
+
+```json
+{
+  "Type": "SpaceAndDepth",
+  "LayerContext": "DEPTH_INTO_FLOOR",
+  "MaxExpectedDepth": 3,
+  "Layers": [
+    { "Type": "ConstantThickness", "Thickness": 1, "Material": { "...": "grass/pebble FieldFunction queue" } },
+    { "Type": "ConstantThickness", "Thickness": 2, "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt" } } }
   ]
 }
 ```
 
-### Conditional Layer Selection
+---
 
-When layers have conditions, only matching layers are applied:
+## Worked example: Plains1_Oak
+
+`Server/HytaleGenerator/Biomes/Plains1/Plains1_Oak.json` builds its surface like this (simplified
+from the real file — the actual graph is hundreds of nested nodes):
 
 ```
-Terrain at y=75, slope=10°:
-  ✓ Dirt_Rich (slope ≤ 20°)
-  ✓ Dirt (no conditions)
-  ✓ Gravel (height 50-80)
-  ✗ Clay (height ≤ 50, skipped)
-
-Terrain at y=40, slope=35°:
-  ✗ Dirt_Rich (slope > 20°, skipped)
-  ✓ Dirt (no conditions)
-  ✗ Gravel (height < 50, skipped)
-  ✓ Clay (height ≤ 50)
+DAOTerrain.Density
+└─ Min
+   ├─ Imported "Plains1_Caves_Terrain"          (carves caves)
+   └─ Mix  (ExportAs "Plains1_Oak_Terrain_Field")
+      └─ Max / Max / Min of several fields:
+         ├─ Sum of cached, normalized SimplexNoise2D fields
+         │   (Seeds "Plains1_Oak", "Plains1_Oak_Random", "Plains1_Oak_Plains", "Plains1_Oak_Cliifs")
+         ├─ CurveMapper( BaseHeight Base, Distance ) curves       (height falloff -> surface)
+         └─ Pow / Normalizer / Abs reshaping of the noise
 ```
+
+The exported name `Plains1_Oak_Terrain_Field` is later imported by the `MaterialProvider`
+(via a `DensityGradient` vector provider) to compute slope and pick surface materials. This is the
+real mechanism that the old docs incorrectly described as "slope conditions" on layers.
 
 ---
 
-## DynamicLayer
-
-Dynamic layers use noise functions to vary their height, creating natural variation in terrain composition.
-
-### Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Block` | string | - | Block type for this layer |
-| `MinHeight` | int | 1 | Minimum layer height |
-| `MaxHeight` | int | 1 | Maximum layer height |
-| `HeightSupplier` | object | - | Noise function for height calculation |
-| `Priority` | int | 2 | Block priority level |
-| `Conditions` | object | - | Placement conditions |
-| `Blend` | boolean | false | Blend with adjacent layers |
-
-### Basic Dynamic Layer
-
-```json
-{
-  "DynamicLayers": [
-    {
-      "Block": "Grass",
-      "MinHeight": 1,
-      "MaxHeight": 1
-    }
-  ]
-}
-```
-
-### Variable Height Layer
-
-```json
-{
-  "DynamicLayers": [
-    {
-      "Block": "Sand",
-      "MinHeight": 2,
-      "MaxHeight": 6,
-      "HeightSupplier": {
-        "Type": "Perlin",
-        "Scale": 0.02,
-        "Octaves": 2
-      }
-    }
-  ]
-}
-```
-
----
-
-## Height Suppliers
-
-Height suppliers (implementing `IDoubleCoordinateSupplier`) generate height values using noise or other algorithms.
-
-### Supplier Types
-
-| Type | Description |
-|------|-------------|
-| `Constant` | Fixed value at all positions |
-| `Perlin` | Perlin noise with configurable scale |
-| `Simplex` | Simplex noise (smoother than Perlin) |
-| `Voronoi` | Voronoi cell-based noise |
-| `Ridged` | Ridged multi-fractal noise |
-| `Compound` | Combines multiple suppliers |
-
-### Constant Supplier
-
-Returns the same value everywhere:
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Constant",
-    "Value": 4
-  }
-}
-```
-
-### Perlin Noise Supplier
-
-Classic Perlin noise with octaves for detail:
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Perlin",
-    "Scale": 0.01,
-    "Octaves": 3,
-    "Persistence": 0.5,
-    "Lacunarity": 2.0,
-    "Seed": 12345
-  }
-}
-```
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `Scale` | float | 0.01 | Noise frequency (smaller = larger features) |
-| `Octaves` | int | 1 | Number of noise layers |
-| `Persistence` | float | 0.5 | Amplitude reduction per octave |
-| `Lacunarity` | float | 2.0 | Frequency multiplier per octave |
-| `Seed` | long | - | Random seed |
-
-### Simplex Noise Supplier
-
-Smoother alternative to Perlin:
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Simplex",
-    "Scale": 0.015,
-    "Octaves": 2
-  }
-}
-```
-
-### Voronoi Supplier
-
-Cell-based noise for distinct regions:
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Voronoi",
-    "Scale": 0.005,
-    "Jitter": 0.8,
-    "DistanceType": "Euclidean"
-  }
-}
-```
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `DistanceType` | string | `"Euclidean"` | Distance calculation method |
-| `Jitter` | float | 1.0 | Randomness in cell seed positions |
-
-Distance types: `"Euclidean"`, `"Manhattan"`, `"Chebyshev"`
-
-### Ridged Noise Supplier
-
-Creates ridge-like features (mountains, veins):
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Ridged",
-    "Scale": 0.008,
-    "Octaves": 4,
-    "Gain": 2.0,
-    "Offset": 1.0
-  }
-}
-```
-
-### Compound Supplier
-
-Combines multiple suppliers:
-
-```json
-{
-  "HeightSupplier": {
-    "Type": "Compound",
-    "Operation": "Add",
-    "Suppliers": [
-      {
-        "Type": "Perlin",
-        "Scale": 0.01,
-        "Octaves": 2
-      },
-      {
-        "Type": "Simplex",
-        "Scale": 0.05,
-        "Weight": 0.3
-      }
-    ]
-  }
-}
-```
-
-| Operation | Description |
-|-----------|-------------|
-| `Add` | Sum all supplier values |
-| `Multiply` | Multiply all values |
-| `Average` | Average all values |
-| `Max` | Use highest value |
-| `Min` | Use lowest value |
-
----
-
-## BlockPopulator
-
-The `BlockPopulator` is the first stage of world generation, responsible for placing terrain blocks.
-
-### Generation Pipeline
-
-```
-BlockPopulator Pipeline
-│
-├─ 1. generateBlockColumn(x, z)
-│     ├─ Get terrain height from heightmap
-│     ├─ Get zone/biome at position
-│     ├─ Place filling blocks (y=0 to terrainHeight)
-│     ├─ Apply static layers from surface down
-│     └─ Apply dynamic layers with noise
-│
-├─ 2. generateCovers(x, z)
-│     ├─ Get biome's CoverContainer
-│     ├─ Evaluate cover conditions
-│     └─ Place covers on valid surfaces
-│
-└─ 3. Track block priorities
-      └─ BlockPriorityChunk stores priority per block
-```
-
-### Column Generation Example
-
-```java
-// Simplified BlockPopulator logic
-void generateBlockColumn(int x, int z, WorldChunk chunk) {
-    int terrainHeight = heightmap.getHeight(x, z);
-    ZoneBiomeResult result = getZoneBiome(x, z);
-    Biome biome = result.biome();
-    LayerContainer layers = biome.getLayerContainer();
-
-    // Fill with base block
-    for (int y = 0; y < terrainHeight; y++) {
-        chunk.setBlock(x, y, z, layers.getFilling(), PRIORITY_FILLING);
-    }
-
-    // Apply layers from surface down
-    int currentY = terrainHeight;
-
-    // Dynamic layers first (surface)
-    for (DynamicLayer layer : layers.getDynamicLayers()) {
-        int height = layer.getHeight(x, z);
-        for (int i = 0; i < height && currentY > 0; i++) {
-            chunk.setBlock(x, currentY--, z, layer.getBlock(), PRIORITY_LAYER);
-        }
-    }
-
-    // Static layers below dynamic
-    for (StaticLayer layer : layers.getStaticLayers()) {
-        if (layer.matchesConditions(x, z, currentY)) {
-            for (int i = 0; i < layer.getHeight() && currentY > 0; i++) {
-                chunk.setBlock(x, currentY--, z, layer.getBlock(), PRIORITY_LAYER);
-            }
-        }
-    }
-}
-```
-
----
-
-## Block Priority
-
-The block priority system prevents later generation stages from overwriting important blocks.
-
-### Priority Levels
-
-| Priority | Constant | Value | Description |
-|----------|----------|-------|-------------|
-| `NONE` | `PRIORITY_NONE` | 0 | Default, can be overwritten |
-| `FILLING` | `PRIORITY_FILLING` | 1 | Base terrain fill |
-| `LAYER` | `PRIORITY_LAYER` | 2 | Terrain layers |
-| `COVER` | `PRIORITY_COVER` | 3 | Surface covers |
-| `WATER` | `PRIORITY_WATER` | 4 | Water/fluids |
-| `CAVE` | `PRIORITY_CAVE` | 5 | Cave carving |
-| `CAVE_FILLING` | `PRIORITY_CAVE_FILLING` | 6 | Cave fill blocks |
-| `CAVE_COVER` | `PRIORITY_CAVE_COVER` | 7 | Cave surfaces |
-| `PREFAB` | `PRIORITY_PREFAB` | 8 | Surface prefabs |
-| `CAVE_PREFAB` | `PRIORITY_CAVE_PREFAB` | 9 | Cave prefabs |
-| `UNIQUE_PREFAB` | `PRIORITY_UNIQUE` | 10 | Unique structures |
-
-### BlockPriorityChunk
-
-Tracks priorities during generation:
-
-```java
-public class BlockPriorityChunk {
-    private final byte[] priorities;  // 16x256x16 = 65536 bytes
-
-    public boolean canPlace(int x, int y, int z, int priority) {
-        return priority >= getPriority(x, y, z);
-    }
-
-    public void setBlock(int x, int y, int z, int blockType, int priority) {
-        if (canPlace(x, y, z, priority)) {
-            // Set block in chunk
-            // Update priority tracking
-            priorities[index(x, y, z)] = (byte) priority;
-        }
-    }
-
-    public int getPriority(int x, int y, int z) {
-        return priorities[index(x, y, z)] & 0xFF;
-    }
-}
-```
-
-### Priority Resolution Example
-
-```
-Position (5, 70, 10) during generation:
-
-1. BlockPopulator places "Stone" (FILLING = 1)
-   priorities[5,70,10] = 1, block = Stone
-
-2. BlockPopulator places "Dirt" (LAYER = 2)
-   2 >= 1 → allowed
-   priorities[5,70,10] = 2, block = Dirt
-
-3. CavePopulator tries to carve (CAVE = 5)
-   5 >= 2 → allowed
-   priorities[5,70,10] = 5, block = Air
-
-4. PrefabPopulator places "Stone_Brick" (PREFAB = 8)
-   8 >= 5 → allowed
-   priorities[5,70,10] = 8, block = Stone_Brick
-
-Final: Stone_Brick with priority 8
-```
-
----
-
-## Complete Layer Examples
-
-### Forest Biome Layers
-
-```json
-{
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      {
-        "Block": "Dirt",
-        "Height": 5,
-        "Conditions": {
-          "SlopeMax": 40
-        }
-      },
-      {
-        "Block": "Gravel",
-        "Height": 2,
-        "Conditions": {
-          "SlopeMin": 40
-        }
-      },
-      {
-        "Block": "Clay",
-        "Height": 1,
-        "Conditions": {
-          "HeightMin": 60,
-          "HeightMax": 70
-        }
-      }
-    ],
-    "DynamicLayers": [
-      {
-        "Block": "Grass",
-        "MinHeight": 1,
-        "MaxHeight": 1,
-        "Conditions": {
-          "SlopeMax": 35
-        }
-      },
-      {
-        "Block": "Dirt",
-        "MinHeight": 1,
-        "MaxHeight": 1,
-        "Conditions": {
-          "SlopeMin": 35
-        }
-      }
-    ]
-  }
-}
-```
-
-### Desert Biome Layers
-
-```json
-{
-  "LayerContainer": {
-    "Filling": "Sandstone",
-    "StaticLayers": [
-      {
-        "Block": "Sandstone_Soft",
-        "Height": 6
-      },
-      {
-        "Block": "Sandstone_Hard",
-        "Height": 3
-      }
-    ],
-    "DynamicLayers": [
-      {
-        "Block": "Sand",
-        "MinHeight": 3,
-        "MaxHeight": 8,
-        "HeightSupplier": {
-          "Type": "Simplex",
-          "Scale": 0.03,
-          "Octaves": 2
-        }
-      }
-    ]
-  }
-}
-```
-
-### Mountain Biome Layers
-
-```json
-{
-  "LayerContainer": {
-    "Filling": "Stone_Granite",
-    "StaticLayers": [
-      {
-        "Block": "Gravel",
-        "Height": 2,
-        "Conditions": {
-          "HeightMax": 120
-        }
-      },
-      {
-        "Block": "Stone",
-        "Height": 3
-      }
-    ],
-    "DynamicLayers": [
-      {
-        "Block": "Grass_Alpine",
-        "MinHeight": 1,
-        "MaxHeight": 1,
-        "Conditions": {
-          "HeightMax": 140,
-          "SlopeMax": 30
-        }
-      },
-      {
-        "Block": "Snow",
-        "MinHeight": 1,
-        "MaxHeight": 3,
-        "HeightSupplier": {
-          "Type": "Perlin",
-          "Scale": 0.05,
-          "Octaves": 2
-        },
-        "Conditions": {
-          "HeightMin": 140
-        }
-      }
-    ]
-  }
-}
-```
-
-### Swamp Biome Layers
-
-```json
-{
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      {
-        "Block": "Mud",
-        "Height": 3,
-        "Conditions": {
-          "HeightMax": 65
-        }
-      },
-      {
-        "Block": "Dirt_Wet",
-        "Height": 4
-      },
-      {
-        "Block": "Clay",
-        "Height": 2
-      }
-    ],
-    "DynamicLayers": [
-      {
-        "Block": "Grass_Swamp",
-        "MinHeight": 1,
-        "MaxHeight": 1,
-        "Conditions": {
-          "HeightMin": 65
-        }
-      },
-      {
-        "Block": "Mud",
-        "MinHeight": 1,
-        "MaxHeight": 2,
-        "HeightSupplier": {
-          "Type": "Voronoi",
-          "Scale": 0.02,
-          "Jitter": 0.6
-        },
-        "Conditions": {
-          "HeightMax": 65
-        }
-      }
-    ]
-  }
-}
-```
-
----
-
-## Subsurface Layers
-
-Subsurface layers generate below the main terrain, useful for ore veins and underground features.
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Block` | string | Block type |
-| `HeightRange` | [min, max] | Y-level range |
-| `Density` | float | Spawn probability (0.0-1.0) |
-| `ClusterSize` | int | Blocks per cluster |
-| `NoiseConfig` | object | Noise configuration |
-
-### Example: Ore Distribution
-
-```json
-{
-  "SubsurfaceLayers": [
-    {
-      "Block": "Ore_Iron",
-      "HeightRange": [5, 64],
-      "Density": 0.008,
-      "ClusterSize": 8,
-      "NoiseConfig": {
-        "Type": "Perlin",
-        "Scale": 0.1
-      }
-    },
-    {
-      "Block": "Ore_Gold",
-      "HeightRange": [5, 32],
-      "Density": 0.003,
-      "ClusterSize": 6
-    },
-    {
-      "Block": "Ore_Diamond",
-      "HeightRange": [5, 16],
-      "Density": 0.001,
-      "ClusterSize": 4
-    }
-  ]
-}
-```
+## What does NOT exist
+
+The previous version of this document described a fictional schema. None of the following appear
+in any asset file and they are not part of the format:
+
+`LayerContainer`, `Filling`, `StaticLayers`, `DynamicLayers`, `SubsurfaceLayers`,
+`HeightSupplier` (and the `Constant`/`Perlin`/`Simplex`/`Voronoi`/`Ridged`/`Compound` supplier
+"Type"s), per-layer `Conditions` with `SlopeMin`/`SlopeMax`/`HeightMin`, and the
+`BlockPopulator`/`BlockPriorityChunk` priority table. Terrain is the density graph plus a
+`MaterialProvider`, nothing more.
 
 ---
 
 ## Related Documentation
 
-- [World Generation Overview](worldgen.md) - Pipeline and priority system
-- [Biomes](worldgen-biomes.md) - LayerContainer in biome context
-- [Caves](worldgen-caves.md) - How caves interact with terrain
-- [Block System](blocks.md) - Block types and properties
+- [World Generation Overview](worldgen.md) - Node-graph system and shared vocabulary
+- [Caves](worldgen-caves.md) - Cave density fields subtracted from terrain
+- [Prefabs / Props](worldgen-prefabs.md) - Placing structures and decorations

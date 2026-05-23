@@ -1,304 +1,233 @@
 # World Generation
 
-World generation in Hytale uses a data-driven pipeline that creates terrain, caves, and structures through a layered system of zones, biomes, and populators. Each stage adds content with configurable priority levels to ensure proper block resolution.
+Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
+material placement, biome selection, tinting, and prop scattering are all expressed as
+trees of typed nodes that are evaluated per world position. There is no imperative
+"populator pipeline" in the assets — instead, each generation concern is a graph whose
+leaves are noise/constant sources and whose root produces a value (a density, a material,
+a tint, a set of positions, etc.).
+
+All world-generation assets live under:
+
+```
+Server/HytaleGenerator/
+```
+
+> The canonical asset root is `Server/HytaleGenerator/` — **not** `Server/WorldGen/`.
 
 ## Quick Navigation
 
 | Category | File | Description |
 |----------|------|-------------|
-| [Zones](worldgen-zones.md) | `worldgen-zones.md` | Zone system, Voronoi distribution, discovery UI |
-| [Biomes](worldgen-biomes.md) | `worldgen-biomes.md` | Biome types, containers, interpolation |
-| [Terrain](worldgen-terrain.md) | `worldgen-terrain.md` | Static/dynamic layers, block population |
-| [Caves](worldgen-caves.md) | `worldgen-caves.md` | Cave types, nodes, shapes, corridors |
-| [Prefabs](worldgen-prefabs.md) | `worldgen-prefabs.md` | Surface/unique structure placement |
+| [Biomes](worldgen-biomes.md) | `worldgen-biomes.md` | Biome files: `Terrain`, `MaterialProvider`, `Props`, environment, tint |
+| [Zones / World Structures](worldgen-zones.md) | `worldgen-zones.md` | `WorldStructures/*.json`: biome assignment by noise range, framework |
 
 ---
 
-## Generation Pipeline
-
-World generation proceeds through a series of populators, each responsible for a specific type of content:
+## Asset Layout
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    World Generation Pipeline                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. BlockPopulator                                               │
-│     └─ Generates terrain layers, surface covers                  │
-│                                                                  │
-│  2. CavePopulator                                                │
-│     └─ Carves cave systems, places cave prefabs                  │
-│                                                                  │
-│  3. PrefabPopulator                                              │
-│     └─ Places surface structures from biome containers           │
-│                                                                  │
-│  4. WaterPopulator                                               │
-│     └─ Fills water bodies, handles fluid simulation              │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+Server/HytaleGenerator/
+├── Biomes/             # Biome definitions (Terrain + MaterialProvider + Props + ...)
+│   ├── Plains1/        #   grouped by zone family (Plains1, Desert1, Taiga1, Volcanic1, ...)
+│   ├── Examples/       #   small documented graphs demonstrating single node types
+│   └── Experimental/
+├── WorldStructures/    # "Zone" equivalents: which biomes appear, keyed by a density value
+│   ├── Zone1_Plains1.json
+│   ├── Zone2_Desert1.json
+│   └── Portals_*.json
+├── Assignments/        # Prop / prefab placement graphs imported by biome `Props`
+│   └── Plains1/Plains1_Oak_Trees.json ...
+├── Density/            # Shared density graphs (e.g. the world `Biome-Map`, cave fields)
+├── BlockMasks/         # Block-set masks
+├── Graphs/             # Standalone example graphs
+├── Positions/          # Standalone position graphs
+├── PropDistributions/  # Standalone prop-distribution graphs
+└── Settings/           # Generator runtime settings (Settings.json)
 ```
 
-### BlockPopulator
+How the pieces fit together:
 
-The first stage generates base terrain using the zone and biome system:
-
-1. **Zone Selection** - Determines which zone applies at each position using Voronoi-based pattern generation
-2. **Biome Selection** - Within each zone, selects biomes using the zone's `BiomePatternGenerator`
-3. **Column Generation** - For each block column, generates filling blocks and terrain layers
-4. **Cover Placement** - Applies surface covers (grass, plants, debris) based on biome rules
-
-> **See also:** [Terrain Layers](worldgen-terrain.md)
-
-### CavePopulator
-
-The second stage carves cave systems into the terrain:
-
-1. **Entry Node Placement** - Determines cave entry points based on `CaveType` conditions
-2. **Node Expansion** - Recursively generates cave nodes following corridor connections
-3. **Shape Carving** - Each node's shape (cylinder, ellipsoid, pipe, etc.) carves out terrain
-4. **Surface Application** - Applies cave covers to walls, floors, and ceilings
-5. **Cave Prefabs** - Places structures within cave nodes
-
-> **See also:** [Cave System](worldgen-caves.md)
-
-### PrefabPopulator
-
-The third stage places surface structures:
-
-1. **Biome Collection** - Gathers all biomes affecting the chunk
-2. **Prefab Collection** - Collects prefab containers from each biome
-3. **Placement Evaluation** - Tests placement conditions for each prefab
-4. **Structure Placement** - Places selected prefabs respecting block priority
-
-> **See also:** [Prefab Placement](worldgen-prefabs.md)
-
-### WaterPopulator
-
-The final stage handles fluid generation:
-
-1. **Water Container Processing** - Reads water configuration from biomes
-2. **Surface Level Calculation** - Determines water surface heights
-3. **Fluid Filling** - Fills terrain depressions with configured fluid types
-
-> **See also:** [WaterContainer](worldgen-biomes.md#watercontainer)
+- A **WorldStructure** (`WorldStructures/*.json`) maps a density value to a list of
+  **biomes** and defines world-wide constants (sea level, bedrock, base height).
+- Each **biome** (`Biomes/.../*.json`) owns a `Terrain` density graph (the heightfield),
+  a `MaterialProvider` (which blocks fill solid vs. empty space), optional `Props`
+  (which reference **assignment** graphs), and optional environment/tint providers.
+- **Density** graphs and **Assignments** can be shared and pulled in by name through
+  `Imported` nodes, so a biome can reuse the world `Biome-Map`, cave fields, or a prop
+  placement defined once elsewhere.
 
 ---
 
-## Block Priority System
+## The Node-Graph Model
 
-When multiple generation stages attempt to place blocks at the same position, the block priority system resolves conflicts. Higher priority values take precedence.
+Every node is a JSON object that carries a `Type` and an identity. Two identity styles
+appear in the assets, and both are valid input to the generator:
 
-| Priority | Value | Description |
-|----------|-------|-------------|
-| `NONE` | 0 | No priority (can be overwritten by anything) |
-| `FILLING` | 1 | Base filling blocks (stone, dirt) |
-| `LAYER` | 2 | Terrain layer blocks |
-| `COVER` | 3 | Surface cover blocks (grass, plants) |
-| `WATER` | 4 | Water and fluid blocks |
-| `CAVE` | 5 | Cave carving (removes terrain) |
-| `CAVE_FILLING` | 6 | Cave filling blocks |
-| `CAVE_COVER` | 7 | Cave surface covers |
-| `PREFAB` | 8 | Surface prefab blocks |
-| `CAVE_PREFAB` | 9 | Cave prefab blocks |
-| `UNIQUE_PREFAB` | 10 | Globally unique structure blocks |
+- **`$NodeId`** — a stable id string, e.g. `"$NodeId": "SimplexNoise2DDensityNode-f2c2..."`.
+  Files saved by the tooling also carry a `$NodeEditorMetadata` block (node positions,
+  groups, comments). Editor-only keys are prefixed with `$`.
+- **`$Position` / `$Title`** — used by editor-exported files instead of `$NodeId`.
 
-### Priority Resolution
+Editor-only metadata (`$NodeId`, `$Position`, `$Title`, `$NodeEditorMetadata`,
+`$WorkspaceID`, `$Groups`, `$Comment`, `$FloatingNodes`, `$Links`) does not affect
+generation; the load-bearing fields are `Type`, the node's parameters, and its child
+node references (commonly under `Inputs`).
 
-```
-Example: A cave carves through terrain with a prefab
-
-Position (10, 45, 20):
-  - BlockPopulator places "Stone" with priority LAYER (2)
-  - CavePopulator carves with priority CAVE (5)
-  - Result: Cave wins, block is removed
-
-Position (10, 46, 20):
-  - BlockPopulator places "Grass" with priority COVER (3)
-  - PrefabPopulator places "Fence" with priority PREFAB (8)
-  - Result: Prefab wins, "Fence" is placed
-```
-
-The `BlockPriorityChunk` class tracks priorities during generation:
-
-```java
-// Internal priority tracking (simplified)
-public class BlockPriorityChunk {
-    private byte[] priorities;  // One byte per block
-
-    public boolean canPlace(int x, int y, int z, int priority) {
-        return priority >= getPriority(x, y, z);
-    }
-
-    public void setBlock(int x, int y, int z, int blockType, int priority) {
-        if (canPlace(x, y, z, priority)) {
-            // Place block and update priority
-        }
-    }
-}
-```
-
----
-
-## File Locations
-
-World generation configuration files are stored in the assets:
-
-| Content Type | Path | Description |
-|--------------|------|-------------|
-| Zones | `Server/WorldGen/Zone/` | Zone definitions with biome patterns |
-| Biomes | `Server/WorldGen/Biome/` | Biome definitions |
-| Cave Types | `Server/WorldGen/Cave/` | Cave system configurations |
-| Cave Nodes | `Server/WorldGen/CaveNode/` | Cave node templates |
-| Layers | `Server/WorldGen/Layer/` | Terrain layer definitions |
-| Unique Prefabs | `Server/WorldGen/UniquePrefab/` | Globally unique structure configs |
-| Prefab Lists | `Server/PrefabList/` | Prefab directory references |
-
-### Assets.zip Structure
-
-```
-Assets.zip/
-├── Prefabs/                    # World generation prefabs
-│   ├── Trees/                  # Tree variants by biome
-│   ├── Rock_Formations/        # Rock and boulder prefabs
-│   ├── Structures/             # Buildings, ruins, dungeons
-│   └── Vegetation/             # Plants, flowers, bushes
-└── Server/
-    └── WorldGen/
-        ├── Zone/               # Zone configurations
-        ├── Biome/              # Biome definitions
-        ├── Cave/               # Cave type definitions
-        ├── CaveNode/           # Cave node templates
-        ├── Layer/              # Terrain layers
-        └── UniquePrefab/       # Unique structure configs
-```
-
----
-
-## Quick Start Example
-
-This example shows a minimal zone → biome → terrain layer chain:
-
-### Zone Definition
+A minimal density node:
 
 ```json
 {
-  "Id": "Zone_Emerald_Grove",
-  "Name": "Emerald Grove",
-  "BiomePatternGenerator": {
-    "Type": "Voronoi",
-    "Biomes": [
-      { "BiomeId": "Biome_Forest", "Weight": 0.6 },
-      { "BiomeId": "Biome_Meadow", "Weight": 0.4 }
-    ],
-    "CellSize": 128
-  },
-  "CaveGenerator": {
-    "CaveTypes": [
-      { "CaveTypeId": "Cave_Standard", "Frequency": 0.02 }
-    ]
-  },
-  "DiscoveryConfig": {
-    "DisplayOnDiscover": true,
-    "Icon": "Icons/Zones/EmeraldGrove.png",
-    "SoundEventId": "SFX_Zone_Discover"
-  }
+  "Type": "SimplexNoise2D",
+  "Skip": false,
+  "Lacunarity": 5,
+  "Persistence": 0.08,
+  "Octaves": 3,
+  "Scale": 400,
+  "Seed": "Plains1_Oak"
 }
 ```
 
-### Biome Definition
+### Common conventions
 
-```json
-{
-  "Id": "Biome_Forest",
-  "LayerContainer": {
-    "Filling": "Stone",
-    "StaticLayers": [
-      { "Block": "Dirt", "Height": 4 }
-    ],
-    "DynamicLayers": [
-      { "Block": "Grass", "MinHeight": 1, "MaxHeight": 1 }
-    ]
-  },
-  "CoverContainer": {
-    "Covers": [
-      {
-        "Block": "Grass_Tall",
-        "Density": 0.3,
-        "Conditions": { "SlopeMax": 30 }
-      }
-    ]
-  },
-  "PrefabContainer": {
-    "Prefabs": [
-      {
-        "PrefabList": "Trees_Oak",
-        "Density": 0.05,
-        "MinSpacing": 4
-      }
-    ]
-  }
-}
-```
+| Key | Meaning |
+|-----|---------|
+| `Type` | The node kind. Required on every node. |
+| `Inputs` | Array of child density nodes feeding this node. |
+| `Skip` | `true` bypasses the node (passes its input through). Common on density nodes. |
+| `ExportAs` | Publishes this node's output under a name so other graphs can pull it. |
+| `Name` | On an `Imported` node, the name of the value to pull in. |
+| `Seed` | A **string** label (e.g. `"A"`, `"Plains1_Oak"`, `"1235"`), not a numeric seed. |
 
-### Terrain Layer
+### Noise parameters
 
-```json
-{
-  "Id": "Layer_Dirt",
-  "Block": "Dirt",
-  "Height": {
-    "Type": "Constant",
-    "Value": 4
-  }
-}
-```
+Noise nodes (`SimplexNoise2D`, `CellNoise2D`, …) share these parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `Lacunarity` | Frequency multiplier between octaves |
+| `Persistence` | Amplitude falloff between octaves |
+| `Octaves` | Number of noise layers summed |
+| `Scale` | Feature size (larger = broader features) |
+| `Seed` | String label that differentiates noise instances |
+
+`CellNoise2D` additionally uses `ScaleX`/`ScaleZ`, `Jitter`, and `CellType`
+(e.g. `"Distance2Div"`).
 
 ---
 
-## Class Hierarchy Overview
+## Node Families
 
+Nodes are organized by the value they produce.
+
+### Density nodes (the core)
+
+Density graphs produce a scalar field. They drive terrain height, cave carving, biome
+maps, prop probability, and tint/environment selection.
+
+**Sources**
+
+| Type | Description |
+|------|-------------|
+| `SimplexNoise2D` | 2D Simplex/fractal noise (`Lacunarity`, `Persistence`, `Octaves`, `Scale`, `Seed`) |
+| `CellNoise2D` | Cellular/Worley noise (`ScaleX`, `ScaleZ`, `Jitter`, `CellType`, `Octaves`, `Seed`) |
+| `Constant` | Fixed `Value` |
+| `BaseHeight` | The world base/sea-level reference (`BaseHeightName`: `"Base"`, `Distance` flag) |
+| `Imported` | Pulls a value exported elsewhere by `Name` (e.g. `"Biome-Map"`) |
+| `Exported` | Wraps a subgraph and publishes it (`ExportAs`, optional `SingleInstance`) |
+
+**Combiners**
+
+| Type | Description |
+|------|-------------|
+| `Sum` | Adds its `Inputs` |
+| `Min` / `Max` | Lower / upper envelope of `Inputs` |
+| `Mix` | Blends `Inputs` |
+| `Abs` | Absolute value |
+| `Pow` | Raises input to `Exponent` |
+| `Inverter` | Negates |
+| `Normalizer` | Remaps `FromMin`..`FromMax` to `ToMin`..`ToMax` |
+| `Clamp` | Clamps between `WallA` and `WallB` |
+| `Scale` | Scales coordinates (`ScaleX`/`ScaleY`/`ScaleZ`) |
+| `Cache` | Memoizes its input (`Capacity`) for reuse |
+| `YOverride` | Forces a constant Y when sampling (`Value`) — makes a field 2D |
+| `CurveMapper` | Remaps a value through a `Curve` (a `Manual` curve of `In`/`Out` `Points`) |
+| `Distance` | Distance-based falloff via a `Curve` |
+
+### Material providers
+
+A biome's `MaterialProvider` decides which block fills each cell. The top-level type used
+by terrain biomes is `Solidity` (it has separate `Solid` and `Empty` branches).
+
+| Type | Description |
+|------|-------------|
+| `Solidity` | Splits placement into `Solid` and `Empty` (required) branches |
+| `Constant` | Always places one `Material` |
+| `Queue` | Tries providers in order; first match wins |
+| `SimpleHorizontal` | Applies a provider within a Y band (`TopY`/`BottomY` + `BaseHeight`) |
+| `SpaceAndDepth` | Layers materials by depth into the floor (`Layers`, `LayerContext`) |
+| `FieldFunction` | Selects materials by sampling a density `FieldFunction` against `Delimiters` |
+
+A `Material` is a leaf with a block id, e.g. `{"Solid": "Rock_Stone"}`,
+`{"Solid": "Soil_Dirt"}`, `{"Solid": "Empty"}`, or a fluid `{"Fluid": "Water_Source"}`.
+
+### Provider / selection nodes
+
+| Type | Description |
+|------|-------------|
+| `Constant` (Environment) | `{"Type":"Constant","Environment":"Env_Zone1_Plains"}` |
+| `Constant` (Tint) | `{"Type":"Constant","Color":"#5b9e28"}` |
+| `DensityDelimited` | Picks an environment/tint by which `Range` a `Density` value falls into |
+
+### Prop / placement nodes
+
+Used inside biome `Props` and in `Assignments/*.json`:
+
+| Type | Description |
+|------|-------------|
+| `Mesh2D` / `Mesh` | Point grids (`PointGenerator`, `Jitter`, `Scale*`, `Seed`) for scatter |
+| `Occurrence` | Gates points by a probability `FieldFunction` |
+| `FieldFunction` | Maps a density field to assignments via `Delimiters` (`Min`/`Max`) |
+| `Weighted` | Random weighted choice among `WeightedAssignments` |
+| `Cluster` | Spawns grouped props with a `DistanceCurve` |
+| `Constant` (Assignments) | Always assigns one `Prop` |
+| `Prefab` | Places prefab(s) by path (`WeightedPrefabPaths`, `Path`, `Weight`) |
+| `Column` | Places a stack of blocks (`ColumnBlocks`) |
+| `Imported` | Pulls an assignment/positions graph by `Name` |
+
+---
+
+## Settings
+
+`Server/HytaleGenerator/Settings/Settings.json` holds generator runtime settings, e.g.:
+
+```json
+{
+  "StatsCheckpoints": [1, 100, 500, 1000],
+  "CustomConcurrency": -1,
+  "BufferCapacityFactor": 0.1,
+  "TargetViewDistance": 512,
+  "TargetPlayerCount": 3
+}
 ```
-World Generation Classes
-├── Zone System
-│   ├── Zone                      (record: id, name, configs)
-│   ├── ZonePatternGenerator      (Voronoi zone distribution)
-│   ├── ZoneDiscoveryConfig       (UI discovery settings)
-│   └── ZoneBiomeResult           (zone + biome at position)
-│
-├── Biome System
-│   ├── Biome (abstract)          (base with containers)
-│   ├── TileBiome                 (weighted selection)
-│   ├── CustomBiome               (procedural)
-│   ├── BiomePatternGenerator     (biome distribution)
-│   └── BiomeInterpolation        (smooth transitions)
-│
-├── Terrain System
-│   ├── LayerContainer            (filling, layers)
-│   ├── StaticLayer               (fixed-height)
-│   ├── DynamicLayer              (noise-based)
-│   └── BlockPopulator            (places terrain)
-│
-├── Cave System
-│   ├── CaveType                  (cave definition)
-│   ├── CaveNodeType              (node template)
-│   ├── CaveNode                  (instantiated node)
-│   ├── CaveNodeShape             (carving shape)
-│   └── CavePopulator             (places caves)
-│
-└── Prefab System
-    ├── PrefabPopulator           (places structures)
-    ├── UniquePrefabGenerator     (globally unique)
-    └── UniquePrefabConfiguration (placement rules)
-```
+
+These are observable values from the asset; they tune concurrency, buffering, and the
+target view distance / player count used while generating.
+
+---
+
+## Reading the Assets
+
+The smallest, most readable graphs are under `Biomes/Examples/` (each demonstrates one
+idea, e.g. `Example_CellNoise2D.json`, `Example_Curve_Mapper.json`, `Example_Mixer.json`).
+Production biomes such as `Biomes/Plains1/Plains1_Oak.json` are large because every node
+in the chain is inlined. To find a specific concept, search for a `Type` value across the
+folder rather than reading a whole file top to bottom.
 
 ---
 
 ## Related Documentation
 
-- [Zones](worldgen-zones.md) - Zone records, pattern generators, discovery
-- [Biomes](worldgen-biomes.md) - Biome types and containers
-- [Terrain](worldgen-terrain.md) - Layer system and block population
-- [Caves](worldgen-caves.md) - Cave types, nodes, and shapes
-- [Prefabs](worldgen-prefabs.md) - Structure placement
-- [Prefab API](prefabs.md) - Java API for prefabs
-- [Block System](blocks.md) - Block types and properties
+- [Biomes](worldgen-biomes.md) — biome file structure
+- [Zones / World Structures](worldgen-zones.md) — biome assignment and world framework
+- [Block System](blocks.md) — block ids used as materials

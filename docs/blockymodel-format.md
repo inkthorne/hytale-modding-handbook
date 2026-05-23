@@ -19,10 +19,10 @@ Block models are stored in various locations depending on their purpose:
 
 | Category | Location |
 |----------|----------|
-| Block models | `Assets/Common/Blocks/Models/` |
-| Character models | `Assets/Common/Characters/` |
-| Item models | `Assets/Common/Items/` |
-| NPC models | `Assets/Common/NPC/` |
+| Block models | `Common/Blocks/Models/` |
+| Character models | `Common/Characters/` |
+| Item models | `Common/Items/` |
+| NPC models | `Common/NPC/` |
 
 Models are organized into subdirectories by category (e.g., `Doors/`, `Furniture/`, `Tools/`).
 
@@ -429,7 +429,7 @@ Items reference models through the `Model` field:
 }
 ```
 
-Model paths are relative to `Assets/Common/` and include the `.blockymodel` extension.
+Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 ## Best Practices
 

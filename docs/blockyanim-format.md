@@ -14,7 +14,7 @@ Blockyanim files define animations for block models, controlling how individual 
 
 ## File Location
 
-Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Approximate distribution under `Assets/Common/`:
+Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Approximate distribution under `Common/`:
 
 | Location | Share | Typical use |
 |----------|-------|-------------|
@@ -23,7 +23,7 @@ Despite the "block animation" name, `.blockyanim` files animate any blockymodel 
 | `Blocks/Animations/` | few | Doors, containers, lights, mechanical blocks |
 | `Items/`, `VFX/`, `Resources/` | a handful | Item and effect animations |
 
-Block animations specifically live under `Assets/Common/Blocks/Animations/`, organized into subdirectories by category (e.g., `Doors/`, `Containers/`, `Lights/`).
+Block animations specifically live under `Common/Blocks/Animations/`, organized into subdirectories by category (e.g., `Doors/`, `Containers/`, `Lights/`).
 
 ## Frame Rate
 
@@ -243,7 +243,7 @@ Blocks reference animations through their `CustomModelAnimation` property in the
 }
 ```
 
-The animation path is relative to `Assets/Common/` and omits the `.blockyanim` extension.
+The animation path is relative to `Common/` and omits the `.blockyanim` extension.
 
 ## Looping Behavior
 

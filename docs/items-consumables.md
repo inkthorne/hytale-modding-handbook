@@ -1,5 +1,7 @@
 # Consumable Items
 
+**Doc type:** JSON asset format · **Assets:** `Server/Item`
+
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
 ## Quick Navigation

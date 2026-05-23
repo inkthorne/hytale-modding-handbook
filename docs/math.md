@@ -1,5 +1,7 @@
 # Math / Vector API
 
+**Doc type:** Java API
+
 ## Overview
 
 Hytale provides a comprehensive math library including vectors, matrices, quaternions, shapes, and utilities.

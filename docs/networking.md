@@ -1,5 +1,7 @@
 # Networking API
 
+**Doc type:** Java API
+
 ## Overview
 
 Types for network serialization and protocol communication between client and server.

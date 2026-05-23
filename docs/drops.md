@@ -1,5 +1,7 @@
 # Drop System
 
+**Doc type:** JSON asset format · **Assets:** `Server/Drops`
+
 Drop files define loot tables for blocks, NPCs, containers, and world prefabs. They use a hierarchical container system that supports guaranteed drops, weighted random selection, and modular composition through references.
 
 > **Root structure:** Every drop file wraps its root container in a top-level `Container` object: `{ "Container": { "Type": ... } }`. The only exception is an empty drop file, which is literally `{}`.

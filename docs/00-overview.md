@@ -1,5 +1,7 @@
 # Getting Started with Hytale Modding
 
+**Doc type:** Guide
+
 Welcome to the Hytale Plugin & Asset documentation. This guide will help you get started creating custom content for Hytale servers.
 
 > **Looking for a quick reference?** See the [Documentation Index](01-index.md) for a complete list of all files, asset types, and Java classes.

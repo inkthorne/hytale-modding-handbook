@@ -1,5 +1,7 @@
 # UI Elements Reference
 
+**Doc type:** UI DSL · **Assets:** `Common/UI`
+
 Comprehensive reference for all UI element types in Hytale's DSL.
 
 ---

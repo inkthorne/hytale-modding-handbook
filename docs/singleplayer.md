@@ -1,5 +1,7 @@
 # Singleplayer API
 
+**Doc type:** Java API
+
 Events for singleplayer-specific functionality.
 
 ---

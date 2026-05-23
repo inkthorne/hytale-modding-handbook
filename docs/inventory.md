@@ -1,5 +1,7 @@
 # Inventory API
 
+**Doc type:** Java API
+
 ## Inventory
 **Package:** `com.hypixel.hytale.server.core.inventory`
 

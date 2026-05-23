@@ -1,5 +1,7 @@
 # Operation System
 
+**Doc type:** Java API
+
 > **Prerequisites:** Read [interactions.md](interactions.md) first for an overview of the interaction system.
 >
 > **See also:** [InteractionContext](interactions-context.md) for execution state, [interactions.md](interactions.md) for interaction types.

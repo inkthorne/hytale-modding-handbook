@@ -1,5 +1,7 @@
 # Fluids API
 
+**Doc type:** Java API
+
 ## Fluid
 **Package:** `com.hypixel.hytale.server.core.asset.type.fluid`
 

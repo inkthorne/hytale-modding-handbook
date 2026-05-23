@@ -1,5 +1,7 @@
 # Collision API
 
+**Doc type:** Java API
+
 ## Class Hierarchy
 ```
 CollisionModule (main collision system)

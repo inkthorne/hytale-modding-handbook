@@ -1,5 +1,7 @@
 # Entities API
 
+**Doc type:** Java API
+
 ## Class Hierarchy
 ```
 Entity (abstract, implements Component<EntityStore>)

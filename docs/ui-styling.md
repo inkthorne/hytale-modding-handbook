@@ -1,5 +1,7 @@
 # UI Styling & Layout
 
+**Doc type:** UI DSL · **Assets:** `Common/UI`
+
 Complete reference for positioning, layout, and visual styling in Hytale's UI DSL.
 
 ---

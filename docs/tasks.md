@@ -1,5 +1,7 @@
 # Tasks API
 
+**Doc type:** Java API
+
 ## TaskRegistry
 **Package:** `com.hypixel.hytale.server.core.task`
 

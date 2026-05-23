@@ -1,5 +1,7 @@
 # UI Templates, Variables & Localization
 
+**Doc type:** UI DSL · **Assets:** `Common/UI`
+
 Advanced DSL features for reusable UI components and localization.
 
 ---

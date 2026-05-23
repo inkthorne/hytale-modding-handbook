@@ -186,36 +186,67 @@ FRAG="$(echo "$OUT" | awk '/^FRAG/{print $2}')"
 info "$FRAG json block(s) are fragments / not standalone-parseable (expected for this doc style)"
 
 # =====================================================================
+section "[ADVISORY] Doc-type tags are present and consistent"
+# Every doc should declare **Doc type:**. A doc not tagged "Java API" that still
+# references com.hypixel.* classes may be mis-tagged (or have stray Java refs).
+OUT="$(python3 - <<'PY'
+import re, glob, os
+untagged=[]; mismatch=[]; counts={}
+type_re=re.compile(r'\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)')
+cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
+for p in sorted(glob.glob("docs/*.md")):
+    bn=os.path.basename(p); txt=open(p).read()
+    m=type_re.search(txt)
+    if not m:
+        untagged.append(bn); continue
+    typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
+    if "Java API" not in typ and cls_re.search(txt):
+        mismatch.append((bn,typ))
+for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
+for u in untagged: print(f"UNTAGGED {u}")
+for bn,typ in mismatch: print(f"MISMATCH {bn} [{typ}] references com.hypixel.* classes")
+PY
+)"
+echo "$OUT" | awk '/^COUNT/{printf "  %-4s %s\n",$2,substr($0,index($0,$3))}'
+U="$(echo "$OUT" | grep -c '^UNTAGGED' || true)"
+MM="$(echo "$OUT" | grep -c '^MISMATCH' || true)"
+[ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
+if [ "$MM" -eq 0 ]; then pass "no JSON/DSL-tagged doc references Java classes"; else
+  warn "$MM doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
+  echo "$OUT" | grep '^MISMATCH' | sed 's/^MISMATCH/      /'
+fi
+
+# =====================================================================
 if [ "$DO_FIELDS" -eq 1 ]; then
 section "[ADVISORY] Documented JSON fields appear in real assets"
 if [ -d "$ASSETS" ]; then
   python3 - "$ASSETS" <<'PY'
 import re, glob, os, sys, subprocess
 assets=sys.argv[1]
-# doc -> asset dir mapping (format docs only)
-m = {
-  "items.md":"Server/Item","items-blocks.md":"Server/Item","items-tools.md":"Server/Item",
-  "items-weapons.md":"Server/Item","items-consumables.md":"Server/Item","items-crafting.md":"Server/Item",
-  "drops.md":"Server/Drops","audio.md":"Server/Audio","npc-roles.md":"Server/NPC",
-  "effects-stats.md":"Server/Entity","prefabs-categories.md":"Server/Prefabs",
-}
+# asset dir comes from each doc's "**Assets:** `dir`" tag (single source of truth)
 key_re = re.compile(r'"([A-Za-z][A-Za-z0-9_]+)"\s*:')
-for doc,adir in m.items():
-    p=f"docs/{doc}"
-    if not os.path.exists(p): continue
+adir_re = re.compile(r'\*\*Assets:\*\*\s*`([^`]+)`')
+checked=0
+for p in sorted(glob.glob("docs/*.md")):
+    txt=open(p).read()
+    m=adir_re.search(txt)
+    if not m: continue                     # only docs that declare an asset dir
+    adir=m.group(1)
+    if adir=="Common": continue            # too broad to field-check meaningfully
     keys=set()
-    for b in re.findall(r'```json\n(.*?)```', open(p).read(), re.S):
+    for b in re.findall(r'```json\n(.*?)```', txt, re.S):
         keys.update(key_re.findall(b))
-    d=os.path.join(assets,adir)
-    suspect=[]
-    for k in sorted(keys):
-        r=subprocess.run(["grep","-rl",f'"{k}"',d],capture_output=True)
-        if r.returncode!=0: suspect.append(k)
+    if not keys: continue
+    d=os.path.join(assets,adir); checked+=1
+    suspect=[k for k in sorted(keys)
+             if subprocess.run(["grep","-rl",f'"{k}"',d],capture_output=True).returncode!=0]
+    doc=os.path.basename(p)
     if suspect:
         print(f"  {doc}: {len(suspect)} documented key(s) absent from {adir} (review — may be example/user-defined):")
         print("      "+", ".join(suspect))
     else:
         print(f"  {doc}: all documented keys present in {adir}")
+print(f"  ({checked} docs field-checked via their **Assets:** tag)")
 PY
 else
   warn "skipped (no extracted assets)"

@@ -1,5 +1,7 @@
 # Plugin Lifecycle API
 
+**Doc type:** Java API
+
 ## Class Hierarchy
 ```
 PluginBase (abstract, implements CommandOwner)

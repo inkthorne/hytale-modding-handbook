@@ -1,5 +1,7 @@
 # Adventure API
 
+**Doc type:** Java API
+
 This document covers adventure gameplay features like instance discovery and treasure chests.
 
 ## Adventure Events

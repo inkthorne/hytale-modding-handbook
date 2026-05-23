@@ -1,5 +1,7 @@
 # Documentation Index
 
+**Doc type:** Index
+
 Complete reference for finding the right documentation file. For a beginner-friendly introduction, see [Overview](00-overview.md).
 
 ## Quick Reference Table
@@ -42,6 +44,34 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [audio.md](audio.md) | Audio system documentation covering sound events, audio categories, ambience, reverb, EQ, and integration with other systems. |
 | [worldgen.md](worldgen.md) | World generation system overview including zones, biomes, terrain layers, caves, and structure placement. |
 | [blockyanim-format.md](blockyanim-format.md) | Block animation (.blockyanim) file format for animating block states like doors, chests, and lights. |
+
+## By Documentation Type
+
+Docs are tagged with a `**Doc type:**` line. This groups them by what they document (and how each is verified — see `scripts/verify-docs.sh`).
+
+### Java API
+_Documents Java classes/methods — verify with `javap` against `HytaleServer.jar`._
+
+[Adventure API](adventure.md)  [Asset Editor Events API](asset-editor.md)  [Assets API](assets.md)  [Codecs API](codecs.md)  [Collision API](collision.md)  [Commands API](commands.md)  [Components (ECS) API](components.md)  [Entities API](entities.md)  [Events API](events.md)  [Fluids API](fluids.md)  [InteractionContext](interactions-context.md)  [Inventory API](inventory.md)  [Localization (i18n) API](i18n.md)  [Math / Vector API](math.md)  [NPC API](npc.md)  [Networking API](networking.md)  [Operation System](interactions-operations.md)  [Permissions API](permissions.md)  [Player API](player.md)  [Plugin Lifecycle API](plugin-lifecycle.md)  [Projectiles API](projectiles.md)  [Singleplayer API](singleplayer.md)  [Tasks API](tasks.md)  [UI Java API](ui-api.md)  [World API](world.md)
+
+### JSON asset format
+_Documents on-disk JSON asset file formats — verify against the extracted `Assets.zip`._
+
+[Audio System](audio.md)  [Biome System](worldgen-biomes.md)  [Block Animation Format (.blockyanim)](blockyanim-format.md)  [Block Items](items-blocks.md)  [Block Model Format (.blockymodel)](blockymodel-format.md)  [Caves](worldgen-caves.md)  [Combat & Effects Interactions](interactions-combat.md)  [Combo System Interactions](interactions-combo.md)  [Consumable Items](items-consumables.md)  [Control Flow Interactions](interactions-flow.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Entity & World Interactions](interactions-world.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefab Categories](prefabs-categories.md)  [Props & Structure Placement](worldgen-prefabs.md)  [Terrain Density Graphs](worldgen-terrain.md)  [Tool Items](items-tools.md)  [Weapon Items](items-weapons.md)  [World Generation](worldgen.md)  [World Structures (Zones)](worldgen-zones.md)
+
+### UI DSL
+_Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
+
+[UI Elements Reference](ui-elements.md)  [UI Styling & Layout](ui-styling.md)  [UI Templates, Variables & Localization](ui-templates.md)
+
+### Java API + JSON asset format
+_Covers both a Java API and a JSON asset format for the same topic._
+
+[Block Definitions](blocks.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)
+
+### Guides & Overviews
+
+[Getting Started with Hytale Modding](00-overview.md)  [Pack vs Plugin Directory Structure](02-structure.md)  [UI System](ui.md)
 
 ## Asset Type Index
 

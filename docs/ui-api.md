@@ -1,5 +1,7 @@
 # UI Java API
 
+**Doc type:** Java API
+
 Server-side Java API reference for Hytale's UI system.
 
 ---

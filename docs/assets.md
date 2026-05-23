@@ -1,5 +1,7 @@
 # Assets API
 
+**Doc type:** Java API
+
 ## AssetRegistry
 **Package:** `com.hypixel.hytale.server.core.plugin.registry`
 

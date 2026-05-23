@@ -1,5 +1,7 @@
 # Projectiles API
 
+**Doc type:** Java API
+
 ## Class Hierarchy
 ```
 ProjectileConfig (asset-based configuration)

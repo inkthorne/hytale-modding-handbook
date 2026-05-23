@@ -1,5 +1,7 @@
 # NPC Roles
 
+**Doc type:** JSON asset format · **Assets:** `Server/NPC`
+
 This document covers NPC role asset definitions, including templates, variants, behaviors, and spawning configurations. These assets are found in `Assets.zip` under `Server/NPC/`.
 
 > **See also:** [NPC API](npc.md) for plugin events and sensor systems, [Drop System](drops.md) for NPC loot tables

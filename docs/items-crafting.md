@@ -1,5 +1,7 @@
 # Crafting System
 
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`
+
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 
 ## Quick Navigation

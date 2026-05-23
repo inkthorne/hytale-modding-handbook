@@ -1,5 +1,7 @@
 # UI System
 
+**Doc type:** Guide
+
 Hytale provides a comprehensive UI system for creating custom interfaces. UIs are defined using a curly-brace DSL format and managed through server-side Java APIs.
 
 ---

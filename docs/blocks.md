@@ -1,5 +1,7 @@
 # Block Definitions
 
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`
+
 Block definitions configure every placeable block in Hytale, from terrain and ores to furniture, doors, and fluids. Blocks are defined as items with a `BlockType` property that specifies rendering, collision, sounds, particles, and interaction behavior.
 
 ## Quick Navigation

@@ -1,5 +1,7 @@
 # Player API
 
+**Doc type:** Java API
+
 This document covers player-related events and messaging APIs.
 
 ## Message

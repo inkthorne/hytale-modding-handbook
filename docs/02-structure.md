@@ -1,5 +1,7 @@
 # Pack vs Plugin Directory Structure
 
+**Doc type:** Guide
+
 This guide explains the difference between asset packs and plugins, and how to organize your files for each.
 
 ## Overview

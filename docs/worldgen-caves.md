@@ -1,5 +1,7 @@
 # Caves
 
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+
 Hytale caves are **not** a separate "cave type / cave node / corridor" system. A cave is simply a
 **density field** that goes negative inside the volume you want hollow, combined into a biome's
 terrain density with `Min`. Wherever the cave field is lower than the surface field, the surface

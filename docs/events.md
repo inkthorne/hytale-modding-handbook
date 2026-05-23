@@ -1,5 +1,7 @@
 # Events API
 
+**Doc type:** Java API
+
 This document covers the core event system. For specific event classes, see the relevant domain documentation:
 
 - **Player events** → [player.md](player.md) (includes ChangeGameModeEvent, CraftRecipeEvent)

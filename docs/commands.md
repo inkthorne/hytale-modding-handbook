@@ -1,5 +1,7 @@
 # Commands API
 
+**Doc type:** Java API
+
 ## Class Hierarchy
 ```
 AbstractCommand

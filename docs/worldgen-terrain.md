@@ -1,5 +1,7 @@
 # Terrain Density Graphs
 
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+
 Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
 **node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
 a tree of math/noise nodes that, evaluated per world position, yields a scalar **density** value.

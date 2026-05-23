@@ -1,5 +1,7 @@
 # Item Definitions
 
+**Doc type:** JSON asset format · **Assets:** `Server/Item`
+
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
 ## Quick Navigation

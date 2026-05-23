@@ -1,5 +1,7 @@
 # Asset Editor Events API
 
+**Doc type:** Java API
+
 Events for the built-in asset editor system.
 
 ---

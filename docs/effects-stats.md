@@ -1,5 +1,7 @@
 # Effects & Stats Reference
 
+**Doc type:** JSON asset format · **Assets:** `Server/Entity`
+
 This document covers the JSON asset structure for status effects and entity stats.
 
 > **See also:** [ApplyEffect Interaction](interactions-combat.md#applyeffect) for applying effects via interactions, [ChangeStat Interaction](interactions-combat.md#changestat) for modifying stats.

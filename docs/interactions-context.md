@@ -1,5 +1,7 @@
 # InteractionContext
 
+**Doc type:** Java API
+
 > **Prerequisites:** Read [interactions.md](interactions.md) and [Operation System](interactions-operations.md) first.
 >
 > **See also:** [Item Definitions](items.md) for `InteractionVars`, [entities.md](entities.md#interactionmanager) for `InteractionManager`.

@@ -1,5 +1,7 @@
 # NPC API
 
+**Doc type:** Java API
+
 This document covers NPC loading events and AI sensor systems.
 
 ## Quick Navigation

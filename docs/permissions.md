@@ -1,5 +1,7 @@
 # Permissions API
 
+**Doc type:** Java API
+
 ## PermissionHolder
 **Package:** `com.hypixel.hytale.server.core.permissions`
 

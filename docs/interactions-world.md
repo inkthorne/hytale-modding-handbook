@@ -1,5 +1,7 @@
 # Entity & World Interactions
 
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions`
+
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
 ## Quick Navigation

@@ -1,5 +1,7 @@
 # World Structures (Zones)
 
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+
 The "zone" in Hytale's data is a **world structure** file under
 `Server/HytaleGenerator/WorldStructures/`. A world structure assigns biomes across the
 world by mapping a density value to **ranges**, names a default/fallback biome, controls

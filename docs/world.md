@@ -1,5 +1,7 @@
 # World API
 
+**Doc type:** Java API
+
 ## World
 **Package:** `com.hypixel.hytale.server.core.universe.world`
 

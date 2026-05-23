@@ -69,14 +69,13 @@ The `Effects` object supports these properties:
 | `ItemPlayerAnimationsId` | string | Player animation set ID |
 | `WorldSoundEventId` | string | Sound audible to all nearby players |
 | `LocalSoundEventId` | string | Sound only the executing player hears |
-| `OnFinishLocalSoundEventId` | string | Sound played when interaction finishes |
 | `ClearAnimationOnFinish` | boolean | Stop animation when interaction ends |
 | `ClearSoundEventOnFinish` | boolean | Stop sound when interaction ends |
 | `WaitForAnimationToFinish` | boolean | Wait for animation before completing |
 | `Particles` | array | Particles attached to model bones |
 | `FirstPersonParticles` | array | Particles for first-person view |
 | `Trails` | array | Weapon trail effects |
-| `CameraEffectId` | string | Camera effect (shake, zoom, etc.) |
+| `CameraEffect` | string | Camera effect id (shake, zoom, etc.) |
 | `MovementEffects` | object | Movement modification effects |
 | `StartDelay` | float | Delay before effects begin |
 
@@ -467,17 +466,21 @@ For conditional hit handling based on entity matchers:
 
 **Package:** `config/server/DamageEntityInteraction`
 
-The core interaction for dealing damage to entities. Supports damage calculation, effects, knockback, and stat modifications.
+The core interaction for dealing damage to entities. Damage amount comes from a `DamageCalculator` (not a flat amount field), and hit feedback / knockback live under `DamageEffects`.
+
+Most weapon attacks reference a shared `DamageEntityParent` via `"Parent"` instead of writing `"Type": "DamageEntity"` directly. The parent supplies common behaviour (clearing regen effects on hit, etc.) and the child adds its `DamageCalculator` and `DamageEffects`.
 
 ### Basic Structure
 
 ```json
 {
   "Type": "DamageEntity",
-  "DamageParameters": {
-    "DamageAmount": 10,
-    "DamageCauseId": "Physical"
-  }
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 5
+    }
+  },
+  "DamageEffects": {}
 }
 ```
 
@@ -485,75 +488,94 @@ The core interaction for dealing damage to entities. Supports damage calculation
 
 ```json
 {
-  "Type": "DamageEntity",
-  "DamageParameters": {
-    "DamageAmount": 10,
-    "DamageCauseId": "Physical",
-    "DamageCalculator": {
-      "Type": "Standard",
-      "BaseDamage": 10,
-      "CriticalMultiplier": 1.5,
-      "CriticalChance": 0.1
+  "Parent": "DamageEntityParent",
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 10
     }
+  },
+  "DamageEffects": {
+    "Knockback": {
+      "Type": "Force",
+      "VelocityConfig": {
+        "AirResistance": 0.97,
+        "AirResistanceMax": 0.96,
+        "GroundResistance": 0.94,
+        "GroundResistanceMax": 0.3,
+        "Threshold": 3.0,
+        "Style": "Exp"
+      },
+      "Direction": { "X": 0.0, "Y": -2.0, "Z": -2.5 },
+      "Force": 8.0,
+      "VelocityType": "Set"
+    },
+    "StaminaDrainMultiplier": 2.5,
+    "WorldSoundEventId": "SFX_Club_Steel_Impact",
+    "LocalSoundEventId": "SFX_Club_Steel_Impact",
+    "WorldParticles": [
+      { "SystemId": "Impact_Sword_Basic_Stronk" }
+    ]
   },
   "EntityStatsOnHit": [
-    { "EntityStatId": "SignatureEnergy", "Amount": 1 }
-  ],
-  "DamageEffects": {
-    "ModelParticles": [
-      { "SystemId": "Blood_Splatter", "Bone": "Chest" }
-    ],
-    "WorldParticles": [
-      { "SystemId": "Impact_Sparks" }
-    ],
-    "LocalSoundEventId": "SFX_Hit_Flesh",
-    "WorldSoundEventId": "SFX_Impact_Metal",
-    "PlayerSoundEventId": "SFX_Player_Hit",
-    "CameraEffectId": "Camera_Shake_Light",
-    "StaminaDrainMultiplier": 1.0,
-    "Knockback": {
-      "Force": 0.5,
-      "RelativeX": -5,
-      "RelativeZ": -5,
-      "VelocityY": 5
-    }
-  },
-  "TargetSelector": {
-    "Type": "AOECircle",
-    "Radius": 3.0
-  }
+    { "EntityStatId": "SignatureEnergy", "Amount": 0 }
+  ]
 }
 ```
 
-### DamageParameters Properties
+### Core Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `DamageAmount` | float | Base damage value |
-| `DamageCauseId` | string | Damage type (Physical, Magical, Fire, etc.) |
-| `DamageCalculator` | object | Optional custom damage calculation |
+| `DamageCalculator` | object | Damage source (see below). Holds `BaseDamage` per damage class |
+| `DamageEffects` | object | Hit feedback: knockback, sounds, particles (see below) |
+| `EntityStatsOnHit` | array | Stats granted to the attacker on a successful hit |
+| `Parent` | string | Optional. Inherits another interaction (e.g. `DamageEntityParent`) |
+
+### DamageCalculator Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `BaseDamage` | object | Map of damage class to amount, e.g. `{ "Physical": 10 }` (other classes such as `Fire` also appear) |
 
 ### DamageEffects Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `ModelParticles` | array | Particles attached to hit entity's model bones |
-| `WorldParticles` | array | Particles spawned at hit location in world space |
+| `Knockback` | object | Knockback configuration (see below) |
+| `WorldParticles` | array | Particles spawned at the hit location, each an object with `SystemId` (optional `Scale`) |
 | `LocalSoundEventId` | string | Sound played for the attacker only |
 | `WorldSoundEventId` | string | Sound played at hit location for all nearby |
-| `PlayerSoundEventId` | string | Sound played for hit player specifically |
-| `CameraEffectId` | string | Camera shake or effect on hit |
 | `StaminaDrainMultiplier` | float | Multiplier for stamina drain on hit |
-| `Knockback` | object | Knockback configuration (see [Knockback System](combat.md#knockback-system)) |
+
+### Knockback Properties
+
+Two `Type` forms appear in real assets — a simple relative form and a `Force`/`Point` directional form:
+
+```json
+"Knockback": {
+  "Force": 1,
+  "RelativeX": 5,
+  "RelativeZ": -5,
+  "VelocityY": 5
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Type` | string | `"Force"` or `"Point"` for directional knockback (omitted for the relative form) |
+| `Force` | float | Strength of the knockback impulse |
+| `Direction` | object | `{ "X", "Y", "Z" }` push direction (with `Type: Force`/`Point`) |
+| `RelativeX` / `RelativeZ` / `VelocityY` | float | Relative push offsets and upward velocity (simple form) |
+| `VelocityType` | string | e.g. `"Set"` |
+| `VelocityConfig` | object | Air/ground resistance and `Style` tuning |
 
 ### EntityStatsOnHit
 
-Grants stats to the attacker on successful hit:
+A top-level array (sibling of `DamageEffects`) that grants stats to the attacker on a successful hit. Each entry has `EntityStatId` and `Amount`:
 
 ```json
 "EntityStatsOnHit": [
-  { "EntityStatId": "SignatureEnergy", "Amount": 1 },
-  { "EntityStatId": "Stamina", "Amount": 5 }
+  { "EntityStatId": "SignatureEnergy", "Amount": 0 }
 ]
 ```
 
@@ -563,16 +585,17 @@ Grants stats to the attacker on successful hit:
 
 **Package:** `config/client/ApplyForceInteraction`
 
-Applies physics force to entities, used for knockback, launches, and movement effects.
+Applies physics force to entities, used for launches, dashes, and movement effects. The force is a `Direction` vector scaled by a `Force` magnitude.
 
 ### Structure
 
 ```json
 {
   "Type": "ApplyForce",
-  "Force": [0, 10, -5],
-  "ForceType": "Impulse",
-  "RelativeToFacing": true
+  "Direction": { "X": 0, "Y": 2, "Z": 0 },
+  "AdjustVertical": false,
+  "WaitForGround": false,
+  "Force": 15
 }
 ```
 
@@ -580,19 +603,23 @@ Applies physics force to entities, used for knockback, launches, and movement ef
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Force` | [x, y, z] | Force vector to apply |
-| `ForceType` | string | `Impulse` (instant) or `Continuous` (over time) |
-| `RelativeToFacing` | boolean | If true, force is relative to entity facing direction |
-| `Duration` | float | Duration for continuous forces |
+| `Direction` | object | Force direction as `{ "X", "Y", "Z" }` |
+| `Force` | float | Magnitude applied along `Direction` |
+| `AdjustVertical` | boolean | Adjust the vertical component of the force |
+| `WaitForGround` | boolean | Wait until the entity is grounded before applying |
+| `Duration` | float | Duration for sustained forces (optional) |
 
-### Example: Launch Pad Effect
+### Example: Double Jump
+
+A vertical launch used by the double-jump interaction:
 
 ```json
 {
   "Type": "ApplyForce",
-  "Force": [0, 25, 0],
-  "ForceType": "Impulse",
-  "RelativeToFacing": false
+  "Direction": { "X": 0, "Y": 2, "Z": 0 },
+  "AdjustVertical": false,
+  "WaitForGround": false,
+  "Force": 15
 }
 ```
 
@@ -611,42 +638,37 @@ Applies status effects to entities (buffs, debuffs, damage over time, etc.).
 ```json
 {
   "Type": "ApplyEffect",
-  "EffectId": "hytale:poison",
-  "Duration": 10,
-  "Amplifier": 1,
-  "Target": "Self"
+  "EffectId": "Stun",
+  "Entity": "Target"
 }
 ```
+
+The effect's duration, magnitude, and particles are defined in the effect asset itself (referenced by `EffectId`), not on the interaction.
 
 ### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `EffectId` | string | ID of the effect to apply |
-| `Duration` | float | Duration in seconds |
-| `Amplifier` | int | Effect strength/level (0 = level 1) |
-| `Target` | string | `Self`, `Target`, or `AOE` |
-| `ShowParticles` | boolean | Whether to show effect particles |
+| `EffectId` | string | ID of the effect to apply (e.g. `Stun`, `Root`, `Red_Flash`) |
+| `Entity` | string | Who receives the effect — `Target`, `Self`, `User`, or `Owner` (defaults to the executing entity when omitted) |
 
-### Example: Apply Burning Effect on Hit
+### Example: Apply Root on a Wand Hit
+
+After a raycast selector hits a vulnerable entity, grant brief immunity then apply the Root effect:
 
 ```json
 {
   "Type": "Serial",
   "Interactions": [
     {
-      "Type": "DamageEntity",
-      "DamageParameters": {
-        "DamageAmount": 5,
-        "DamageCauseId": "Fire"
-      }
+      "Type": "ChangeStat",
+      "Entity": "Target",
+      "StatModifiers": { "Immunity": 25 }
     },
     {
       "Type": "ApplyEffect",
-      "EffectId": "hytale:burning",
-      "Duration": 5,
-      "Amplifier": 0,
-      "Target": "Target"
+      "EffectId": "Root",
+      "Entity": "Target"
     }
   ]
 }
@@ -658,15 +680,15 @@ Applies status effects to entities (buffs, debuffs, damage over time, etc.).
 
 **Package:** `config/server/ClearEntityEffectInteraction`
 
-Removes status effects from entities.
+Removes status effects from entities. Effects are identified by their entity-effect id (`EntityEffectId` for one, or `EntityEffectIds` for several).
 
 ### Structure
 
 ```json
 {
   "Type": "ClearEntityEffect",
-  "EffectId": "hytale:poison",
-  "Target": "Self"
+  "Entity": "Target",
+  "EntityEffectId": "Potion_Health_Regen"
 }
 ```
 
@@ -674,17 +696,29 @@ Removes status effects from entities.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `EffectId` | string | Specific effect to remove, or omit for all |
-| `Target` | string | `Self` or `Target` |
-| `EffectCategory` | string | Remove all effects of a category (optional) |
+| `Entity` | string | Whose effect to remove — typically `Target` |
+| `EntityEffectId` | string | Single effect id to remove |
+| `EntityEffectIds` | array | List of effect ids to remove |
 
-### Example: Cleanse Potion
+### Example: Strip Regen Effects on Hit
+
+`DamageEntityParent` chains a series of `ClearEntityEffect` interactions so a damaging hit cancels the target's active regen buffs:
 
 ```json
 {
-  "Type": "ClearEntityEffect",
-  "EffectCategory": "Debuff",
-  "Target": "Self"
+  "Type": "Serial",
+  "Interactions": [
+    {
+      "Type": "ClearEntityEffect",
+      "Entity": "Target",
+      "EntityEffectId": "Potion_Health_Regen"
+    },
+    {
+      "Type": "ClearEntityEffect",
+      "Entity": "Target",
+      "EntityEffectId": "Potion_Stamina_Regen"
+    }
+  ]
 }
 ```
 
@@ -876,27 +910,25 @@ From an area-effect stun bomb that grants immunity to prevent chain-stunning:
 
 ```json
 {
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "Selector",
-      "SelectorType": "AOECircle",
-      "Radius": 4,
-      "IncludeSelf": false,
-      "EntityCategory": "Creature",
-      "Interaction": {
-        "Type": "Condition",
-        "ConditionType": "Effect",
-        "Effect": "Immune",
-        "Invert": true,
+  "Type": "Selector",
+  "Selector": {
+    "Id": "AOECircle",
+    "Range": 3
+  },
+  "HitEntity": {
+    "Interactions": [
+      {
+        "Type": "EffectCondition",
+        "Entity": "Target",
+        "EntityEffectIds": ["Immune"],
+        "Match": "None",
         "Next": {
           "Type": "Serial",
           "Interactions": [
             {
               "Type": "ChangeStat",
               "Entity": "Target",
-              "StatType": "Effects",
-              "StatModifiers": { "Immune": 4.0 }
+              "StatModifiers": { "Immunity": 25 }
             },
             {
               "Type": "Interrupt",
@@ -905,32 +937,37 @@ From an area-effect stun bomb that grants immunity to prevent chain-stunning:
             },
             {
               "Type": "ApplyEffect",
-              "Entity": "Target",
-              "Effect": "Stun",
-              "Duration": 3.0
+              "EffectId": "Stun",
+              "Entity": "Target"
             },
             {
-              "Type": "DamageEntity",
-              "Entity": "Target",
-              "DamageType": "Physical",
-              "Amount": 10,
-              "Knockback": 5
+              "Parent": "DamageEntityParent",
+              "DamageCalculator": {
+                "BaseDamage": { "Physical": 15 }
+              },
+              "DamageEffects": {
+                "Knockback": {
+                  "Type": "Point",
+                  "Force": 15,
+                  "VelocityType": "Set"
+                }
+              }
             }
           ]
         }
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
-This pattern:
-1. Selects all creatures in a 4-block radius
-2. Checks they don't already have Immunity (prevents chain-stunning)
-3. Grants 4 seconds of Immunity
-4. Interrupts their current action (unless Uninterruptable)
-5. Applies a 3-second Stun effect
-6. Deals damage with knockback
+This pattern (from `Bomb_Explode_Stun`):
+1. Selects entities in a 3-block-radius `AOECircle`
+2. Uses `EffectCondition` with `Match: "None"` to skip targets that already have `Immune`
+3. Grants Immunity via `ChangeStat`
+4. Interrupts their current action (unless tagged `Uninterruptable`)
+5. Applies the `Stun` effect
+6. Deals damage with knockback through `DamageEntityParent`
 
 #### Melee Stun Attack
 
@@ -938,13 +975,14 @@ A weapon hit that interrupts and stuns on contact:
 
 ```json
 {
-  "Type": "HitEntity",
+  "Type": "Serial",
   "Interactions": [
     {
       "Type": "DamageEntity",
-      "Entity": "Target",
-      "DamageType": "Physical",
-      "Amount": 15
+      "DamageCalculator": {
+        "BaseDamage": { "Physical": 15 }
+      },
+      "DamageEffects": {}
     },
     {
       "Type": "Interrupt",
@@ -952,9 +990,8 @@ A weapon hit that interrupts and stuns on contact:
     },
     {
       "Type": "ApplyEffect",
-      "Entity": "Target",
-      "Effect": "Stun",
-      "Duration": 1.5
+      "EffectId": "Stun",
+      "Entity": "Target"
     }
   ]
 }

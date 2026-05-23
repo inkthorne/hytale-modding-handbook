@@ -187,8 +187,9 @@ info "$FRAG json block(s) are fragments / not standalone-parseable (expected for
 
 # =====================================================================
 section "[ADVISORY] Doc-type tags are present and consistent"
-# Every doc should declare **Doc type:**. A doc not tagged "Java API" that still
-# references com.hypixel.* classes may be mis-tagged (or have stray Java refs).
+# Every doc should declare **Doc type:**. A doc not tagged "Java API" that
+# references >=2 distinct com.hypixel.* classes may be mis-tagged (a single
+# incidental base-class mention in a JSON/DSL doc is normal and not flagged).
 OUT="$(python3 - <<'PY'
 import re, glob, os
 untagged=[]; mismatch=[]; counts={}
@@ -200,11 +201,12 @@ for p in sorted(glob.glob("docs/*.md")):
     if not m:
         untagged.append(bn); continue
     typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
-    if "Java API" not in typ and cls_re.search(txt):
-        mismatch.append((bn,typ))
+    classes=set(cls_re.findall(txt))
+    if "Java API" not in typ and len(classes) >= 2:
+        mismatch.append((bn,typ,len(classes)))
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
-for bn,typ in mismatch: print(f"MISMATCH {bn} [{typ}] references com.hypixel.* classes")
+for bn,typ,n in mismatch: print(f"MISMATCH {bn} [{typ}] references {n} distinct com.hypixel.* classes")
 PY
 )"
 echo "$OUT" | awk '/^COUNT/{printf "  %-4s %s\n",$2,substr($0,index($0,$3))}'

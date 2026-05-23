@@ -105,31 +105,36 @@ Demonstrates the inventory API with:
 
 ## Requirements
 
-- Hytale installed (uses `HytaleServer.jar` from `%APPDATA%\Hytale`)
+- Hytale installed (uses `HytaleServer.jar` from the local install)
+  - **Windows:** `%APPDATA%\Hytale\install\release\package\game\latest\Server\`
+  - **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/package/game/latest/Server/`
 - Java 25+
 - Gradle (wrapper included)
 
+The build resolves the jar automatically per-platform via `examples/hytale-paths.gradle`.
+
 ## Building
 
-Each example can be built independently:
+Each example can be built independently.
 
+**Windows:**
 ```batch
-cd examples/commands
-build.bat
+cd examples\commands
+build.bat        :: build
+deploy.bat       :: build and deploy to the mods folder
 ```
 
-Or using Gradle directly:
-
-```batch
-gradlew build
+**Linux / macOS** (use the Gradle wrapper directly — the `.bat` scripts are Windows-only):
+```bash
+cd examples/commands
+./gradlew jar    # build (produces build/libs/*.jar)
 ```
 
 ## Deployment
 
-Copy the built JAR from `build/libs/` to:
-```
-%APPDATA%\Hytale\UserData\Mods\
-```
+Copy the built JAR from `build/libs/` to the mods folder:
+- **Windows:** `%APPDATA%\Hytale\UserData\Mods\`
+- **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`
 
 ## License
 

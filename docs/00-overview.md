@@ -78,16 +78,26 @@ Each example can be built and deployed to test changes immediately.
 
 From any example directory:
 
-```bash
-./build.bat    # Build the plugin
-./deploy.bat   # Build and deploy to Hytale mods folder
+```batch
+:: Windows
+build.bat      :: Build the plugin
+deploy.bat     :: Build and deploy to the Hytale mods folder
 ```
 
-Plugins are deployed to `%APPDATA%\Hytale\UserData\Mods\`.
+```bash
+# Linux / macOS (the .bat scripts are Windows-only)
+./gradlew jar  # Build the plugin (produces build/libs/*.jar)
+```
+
+Plugins are deployed to the mods folder:
+- **Windows:** `%APPDATA%\Hytale\UserData\Mods\`
+- **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`
 
 ### Reference Files
 
 Your Hytale installation contains useful reference files:
 
-- **HytaleServer.jar** (`%APPDATA%\Hytale\install\release\package\game\latest\Server\`) - Decompile to explore API classes
-- **Assets.zip** (`%APPDATA%\Hytale\install\release\package\game\latest\`) - Contains all vanilla asset definitions as examples
+- **HytaleServer.jar** (`...install/release/package/game/latest/Server/`) - Decompile to explore API classes
+- **Assets.zip** (`...install/release/package/game/latest/`) - Contains all vanilla asset definitions as examples
+
+The install root is `%APPDATA%\Hytale\` on Windows and `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/` on the Linux Flatpak launcher. See [CLAUDE.md](../CLAUDE.md) for extracting `Assets.zip` to inspect assets on Linux.

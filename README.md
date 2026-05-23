@@ -103,6 +103,12 @@ Demonstrates the inventory API with:
 - Inspecting inventory contents
 - Sorting storage by name/type/rarity
 
+### [examples/entity-count/](./examples/entity-count/)
+Demonstrates the ECS ticking-system pattern with:
+- An `EntityTickingSystem` that runs every tick on the world thread
+- Counting entities by component (`Total`/`Players`/`NPCs`/`Other`)
+- Pushing live values to a `CustomUIHud` overlay
+
 ## Requirements
 
 - Hytale installed (uses `HytaleServer.jar` from the local install)

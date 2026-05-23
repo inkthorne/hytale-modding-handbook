@@ -12,8 +12,8 @@ When an interaction runs, `InteractionContext` carries:
 
 - **Entity references** - The owning entity, executing entity, and targets
 - **Item state** - The held item being used
-- **Meta store** - Key-value data like hit locations and targets
-- **InteractionVars** - Item-defined variables for customization
+- **Meta store** - Key-value data like hit locations and targets (`DynamicMetaStore`)
+- **InteractionVars** - Item-defined variables for customization (a `Map<String, String>`)
 - **Flow control** - Labels and jump capabilities
 - **Chain management** - Current chain and entry tracking
 
@@ -27,7 +27,7 @@ Understanding `InteractionContext` is essential for:
 
 ## InteractionContext Class
 
-**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction`
+**Package:** `com.hypixel.hytale.server.core.entity`
 
 ### Core Methods
 
@@ -40,30 +40,34 @@ public class InteractionContext {
 
     // Item access
     ItemStack getHeldItem();                // The item being used
-    int getHeldItemSlot();                  // Slot index of held item
-    ItemType getOriginalItemType();         // Item type when chain started
+    byte getHeldItemSlot();                 // Slot index of held item
+    Item getOriginalItemType();             // Item config when chain started
 
     // Meta store (dynamic data)
-    <T> T getMeta(MetaKey<T> key);
-    <T> void setMeta(MetaKey<T> key, T value);
-    MetaStore getMetaStore();
+    DynamicMetaStore<InteractionContext> getMetaStore();
 
-    // InteractionVars (item-defined variables)
-    InteractionVars getInteractionVars();
-    void setInteractionVarsGetter(InteractionVarsGetter getter);
+    // InteractionVars (item-defined variables, a plain String->String map)
+    Map<String, String> getInteractionVars();
+    void setInteractionVarsGetter(Function<InteractionContext, Map<String, String>> getter);
 
     // Flow control
     void jump(Label label);
     int getOperationCounter();
+    void setOperationCounter(int counter);
     void setLabels(Label... labels);
-    void advanceOperation();
 
     // Chain management
     InteractionChain getChain();
     InteractionEntry getEntry();
-    InteractionContext fork();
+    // fork(...) overloads return InteractionChain and take args, e.g.:
+    InteractionChain fork(InteractionType type, InteractionContext ctx,
+                          RootInteraction root, boolean flag);
 }
 ```
+
+> **Note:** `InteractionContext` does **not** expose `getMeta`/`setMeta` convenience
+> methods. Meta values are accessed through the `DynamicMetaStore` returned by
+> `getMetaStore()`. There is no `advanceOperation()` and no static factory method.
 
 ---
 
@@ -135,12 +139,13 @@ public void tick(..., InteractionContext context, ...) {
 
 ### Original Item Type
 
-Tracks the item type when the chain started. Useful for detecting item swaps:
+Tracks the item config when the chain started. Useful for detecting item swaps.
+`getOriginalItemType()` returns an `Item` (the item config type), not an `ItemType`:
 
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
-    ItemType original = context.getOriginalItemType();
+    Item original = context.getOriginalItemType();
     ItemStack current = context.getHeldItem();
 
     if (current != null && !current.getItemType().equals(original)) {
@@ -152,7 +157,7 @@ public void tick(..., InteractionContext context, ...) {
 ### Held Item Slot
 
 ```java
-int slot = context.getHeldItemSlot();
+byte slot = context.getHeldItemSlot();
 // Use for inventory operations
 ```
 
@@ -160,7 +165,7 @@ int slot = context.getHeldItemSlot();
 
 ## Meta Store
 
-The meta store is a key-value map for passing data between operations. Standard keys are defined on the `Interaction` class.
+The meta store is a key-value map for passing data between operations. Standard keys are defined on the `Interaction` class. Access it via `context.getMetaStore()`, which returns a `DynamicMetaStore`; read with `getMetaObject(key)` and write with `putMetaObject(key, value)`.
 
 ### Standard Meta Keys
 
@@ -180,14 +185,16 @@ The meta store is a key-value map for passing data between operations. Standard 
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
+    DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
+
     // Get target from selector
-    Ref<EntityStore> target = context.getMeta(Interaction.TARGET_ENTITY);
+    Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
 
     // Get hit position
-    Vector4d hitPos = context.getMeta(Interaction.HIT_LOCATION);
+    Vector4d hitPos = meta.getMetaObject(Interaction.HIT_LOCATION);
 
     // Get damage info
-    Damage damage = context.getMeta(Interaction.DAMAGE);
+    Damage damage = meta.getMetaObject(Interaction.DAMAGE);
 
     if (target != null && hitPos != null) {
         // Spawn hit effect at location
@@ -200,13 +207,15 @@ public void tick(..., InteractionContext context, ...) {
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
+    DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
+
     // Store data for later operations
-    context.setMeta(Interaction.TARGET_ENTITY, foundTarget);
-    context.setMeta(Interaction.HIT_LOCATION, hitPosition);
+    meta.putMetaObject(Interaction.TARGET_ENTITY, foundTarget);
+    meta.putMetaObject(Interaction.HIT_LOCATION, hitPosition);
 }
 ```
 
-### MetaKey and MetaStore
+### MetaKey and the Meta Store
 
 The meta system provides type-safe key-value storage for passing data between operations during interaction execution.
 
@@ -214,29 +223,21 @@ The meta system provides type-safe key-value storage for passing data between op
 
 `MetaKey<T>` is a type-safe key class that identifies stored values and enforces their type at compile time.
 
-**Package:** `com.hypixel.hytale.server.core.modules.interaction.meta`
+**Package:** `com.hypixel.hytale.server.core.meta`
+
+`MetaKey` has a package-private constructor (keys are registered internally) and exposes only `getId()`. There is no public `MetaKey.create(...)` factory, so plugins use the predefined standard keys on the `Interaction` class rather than creating their own.
+
+#### DynamicMetaStore
+
+The store is accessed via `context.getMetaStore()`, which returns a
+`DynamicMetaStore<InteractionContext>`. Read and write values directly on it:
 
 ```java
-// Create a key with namespace and type
-public static final MetaKey<Vector3d> IMPACT_POINT =
-    MetaKey.create("myplugin:impact", Vector3d.class);
+DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
 
-public static final MetaKey<Integer> HIT_COUNT =
-    MetaKey.create("myplugin:hits", Integer.class);
-
-public static final MetaKey<List<Ref<EntityStore>>> TARGETS =
-    MetaKey.create("myplugin:targets", List.class);
-```
-
-**Key naming convention:** Use `namespace:name` format to avoid conflicts between plugins (e.g., `"myplugin:damage_multiplier"`).
-
-#### MetaStore
-
-`MetaStore` is the underlying storage accessed via `context.getMetaStore()`. Most operations use the convenience methods on `InteractionContext` directly.
-
-```java
-// Direct MetaStore access (rarely needed)
-MetaStore metaStore = context.getMetaStore();
+Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
+boolean has = meta.hasMetaObject(Interaction.DAMAGE);
+meta.putMetaObject(Interaction.TARGET_ENTITY, foundTarget);
 ```
 
 #### Standard Keys on Interaction Class
@@ -251,65 +252,37 @@ The `Interaction` class defines standard keys used by built-in operations:
 | `Interaction.TARGET_BLOCK` | `BlockPosition` | Block targeting | Block being interacted with |
 | `Interaction.DAMAGE` | `Damage` | Damage ops | Damage calculation result |
 
-#### Custom Meta Keys
-
-Define custom keys to pass data between your operations:
-
-```java
-public class MyInteractionKeys {
-    // Define keys as static finals for reuse
-    public static final MetaKey<Vector3d> IMPACT_POINT =
-        MetaKey.create("myplugin:impact_point", Vector3d.class);
-
-    public static final MetaKey<Float> CHARGE_LEVEL =
-        MetaKey.create("myplugin:charge", Float.class);
-
-    public static final MetaKey<Boolean> IS_CRITICAL =
-        MetaKey.create("myplugin:critical", Boolean.class);
-}
-```
+> **Note:** `MetaKey` instances are registered internally and have no public
+> `create(...)` factory, so plugins cannot define arbitrary custom keys. Use the
+> predefined standard keys above. To carry your own data between operations, prefer
+> the item's `InteractionVars` (see below).
 
 #### Operation Communication Pattern
 
 Operations communicate by writing to and reading from the meta store:
 
 ```java
-// First operation: Calculate and store data
-public class CalculateDamageOp implements Operation {
-    @Override
-    public void tick(..., InteractionContext context, ...) {
-        float baseDamage = context.getInteractionVars().getFloat("Damage", 10.0f);
-        float chargeLevel = context.getMeta(MyInteractionKeys.CHARGE_LEVEL);
-
-        float finalDamage = baseDamage * (chargeLevel != null ? chargeLevel : 1.0f);
-
-        // Store for later operations
-        context.setMeta(MyInteractionKeys.CALCULATED_DAMAGE, finalDamage);
-        context.advanceOperation();
-    }
-}
-
-// Second operation: Use the stored data
+// First operation: Read a target stored by an earlier Selector
 public class ApplyDamageOp implements Operation {
     @Override
     public void tick(..., InteractionContext context, ...) {
-        Float damage = context.getMeta(MyInteractionKeys.CALCULATED_DAMAGE);
-        Ref<EntityStore> target = context.getMeta(Interaction.TARGET_ENTITY);
+        DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
 
-        if (damage != null && target != null) {
+        Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
+        Damage damage = meta.getMetaObject(Interaction.DAMAGE);
+
+        if (target != null && damage != null) {
             // Apply damage to target
         }
-        context.advanceOperation();
     }
 }
 ```
 
 #### Best Practices
 
-1. **Define keys as static finals** - Reuse the same key instance across operations
-2. **Use namespaced names** - Prevents conflicts with other plugins
-3. **Check for null** - Meta values may not be set if earlier operations were skipped
-4. **Type safety** - The generic type ensures compile-time type checking
+1. **Use the standard keys** - The `Interaction` constants cover targeting, hits, and damage
+2. **Check for null** - Meta values may not be set if earlier operations were skipped
+3. **Type safety** - The `MetaKey<T>` generic ensures compile-time type checking
 
 ---
 
@@ -319,15 +292,20 @@ public class ApplyDamageOp implements Operation {
 
 ### Accessing InteractionVars
 
+`getInteractionVars()` returns a plain `Map<String, String>` — there are no typed
+accessors. Parse values yourself:
+
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
-    InteractionVars vars = context.getInteractionVars();
+    Map<String, String> vars = context.getInteractionVars();
 
-    // Get typed values
-    float damage = vars.getFloat("Damage", 10.0f);  // Default 10
-    String effectId = vars.getString("EffectId", "none");
-    int count = vars.getInt("HitCount", 1);
+    // Values are strings; parse and apply defaults manually
+    float damage = vars.containsKey("Damage")
+        ? Float.parseFloat(vars.get("Damage")) : 10.0f;
+    String effectId = vars.getOrDefault("EffectId", "none");
+    int count = vars.containsKey("HitCount")
+        ? Integer.parseInt(vars.get("HitCount")) : 1;
 }
 ```
 
@@ -390,26 +368,15 @@ public void tick(..., InteractionContext context, ...) {
 }
 ```
 
-### Advancing Operations
-
-Signal that the current operation is complete:
-
-```java
-@Override
-public void tick(..., InteractionContext context, ...) {
-    elapsed += deltaTime;
-    if (elapsed >= duration) {
-        context.advanceOperation();  // Move to next operation
-    }
-}
-```
-
 ### Operation Counter
 
-Track current position in the operation array:
+Track and set the current position in the operation array. There is no
+`advanceOperation()` convenience method; the operation counter is read and written
+directly:
 
 ```java
 int currentOp = context.getOperationCounter();
+context.setOperationCounter(currentOp + 1);  // Move to next operation
 ```
 
 ---
@@ -418,57 +385,47 @@ int currentOp = context.getOperationCounter();
 
 ### InteractionChain
 
-The chain represents the full execution context:
+The chain represents the full execution context (package
+`com.hypixel.hytale.server.core.entity`):
 
 ```java
 InteractionChain chain = context.getChain();
 
-// Chain state
-boolean isComplete = chain.isComplete();
-InteractionState state = chain.getState();
+// Chain identification and type
+int chainId = chain.getChainId();
+InteractionType type = chain.getType();
 
-// Chain identification
-String chainId = chain.getId();
+// Server-side state and the root interaction
+InteractionState state = chain.getServerState();
+RootInteraction root = chain.getRootInteraction();
 ```
 
 ### InteractionEntry
 
-The entry is the starting point configuration:
+The entry tracks per-entry execution state (package
+`com.hypixel.hytale.server.core.entity`):
 
 ```java
 InteractionEntry entry = context.getEntry();
-
-// Get the root interaction
-RootInteraction root = entry.getRootInteraction();
+int index = entry.getIndex();
 ```
 
 ### Forking Contexts
 
-Create a new context for parallel/branched execution:
+`fork(...)` starts a new (forked) chain. Unlike a no-arg copy, the overloads take
+arguments and return an `InteractionChain`:
 
 ```java
-InteractionContext forkedContext = context.fork();
-// forkedContext shares meta store but has independent operation tracking
+// fork(InteractionType, InteractionContext, RootInteraction, boolean)
+InteractionChain forked = context.fork(type, context, rootInteraction, false);
 ```
 
 ---
 
-## Creating Contexts
+## Receiving Contexts
 
-### Factory Methods
-
-Contexts are typically created by the interaction system, but can be created manually:
-
-```java
-// Create context for an entity
-InteractionContext context = InteractionContext.create(
-    entityRef,           // Executing entity
-    ownerRef,            // Owning entity (usually same)
-    heldItem,            // Item being used
-    heldItemSlot,        // Slot index
-    interactionVars      // Vars from item
-);
-```
+`InteractionContext` is created by the interaction system (via internal static
+factories such as `forInteraction(...)`); plugins do not construct it directly.
 
 ### Context in Custom Interactions
 
@@ -497,28 +454,27 @@ public class ApplyBurnOp implements Operation {
                      float deltaTime, InteractionType type, InteractionContext context,
                      CooldownHandler cooldown) {
         if (!isFirstTick) {
-            context.advanceOperation();
             return;
         }
+
+        DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
 
         // Get target from previous Selector operation
-        Ref<EntityStore> target = context.getMeta(Interaction.TARGET_ENTITY);
+        Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
         if (target == null || !target.isValid()) {
-            context.advanceOperation();
             return;
         }
 
-        // Get burn duration from item's InteractionVars
-        InteractionVars vars = context.getInteractionVars();
-        float burnDuration = vars.getFloat("BurnDuration", 5.0f);
+        // Get burn duration from item's InteractionVars (a String->String map)
+        Map<String, String> vars = context.getInteractionVars();
+        float burnDuration = vars.containsKey("BurnDuration")
+            ? Float.parseFloat(vars.get("BurnDuration")) : 5.0f;
 
         // Apply burn effect to target
         LivingEntity targetEntity = target.get(LivingEntity.class);
         if (targetEntity != null) {
             // Apply effect logic...
         }
-
-        context.advanceOperation();
     }
 
     // ... other Operation methods
@@ -539,7 +495,7 @@ public class CheckCriticalHitOp implements Operation {
 
     @Override
     public void tick(..., InteractionContext context, ...) {
-        Damage damage = context.getMeta(Interaction.DAMAGE);
+        Damage damage = context.getMetaStore().getMetaObject(Interaction.DAMAGE);
 
         if (damage != null && damage.isCritical()) {
             context.jump(critLabel);

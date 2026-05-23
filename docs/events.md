@@ -22,7 +22,7 @@ This document covers the core event system. For specific event classes, see the 
 ---
 
 ## EventRegistry
-**Package:** `com.hypixel.hytale.server.core.event`
+**Package:** `com.hypixel.hytale.event`
 
 Register event listeners. Access via `getEventRegistry()` in your plugin.
 
@@ -92,7 +92,7 @@ Listens only if no other handler processed the event:
 ---
 
 ## EventPriority
-**Package:** `com.hypixel.hytale.server.core.event`
+**Package:** `com.hypixel.hytale.event`
 
 Use to control handler execution order. Lower priority number executes first.
 

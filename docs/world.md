@@ -42,7 +42,7 @@ void untrackPlayerRef(PlayerRef ref)
 CompletableFuture<PlayerRef> addPlayer(PlayerRef ref)
 CompletableFuture<PlayerRef> addPlayer(PlayerRef ref, Transform position)
 CompletableFuture<PlayerRef> addPlayer(PlayerRef ref, Transform position, Boolean teleport, Boolean respawn)
-CompletableFuture<Void> drainPlayersTo(World targetWorld)
+CompletableFuture<Void> drainPlayersTo(World targetWorld, Collection<PlayerRef> players)
 ```
 
 ### Entities
@@ -131,14 +131,8 @@ int getRotationIndex(int x, int y, int z)
 
 ### Block States
 ```java
-// Get block state at position
-BlockState getState(int x, int y, int z)
-
-// Set block state at position
-void setState(int x, int y, int z, BlockState state, boolean notify)
-
-// Set block state from holder
-void setState(int x, int y, int z, Holder<ChunkStore> holder)
+// Set the block type, rotation, and component holder at position
+void setState(int x, int y, int z, BlockType type, int rotationIndex, Holder<ChunkStore> holder)
 
 // Get block component entity reference
 Ref<ChunkStore> getBlockComponentEntity(int x, int y, int z)
@@ -201,7 +195,8 @@ void initFlags()
 ```java
 // Keep chunk loaded
 boolean shouldKeepLoaded()
-void setKeepLoaded(boolean keepLoaded)
+void addKeepLoaded()
+void removeKeepLoaded()
 
 // Keep-alive timer (returns remaining time)
 int pollKeepAlive(int decrement)
@@ -235,9 +230,6 @@ boolean isLightingUpdatesEnabled()
 BlockChunk getBlockChunk()
 BlockComponentChunk getBlockComponentChunk()
 EntityChunk getEntityChunk()
-
-// Set block component chunk
-void setBlockComponentChunk(BlockComponentChunk chunk)
 ```
 
 ### ECS Integration
@@ -316,12 +308,11 @@ if (chunk != null) {
     // Read block at local position (0-31, 0-255, 0-31)
     int blockId = chunk.getBlock(16, 64, 16);
 
-    // Get block state
-    BlockState state = chunk.getState(16, 64, 16);
-
-    // Set a block (requires BlockType lookup)
+    // Set a block (requires BlockType lookup).
+    // Note: setBlock's 4th param is the int blockId, NOT BlockType.getId()
+    // (which returns a String). Resolve the numeric id separately.
     BlockType stoneType = BlockType.fromString("stone");
-    chunk.setBlock(16, 65, 16, stoneType.getId(), stoneType, 0, 0, 0);
+    chunk.setBlock(16, 65, 16, blockId, stoneType, 0, 0, 0);
 
     // Mark chunk for saving
     chunk.markNeedsSaving();
@@ -491,7 +482,14 @@ static final GameplayConfig DEFAULT;      // Default config instance
 ### WorldConfig
 **Package:** `com.hypixel.hytale.server.core.asset.type.gameplay`
 
-Configuration for world-specific settings like block rules and day/night cycle.
+Configuration for world-specific gameplay settings like block rules and day/night cycle.
+
+> **Note: two distinct `WorldConfig` classes exist.** The gameplay settings below
+> (`isBlockBreakingAllowed`, `getSleepConfig`, day/night durations, `DEFAULT_*_DURATION_SECONDS`)
+> live on `com.hypixel.hytale.server.core.asset.type.gameplay.WorldConfig`, reached via
+> `world.getGameplayConfig().getWorldConfig()`. The separate `World.getWorldConfig()` method
+> returns a *different* class, `com.hypixel.hytale.server.core.universe.world.WorldConfig`,
+> which does **not** expose these gameplay accessors.
 
 #### Key Methods
 ```java
@@ -519,7 +517,8 @@ static final int DEFAULT_NIGHTTIME_DURATION_SECONDS;
 
 #### Usage Example
 ```java
-WorldConfig config = world.getWorldConfig();
+// Gameplay WorldConfig is reached through the gameplay config, not world.getWorldConfig()
+WorldConfig config = world.getGameplayConfig().getWorldConfig();
 
 if (config.isBlockBreakingAllowed()) {
     // Players can break blocks

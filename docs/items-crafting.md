@@ -807,20 +807,24 @@ public enum BenchType {
 
 **Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
+`CraftRecipeEvent` is an abstract event that extends `CancellableEcsEvent`. Its data
+accessors and cancellation are defined on the base class; the `Pre` and `Post`
+subclasses add no methods of their own.
+
 ```java
-// Pre-craft event (cancellable)
-CraftRecipeEvent.Pre {
-    CraftingRecipe getCraftedRecipe()
-    int getQuantity()
-    boolean isCancelled()
-    void setCancelled(boolean cancelled)
+// Abstract base
+abstract class CraftRecipeEvent extends CancellableEcsEvent {
+    CraftingRecipe getCraftedRecipe();
+    int getQuantity();
+
+    // Inherited from CancellableEcsEvent:
+    //   boolean isCancelled();
+    //   void setCancelled(boolean);
 }
 
-// Post-craft event
-CraftRecipeEvent.Post {
-    CraftingRecipe getCraftedRecipe()
-    int getQuantity()
-}
+// Subclasses (no additional methods):
+//   CraftRecipeEvent.Pre  - fired before crafting (cancel here to prevent it)
+//   CraftRecipeEvent.Post - fired after crafting
 ```
 
 ### Event Example

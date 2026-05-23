@@ -284,10 +284,11 @@ if (survivalSettings != null) {
 #### Using Meta Keys in Custom Interactions
 
 ```java
-// During interaction execution, access meta data
-Ref<EntityStore> target = context.getMeta(Interaction.TARGET_ENTITY);
-Vector4d hitLocation = context.getMeta(Interaction.HIT_LOCATION);
-Damage damage = context.getMeta(Interaction.DAMAGE);
+// During interaction execution, access meta data via the meta store
+DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
+Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
+Vector4d hitLocation = meta.getMetaObject(Interaction.HIT_LOCATION);
+Damage damage = meta.getMetaObject(Interaction.DAMAGE);
 ```
 
 ### Root Interaction Configuration
@@ -391,24 +392,28 @@ See [interactions-flow.md#cooldowncondition](interactions-flow.md#cooldowncondit
 ```java
 public class InteractionRules {
     // Which interaction types block this interaction from starting
-    InteractionType[] blockedBy;
-    String blockedByBypass;  // Condition to bypass blocking
+    protected Set<InteractionType> blockedBy;
+    protected String blockedByBypass;  // Condition to bypass blocking
 
     // Which interaction types this interaction blocks
-    InteractionType[] blocking;
-    String blockingBypass;
+    protected Set<InteractionType> blocking;
+    protected String blockingBypass;
 
     // Which interaction types can interrupt this interaction mid-execution
-    InteractionType[] interruptedBy;
-    String interruptedByBypass;
+    protected Set<InteractionType> interruptedBy;
+    protected String interruptedByBypass;
 
     // Which interaction types this interaction interrupts
-    InteractionType[] interrupting;
-    String interruptingBypass;
+    protected Set<InteractionType> interrupting;
+    protected String interruptingBypass;
 
-    // Validation methods
-    boolean validateInterrupts(InteractionType type);
-    boolean validateBlocked(InteractionType type);
+    // Validation methods (Int2ObjectMap/IntSet are fastutil collections)
+    boolean validateInterrupts(InteractionType type, Int2ObjectMap<IntSet> tags,
+                               InteractionType otherType, Int2ObjectMap<IntSet> otherTags,
+                               InteractionRules otherRules);
+    boolean validateBlocked(InteractionType type, Int2ObjectMap<IntSet> tags,
+                            InteractionType otherType, Int2ObjectMap<IntSet> otherTags,
+                            InteractionRules otherRules);
 }
 ```
 

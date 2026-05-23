@@ -80,11 +80,13 @@ Both methods receive identical parameters:
 
 Controls synchronization between client and server:
 
+**Package:** `com.hypixel.hytale.protocol`
+
 | Value | Behavior |
 |-------|----------|
-| `NONE` | Execute immediately on both client and server |
-| `SERVER` | Client waits for server confirmation before executing |
-| `CLIENT` | Server waits for client data (rare, for client-authoritative actions) |
+| `None` | Execute immediately on both client and server |
+| `Server` | Client waits for server confirmation before executing |
+| `Client` | Server waits for client data (rare, for client-authoritative actions) |
 
 ---
 
@@ -447,7 +449,7 @@ public class MyCustomOp implements Operation {
 
     @Override
     public WaitForDataFrom getWaitForDataFrom() {
-        return WaitForDataFrom.NONE;  // No sync needed
+        return WaitForDataFrom.None;  // No sync needed
     }
 
     @Override

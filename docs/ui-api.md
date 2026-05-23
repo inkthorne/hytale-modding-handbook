@@ -33,24 +33,22 @@ Server-side Java API reference for Hytale's UI system.
 UI element anchoring for positioning.
 
 ```java
-// Setters (fluent API, return Anchor)
-Anchor left(Value<Integer> value)
-Anchor right(Value<Integer> value)
-Anchor top(Value<Integer> value)
-Anchor bottom(Value<Integer> value)
-Anchor height(Value<Integer> value)
-Anchor width(Value<Integer> value)
-Anchor minWidth(Value<Integer> value)
-Anchor maxWidth(Value<Integer> value)
-
-// Presets
-Anchor full()        // Fill parent completely
-Anchor horizontal()  // Fill horizontally
-Anchor vertical()    // Fill vertically
+// Setters (void, set-prefixed)
+void setLeft(Value<Integer> value)
+void setRight(Value<Integer> value)
+void setTop(Value<Integer> value)
+void setBottom(Value<Integer> value)
+void setHeight(Value<Integer> value)
+void setWidth(Value<Integer> value)
+void setMinWidth(Value<Integer> value)
+void setMaxWidth(Value<Integer> value)
 
 // Codec for serialization
-static final Codec<Anchor> CODEC
+static final BuilderCodec<Anchor> CODEC
 ```
+
+> **Note:** `full`, `horizontal`, and `vertical` are private fields (also set via
+> `setFull`/`setHorizontal`/`setVertical`), not standalone preset methods.
 
 ### Area
 **Package:** `com.hypixel.hytale.server.core.ui`
@@ -62,11 +60,6 @@ Area setX(int x)
 Area setY(int y)
 Area setWidth(int width)
 Area setHeight(int height)
-
-int getX()
-int getY()
-int getWidth()
-int getHeight()
 ```
 
 ### Value<T>
@@ -88,7 +81,7 @@ static <T> Value<T> of(T literal)                                // Literal valu
 ---
 
 ## UICommandBuilder
-**Package:** `com.hypixel.hytale.server.core.ui`
+**Package:** `com.hypixel.hytale.server.core.ui.builder`
 
 Build UI commands for updating client UI elements.
 
@@ -151,7 +144,7 @@ CustomUICommand[] getCommands()
 ---
 
 ## UIEventBuilder
-**Package:** `com.hypixel.hytale.server.core.ui`
+**Package:** `com.hypixel.hytale.server.core.ui.builder`
 
 Build UI event handlers for client interaction.
 
@@ -167,7 +160,7 @@ CustomUIEventBinding[] getEvents()
 ```
 
 ### EventData
-**Package:** `com.hypixel.hytale.server.core.ui`
+**Package:** `com.hypixel.hytale.server.core.ui.builder`
 
 Container for UI event data passed to handlers.
 
@@ -340,8 +333,9 @@ void onDismiss(Ref<EntityStore> ref, Store<EntityStore> store)
 
 | Value | Description |
 |-------|-------------|
+| `CantClose` | Page must be closed programmatically |
 | `CanDismiss` | Player can dismiss the page (ESC key) |
-| `CannotDismiss` | Page must be closed programmatically |
+| `CanDismissOrCloseThroughInteraction` | Player can dismiss, or the page can be closed via an interaction |
 
 ### Implementation Example
 
@@ -414,7 +408,7 @@ To open custom pages via [`OpenCustomUI`](interactions-world.md#opencustomui) in
 For pages that don't need additional JSON properties, use `registerSimple()`:
 
 ```java
-import com.hypixel.hytale.server.core.interaction.OpenCustomUIInteraction;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction;
 
 @Override
 protected void setup() {
@@ -440,8 +434,8 @@ Usage in JSON:
 For pages that accept additional properties from JSON, implement `CustomPageSupplier`:
 
 ```java
-import com.hypixel.hytale.server.core.interaction.OpenCustomUIInteraction;
-import com.hypixel.hytale.server.core.interaction.OpenCustomUIInteraction.CustomPageSupplier;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction;
+import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.CustomPageSupplier;
 
 public class MyPageSupplier implements CustomPageSupplier {
     // Define codec for JSON deserialization
@@ -471,10 +465,13 @@ protected void setup() {
         this,
         MyPageSupplier.class,
         "MyPage",
-        MyPageSupplier.CODEC
+        new MyPageSupplier()   // supplier INSTANCE, not a codec
     );
 }
 ```
+
+> **Signature:** `registerCustomPageSupplier(PluginBase plugin, Class<?> pageClass, String id, S supplier)`
+> — the 4th argument is an instance of your `CustomPageSupplier`, not a codec.
 
 Usage in JSON with custom properties:
 ```json
@@ -515,7 +512,6 @@ public interface CustomPageSupplier {
 |--------|----------|
 | `registerSimple()` | Pages with no extra JSON properties |
 | `registerCustomPageSupplier()` | Pages with custom JSON properties |
-| `registerBlockCustomPage()` | Pages tied to block state |
 | `registerBlockEntityCustomPage()` | Pages tied to block entities |
 
 ### Complete Example
@@ -568,7 +564,7 @@ protected void setup() {
         this,
         ShopPageSupplier.class,
         "MyShop",
-        ShopPageSupplier.CODEC
+        new ShopPageSupplier()   // supplier INSTANCE, not a codec
     );
 }
 ```
@@ -591,10 +587,16 @@ protected void setup() {
 
 Manage player windows (inventory, crafting, etc.).
 
+Most lifecycle methods require ECS parameters (`Ref<EntityStore>`, `Store<EntityStore>`,
+or `ComponentAccessor<EntityStore>`).
+
 ```java
+// Initialization
+void init(PlayerRef playerRef)
+
 // Open windows
-OpenWindow openWindow(Window window)
-List<OpenWindow> openWindows(Window... windows)
+OpenWindow openWindow(Ref<EntityStore> ref, Window window, Store<EntityStore> store)
+List<OpenWindow> openWindows(Ref<EntityStore> ref, Store<EntityStore> store, Window... windows)
 
 // Set/Get by slot
 void setWindow(int slotId, Window window)
@@ -607,11 +609,11 @@ void updateWindows()
 void markWindowChanged(int slotId)
 
 // Close
-Window closeWindow(int slotId)
-void closeAllWindows()
+Window closeWindow(Ref<EntityStore> ref, int slotId, ComponentAccessor<EntityStore> accessor)
+void closeAllWindows(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 
 // Validation
-void validateWindows()
+void validateWindows(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 ```
 
 ### Window Class
@@ -628,6 +630,8 @@ void init(PlayerRef playerRef, WindowManager windowManager)
 
 // Abstract - must implement
 abstract JsonObject getData()  // Window data for client
+protected abstract boolean onOpen0(Ref<EntityStore> ref, Store<EntityStore> store)
+protected abstract void onClose0(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 
 // Event handling
 void handleAction(Ref<EntityStore> ref, Store<EntityStore> store, WindowAction action)
@@ -639,7 +643,7 @@ void setId(int id)
 PlayerRef getPlayerRef()
 
 // Lifecycle
-void close()
+void close(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 
 // Close event registration
 EventRegistration registerCloseEvent(Consumer<Window.WindowCloseEvent> handler)
@@ -697,14 +701,14 @@ int getId()
 ```java
 WindowManager windows = player.getWindowManager();
 
-// Open a window and get reference
+// Open a window and get reference (ECS params required)
 Window myWindow = new MyCustomWindow(WindowType.Container);
-OpenWindow opened = windows.openWindow(myWindow);
+OpenWindow opened = windows.openWindow(ref, myWindow, store);
 
 int slotId = opened.getId();
 
 // Later, close by slot ID
-windows.closeWindow(slotId);
+windows.closeWindow(ref, slotId, store);
 ```
 
 ---
@@ -1208,7 +1212,7 @@ boolean getIsCurrentlyLoadingHotbar()
 ## File Browser System
 
 ### FileBrowserConfig
-**Package:** `com.hypixel.hytale.server.core.ui`
+**Package:** `com.hypixel.hytale.server.core.ui.browser`
 
 Configuration record for file browser UI.
 
@@ -1250,7 +1254,7 @@ FileBrowserConfig build()
 ```
 
 ### ServerFileBrowser
-**Package:** `com.hypixel.hytale.server.core.ui`
+**Package:** `com.hypixel.hytale.server.core.ui.browser`
 
 Server-side file browser implementation.
 
@@ -1286,8 +1290,6 @@ void clearSelection()
 
 // Utility
 FileBrowserConfig getConfig()
-Path resolveSecure(String path)      // Secure path resolution
-Path resolveFromCurrent(String path)
 ```
 
 ### Usage Example
@@ -1310,7 +1312,9 @@ browser.buildUI(cmd, events);
 ---
 
 ## WindowCloseEvent
-**Package:** `com.hypixel.hytale.server.core.entity.entities.player.windows`
+**Class:** `com.hypixel.hytale.server.core.entity.entities.player.windows.Window.WindowCloseEvent`
+
+This is an inner class of `Window` (`Window.WindowCloseEvent`), not a standalone class.
 
 Event fired when a player window is closed. Implements `IEvent<Void>`.
 
@@ -1318,11 +1322,11 @@ This is a minimal event that signals window closure. It does not provide additio
 
 ### Usage Example
 ```java
-import com.hypixel.hytale.server.core.entity.entities.player.windows.WindowCloseEvent;
+import com.hypixel.hytale.server.core.entity.entities.player.windows.Window;
 
 @Override
 protected void setup() {
-    getEventRegistry().register(WindowCloseEvent.class, event -> {
+    getEventRegistry().register(Window.WindowCloseEvent.class, event -> {
         System.out.println("A window was closed");
     });
 }
@@ -1397,10 +1401,10 @@ Player player = store.getComponent(ref, Player.getComponentType());
 WindowManager windows = player.getWindowManager();
 
 Window inventoryWindow = new MyCustomWindow(WindowType.Container);
-OpenWindow opened = windows.openWindow(inventoryWindow);
+OpenWindow opened = windows.openWindow(ref, inventoryWindow, store);
 
 // Later, close it
-windows.closeWindow(opened.getId());
+windows.closeWindow(ref, opened.getId(), store);
 ```
 
 ---

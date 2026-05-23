@@ -128,7 +128,7 @@ ComponentRegistry<ECS_TYPE> getRegistry()
 Class<? super T> getTypeClass()
 int getIndex()
 boolean test(Archetype<ECS_TYPE> archetype)
-boolean requiresComponentType()
+boolean requiresComponentType(ComponentType<ECS_TYPE, ?> type)
 ```
 
 ---
@@ -160,6 +160,9 @@ Used in `EntityEventSystem` handlers and iteration to access components by entit
 ```java
 // Get component for entity at index
 <T extends Component<ECS_TYPE>> T getComponent(int index, ComponentType<ECS_TYPE, T> type)
+
+// Number of entities in this chunk
+int size()
 ```
 
 See [Events API - ECS Events](events.md#ecs-events-entityeventsystem) for usage example.
@@ -370,7 +373,7 @@ public class MyEventSystem extends EntityEventSystem<EntityStore, MyEvent> {
         buffer.removeComponent(ref, OldComponent.getComponentType());
 
         // Deferred: spawn new entity
-        Holder<EntityStore> holder = new Holder<>();
+        Holder<EntityStore> holder = store.getRegistry().newHolder();
         holder.addComponent(SomeComponent.getComponentType(), new SomeComponent());
         buffer.addEntity(holder, AddReason.SPAWN);
 
@@ -395,7 +398,7 @@ public class MyEventSystem extends EntityEventSystem<EntityStore, MyEvent> {
 ### Holder<ECS_TYPE>
 **Package:** `com.hypixel.hytale.component`
 
-Blueprint/template for creating entities. Use to define entity composition before adding to store.
+Blueprint/template for creating entities. Use to define entity composition before adding to store. `Holder` has no public constructor — obtain one via `registry.newHolder()`.
 
 ```java
 // Get archetype (component composition)
@@ -414,8 +417,8 @@ Holder<ECS_TYPE> clone()
 
 #### Usage
 ```java
-// Create entity from holder
-Holder<EntityStore> holder = new Holder<>();
+// Create entity from holder (obtain holder from the registry)
+Holder<EntityStore> holder = store.getRegistry().newHolder();
 holder.addComponent(MyComponent.getComponentType(), new MyComponent());
 Ref<EntityStore> entityRef = store.addEntity(holder, AddReason.SPAWN);
 ```
@@ -441,12 +444,15 @@ boolean test(Archetype<ECS_TYPE> archetype)
 // Factory methods
 static <ECS_TYPE> Archetype<ECS_TYPE> of(ComponentType<ECS_TYPE, ?>... types)
 
-// Modify archetype (returns new instance)
-Archetype<ECS_TYPE> add(ComponentType<ECS_TYPE, ?> type)
-Archetype<ECS_TYPE> remove(ComponentType<ECS_TYPE, ?> type)
+// Query matching
+boolean requiresComponentType(ComponentType<ECS_TYPE, ?> type)
+
+// Modify archetype (STATIC; returns new instance)
+static <ECS_TYPE, T extends Component<ECS_TYPE>> Archetype<ECS_TYPE> add(Archetype<ECS_TYPE> archetype, ComponentType<ECS_TYPE, T> type)
+static <ECS_TYPE, T extends Component<ECS_TYPE>> Archetype<ECS_TYPE> remove(Archetype<ECS_TYPE> archetype, ComponentType<ECS_TYPE, T> type)
 
 // Serialization
-Archetype<ECS_TYPE> getSerializableArchetype()
+Archetype<ECS_TYPE> getSerializableArchetype(ComponentRegistry.Data<ECS_TYPE> data)
 ```
 
 ---
@@ -483,9 +489,7 @@ Reason for adding an entity to the store.
 ```java
 public enum AddReason {
     SPAWN,
-    LOAD,
-    TRANSFER,
-    // ... other values
+    LOAD
 }
 ```
 
@@ -494,11 +498,8 @@ Reason for removing an entity from the store.
 
 ```java
 public enum RemoveReason {
-    DESPAWN,
-    UNLOAD,
-    TRANSFER,
-    DEATH,
-    // ... other values
+    REMOVE,
+    UNLOAD
 }
 ```
 
@@ -834,7 +835,7 @@ public class MyCustomComponent implements Component<EntityStore> {
 ```java
 // Iterate all entities with Player component
 store.forEachChunk(Player.getComponentType(), (chunk, buffer) -> {
-    for (int i = 0; i < chunk.getCount(); i++) {
+    for (int i = 0; i < chunk.size(); i++) {
         Player player = chunk.getComponent(i, Player.getComponentType());
         // Process player
     }

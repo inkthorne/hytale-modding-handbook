@@ -682,7 +682,7 @@ Knockback is a temporary component-based system that applies velocity changes to
 
 ### KnockbackComponent
 
-**Package:** `com.hypixel.hytale.server.core.modules.entity.damage`
+**Package:** `com.hypixel.hytale.server.core.entity.knockback`
 
 A temporary ECS component that manages knockback state on entities.
 
@@ -777,14 +777,14 @@ Certain status effects can modify knockback resistance, either increasing or dec
 To apply knockback programmatically, add a `KnockbackComponent` to an entity:
 
 ```java
-import com.hypixel.hytale.server.core.modules.entity.damage.KnockbackComponent;
+import com.hypixel.hytale.server.core.entity.knockback.KnockbackComponent;
 import org.joml.Vector3d;
 
 // In an ECS system with access to CommandBuffer
 KnockbackComponent knockback = new KnockbackComponent();
-knockback.velocity = new Vector3d(0, 5, -10);  // Up and backward
-knockback.duration = 0.5f;  // Half second duration
-knockback.timer = 0f;
+knockback.setVelocity(new Vector3d(0, 5, -10));  // Up and backward
+knockback.setDuration(0.5f);  // Half second duration
+knockback.setTimer(0f);
 
 buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback);
 ```

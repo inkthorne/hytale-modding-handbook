@@ -1024,70 +1024,6 @@ Used for:
 
 ## Java API Reference
 
-### BlockStateRegistry
-**Package:** `com.hypixel.hytale.server.core.universe.world.meta`
-
-Register custom block states. Access via `getBlockStateRegistry()` in your plugin.
-
-#### Methods
-```java
-// Register a simple block state
-<T extends BlockState> BlockStateRegistration registerBlockState(
-    Class<T> stateClass,
-    String name,
-    Codec<T> codec
-)
-
-// Register block state with associated data
-<T extends BlockState, D extends StateData> BlockStateRegistration registerBlockState(
-    Class<T> stateClass,
-    String name,
-    Codec<T> stateCodec,
-    Class<D> dataClass,
-    Codec<D> dataCodec
-)
-```
-
----
-
-### BlockState Interface
-
-Custom block states must implement the `BlockState` interface.
-
-```java
-public interface BlockState {
-    // Implement your state logic
-}
-```
-
----
-
-### StateData Interface
-
-For blocks that need additional persistent data beyond basic state.
-
-```java
-public interface StateData {
-    // Implement your data storage
-}
-```
-
----
-
-### BlockStateRegistration
-**Package:** `com.hypixel.hytale.server.core.universe.world.meta`
-
-Registration handle returned by `registerBlockState()`. Extends `Registration`.
-
-```java
-public class BlockStateRegistration extends Registration {
-    // Get the registered BlockState class
-    Class<? extends BlockState> getBlockStateClass()
-}
-```
-
----
-
 ### BlockType
 **Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config`
 
@@ -1343,7 +1279,7 @@ Rotation roll()    // Roll rotation
 #### Methods
 ```java
 // Apply rotation to vector
-Vector3d rotate(Vector3d v)
+Vector3d rotatedVector(Vector3d v)
 
 // Get rotation from array
 static RotationTuple getRotation(RotationTuple[] rotations,
@@ -1523,9 +1459,10 @@ Fired before the block interaction is processed. Can be cancelled.
 
 ```java
 public class UseBlockEvent.Pre extends CancellableEcsEvent {
+    InteractionType getInteractionType()
+    InteractionContext getContext()
     Vector3i getTargetBlock()
     BlockType getBlockType()
-    ItemStack getItemInHand()
     boolean isCancelled()
     void setCancelled(boolean)
 }
@@ -1537,9 +1474,10 @@ Fired after the block interaction is processed. Cannot be cancelled.
 
 ```java
 public class UseBlockEvent.Post extends EcsEvent {
+    InteractionType getInteractionType()
+    InteractionContext getContext()
     Vector3i getTargetBlock()
     BlockType getBlockType()
-    ItemStack getItemInHand()
 }
 ```
 
@@ -1582,32 +1520,6 @@ public class UseBlockPreSystem extends EntityEventSystem<EntityStore, UseBlockEv
 ---
 
 ## Usage Examples
-
-### Register Block State
-```java
-@Override
-protected void setup() {
-    getBlockStateRegistry().registerBlockState(
-        MyBlockState.class,
-        "my_block_state",
-        MyBlockState.CODEC
-    );
-}
-```
-
-### Register Block State with Data
-```java
-@Override
-protected void setup() {
-    getBlockStateRegistry().registerBlockState(
-        MyBlockState.class,
-        "my_block_state",
-        MyBlockState.CODEC,
-        MyBlockStateData.class,
-        MyBlockStateData.CODEC
-    );
-}
-```
 
 ### Handle Block Break Event
 ```java

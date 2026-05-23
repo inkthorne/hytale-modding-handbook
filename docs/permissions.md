@@ -77,7 +77,7 @@ Events related to permission changes for players and groups.
 
 ### PlayerGroupEvent
 
-Fired when a player's group membership changes.
+Fired when a player's group membership changes. Extends `PlayerPermissionChangeEvent`.
 
 **Variants:**
 - `PlayerGroupEvent.Added` - Player added to a group
@@ -85,32 +85,46 @@ Fired when a player's group membership changes.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getPlayerRef()` | `PlayerRef` | The player whose group changed |
-| `getGroup()` | `String` | The group being added/removed |
+| `getPlayerUuid()` | `UUID` | The UUID of the player whose group changed (inherited) |
+| `getGroupName()` | `String` | The group being added/removed |
 
 ---
 
 ### PlayerPermissionChangeEvent
 
-Fired when a player's individual permissions change.
+Abstract base for player permission/group change events.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getPlayerRef()` | `PlayerRef` | The player whose permissions changed |
-| `getPermission()` | `String` | The permission that changed |
-| `getValue()` | `Boolean` | The new permission value (true/false/null) |
+| `getPlayerUuid()` | `UUID` | The UUID of the player whose permissions changed |
+
+**Subclasses:**
+
+| Class | Methods |
+|-------|---------|
+| `PlayerPermissionChangeEvent.PermissionsAdded` | `getAddedPermissions(): Set<String>` |
+| `PlayerPermissionChangeEvent.PermissionsRemoved` | `getRemovedPermissions(): Set<String>` |
+| `PlayerPermissionChangeEvent.GroupAdded` | `getGroupName(): String` |
+| `PlayerPermissionChangeEvent.GroupRemoved` | `getGroupName(): String` |
+
+> **Note:** `PlayerGroupEvent` (and its `Added`/`Removed` variants) also extends this base.
 
 ---
 
 ### GroupPermissionChangeEvent
 
-Fired when a permission group's permissions change.
+Abstract base fired when a permission group's permissions change.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getGroup()` | `String` | The group whose permissions changed |
-| `getPermission()` | `String` | The permission that changed |
-| `getValue()` | `Boolean` | The new permission value (true/false/null) |
+| `getGroupName()` | `String` | The group whose permissions changed |
+
+**Variants:**
+
+| Class | Methods |
+|-------|---------|
+| `GroupPermissionChangeEvent.Added` | `getAddedPermissions(): Set<String>` |
+| `GroupPermissionChangeEvent.Removed` | `getRemovedPermissions(): Set<String>` |
 
 ---
 
@@ -124,33 +138,29 @@ import com.hypixel.hytale.server.core.event.events.permissions.*;
 protected void setup() {
     // Listen for player group additions
     getEventRegistry().register(PlayerGroupEvent.Added.class, event -> {
-        var playerRef = event.getPlayerRef();
-        var group = event.getGroup();
-        playerRef.sendMessage(Message.raw("You were added to group: " + group));
+        var playerUuid = event.getPlayerUuid();
+        var group = event.getGroupName();
+        System.out.println("Player " + playerUuid + " was added to group: " + group);
     });
 
     // Listen for player group removals
     getEventRegistry().register(PlayerGroupEvent.Removed.class, event -> {
-        var playerRef = event.getPlayerRef();
-        var group = event.getGroup();
-        playerRef.sendMessage(Message.raw("You were removed from group: " + group));
+        var playerUuid = event.getPlayerUuid();
+        var group = event.getGroupName();
+        System.out.println("Player " + playerUuid + " was removed from group: " + group);
     });
 
-    // Listen for permission changes
-    getEventRegistry().register(PlayerPermissionChangeEvent.class, event -> {
-        var playerRef = event.getPlayerRef();
-        var permission = event.getPermission();
-        var value = event.getValue();
-        System.out.println("Player " + playerRef.getUsername() +
-                          " permission " + permission + " changed to " + value);
+    // Listen for player permission additions
+    getEventRegistry().register(PlayerPermissionChangeEvent.PermissionsAdded.class, event -> {
+        var playerUuid = event.getPlayerUuid();
+        var added = event.getAddedPermissions();  // Set<String>
+        System.out.println("Player " + playerUuid + " gained permissions: " + added);
     });
 
-    // Listen for group permission changes
-    getEventRegistry().register(GroupPermissionChangeEvent.class, event -> {
-        var group = event.getGroup();
-        var permission = event.getPermission();
-        var value = event.getValue();
-        System.out.println("Group " + group +
-                          " permission " + permission + " changed to " + value);
+    // Listen for group permission additions
+    getEventRegistry().register(GroupPermissionChangeEvent.Added.class, event -> {
+        var group = event.getGroupName();
+        var added = event.getAddedPermissions();  // Set<String>
+        System.out.println("Group " + group + " gained permissions: " + added);
     });
 }

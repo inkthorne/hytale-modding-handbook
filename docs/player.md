@@ -416,7 +416,7 @@ ECS event fired when a player's game mode changes. Extends `CancellableEcsEvent`
 
 ### GameMode Enum
 
-**Package:** `com.hypixel.hytale.server.core.entity.entities.player`
+**Package:** `com.hypixel.hytale.protocol`
 
 | Value | Description |
 |-------|-------------|

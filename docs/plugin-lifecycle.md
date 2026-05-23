@@ -52,7 +52,6 @@ getCommandRegistry()       // CommandRegistry - register commands
 getEventRegistry()         // EventRegistry - register event listeners
 getTaskRegistry()          // TaskRegistry - schedule tasks
 getEntityRegistry()        // EntityRegistry - register entities
-getBlockStateRegistry()    // BlockStateRegistry - register block states
 getAssetRegistry()         // AssetRegistry - register assets
 getEntityStoreRegistry()   // ComponentRegistryProxy<EntityStore>
 getChunkStoreRegistry()    // ComponentRegistryProxy<ChunkStore>
@@ -64,7 +63,8 @@ getClientFeatureRegistry() // ClientFeatureRegistry
 ### Configuration
 ```java
 // Load configuration from file with default fallback
-<T> T withConfig(BuilderCodec<T> codec)
+<T> Config<T> withConfig(BuilderCodec<T> codec)
+<T> Config<T> withConfig(String name, BuilderCodec<T> codec)
 ```
 
 See [Codecs Documentation](codecs.md) for BuilderCodec details.
@@ -104,13 +104,10 @@ PrefabStore prefabs = PrefabStore.get();
 | `ProjectileModule` | `com.hypixel.hytale.server.core.modules.projectile` | Projectile spawning and management |
 | `PrefabStore` | `com.hypixel.hytale.server.core.prefab` | Load and spawn prefabs |
 | `BlockModule` | `com.hypixel.hytale.server.core.modules.block` | Block operations (place, break, query) |
-| `DamageModule` | `com.hypixel.hytale.server.core.modules.damage` | Damage calculation and application |
+| `DamageModule` | `com.hypixel.hytale.server.core.modules.entity.damage` | Damage calculation and application |
 | `ItemModule` | `com.hypixel.hytale.server.core.modules.item` | Item operations |
 | `EntityModule` | `com.hypixel.hytale.server.core.modules.entity` | Entity spawning and management |
 | `TimeModule` | `com.hypixel.hytale.server.core.modules.time` | Time and tick management |
-| `SoundModule` | `com.hypixel.hytale.server.core.modules.sound` | Sound playback |
-| `ParticleModule` | `com.hypixel.hytale.server.core.modules.particle` | Particle effects |
-| `PhysicsModule` | `com.hypixel.hytale.server.core.modules.physics` | Physics operations |
 
 ### Usage Example
 ```java
@@ -169,7 +166,8 @@ public enum PluginState {
     START,     // Currently in start() phase
     ENABLED,   // Fully enabled and running
     SHUTDOWN,  // Currently shutting down
-    DISABLED   // Fully disabled
+    DISABLED,  // Fully disabled
+    FAILED     // Plugin failed to load or run
 }
 ```
 
@@ -227,7 +225,7 @@ String getWebsite()                  // Plugin website URL
 Map<PluginIdentifier, SemverRange> getDependencies()          // Required dependencies
 Map<PluginIdentifier, SemverRange> getOptionalDependencies()  // Optional dependencies
 Map<PluginIdentifier, SemverRange> getLoadBefore()            // Plugins to load before
-SemverRange getServerVersion()                                 // Required server version
+String getServerVersion()                                      // Required server version
 ```
 
 ### Other

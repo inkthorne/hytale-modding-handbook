@@ -53,15 +53,15 @@ void referToServer(String host, int port, byte[] data)
 HiddenPlayersManager getHiddenPlayersManager()
 
 // Lifecycle
-void addToStore()
-void removeFromStore()
+Ref<EntityStore> addToStore(Store<EntityStore> store)
+Holder<EntityStore> removeFromStore()
 
 // Component type for ECS access
 static ComponentType<EntityStore, PlayerRef> getComponentType()
 ```
 
 ## Player
-**Package:** `com.hypixel.hytale.server.core.entity.entities.player`
+**Package:** `com.hypixel.hytale.server.core.entity.entities`
 
 Full player entity with all game state.
 
@@ -89,16 +89,14 @@ void setFirstSpawn(boolean firstSpawn)
 
 // Inventory
 Inventory getInventory()
-Inventory setInventory(Inventory inventory)
-void sendInventory()
 
 // Position & Movement
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 void addLocationChange(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
-static Transform getRespawnPosition(Ref<EntityStore> ref, String spawnPoint, ComponentAccessor<EntityStore> accessor)
+static CompletableFuture<Transform> getRespawnPosition(Ref<EntityStore> ref, String spawnPoint, ComponentAccessor<EntityStore> accessor)
 void applyMovementStates(Ref<EntityStore> ref, SavedMovementStates saved, MovementStates current, ComponentAccessor<EntityStore> accessor)
 void resetVelocity(Velocity velocity)
-void processVelocitySample()
+void processVelocitySample(double deltaTime, Vector3d sample, Velocity velocity)
 
 // Managers
 WindowManager getWindowManager()
@@ -122,15 +120,13 @@ int getMountEntityId()
 void setMountEntityId(int id)
 
 // Item Durability
-boolean canDecreaseItemStackDurability()
-boolean canApplyItemStackPenalties()
-void updateItemStackDurability()
+ItemStackSlotTransaction updateItemStackDurability(Ref<EntityStore> ref, ItemStack stack, ItemContainer container, int slot, double amount, ComponentAccessor<EntityStore> accessor)
 
 // Block Processing
 void configTriggerBlockProcessing(boolean trigger, boolean process, CollisionResultComponent result)
 
 // Persistence
-void saveConfig(World world, Holder<EntityStore> holder)
+CompletableFuture<Void> saveConfig(World world, Holder<EntityStore> holder)
 
 // Connection State
 boolean isWaitingForClientReady()
@@ -148,16 +144,11 @@ Base class for entities with health, inventory, etc.
 ```java
 // Inventory
 Inventory getInventory()
-Inventory setInventory(Inventory inventory)
-Inventory setInventory(Inventory inventory, boolean notify)
 
 // Movement
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 double getCurrentFallDistance()
 void setCurrentFallDistance(double distance)
-
-// Stats
-StatModifiersManager getStatModifiersManager()
 
 // Environment
 boolean canBreathe(Ref<EntityStore> ref, BlockMaterial material, int fluidLevel, ComponentAccessor<EntityStore> accessor)
@@ -217,7 +208,7 @@ Use `PlayerRef` when you only need these operations.
 
 `Player` is the full entity component with access to:
 - **Permissions:** `hasPermission()`
-- **Inventory:** `getInventory()`, `sendInventory()`
+- **Inventory:** `getInventory()`
 - **Game State:** `getGameMode()`, `isFirstSpawn()`
 - **UI Managers:** `getWindowManager()`, `getPageManager()`, `getHudManager()`, `getHotbarManager()`
 - **Movement:** `moveTo()`, `resetVelocity()`
@@ -361,14 +352,14 @@ Manages stat modifiers for living entities. Used to recalculate entity stats whe
 
 ### Getting the Manager
 ```java
-LivingEntity entity = ...;
-StatModifiersManager manager = entity.getStatModifiersManager();
+EntityStatMap stats = store.getComponent(ref, EntityStatMap.getComponentType());
+StatModifiersManager manager = stats.getStatModifiersManager();
 ```
 
 ### Methods
 ```java
-// Trigger stat recalculation
-void setRecalculate(boolean recalculate)
+// Schedule stat recalculation
+void scheduleRecalculate()
 
 // Queue specific stats to be cleared before recalculation
 void queueEntityStatsToClear(int[] statIndices)
@@ -384,12 +375,11 @@ void recalculateEntityStatModifiers(
 ### Usage Example
 ```java
 // Force recalculation of entity stats after changing equipment
-LivingEntity entity = store.getComponent(ref, LivingEntity.getComponentType());
-if (entity != null) {
-    StatModifiersManager manager = entity.getStatModifiersManager();
-    manager.setRecalculate(true);
+EntityStatMap stats = store.getComponent(ref, EntityStatMap.getComponentType());
+if (stats != null) {
+    StatModifiersManager manager = stats.getStatModifiersManager();
+    manager.scheduleRecalculate();
 
-    EntityStatMap stats = store.getComponent(ref, EntityStatMap.getComponentType());
     manager.recalculateEntityStatModifiers(ref, stats, store);
 }
 ```
@@ -438,13 +428,13 @@ if (velocity != null) {
 
 ### VelocityConfig
 
-**Package:** `com.hypixel.hytale.server.core.modules.physics.velocity`
+**Package:** `com.hypixel.hytale.server.core.modules.splitvelocity`
 
 Configuration for velocity behavior. Default constructor provides standard physics behavior.
 
 ### ChangeVelocityType
 
-**Package:** `com.hypixel.hytale.server.core.modules.physics.velocity`
+**Package:** `com.hypixel.hytale.protocol`
 
 Enum controlling how velocity is applied:
 - `Add` - Add to current velocity
@@ -505,7 +495,7 @@ Component for managing entity interaction chains. Used with trigger blocks to ex
 
 ### Tick & Lifecycle
 ```java
-void tick()   // Process pending interactions
+void tick(Ref<EntityStore> ref, CommandBuffer<EntityStore> buffer, float deltaTime)   // Process pending interactions
 void clear()  // Clear all interaction chains
 ```
 
@@ -518,7 +508,7 @@ boolean tryStartChain(...)
 void executeChain(...)
 
 // Cancel active chains
-void cancelChains()
+void cancelChains(InteractionChain chain)
 ```
 
 ### Query
@@ -527,7 +517,7 @@ void cancelChains()
 boolean canRun(...)
 
 // Get active chains
-Object getChains()
+Int2ObjectMap<InteractionChain> getChains()
 ```
 
 ### Rules
@@ -555,7 +545,7 @@ result.defaultTriggerBlocksProcessing(manager, entity, ref, flag, accessor);
 
 **Package:** `com.hypixel.hytale.server.core.event.events.entity`
 
-Events related to entity lifecycle. For inventory-related events (`LivingEntityInventoryChangeEvent`, `DropItemEvent`, `SwitchActiveSlotEvent`, `InteractivelyPickupItemEvent`), see [inventory.md](inventory.md#inventory-events).
+Events related to entity lifecycle. For inventory-related events (`InventoryChangeEvent`, `DropItemEvent`, `SwitchActiveSlotEvent`, `InteractivelyPickupItemEvent`), see [inventory.md](inventory.md#inventory-events).
 
 ### Event Summary
 
@@ -588,7 +578,6 @@ Fired when an entity is removed from the world.
 | Method | Return Type | Description |
 |--------|-------------|-------------|
 | `getEntity()` | `Entity` | The entity being removed |
-| `getRemoveReason()` | `RemoveReason` | Why the entity is being removed |
 
 ---
 
@@ -640,8 +629,7 @@ protected void setup() {
     // Listen for entity removals
     getEventRegistry().registerGlobal(EntityRemoveEvent.class, event -> {
         var entity = event.getEntity();
-        var reason = event.getRemoveReason();
-        System.out.println("Entity removed: " + entity + " reason: " + reason);
+        System.out.println("Entity removed: " + entity);
     });
 }
 ```

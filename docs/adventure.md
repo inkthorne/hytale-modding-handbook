@@ -324,9 +324,7 @@ Tracks world map discovery state for a player. Provides methods to discover/undi
 | `discoverZones(World, Set<String>)` | `boolean` | Discover multiple zones |
 | `undiscoverZones(World, Set<String>)` | `boolean` | Undiscover multiple zones |
 | `isAllowTeleportToCoordinates()` | `boolean` | Check if coordinate teleport allowed |
-| `setAllowTeleportToCoordinates(World, boolean)` | `void` | Set coordinate teleport permission |
 | `isAllowTeleportToMarkers()` | `boolean` | Check if marker teleport allowed |
-| `setAllowTeleportToMarkers(World, boolean)` | `void` | Set marker teleport permission |
 | `getViewRadiusOverride()` | `Integer` | Get view radius override (nullable) |
 | `setViewRadiusOverride(Integer)` | `void` | Set view radius override |
 
@@ -352,9 +350,9 @@ if (currentZone != null) {
 World world = player.getWorld();
 boolean discovered = tracker.discoverZone(world, "ancient_ruins");
 
-// Control teleport permissions
-tracker.setAllowTeleportToCoordinates(world, false);  // Disable coordinate teleport
-tracker.setAllowTeleportToMarkers(world, true);       // Enable marker teleport
+// Check teleport permissions
+boolean canTeleportToCoords = tracker.isAllowTeleportToCoordinates();
+boolean canTeleportToMarkers = tracker.isAllowTeleportToMarkers();
 
 // Override view radius
 tracker.setViewRadiusOverride(500);  // Set custom view radius

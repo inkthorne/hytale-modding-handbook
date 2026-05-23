@@ -17,14 +17,14 @@ static final int BACKPACK_SECTION_ID
 
 ### Default Capacities
 ```java
-static final int DEFAULT_HOTBAR_CAPACITY
-static final int DEFAULT_UTILITY_CAPACITY
-static final int DEFAULT_TOOLS_CAPACITY
-static final int DEFAULT_ARMOR_CAPACITY
-static final int DEFAULT_STORAGE_ROWS
-static final int DEFAULT_STORAGE_COLUMNS
-static final int DEFAULT_STORAGE_CAPACITY
-static final int INACTIVE_SLOT_INDEX
+static final short DEFAULT_HOTBAR_CAPACITY
+static final short DEFAULT_UTILITY_CAPACITY
+static final short DEFAULT_TOOLS_CAPACITY
+static final short DEFAULT_ARMOR_CAPACITY
+static final short DEFAULT_STORAGE_ROWS
+static final short DEFAULT_STORAGE_COLUMNS
+static final short DEFAULT_STORAGE_CAPACITY
+static final byte INACTIVE_SLOT_INDEX
 ```
 
 ### Get Sections
@@ -42,23 +42,23 @@ ItemContainer getSectionById(int sectionId)
 ```java
 CombinedItemContainer getCombinedHotbarFirst()
 CombinedItemContainer getCombinedStorageFirst()
-CombinedItemContainer getCombinedEverything()
-CombinedItemContainer getCombinedArmorHotbarStorage()
 CombinedItemContainer getCombinedArmorHotbarUtilityStorage()
 CombinedItemContainer getCombinedHotbarUtilityConsumableStorage()
 CombinedItemContainer getCombinedBackpackStorageHotbar()
+CombinedItemContainer getCombinedBackpackStorageHotbarFirst()
+CombinedItemContainer getCombinedStorageHotbarBackpack()
 ```
 
 ### Active Slots
 ```java
 // Hotbar
 byte getActiveHotbarSlot()
-void setActiveHotbarSlot(byte slot)
+void setActiveHotbarSlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
 ItemStack getActiveHotbarItem()
 
 // Tools
 byte getActiveToolsSlot()
-void setActiveToolsSlot(byte slot)
+void setActiveToolsSlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
 ItemStack getToolsItem()
 ItemStack getActiveToolItem()
 boolean usingToolsItem()
@@ -66,20 +66,22 @@ void setUsingToolsItem(boolean using)
 
 // Utility
 byte getActiveUtilitySlot()
-void setActiveUtilitySlot(byte slot)
+void setActiveUtilitySlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
+void setActiveUtilitySlot(Holder<EntityStore> holder, byte slot)
 ItemStack getUtilityItem()
 
 // General
 byte getActiveSlot(int sectionId)
-void setActiveSlot(int sectionId, byte slot)
+void setActiveSlot(Ref<EntityStore> ref, int sectionId, byte slot, ComponentAccessor<EntityStore> accessor)
+void setActiveSlot(Holder<EntityStore> holder, int sectionId, byte slot)
 ItemStack getItemInHand()
 ```
 
 ### Item Operations
 ```java
 void moveItem(int fromSection, int fromSlot, int toSection, int toSlot, int count)
-void smartMoveItem(int section, int slot, int count, SmartMoveType type)
-ListTransaction<MoveTransaction<ItemStackTransaction>> takeAll(int section)
+void smartMoveItem(Ref<EntityStore> ref, int section, int slot, int count, SmartMoveType type, PlayerSettings settings, ComponentAccessor<EntityStore> accessor)
+ListTransaction<MoveTransaction<ItemStackTransaction>> takeAll(int section, PlayerSettings settings)
 ListTransaction<MoveTransaction<ItemStackTransaction>> putAll(int section)
 ListTransaction<MoveTransaction<ItemStackTransaction>> quickStack(int section)
 List<ItemStack> dropAllItemStacks()
@@ -88,13 +90,8 @@ void clear()
 
 ### Sorting & Management
 ```java
-void sortStorage(SortType sortType)
-void setSortType(SortType sortType)
-void resizeBackpack(short size, List<ItemStack> overflow)
-void markChanged()
-boolean consumeIsDirty()
-boolean consumeNeedsSaving()
-boolean containsBrokenItem()
+void sortStorage()
+static boolean containsBrokenItem(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 ```
 
 ---
@@ -337,15 +334,16 @@ boolean canAddItemStack(ItemStack item, boolean addAllOrNothing, boolean fullSta
 ItemStackTransaction addItemStack(ItemStack item)
 ItemStackTransaction addItemStack(ItemStack item, boolean addAllOrNothing, boolean fullStacks, boolean filter)
 ItemStackTransaction addItemStacks(List<ItemStack> items)
-ItemStackTransaction addItemStacksOrdered(List<ItemStack> items)
-ItemStackTransaction addItemStacksOrdered(List<ItemStack> items, short startSlot)
-ItemStackTransaction addItemStacksOrdered(List<ItemStack> items, short startSlot, boolean addAllOrNothing, boolean fullStacks)
+ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(List<ItemStack> items)
+ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(short startSlot, List<ItemStack> items)
+ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(List<ItemStack> items, boolean addAllOrNothing, boolean fullStacks)
+ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(short startSlot, List<ItemStack> items, boolean addAllOrNothing, boolean fullStacks)
 ```
 
 ### Removing Items
 ```java
 // By slot
-ItemStack removeItemStackFromSlot(short slotIndex)
+SlotTransaction removeItemStackFromSlot(short slotIndex)
 ItemStackSlotTransaction removeItemStackFromSlot(short slotIndex, int quantity)
 ItemStackSlotTransaction removeItemStackFromSlot(short slotIndex, ItemStack item, int quantity)
 
@@ -398,9 +396,11 @@ EventRegistration registerChangeEvent(short slotIndex, Consumer<ItemContainerCha
 
 ---
 
-## ItemContainerChangeEvent
+## ItemContainer.ItemContainerChangeEvent
 
 **Package:** `com.hypixel.hytale.server.core.inventory.container`
+
+Nested type: `ItemContainer.ItemContainerChangeEvent` (inner class of `ItemContainer`).
 
 Java Record that fires when an item container's contents change. Implements `IEvent<Void>`.
 
@@ -440,7 +440,7 @@ hotbar.registerChangeEvent(EventPriority.EARLY, event -> {
 
 ### Note
 
-This event is specific to individual `ItemContainer` instances. To listen for general inventory changes across all entities, use `LivingEntityInventoryChangeEvent` instead (see [entities.md](entities.md)).
+This event is specific to individual `ItemContainer` instances. To listen for general inventory changes across all entities, use `InventoryChangeEvent` instead (see [Inventory Events](#inventory-events)).
 
 > **See also:** [Player Events](player.md#player-events)
 
@@ -833,7 +833,7 @@ hotbar.registerChangeEvent(event -> {
 
 ### Sort Storage
 ```java
-inventory.sortStorage(SortType.TYPE);
+inventory.sortStorage();
 ```
 
 ### Create ItemStack with Metadata
@@ -1097,11 +1097,11 @@ Events related to inventory operations (dropping items, switching slots, picking
 
 ### Event Summary
 
-**Package:** `com.hypixel.hytale.server.core.event.events.entity`
+**Package:** `com.hypixel.hytale.server.core.inventory`
 
 | Class | Description |
 |-------|-------------|
-| `LivingEntityInventoryChangeEvent` | Living entity inventory changes |
+| `InventoryChangeEvent` | Inventory contents change (ECS event) |
 
 **Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
@@ -1113,28 +1113,48 @@ Events related to inventory operations (dropping items, switching slots, picking
 
 ---
 
-### LivingEntityInventoryChangeEvent
+### InventoryChangeEvent
 
-**Package:** `com.hypixel.hytale.server.core.event.events.entity`
+**Package:** `com.hypixel.hytale.server.core.inventory`
 
-Fired when a living entity's inventory changes.
+ECS event (extends `EcsEvent`) fired when an inventory's contents change. Handle it with an `EntityEventSystem`.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getEntity()` | `LivingEntity` | The entity whose inventory changed |
-| `getInventory()` | `Inventory` | The updated inventory |
+| `getComponentType()` | `ComponentType<EntityStore, ? extends InventoryComponent>` | The inventory component type |
+| `getInventory()` | `InventoryComponent` | The inventory component that changed |
+| `getItemContainer()` | `ItemContainer` | The container that changed |
+| `getTransaction()` | `Transaction` | The transaction details |
 
 ### Usage Example
 
 ```java
-import com.hypixel.hytale.server.core.event.events.entity.LivingEntityInventoryChangeEvent;
+import com.hypixel.hytale.component.*;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.inventory.InventoryChangeEvent;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-@Override
-protected void setup() {
-    getEventRegistry().registerGlobal(LivingEntityInventoryChangeEvent.class, event -> {
-        var entity = event.getEntity();
-        System.out.println("Inventory changed for: " + entity);
-    });
+public class InventoryChangeSystem extends EntityEventSystem<EntityStore, InventoryChangeEvent> {
+
+    public InventoryChangeSystem() {
+        super(InventoryChangeEvent.class);
+    }
+
+    @Override
+    public void handle(int index, ArchetypeChunk<EntityStore> chunk,
+                       Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
+                       InventoryChangeEvent event) {
+        var container = event.getItemContainer();
+        var transaction = event.getTransaction();
+        System.out.println("Inventory changed: " + transaction);
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Player.getComponentType();
+    }
 }
 ```
 
@@ -1144,14 +1164,23 @@ protected void setup() {
 
 **Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
-ECS event fired when an item is dropped. Has variants:
-- `DropItemEvent.Drop` - General item drop
-- `DropItemEvent.PlayerRequest` - Player-initiated drop
+ECS event fired when an item is dropped. Extends `CancellableEcsEvent`. The base class has no item/position accessors; use the variant subclasses:
+- `DropItemEvent.Drop` - General item drop. Provides `getItemStack()` / `setItemStack(ItemStack)` and `getThrowSpeed()` / `setThrowSpeed(float)`.
+- `DropItemEvent.PlayerRequest` - Player-initiated drop. Provides `getInventorySectionId()` (`int`) and `getSlotId()` (`short`).
+
+**`DropItemEvent.Drop`**
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
 | `getItemStack()` | `ItemStack` | The item being dropped |
-| `getPosition()` | `Vector3d` | Drop position |
+| `getThrowSpeed()` | `float` | Throw speed of the drop |
+
+**`DropItemEvent.PlayerRequest`**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getInventorySectionId()` | `int` | Section the drop originates from |
+| `getSlotId()` | `short` | Slot the drop originates from |
 
 ---
 
@@ -1176,7 +1205,7 @@ ECS event fired when the active inventory slot changes (e.g., player switching h
 | Method | Return Type | Description |
 |--------|-------------|-------------|
 | `getPreviousSlot()` | `int` | The previous active slot |
-| `getNewSlot()` | `int` | The new active slot |
+| `getNewSlot()` | `byte` | The new active slot |
 
 ### ECS Inventory Event Example
 

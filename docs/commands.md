@@ -151,7 +151,7 @@ void setAllowsExtraArguments(boolean allows)    // Allow trailing arguments
 void setOwner(CommandOwner owner)               // Set owning plugin
 
 // Matching
-boolean matches(String input, String alias, int depth)  // Check if input matches command
+MatchResult matches(String input, String alias, int depth)  // Check if input matches command
 ```
 
 > **See also:** [Permissions API](permissions.md#permissionholder)
@@ -187,8 +187,8 @@ AbstractWorldCommand(String name, String description, boolean allowsExtraArgs)
 ```java
 protected abstract void execute(
     CommandContext commandContext,
-    Store<EntityStore> store,
-    World world
+    World world,
+    Store<EntityStore> store
 );
 ```
 
@@ -210,10 +210,11 @@ AbstractTargetPlayerCommand(String name, String description, boolean allowsExtra
 ```java
 protected abstract void execute(
     CommandContext commandContext,
-    Store<EntityStore> store,
+    Ref<EntityStore> ref,
     Ref<EntityStore> targetRef,
     PlayerRef targetPlayer,
-    World world
+    World world,
+    Store<EntityStore> store
 );
 ```
 
@@ -226,8 +227,9 @@ public class KickCommand extends AbstractTargetPlayerCommand {
     }
 
     @Override
-    protected void execute(CommandContext ctx, Store<EntityStore> store,
-                          Ref<EntityStore> targetRef, PlayerRef targetPlayer, World world) {
+    protected void execute(CommandContext ctx, Ref<EntityStore> ref,
+                          Ref<EntityStore> targetRef, PlayerRef targetPlayer,
+                          World world, Store<EntityStore> store) {
         // targetPlayer is the player being kicked (not the sender)
         targetPlayer.sendMessage(Message.raw("You have been kicked!"));
         // Kick logic here
@@ -345,7 +347,7 @@ ArgTypes.COLOR     // Color (integer)
 ```java
 ArgTypes.PLAYER_UUID  // Player UUID with suggestions
 ArgTypes.PLAYER_REF   // PlayerRef with tab completion
-ArgTypes.ENTITY_ID    // Entity UUID
+ArgTypes.ENTITY_ID    // Entity UUID (an ArgWrapper<EntityWrappedArg, UUID>)
 ```
 
 ### World & Position Types
@@ -457,7 +459,7 @@ public class SpawnCommand extends AbstractPlayerCommand {
 
 **Key methods:**
 - `relPos.getRelativePosition(Vector3d origin, World world)` - Resolves relative coords against origin
-- `relPos.isRelativeX()`, `isRelativeY()`, `isRelativeZ()` - Check which axes use `~`
+- `relPos.isRelative()` - Check whether the position uses `~` (relative) coordinates
 
 ### Custom Enum Argument Example
 ```java

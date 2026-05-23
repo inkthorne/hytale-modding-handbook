@@ -20,8 +20,6 @@ Hytale provides a comprehensive math library including vectors, matrices, quater
 | Class | Description |
 |-------|-------------|
 | `Matrix4d` | 4x4 transformation matrix (translate, rotate, scale, project) |
-| `Mat4f` | 4x4 float matrix (serialization) |
-| `Quatf` | Quaternion (x, y, z, w) |
 | `Box` | Axis-aligned bounding box (AABB) |
 | `Axis` | Enum for X, Y, Z axes |
 | `MathUtil` | Static math utilities |
@@ -810,54 +808,6 @@ Vector4d result = matrix.multiply(pos);
 // For perspective projection, divide by w
 result.perspectiveTransform();
 // Now result.x/y/z are in normalized device coordinates
-```
-
----
-
-## Mat4f
-
-**Package:** `com.hypixel.hytale.math`
-
-Lightweight 4x4 float matrix, primarily for network serialization.
-
-### Fields
-
-```java
-// 16 public final float fields
-mat.m11, mat.m12, mat.m13, mat.m14  // Row 1
-mat.m21, mat.m22, mat.m23, mat.m24  // Row 2
-mat.m31, mat.m32, mat.m33, mat.m34  // Row 3
-mat.m41, mat.m42, mat.m43, mat.m44  // Row 4
-```
-
-### Methods
-
-```java
-Mat4f identity = Mat4f.identity();
-mat.serialize(ByteBuf buf);
-Mat4f mat = Mat4f.deserialize(ByteBuf buf, int version);
-```
-
----
-
-## Quatf
-
-**Package:** `com.hypixel.hytale.math`
-
-Quaternion for rotation representation. Minimal API - primarily for serialization.
-
-### Fields
-
-```java
-public final float x, y, z, w;
-```
-
-### Methods
-
-```java
-Quatf quat = new Quatf(x, y, z, w);
-quat.serialize(ByteBuf buf);
-Quatf quat = Quatf.deserialize(ByteBuf buf, int version);
 ```
 
 ---

@@ -24,7 +24,7 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [ui.md](ui.md) | UI system covering pages, windows, HUD, DSL syntax, elements, styling, and Java API. |
 | [blocks.md](blocks.md) | Covers the block system including block states, BlockType properties, block events (place/break/use/damage), and world access. |
 | [assets.md](assets.md) | Asset registry system for custom assets, asset stores, built-in asset access, and asset lifecycle events. |
-| [codecs.md](codecs.md) | Serialization system using codecs for data persistence and configuration loading, including RecordCodecBuilder patterns. |
+| [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |
 | [prefabs.md](prefabs.md) | Prefab system for placing pre-defined block/entity selections including transformations, placement, and prefab events. |
 | [math.md](math.md) | Comprehensive math library with vectors (Vector3d/f/i/l), matrices, transforms, Box AABB, and utility methods. |
@@ -115,7 +115,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PermissionHolder](permissions.md), [PlayerGroupEvent](permissions.md), [PlayerPermissionChangeEvent](permissions.md)
 
 **Inventory & Crafting**
-[Inventory](inventory.md), [ItemStack](inventory.md), [Item](inventory.md), [ItemContainer](inventory.md), [CombinedItemContainer](inventory.md), [SmartMoveType](inventory.md), [SortType](inventory.md), [FilterType](inventory.md), [FilterActionType](inventory.md), [SlotFilter](inventory.md), [ActionType](inventory.md), [ItemStackTransaction](inventory.md), [CraftingRecipe](inventory.md), [MaterialQuantity](inventory.md), [ResourceQuantity](inventory.md), [BenchRequirement](inventory.md), [BenchType](inventory.md), [DropItemEvent](inventory.md), [SwitchActiveSlotEvent](inventory.md), [InteractivelyPickupItemEvent](inventory.md), [LivingEntityInventoryChangeEvent](inventory.md), [CraftRecipeEvent](inventory.md)
+[Inventory](inventory.md), [ItemStack](inventory.md), [Item](inventory.md), [ItemContainer](inventory.md), [CombinedItemContainer](inventory.md), [SmartMoveType](inventory.md), [SortType](inventory.md), [FilterType](inventory.md), [FilterActionType](inventory.md), [SlotFilter](inventory.md), [ActionType](inventory.md), [ItemStackTransaction](inventory.md), [CraftingRecipe](inventory.md), [MaterialQuantity](inventory.md), [ResourceQuantity](inventory.md), [BenchRequirement](inventory.md), [BenchType](inventory.md), [DropItemEvent](inventory.md), [SwitchActiveSlotEvent](inventory.md), [InteractivelyPickupItemEvent](inventory.md), [InventoryChangeEvent](inventory.md), [CraftRecipeEvent](inventory.md)
 
 **Tasks**
 [TaskRegistry](tasks.md), [TaskRegistration](tasks.md)
@@ -124,10 +124,10 @@ JSON asset types used in Hytale's data-driven systems.
 [UICommandBuilder](ui-api.md), [UIEventBuilder](ui-api.md), [WindowManager](ui-api.md), [PageManager](ui-api.md), [HudManager](ui-api.md), [HotbarManager](ui-api.md), [Window](ui-api.md), [WindowType](ui-api.md), [OpenWindow](ui-api.md), [Page](ui-api.md), [CustomUIPage](ui-api.md), [HudComponent](ui-api.md), [CustomUIEventBindingType](ui-api.md)
 
 **Blocks**
-[BlockStateRegistry](blocks.md), [BlockStateRegistration](blocks.md), [BlockType](blocks.md), [BlockMaterial](blocks.md), [Rotation](blocks.md), [RotationTuple](blocks.md), [PlaceBlockEvent](blocks.md), [BreakBlockEvent](blocks.md), [DamageBlockEvent](blocks.md), [UseBlockEvent](blocks.md)
+[BlockType](blocks.md), [BlockMaterial](blocks.md), [Rotation](blocks.md), [RotationTuple](blocks.md), [PlaceBlockEvent](blocks.md), [BreakBlockEvent](blocks.md), [DamageBlockEvent](blocks.md), [UseBlockEvent](blocks.md)
 
 **Assets**
-[AssetRegistry](assets.md), [Model](assets.md), [ModelAsset](assets.md), [AssetPackRegisterEvent](assets.md), [AssetPackUnregisterEvent](assets.md), [LoadAssetEvent](assets.md), [GenerateSchemaEvent](assets.md), [CommonAssetMonitorEvent](assets.md), [SendCommonAssetsEvent](assets.md), [PathEvent](assets.md)
+[AssetRegistry](assets.md), [Model](assets.md), [ModelAsset](assets.md), [AssetPackRegisterEvent](assets.md), [AssetPackUnregisterEvent](assets.md), [LoadAssetEvent](assets.md), [CommonAssetMonitorEvent](assets.md), [SendCommonAssetsEvent](assets.md), [PathEvent](assets.md)
 
 **Interactions**
 [Interaction](interactions.md), [SimpleInteraction](interactions.md), [SimpleInstantInteraction](interactions.md), [Operation](interactions-operations.md), [OperationsBuilder](interactions-operations.md), [InteractionContext](interactions-context.md), [CooldownHandler](interactions.md#cooldown-system), [InteractionRules](interactions.md#interactionrules)
@@ -139,10 +139,10 @@ JSON asset types used in Hytale's data-driven systems.
 [PrefabStore](prefabs.md), [BlockSelection](prefabs.md), [PrefabRotation](prefabs.md), [PrefabEntry](prefabs.md), [PrefabWeights](prefabs.md), [PrefabPasteEvent](prefabs.md), [PrefabPlaceEntityEvent](prefabs.md)
 
 **Math**
-[Vector3d](math.md), [Vector3f](math.md), [Vector3i](math.md), [Vector3l](math.md), [Vector2d](math.md), [Vector2i](math.md), [Vector4d](math.md), [Matrix4d](math.md), [Mat4f](math.md), [Quatf](math.md), [Transform](math.md), [Box](math.md), [Axis](math.md), [MathUtil](math.md)
+[Vector3d](math.md), [Vector3f](math.md), [Vector3i](math.md), [Vector3l](math.md), [Vector2d](math.md), [Vector2i](math.md), [Vector4d](math.md), [Matrix4d](math.md), [Transform](math.md), [Box](math.md), [Axis](math.md), [MathUtil](math.md)
 
 **Codecs**
-[Codec](codecs.md), [RecordCodecBuilder](codecs.md)
+[Codec](codecs.md), [BuilderCodec](codecs.md), [KeyedCodec](codecs.md)
 
 **Projectiles**
 [ProjectileModule](projectiles.md), [ProjectileConfig](projectiles.md), [PhysicsConfig](projectiles.md), [StandardPhysicsConfig](projectiles.md), [ImpactConsumer](projectiles.md), [BounceConsumer](projectiles.md), [StandardPhysicsProvider](projectiles.md), [PredictedProjectile](projectiles.md), [BallisticData](projectiles.md), [BallisticDataProvider](projectiles.md), [ProjectileInteraction](projectiles.md)

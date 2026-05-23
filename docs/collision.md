@@ -477,26 +477,27 @@ Evaluates intersection between a box and blocks. Used for position validation an
 
 ### Box Configuration
 ```java
-void setBox(Box box)
-void setPosition(Vector3d position)
-void expandBox(double amount)
+// These return the evaluator (builder pattern), not void
+BoxBlockIntersectionEvaluator setBox(Box box)
+BoxBlockIntersectionEvaluator setPosition(Vector3d position)
+BoxBlockIntersectionEvaluator expandBox(double amount)
 ```
 
 ### Intersection Tests
 ```java
-// Basic intersection
-boolean intersectBox()
+// Basic intersection (returns a result code, not a boolean)
+int intersectBox(Box box, double x, double y, double z)
 
 // Intersection with touch detection
-boolean intersectBoxComputeTouch()
+int intersectBoxComputeTouch(Box box, double x, double y, double z)
 
 // Intersection with ground detection
-boolean intersectBoxComputeOnGround()
+int intersectBoxComputeOnGround(Box box, double x, double y, double z)
 ```
 
 ### Query Results
 ```java
-boolean isBoxIntersecting()
+boolean isBoxIntersecting(Box box, double x, double y, double z)
 boolean isTouching()
 boolean touchesCeil()
 ```

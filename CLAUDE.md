@@ -92,3 +92,5 @@ It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): eve
 
 - **examples/commands/**: Command system (no-arg and position args)
 - **examples/ui/**: Custom UI pages and HUD management
+- **examples/inventory/**: Inventory and item-stack management
+- **examples/entity-count/**: ECS ticking system (`EntityTickingSystem`) that counts world entities each tick and pushes the totals to a live `CustomUIHud`

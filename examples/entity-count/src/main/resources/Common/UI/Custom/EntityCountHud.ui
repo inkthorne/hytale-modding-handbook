@@ -1,0 +1,35 @@
+Group {
+    Anchor: (Top: 10, Right: 10, Width: 200, Height: 140);
+    Background: (Color: #000000(0.6));
+    Padding: (Full: 10);
+    LayoutMode: Top;
+
+    Label #TitleLabel {
+        Style: (FontSize: 14, TextColor: #FFFFFF);
+        Text: "Entities in world";
+    }
+
+    Label #TotalLabel {
+        Anchor: (Top: 6);
+        Style: (FontSize: 16, TextColor: #FFD24A);
+        Text: "Total: 0";
+    }
+
+    Label #PlayerLabel {
+        Anchor: (Top: 4);
+        Style: (FontSize: 16, TextColor: #4488FF);
+        Text: "Players: 0";
+    }
+
+    Label #NpcLabel {
+        Anchor: (Top: 4);
+        Style: (FontSize: 16, TextColor: #FF8844);
+        Text: "NPCs: 0";
+    }
+
+    Label #OtherLabel {
+        Anchor: (Top: 4);
+        Style: (FontSize: 16, TextColor: #44CC66);
+        Text: "Other: 0";
+    }
+}

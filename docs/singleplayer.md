@@ -14,7 +14,7 @@ Implements `IEvent<Void>`. Fired when singleplayer requests a specific access le
 |--------|-------------|-------------|
 | `getAccess()` | `Access` | The requested access level |
 
-> **See also:** [Event Registry](plugin-lifecycle.md#pluginevent)
+> **See also:** [Event Registry](plugin-lifecycle.md#pluginevent-base-class)
 
 ---
 

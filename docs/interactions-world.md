@@ -438,8 +438,8 @@ Example assets using ChangeState:
 
 ### Related
 
-- [BlockCondition](interactions-conditions.md#blockcondition) - Check current block state
-- [State.Definitions](items-blocks.md#state-definitions) - Define block states and their property overrides
+- [BlockCondition](interactions-flow.md#blockcondition) - Check current block state
+- [State.Definitions](items-blocks.md#block-states) - Define block states and their property overrides
 
 ---
 
@@ -924,5 +924,5 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 - [ChargingInteraction](interactions-combo.md#charginginteraction) - Parent class providing hold-duration behavior
 - [ChainFlagInteraction](interactions-combo.md#chainflaginteraction) - Set flags from BlockedInteractions for counter-attack systems
 - [ChangeState](interactions-world.md#changestate) - Used in Failed for guard break stagger
-- [ChangeStat](interactions-stat.md#changestat) - Modify stamina, signature energy on block
+- [ChangeStat](interactions-combat.md#changestat) - Modify stamina, signature energy on block
 - [Replace](interactions-flow.md#replace) - Used in Forks for weapon-specific bash attacks

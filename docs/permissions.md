@@ -53,7 +53,7 @@ public class AdminCommand extends AbstractPlayerCommand {
 
 Players without the required permission won't be able to execute the command.
 
-> **See also:** [Commands API](commands.md#command-permissions)
+> **See also:** [Commands API](commands.md#other-abstractcommand-methods)
 
 ---
 
@@ -63,7 +63,7 @@ Players without the required permission won't be able to execute the command.
 
 Events related to permission changes for players and groups.
 
-> **See also:** [Event Registry](plugin-lifecycle.md#pluginevent)
+> **See also:** [Event Registry](plugin-lifecycle.md#pluginevent-base-class)
 
 ### Event Summary
 

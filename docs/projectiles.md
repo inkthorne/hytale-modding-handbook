@@ -53,7 +53,7 @@ ComponentType<EntityStore, StandardPhysicsProvider> getStandardPhysicsProviderCo
 ComponentType<EntityStore, PredictedProjectile> getPredictedProjectileComponentType()
 ```
 
-> **See also:** [ECS Components](components.md#component-types)
+> **See also:** [ECS Components](components.md#core-types)
 
 ---
 
@@ -417,7 +417,7 @@ Result onCollisionSliceFinished()
 void onCollisionFinished()
 ```
 
-> **See also:** [Collision API](collision.md#collision-result)
+> **See also:** [Collision API](collision.md#collisionresult)
 
 ### Tick Methods
 ```java

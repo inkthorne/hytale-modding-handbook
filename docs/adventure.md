@@ -29,7 +29,7 @@ Abstract base class for instance discovery events. Extends `EcsEvent`.
 | `getInstanceWorldUuid()` | `UUID` | UUID of the discovered instance world |
 | `getDiscoveryConfig()` | `InstanceDiscoveryConfig` | Configuration for this discovery |
 
-> **See also:** [ECS Event Systems](components.md#entityeventsystem)
+> **See also:** [ECS Event Systems](components.md#event-type-registration)
 
 ---
 

@@ -118,7 +118,7 @@ getEventRegistry().register(AllNPCsLoadedEvent.class, event -> {
 
 Events and classes related to NPC AI sensors. Sensors detect entities and trigger NPC behaviors.
 
-> **See also:** [ECS Event System](components.md#entityeventsystem)
+> **See also:** [ECS Event System](components.md#event-type-registration)
 
 **Package:** `com.hypixel.hytale.server.npc.corecomponents.world`
 

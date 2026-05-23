@@ -935,7 +935,7 @@ box.forEachBlock(offsetX, offsetY, offsetZ, scale, (x, y, z) -> {
 });
 ```
 
-> **See also:** [Collision API](collision.md#box-collision-detection)
+> **See also:** [Collision API](collision.md#boxcollisiondata)
 
 ---
 

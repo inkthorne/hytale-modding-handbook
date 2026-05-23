@@ -2239,7 +2239,7 @@ Different memory states can unlock higher placement limits:
 ### Related Interactions
 
 - [CooldownCondition](#cooldowncondition) - Check cooldown state (also uses `Next`/`Failed`)
-- [MemoriesCondition](#memoriescondition) - Branch based on player memory states
+- MemoriesCondition - Branch based on player memory states
 - [Block Interactions](interactions-world.md#block-interactions) - PlaceBlock interaction for actual placement
 
 ---

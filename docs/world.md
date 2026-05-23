@@ -99,7 +99,7 @@ void stopIndividualWorld()
 void execute(Runnable task)  // Execute on world thread
 ```
 
-> **See also:** [ECS Components](components.md#store-type-parameters)
+> **See also:** [ECS Components](components.md#common-store-types)
 
 ---
 
@@ -250,7 +250,7 @@ Component<ChunkStore> clone()
 void loadFromHolder(World world, int x, int z, Holder<ChunkStore> holder)
 ```
 
-> **See also:** [Collision API](collision.md#blockcollidingdata)
+> **See also:** [Collision API](collision.md#blockcollisiondata)
 
 ---
 
@@ -726,7 +726,7 @@ protected void setup() {
 
 Events related to chunk loading, saving, and unloading.
 
-> **See also:** [Event Systems](components.md#entityeventsystem)
+> **See also:** [Event Systems](components.md#event-type-registration)
 
 ### Event Summary
 

@@ -29,7 +29,7 @@ Abstract base class for all asset editor events.
 |--------|-------------|-------------|
 | `getEditorClient()` | `EditorClient` | The editor client |
 
-> **See also:** [Asset Registry](assets.md#asset-registry)
+> **See also:** [Asset Registry](assets.md#assetregistry)
 
 ---
 

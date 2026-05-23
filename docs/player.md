@@ -474,7 +474,7 @@ protected void setup() {
 }
 ```
 
-> **See also:** [ECS Event Handling](components.md#entityeventsystem)
+> **See also:** [ECS Event Handling](components.md#event-type-registration)
 
 ---
 

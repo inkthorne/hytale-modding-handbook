@@ -407,7 +407,7 @@ prefab.place(commandSender, world);
 
 Events related to prefab pasting and entity placement from prefabs.
 
-> **See also:** [ECS Event Systems](components.md#entityeventsystem)
+> **See also:** [ECS Event Systems](components.md#event-type-registration)
 
 **Package:** `com.hypixel.hytale.server.core.prefab.event`
 

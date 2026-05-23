@@ -802,7 +802,7 @@ This grants 5 signature energy each time the player successfully blocks an attac
 
 **Package:** `config/server/InterruptInteraction`
 
-Cancels the current interaction chain on the target entity. Used for stagger effects, crowd control, or cancelling enemy attacks mid-animation. Typically paired with [ApplyEffect](#applyeffectinteraction) (Stun) for full crowd control mechanics.
+Cancels the current interaction chain on the target entity. Used for stagger effects, crowd control, or cancelling enemy attacks mid-animation. Typically paired with [ApplyEffect](#applyeffect) (Stun) for full crowd control mechanics.
 
 ### Core Properties
 
@@ -986,7 +986,7 @@ Use Interrupt alone for light staggers (enemy can recover quickly). Use both for
 
 ### Related Interactions
 
-- [ApplyEffectInteraction](#applyeffectinteraction) - Apply status effects like Stun
-- [ChainingInteraction](#chaininginteraction) - Create interruptible combo chains
-- [DamageEntityInteraction](#damageentityinteraction) - Deal damage alongside interrupt
-- [SelectorInteraction](#selectorinteraction) - Target multiple entities for AOE interrupts
+- [ApplyEffect](#applyeffect) - Apply status effects like Stun
+- [ChainingInteraction](interactions-combo.md#chaininginteraction) - Create interruptible combo chains
+- [DamageEntity](#damageentity) - Deal damage alongside interrupt
+- [Selector](#selector) - Target multiple entities for AOE interrupts

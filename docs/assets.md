@@ -77,7 +77,7 @@ Common asset type configurations:
 | `particle/` | Particle effect configurations |
 | `gameplay/` | Gameplay configuration assets |
 
-> **See also:** [Codecs API](codecs.md#builtin-codecs)
+> **See also:** [Codecs API](codecs.md#built-in-codecs)
 
 ---
 
@@ -537,7 +537,7 @@ JSON with type dispatch:
 }
 ```
 
-> **See also:** [Codecs API - Polymorphic Type Dispatch](codecs.md#polymorphic-type-dispatch)
+> **See also:** [Codecs API - Polymorphic Type Dispatch](codecs.md#codec-map-types-polymorphic--lookup-codecs)
 
 ---
 
@@ -615,7 +615,7 @@ Assets are loaded during server startup:
 - Assets persist across server restarts (stored in data files)
 - Explore specific asset type packages for detailed APIs
 - For a complete guide on creating custom assets, see [Creating Custom Asset Types](#creating-custom-asset-types)
-- For polymorphic assets with type dispatch, see [Codecs API - Polymorphic Type Dispatch](codecs.md#polymorphic-type-dispatch)
+- For polymorphic assets with type dispatch, see [Codecs API - Polymorphic Type Dispatch](codecs.md#codec-map-types-polymorphic--lookup-codecs)
 
 ---
 

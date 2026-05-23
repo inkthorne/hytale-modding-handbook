@@ -821,7 +821,7 @@ Blocks reference drop files in their `BlockType.Components.container` configurat
 }
 ```
 
-See [Block Items - Container Configuration](items-blocks.md#container-configuration) for details.
+See [Block Items - Containers](items-blocks.md#containers) for details.
 
 ### NPC Drops
 
@@ -857,7 +857,7 @@ Crop blocks define harvest drops in their `BlockType.Farming.HarvestDrops` prope
 
 Note: `HarvestDrops` uses a simplified inline format rather than referencing drop files.
 
-See [Block Items - Farming Configuration](items-blocks.md#farming-configuration) for details.
+See [Block Items - Farming & Soil](items-blocks.md#farming--soil) for details.
 
 ### Prefab Containers
 

@@ -46,7 +46,6 @@
 - [BlockCondition](interactions-flow.md#blockcondition) - Branch based on block type/state/tag
 - [CooldownCondition](interactions-flow.md#cooldowncondition) - Branch based on cooldown completion
 - [MovementCondition](interactions-flow.md#movementcondition) - Direction-based input branching
-- [DestroyCondition](interactions-flow.md#destroycondition) - Check if block is destroyable
 - [PlacementCountCondition](interactions-flow.md#placementcountcondition) - Branch based on block placement count
 - [Repeat](interactions-flow.md#repeat) - Loop execution of interactions
 - [Replace](interactions-flow.md#replace) - Variable substitution for templates
@@ -57,7 +56,6 @@
 - [RemoveEntity](interactions-world.md#removeentity) - Despawn entities from the world
 - [LaunchProjectile](interactions-world.md#launchprojectile) - Fire projectiles
 - [SendMessage](interactions-world.md#sendmessage) - Send chat messages to players
-- [RunRootInteraction](interactions-world.md#runrootinteraction) - Dynamically execute another root interaction
 - [UI Interactions](interactions-world.md#ui-interactions) - Open UI pages (OpenPage, OpenCustomUI)
 - [Inventory Interactions](interactions-world.md#inventory-interactions) - Manage inventory and equipment
 - [Block Interactions](interactions-world.md#block-interactions) - Break or place blocks

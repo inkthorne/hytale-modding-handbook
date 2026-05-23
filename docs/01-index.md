@@ -54,13 +54,13 @@ JSON asset types used in Hytale's data-driven systems.
 [SimpleInteraction](interactions-combat.md#simpleinteraction), [Selector](interactions-combat.md#selector), [DamageEntity](interactions-combat.md#damageentity), [ApplyForce](interactions-combat.md#applyforce), [ApplyEffect](interactions-combat.md#applyeffect), [ClearEntityEffect](interactions-combat.md#clearentityeffect), [ChangeStat](interactions-combat.md#changestat), [InterruptInteraction](interactions-combat.md#interruptinteraction)
 
 **Interactions - Control Flow**
-[Serial](interactions-flow.md#serial), [Parallel](interactions-flow.md#parallel), [Condition](interactions-flow.md#condition), [StatsCondition](interactions-flow.md#statscondition), [EffectCondition](interactions-flow.md#effectcondition), [BlockCondition](interactions-flow.md#blockcondition), [CooldownCondition](interactions-flow.md#cooldowncondition), [MovementCondition](interactions-flow.md#movementcondition), [DestroyCondition](interactions-flow.md#destroycondition), [PlacementCountCondition](interactions-flow.md#placementcountcondition), [Repeat](interactions-flow.md#repeat), [Replace](interactions-flow.md#replace)
+[Serial](interactions-flow.md#serial), [Parallel](interactions-flow.md#parallel), [Condition](interactions-flow.md#condition), [StatsCondition](interactions-flow.md#statscondition), [EffectCondition](interactions-flow.md#effectcondition), [BlockCondition](interactions-flow.md#blockcondition), [CooldownCondition](interactions-flow.md#cooldowncondition), [MovementCondition](interactions-flow.md#movementcondition), [PlacementCountCondition](interactions-flow.md#placementcountcondition), [Repeat](interactions-flow.md#repeat), [Replace](interactions-flow.md#replace)
 
 **Interactions - Target Selectors**
-[AOECircle](interactions-flow.md#aoecircleselector), [AOECylinder](interactions-flow.md#aoecylinderselector), [Raycast](interactions-flow.md#raycastselector), [Stab](interactions-flow.md#stabselector), [Horizontal](interactions-flow.md#horizontalselector)
+[AOECircle](interactions-combat.md#aoecircle-area-of-effect), [Raycast](interactions-combat.md#raycast-straight-line), [Stab](interactions-combat.md#stab-thrust-attacks), [Horizontal](interactions-combat.md#horizontal-sweeping-attacks)
 
 **Interactions - Entity & World**
-[SpawnPrefab](interactions-world.md#spawnprefab), [RemoveEntity](interactions-world.md#removeentity), [LaunchProjectile](interactions-world.md#launchprojectile), [SendMessage](interactions-world.md#sendmessage), [RunRootInteraction](interactions-world.md#runrootinteraction), [OpenPage](interactions-world.md#ui-interactions), [OpenCustomUI](interactions-world.md#ui-interactions), [EquipItem](interactions-world.md#inventory-interactions), [ModifyInventory](interactions-world.md#inventory-interactions), [BreakBlock](interactions-world.md#block-interactions), [PlaceBlock](interactions-world.md#block-interactions), [ChangeState](interactions-world.md#changestate), [LaunchPadInteraction](interactions-world.md#launchpadinteraction), [WieldingInteraction](interactions-world.md#wieldinginteraction)
+[SpawnPrefab](interactions-world.md#spawnprefab), [RemoveEntity](interactions-world.md#removeentity), [LaunchProjectile](interactions-world.md#launchprojectile), [SendMessage](interactions-world.md#sendmessage), [OpenPage](interactions-world.md#ui-interactions), [OpenCustomUI](interactions-world.md#ui-interactions), [EquipItem](interactions-world.md#inventory-interactions), [ModifyInventory](interactions-world.md#inventory-interactions), [BreakBlock](interactions-world.md#block-interactions), [PlaceBlock](interactions-world.md#block-interactions), [ChangeState](interactions-world.md#changestate), [LaunchPadInteraction](interactions-world.md#launchpadinteraction), [WieldingInteraction](interactions-world.md#wieldinginteraction)
 
 **Items - Weapon Templates**
 [Template_Weapon_Sword](items-weapons.md#template_weapon_sword), [Template_Weapon_Daggers](items-weapons.md#template_weapon_daggers), [Template_Weapon_Shield](items-weapons.md#template_weapon_shield), [Template_Weapon_Battleaxe](items-weapons.md#template_weapon_battleaxe), [Template_Weapon_Shortbow](items-weapons.md#template_weapon_shortbow), [Template_Weapon_Mace](items-weapons.md#template_weapon_mace), [Template_Weapon_Crossbow](items-weapons.md#template_weapon_crossbow)
@@ -72,19 +72,19 @@ JSON asset types used in Hytale's data-driven systems.
 [SoundEvents](audio.md#soundevents), [AudioCategories](audio.md#audiocategories), [AmbienceFX](audio.md#ambiencefx), [EQ](audio.md#eq-equalizer), [Reverb](audio.md#reverb), [ItemSounds](audio.md#itemsounds), [SoundSets](audio.md#soundsets)
 
 **World Generation - Zones & Biomes**
-[Zone](worldgen-zones.md#zone-record), [ZonePatternGenerator](worldgen-zones.md#zonepatterngenerator), [BiomePatternGenerator](worldgen-zones.md#biomepatterngenerator), [ZoneDiscoveryConfig](worldgen-zones.md#zonediscoveryconfig), [Biome](worldgen-biomes.md#biome-types), [TileBiome](worldgen-biomes.md#tilebome), [BiomeInterpolation](worldgen-biomes.md#biomeinterpolation)
+[Zone](worldgen-zones.md#top-level-structure), [Biome Assignment](worldgen-zones.md#biome-assignment-noiserange), [Density](worldgen-zones.md#density), [SpawnPositions](worldgen-zones.md#spawnpositions), [Biome](worldgen-biomes.md#top-level-structure), [Terrain](worldgen-biomes.md#terrain), [MaterialProvider](worldgen-biomes.md#materialprovider)
 
-**World Generation - Biome Containers**
-[LayerContainer](worldgen-biomes.md#layercontainer), [CoverContainer](worldgen-biomes.md#covercontainer), [PrefabContainer](worldgen-biomes.md#prefabcontainer), [WaterContainer](worldgen-biomes.md#watercontainer), [TintContainer](worldgen-biomes.md#tintcontainer), [EnvironmentContainer](worldgen-biomes.md#environmentcontainer), [FadeContainer](worldgen-biomes.md#fadecontainer)
+**World Generation - Biome Providers**
+[MaterialProvider](worldgen-biomes.md#materialprovider), [Props](worldgen-biomes.md#props), [EnvironmentProvider](worldgen-biomes.md#environmentprovider), [TintProvider](worldgen-biomes.md#tintprovider)
 
 **World Generation - Terrain**
-[StaticLayer](worldgen-terrain.md#staticlayer), [DynamicLayer](worldgen-terrain.md#dynamiclayer), [HeightSupplier](worldgen-terrain.md#height-suppliers), [BlockPopulator](worldgen-terrain.md#blockpopulator), [BlockPriorityChunk](worldgen-terrain.md#block-priority)
+[DAOTerrain node](worldgen-terrain.md#the-daoterrain-node), [Density node families](worldgen-terrain.md#density-node-families), [Noise nodes](worldgen-terrain.md#noise-nodes), [BaseHeight](worldgen-terrain.md#baseheight), [MaterialProvider](worldgen-terrain.md#materialprovider)
 
 **World Generation - Caves**
-[CaveType](worldgen-caves.md#cavetype), [CaveNodeType](worldgen-caves.md#cavenodetype), [CaveNodeShape](worldgen-caves.md#cavenodeshape), [CaveNodeChildEntry](worldgen-caves.md#cavenodechildentry), [CaveNodeCoverEntry](worldgen-caves.md#cavenodecoverentry), [CavePrefabContainer](worldgen-caves.md#caveprefabcontainer)
+[How carving works](worldgen-caves.md#how-carving-works), [Anatomy of a cave field](worldgen-caves.md#anatomy-of-a-cave-field), [Building blocks](worldgen-caves.md#building-blocks), [Volcanic example](worldgen-caves.md#volcanic-example)
 
 **World Generation - Prefabs**
-[PrefabPopulator](worldgen-prefabs.md#prefabpopulator), [UniquePrefabGenerator](worldgen-prefabs.md#uniqueprefabgenerator), [UniquePrefabConfiguration](worldgen-prefabs.md#uniqueprefabconfiguration), [PlacementConditions](worldgen-prefabs.md#placement-conditions)
+[Biome Props array](worldgen-prefabs.md#biome-props-array), [Assignment node types](worldgen-prefabs.md#assignment-node-types), [Prop types](worldgen-prefabs.md#prop-types), [Positions & PropDistributions](worldgen-prefabs.md#positions--propdistributions)
 
 ---
 

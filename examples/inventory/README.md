@@ -8,8 +8,14 @@ Demonstrates the Hytale inventory API with commands for managing player items.
 Add items to your inventory. Tries hotbar first, then storage.
 
 **Examples:**
-- `/give hytale:wooden_sword` - Give 1 wooden sword
-- `/give hytale:apple 10` - Give 10 apples
+- `/give Weapon_Sword_Wood 1` - Give 1 wooden sword
+- `/give Plant_Fruit_Apple 10` - Give 10 apples
+
+> **Item IDs are the bare asset name (the `.json` filename), with no `hytale:`
+> prefix, and they are case-sensitive on the client.** A wrong-case id (e.g.
+> `plant_fruit_apple`) still resolves server-side — so `/give` accepts it and
+> adds items — but the client renders them as a `?` placeholder with no model.
+> Use the exact casing, e.g. `Plant_Fruit_Apple`, `Weapon_Sword_Wood`.
 
 **API demonstrated:** `ItemStack`, `ItemContainer.addItemStack()`, transaction handling
 
@@ -90,7 +96,7 @@ Inventory inventory = player.getInventory();
 
 ### Adding Items with Combined Container
 ```java
-ItemStack item = new ItemStack("hytale:apple", 10);
+ItemStack item = new ItemStack("Plant_Fruit_Apple", 10);
 CombinedItemContainer combined = inventory.getCombinedHotbarFirst();
 ItemStackTransaction result = combined.addItemStack(item);
 if (result.getRemainder() == null) {

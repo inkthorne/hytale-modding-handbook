@@ -20,8 +20,13 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
  * Give items to the player's inventory.
  * Usage: /give <item> <quantity>
  * Examples:
- *   /give hytale:wooden_sword 1
- *   /give hytale:apple 10
+ *   /give Weapon_Sword_Wood 1
+ *   /give Plant_Fruit_Apple 10
+ *
+ * Item IDs are the bare asset name (the .json filename), with no "hytale:"
+ * prefix, and are case-sensitive on the client. A wrong-case id resolves
+ * server-side (getItem() != UNKNOWN, so it is accepted) but the client cannot
+ * render it and shows a "?" placeholder. Use exact casing, e.g. Plant_Fruit_Apple.
  */
 public class GiveCommand extends AbstractPlayerCommand {
 
@@ -30,7 +35,7 @@ public class GiveCommand extends AbstractPlayerCommand {
 
     public GiveCommand() {
         super("give", "Add items to your inventory");
-        itemArg = withRequiredArg("item", "Item ID (e.g., hytale:wooden_sword)", ArgTypes.STRING);
+        itemArg = withRequiredArg("item", "Item ID, exact case (e.g., Weapon_Sword_Wood)", ArgTypes.STRING);
         quantityArg = withRequiredArg("quantity", "Number of items", ArgTypes.INTEGER);
     }
 

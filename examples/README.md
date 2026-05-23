@@ -44,7 +44,7 @@ Each example builds independently from its own directory:
 ```
 
 On Windows use `build.bat` / `deploy.bat`. See the top-level
-[README](../README.md#build-commands) for the Mods folder location per platform.
+[README](../README.md#deployment) for the Mods folder location per platform.
 
 ## Shared configuration
 

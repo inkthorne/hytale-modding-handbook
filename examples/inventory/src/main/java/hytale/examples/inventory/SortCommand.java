@@ -48,7 +48,7 @@ public class SortCommand extends AbstractPlayerCommand {
         Player player = store.getComponent(ref, Player.getComponentType());
         Inventory inventory = player.getInventory();
 
-        inventory.sortStorage(sortType);
+        inventory.getStorage().sortItems(sortType);
         playerRef.sendMessage(Message.raw("Sorted storage by " + sortType.name().toLowerCase()));
     }
 }

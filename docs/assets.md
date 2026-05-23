@@ -382,8 +382,8 @@ public class SpellDefinition implements JsonAsset<String> {
 ```java
 package com.example.spells;
 
-import com.hypixel.hytale.server.core.asset.AssetStore;
-import com.hypixel.hytale.server.core.asset.DefaultAssetMap;
+import com.hypixel.hytale.assetstore.AssetStore;
+import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
 
 public class SpellStore extends AssetStore<String, SpellDefinition, DefaultAssetMap<String, SpellDefinition>> {
 

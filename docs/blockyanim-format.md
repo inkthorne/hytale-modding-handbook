@@ -14,12 +14,16 @@ Blockyanim files define animations for block models, controlling how individual 
 
 ## File Location
 
-Block animations are stored in:
-```
-Assets/Common/Blocks/Animations/
-```
+Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Approximate distribution under `Assets/Common/`:
 
-Organized into subdirectories by category (e.g., `Doors/`, `Containers/`, `Lights/`).
+| Location | Share | Typical use |
+|----------|-------|-------------|
+| `NPC/` | most | NPC/creature animations |
+| `Characters/` | many | Player and character animations |
+| `Blocks/Animations/` | few | Doors, containers, lights, mechanical blocks |
+| `Items/`, `VFX/`, `Resources/` | a handful | Item and effect animations |
+
+Block animations specifically live under `Assets/Common/Blocks/Animations/`, organized into subdirectories by category (e.g., `Doors/`, `Containers/`, `Lights/`).
 
 ## Frame Rate
 
@@ -48,7 +52,7 @@ Block animations run at **20 frames per second**. All time values in keyframes a
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `formatVersion` | integer | Yes | Schema version, currently `1` |
+| `formatVersion` | integer | Usually | Schema version, currently `1`. Present in nearly all assets; a few omit it |
 | `duration` | integer | Yes | Total animation length in frames (at 20 FPS) |
 | `holdLastKeyframe` | boolean | No | If `true`, animation holds the final keyframe values when complete. Default is `false` |
 | `nodeAnimations` | object | Yes | Map of node names to their animation tracks |

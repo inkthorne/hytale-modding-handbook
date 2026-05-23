@@ -320,7 +320,7 @@ Items define vars in their JSON:
   "Type": "Item",
   "InteractionVars": {
     "Damage": 25.0,
-    "EffectId": "hytale:burning",
+    "EffectId": "Burn",
     "HitCount": 3
   }
 }

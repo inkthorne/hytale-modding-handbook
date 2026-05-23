@@ -860,7 +860,7 @@ The `SpawnPrefab` interaction can spawn entity prefabs during combat or ability 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "hytale:skeleton",
+  "PrefabId": "Skeleton_Fighter_Random_Weapon",
   "Position": "Self",
   "Count": 3,
   "Offset": [0, 0, 2]

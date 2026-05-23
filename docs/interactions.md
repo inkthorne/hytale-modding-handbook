@@ -164,8 +164,8 @@ AssetStore<String, Interaction, ...> store = Interaction.getAssetStore();
 IndexedLookupTableAssetMap<String, Interaction> map = Interaction.getAssetMap();
 
 // Get interaction by ID (returns unknown if not found)
-Interaction interaction = Interaction.getInteractionOrUnknown("hytale:sword_swing");
-int interactionId = Interaction.getInteractionIdOrUnknown("hytale:sword_swing");
+Interaction interaction = Interaction.getInteractionOrUnknown("Melee_Root");
+int interactionId = Interaction.getInteractionIdOrUnknown("Melee_Root");
 ```
 
 ### Meta Keys
@@ -261,7 +261,7 @@ See [Player Documentation](player.md) for full details.
 
 ```java
 // Get interaction from assets
-Interaction swordSwing = Interaction.getInteractionOrUnknown("hytale:sword_swing");
+Interaction swordSwing = Interaction.getInteractionOrUnknown("Melee_Root");
 
 if (!swordSwing.isUnknown()) {
     float duration = swordSwing.getRunTime();

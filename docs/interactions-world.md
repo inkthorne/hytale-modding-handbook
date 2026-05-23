@@ -32,7 +32,7 @@ Spawns entities at specified locations.
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "hytale:skeleton",
+  "PrefabId": "Skeleton_Fighter_Random_Weapon",
   "Position": "Target",
   "Count": 1,
   "Offset": [0, 0, 0]
@@ -55,7 +55,7 @@ Spawns entities at specified locations.
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "hytale:minion_skeleton",
+  "PrefabId": "Skeleton_Fighter_Random_Weapon",
   "Position": "Self",
   "Count": 3,
   "Offset": [0, 0, 2]
@@ -112,7 +112,7 @@ Fires projectiles from an entity.
 ```json
 {
   "Type": "LaunchProjectile",
-  "ProjectileId": "hytale:arrow",
+  "ProjectileId": "Arrow_FullCharge",
   "Speed": 50,
   "SpawnOffset": [0, 1.5, 0.5],
   "AimType": "Forward"
@@ -225,7 +225,7 @@ Equips an item to an equipment slot.
 {
   "Type": "EquipItem",
   "Slot": "MainHand",
-  "ItemId": "hytale:iron_sword"
+  "ItemId": "Weapon_Sword_Iron"
 }
 ```
 
@@ -285,7 +285,7 @@ Places a block at the target location.
 {
   "Type": "PlaceBlock",
   "Target": "TargetBlock",
-  "BlockId": "hytale:stone"
+  "BlockId": "Rock_Dawnstone"
 }
 ```
 
@@ -424,7 +424,7 @@ State change with audio feedback:
     "Off": "default"
   },
   "Effects": {
-    "LocalSoundEventId": "hytale:deco.toggle"
+    "LocalSoundEventId": "SFX_Door_Crude_Open"
   }
 }
 ```

@@ -613,8 +613,8 @@ protected void setup() {
     });
 
     // Or listen for a specific block type
-    getEventRegistry().register(LivingEntityUseBlockEvent.class, "hytale:crafting_table", event -> {
-        System.out.println("Entity used crafting table!");
+    getEventRegistry().register(LivingEntityUseBlockEvent.class, "Bench_Builders", event -> {
+        System.out.println("Entity used crafting bench!");
     });
 }
 ```

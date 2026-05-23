@@ -1,455 +1,422 @@
 # Codecs API
 
-Hytale uses a codec-based serialization system for data persistence, configuration, and asset loading.
+Hytale uses a codec-based serialization system for data persistence, configuration, and asset loading. It is built on **BSON** (`org.bson.BsonValue` / `org.bson.BsonDocument`) and can also read JSON directly.
 
 ## Overview
 **Package:** `com.hypixel.hytale.codec`
 
-Codecs provide type-safe serialization and deserialization of data structures to/from various formats (JSON, BSON, etc.).
+A codec converts a Java value to/from a `BsonValue`. Encoding and decoding always take an `ExtraInfo` context object (`com.hypixel.hytale.codec.ExtraInfo`) that carries validation results, version info, key paths, and a small metadata map.
 
 ---
 
 ## Core Codec Types
 
 ### Codec<T>
-Base interface for all codecs.
+**Package:** `com.hypixel.hytale.codec`
+
+Base interface for all codecs. It extends `RawJsonCodec<T>` and `SchemaConvertable<T>`.
 
 ```java
-public interface Codec<T> {
-    // Encode value to output
-    <O> DataResult<O> encode(T value, DynamicOps<O> ops, O prefix);
+public interface Codec<T> extends RawJsonCodec<T>, SchemaConvertable<T> {
+    // Decode a value from a BsonValue
+    T decode(BsonValue value, ExtraInfo extraInfo);
+    default T decode(BsonValue value);          // uses a fresh ExtraInfo
 
-    // Decode value from input
-    <I> DataResult<Pair<T, I>> decode(DynamicOps<I> ops, I input);
+    // Encode a value to a BsonValue
+    BsonValue encode(T value, ExtraInfo extraInfo);
+    default BsonValue encode(T value);          // uses a fresh ExtraInfo
+
+    // Read directly from JSON (used during asset loading)
+    default T decodeJson(RawJsonReader reader, ExtraInfo extraInfo) throws IOException;
 }
 ```
+
+> Note: there is no `DynamicOps`, `DataResult`, or `Pair` in this API. Decode failures throw exceptions (e.g. `org.bson.BsonSerializationException`) rather than returning a result wrapper.
 
 ---
 
-### BuilderCodec<T>
-**Package:** `com.hypixel.hytale.codec`
+## Built-in Codecs
 
-Codec with default value support for configuration loading.
+`Codec` exposes pre-built singleton instances as static fields. Their exact field types are concrete classes, but they are all `Codec<T>`.
 
+### Primitive / simple codecs
 ```java
-public interface BuilderCodec<T> extends Codec<T> {
-    // Get default instance
-    T getDefault();
-}
+Codec.BOOLEAN     // Codec<Boolean>  (BooleanCodec)
+Codec.BYTE        // Codec<Byte>     (ByteCodec)
+Codec.SHORT       // Codec<Short>    (ShortCodec)
+Codec.INTEGER     // Codec<Integer>  (IntegerCodec)
+Codec.LONG        // Codec<Long>     (LongCodec)
+Codec.FLOAT       // Codec<Float>    (FloatCodec)
+Codec.DOUBLE      // Codec<Double>   (DoubleCodec)
+Codec.STRING      // Codec<String>   (StringCodec)
 ```
 
-#### Usage with Plugin Configuration
+> The constants are `BOOLEAN` and `INTEGER` — there is no `Codec.BOOL` or `Codec.INT`.
+
+### Array codecs
 ```java
-public class MyConfig {
-    private int maxPlayers;
-    private String serverName;
-
-    public static final BuilderCodec<MyConfig> CODEC = new BuilderCodec<>() {
-        // Implement codec methods
-        @Override
-        public MyConfig getDefault() {
-            return new MyConfig(20, "My Server");
-        }
-    };
-}
-
-// In plugin setup
-@Override
-protected void setup() {
-    MyConfig config = withConfig(MyConfig.CODEC);
-    // config is loaded from file or default if not exists
-}
+Codec.BYTE_ARRAY     // Codec<byte[]>
+Codec.DOUBLE_ARRAY   // DoubleArrayCodec
+Codec.FLOAT_ARRAY    // FloatArrayCodec
+Codec.INT_ARRAY      // IntArrayCodec
+Codec.LONG_ARRAY     // LongArrayCodec
+Codec.STRING_ARRAY   // ArrayCodec<String>
 ```
 
-> **See also:** [Plugin Configuration](plugin-lifecycle.md#configuration)
+### Other built-ins
+```java
+Codec.BSON_DOCUMENT  // Codec for a raw BsonDocument
+Codec.PATH           // FunctionCodec<String, Path>
+Codec.INSTANT        // FunctionCodec<String, Instant>
+Codec.DURATION       // FunctionCodec<String, Duration>
+Codec.DURATION_SECONDS // FunctionCodec<Double, Duration>
+Codec.LOG_LEVEL      // FunctionCodec<String, java.util.logging.Level>
+Codec.UUID_BINARY    // UUIDBinaryCodec
+Codec.UUID_STRING    // FunctionCodec<String, UUID>
+```
+
+### Building collection / enum codecs
+There is no `Codec.list(...)` or `Codec.unboundedMap(...)`. Collection codecs are concrete classes you construct directly:
+
+```java
+// Array of T (com.hypixel.hytale.codec.codecs.array.ArrayCodec)
+ArrayCodec<String> stringArray = new ArrayCodec<>(Codec.STRING, String[]::new);
+
+// Set of V (com.hypixel.hytale.codec.codecs.set.SetCodec)
+SetCodec<String, Set<String>> stringSet =
+    new SetCodec<>(Codec.STRING, HashSet::new, false);
+
+// Map<String, V> (com.hypixel.hytale.codec.codecs.map.MapCodec)
+MapCodec<String, Integer, Map<String, Integer>> stringIntMap =
+    new MapCodec<>(Codec.INTEGER, HashMap::new);
+
+// Enum (com.hypixel.hytale.codec.codecs.EnumCodec)
+EnumCodec<MyEnum> enumCodec = new EnumCodec<>(MyEnum.class);
+```
 
 ---
 
 ### KeyedCodec<T>
 **Package:** `com.hypixel.hytale.codec`
 
-Codec with a string key for metadata storage.
+A concrete class that pairs a child `Codec<T>` with a string key. It reads/writes that key inside a `BsonDocument` and is the building block for object fields and for `ItemStack` metadata.
 
 ```java
-public interface KeyedCodec<T> extends Codec<T> {
-    String getKey();
+public class KeyedCodec<T> {
+    public KeyedCodec(String key, Codec<T> codec);
+    public KeyedCodec(String key, Codec<T> codec, boolean required);
+    public KeyedCodec(String key, Codec<T> codec, boolean required, boolean ...);
+
+    public String getKey();
+    public Codec<T> getChildCodec();
+    public boolean isRequired();
+
+    // Read this key out of a document
+    public T getNow(BsonDocument doc);
+    public T getOrNull(BsonDocument doc);
+    public Optional<T> get(BsonDocument doc);
+    public T getOrDefault(BsonDocument doc, ExtraInfo info, T fallback);
+
+    // Write this key into a document
+    public void put(BsonDocument doc, T value);
 }
 ```
 
 #### Usage with ItemStack Metadata
+`ItemStack` stores metadata as a `BsonDocument`, and a `KeyedCodec` is used to read/write a single entry.
+
 ```java
-public static final KeyedCodec<MyData> MY_DATA_CODEC = new KeyedCodec<>() {
-    @Override
-    public String getKey() {
-        return "my_data";
-    }
-    // Implement codec methods
-};
+// "MyData" is the BSON key; MyData.CODEC is a Codec<MyData>
+public static final KeyedCodec<MyData> MY_DATA =
+    new KeyedCodec<>("MyData", MyData.CODEC);
 
-// Store in ItemStack
-ItemStack item = itemStack.withMetadata(MY_DATA_CODEC, myDataInstance);
+// Store on an ItemStack (returns a new ItemStack)
+ItemStack stamped = itemStack.withMetadata(MY_DATA, myDataInstance);
 
-// Retrieve from ItemStack
-MyData data = itemStack.getFromMetadataOrNull(MY_DATA_CODEC);
+// Retrieve (null if absent)
+MyData data = stamped.getFromMetadataOrNull(MY_DATA);
+```
+
+`ItemStack` also offers `withMetadata(String key, Codec<T>, T)` and
+`getFromMetadataOrNull(String key, Codec<T>)` if you prefer not to keep a `KeyedCodec`.
+
+---
+
+## BuilderCodec — codecs for objects
+
+### BuilderCodec<T>
+**Package:** `com.hypixel.hytale.codec.builder`
+
+`BuilderCodec` is a concrete `Codec<T>` (it also implements `DirectDecodeCodec`, `InheritCodec`, and `ValidatableCodec`). It is the standard way to define a codec for a plain Java object. You build one with the static `builder(...)` factory and a fluent API; each field is a `KeyedCodec` plus a setter (`BiConsumer<T, F>`) and a getter (`Function<T, F>`).
+
+```java
+public class BuilderCodec<T> implements Codec<T>, ... {
+    // Factory: the class plus a no-arg supplier that creates a blank instance
+    public static <T> Builder<T> builder(Class<T> type, Supplier<T> supplier);
+
+    // The default/blank instance produced by the supplier
+    public T getDefaultValue();
+    public T getDefaultValue(ExtraInfo extraInfo);
+
+    public Class<T> getInnerClass();
+    public BsonDocument encode(T value, ExtraInfo extraInfo);
+    public T decode(BsonValue value, ExtraInfo extraInfo);
+}
+```
+
+The fluent `Builder<T>` (returned by `builder(...)`) offers, among others:
+
+```java
+// Add a field; returns a FieldBuilder you finish with .add()
+<F> FieldBuilder append(KeyedCodec<F> codec, BiConsumer<T, F> setter, Function<T, F> getter);
+
+// Add a field directly without the FieldBuilder step
+<F> Builder<T> addField(KeyedCodec<F> codec, BiConsumer<T, F> setter, Function<T, F> getter);
+
+Builder<T> documentation(String doc);
+Builder<T> versioned();
+Builder<T> afterDecode(BiConsumer<T, ExtraInfo> action);
+Builder<T> validator(BiConsumer<T, ValidationResults> validator);
+BuilderCodec<T> build();
+```
+
+`FieldBuilder` (returned by `append`) lets you attach per-field options, then `add()` returns to the `Builder`:
+
+```java
+FieldBuilder addValidator(Validator<? super F> validator);
+FieldBuilder setVersionRange(int min, int max);
+FieldBuilder documentation(String doc);
+Builder<T> add();
+```
+
+> There is no `BuilderCodec.getDefault()` — the method is `getDefaultValue()`. `BuilderCodec` is a class, not an interface, so you do not implement it anonymously; you build instances with `BuilderCodec.builder(...)`.
+
+#### Defining a CODEC for an object
+
+This is the real idiom used throughout the codebase (e.g. `InteractionConfiguration.CODEC`):
+
+```java
+public class MyConfig {
+    private boolean enabled = true;
+    private int maxConnections = 100;
+    private String welcomeMessage = "Welcome!";
+
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean v) { this.enabled = v; }
+    public int getMaxConnections() { return maxConnections; }
+    public void setMaxConnections(int v) { this.maxConnections = v; }
+    public String getWelcomeMessage() { return welcomeMessage; }
+    public void setWelcomeMessage(String v) { this.welcomeMessage = v; }
+
+    public static final BuilderCodec<MyConfig> CODEC =
+        BuilderCodec.builder(MyConfig.class, MyConfig::new)
+            .append(new KeyedCodec<>("Enabled", Codec.BOOLEAN),
+                    MyConfig::setEnabled, MyConfig::isEnabled)
+            .add()
+            .append(new KeyedCodec<>("MaxConnections", Codec.INTEGER),
+                    MyConfig::setMaxConnections, MyConfig::getMaxConnections)
+            .add()
+            .append(new KeyedCodec<>("WelcomeMessage", Codec.STRING),
+                    MyConfig::setWelcomeMessage, MyConfig::getWelcomeMessage)
+            .add()
+            .build();
+}
+```
+
+Defaults come from the fields' initial values in the supplied blank instance (`MyConfig::new`) — missing keys simply keep those values.
+
+> **See also:** [Plugin Configuration](plugin-lifecycle.md#configuration)
+
+---
+
+## Plugin Configuration
+
+`PluginBase` loads config through a `BuilderCodec<T>`. Note the return type is `Config<T>` (`com.hypixel.hytale.server.core.util.Config`), **not** `T`.
+
+```java
+protected final <T> Config<T> withConfig(BuilderCodec<T> codec);
+protected final <T> Config<T> withConfig(String name, BuilderCodec<T> codec);
+```
+
+`Config<T>` exposes:
+
+```java
+public class Config<T> {
+    public CompletableFuture<T> load();   // load from disk (or defaults)
+    public T get();                       // current value
+    public CompletableFuture<Void> save();
+}
+```
+
+Usage in a plugin:
+
+```java
+@Override
+protected void setup() {
+    Config<MyConfig> config = withConfig(MyConfig.CODEC);
+    config.load().thenAccept(loaded -> {
+        if (loaded.isEnabled()) {
+            // plugin enabled
+        }
+    });
+}
 ```
 
 ---
 
-## Codec Map Types
+## Codec Map Types (polymorphic / lookup codecs)
+
+These map a string discriminator (a `"Type"`-style key) or a class to a child codec, so a document can select which concrete codec deserializes it.
 
 ### StringCodecMapCodec<T, C>
-Maps string keys to codec-serialized values.
+**Package:** `com.hypixel.hytale.codec.lookup`
+
+Abstract base for codecs that dispatch on a string key. It is **abstract** — you do not instantiate it directly with `new StringCodecMapCodec<>("Type", SomeClass.class)`. Concrete subclasses (such as `AssetCodecMapCodec`) provide a usable implementation. Its constructors take the discriminator key and flags:
 
 ```java
-// Define codec map
-public static final StringCodecMapCodec<MyConfig, Codec<MyConfig>> CONFIG_MAP =
-    new StringCodecMapCodec<>(MyConfig.CODEC);
+public abstract class StringCodecMapCodec<T, C extends Codec<? extends T>>
+        extends ACodecMapCodec<String, T, C> {
+    public StringCodecMapCodec();
+    public StringCodecMapCodec(String typeKey);
+    public StringCodecMapCodec(String typeKey, boolean ...);
 
-// Register with plugin
-@Override
-protected void setup() {
-    CodecMapRegistry<MyConfig, Codec<MyConfig>> registry =
-        getCodecRegistry(CONFIG_MAP);
-    registry.register("my_config", myConfig);
+    // register a concrete type under a string id
+    public StringCodecMapCodec<T, C> register(Priority p, String id,
+                                              Class<? extends T> type, C codec);
 }
 ```
-
----
 
 ### AssetCodecMapCodec<K, T>
-Maps asset keys to asset instances.
+**Package:** `com.hypixel.hytale.assetstore.codec`
+
+A concrete `StringCodecMapCodec` for polymorphic JSON assets (`T extends JsonAsset<K>`). This is what real assets such as `Interaction.CODEC` use. Its constructor takes the **key codec plus id and asset-data getters/setters** (5 args, or 6 with a leading type-key string) — **not** a single `MyAsset.CODEC`:
 
 ```java
-// For assets with custom key types
-public static final AssetCodecMapCodec<String, MyAsset> ASSET_MAP =
-    new AssetCodecMapCodec<>(MyAsset.CODEC);
-```
+public class AssetCodecMapCodec<K, T extends JsonAsset<K>>
+        extends StringCodecMapCodec<T, AssetBuilderCodec<K, T>>
+        implements AssetCodec<K, T> {
 
----
+    public AssetCodecMapCodec(
+        Codec<K> keyCodec,
+        BiConsumer<T, K> idSetter,
+        Function<T, K> idGetter,
+        BiConsumer<T, AssetExtraInfo.Data> dataSetter,
+        Function<T, AssetExtraInfo.Data> dataGetter);
+
+    // 6-arg variant adds a leading type-key String
+
+    // register a concrete asset subtype (the child is an AssetBuilderCodec)
+    public AssetCodecMapCodec<K, T> register(String id,
+        Class<? extends T> type, BuilderCodec<? extends T> codec);
+}
+```
 
 ### MapKeyMapCodec<V>
-Maps arbitrary keys to values.
+**Package:** `com.hypixel.hytale.codec.lookup`
+
+A concrete map codec keyed by `Class<? extends V>`. The constructor is **no-arg**; you register types after construction via `register(Class, String, Codec)`:
 
 ```java
-public static final MapKeyMapCodec<MyValue> VALUE_MAP =
-    new MapKeyMapCodec<>(MyValue.CODEC);
-```
+public class MapKeyMapCodec<V> extends AMapProvidedMapCodec<...> {
+    public MapKeyMapCodec();
+    public MapKeyMapCodec(boolean ...);
 
----
+    public <T extends V> void register(Class<T> type, String id, Codec<T> codec);
+    public <T extends V> void unregister(Class<T> type);
 
-## Built-in Codecs
-
-### Primitive Codecs
-```java
-Codec.BOOL        // boolean
-Codec.BYTE        // byte
-Codec.SHORT       // short
-Codec.INT         // int
-Codec.LONG        // long
-Codec.FLOAT       // float
-Codec.DOUBLE      // double
-Codec.STRING      // String
-```
-
-### Collection Codecs
-```java
-Codec.list(elementCodec)        // List<T>
-Codec.unboundedMap(keyCodec, valueCodec)  // Map<K, V>
-```
-
-### Optional Codec
-```java
-codec.optionalFieldOf("name", defaultValue)  // Optional with default
-codec.optionalFieldOf("name")                 // Optional, may be absent
-```
-
----
-
-## RecordCodecBuilder
-
-Build codecs for record-like classes:
-
-```java
-public class MyRecord {
-    private final String name;
-    private final int value;
-    private final List<String> tags;
-
-    public static final Codec<MyRecord> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.STRING.fieldOf("name").forGetter(MyRecord::getName),
-            Codec.INT.fieldOf("value").forGetter(MyRecord::getValue),
-            Codec.STRING.listOf().optionalFieldOf("tags", List.of()).forGetter(MyRecord::getTags)
-        ).apply(instance, MyRecord::new)
-    );
-
-    public MyRecord(String name, int value, List<String> tags) {
-        this.name = name;
-        this.value = value;
-        this.tags = tags;
-    }
-
-    public String getName() { return name; }
-    public int getValue() { return value; }
-    public List<String> getTags() { return tags; }
+    public Class<? extends V> getKeyForId(String id);
+    public V decodeById(String id, BsonValue value, ExtraInfo info);
 }
 ```
 
-> **See also:** [Assets API](assets.md#json-asset-pattern)
-
 ---
 
-## Codec Operations
+## Registering Custom Types via the Plugin Registry
 
-### Mapping
+### CodecMapRegistry<T, C>
+**Package:** `com.hypixel.hytale.server.core.plugin.registry`
+
+A plugin obtains a registry for a given map codec through `PluginBase.getCodecRegistry(...)`, then registers concrete types. Registration is **3-arg**: `register(String id, Class<? extends T> type, C codec)` — note the explicit `Class` argument (there is no 2-arg `register("name", instance)`).
+
 ```java
-// Transform codec output
-Codec<Integer> intCodec = Codec.STRING.xmap(
-    Integer::parseInt,    // String -> Integer
-    String::valueOf       // Integer -> String
-);
-```
-
-### Field Of
-```java
-// Create codec for a named field
-Codec<String> fieldCodec = Codec.STRING.fieldOf("my_field");
-```
-
-### Either
-```java
-// Try first codec, then second
-Codec<Object> either = Codec.either(firstCodec, secondCodec);
-```
-
-### Dispatch
-```java
-// Polymorphic codec based on type field
-Codec<BaseClass> dispatch = type.dispatch(
-    BaseClass::getType,
-    typeName -> getCodecForType(typeName)
-);
-```
-
----
-
-## Polymorphic Type Dispatch
-
-Hytale uses type dispatch for assets that have multiple implementations sharing a common base type. This allows JSON files to specify which concrete type to deserialize using a `"Type"` field.
-
-### How Type Dispatch Works
-
-When loading a polymorphic asset, the system:
-1. Reads the `"Type"` field from JSON
-2. Looks up the corresponding codec in a registry
-3. Uses that codec to deserialize the remaining fields
-
-```json
-{
-  "Type": "Simple",
-  "Duration": 1.5,
-  "Animation": "wave"
+public class CodecMapRegistry<T, C extends Codec<? extends T>> implements IRegistry {
+    public CodecMapRegistry<T, C> register(String id,
+        Class<? extends T> type, C codec);
+    public CodecMapRegistry<T, C> register(Priority p, String id,
+        Class<? extends T> type, C codec);
+    public void shutdown();
 }
 ```
 
-The `"Type": "Simple"` tells the system to use `SimpleInteraction.CODEC` instead of `ComplexInteraction.CODEC`.
+`PluginBase` provides overloads of `getCodecRegistry` for each map-codec kind:
 
-### StringCodecMapCodec vs AssetCodecMapCodec
-
-**`StringCodecMapCodec<T, C>`** - Maps type strings to codecs for polymorphic dispatch:
 ```java
-// Registry that maps "Simple" -> SimpleInteraction.CODEC, etc.
-public static final StringCodecMapCodec<Interaction, Codec<? extends Interaction>> TYPE_CODEC =
-    new StringCodecMapCodec<>("Type", Interaction.class);
+// for a StringCodecMapCodec<T, C>
+<T, C extends Codec<? extends T>> CodecMapRegistry<T, C>
+    getCodecRegistry(StringCodecMapCodec<T, C> mapCodec);
+
+// for an AssetCodecMapCodec<K, T>
+<K, T extends JsonAsset<K>> CodecMapRegistry.Assets<T, ?>
+    getCodecRegistry(AssetCodecMapCodec<K, T> mapCodec);
+
+// for a MapKeyMapCodec<V>
+<V> MapKeyMapRegistry<V> getCodecRegistry(MapKeyMapCodec<V> mapCodec);
 ```
 
-**`AssetCodecMapCodec<K, T>`** - Maps asset keys to asset instances (for asset stores):
-```java
-// Registry that maps asset IDs to loaded asset instances
-public static final AssetCodecMapCodec<String, MyAsset> ASSET_MAP =
-    new AssetCodecMapCodec<>(MyAsset.CODEC);
-```
-
-Use `StringCodecMapCodec` when you need polymorphic type selection. Use `AssetCodecMapCodec` for asset storage.
-
-### Registering Custom Types
-
-To add a new type to an existing polymorphic system, register it during plugin `setup()`:
+#### Example: registering a custom type into an existing string-dispatched system
 
 ```java
 @Override
 protected void setup() {
-    // Get the codec registry for the Interaction type system
-    CodecMapRegistry<Interaction, Codec<? extends Interaction>> registry =
-        getCodecRegistry(Interaction.TYPE_CODEC);
+    // SomeBase.MAP_CODEC is a StringCodecMapCodec<SomeBase, Codec<? extends SomeBase>>
+    CodecMapRegistry<SomeBase, Codec<? extends SomeBase>> registry =
+        getCodecRegistry(SomeBase.MAP_CODEC);
 
-    // Register your custom interaction type
-    // JSON files can now use "Type": "MyCustom" to select this codec
-    registry.register("MyCustom", MyCustomInteraction.CODEC);
+    // documents with this id now decode with MyType.CODEC
+    registry.register("MyType", MyType.class, MyType.CODEC);
 }
 ```
 
-After registration, JSON files can use your type:
-```json
-{
-  "Type": "MyCustom",
-  "CustomField": "value"
-}
-```
-
-### When Registration Happens
-
-Type registration must occur during the plugin `setup()` phase:
-- Built-in types are pre-registered by server modules before plugins load
-- Plugin types are registered when `setup()` is called
-- All types must be registered before asset loading completes
-
-### Built-in Type Systems
-
-Some Hytale systems use type dispatch internally. Plugins can extend these by registering additional types:
-
-| System | Codec | Built-in Types |
-|--------|-------|----------------|
-| Interactions | `Interaction.TYPE_CODEC` | Simple, Complex, Sequence |
-| Conditions | `Condition.TYPE_CODEC` | And, Or, Not, HasItem |
-
-> **Note:** Check specific API documentation to see which systems support plugin type extensions.
-
-### Creating Your Own Type-Dispatched System
-
-For a completely new polymorphic asset system:
-
-```java
-// 1. Define the base type
-public interface MyEffect {
-    void apply(Player player);
-
-    // Type dispatch codec
-    StringCodecMapCodec<MyEffect, Codec<? extends MyEffect>> TYPE_CODEC =
-        new StringCodecMapCodec<>("Type", MyEffect.class);
-}
-
-// 2. Implement concrete types
-public class DamageEffect implements MyEffect {
-    private final int amount;
-
-    public static final Codec<DamageEffect> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.INT.fieldOf("Amount").forGetter(e -> e.amount)
-        ).apply(instance, DamageEffect::new)
-    );
-
-    @Override
-    public void apply(Player player) {
-        player.damage(amount);
-    }
-}
-
-// 3. Register types in setup()
-@Override
-protected void setup() {
-    CodecMapRegistry<MyEffect, Codec<? extends MyEffect>> registry =
-        getCodecRegistry(MyEffect.TYPE_CODEC);
-
-    registry.register("Damage", DamageEffect.CODEC);
-    registry.register("Heal", HealEffect.CODEC);
-}
-```
-
-JSON usage:
-```json
-{
-  "Type": "Damage",
-  "Amount": 10
-}
-```
-
-> **See also:** [Assets API](assets.md) for creating complete asset stores with type dispatch
+> Registration must occur during `setup()`, before asset loading completes. Built-in types are registered by server modules before plugins load.
 
 ---
 
-## Usage Examples
+## Custom Assets with Codecs
 
-### Plugin Configuration
+Real asset classes implement `JsonAsset<K>` (which requires `K getId()`) and expose their codec as an `AssetBuilderCodec` (a `BuilderCodec` subclass). Polymorphic asset families (like `Interaction`) expose an `AssetCodecMapCodec` as their `CODEC`.
+
+For example, `com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe` and
+`com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType` both declare:
+
 ```java
-public class PluginConfig {
-    private boolean enabled;
-    private int maxConnections;
-    private String welcomeMessage;
-
-    public static final BuilderCodec<PluginConfig> CODEC = new BuilderCodec<>() {
-        private final Codec<PluginConfig> inner = RecordCodecBuilder.create(instance ->
-            instance.group(
-                Codec.BOOL.optionalFieldOf("enabled", true).forGetter(c -> c.enabled),
-                Codec.INT.optionalFieldOf("maxConnections", 100).forGetter(c -> c.maxConnections),
-                Codec.STRING.optionalFieldOf("welcomeMessage", "Welcome!").forGetter(c -> c.welcomeMessage)
-            ).apply(instance, PluginConfig::new)
-        );
-
-        @Override
-        public PluginConfig getDefault() {
-            return new PluginConfig(true, 100, "Welcome!");
-        }
-
-        // Delegate to inner codec
-    };
-}
-
-// Load in plugin
-@Override
-protected void setup() {
-    PluginConfig config = withConfig(PluginConfig.CODEC);
-    if (config.isEnabled()) {
-        // Plugin is enabled
-    }
-}
+public static final AssetBuilderCodec<String, ThatAsset> CODEC;
 ```
 
-### Custom Asset with Codec
+`AssetBuilderCodec` is built like a `BuilderCodec`, but its `builder(...)` factory additionally takes the key codec and the id/data getters and setters:
+
 ```java
-public class SpellDefinition implements JsonAsset<String> {
-    private final String name;
-    private final int manaCost;
-    private final float cooldown;
-
-    public static final Codec<SpellDefinition> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.STRING.fieldOf("Name").forGetter(SpellDefinition::getName),
-            Codec.INT.fieldOf("ManaCost").forGetter(SpellDefinition::getManaCost),
-            Codec.FLOAT.fieldOf("Cooldown").forGetter(SpellDefinition::getCooldown)
-        ).apply(instance, SpellDefinition::new)
-    );
-
-    // Constructor and getters...
-}
+public static <K, T extends JsonAsset<K>> AssetBuilderCodec.Builder<K, T> builder(
+    Class<T> type,
+    Supplier<T> supplier,
+    Codec<K> keyCodec,
+    BiConsumer<T, K> idSetter,
+    Function<T, K> idGetter,
+    BiConsumer<T, AssetExtraInfo.Data> dataSetter,
+    Function<T, AssetExtraInfo.Data> dataGetter);
 ```
 
-> **See also:** [Assets API - Creating Custom Asset Types](assets.md#creating-custom-asset-types) for the complete guide
+You then chain `.append(...).add()` for each field exactly as with `BuilderCodec`.
 
-### Block State with Codec
-```java
-public class MyBlockState implements BlockState {
-    private final int power;
-    private final boolean active;
-
-    public static final Codec<MyBlockState> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.INT.fieldOf("power").forGetter(s -> s.power),
-            Codec.BOOL.fieldOf("active").forGetter(s -> s.active)
-        ).apply(instance, MyBlockState::new)
-    );
-
-    // Register in setup()
-    // getBlockStateRegistry().registerBlockState(MyBlockState.class, "my_state", CODEC);
-}
-```
+> **See also:** [Assets API - Creating Custom Asset Types](assets.md#creating-custom-asset-types) for the complete guide.
 
 ---
 
 ## Notes
-- Codecs are immutable and thread-safe
-- Use `RecordCodecBuilder` for complex data structures
-- `BuilderCodec` provides defaults for missing fields
-- `KeyedCodec` is ideal for ItemStack metadata
-- Always provide meaningful defaults for optional fields
-- Codec errors are returned as `DataResult` for safe handling
+- Codecs operate on `org.bson.BsonValue` / `org.bson.BsonDocument`; JSON is read via `decodeJson`.
+- Every encode/decode call carries an `ExtraInfo` context (validation, version, key path).
+- Use `BuilderCodec.builder(...)` for object/config codecs; defaults come from the blank instance the supplier creates.
+- `KeyedCodec` is the unit for object fields and for `ItemStack` metadata.
+- `StringCodecMapCodec`, `AssetCodecMapCodec`, and `MapKeyMapCodec` provide polymorphic dispatch; register concrete types through `getCodecRegistry(...)` during `setup()`.
+- Decode errors throw exceptions (e.g. `BsonSerializationException`); there is no `DataResult` wrapper.
+</content>
+</invoke>

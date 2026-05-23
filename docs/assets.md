@@ -187,35 +187,44 @@ String idleAnim = model.getFirstBoundAnimationId("idle", "default");
 
 Assets in Hytale typically follow a JSON-based pattern with codec serialization. For a complete implementation guide, see [Creating Custom Asset Types](#creating-custom-asset-types).
 
+A `JsonAsset<K>` exposes its key via `getId()`. The codec is a `BuilderCodec` built with the
+`BuilderCodec.builder(...)` factory: it needs a no-arg constructor (the blank-instance supplier)
+and a setter/getter pair for each field. See [Codecs API - BuilderCodec](codecs.md#buildercodec--codecs-for-objects).
+
 ```java
 public class MyAsset implements JsonAsset<String> {
     private String id;
     private String name;
     private int value;
 
-    // Codec for serialization
-    public static final Codec<MyAsset> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.STRING.fieldOf("id").forGetter(MyAsset::getId),
-            Codec.STRING.fieldOf("name").forGetter(MyAsset::getName),
-            Codec.INT.fieldOf("value").forGetter(MyAsset::getValue)
-        ).apply(instance, MyAsset::new)
-    );
+    // Codec for serialization — built field-by-field with BuilderCodec
+    public static final BuilderCodec<MyAsset> CODEC =
+        BuilderCodec.builder(MyAsset.class, MyAsset::new)
+            .append(new KeyedCodec<>("Id", Codec.STRING),
+                    MyAsset::setId, MyAsset::getId)
+            .add()
+            .append(new KeyedCodec<>("Name", Codec.STRING),
+                    MyAsset::setName, MyAsset::getName)
+            .add()
+            .append(new KeyedCodec<>("Value", Codec.INTEGER),
+                    MyAsset::setValue, MyAsset::getValue)
+            .add()
+            .build();
 
-    public MyAsset(String id, String name, int value) {
-        this.id = id;
-        this.name = name;
-        this.value = value;
+    // BuilderCodec needs a no-arg constructor to create the blank instance
+    public MyAsset() {
     }
 
     @Override
-    public String getKey() {
+    public String getId() {
         return id;
     }
 
-    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
     public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public int getValue() { return value; }
+    public void setValue(int value) { this.value = value; }
 }
 ```
 
@@ -320,37 +329,51 @@ Here's a full implementation of a custom "Spell" asset system:
 package com.example.spells;
 
 import com.hypixel.hytale.codec.Codec;
-import com.hypixel.hytale.codec.RecordCodecBuilder;
-import com.hypixel.hytale.server.core.asset.JsonAsset;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.assetstore.JsonAsset;
 
 public class SpellDefinition implements JsonAsset<String> {
-    private final String name;
-    private final int manaCost;
-    private final float cooldown;
-    private final String effect;
+    private String id;
+    private String name;
+    private int manaCost;
+    private float cooldown;
+    // Field initializers supply the defaults; a missing "Effect" key keeps "none"
+    private String effect = "none";
 
-    public static final Codec<SpellDefinition> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.STRING.fieldOf("Name").forGetter(SpellDefinition::getName),
-            Codec.INT.fieldOf("ManaCost").forGetter(SpellDefinition::getManaCost),
-            Codec.FLOAT.fieldOf("Cooldown").forGetter(SpellDefinition::getCooldown),
-            Codec.STRING.optionalFieldOf("Effect", "none").forGetter(SpellDefinition::getEffect)
-        ).apply(instance, SpellDefinition::new)
-    );
+    public static final BuilderCodec<SpellDefinition> CODEC =
+        BuilderCodec.builder(SpellDefinition.class, SpellDefinition::new)
+            .append(new KeyedCodec<>("Name", Codec.STRING),
+                    SpellDefinition::setName, SpellDefinition::getName)
+            .add()
+            .append(new KeyedCodec<>("ManaCost", Codec.INTEGER),
+                    SpellDefinition::setManaCost, SpellDefinition::getManaCost)
+            .add()
+            .append(new KeyedCodec<>("Cooldown", Codec.FLOAT),
+                    SpellDefinition::setCooldown, SpellDefinition::getCooldown)
+            .add()
+            .append(new KeyedCodec<>("Effect", Codec.STRING),
+                    SpellDefinition::setEffect, SpellDefinition::getEffect)
+            .add()
+            .build();
 
-    public SpellDefinition(String name, int manaCost, float cooldown, String effect) {
-        this.name = name;
-        this.manaCost = manaCost;
-        this.cooldown = cooldown;
-        this.effect = effect;
+    // BuilderCodec needs a no-arg constructor for the blank instance
+    public SpellDefinition() {
     }
 
-    // JsonAsset requires no getKey() override when using filename-based keys
+    // JsonAsset requires getId(); the loader sets it from the filename
+    @Override
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public int getManaCost() { return manaCost; }
+    public void setManaCost(int manaCost) { this.manaCost = manaCost; }
     public float getCooldown() { return cooldown; }
+    public void setCooldown(float cooldown) { this.cooldown = cooldown; }
     public String getEffect() { return effect; }
+    public void setEffect(String effect) { this.effect = effect; }
 }
 ```
 
@@ -453,26 +476,41 @@ public void castSpell(Player player, String spellName) {
 
 ### Adding Polymorphic Types
 
-If your asset system needs multiple subtypes (e.g., different spell categories with different fields), use type dispatch:
+If your asset system needs multiple subtypes (e.g., different spell categories with different fields),
+use type dispatch with a `StringCodecMapCodec`. `StringCodecMapCodec` is **abstract**, so you declare a
+small concrete subclass for your family rather than instantiating it directly. Each subtype is a plain
+class with a `BuilderCodec`, registered by id during `setup()`. See
+[Codecs API - Codec Map Types](codecs.md#codec-map-types-polymorphic--lookup-codecs).
 
 ```java
 // Base interface
 public interface SpellEffect {
     void apply(Player caster, Entity target);
 
-    StringCodecMapCodec<SpellEffect, Codec<? extends SpellEffect>> TYPE_CODEC =
-        new StringCodecMapCodec<>("Type", SpellEffect.class);
+    // Concrete dispatcher: documents are dispatched on their "Type" key
+    final class TypeCodec extends StringCodecMapCodec<SpellEffect, Codec<? extends SpellEffect>> {
+        TypeCodec() { super("Type"); }
+    }
+
+    TypeCodec TYPE_CODEC = new TypeCodec();
 }
 
 // Damage effect implementation
 public class DamageSpellEffect implements SpellEffect {
-    private final int damage;
+    private int damage;
 
-    public static final Codec<DamageSpellEffect> CODEC = RecordCodecBuilder.create(instance ->
-        instance.group(
-            Codec.INT.fieldOf("Damage").forGetter(e -> e.damage)
-        ).apply(instance, DamageSpellEffect::new)
-    );
+    public static final BuilderCodec<DamageSpellEffect> CODEC =
+        BuilderCodec.builder(DamageSpellEffect.class, DamageSpellEffect::new)
+            .append(new KeyedCodec<>("Damage", Codec.INTEGER),
+                    DamageSpellEffect::setDamage, DamageSpellEffect::getDamage)
+            .add()
+            .build();
+
+    public DamageSpellEffect() {
+    }
+
+    public int getDamage() { return damage; }
+    public void setDamage(int damage) { this.damage = damage; }
 
     @Override
     public void apply(Player caster, Entity target) {
@@ -480,14 +518,14 @@ public class DamageSpellEffect implements SpellEffect {
     }
 }
 
-// Register in setup()
+// Register in setup() — register(...) takes the id, the concrete class, and the codec
 @Override
 protected void setup() {
     CodecMapRegistry<SpellEffect, Codec<? extends SpellEffect>> registry =
         getCodecRegistry(SpellEffect.TYPE_CODEC);
 
-    registry.register("Damage", DamageSpellEffect.CODEC);
-    registry.register("Heal", HealSpellEffect.CODEC);
+    registry.register("Damage", DamageSpellEffect.class, DamageSpellEffect.CODEC);
+    registry.register("Heal", HealSpellEffect.class, HealSpellEffect.CODEC);
 }
 ```
 
@@ -530,12 +568,12 @@ if (assetStore.contains("my_asset_id")) {
 ```java
 @Override
 protected void setup() {
-    // Register a string-keyed codec
-    CodecMapRegistry<MyConfig, Codec<MyConfig>> registry =
-        getCodecRegistry(MyConfig.STRING_CODEC_MAP);
+    // SomeBase.TYPE_CODEC is a StringCodecMapCodec<SomeBase, Codec<? extends SomeBase>>
+    CodecMapRegistry<SomeBase, Codec<? extends SomeBase>> registry =
+        getCodecRegistry(SomeBase.TYPE_CODEC);
 
-    // Register configurations
-    registry.register("my_config", myConfigInstance);
+    // register(id, concrete class, codec) — documents with this id decode with MyType.CODEC
+    registry.register("MyType", MyType.class, MyType.CODEC);
 }
 ```
 

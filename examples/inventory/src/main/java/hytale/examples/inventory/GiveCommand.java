@@ -7,8 +7,7 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.CombinedItemContainer;
@@ -54,11 +53,8 @@ public class GiveCommand extends AbstractPlayerCommand {
             return;
         }
 
-        Player player = store.getComponent(ref, Player.getComponentType());
-        Inventory inventory = player.getInventory();
-
         // Use combined container that tries hotbar first, then storage
-        CombinedItemContainer combined = inventory.getCombinedHotbarFirst();
+        CombinedItemContainer combined = InventoryComponent.getCombined(store, ref, InventoryComponent.HOTBAR_FIRST);
         ItemStackTransaction result = combined.addItemStack(itemStack);
 
         ItemStack remainder = result.getRemainder();

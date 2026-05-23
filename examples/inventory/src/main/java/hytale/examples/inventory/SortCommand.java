@@ -7,8 +7,7 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.container.SortType;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -45,10 +44,7 @@ public class SortCommand extends AbstractPlayerCommand {
             return;
         }
 
-        Player player = store.getComponent(ref, Player.getComponentType());
-        Inventory inventory = player.getInventory();
-
-        inventory.getStorage().sortItems(sortType);
+        store.getComponent(ref, InventoryComponent.Storage.getComponentType()).getInventory().sortItems(sortType);
         playerRef.sendMessage(Message.raw("Sorted storage by " + sortType.name().toLowerCase()));
     }
 }

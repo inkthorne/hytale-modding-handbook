@@ -5,8 +5,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -27,11 +26,8 @@ public class InspectCommand extends AbstractPlayerCommand {
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-        Player player = store.getComponent(ref, Player.getComponentType());
-        Inventory inventory = player.getInventory();
-
         // Show held item
-        ItemStack heldItem = inventory.getItemInHand();
+        ItemStack heldItem = InventoryComponent.getItemInHand(store, ref);
         if (heldItem.isEmpty()) {
             playerRef.sendMessage(Message.raw("Held item: (empty)"));
         } else {
@@ -40,25 +36,25 @@ public class InspectCommand extends AbstractPlayerCommand {
         }
 
         // Show active hotbar slot
-        byte activeSlot = inventory.getActiveHotbarSlot();
+        byte activeSlot = store.getComponent(ref, InventoryComponent.Hotbar.getComponentType()).getActiveSlot();
         playerRef.sendMessage(Message.raw("Active hotbar slot: " + activeSlot));
 
         // Count hotbar items
-        ItemContainer hotbar = inventory.getHotbar();
+        ItemContainer hotbar = store.getComponent(ref, InventoryComponent.Hotbar.getComponentType()).getInventory();
         int hotbarCount = countItems(hotbar);
         int hotbarSlots = countNonEmptySlots(hotbar);
         playerRef.sendMessage(Message.raw("Hotbar: " + hotbarSlots + "/" + hotbar.getCapacity()
             + " slots, " + hotbarCount + " total items"));
 
         // Count storage items
-        ItemContainer storage = inventory.getStorage();
+        ItemContainer storage = store.getComponent(ref, InventoryComponent.Storage.getComponentType()).getInventory();
         int storageCount = countItems(storage);
         int storageSlots = countNonEmptySlots(storage);
         playerRef.sendMessage(Message.raw("Storage: " + storageSlots + "/" + storage.getCapacity()
             + " slots, " + storageCount + " total items"));
 
         // Count armor items
-        ItemContainer armor = inventory.getArmor();
+        ItemContainer armor = store.getComponent(ref, InventoryComponent.Armor.getComponentType()).getInventory();
         int armorSlots = countNonEmptySlots(armor);
         playerRef.sendMessage(Message.raw("Armor: " + armorSlots + "/" + armor.getCapacity() + " slots equipped"));
 

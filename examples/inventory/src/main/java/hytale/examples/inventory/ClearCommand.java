@@ -7,8 +7,7 @@ import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -34,18 +33,15 @@ public class ClearCommand extends AbstractPlayerCommand {
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-        Player player = store.getComponent(ref, Player.getComponentType());
-        Inventory inventory = player.getInventory();
-
         String section = ctx.get(sectionArg).toLowerCase();
 
         if (section.equals("all")) {
-            inventory.clear();
+            InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING).clear();
             playerRef.sendMessage(Message.raw("Cleared entire inventory"));
             return;
         }
 
-        ItemContainer container = getSectionContainer(inventory, section);
+        ItemContainer container = getSectionContainer(store, ref, section);
 
         if (container == null) {
             playerRef.sendMessage(Message.raw("Unknown section: " + section
@@ -57,15 +53,16 @@ public class ClearCommand extends AbstractPlayerCommand {
         playerRef.sendMessage(Message.raw("Cleared " + section));
     }
 
-    private ItemContainer getSectionContainer(Inventory inventory, String section) {
-        return switch (section) {
-            case "hotbar" -> inventory.getHotbar();
-            case "storage" -> inventory.getStorage();
-            case "armor" -> inventory.getArmor();
-            case "utility" -> inventory.getUtility();
-            case "tools" -> inventory.getTools();
-            case "backpack" -> inventory.getBackpack();
+    private ItemContainer getSectionContainer(Store<EntityStore> store, Ref<EntityStore> ref, String section) {
+        var type = switch (section) {
+            case "hotbar" -> InventoryComponent.Hotbar.getComponentType();
+            case "storage" -> InventoryComponent.Storage.getComponentType();
+            case "armor" -> InventoryComponent.Armor.getComponentType();
+            case "utility" -> InventoryComponent.Utility.getComponentType();
+            case "tools" -> InventoryComponent.Tool.getComponentType();
+            case "backpack" -> InventoryComponent.Backpack.getComponentType();
             default -> null;
         };
+        return type == null ? null : store.getComponent(ref, type).getInventory();
     }
 }

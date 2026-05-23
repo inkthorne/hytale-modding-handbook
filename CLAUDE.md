@@ -64,11 +64,11 @@ The `docs/` were fact-checked against game **build-12** (API docs via `javap` on
 Run the regression checker after any game update (or before trusting/extending a doc):
 
 ```bash
-./scripts/verify-docs.sh          # full run (hard gates + advisories)
-./scripts/verify-docs.sh --no-build   # skip example compilation (faster)
+./maintenance/scripts/verify-docs.sh          # full run (hard gates + advisories)
+./maintenance/scripts/verify-docs.sh --no-build   # skip example compilation (faster)
 ```
 
-It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`, all intra-doc anchor links resolve, and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `baseline/CommonAssetsIndex.hashes`** (which Common assets changed since build-12 — re-verify docs referencing those). See `baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
+It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`, all intra-doc anchor links resolve, and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since build-12 — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
 
 ## Architecture
 

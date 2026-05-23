@@ -5,7 +5,7 @@
 # a game update.
 #
 # Usage:
-#   scripts/verify-docs.sh [--no-build] [--fields]
+#   maintenance/scripts/verify-docs.sh [--no-build] [--fields]
 #
 #   --no-build   Skip compiling the example projects (faster).
 #   --fields     Enable the (noisy, advisory) per-format field-existence check.
@@ -18,7 +18,8 @@
 # the run (they print findings for human review).
 
 set -u
-cd "$(dirname "$0")/.." || exit 2
+# Resolve repo root: this script lives at maintenance/scripts/, so go up two levels.
+cd "$(dirname "$0")/../.." || exit 2
 REPO="$(pwd)"
 
 NO_BUILD=0
@@ -153,13 +154,13 @@ fi
 # =====================================================================
 section "[INFO] Asset drift vs baseline"
 # Tells you exactly which Common assets changed since the baseline was captured.
-if [ -f baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
-  D="$(diff <(sort baseline/CommonAssetsIndex.hashes) <(sort "$ASSETS/CommonAssetsIndex.hashes") | grep -c '^[<>]' || true)"
+if [ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
+  D="$(diff <(sort maintenance/baseline/CommonAssetsIndex.hashes) <(sort "$ASSETS/CommonAssetsIndex.hashes") | grep -c '^[<>]' || true)"
   if [ "$D" -eq 0 ]; then
     info "0 changed Common assets — docs verified against this build still apply"
   else
     warn "$D changed line(s) vs baseline — re-verify docs referencing those assets"
-    info "see: diff baseline/CommonAssetsIndex.hashes \"$ASSETS/CommonAssetsIndex.hashes\""
+    info "see: diff maintenance/baseline/CommonAssetsIndex.hashes \"$ASSETS/CommonAssetsIndex.hashes\""
   fi
 else
   warn "skipped (missing baseline or live index)"

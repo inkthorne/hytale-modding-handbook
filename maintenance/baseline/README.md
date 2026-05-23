@@ -26,7 +26,7 @@ Re-extract the current assets (see CLAUDE.md → "Inspecting assets on Linux"),
 then diff the live index against this baseline:
 
 ```bash
-diff baseline/CommonAssetsIndex.hashes ~/.cache/hytale-assets/CommonAssetsIndex.hashes
+diff maintenance/baseline/CommonAssetsIndex.hashes ~/.cache/hytale-assets/CommonAssetsIndex.hashes
 ```
 
 - No output → Common assets are byte-identical; format docs almost certainly still hold.

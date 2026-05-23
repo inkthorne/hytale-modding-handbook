@@ -47,7 +47,7 @@ Complete reference for finding the right documentation file. For a beginner-frie
 
 ## By Documentation Type
 
-Docs are tagged with a `**Doc type:**` line. This groups them by what they document (and how each is verified — see `scripts/verify-docs.sh`).
+Docs are tagged with a `**Doc type:**` line. This groups them by what they document (and how each is verified — see `maintenance/scripts/verify-docs.sh`).
 
 ### Java API
 _Documents Java classes/methods — verify with `javap` against `HytaleServer.jar`._

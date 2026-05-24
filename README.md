@@ -1,6 +1,6 @@
-# Hytale Plugin Examples
+# Hytale Modding Handbook
 
-A reference for Hytale server plugin development with documentation and working examples.
+A Hytale server-plugin & asset API reference, with the descriptions, gotchas, and working examples to build with.
 
 ## Documentation
 

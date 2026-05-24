@@ -16,7 +16,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
  *   <li>Element targeting with #ElementId.Property syntax</li>
  * </ul>
  *
- * @see <a href="https://github.com/user/hytale-plugin-examples/blob/main/docs/ui-api.md#customuihud">CustomUIHud Documentation</a>
+ * See {@code docs/ui-api.md} (CustomUIHud section) in the repository root for full documentation.
  */
 public class StatusHud extends CustomUIHud {
 

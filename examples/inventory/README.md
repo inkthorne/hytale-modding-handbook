@@ -17,7 +17,7 @@ Add items to your inventory. Tries hotbar first, then storage.
 > adds items — but the client renders them as a `?` placeholder with no model.
 > Use the exact casing, e.g. `Plant_Fruit_Apple`, `Weapon_Sword_Wood`.
 
-**API demonstrated:** `ItemStack`, `ItemContainer.addItemStack()`, transaction handling
+**API demonstrated:** `ItemStack`, `CombinedItemContainer.addItemStack()` (combined container from `InventoryComponent.getCombined(...)`), transaction handling
 
 ### `/inv-clear <section>`
 Clear inventory sections.
@@ -30,7 +30,7 @@ Clear inventory sections.
 
 **Valid sections:** hotbar, storage, armor, utility, tools, backpack
 
-**API demonstrated:** `Inventory.clear()`, section access via `getHotbar()`, etc.
+**API demonstrated:** `container.clear()`, section access via component types (`InventoryComponent.Hotbar.getComponentType()`, etc.)
 
 ### `/inspect`
 Show current inventory contents and statistics.
@@ -42,7 +42,7 @@ Show current inventory contents and statistics.
 - Armor slots equipped
 - Total item count
 
-**API demonstrated:** `getItemInHand()`, container iteration with `forEach()`
+**API demonstrated:** `InventoryComponent.getItemInHand(store, ref)` (static), container iteration with `forEach()`
 
 ### `/sort <type>`
 Sort storage inventory.
@@ -52,7 +52,7 @@ Sort storage inventory.
 - `/sort type` - Sort by item category
 - `/sort rarity` - Sort by item rarity
 
-**API demonstrated:** `Inventory.sortStorage(SortType)`
+**API demonstrated:** `.sortItems(SortType)` on a section's `ItemContainer`
 
 ## Building
 
@@ -88,16 +88,24 @@ deploy.bat
 
 ## Key API Patterns
 
-### Getting Player Inventory
+Inventory access goes through the static `InventoryComponent` helpers and the
+per-section component types — there is no `player.getInventory()`.
+
+### Accessing a Section's Container
 ```java
-Player player = store.getComponent(ref, Player.getComponentType());
-Inventory inventory = player.getInventory();
+// Each section is its own component; .getInventory() returns its ItemContainer.
+ItemContainer hotbar = store.getComponent(ref,
+    InventoryComponent.Hotbar.getComponentType()).getInventory();
+ItemContainer storage = store.getComponent(ref,
+    InventoryComponent.Storage.getComponentType()).getInventory();
+// Other sections: Armor, Utility, Tool, Backpack.
 ```
 
-### Adding Items with Combined Container
+### Adding Items with a Combined Container
 ```java
 ItemStack item = new ItemStack("Plant_Fruit_Apple", 10);
-CombinedItemContainer combined = inventory.getCombinedHotbarFirst();
+// HOTBAR_FIRST tries the hotbar, then storage. (EVERYTHING spans all sections.)
+CombinedItemContainer combined = InventoryComponent.getCombined(store, ref, InventoryComponent.HOTBAR_FIRST);
 ItemStackTransaction result = combined.addItemStack(item);
 if (result.getRemainder() == null) {
     // All items added
@@ -116,11 +124,23 @@ container.forEach((slot, itemStack) -> {
 });
 ```
 
-### Checking Held Item
+### Checking the Held Item
 ```java
-ItemStack heldItem = inventory.getItemInHand();
+ItemStack heldItem = InventoryComponent.getItemInHand(store, ref);
 if (!heldItem.isEmpty()) {
     String itemId = heldItem.getItemId();
     int quantity = heldItem.getQuantity();
 }
+```
+
+### Clearing and Sorting
+```java
+// Clear every section at once via the combined EVERYTHING container.
+InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING).clear();
+
+// Clear or sort a single section's container.
+ItemContainer storage = store.getComponent(ref,
+    InventoryComponent.Storage.getComponentType()).getInventory();
+storage.clear();
+storage.sortItems(SortType.NAME);
 ```

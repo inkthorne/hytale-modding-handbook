@@ -23,6 +23,50 @@ This document covers the core event system. For specific event classes, see the 
 
 ---
 
+This page covers the core event system: registering listeners, priorities, the event interface hierarchy, keyed vs non-keyed events, and ECS event handling.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.event` (with ECS events in `com.hypixel.hytale.component.system`) and provides:
+- An `EventRegistry` for registering synchronous, async, global, keyed, and unhandled listeners
+- Handler ordering via `EventPriority`
+- A marker-interface hierarchy distinguishing keyed, async, and cancellable events
+- `EventRegistration` handles for unregistering (and combining) listeners
+- Cancellable events via `ICancellable` / `CancellableEcsEvent`
+- ECS events handled by `EntityEventSystem` with entity-level context
+
+## Architecture
+```
+EventRegistry (getEventRegistry())
+├── Registration modes
+│   ├── register / registerGlobal (keyed vs all keys)
+│   ├── registerAsync / registerAsyncGlobal
+│   └── registerUnhandled / registerAsyncUnhandled
+├── EventPriority (FIRST → EARLY → NORMAL → LATE → LAST)
+├── EventRegistration (unregister / combine)
+├── Event types
+│   ├── IBaseEvent → IEvent (keyed) / IAsyncEvent (async)
+│   └── ICancellable (cancellable)
+└── ECS events (registered via getEntityStoreRegistry())
+    ├── EcsEvent → CancellableEcsEvent
+    └── EntityEventSystem (handle() with chunk/index entity context)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `EventRegistry` | `event` | Registers event listeners |
+| `EventPriority` | `event` | Enum controlling handler execution order |
+| `EventRegistration<KeyType, EventType>` | `event` | Handle for unregistering / combining listeners |
+| `IBaseEvent<KeyType>` | `event` | Marker interface for all events |
+| `IEvent<KeyType>` | `event` | Marker interface for keyed events |
+| `IAsyncEvent<KeyType>` | `event` | Marker interface for async events |
+| `ICancellable` | `event` | Interface for cancellable events |
+| `EcsEvent` | `component.system` | Abstract base for ECS events |
+| `CancellableEcsEvent` | `component.system` | Abstract base for cancellable ECS events |
+| `ICancellableEcsEvent` | `component.system` | Interface for cancellable ECS events |
+| `EntityEventSystem` | `component.system` | System that handles ECS events with entity context |
+
 ## EventRegistry
 **Package:** `com.hypixel.hytale.event`
 

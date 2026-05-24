@@ -2,6 +2,74 @@
 
 **Doc type:** Java API
 
+The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.inventory` and provides:
+- A sectioned player `Inventory` (hotbar, storage, armor, utility, tools, backpack) with combined views
+- `ItemStack` value type with metadata, plus the `Item` config that backs each stack
+- `ItemContainer` operations: add, remove, move, smart-move, quick-stack, sort, and filter
+- Slot filtering (`SlotFilter`, `FilterType`, `FilterActionType`) and sorting (`SortType`)
+- A transaction layer (`ItemStackTransaction`, `MoveTransaction`, `ListTransaction`) for atomic, reversible edits
+- Crafting (`CraftingRecipe`, `BenchRequirement`) and ECS inventory/crafting events
+
+## Architecture
+```
+Inventory  (player; sectioned)
+├── Sections → ItemContainer
+│   ├── getHotbar / getStorage / getArmor / getUtility / getTools / getBackpack
+│   └── CombinedItemContainer  (cross-section views)
+├── ItemContainer implementations
+│   ├── SimpleItemContainer
+│   └── CombinedItemContainer
+├── ItemStack  (backed by Item config)
+├── Filtering & Sorting
+│   ├── SlotFilter (FilterType / FilterActionType)
+│   └── SortType
+├── Transaction System
+│   ├── ItemStackTransaction / MoveTransaction
+│   ├── ListTransaction
+│   └── ActionType
+├── Crafting
+│   ├── CraftingRecipe
+│   └── BenchRequirement / BenchType
+└── Events (ECS)
+    ├── InventoryChangeEvent / DropItemEvent
+    ├── InteractivelyPickupItemEvent / SwitchActiveSlotEvent
+    └── CraftRecipeEvent (Pre / Post)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Inventory` | `server.core.inventory` | Player inventory with multiple sections |
+| `ItemStack` | `server.core.inventory` | A stack of items with count and metadata |
+| `Item` | `server.core.asset.type.item.config` | Item definition/config backing an `ItemStack` |
+| `ItemContainer` | `server.core.inventory.container` | A container of slots; add/remove/move/filter API |
+| `ItemContainer.ItemContainerChangeEvent` | `server.core.inventory.container` | Fired when a container's contents change |
+| `SimpleItemContainer` | `server.core.inventory.container` | Basic standalone container implementation |
+| `CombinedItemContainer` | `server.core.inventory.container` | View spanning multiple sections as one container |
+| `SlotFilter` | `server.core.inventory.container.filter` | Per-slot filtering rules |
+| `FilterType` | `server.core.inventory.container.filter` | Filter category enum |
+| `FilterActionType` | `server.core.inventory.container.filter` | Allow/deny action enum for filters |
+| `SortType` | `server.core.inventory.container` | Container sort ordering enum |
+| `SmartMoveType` | `protocol` | Smart-move behavior selector |
+| `MaterialQuantity` | `server.core.inventory` | Material-id + quantity pair |
+| `ResourceQuantity` | `server.core.inventory` | Resource-type + quantity pair |
+| `ItemStackTransaction` | `server.core.inventory.transaction` | Single reversible item-stack edit |
+| `MoveTransaction<T>` | `server.core.inventory.transaction` | A move wrapped as a transaction |
+| `ListTransaction<T>` | `server.core.inventory.transaction` | Batch of transactions |
+| `ActionType` | `server.core.inventory.transaction` | Transaction action kind |
+| `CraftingRecipe` | `server.core.asset.type.item.config` | Crafting recipe config (inputs, outputs, requirements) |
+| `BenchRequirement` | `protocol` | Required crafting bench for a recipe |
+| `BenchType` | `protocol` | Crafting bench type enum |
+| `CraftRecipeEvent` | `server.core.event.events.ecs` | ECS event for crafting (`Pre`/`Post`) |
+| `InventoryChangeEvent` | `server.core.inventory` | Inventory contents changed |
+| `DropItemEvent` | `server.core.event.events.ecs` | Item dropped |
+| `InteractivelyPickupItemEvent` | `server.core.event.events.ecs` | Item picked up interactively |
+| `SwitchActiveSlotEvent` | `server.core.event.events.ecs` | Active slot changed |
+
 ## Inventory
 **Package:** `com.hypixel.hytale.server.core.inventory`
 

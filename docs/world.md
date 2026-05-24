@@ -2,6 +2,53 @@
 
 **Doc type:** Java API
 
+Covers the runtime `World` object, its chunks, per-player chunk tracking, gameplay configuration, and the world/chunk lifecycle events plugins can observe.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.universe.world` (and related asset/event subpackages) and provides:
+- A `World` tick thread exposing players, entities, chunks, and ECS stores
+- Direct block/state/terrain access per `WorldChunk`
+- Per-player chunk loading and visibility control via `ChunkTracker`
+- Layered gameplay configuration (`GameplayConfig`, `WorldConfig`, `DeathConfig`)
+- Per-world client feature toggles (`ClientFeature`)
+- World-lifecycle and chunk events (add/remove/start/load, save/unload, moon phase)
+
+## Architecture
+```
+World (tick thread)
+├── Players (getPlayers / addPlayer / PlayerRef)
+│   └── ChunkTracker (per-player chunk loading + visibility)
+├── Chunks (getChunk* / WorldChunk)
+│   ├── Block + state + terrain access
+│   └── ChunkFlag (per-chunk state flags)
+├── ECS Stores (ChunkStore, EntityStore)
+├── Configuration
+│   └── GameplayConfig
+│       ├── WorldConfig (block rules, day/night, sleep)
+│       └── DeathConfig (item loss, respawn)
+├── ClientFeature toggles (per-world, broadcast to clients)
+└── Events
+    ├── World lifecycle (Add / Remove / Start / AllWorldsLoaded)
+    └── Chunk (ChunkPreLoadProcess / ChunkSave / ChunkUnload / MoonPhaseChange)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `World` | `server.core.universe.world` | The game world; tick thread exposing players, entities, chunks, and config |
+| `WorldChunk` | `server.core.universe.world.chunk` | A loaded chunk; block, state, and terrain data access |
+| `ChunkFlag` | `server.core.universe.world.chunk` | Enum of per-chunk state flags |
+| `ChunkTracker` | `server.core.modules.entity.player` | Per-player chunk loading rate and visibility |
+| `GameplayConfig` | `server.core.asset.type.gameplay` | Master gameplay configuration; holds sub-configs |
+| `WorldConfig` (gameplay) | `server.core.asset.type.gameplay` | Block rules, day/night cycle, sleep settings |
+| `DeathConfig` | `server.core.asset.type.gameplay` | Death/respawn and item-loss behavior |
+| `ClientFeature` | `protocol.packets.setup` | Enum of per-world client feature toggles |
+| `WorldEvent` | `server.core.universe.world.events` | Base for world-lifecycle events (keyed by String) |
+| `ChunkEvent` | `server.core.universe.world.events` | Base for chunk events |
+| `ChunkSaveEvent` / `ChunkUnloadEvent` | `server.core.universe.world.events.ecs` | ECS events for chunk save/unload |
+| `MoonPhaseChangeEvent` | `server.core.universe.world.events.ecs` | ECS event fired on moon phase change |
+
 ## World
 **Package:** `com.hypixel.hytale.server.core.universe.world`
 

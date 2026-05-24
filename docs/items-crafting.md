@@ -4,6 +4,48 @@
 
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 
+This page documents crafting: the bench items that host crafting UIs, the JSON recipe structure embedded in item definitions, the tier-upgrade system, and the Java `CraftingRecipe` API and crafting events.
+
+## Overview
+
+Defined as JSON assets under `Server/Item` with a supporting Java API, and covers:
+- Bench types: `Crafting`, `Processing`, `DiagramCrafting`, `StructuralCrafting`
+- Recipe structure embedded in item definitions (inputs, outputs, requirements)
+- Input types (`ItemId` vs `ResourceTypeId`) and `BenchRequirement`
+- Processing and salvage recipes
+- The bench tier system (`TierLevels`, time-reduction modifiers)
+- Java API: `CraftingRecipe`, `BenchRequirement`, `BenchType`, and `CraftRecipeEvent`
+
+## Architecture
+```
+Crafting
+├── Bench items (BlockType.Bench)
+│   ├── Crafting (Workbench, Weapon Bench, Alchemy)
+│   ├── Processing (Furnace, Campfire, Tannery, Salvage)
+│   ├── DiagramCrafting (Armory)
+│   └── StructuralCrafting (Builder's Bench)
+├── Recipe (embedded in item definition)
+│   ├── Input (ItemId / ResourceTypeId + Quantity)
+│   ├── Output
+│   └── BenchRequirement (Type, Categories, Id, RequiredTierLevel)
+├── Tier system (TierLevels, time-reduction modifiers)
+└── Java API
+    ├── CraftingRecipe
+    ├── BenchRequirement / BenchType
+    └── CraftRecipeEvent (Pre / Post)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Bench` | `BlockType.Bench` (item property) | Bench config; `Type`, categories, tier levels |
+| `Recipe` | item property | Embedded crafting recipe (inputs, output, requirements) |
+| `BenchRequirement` (asset) | `Recipe.BenchRequirement` | JSON bench requirement for a recipe |
+| `CraftingRecipe` | `server.core.asset.type.item.config` | Java recipe config (inputs, outputs, requirements) |
+| `BenchRequirement` | `protocol` | Java type for a recipe's required bench |
+| `BenchType` | `protocol` | Crafting bench type enum |
+| `CraftRecipeEvent` | `server.core.event.events.ecs` | ECS crafting event (`Pre`/`Post`) |
+
 ## Quick Navigation
 
 | Bench Type | Examples | Description |

@@ -2,6 +2,59 @@
 
 **Doc type:** Java API
 
+This page covers block and character collision detection: the module, query results, the various collision-data types, configuration, and evaluators.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.modules.collision` and provides:
+- `CollisionModule` for collision detection, queries, and position validation
+- `CollisionResult`, the container managing block/character collisions, slides, and triggers
+- Collision-data types: `BlockCollisionData`, `BoxCollisionData`, `CharacterCollisionData`, `BasicCollisionData`
+- `CollisionConfig` / `CollisionModuleConfig` for query and module configuration
+- Material constants (`CollisionMaterial`) and filtering (`CollisionFilter`)
+- Evaluators (`IBlockCollisionEvaluator`, `BoxBlockIntersectionEvaluator`) for intersection tests
+- `CollisionResultComponent` for per-entity collision tracking
+
+## Architecture
+```
+CollisionModule  (findCollisions, findIntersections, validatePosition)
+├── CollisionResult  (query results container)
+│   ├── Block collisions  → BlockCollisionData
+│   ├── Character collisions → CharacterCollisionData
+│   ├── Slides / Triggers / Damage blocks
+│   └── CollisionDataArray<T>  (internal element storage)
+├── Collision data types
+│   └── BasicCollisionData → BoxCollisionData → BlockCollisionData
+│       (CharacterCollisionData also extends BasicCollisionData)
+├── Configuration
+│   ├── CollisionConfig        (per-query)
+│   ├── CollisionModuleConfig  (module-wide)
+│   └── CollisionMaterial       (material constants)
+├── Filtering / Evaluation
+│   ├── CollisionFilter<D, T>
+│   ├── IBlockCollisionEvaluator
+│   └── BoxBlockIntersectionEvaluator
+└── CollisionResultComponent  (per-entity collision tracking)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `CollisionModule` | `modules.collision` | Main module for collision detection and queries |
+| `CollisionResult` | `modules.collision` | Container for collision query results |
+| `BlockCollisionData` | `modules.collision` | Information about a block collision |
+| `BoxCollisionData` | `modules.collision` | Base class for box collision info |
+| `CharacterCollisionData` | `modules.collision` | Information about a character/entity collision |
+| `BasicCollisionData` | `modules.collision` | Base collision data (point + start) |
+| `CollisionConfig` | `modules.collision` | Per-query collision configuration |
+| `CollisionFilter` | `modules.collision` | Generic filter interface for collision queries |
+| `CollisionMaterial` | `modules.collision` | Constants for collision material types |
+| `IBlockCollisionEvaluator` | `modules.collision` | Interface for evaluating block collisions |
+| `BoxBlockIntersectionEvaluator` | `modules.collision` | Evaluates box-vs-block intersection |
+| `CollisionModuleConfig` | `modules.collision` | Module-wide collision configuration |
+| `CollisionDataArray<T>` | `modules.collision` | Generic container for collision data elements |
+| `CollisionResultComponent` | `modules.entity.component` | Entity component wrapping a CollisionResult |
+
 ## Class Hierarchy
 ```
 CollisionModule (main collision system)

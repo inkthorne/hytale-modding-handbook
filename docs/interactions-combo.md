@@ -4,6 +4,40 @@
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
+This page covers the combo-system interactions: chaining attacks together with timing windows, branching on tap vs hold, charge-and-release mechanics, and the flag/cancel machinery that coordinates chains.
+
+## Overview
+
+Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
+- `Chaining` for sequential combo chains with a `ChainingAllowance` timing window
+- `FirstClick` to branch between tap (click) and hold (held) input paths
+- `Charging` for charge-and-release abilities keyed by hold-time thresholds
+- `ChainId`-based coordination so separate chains can share state
+- `ChainFlag` to set named flags that jump a chain into a `Flags` branch
+- `CancelChain` to reset an active chain's state to the beginning
+
+## Architecture
+```
+Combo System (coordinated by shared ChainId)
+├── ChainingInteraction (Next[] steps + ChainingAllowance window)
+│   └── Flags map ── jumped into by ──┐
+├── FirstClickInteraction             │
+│   ├── Click path                    │
+│   └── Held path ─► often a Charging │ or sets a flag
+├── ChargingInteraction (Next: time-threshold → interaction)
+├── ChainFlagInteraction ─────────────┘ (sets Flag on a ChainId)
+└── CancelChainInteraction (clears chain state + flags for a ChainId)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `ChainingInteraction` | `config/client/ChainingInteraction` | Sequential combo chains with timing windows and `Flags` branches |
+| `FirstClickInteraction` | `config/client/FirstClickInteraction` | Branches on tap (`Click`) vs hold (`Held`) input |
+| `ChargingInteraction` | `config/client/ChargingInteraction` | Charge-and-release, keyed by hold-time thresholds |
+| `ChainFlagInteraction` | `config/none/ChainFlagInteraction` | Sets a named flag on a chain to trigger a `Flags` branch |
+| `CancelChainInteraction` | `config/none/CancelChainInteraction` | Resets an active chain's state (and clears its flags) |
+
 ## Quick Navigation
 
 | Interaction | Description |

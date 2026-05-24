@@ -2,6 +2,51 @@
 
 **Doc type:** Java API
 
+This page covers spawning and simulating projectiles: the module, asset-based configuration, physics, ECS components, and impact/bounce callbacks.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.modules.projectile` (and its `config`, `component`, and `interaction` subpackages) and provides:
+- `ProjectileModule` for spawning and managing projectiles
+- `ProjectileConfig`, asset-based ballistic and visual configuration
+- Physics via `PhysicsConfig` / `StandardPhysicsConfig` and `StandardPhysicsProvider`
+- ECS components: `Projectile` and `PredictedProjectile` (client prediction)
+- `ImpactConsumer` / `BounceConsumer` callbacks for impacts and bounces
+- `ProjectileInteraction` for launching projectiles from interactions
+
+## Architecture
+```
+ProjectileModule  (spawnProjectile, component-type accessors)
+├── ProjectileConfig        (asset: ballistic data, spawn offset, model, sounds)
+│   └── BallisticData        (muzzle velocity, gravity, shot adjustments)
+├── Physics
+│   ├── PhysicsConfig → StandardPhysicsConfig  (bounce, rolling, fluid)
+│   └── StandardPhysicsProvider (per-tick simulation, collision, fluid state)
+├── Components
+│   ├── Projectile           (marks entity as a projectile)
+│   └── PredictedProjectile  (client-side prediction by UUID)
+├── Callbacks
+│   ├── ImpactConsumer
+│   └── BounceConsumer
+└── ProjectileInteraction   (launches projectiles, provides BallisticData)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `ProjectileModule` | `modules.projectile` | Spawns and manages projectiles |
+| `ProjectileConfig` | `modules.projectile.config` | Asset-based projectile configuration |
+| `BallisticData` | `modules.projectile.config` | Interface for ballistic properties |
+| `PhysicsConfig` | `modules.projectile.config` | Interface for projectile physics behavior |
+| `StandardPhysicsConfig` | `modules.projectile.config` | Default physics implementation (bounce, fluid, rolling) |
+| `StandardPhysicsProvider` | `modules.projectile.config` | ECS component running physics simulation |
+| `ImpactConsumer` | `modules.projectile.config` | Callback for projectile impacts |
+| `BounceConsumer` | `modules.projectile.config` | Callback for projectile bounces |
+| `BallisticDataProvider` | `modules.projectile.config` | Interface for types providing ballistic data |
+| `Projectile` | `modules.projectile.component` | ECS component marking an entity as a projectile |
+| `PredictedProjectile` | `modules.projectile.component` | ECS component for client-side prediction |
+| `ProjectileInteraction` | `modules.projectile.interaction` | Interaction that launches projectiles |
+
 ## Class Hierarchy
 ```
 ProjectileConfig (asset-based configuration)

@@ -2,6 +2,37 @@
 
 **Doc type:** Java API
 
+This page covers checking permissions on players and commands, plus events fired when player or group permissions change.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.permissions` (with permission events in `com.hypixel.hytale.server.core.event.events.permissions`) and provides:
+- A `PermissionHolder` interface for permission checks (implemented by `Player`)
+- Permission checks with optional default values
+- Command-level permission gating via `AbstractCommand.requirePermission()`
+- Events for player permission, player group, and group permission changes
+
+## Architecture
+```
+Permission checks
+├── PermissionHolder (Player implements it)
+│   └── hasPermission(node) / hasPermission(node, default)
+└── Command gating (AbstractCommand.requirePermission(node))
+
+Permission Events (event.events.permissions)
+├── PlayerPermissionChangeEvent (base; PermissionsAdded / PermissionsRemoved / GroupAdded / GroupRemoved)
+│   └── PlayerGroupEvent (Added / Removed)
+└── GroupPermissionChangeEvent (Added / Removed)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `PermissionHolder` | `server.core.permissions` | Interface for entities that can hold permissions; `Player` implements it |
+| `PlayerPermissionChangeEvent` | `server.core.event.events.permissions` | Abstract base for player permission/group change events |
+| `PlayerGroupEvent` | `server.core.event.events.permissions` | Player group membership changes (`Added` / `Removed`) |
+| `GroupPermissionChangeEvent` | `server.core.event.events.permissions` | Permission group's permissions change (`Added` / `Removed`) |
+
 ## PermissionHolder
 **Package:** `com.hypixel.hytale.server.core.permissions`
 

@@ -22,6 +22,32 @@ Understanding Operations is essential for:
 - Debugging interaction execution
 - Understanding timing and frame-by-frame behavior
 
+## Architecture
+```
+Operation System
+├── Operation interface (tick / simulateTick / handle + getWaitForDataFrom / getRules / getTags)
+├── Loading phase
+│   ├── walk(Collector) — tree traversal, metadata collection
+│   │   ├── Collector (ListCollector / SingleCollector / TreeCollector)
+│   │   └── CollectorTag (SerialTag / ParallelTag / ChainingTag / ...)
+│   └── compile(OperationsBuilder) — flatten tree to Operation[]
+├── OperationsBuilder (addOperation + Label flow control)
+│   └── Label system (createLabel / createUnresolvedLabel / resolveLabel / jump)
+└── Runtime execution
+    ├── handle(isStart) → tick()/simulateTick() per frame → handle(end)
+    └── WaitForDataFrom (None / Server / Client) — client/server sync
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Operation` | `server.core.modules.interaction.interaction.operation` | Interface for executable interaction steps |
+| `OperationsBuilder` | `server.core.modules.interaction.interaction.operation` | Builds operation sequences with label-based flow control |
+| `Label` | `interaction.operation` | Jump target within an operation sequence |
+| `Collector` | `interaction.operation` | Visitor receiving callbacks during `walk()` traversal |
+| `CollectorTag` | `interaction.operation` | Identifies which branch is visited (SerialTag, ParallelTag, ...) |
+| `WaitForDataFrom` | `protocol` | Enum controlling client/server execution sync |
+
 ---
 
 ## Operation Interface

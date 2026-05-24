@@ -4,6 +4,43 @@
 
 Events for the built-in asset editor system.
 
+This page covers the server-side events fired by Hytale's built-in asset editor as clients connect, select/create assets, and request data.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.builtin.asseteditor.event` and provides:
+- A generic base event (`EditorClientEvent<KeyType>`) carrying the `EditorClient`
+- Button activation and asset creation events
+- Asset selection and client disconnect events
+- Async events for autocomplete and dataset requests (settable results)
+- A weather preview lock event
+
+## Architecture
+```
+EditorClientEvent<KeyType> (base — exposes EditorClient)
+├── Synchronous events
+│   ├── AssetEditorActivateButtonEvent
+│   ├── AssetEditorAssetCreatedEvent
+│   ├── AssetEditorClientDisconnectEvent
+│   ├── AssetEditorSelectAssetEvent
+│   └── AssetEditorUpdateWeatherPreviewLockEvent
+└── Async events (IAsyncEvent<String>, set results)
+    ├── AssetEditorFetchAutoCompleteDataEvent
+    └── AssetEditorRequestDataSetEvent
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `EditorClientEvent<KeyType>` | `builtin.asseteditor.event` | Abstract base for editor events; exposes `getEditorClient()` |
+| `AssetEditorActivateButtonEvent` | `builtin.asseteditor.event` | Fired when an editor button is activated |
+| `AssetEditorAssetCreatedEvent` | `builtin.asseteditor.event` | Fired when an asset is created |
+| `AssetEditorClientDisconnectEvent` | `builtin.asseteditor.event` | Fired when an editor client disconnects |
+| `AssetEditorSelectAssetEvent` | `builtin.asseteditor.event` | Fired when an asset is selected |
+| `AssetEditorFetchAutoCompleteDataEvent` | `builtin.asseteditor.event` | Async; supplies autocomplete results |
+| `AssetEditorRequestDataSetEvent` | `builtin.asseteditor.event` | Async; supplies dataset results |
+| `AssetEditorUpdateWeatherPreviewLockEvent` | `builtin.asseteditor.event` | Fired when weather preview lock changes |
+
 ---
 
 ## Event Summary

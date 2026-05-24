@@ -4,6 +4,47 @@
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
+## Overview
+
+Defined as JSON assets under `Server/Item` and covers:
+- Common item properties shared by every item (identity, visuals, stacking, durability)
+- Template-based inheritance via `Parent` and the `InteractionVars` override system
+- The quality/rarity tier system and UI `Categories` for the creative library
+- `Tags` and `ResourceTypes` for filtering and recipe-input flexibility
+- `Interactions`, `Weapon`, and `Recipe` configuration blocks
+- Stat-driven appearance via `ItemAppearanceConditions`
+
+## Architecture
+```
+Item definition (Server/Item/Items/*.json)
+├── Identity & visuals (TranslationProperties, Icon, Model, Texture, Scale, IconProperties)
+├── Inheritance (Parent → template; InteractionVars override slots)
+├── Classification
+│   ├── Quality (rarity tier)
+│   ├── Categories (creative-library UI)
+│   ├── Tags (Type / Family)
+│   └── ResourceTypes (recipe input groups; Server/Item/ResourceTypes/*.json)
+├── Placement → BlockType  (see items-blocks.md)
+├── Behavior
+│   ├── Interactions (Primary / Secondary / Ability slots)
+│   └── Weapon (stat modifiers, dual-wield)
+├── Recipe (inputs, bench requirement, tier)
+└── ItemAppearanceConditions (stat-driven model/VFX/particles)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| Item definition | `Server/Item/Items/*.json` | A single item; properties listed under Common Properties |
+| `Template_*` items | `Server/Item/Items/.../Template_*.json` | Parent templates inherited via `Parent` |
+| `BlockType` | item property | Placeable-block config for an item (see [Block Items](items-blocks.md)) |
+| `Interactions` | item property | Maps input slots to root interaction chains |
+| `InteractionVars` | item property | Per-item overrides for template interaction slots |
+| `Weapon` | item property | Wield-time stats and dual-wield rendering |
+| `Recipe` | item property | Crafting inputs, bench requirement, and tier |
+| ResourceType | `Server/Item/ResourceTypes/*.json` | Named group of items for recipe inputs |
+| Category hierarchy | `Server/Item/Category/CreativeLibrary/Items.json` | Declares creative-library category IDs |
+
 ## Quick Navigation
 
 | Category | File | Description |

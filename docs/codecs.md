@@ -9,6 +9,33 @@ Hytale uses a codec-based serialization system for data persistence, configurati
 
 A codec converts a Java value to/from a `BsonValue`. Encoding and decoding always take an `ExtraInfo` context object (`com.hypixel.hytale.codec.ExtraInfo`) that carries validation results, version info, key paths, and a small metadata map.
 
+## Architecture
+```
+Codec<T> (base interface, extends RawJsonCodec + SchemaConvertable)
+├── Built-in singletons (Codec.STRING, Codec.INTEGER, arrays, Path/Instant/UUID, ...)
+├── KeyedCodec<T>             a codec bound to a named key
+├── BuilderCodec<T>           field-by-field codec for plain objects
+│   └── BuilderCodec.builder(...)  fluent factory (KeyedCodec + setter/getter)
+└── Codec Map Types (polymorphic / lookup dispatch)
+    ├── StringCodecMapCodec<T, C>     dispatch on a string "Type" key
+    ├── AssetCodecMapCodec<K, T>      dispatch keyed by asset
+    └── MapKeyMapCodec<V>             map-key dispatch
+        └── CodecMapRegistry<T, C>    plugin registry binding ids → codecs
+ExtraInfo                       per-encode/decode context (validation, version, paths)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Codec<T>` | `codec` | Base interface; encode/decode a value to/from `BsonValue` |
+| `KeyedCodec<T>` | `codec` | A codec associated with a named key |
+| `BuilderCodec<T>` | `codec.builder` | Field-by-field codec for plain Java objects |
+| `ExtraInfo` | `codec` | Encode/decode context (validation, version, key paths, metadata) |
+| `StringCodecMapCodec<T, C>` | `codec` | Polymorphic dispatch on a string type key |
+| `AssetCodecMapCodec<K, T>` | `codec` | Polymorphic dispatch keyed by asset |
+| `MapKeyMapCodec<V>` | `codec` | Map-key-based dispatch codec |
+| `CodecMapRegistry<T, C>` | `server.core.plugin.registry` | Registers custom types (id → class + codec) |
+
 ---
 
 ## Core Codec Types

@@ -4,6 +4,46 @@
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 
+## Overview
+
+Implemented across `com.hypixel.hytale.builtin` (instances, adventure objectives) and `com.hypixel.hytale.server.core.universe.world` and provides:
+- ECS events for instance discovery (`DiscoverInstanceEvent` and its `.Display` variant)
+- ECS events for zone discovery (`DiscoverZoneEvent` and its `.Display` variant)
+- A keyed `TreasureChestOpeningEvent` fired when a player opens a treasure chest
+- `InstanceDiscoveryConfig` for controlling how discoveries are displayed
+- `WorldMapTracker` for querying and mutating per-player map/zone discovery state
+
+## Architecture
+```
+Instance discovery (com.hypixel.hytale.builtin.instances.event)
+└── DiscoverInstanceEvent
+      └── DiscoverInstanceEvent.Display (cancellable)
+            └── InstanceDiscoveryConfig (display settings)
+
+Zone discovery (com.hypixel.hytale.server.core.event.events.ecs)
+└── DiscoverZoneEvent
+      └── DiscoverZoneEvent.Display (cancellable)
+            └── WorldMapTracker.ZoneDiscoveryInfo
+
+Objectives
+└── TreasureChestOpeningEvent (keyed by String)
+
+Player map state
+└── WorldMapTracker (discover/undiscover zones, teleport/view-radius rules)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `DiscoverInstanceEvent` | `builtin.instances.event` | Base ECS event for instance discovery |
+| `DiscoverInstanceEvent.Display` | `builtin.instances.event` | Cancellable ECS event for instance-discovery UI display |
+| `DiscoverZoneEvent` | `server.core.event.events.ecs` | Base ECS event for zone discovery |
+| `DiscoverZoneEvent.Display` | `server.core.event.events.ecs` | Cancellable ECS event for zone-discovery UI display |
+| `TreasureChestOpeningEvent` | `builtin.adventure.objectives.events` | Keyed event fired when a player opens a treasure chest |
+| `InstanceDiscoveryConfig` | `builtin.instances.config` | Configuration for instance-discovery display |
+| `WorldMapTracker` | `server.core.universe.world` | Tracks and mutates per-player map discovery state |
+| `WorldMapTracker.ZoneDiscoveryInfo` | `server.core.universe.world` | Record of zone-discovery details |
+
 ## Adventure Events
 
 Events related to adventure gameplay features.

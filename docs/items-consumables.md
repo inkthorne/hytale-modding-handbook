@@ -4,6 +4,47 @@
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
+This page documents consumable items — food and potions — that apply effects or stat changes when used, including their templates, tiers, and the interactions that drive consumption.
+
+## Overview
+
+Defined as JSON assets under `Server/Item` and covers:
+- Food items (`Template_Food`, `Template_Fruit`, `Template_Crop_Item`) with tiers and buffs
+- Potions (`Potion_Template`) for instant effects and transformations
+- Timed consumption via `Consume_Charge` and the `Secondary` (right-click) slot
+- Consumable interactions: `ApplyEffect`, `ChangeStat`, `ModifyInventory`, `RemoveEffect`/`ClearEntityEffect`
+- Stat-check conditions gating potion effects
+- Recipes for building custom food and potion items
+
+## Architecture
+```
+Consumable item (Consumable: true)
+├── Food
+│   ├── Template_Food / Template_Fruit / Template_Crop_Item
+│   ├── Food tiers + buff system
+│   └── InteractionVars: Consume_Charge, Effect
+└── Potion
+    ├── Potion_Template
+    ├── families: Health / Stamina / Regen / Morph / Utility / Signature
+    └── Stat-check conditions
+Consumption interactions
+├── ApplyEffect / RemoveEffect / ClearEntityEffect
+├── ChangeStat
+└── ModifyInventory
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Template_Food` | `Server/Item/Items/Food/Template_Food.json` | Base template for prepared food items |
+| `Template_Fruit` | `Server/Item/Items/Food/...` | Template for fruit food items |
+| `Template_Crop_Item` | `Server/Item/Items/Food/...` | Template for raw crop items |
+| `Potion_Template` | `Server/Item/Items/Potion/...` | Base template for potions |
+| `ApplyEffect` | consumable interaction | Applies a status effect on use |
+| `ChangeStat` | consumable interaction | Modifies an entity stat on use |
+| `ModifyInventory` | consumable interaction | Alters inventory contents on use |
+| `Consume_Charge` | food `InteractionVars` slot | Charging/timing config for consumption |
+
 ## Quick Navigation
 
 | Category | Template | Count | Description |

@@ -10,6 +10,45 @@ from world structures (see [worldgen-zones.md](worldgen-zones.md)).
 See [worldgen.md](worldgen.md) for the node-graph vocabulary (`Type`, `Inputs`, `Skip`,
 `ExportAs`, `Imported`, noise parameters) that this document builds on.
 
+## Overview
+
+Defined as JSON node-graph files under `Server/HytaleGenerator/Biomes/` and provides:
+- A `Terrain` heightfield (a `DAOTerrain` node wrapping a density graph)
+- A `MaterialProvider` (usually `Solidity`) choosing solid vs. empty blocks
+- Optional `Props` entries scattering props/prefabs
+- Optional `EnvironmentProvider` for sky/ambient selection
+- Optional `TintProvider` for block color tint
+- Referencing by file name from world structures (see [worldgen-zones.md](worldgen-zones.md))
+
+## Architecture
+```
+Biome file (Biomes/<Family>/<Biome>.json)
+├── Name                 display name
+├── Terrain (DAOTerrain)
+│   └── Density          heightfield graph (Min/Max/Sum/Mix over noise + BaseHeight)
+├── MaterialProvider (Solidity)
+│   ├── Solid            blocks where terrain is solid
+│   └── Empty (REQUIRED) air + fluids (e.g. Water_Source)
+├── Props[]              Positions (Mesh2D/Occurrence) + Assignments (usually Imported)
+├── EnvironmentProvider  Constant | DensityDelimited
+└── TintProvider         Constant | DensityDelimited
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Where | Description |
+|-----------|-------|-------------|
+| `DAOTerrain` | `Terrain` | Biome terrain entry point; wraps the `Density` heightfield graph |
+| `Solidity` | `MaterialProvider` | Top-level provider; splits into `Solid` and `Empty` branches |
+| `Constant` | provider / env / tint | Always places one block, environment, or tint color |
+| `Queue` | material provider | Tries child providers in order; first match wins |
+| `SimpleHorizontal` | material provider | Applies a provider within a Y band relative to a base height |
+| `SpaceAndDepth` | material provider | Stacks `ConstantThickness` layers by depth into the floor |
+| `FieldFunction` | material provider | Picks material by where a sampled density falls (`From`/`To`) |
+| `Mesh2D` / `Occurrence` | `Props` Positions | Candidate point grid / probability gate |
+| `DensityDelimited` | env / tint provider | Selects environment or tint by density `Range` |
+
 ## Quick Navigation
 
 | Section | Description |

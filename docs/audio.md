@@ -4,6 +4,46 @@
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 
+## Overview
+
+Defined as a set of JSON asset formats under `Server/Audio/` and provides:
+- Multi-layer sound events with volume/pitch variation, looping, and spatial attenuation
+- Hierarchical audio categories for volume mixing (with `Parent` inheritance)
+- Ambient soundscapes (beds, emitters, music) gated by environmental conditions
+- Equalizer and reverb presets for environmental filtering
+- Item sound sets for inventory drag/drop interactions
+- Named sound-event collections (sound sets) referenced by other systems
+
+## Architecture
+```
+Server/Audio/
+├── SoundEvents/      core sound units (Layers → Files, RandomSettings, attenuation)
+│   └── SFX_Attn_*    shared attenuation parent presets (inherited via Parent)
+├── AudioCategories/  volume mixing groups (Parent inheritance)
+├── AmbienceFX/       ambient soundscapes
+│   ├── AmbientBed    continuous looping Track
+│   ├── Sounds        periodic emitters (SoundEventId, Frequency, Radius)
+│   ├── Music         track playlists
+│   └── Conditions    Environment/Weather tag patterns, light/time/altitude/walls
+├── EQ/               equalizer presets (4-band parametric)
+├── Reverb/           environment reverb presets
+├── ItemSounds/       ISS_* inventory drag/drop sound sets
+└── SoundSets/        named sound-event collections
+```
+
+## Key Classes
+| Section | Location | Description |
+|---------|----------|-------------|
+| Sound Event | `Server/Audio/SoundEvents/*.json` | Layered sound definition with variation and attenuation |
+| Attenuation Preset | `Server/Audio/SoundEvents/SFX_Attn_*.json` | Shared `MaxDistance`/`StartAttenuationDistance` parents |
+| Audio Category | `Server/Audio/AudioCategories/*.json` | Volume mixing group with `Parent` inheritance |
+| Ambience | `Server/Audio/AmbienceFX/Ambience/*.json` | Conditional soundscape (bed + emitters) |
+| Music | `Server/Audio/AmbienceFX/Music/*.json` | Background music track playlists |
+| EQ Preset | `Server/Audio/EQ/*.json` | 4-band parametric equalizer settings |
+| Reverb Preset | `Server/Audio/Reverb/*.json` | Acoustic environment reverb settings |
+| Item Sounds | `Server/Audio/ItemSounds/ISS_*.json` | Inventory drag/drop sound set (`ItemSoundSetId`) |
+| Sound Set | `Server/Audio/SoundSets/*.json` | Named sound-event collection |
+
 ## Quick Navigation
 
 | Section | Directory | Files | Description |

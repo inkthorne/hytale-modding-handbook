@@ -4,6 +4,43 @@
 
 This document covers NPC loading events and AI sensor systems.
 
+## Overview
+
+Implemented in `com.hypixel.hytale.server.npc` (with `spawning` and `npc.corecomponents.world` subsystems) and provides:
+- NPC loading events (`AllNPCsLoadedEvent`, `LoadedNPCEvent`)
+- `BuilderInfo`, metadata describing each loaded NPC definition
+- AI sensor events (`SensorEvent`, `SensorEntityEvent`) for entity detection
+- Sensor builder classes for configuring detection range and target search
+- `EventSearchType` for controlling player-vs-NPC search priority
+
+## Architecture
+```
+NPC System
+├── Loading Events
+│   ├── AllNPCsLoadedEvent   (all NPCs finished loading)
+│   ├── LoadedNPCEvent       (individual NPC loaded)
+│   └── BuilderInfo          (per-NPC definition metadata)
+└── AI Sensors
+    ├── SensorEvent          (base sensor event, extends SensorBase)
+    │   └── SensorEntityEvent (entity detection)
+    ├── EventSearchType      (player/NPC search priority)
+    └── Builders
+        ├── BuilderSensorEvent
+        └── BuilderSensorEntityEvent
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `AllNPCsLoadedEvent` | `server.npc` | Fired once when all NPCs finish loading |
+| `LoadedNPCEvent` | `server.spawning` | Fired when an individual NPC definition loads |
+| `BuilderInfo` | `server.npc.asset.builder` | Metadata about an NPC definition |
+| `SensorEvent` | `server.npc.corecomponents.world` | Abstract base for sensor events |
+| `SensorEntityEvent` | `server.npc.corecomponents.world` | Entity-specific sensor event |
+| `EventSearchType` | `server.npc.corecomponents.world.SensorEvent` | Enum controlling sensor target search |
+| `BuilderSensorEvent` | `server.npc.corecomponents.world.builders` | Builder for sensor event configuration |
+| `BuilderSensorEntityEvent` | `server.npc.corecomponents.world.builders` | Builder adding entity-specific sensor config |
+
 ## Quick Navigation
 
 | Category | File | Description |

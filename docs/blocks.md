@@ -57,6 +57,44 @@ Blocks are organized into categories for the Creative Library:
 
 ---
 
+## Architecture
+```
+Block definition (JSON item with a BlockType)
+├── BlockType (rendering, material, opacity, light)
+│   ├── Textures (per-face / weighted variants)
+│   ├── CustomModel (.blockymodel) + CustomModelAnimation (.blockyanim)
+│   ├── HitboxType (collision shape)
+│   ├── State (multi-state models, e.g. doors/containers)
+│   ├── ConnectedBlockRuleSet (neighbor-aware connected blocks)
+│   ├── Gathering (tool + drop list)
+│   └── Interactions (Primary / Use / Collision)
+├── Sound sets (Server/Item/Block/Sounds)
+├── Particle sets (Server/Item/Block/Particles)
+├── Fluid blocks (MaxFluidLevel, FluidFXId, Ticker)
+└── Block type lists (Server/BlockTypeList — categorization)
+
+Java runtime
+├── BlockType (config accessors)
+├── BlockMaterial / Rotation / RotationTuple (placement)
+├── World / WorldChunk (block read/write)
+└── Block events (Place / Break / Damage / UseBlock — ECS)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `BlockType` | `server.core.asset.type.blocktype.config` | Core block-type configuration; all block properties |
+| `BlockMaterial` | `protocol` | Enum of physical material type (Empty / Solid) |
+| `Rotation` | `server.core.asset.type.blocktype.config` | Enum of 90-degree rotation increments |
+| `RotationTuple` | `server.core.asset.type.blocktype.config` | Record of yaw/pitch/roll; used for placement rotation |
+| `WorldChunk` | `server.core.universe.world.chunk` | Block read/write access (see [world.md](world.md#worldchunk)) |
+| `PlaceBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is placed (cancellable) |
+| `BreakBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is broken (cancellable) |
+| `DamageBlockEvent` | `server.core.event.events.ecs` | ECS event fired during mining progress (cancellable) |
+| `UseBlockEvent` | `server.core.event.events.ecs` | ECS event for block use; `Pre` (cancellable) / `Post` |
+
+---
+
 ## Common Properties
 
 All block items support standard item properties plus `BlockType`:

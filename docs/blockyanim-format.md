@@ -14,6 +14,29 @@ Blockyanim files define animations for block models, controlling how individual 
 - Mechanical block animations
 - Environmental decorations
 
+## Architecture
+```
+.blockyanim (JSON)
+├── formatVersion / duration / holdLastKeyframe  (top-level fields)
+└── nodeAnimations          map of node name → animation tracks
+    └── per-node tracks
+        ├── position         {x, y, z}
+        ├── orientation       {x, y, z, w} quaternion
+        ├── shapeStretch      {x, y, z} scale
+        ├── shapeVisible       boolean (instant switch)
+        └── shapeUvOffset      {u, v}
+            └── keyframes      time + delta + interpolationType (smooth | linear)
+```
+
+## Key Classes
+| Section | Location | Description |
+|---------|----------|-------------|
+| Top-level fields | `.blockyanim` root | `formatVersion`, `duration`, `holdLastKeyframe`, `nodeAnimations` |
+| `nodeAnimations` | `.blockyanim` root | Map of node name (from `.blockymodel`) to its animation tracks |
+| `position` / `orientation` / `shapeStretch` / `shapeUvOffset` track | node track | Interpolated transform/UV tracks of keyframes |
+| `shapeVisible` track | node track | Boolean visibility track (no interpolation) |
+| Keyframe | track entry | `time` (frame) + `delta` value + `interpolationType` |
+
 ## File Location
 
 Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Approximate distribution under `Common/`:

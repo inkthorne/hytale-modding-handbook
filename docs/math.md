@@ -26,6 +26,42 @@ Hytale provides a comprehensive math library including vectors, matrices, quater
 | `Axis` | Enum for X, Y, Z axes |
 | `MathUtil` | Static math utilities |
 
+## Architecture
+```
+com.hypixel.hytale.math
+├── vector
+│   ├── Vector3d / Vector3f / Vector3i / Vector3l   3D vectors (double/float/int/long)
+│   ├── Vector2d / Vector2i                          2D vectors
+│   ├── Vector4d                                     4D vector (matrix transforms)
+│   └── Transform                                    position (Vector3d) + rotation (Vector3f)
+├── matrix.Matrix4d                                  4x4 transformation matrix
+├── shape.Box                                        axis-aligned bounding box (AABB)
+├── raycast.RaycastAABB                              ray-vs-AABB intersection
+├── util.MathUtil                                    static math utilities
+├── Axis                                             X / Y / Z enum
+└── Range                                            numeric range
+
+(server-side ECS) server.core.modules.entity.component.TransformComponent
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Vector3d` | `math.vector` | Double-precision 3D vector (positions, velocities, directions) |
+| `Vector3f` | `math.vector` | Float 3D vector (rotations: pitch/yaw/roll) |
+| `Vector3i` | `math.vector` | Integer 3D vector (block positions) |
+| `Vector3l` | `math.vector` | Long 3D vector |
+| `Vector2d` / `Vector2i` | `math.vector` | 2D vectors (positions, grid positions) |
+| `Vector4d` | `math.vector` | 4D vector, used with `Matrix4d` |
+| `Transform` | `math.vector` | Position (`Vector3d`) + rotation (`Vector3f`) bundle |
+| `TransformComponent` | `server.core.modules.entity.component` | ECS component holding position/rotation and chunk info |
+| `Matrix4d` | `math.matrix` | 4x4 transformation matrix (translate, rotate, scale, project) |
+| `Box` | `math.shape` | Axis-aligned bounding box (AABB) |
+| `Axis` | `math` | Enum for X, Y, Z axes |
+| `RaycastAABB` | `math.raycast` | Ray-vs-AABB intersection |
+| `Range` | `math` | Numeric range |
+| `MathUtil` | `math.util` | Static math utilities (rounding, clamping, interpolation, ...) |
+
 ## Vector3d
 
 **Package:** `com.hypixel.hytale.math.vector`

@@ -6,6 +6,24 @@
 
 Types for network serialization and protocol communication between client and server.
 
+## Architecture
+```
+Network serialization
+└── NetworkSerializable<Packet>     toPacket() — implemented by asset types
+    (ProjectileConfig, Interaction, Model, ...)
+
+Protocol types (com.hypixel.hytale.protocol)
+├── Direction          3D rotation (yaw / pitch / roll)
+└── WaitForDataFrom    enum for client/server sync mode
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `NetworkSerializable<Packet>` | `server.core.io` | Interface for types serializable to network packets (`toPacket()`) |
+| `Direction` | `protocol` | Protocol class for a 3D rotation (yaw, pitch, roll) |
+| `WaitForDataFrom` | `protocol` | Enum selecting which side data is awaited from |
+
 ## Class Hierarchy
 ```
 NetworkSerializable<Packet> (interface)

@@ -4,6 +4,44 @@
 
 This document covers player-related events and messaging APIs.
 
+## Overview
+
+Implemented across `com.hypixel.hytale.server.core` (messaging) and `com.hypixel.hytale.server.core.event.events.player` (events), and provides:
+- A fluent `Message` builder for chat text, formatting, translations, and composition
+- Player connection, chat, interaction, craft, and input events
+- A keyed `PlayerInteractEvent` exposing the action type, held item, and target
+- The `InteractionType` enum categorizing interaction kinds
+- An ECS `ChangeGameModeEvent` for intercepting game-mode changes
+- A `HiddenPlayersManager` for per-player visibility (vanish/spectator systems)
+
+## Architecture
+```
+Messaging
+└── Message ──▶ FormattedMessage (wire format)
+
+Player Events  (com.hypixel.hytale.server.core.event.events.player)
+├── PlayerConnectEvent / PlayerDisconnectEvent / PlayerReadyEvent
+├── PlayerChatEvent          (keyed by String)
+├── PlayerInteractEvent      (keyed by String)
+│   └── InteractionType (action category)
+└── PlayerCraft / Mouse / SetupConnect / world add-remove events
+
+ECS Events
+└── ChangeGameModeEvent ──▶ GameMode
+
+Player-scoped managers
+└── HiddenPlayersManager (visibility)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Message` | `server.core` | Fluent chat-message builder (formatting, translations, composition) |
+| `HiddenPlayersManager` | `server.core.entity.entities.player` | Per-player visibility control |
+| `PlayerInteractEvent` | `server.core.event.events.player` | Keyed event fired on player interactions |
+| `InteractionType` | `protocol` | Enum of interaction kinds returned by `getActionType()` |
+| `ChangeGameModeEvent` | `server.core.event.events.ecs` | Cancellable ECS event for game-mode changes |
+
 ## Message
 **Package:** `com.hypixel.hytale.server.core`
 

@@ -21,6 +21,42 @@ Complete reference for positioning, layout, and visual styling in Hytale's UI DS
 
 ---
 
+## Overview
+
+Defined in `.ui` DSL files under `Common/UI`, this page covers the properties that position, lay out, and style elements:
+- `Anchor` — element positioning and sizing
+- `LayoutMode` — arrangement of child elements
+- `Padding` — internal spacing
+- `Background` — colors, textures, and 9-slice patches
+- `Style` — font, color, and alignment
+- State-based styling for interactive element states
+
+## Architecture
+```
+Element
+├── Anchor      (Width/Height/Top/Bottom/Left/Right/Min/Max, Full key)
+├── LayoutMode  (child arrangement; Full, Top, CenterMiddle, etc.)
+├── Padding     (internal spacing)
+├── Background  (Color / texture / 9-slice patch)
+└── Style       (FontSize, TextColor, alignment)
+      └── State-based styling (Default, Hovered, Pressed, …)
+```
+
+## Key Classes
+
+These are DSL styling properties (not Java classes); the table lists the key properties documented on this page.
+
+| Property | Applies to | Description |
+|----------|-----------|-------------|
+| `Anchor` | Any element | Positioning and sizing within the parent |
+| `LayoutMode` | Containers | How child elements are arranged |
+| `Padding` | Containers | Internal spacing around content |
+| `Background` | Any element | Background color, texture, or 9-slice patch |
+| `Style` | Text/controls | Font, color, and alignment settings |
+| State blocks | Interactive elements | Per-state styling (e.g. `Default`, `Hovered`) |
+
+---
+
 ## Anchor System
 
 The `Anchor` property controls element positioning and sizing within its parent.

@@ -22,6 +22,43 @@ Advanced DSL features for reusable UI components and localization.
 
 ---
 
+## Overview
+
+Advanced `.ui` DSL features (assets under `Common/UI`) for reuse and localization:
+- File imports (`$Var = "path/to/file.ui";`) to pull in libraries like `Common.ui`
+- Instantiating named templates from imports (`$File.@Template`)
+- Variables (`@Name = value;`) for shared constants
+- The spread operator (`...`) to compose styles and properties
+- Localization of translatable text strings
+- Element references by ID
+
+## Architecture
+```
+Import          $Var = "path/to/file.ui";
+└── Member access   $File.@Name
+      ├── Template instantiation : $File.@Template #Id { @Param = ...; }
+      └── Value/style read       : $File.@SomeValue
+
+Variables   @Name = value;   (referenced as @Name)
+Spread      ( ...@BaseStyle, Override: value )   (compose styles/props)
+Localization + element references (by #Id)
+```
+
+## Key Classes
+
+These are DSL constructs (not Java classes); the table lists the key features documented on this page.
+
+| Construct | Syntax | Description |
+|-----------|--------|-------------|
+| File import | `$Var = "file.ui";` | Import an external `.ui` file into a variable |
+| Member access | `$File.@Name` | Read a value/style or instantiate a template from an import |
+| Template instantiation | `$File.@Template #Id { ... }` | Use a named template as an element type |
+| Variable | `@Name = value;` | Define a reusable value |
+| Spread operator | `( ...@Base, Override: v )` | Compose styles/properties |
+| Element reference | `#Id` | Reference an element by ID |
+
+---
+
 ## File Imports
 
 Import an external `.ui` file into a variable, then access the named templates and

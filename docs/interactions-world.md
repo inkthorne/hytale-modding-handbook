@@ -4,6 +4,55 @@
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
+This page covers the entity- and world-affecting interactions: spawning and removing entities, launching projectiles, messaging, opening UI, manipulating inventory and blocks, state transitions, and movement mechanics.
+
+## Overview
+
+Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
+- Entity lifecycle: `SpawnPrefab`, `RemoveEntity`, `LaunchProjectile`
+- Player communication: `SendMessage` and UI page opening (`OpenCustomUI`)
+- Inventory/equipment changes: `EquipItem`, `ModifyInventory`
+- World blocks: `BreakBlock`, `PlaceBlock`
+- Entity state and physics: `ChangeState`, `LaunchPad`, `Wielding`
+
+## Architecture
+```
+Entity & World
+├── Entity lifecycle
+│   ├── SpawnPrefab (PrefabId at Self / Target / HitLocation)
+│   ├── RemoveEntity
+│   └── LaunchProjectile (ProjectileId + Speed)
+├── Player I/O
+│   ├── SendMessage (chat)
+│   └── UI (OpenCustomUI)
+├── Inventory
+│   ├── EquipItem
+│   └── ModifyInventory
+├── Blocks
+│   ├── BreakBlock
+│   └── PlaceBlock
+└── Entity state & physics
+    ├── ChangeState (state-machine transition)
+    ├── LaunchPad
+    └── Wielding (blocking / guarding)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `SpawnPrefabInteraction` | `config/server/SpawnPrefabInteraction` | Spawns entity prefabs at a location |
+| `RemoveEntityInteraction` | `config/none/RemoveEntityInteraction` | Despawns entities from the world |
+| `LaunchProjectileInteraction` | `config/server/LaunchProjectileInteraction` | Fires projectiles from an entity |
+| `SendMessageInteraction` | `config/none/SendMessageInteraction` | Sends chat messages to players |
+| `OpenCustomUIInteraction` | `config/server/OpenCustomUIInteraction` | Opens a custom UI page |
+| `EquipItemInteraction` | `config/server/EquipItemInteraction` | Equips an item |
+| `ModifyInventoryInteraction` | `config/server/ModifyInventoryInteraction` | Adjusts inventory contents |
+| `BreakBlockInteraction` | `config/client/BreakBlockInteraction` | Breaks a targeted block |
+| `PlaceBlockInteraction` | `config/client/PlaceBlockInteraction` | Places a block |
+| `ChangeStateInteraction` | `config/client/ChangeStateInteraction` | Changes an entity's state-machine state |
+| `LaunchPadInteraction` | `config/server/LaunchPadInteraction` | Launch-pad physics |
+| `WieldingInteraction` | `config/client/WieldingInteraction` | Blocking and guarding mechanics |
+
 ## Quick Navigation
 
 | Interaction | Description |

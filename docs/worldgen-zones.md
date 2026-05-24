@@ -14,6 +14,42 @@ The shipped per-region structures are `Zone1_Plains1.json`, `Zone2_Desert1.json`
 See [worldgen.md](worldgen.md) for the node-graph vocabulary and
 [worldgen-biomes.md](worldgen-biomes.md) for what each referenced biome contains.
 
+## Overview
+
+Defined as JSON files under `Server/HytaleGenerator/WorldStructures/` and provides:
+- Biome assignment across the world by mapping a density value to ranges (`NoiseRange`)
+- A `DefaultBiome` fallback and transition-width controls
+- A `Density` graph (the "biome map") that drives biome selection
+- A `Framework` declaring world constants and named position graphs
+- `SpawnPositions` selecting where players spawn
+
+## Architecture
+```
+World structure file (WorldStructures/*.json, Type: NoiseRange)
+├── Density          biome-map field (usually Imported "Biome-Map")
+├── Biomes[]         density Min/Max range -> biome name
+├── DefaultBiome     fallback outside any range
+├── DefaultTransitionDistance / MaxBiomeEdgeDistance   blend widths
+├── Framework[]
+│   ├── DecimalConstants   Base / Water / Bedrock (sampled by biome BaseHeight)
+│   └── Positions          named position graphs (e.g. Spawns)
+└── SpawnPositions   positions graph (List / Imported / Offset / Bound / ...)
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Where | Description |
+|-----------|-------|-------------|
+| `NoiseRange` | top-level `Type` | The world-structure kind; assigns biomes by density range |
+| (biome entry) | `Biomes[]` | `{ Biome, Min, Max }` mapping a density band to a biome name |
+| `Imported` | `Density` | Pulls in the shared biome map (`Biome-Map`) |
+| `Constant` / `SimplexNoise2D` | `Density` | Inline density field alternatives |
+| `DecimalConstants` | `Framework` | Named world constants (`Base`, `Water`, `Bedrock`) |
+| `Positions` | `Framework` | Named position graphs (published via `ExportAs`) |
+| `List` / `Offset` / `Bound` | `SpawnPositions` | Fixed points, shift, and box-restrict positions |
+| `FieldFunction` / `Mesh2D` / `Distance` | `SpawnPositions` | Gate and generate candidate spawn points |
+
 ## Quick Navigation
 
 | Section | Description |

@@ -11,6 +11,49 @@ A separate `MaterialProvider` then decides *which* block fills each solid (or em
 This document describes the real format used by the asset files under
 `Server/HytaleGenerator/`.
 
+## Overview
+
+Defined as JSON density node graphs under `Server/HytaleGenerator/` and provides:
+- A per-biome `DAOTerrain` node whose `Density` graph yields a scalar heightfield
+- Density combiners (`Sum`/`Min`/`Max`/`Mix`) and unary math over noise sources
+- Noise nodes (`SimplexNoise2D`/`3D`, `CellNoise2D`) as the field sources
+- Shaping via `CurveMapper`, `Normalizer`, `Pow`, `Abs`, `Clamp`
+- `BaseHeight` references to surface/bedrock for altitude-driven shaping
+- Field reuse via `Cache` / `Exported` / `Imported`
+- A `MaterialProvider` that turns density into block ids
+
+## Architecture
+```
+Biome Terrain (DAOTerrain)
+└── Density graph (scalar field; >= 0 solid, < 0 empty)
+    ├── Combiners   Sum / Min / Max / Mix
+    ├── Sources     SimplexNoise2D / SimplexNoise3D / CellNoise2D
+    ├── Shaping     CurveMapper / Normalizer / Pow / Abs / Clamp
+    ├── BaseHeight  Base / Bedrock reference (+ Distance)
+    └── Reuse       Cache / Exported / Imported (e.g. cave field via Min)
+
+MaterialProvider (Solidity)
+├── Solid  Queue / SpaceAndDepth / SimpleHorizontal / FieldFunction / Constant
+└── Empty  (air + fluids)
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Family | Description |
+|-----------|--------|-------------|
+| `DAOTerrain` | Entry point | Biome terrain node; wraps the root `Density` graph |
+| `Sum` / `Min` / `Max` / `Mix` | Combiner | Add / clip / union / blend input fields |
+| `Abs` / `Inverter` / `Pow` / `Constant` | Unary math | Reshape or supply a fixed value |
+| `Normalizer` / `Clamp` | Range remap | Linearly remap or clamp a field |
+| `SimplexNoise2D` / `SimplexNoise3D` / `CellNoise2D` | Noise source | The scalar field sources |
+| `CurveMapper` / `Distance` | Shaping | Map a value through a `Manual` curve |
+| `BaseHeight` | Reference | Inject a named reference height (`Base` / `Bedrock`) |
+| `Cache` / `Exported` / `Imported` | Reuse | Memoize, publish, and pull fields by name |
+| `Solidity` | Material provider | Routes solid cells and empty cells to providers |
+| `SpaceAndDepth` / `ConstantThickness` | Material provider | Stack material layers by depth into the floor |
+| `FieldFunction` | Material provider | Select material by a sampled density range |
+
 ## Quick Navigation
 
 | Section | Description |

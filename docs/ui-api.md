@@ -4,6 +4,55 @@
 
 Server-side Java API reference for Hytale's UI system.
 
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.ui` (and player manager packages under `server.core.entity.entities.player`) and provides:
+- Builders for UI update commands and event bindings (`UICommandBuilder`, `UIEventBuilder`)
+- Positioning primitives (`Anchor`, `Area`, `Value<T>`)
+- Full-screen page management and custom page base classes (`PageManager`, `CustomUIPage`)
+- Window lifecycle management (`WindowManager`, `Window` and subclasses)
+- HUD visibility control and custom HUD overlays (`HudManager`, `CustomUIHud`)
+- Hotbar configuration and a server-side file browser UI
+
+## Architecture
+```
+UICommandBuilder / UIEventBuilder   (build commands + event bindings)
+└── consumed by all UI surfaces below
+
+Player
+├── PageManager
+│   └── CustomUIPage
+│         ├── BasicCustomUIPage
+│         └── InteractiveCustomUIPage<T>
+├── WindowManager
+│   └── Window (ContainerWindow, ItemContainerWindow, BlockWindow, ValidatedWindow)
+├── HudManager
+│   ├── HudComponent (native elements)
+│   └── CustomUIHud
+└── HotbarManager
+
+Positioning: Anchor, Area, Value<T>
+File browser: FileBrowserConfig ──▶ ServerFileBrowser
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `UICommandBuilder` | `server.core.ui.builder` | Builds UI update commands (append, set, clear, remove) |
+| `UIEventBuilder` | `server.core.ui.builder` | Builds client-interaction event bindings |
+| `Anchor` | `server.core.ui` | Element anchoring/positioning |
+| `Area` | `server.core.ui` | UI area/bounds definition |
+| `Value<T>` | `server.core.ui` | Literal or document-reference value container |
+| `PageManager` | `server.core.entity.entities.player.pages` | Manages full-screen player pages |
+| `CustomUIPage` | `server.core.entity.entities.player.pages` | Abstract base for custom plugin pages |
+| `WindowManager` | `server.core.entity.entities.player.windows` | Manages player windows |
+| `Window` | `server.core.entity.entities.player.windows` | Abstract base for player windows |
+| `HudManager` | `server.core.entity.entities.player.hud` | Controls HUD visibility and custom HUD |
+| `CustomUIHud` | `server.core.entity.entities.player.hud` | Abstract base for custom HUD overlays |
+| `HotbarManager` | `server.core.entity.entities.player` | Manages player hotbar configurations |
+| `FileBrowserConfig` | `server.core.ui.browser` | Configuration for the file browser UI |
+| `ServerFileBrowser` | `server.core.ui.browser` | Server-side file browser implementation |
+
 ---
 
 ## Quick Navigation

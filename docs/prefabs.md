@@ -4,6 +4,44 @@
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.prefab` and provides:
+- A central `PrefabStore` for loading and saving server, asset, and world-gen prefabs
+- `BlockSelection`, the prefab payload holding blocks, fluids, and entities
+- Placement into the world with rotation (`PrefabRotation`) and transformation
+- Capturing selections from the world back into prefabs
+- Weighted random selection (`PrefabWeights`) and prefab metadata (`PrefabEntry`)
+- Prefab lifecycle events (paste, place-entity)
+
+## Architecture
+```
+PrefabStore  (load / save / locate)
+├── Sources
+│   ├── server prefabs
+│   ├── asset prefabs (per AssetPack)
+│   └── world-gen prefabs
+├── BlockSelection  (blocks + fluids + entities)
+│   ├── place into world (+ PrefabRotation, transform)
+│   └── copy from world
+├── PrefabEntry  (file metadata)
+├── PrefabWeights  (weighted random pick)
+└── Events
+    ├── PrefabPasteEvent
+    └── PrefabPlaceEntityEvent
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `PrefabStore` | `server.core.prefab` | Central store for loading/saving prefabs; `PrefabStore.get()` |
+| `BlockSelection` | `server.core.prefab.selection.standard` | Prefab data: blocks, fluids, entities; placement and copy |
+| `PrefabRotation` | `server.core.prefab` | Rotation enum applied during placement |
+| `PrefabEntry` | `server.core.prefab` | Prefab file metadata record |
+| `PrefabWeights` | `server.core.prefab` | Weighted random selection over prefabs |
+| `PrefabPasteEvent` | `server.core.prefab.event` | Fired when a prefab is pasted into the world |
+| `PrefabPlaceEntityEvent` | `server.core.prefab.event` | Fired when a prefab places an entity |
+
 ## Quick Navigation
 
 | Category | File | Description |

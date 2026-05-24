@@ -2,6 +2,47 @@
 
 **Doc type:** Java API
 
+The assets system loads, registers, and looks up data-driven game content (items, blocks, models, and custom plugin types) backed by JSON files and codec serialization.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.asset` (with the registry in `...plugin.registry` and the map types in `com.hypixel.hytale.assetstore`) and provides:
+- A central asset store (`HytaleAssetStore`) and per-type `AssetMap` lookups
+- A plugin-facing `AssetRegistry` for registering custom asset stores during `setup()`
+- JSON-backed asset definitions via `JsonAsset<K>` and `BuilderCodec`
+- Built-in asset type configs (item, blocktype, model, particle, gameplay)
+- Prefab storage (`PrefabStore`) for entity prefabs
+- Asset lifecycle events (pack register/unregister, load, file monitoring)
+
+## Architecture
+```
+AssetRegistry (plugin entry: getAssetRegistry())
+├── HytaleAssetStore (central server-side storage)
+│   └── AssetStore<K, T, M>  (per-type stores)
+│       └── AssetMap<K, T>
+│           ├── DefaultAssetMap (recommended)
+│           └── IndexedLookupTableAssetMap (indexed lookups)
+├── JsonAsset<K> (BuilderCodec-serialized definitions)
+├── Built-in asset types (item / blocktype / model / particle / gameplay)
+├── PrefabStore (entity prefabs)
+└── Asset Events (AssetPackRegister/Unregister, LoadAsset, monitor events)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `AssetRegistry` | `server.core.plugin.registry` | Registers custom asset stores; obtained via `getAssetRegistry()` |
+| `HytaleAssetStore` | `server.core.asset` | Central server-side asset storage |
+| `AssetStore<K, T, M>` | `assetstore` | Base class for a per-type asset store |
+| `AssetMap<K, T>` | `assetstore` | Lookup map for loaded assets (`getAsset(key)`) |
+| `DefaultAssetMap<K, T>` | `assetstore.map` | Standard HashMap-backed map (recommended) |
+| `IndexedLookupTableAssetMap<K, T>` | `assetstore.map` | Array-backed map for integer-indexed lookups |
+| `JsonAsset<K>` | `assetstore` | Interface for JSON-loaded assets; exposes `getId()` |
+| `PrefabStore` | `server.core.prefab` | Stores and manages entity prefabs |
+| `Model` | `server.core.asset.type.model.config` | 3D model configuration for entities, items, projectiles |
+| `AssetPackRegisterEvent` | `server.core.asset` | Fired when an asset pack is registered |
+| `LoadAssetEvent` | `server.core.asset` | Fired during the asset loading phase (priority-based) |
+
 ## AssetRegistry
 **Package:** `com.hypixel.hytale.server.core.plugin.registry`
 

@@ -6,6 +6,44 @@ Hytale includes ~7,824 prefab files organized into major categories for world ge
 
 > **See also:** [Prefabs API](prefabs.md) for Java API and file format documentation
 
+This page is a taxonomy of the shipped prefab assets — the major category directories, their naming conventions, and the directory structures used for world generation.
+
+## Overview
+
+Defined as JSON assets under `Server/Prefabs` (in `Assets.zip`) and covers:
+- The major prefab categories (trees, rocks, NPC structures, monuments, mineshafts, dungeons, caves, plants, spawn)
+- Naming conventions encoding category, type, variant, and size
+- Growth-stage directory layout for trees and biome/material variant suffixes
+- Where each category lives under `Server/Prefabs/`
+
+## Architecture
+```
+Server/Prefabs/
+├── Trees/            (per-species → Stage_N subdirs, Stumps)
+├── Rocks/            (formations, arches, fossils, pillars, mushrooms)
+├── NPC structures    (faction buildings, villages, outposts)
+├── Monuments         (towers, temples, encounters, camps)
+├── Mineshafts/       (modular mine components; + Mineshaft_Drift)
+├── Dungeons/         (modular dungeon rooms)
+├── Caves/            (formations, nests, nodes)
+├── Plants/           (bushes, cacti, coral, driftwood)
+├── Spawn/            (player spawn layouts)
+└── Unique, Blocksets, Testing, TestTree
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| Trees | `Server/Prefabs/Trees/` | Growth stages, species, biome variants (~1126) |
+| Rock Formations | `Server/Prefabs/` (Rocks) | Rocks, arches, fossils, pillars, mushrooms (~1676) |
+| NPC Structures | `Server/Prefabs/` | Faction buildings, villages, outposts (~856) |
+| Monuments | `Server/Prefabs/` | Towers, temples, encounters, camps (~806) |
+| Mineshafts | `Server/Prefabs/` | Modular mine components (~1160) |
+| Dungeons | `Server/Prefabs/` | Modular dungeon rooms (~858) |
+| Caves | `Server/Prefabs/` | Formations, nests, nodes (~492) |
+| Plants | `Server/Prefabs/` | Bushes, cacti, coral, driftwood (~555) |
+| Spawn | `Server/Prefabs/` | Player spawn layouts (~20) |
+
 ---
 
 ## Quick Navigation

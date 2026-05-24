@@ -9,6 +9,48 @@
 > - [InteractionContext](interactions-context.md) - Execution state and data access
 > - [Item Definitions](items.md) - How items define and customize interactions via `InteractionVars`
 
+This page covers the interaction system: the data-driven actions entities perform (attacks, abilities, item uses), how they are defined as JSON assets, and how they are triggered, gated, and configured.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.modules.interaction.interaction.config` and provides:
+- A base `Interaction` abstract class with a `SimpleInteraction` / `SimpleInstantInteraction` hierarchy
+- Root vs nested interactions: input-triggered entry points and reusable building blocks
+- Asset-store lookup of interactions by string ID
+- A meta-key store for passing targeting/hit/damage data between steps
+- Per-`GameMode` settings and cooldown configuration
+- Conflict rules (`InteractionRules`) for blocking and interrupting between interaction types
+
+## Architecture
+```
+Interaction System
+├── RootInteraction (Server/Item/RootInteractions/)
+│   ├── triggered by input (PRIMARY, SECONDARY, ...)
+│   ├── RootInteractionSettings (per-GameMode + cooldown)
+│   └── references nested Interactions
+├── Nested Interaction (Server/Item/Interactions/)
+│   ├── SimpleInteraction → SimpleInstantInteraction
+│   └── composed via Serial / Parallel / Condition (see interactions-flow.md)
+├── Asset lookup (Interaction.getInteractionOrUnknown / getAssetStore / getAssetMap)
+├── Meta keys (TARGET_ENTITY, HIT_LOCATION, DAMAGE, ...) — see interactions-context.md
+├── InteractionRules (blockedBy / blocking / interruptedBy / interrupting)
+├── CooldownHandler (per-entity cooldown timers)
+└── InteractionSettings / RootInteractionSettings (per-GameMode behavior)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Interaction` | `server.core.modules.interaction.interaction.config` | Abstract base for all interactions; identity, effects, rules, asset lookup |
+| `SimpleInteraction` | `server.core.modules.interaction.interaction.config` | Base building-block interaction (delays, animations, sounds, flow) |
+| `SimpleInstantInteraction` | `server.core.modules.interaction.interaction.config` | Abstract base for instant (no-duration) interactions |
+| `RootInteraction` | `server.core.modules.interaction.interaction.config` | Input-triggered entry-point interaction; holds settings and cooldowns |
+| `CooldownHandler` | `server.core.modules.interaction.interaction` | Manages per-entity cooldown timers |
+| `InteractionRules` | `server.core.modules.interaction.interaction.config` | Block/interrupt conflict rules between interaction types |
+| `InteractionSettings` | `protocol` | Per-`GameMode` settings for a nested interaction |
+| `RootInteractionSettings` | `protocol` | Per-`GameMode` settings + cooldown for a root interaction |
+| `InteractionType` | `protocol` | Enum of interaction trigger types (PRIMARY, SECONDARY, ...) |
+
 ## Quick Navigation
 
 | Category | File | Description |

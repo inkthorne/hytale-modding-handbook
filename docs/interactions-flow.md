@@ -4,6 +4,53 @@
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
+This page covers the control-flow interactions: composing interactions in sequence or parallel, branching on game state, looping, variable substitution, and target selection.
+
+## Overview
+
+Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
+- `Serial` and `Parallel` composition of child interactions
+- Conditional branching on game/movement state, stats, effects, blocks, cooldowns, and placement counts
+- Cooldown control via `TriggerCooldown` and `ResetCooldown`
+- `Repeat` for looping execution
+- `Replace` for variable substitution in templated interactions
+- Target selectors for AOE, raycast, and stab targeting
+
+## Architecture
+```
+Control Flow
+├── Composition
+│   ├── Serial (run children in order)
+│   └── Parallel (run children concurrently)
+├── Conditions (branch via Next / fallthrough)
+│   ├── Condition (game mode + movement state)
+│   ├── StatsCondition (entity stat values)
+│   ├── EffectCondition (active status effects)
+│   ├── BlockCondition (block type/state/tag)
+│   ├── CooldownCondition (cooldown completion)
+│   ├── MovementCondition (input direction)
+│   └── PlacementCountCondition (block placement count)
+├── Cooldown control (TriggerCooldown / ResetCooldown)
+├── Looping (Repeat)
+├── Templating (Replace — Var + DefaultValue)
+└── Target Selectors (AOE / raycast / stab)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Serial` (`SerialInteraction`) | `config/none/SerialInteraction` | Runs child interactions sequentially |
+| `Parallel` | `interaction config` | Runs child interactions concurrently |
+| `Condition` | `interaction config` | Branches on game mode and movement state |
+| `StatsCondition` | `interaction config` | Branches on entity stat values |
+| `EffectCondition` | `interaction config` | Branches on active status effects |
+| `BlockCondition` | `interaction config` | Branches on block type/state/tag |
+| `CooldownCondition` | `interaction config` | Branches on cooldown completion |
+| `MovementCondition` | `interaction config` | Branches on input direction |
+| `PlacementCountCondition` | `interaction config` | Branches on block placement count |
+| `Repeat` | `interaction config` | Loops execution of child interactions |
+| `Replace` | `interaction config` | Variable substitution (`Var` + `DefaultValue`) |
+
 ## Quick Navigation
 
 | Interaction | Description |

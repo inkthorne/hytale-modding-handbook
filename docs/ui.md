@@ -55,6 +55,35 @@ The UI system consists of:
 
 ---
 
+## Architecture
+```
+Player
+├── PageManager        (full-screen pages)
+│   └── CustomUIPage / BasicCustomUIPage  (plugin-defined pages)
+├── WindowManager      (overlay windows)
+│   └── Window         (Container, crafting, etc.)
+└── HudManager         (always-visible HUD)
+    ├── HudComponent   (built-in native elements)
+    └── CustomUIHud    (plugin overlay)
+
+Build pipeline (shared by pages/windows/HUD):
+.ui DSL file  ──append()──▶  UICommandBuilder  ──▶  client render
+                            UIEventBuilder     ──▶  server event handling
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `BasicCustomUIPage` | `server.core.entity.entities.player.pages` | Base class for plugin-defined full-screen pages |
+| `CustomUIHud` | `server.core.entity.entities.player.hud` | Base class for persistent custom HUD overlays |
+| `UICommandBuilder` | `server.core.ui.builder` | Builds UI update commands (append, set, clear) |
+| `UIEventBuilder` | `server.core.ui.builder` | Registers server-side event bindings |
+| `PageManager` | `server.core.entity.entities.player.pages` | Opens and closes full-screen pages |
+| `WindowManager` | `server.core.entity.entities.player.windows` | Manages overlay windows |
+| `HudManager` | `server.core.entity.entities.player.hud` | Controls HUD component visibility and custom HUD |
+
+---
+
 ## Quick Start
 
 ### 1. Create a .ui File

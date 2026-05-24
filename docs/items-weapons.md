@@ -4,6 +4,47 @@
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
+This page documents weapon items — swords, daggers, shields, battleaxes, bows, maces, and crossbows — each built from a formal `Template_Weapon_*` with combo interactions, signature abilities, and per-tier damage overrides.
+
+## Overview
+
+Defined as JSON assets under `Server/Item` and covers:
+- One `Template_Weapon_*` per weapon family, each with its signature ability
+- Interaction slots: `Primary` (combo), `Secondary` (guard/aim), `Ability1` (signature)
+- `Weapon` stats (stat modifiers, dual-wield rendering) and `Tags`
+- Per-item damage overrides via `InteractionVars` and damage scaling by tier
+- Charge- and ammo-based mechanics (bows, crossbows) including the reload system
+- Signature-ready appearance/effects and common patterns (damage calculator, stamina cost, blocked effects)
+
+## Architecture
+```
+Weapon item (inherits a Template_Weapon_* template)
+├── Templates
+│   ├── Template_Weapon_Sword (Vortexstrike)
+│   ├── Template_Weapon_Daggers (Razorstrike)
+│   ├── Template_Weapon_Shield (bash)
+│   ├── Template_Weapon_Battleaxe (Whirlwind)
+│   ├── Template_Weapon_Shortbow (Volley)
+│   ├── Template_Weapon_Mace (Groundslam)
+│   └── Template_Weapon_Crossbow (BigArrow)
+├── Interactions (Primary combo / Secondary guard / Ability1 signature)
+├── Weapon stats + Tags (Type / Family)
+├── InteractionVars (per-item damage, guard, charge overrides)
+└── Ranged mechanics (charge, ammo consumption, reload)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Template_Weapon_Sword` | `Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json` | Sword template; 4-hit combo + Vortexstrike |
+| `Template_Weapon_Daggers` | `Server/Item/Items/Weapon/...` | Dual-wield daggers + Razorstrike |
+| `Template_Weapon_Shield` | `Server/Item/Items/Weapon/...` | Defensive shield with bash |
+| `Template_Weapon_Battleaxe` | `Server/Item/Items/Weapon/...` | Two-handed battleaxe + Whirlwind |
+| `Template_Weapon_Shortbow` | `Server/Item/Items/Weapon/...` | Charged bow + Volley |
+| `Template_Weapon_Mace` | `Server/Item/Items/Weapon/...` | Blunt mace + Groundslam |
+| `Template_Weapon_Crossbow` | `Server/Item/Items/Weapon/...` | Ammo-based crossbow + BigArrow |
+| `Weapon` | item property | Wield stats and dual-wield rendering |
+
 ## Quick Navigation
 
 | Template | Children | Signature Ability | Description |

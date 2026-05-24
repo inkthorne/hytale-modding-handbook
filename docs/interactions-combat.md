@@ -4,6 +4,48 @@
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
+This page covers the combat and effects interactions: target selection, dealing damage, applying forces and status effects, modifying stats, and interrupting other entities.
+
+## Overview
+
+Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
+- A versatile `Simple` interaction for delays, animations, sounds, particles, and flow control
+- A `Selector` for melee/AOE/raycast hitbox target selection
+- `DamageEntity` for damage (via `DamageCalculator`) with knockback, sounds, and stat grants
+- `ApplyForce` for physics-based knockback and launches
+- `ApplyEffect` / `ClearEntityEffect` for adding and removing status effects
+- `ChangeStat` for modifying health, stamina, and signature energy
+- `Interrupt` for cancelling a target's active interaction chain
+
+## Architecture
+```
+Combat & Effects
+├── Targeting
+│   └── Selector (Horizontal / AOECircle / Raycast / Stab) → HitEntity / HitBlock
+├── Damage
+│   ├── DamageEntity (DamageCalculator + DamageEffects + EntityStatsOnHit)
+│   └── ApplyForce (Direction + Force knockback/launch)
+├── Status effects
+│   ├── ApplyEffect (EffectId → effect asset)
+│   └── ClearEntityEffect (EntityEffectId / EntityEffectIds)
+├── Stats
+│   └── ChangeStat (StatModifiers, Behaviour, ValueType)
+├── Control
+│   └── InterruptInteraction (cancel target chain; ExcludedTag immunity)
+└── SimpleInteraction (delays, animations, sounds, flow via Next / Failed)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `SimpleInteraction` | `config` (server + `protocol`) | Base building-block interaction; delays, animations, sounds, flow control |
+| `Selector` (`SelectInteraction`) | `config/none/SelectInteraction` | Hitbox/target selection for melee, AOE, raycast, and stab |
+| `DamageEntity` (`DamageEntityInteraction`) | `config/server/DamageEntityInteraction` | Deals damage via `DamageCalculator` with `DamageEffects` |
+| `ApplyForce` (`ApplyForceInteraction`) | `config/client/ApplyForceInteraction` | Applies a physics force for knockback/launches |
+| `ApplyEffect` (`ApplyEffectInteraction`) | `config/none/ApplyEffectInteraction` | Applies a status effect by `EffectId` |
+| `ClearEntityEffect` (`ClearEntityEffectInteraction`) | `config/server/ClearEntityEffectInteraction` | Removes status effects by id |
+| `InterruptInteraction` | `config/server/InterruptInteraction` | Cancels the target's current interaction chain |
+
 ## Quick Navigation
 
 | Interaction | Description |

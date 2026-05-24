@@ -6,6 +6,48 @@ This document covers damage events, combat systems, and kill feed customization.
 
 > **See also:** For JSON-based combat configuration (damage interactions, effects, target selectors), see [Interactions API Reference](interactions.md#reference). For effect and stat asset definitions, see [Effects & Stats Reference](effects-stats.md).
 
+## Overview
+
+Implemented mainly in `com.hypixel.hytale.server.core.modules.entity.damage` (with JSON-driven combat config) and provides:
+- The `Damage` ECS event and `DamageEventSystem` base class for handling damage
+- Damage source types (`EntitySource`, `EnvironmentSource`, `ProjectileSource`, `CommandSource`)
+- `DamageCause` constants and `DamageDataComponent` for damageable entities
+- Kill feed events (`KillFeedEvent.Display`, `KillerMessage`, `DecedentMessage`)
+- A component-based `KnockbackComponent` system with armor/wielding reduction
+- JSON config for stats-on-hit, blocking, parry, and knockback
+
+## Architecture
+```
+Combat
+├── Damage Pipeline
+│   ├── Damage (event, fires on victim) + DamageEventSystem
+│   ├── Damage.Source → EntitySource / EnvironmentSource / ProjectileSource / CommandSource
+│   ├── DamageCause (PHYSICAL, FALL, DROWNING, ...)
+│   └── DamageDataComponent (marks damageable entities)
+├── Kill Feed (KillFeedEvent)
+│   ├── KillerMessage / DecedentMessage / Display
+├── Knockback
+│   ├── KnockbackComponent (temporary, timer-driven)
+│   ├── KnockbackSystems.ApplyKnockback / ApplyPlayerKnockback
+│   └── DamageSystems.ArmorKnockbackReduction / WieldingKnockbackReduction
+└── JSON Combat Config (Server/Item/Interactions)
+    ├── EntityStatsOnHit
+    ├── Blocking / Wielding (DamageModifiers, StaminaCost)
+    └── Knockback parameters
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Damage` | `server.core.modules.entity.damage` | ECS event fired when damage occurs; cancellable |
+| `DamageEventSystem` | `server.core.modules.entity.damage` | Base class for handling Damage events |
+| `Damage.Source` | `server.core.modules.entity.damage` | Interface for damage sources |
+| `Damage.EntitySource` | `server.core.modules.entity.damage` | Source when damage comes from an entity |
+| `DamageCause` | `server.core.modules.entity.damage` | Asset type for damage cause (FALL, PHYSICAL, etc.) |
+| `DamageDataComponent` | `server.core.entity.damage` | Component on entities that can receive damage |
+| `KillFeedEvent` | `server.core.modules.entity.damage.event` | Container for kill feed events (Display/KillerMessage/DecedentMessage) |
+| `KnockbackComponent` | `server.core.entity.knockback` | Temporary component managing knockback state |
+
 ## Damage Events (DamageEventSystem)
 
 Handle damage events when entities receive damage. Extend `DamageEventSystem` (not raw `EntityEventSystem`).

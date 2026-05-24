@@ -25,6 +25,29 @@ Understanding `InteractionContext` is essential for:
 - Passing data between operations
 - Implementing custom interactions
 
+## Architecture
+```
+InteractionContext (passed to every operation tick)
+├── Entity references (getEntity / getOwningEntity / getTargetEntity)
+├── Item state (getHeldItem / getHeldItemSlot / getOriginalItemType)
+├── Meta store (DynamicMetaStore via getMetaStore)
+│   └── MetaKey<T> keys (standard keys defined on Interaction)
+├── InteractionVars (item-defined Map<String, String>)
+├── Flow control (jump(Label) / operation counter / labels)
+└── Chain management
+    ├── InteractionChain (getChain) + fork(...)
+    └── InteractionEntry (getEntry)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `InteractionContext` | `server.core.entity` | Execution-state container passed to operations |
+| `DynamicMetaStore` | `server.core` (returned by `getMetaStore`) | Key-value store for passing data between operations |
+| `MetaKey<T>` | `server.core.meta` | Type-safe key for meta-store values (registered internally) |
+| `InteractionChain` | `server.core.entity` | Full chain execution context (id, type, server state, root) |
+| `InteractionEntry` | `server.core.entity` | Per-entry execution state within a chain |
+
 ---
 
 ## InteractionContext Class

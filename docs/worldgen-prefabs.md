@@ -16,6 +16,54 @@ FieldFunction (noise) -> Delimiter (Min/Max range gate) -> Weighted (pick by wei
 
 This document describes the real format under `Server/HytaleGenerator/`.
 
+## Overview
+
+Defined as JSON node graphs under `Server/HytaleGenerator/` and provides:
+- A biome `Props[]` array pairing positions (where) with assignments (what)
+- Shared `Assignments/` graphs referenced by name
+- Field/range/weight gating of placement (`FieldFunction` -> `Delimiter` -> `Weighted`)
+- Prop builders: `Prefab`, `Cluster`, `Column`, `Cuboid`, `Union`, `Density`
+- Rotation (`Directionality`) and vertical placement (`Scanner`) helpers
+- Standalone reusable position and prop-distribution graphs
+
+## Architecture
+```
+Biome Props[] entry
+├── Positions  (Mesh2D / Occurrence — where to try)
+└── Assignments (usually Imported -> Assignments/*.json)
+        │
+        ▼
+Assignment graph (ExportAs "<name>")
+└── FieldFunction (noise) -> Delimiter (Min/Max gate) -> Weighted (pick by weight)
+        -> Constant | Union -> Prop:
+           ├── Prefab   (WeightedPrefabPaths)
+           ├── Cluster  (DistanceCurve + WeightedProps)
+           ├── Column   (ColumnBlocks)
+           ├── Cuboid   (Bounds + Material)
+           └── Density  (3D field -> ore veins)
+        each prop: Directionality (rotation) + Scanner (vertical placement)
+
+Standalone: Positions/ · PropDistributions/ · BlockMasks/
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Family | Description |
+|-----------|--------|-------------|
+| `FieldFunction` | Assignment | Gate placement on a density value via `Min`/`Max` `Delimiters` |
+| `Weighted` | Assignment | Randomly choose one child by `Weight` (`SkipChance` to place nothing) |
+| `Constant` | Assignment | Always yields one `Prop` |
+| `Union` | Assignment | Place several props together |
+| `Prefab` | Prop | Place a pre-authored structure (`WeightedPrefabPaths`) |
+| `Cluster` | Prop | Scatter props around an anchor by `DistanceCurve` |
+| `Column` | Prop | Stack blocks at Y offsets (`ColumnBlocks`) |
+| `Cuboid` | Prop | Fill an axis-aligned box |
+| `Density` | Prop | Place where a 3D density field exceeds a threshold (ore veins) |
+| `Mesh2D` / `Occurrence` | Positions | Candidate point grid / probability gate |
+| `Directionality` | Helper | Rotation rule (`Random` / `Static`) + surface `Pattern` |
+| `Scanner` | Helper | Vertical band scan (`ColumnLinear`) to find placement Y |
+
 ## Quick Navigation
 
 | Section | Description |

@@ -2,6 +2,29 @@
 
 **Doc type:** Java API
 
+This page covers registering async and scheduled tasks so the plugin system can track them across the plugin lifecycle.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.task` and provides:
+- A `TaskRegistry` for tracking `CompletableFuture` and `ScheduledFuture` tasks
+- A `TaskRegistration` handle for unregistering and checking task status
+- Automatic cleanup of registered tasks when the plugin is disabled
+
+## Architecture
+```
+TaskRegistry (getTaskRegistry())
+├── registerTask(CompletableFuture<Void>)
+├── registerTask(ScheduledFuture<Void>)
+└── TaskRegistration (handle: getTask / unregister / isRegistered)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `TaskRegistry` | `server.core.task` | Registers async tasks for lifecycle tracking |
+| `TaskRegistration` | `server.core.task` | Handle to unregister a task and check its status (extends `Registration`) |
+
 ## TaskRegistry
 **Package:** `com.hypixel.hytale.server.core.task`
 

@@ -11,6 +11,41 @@ In other words: caves use exactly the same density node graph vocabulary as
 [terrain](worldgen-terrain.md) (`SimplexNoise2D`, `CurveMapper`, `Sum`, `Min`, `Max`, `Mix`,
 `Normalizer`, `Pow`, `Abs`, `Inverter`, `BaseHeight`, `Cache`, `Imported`, `Constant`).
 
+## Overview
+
+Defined as JSON density fields under `Server/HytaleGenerator/Density/` and provides:
+- Cave volumes expressed purely as density graphs (no dedicated cave schema)
+- Carving by combining a cave field into terrain with `Min`
+- Depth-band confinement via `CurveMapper` over `BaseHeight`
+- Tunnel shaping from noise plus `Pow`/`Abs` wall pinching
+- Export by name so biomes can `Imported` the same cave field
+
+## Architecture
+```
+Cave density field (Density/*_Caves_*.json)
+├── root Cache (ExportAs "..._Caves_Terrain")
+│   └── Mix / Max / Min / Sum / Inverter of:
+│       ├── Snake Floors    SimplexNoise2D + CurveMapper(BaseHeight)
+│       ├── Snake Ceilings  SimplexNoise2D + CurveMapper(BaseHeight)
+│       ├── Snake Walls     Pow / Abs / Normalizer over SimplexNoise2D
+│       └── Cavern Ceilings Sum of CurveMapper(BaseHeight) + SimplexNoise2D
+│
+└── carving: biome Terrain root = Min(Imported cave field, surface field)
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Role in caves | Description |
+|-----------|---------------|-------------|
+| `Min` | Carving | Combines cave field with terrain; lower (cave) value wins -> empty |
+| `Cache` | Field root | Memoizes and `ExportAs` the cave field for biome import |
+| `SimplexNoise2D` | Tunnel shape | Drives the meander of floors, ceilings, and walls |
+| `CurveMapper` | Depth band | Maps `BaseHeight` (`Distance`) altitude to a carve multiplier |
+| `BaseHeight` | Reference | Ties cave heights to the named world `Base` height |
+| `Pow` / `Abs` / `Normalizer` | Wall pinch | Sharpen noise into narrow corridors |
+| `Imported` / `Exported` | Reuse | Pull the cave field into a biome terrain graph |
+
 ## Quick Navigation
 
 | Section | Description |

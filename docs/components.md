@@ -4,6 +4,55 @@
 
 Hytale uses an Entity Component System (ECS) architecture. Entities are composed of components stored in typed stores.
 
+## Overview
+
+Implemented in `com.hypixel.hytale.component` and provides:
+- Typed component stores (`Store<EntityStore>`, `Store<ChunkStore>`) accessed via `Ref` handles
+- Components, resources, and their type descriptors (`Component`, `ComponentType`, `Resource`, `ResourceType`)
+- Entity composition via `Holder` blueprints and `Archetype` descriptions
+- Querying and filtering entities (`Query` and its `and`/`or`/`not`/`any` combinators)
+- Deferred, iteration-safe mutation via `CommandBuffer`
+- A `ComponentRegistry` for registering components, resources, systems, and event types
+- Ticking systems (`EntityTickingSystem`) for per-tick entity processing
+
+## Architecture
+```
+ComponentRegistry (per ECS type: EntityStore / ChunkStore)
+├── Store<ECS_TYPE> (the live entity/component container)
+│   ├── Ref<ECS_TYPE> (handle to one entity)
+│   ├── ArchetypeChunk (component access by index during iteration)
+│   └── CommandBuffer (deferred add/remove/spawn during iteration)
+├── Composition
+│   ├── Component / ComponentType
+│   ├── Holder (entity blueprint) → Archetype (component layout)
+│   └── Resource / ResourceType (world-level singletons)
+├── Query (filter entities; and / or / not / any)
+└── Systems
+    └── EntityTickingSystem (per-tick processing, filtered by getQuery())
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Store<ECS_TYPE>` | `component` | Container for entities and components; implements `ComponentAccessor` |
+| `Ref<ECS_TYPE>` | `component` | Lightweight handle to a single entity |
+| `Component<ECS_TYPE>` | `component` | Interface for all components (must be cloneable) |
+| `ComponentType<ECS_TYPE, T>` | `component` | Type descriptor for a component; also usable as a `Query` |
+| `ComponentAccessor<ECS_TYPE>` | `component` | Interface for component access; `Store` implements it |
+| `ArchetypeChunk<ECS_TYPE>` | `component` | Indexed component access during iteration / event handling |
+| `CommandBuffer<ECS_TYPE>` | `component` | Deferred entity/component operations during iteration |
+| `Holder<ECS_TYPE>` | `component` | Blueprint/template for creating entities |
+| `Archetype<ECS_TYPE>` | `component` | Describes a component composition; implements `Query` |
+| `Resource<ECS_TYPE>` | `component` | Marker interface for world-level singleton resources |
+| `ResourceType<ECS_TYPE, T>` | `component` | Type descriptor for resources |
+| `ComponentRegistry<ECS_TYPE>` | `component` | Registers components, resources, systems, and event types |
+| `Query<ECS_TYPE>` | `component.query` | Filters entities by component composition |
+| `EntityTickingSystem<ECS_TYPE>` | `component.system.tick` | Base class for per-tick entity processing |
+| `EntityStore` | `server.core.universe.world.storage` | ECS type parameter for entity components |
+| `ChunkStore` | `server.core.universe.world.storage` | ECS type parameter for chunk components |
+| `TransformComponent` | `server.core.modules.entity.component` | Stores entity position and rotation |
+| `Teleport` | `server.core.modules.entity.teleport` | Action component triggering player teleportation |
+
 ## Core Types
 
 ### Store<ECS_TYPE>

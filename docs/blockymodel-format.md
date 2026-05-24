@@ -15,6 +15,30 @@ Blockymodel files define 3D models using a hierarchical node system. Each node c
 
 Blockymodel files work closely with `.blockyanim` files - the model defines geometry and node names, while animations reference those nodes to apply transformations over time.
 
+## Architecture
+```
+.blockymodel (JSON)
+├── lod                "auto" | "off"
+└── nodes[]            hierarchical node tree
+    └── node           id, name, position, orientation
+        ├── shape       mesh geometry
+        │   ├── box      sized cuboid
+        │   ├── quad     flat 2D plane
+        │   └── none     transform-only (no mesh)
+        │       └── textureLayout  per-face UV layout
+        └── children[]  nested nodes
+```
+
+## Key Classes
+| Section | Location | Description |
+|---------|----------|-------------|
+| Top-level fields | `.blockymodel` root | `nodes` array and optional `lod` mode |
+| Node | `nodes[]` entry | `id`, `name`, `position`, `orientation`, optional `shape` and `children` |
+| `box` shape | node `shape` | Cuboid mesh defined by `size` per dimension |
+| `quad` shape | node `shape` | Flat 2D plane (foliage, flat decorations) |
+| `none` shape | node `shape` | Transform-only node with no mesh |
+| `textureLayout` | node `shape` | Per-face UV/texture layout |
+
 ## File Location
 
 Block models are stored in various locations depending on their purpose:

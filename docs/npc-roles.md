@@ -8,6 +8,45 @@ This document covers NPC role asset definitions, including templates, variants, 
 
 ---
 
+## Overview
+
+Defined as JSON assets under `Server/NPC/` in `Assets.zip` and provides:
+- Role definitions: abstract `Template` roles and concrete `Variant` roles
+- A `Parameters` / `Compute` system for parameterizing templates
+- Attitude definitions describing relationships between NPC groups
+- Groups and flocks for spawn grouping and pack sizing
+- Spawn beacons controlling where and how NPCs spawn
+- A behavior system (Instructions: sensors, actions, body motion) and reusable components
+- Combat Action Evaluator (CAE) files for intelligent combat decisions
+
+## Architecture
+```
+Server/NPC/
+├── Roles/        Templates (Abstract) + Variants (concrete, inherit via Reference)
+│   ├── Parameters / Compute   (parameterized values)
+│   ├── MotionControllerList   (Walk / Fly)
+│   └── Instructions           (Sensors → Actions / BodyMotion; reusable Components)
+├── Attitude/     Friendly / Hostile / Neutral / Ignore / Revered between groups
+├── Groups/       Named role collections (IncludeRoles, wildcards)
+├── Flocks/       Weighted flock sizes
+├── Spawn/Beacons/  Where/when NPCs spawn (by zone/tier/biome)
+├── Balancing/    Combat Action Evaluator (CAE) files
+└── DecisionMaking/ AI decision conditions
+```
+
+## Key Classes
+These are JSON asset constructs (file types / field schemas), not Java classes.
+
+| Construct | Location | Description |
+|-----------|----------|-------------|
+| Role (`Template`) | `Server/NPC/Roles/` | Abstract base with `Parameters`; concrete roles inherit from it |
+| Role (`Variant`) | `Server/NPC/Roles/` | Concrete NPC referencing a template, overriding via `Modify` |
+| Attitude file | `Server/NPC/Attitude/Roles/` | Maps attitude values to other group names |
+| Group file | `Server/NPC/Groups/` | Named collection of roles (`IncludeRoles`) |
+| Flock file | `Server/NPC/Flocks/` | Weighted flock-size configuration |
+| Spawn beacon | `Server/NPC/Spawn/Beacons/` | Spawn location/timing/filter configuration |
+| CAE file | `Server/NPC/Balancing/` | Combat Action Evaluator for intelligent combat |
+
 ## Directory Structure
 
 The NPC system is organized into several directories:

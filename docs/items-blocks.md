@@ -9,6 +9,46 @@
 > All structures and examples below are taken directly from real asset files under
 > `Server/Item/Items/`. Counts cited (e.g. "~2344 blocks") are from the shipped assets.
 
+This page documents the `BlockType` property an item carries to become a placeable block — rendering, collision, gathering, states, connections, interactions, and block-entity components.
+
+## Overview
+
+Defined as JSON assets under `Server/Item` (the `BlockType` property of item files) and covers:
+- Core block properties: `Material`, `DrawType`, `Opacity`, `HitboxType`, `Flags`
+- Textures and custom models for cube and model blocks
+- `Gathering` (how a block is broken/harvested and what it drops)
+- Light, particles, rotation, placement, and support rules
+- Block `State` machines (On/Off, Open/Close, doors), connected-block rule sets, and farming/soil stages
+- Block-entity components (`ItemContainerBlock`, `BenchBlock`, `ProcessingBenchBlock`, `FarmingBlock`, etc.) and block interactions
+
+## Architecture
+```
+BlockType (item property)
+├── Appearance & collision (Material, DrawType, Opacity, HitboxType, Flags)
+├── Visuals (Textures, custom Models, ParticleColor, Light, Particles)
+├── Gathering & Drops (→ drops.md DropList)
+├── Placement (VariantRotation, PlacementSettings, Support)
+├── State machine (On/Off, Open/Close, Doors)
+├── Connected blocks (Stair, Roof, CustomTemplate rule sets)
+├── Farming (SoilConfig, Stages)
+└── BlockEntity.Components
+    ├── ItemContainerBlock  (containers)
+    ├── BenchBlock / ProcessingBenchBlock  (benches)
+    └── FarmingBlock, RespawnBlock, TreasureChest, SpawnMarkerBlock, …
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `BlockType` | item property | Block config attached to an item to make it placeable |
+| `Gathering` | `BlockType.Gathering` | Break/harvest rules and drop output |
+| `State` | `BlockType.State` | Block state machine (On/Off, Open/Close, doors) |
+| `BlockEntity.Components` | `BlockType.BlockEntity.Components` | Per-block entity component map |
+| `ItemContainerBlock` | block-entity component | Storage container (e.g. chests); has `Capacity` |
+| `BenchBlock` | block-entity component | Crafting bench block entity |
+| `ProcessingBenchBlock` | block-entity component | Fuel/timed processing bench block entity |
+| `FarmingBlock` | block-entity component | Farming/soil block entity |
+
 ## Quick Navigation
 
 | Category | Examples | Key Features |

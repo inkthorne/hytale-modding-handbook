@@ -10,6 +10,40 @@ Drop files define loot tables for blocks, NPCs, containers, and world prefabs. T
 
 ---
 
+## Overview
+
+Defined as JSON assets under `Server/Drops/` in `Assets.zip` and provides:
+- A hierarchical container system rooted in a top-level `Container` object
+- Container types: `Multiple`, `Choice`, `Single`, `Empty`, `Droplist`
+- Guaranteed drops, weighted random selection, and multi-roll loot
+- Modular composition via `Droplist` references to other drop files
+- Item entries with `ItemId` and `QuantityMin`/`QuantityMax` ranges
+- Drop tables for crops, NPCs, mining, plants, containers, prefabs, traps, and more
+
+## Architecture
+```
+Drop File  { "Container": ... }
+└── Container (Type)
+    ├── Multiple  → all child containers evaluated (Weight = % chance)
+    ├── Choice    → one child by weight (RollsMin/RollsMax for multi-roll)
+    ├── Single    → leaf: one Item (ItemId, QuantityMin/Max)
+    ├── Empty     → no drop (chance-for-nothing inside Choice)
+    └── Droplist  → references another drop file by DroplistId
+```
+
+## Key Classes
+These are JSON asset constructs (container/field schemas), not Java classes.
+
+| Construct | Location | Description |
+|-----------|----------|-------------|
+| Drop file root | `Server/Drops/` | Wraps the root `Container` (or `{}` for no drop) |
+| `Multiple` container | drop JSON | Evaluates all nested containers |
+| `Choice` container | drop JSON | Selects one nested container by weight |
+| `Single` container | drop JSON | Leaf node defining one item drop |
+| `Empty` container | drop JSON | Produces no drop (used inside Choice/Multiple) |
+| `Droplist` container | drop JSON | References another drop file by `DroplistId` |
+| Item object | drop JSON | `ItemId` + `QuantityMin`/`QuantityMax` |
+
 ## Quick Navigation
 
 | Category | Directory | Files | Description |

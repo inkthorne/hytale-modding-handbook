@@ -4,6 +4,45 @@
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
+This page documents tool items — pickaxes, hatchets, shovels, and other gathering/utility tools — configured through the `Tool` property and a shared "Crude" base item per family.
+
+## Overview
+
+Defined as JSON assets under `Server/Item` and covers:
+- The `Tool` property: `Specs` (power per gather type), `Speed`, and `DurabilityLossBlockTypes`
+- `GatherType` categories and gather-quality levels that gate which blocks a tool breaks
+- Material tiers and power scaling across tool variants
+- Each tool family (pickaxe, hatchet, shovel, hoe, hammer, shears, watering can, sickle, repair kit, capture crate, feedbag, fertilizer) with its `Crude` base and child variants
+- Tool interactions: `BreakBlock`, `ChangeBlock`, and durability handling
+- The watering can's `State` system for fill/water
+
+## Architecture
+```
+Tool item (inherits Tool_<Family>_Crude base)
+├── Tool property
+│   ├── Specs[] (Power + GatherType + optional Quality)
+│   ├── Speed
+│   └── DurabilityLossBlockTypes
+├── Material tiers (power scaling)
+├── Tool families
+│   ├── Pickaxe / Hatchet / Shovel / Hoe / Hammer
+│   ├── Shears / Watering Can / Sickle
+│   └── Repair Kit / Capture Crate / Feedbag / Fertilizer
+└── Interactions (BreakBlock, ChangeBlock, durability)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Tool` | item property | Tool config: specs, speed, durability rules |
+| `Tool.Specs` | item property | Per-`GatherType` power (and optional quality) entries |
+| `Tool_Pickaxe_Crude` | `Server/Item/Items/.../Tool_Pickaxe_Crude.json` | Crude base inherited by pickaxe variants |
+| `Tool_Hatchet_Crude` | `Server/Item/Items/.../Tool_Hatchet_Crude.json` | Crude base for hatchets |
+| `Tool_Shovel_Crude` | `Server/Item/Items/.../Tool_Shovel_Crude.json` | Crude base for shovels |
+| `Tool_Watering_Can` | `Server/Item/Items/.../Tool_Watering_Can.json` | Watering can with fill/water `State` system |
+| `BreakBlock` | tool interaction | Breaks/harvests the targeted block |
+| `ChangeBlock` | tool interaction | Cycles/converts a block (e.g. hammer, hoe) |
+
 ## Quick Navigation
 
 | Tool Type | Children | Primary Use | Description |

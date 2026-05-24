@@ -4,6 +4,25 @@
 
 Events for singleplayer-specific functionality.
 
+This page covers the event fired in singleplayer/local server mode when an access level is requested.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.modules.singleplayer` and provides:
+- A singleplayer access-request event (`SingleplayerRequestAccessEvent`) exposing the requested `Access` level
+
+## Architecture
+```
+com.hypixel.hytale.server.core.modules.singleplayer
+└── SingleplayerRequestAccessEvent (IEvent<Void>)
+    └── getAccess() → Access (requested access level)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `SingleplayerRequestAccessEvent` | `server.core.modules.singleplayer` | Fired when singleplayer requests a specific access level |
+
 ---
 
 ## SingleplayerRequestAccessEvent

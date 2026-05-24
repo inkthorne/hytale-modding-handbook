@@ -2,6 +2,48 @@
 
 **Doc type:** Java API
 
+The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.command.system` and provides:
+- Player, world, and target-player command base classes
+- Typed argument parsing with validation (required, optional, default, flag, and list variants)
+- Tab completion via suggestions
+- Aliases, subcommands, and usage variants
+- Auto-generated, permission-gated command nodes
+- A factory (`ArgTypes`) of built-in argument types for primitives, positions, assets, and game enums
+
+## Architecture
+```
+CommandRegistry
+├── Registered AbstractCommands
+│   ├── AbstractPlayerCommand
+│   ├── AbstractWorldCommand
+│   └── AbstractTargetPlayerCommand
+├── Argument System (withRequiredArg / withOptionalArg / withDefaultArg / withFlagArg + list variants)
+├── ArgumentType<D> (SingleArgumentType / custom)
+│   └── ArgTypes (factory for built-in types)
+├── CommandContext (parsed args + sender)
+└── Permission model (auto-generated nodes via CommandOwner)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `AbstractCommand` | `server.core.command.system` | Base class for all commands; argument and permission API |
+| `AbstractAsyncCommand` | `server.core.command.system.basecommands` | Async command base; all player commands inherit from it |
+| `AbstractPlayerCommand` | `server.core.command.system.basecommands` | Most common base for player-executed commands |
+| `AbstractWorldCommand` | `server.core.command.system.basecommands` | Base for commands operating on a world context |
+| `AbstractTargetPlayerCommand` | `server.core.command.system.basecommands` | Base for commands targeting another player |
+| `CommandContext` | `server.core.command.system` | Execution context with parsed args and sender access |
+| `CommandRegistry` | `server.core.command.system` | Registers commands with the server |
+| `CommandRegistration` | `server.core.command.system` | Handle returned from registration (for unregistering) |
+| `CommandSender` | `server.core.command.system` | Interface for anything that sends commands / receives messages |
+| `CommandOwner` | `server.core.command.system` | Interface for command owners (typically plugins) |
+| `ArgumentType<D>` | `server.core.command.system.arguments.types` | Abstract base for argument types |
+| `ArgTypes` | `server.core.command.system.arguments.types` | Factory of built-in argument types |
+
 ## Class Hierarchy
 ```
 AbstractCommand

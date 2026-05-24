@@ -17,6 +17,51 @@ Server/HytaleGenerator/
 
 > The canonical asset root is `Server/HytaleGenerator/` — **not** `Server/WorldGen/`.
 
+## Overview
+
+Defined as JSON node-graph assets under `Server/HytaleGenerator/` and provides:
+- A typed node-graph model (every node has a `Type` plus child `Inputs`)
+- Density graphs that drive terrain height, cave carving, and biome selection
+- Material providers that turn density into block ids (solid vs. empty)
+- Prop/placement graphs for scattering props and prefabs
+- Environment and tint selection per biome
+- Reuse across graphs via `ExportAs` / `Imported`
+
+## Architecture
+```
+Server/HytaleGenerator/
+├── WorldStructures/   maps a density value -> biomes; world constants (Framework)
+│   └── Density "Biome-Map"  (which biome appears where)
+├── Biomes/            per-biome graphs
+│   ├── Terrain (DAOTerrain) -> Density graph (heightfield)
+│   ├── MaterialProvider (Solidity: Solid / Empty branches)
+│   ├── Props[]  -> Positions + Assignments
+│   ├── EnvironmentProvider / TintProvider
+│   └── pull shared fields via Imported
+├── Density/           shared density graphs (Biome-Map, cave fields)
+├── Assignments/       prop/prefab placement graphs (imported by biome Props)
+├── Positions/ · PropDistributions/   standalone placement graphs
+├── BlockMasks/        block-set placement filters
+└── Settings/          generator runtime settings (Settings.json)
+```
+
+## Key Classes
+These are JSON worldgen node types (not Java classes); the table lists the key node types documented on this page.
+
+| Node type | Family | Description |
+|-----------|--------|-------------|
+| `SimplexNoise2D` / `CellNoise2D` | Density source | Noise fields (the core scalar sources) |
+| `BaseHeight` | Density source | Injects a named world reference height (`Base`, `Bedrock`) |
+| `Imported` / `Exported` | Reuse | Pull / publish a field by name across graphs |
+| `Sum` / `Min` / `Max` / `Mix` | Density combiner | Combine input fields |
+| `CurveMapper` / `Normalizer` / `Clamp` / `Pow` / `Abs` | Density shaping | Remap or reshape a field |
+| `Solidity` | Material provider | Splits placement into `Solid` and `Empty` branches |
+| `Queue` / `SimpleHorizontal` / `SpaceAndDepth` / `FieldFunction` | Material provider | Select which block fills a cell |
+| `Mesh2D` / `Occurrence` | Prop positions | Candidate point grids and probability gating |
+| `Weighted` / `Cluster` / `Constant` | Prop assignment | Choose / group what to place |
+| `Prefab` / `Column` | Prop | Place a prefab structure or a block stack |
+| `DensityDelimited` | Provider/selection | Pick environment/tint by density range |
+
 ## Quick Navigation
 
 | Category | File | Description |

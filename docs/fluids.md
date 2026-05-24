@@ -2,6 +2,38 @@
 
 **Doc type:** Java API
 
+Covers the `Fluid` asset type (water, lava, etc.) and how fluid data is surfaced through collision queries.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.asset.type.fluid` and provides:
+- A `Fluid` asset describing a fluid block's identity and properties
+- Fluid level, light emission, and entity-damage values
+- Tick behavior governing fluid spread (`Ticker`)
+- Fluid interaction rules (e.g. water + lava transforms)
+- Fluid exposure through collision results (`BlockCollisionData`, `CollisionConfig`)
+
+## Architecture
+```
+Fluid (asset type)
+├── Identity (getId / isUnknown; EMPTY / UNKNOWN constants)
+├── Properties (max level, light, damage-to-entities, isTrigger)
+├── Ticker (fluid spread behavior)
+└── Interactions (fluid-meets-fluid rules)
+
+Collision exposure
+├── BlockCollisionData (fluid, fluidId on a block collision)
+└── CollisionConfig (fluid, fluidId, fluidLevel during a query)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Fluid` | `server.core.asset.type.fluid` | Asset type for fluid blocks (water, lava, etc.) |
+| `Ticker` | (referenced via `Fluid.getTicker()`) | Tick behavior controlling fluid spread |
+| `BlockCollisionData` | see [collision.md](collision.md#blockcollisiondata) | Exposes the fluid at a block collision |
+| `CollisionConfig` | see [collision.md](collision.md#collisionconfig) | Exposes fluid id/level during collision queries |
+
 ## Fluid
 **Package:** `com.hypixel.hytale.server.core.asset.type.fluid`
 

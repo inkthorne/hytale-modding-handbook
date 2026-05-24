@@ -2,6 +2,53 @@
 
 **Doc type:** Java API
 
+This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.entity` (and related `modules` packages) and provides:
+- An entity class hierarchy: `Entity` → `LivingEntity` → `Player`
+- `PlayerRef`, a lightweight player handle for messaging, identity, and position
+- `EntityStatMap` for reading and modifying entity stats (health, stamina, mana, etc.)
+- `StatModifiersManager` for recalculating stats when modifiers change
+- `Velocity` for applying forces and impulses to entities
+- `InteractionManager` for entity interaction chains with trigger blocks
+- Entity lifecycle events (`EntityEvent`, `EntityRemoveEvent`, `LivingEntityUseBlockEvent`)
+
+## Architecture
+```
+Entity (ECS-backed entity + lifecycle)
+├── PlayerRef            (lightweight handle: messaging / identity / position)
+├── Player               (full component: permissions, inventory, UI managers)
+│   ├── HudManager / PageManager / WindowManager / HotbarManager
+│   └── Inventory
+├── Stats
+│   ├── EntityStatMap        (health, stamina, mana via DefaultEntityStatTypes)
+│   └── StatModifiersManager (recalculation of stat modifiers)
+├── Physics
+│   └── Velocity             (forces / impulses via addInstruction)
+├── InteractionManager   (interaction chains with trigger blocks)
+└── Entity Events        (EntityEvent / EntityRemoveEvent / LivingEntityUseBlockEvent)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `Entity` | `server.core.entity` | Base class for all entities; lifecycle and identity |
+| `LivingEntity` | `server.core.entity` | Entities with health and inventory |
+| `Player` | `server.core.entity.entities` | Full player entity with all game state |
+| `PlayerRef` | `server.core.universe` | Lightweight player reference for messaging and identity |
+| `EntityStatMap` | `server.core.modules.entitystats` | Component holding entity stats (health, mana, etc.) |
+| `DefaultEntityStatTypes` | `server.core.modules.entitystats.asset` | Provides stat indices for common stats |
+| `StatModifiersManager` | `server.core.entity` | Recalculates stat modifiers for living entities |
+| `Velocity` | `server.core.modules.physics.component` | Component for applying forces/impulses |
+| `VelocityConfig` | `server.core.modules.splitvelocity` | Configuration for velocity behavior |
+| `ChangeVelocityType` | `protocol` | Enum for how velocity is applied (Add/Set) |
+| `InteractionManager` | `server.core.entity` | Component managing entity interaction chains |
+| `EntityEvent` | `server.core.event.events.entity` | Base entity lifecycle event |
+| `EntityRemoveEvent` | `server.core.event.events.entity` | Fired when an entity is removed |
+| `LivingEntityUseBlockEvent` | `server.core.event.events.entity` | Fired when a living entity uses a block (keyed by block type) |
+
 ## Class Hierarchy
 ```
 Entity (abstract, implements Component<EntityStore>)

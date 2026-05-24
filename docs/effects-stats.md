@@ -8,6 +8,46 @@ This document covers the JSON asset structure for status effects and entity stat
 
 ---
 
+## Overview
+
+Defined as JSON assets under `Server/Entity/` in `Assets.zip` and provides:
+- Status effect definitions (`Server/Entity/Effects/`): buffs, debuffs, DoT, transformations
+- Damage immunity and per-type `DamageResistance` modifiers
+- Stat modifiers (`StatModifiers`, `RawStatModifiers`) with calculation control
+- Application/tick effect hooks (particles, sounds, tints, movement/ability restrictions)
+- Stat definitions (`Server/Entity/Stats/`): bounds, regeneration, and min/max value effects
+- A condition system gating regeneration rules
+
+## Architecture
+```
+Server/Entity/
+├── Effects/   Status effect definitions
+│   ├── Core: Duration / Infinite / OverlapBehavior / Debuff
+│   ├── Invulnerable / DamageResistance / ModelChange
+│   ├── StatModifiers / RawStatModifiers (+ DamageCalculatorCooldown)
+│   ├── ApplicationEffects  (one-time: particles, sounds, tints, movement/ability)
+│   └── StatModifierEffects (per-tick: WorldParticles / WorldSoundEventId)
+└── Stats/     Stat definitions
+    ├── Core: InitialValue / Min / Max / Shared / ResetType
+    ├── Regenerating[]   (Interval / Amount / RegenType + Conditions)
+    ├── Condition Ids    (Alive, IsPlayer, Stat, NoDamageTaken, Sprinting, ...)
+    └── MinValueEffects / MaxValueEffects  (Interactions on min/max)
+```
+
+## Key Classes
+These are JSON asset constructs (field schemas), not Java classes.
+
+| Construct | Location | Description |
+|-----------|----------|-------------|
+| Effect definition | `Server/Entity/Effects/` | A status effect (buff/debuff/transform) |
+| `DamageResistance` | effect JSON | Per-damage-type resistance modifiers |
+| `StatModifiers` / `RawStatModifiers` | effect JSON | Stat changes (simple vs. calculation-controlled) |
+| `ApplicationEffects` | effect JSON | One-time effects applied when the effect starts |
+| `StatModifierEffects` | effect JSON | Effects triggered on each stat-modifier tick |
+| Stat definition | `Server/Entity/Stats/` | Bounds, regen, and value-trigger rules for a stat |
+| `Regenerating` | stat JSON | Automatic stat recovery/drain rules with conditions |
+| `MinValueEffects` / `MaxValueEffects` | stat JSON | Interactions run when a stat hits min/max |
+
 ## Effects (Status Effects)
 
 **Asset location:** `Server/Entity/Effects/` in Assets.zip

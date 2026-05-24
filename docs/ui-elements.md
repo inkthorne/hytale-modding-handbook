@@ -28,6 +28,48 @@ Comprehensive reference for all UI element types in Hytale's DSL.
 
 ---
 
+## Overview
+
+Defined in `.ui` DSL files under `Common/UI` and provides element types for:
+- Containers and layout (`Group`)
+- Text display (`Label`, `TimerLabel`, `HotkeyLabel`)
+- Buttons (`Button`, `TextButton`, `BackButton`, `ActionButton`)
+- Inputs (`TextField`, `CheckBox`, `Slider`, `DropdownBox`, `NumberField`, and more)
+- Display widgets (`Sprite`, `AssetImage`, `ItemSlot`, `ProgressBar`, `CircularProgressBar`)
+- Navigation (`TabNavigation`, `TabButton`)
+
+## Architecture
+```
+Group (container)
+├── Text         : Label, TimerLabel, HotkeyLabel
+├── Button       : Button, TextButton, BackButton, ActionButton
+├── Input        : TextField, CompactTextField, MultilineTextField,
+│                  NumberField, CheckBox, Slider, FloatSlider,
+│                  DropdownBox, ColorPickerDropdownBox
+├── Display      : Sprite, AssetImage, ItemSlot, ProgressBar, CircularProgressBar
+└── Navigation   : TabNavigation, TabButton
+
+Many controls are instantiated via named templates in Common.ui (e.g. $C.@CheckBox)
+rather than as bare element tags — see Templates & Variables.
+```
+
+## Key Classes
+
+These are DSL element types (not Java classes); the table lists the key element categories documented on this page.
+
+| Element | Category | Description |
+|---------|----------|-------------|
+| `Group` | Container | Groups and lays out child elements; root `Group` must be ID-less |
+| `Label` | Text | Static or dynamic text display |
+| `TimerLabel` / `HotkeyLabel` | Text | Countdown text and hotkey-hint text |
+| `Button` / `TextButton` / `BackButton` / `ActionButton` | Button | Clickable controls |
+| `TextField` / `NumberField` / `CheckBox` / `Slider` / `DropdownBox` | Input | User input controls |
+| `Sprite` / `AssetImage` / `ItemSlot` | Display | Image and item-slot display |
+| `ProgressBar` / `CircularProgressBar` | Display | Progress indicators |
+| `TabNavigation` / `TabButton` | Navigation | Tabbed navigation |
+
+---
+
 ## Container Elements
 
 ### Group

@@ -2,6 +2,53 @@
 
 **Doc type:** Java API
 
+This page covers the plugin entry point, its lifecycle phases, the registries and core modules it exposes, the `manifest.json` format, logging, and server/plugin lifecycle events.
+
+## Overview
+
+Implemented in `com.hypixel.hytale.server.core.plugin` and provides:
+- A `JavaPlugin` base class with overridable lifecycle hooks (`setup`, `start`, `preLoad`, `shutdown`)
+- Registry accessors for commands, events, tasks, entities, and assets
+- Static `.get()` accessors for core game modules (collision, projectiles, blocks, items, entities, time, etc.)
+- Plugin metadata via `PluginManifest`, `PluginIdentifier`, and `PluginState`
+- A fluent logging API (`HytaleLogger`)
+- Server and plugin lifecycle events (`BootEvent`, `ShutdownEvent`, `PrepareUniverseEvent`, `PluginSetupEvent`)
+
+## Architecture
+```
+JavaPlugin (your entry point)
+├── Lifecycle phases (setup → start → enabled → shutdown; tracked by PluginState)
+├── Registries (from PluginBase)
+│   ├── CommandRegistry
+│   ├── EventRegistry
+│   ├── TaskRegistry
+│   ├── EntityRegistry / AssetRegistry
+│   └── EntityStoreRegistry / ChunkStoreRegistry (ComponentRegistryProxy)
+├── Core Modules (static .get() singletons)
+│   └── CollisionModule, ProjectileModule, BlockModule, ItemModule, EntityModule, TimeModule, PrefabStore, DamageModule
+├── Metadata (PluginManifest / PluginIdentifier / PluginState, from manifest.json)
+├── Logging (HytaleLogger)
+└── Lifecycle Events
+    ├── Server (BootEvent, ShutdownEvent, PrepareUniverseEvent)
+    └── Plugin (PluginEvent, PluginSetupEvent)
+```
+
+## Key Classes
+| Class | Location | Description |
+|-------|----------|-------------|
+| `JavaPlugin` | `server.core.plugin` | Abstract base class your plugin extends |
+| `PluginBase` | `server.core.plugin` | Base providing lifecycle hooks and registry accessors |
+| `JavaPluginInit` | `server.core.plugin` | Init object passed to the plugin constructor by the server |
+| `PluginState` | `server.core.plugin` | Enum of lifecycle states (NONE, SETUP, START, ENABLED, SHUTDOWN, DISABLED, FAILED) |
+| `PluginIdentifier` | `common.plugin` | Identifies a plugin by group and name |
+| `PluginManifest` | `common.plugin` | Plugin metadata loaded from `manifest.json` |
+| `HytaleLogger` | `logger` | Fluent logging API (Google Flogger based) |
+| `BootEvent` | `server.core.event.events` | Fired when server boot completes |
+| `ShutdownEvent` | `server.core.event.events` | Fired when the server is shutting down |
+| `PrepareUniverseEvent` | `server.core.event.events` | Fired during universe preparation, before worlds load |
+| `PluginEvent` | `server.core.plugin.event` | Base class for plugin lifecycle events (keyed by plugin class) |
+| `PluginSetupEvent` | `server.core.plugin.event` | Fired when a plugin's setup has completed |
+
 ## Class Hierarchy
 ```
 PluginBase (abstract, implements CommandOwner)

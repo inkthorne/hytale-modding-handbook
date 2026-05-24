@@ -328,6 +328,64 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
 
 ---
 
+## Built-in Entity Components
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.component`
+
+Beyond stats and velocity, the engine ships a set of ready-made `Component<EntityStore>` types that control an entity's **appearance and behaviour** — its model, display name, scale, lighting, interactability, and more. Attaching one of these to an entity's `Ref` is the standard way a plugin changes how an entity looks or acts.
+
+Every class here follows the same ECS contract: a static `getComponentType()` returning its `ComponentType<EntityStore, …>`, used with the [Store component API](components.md#component-operations) (`addComponent` / `getComponent` / `putComponent`).
+
+### Data components
+
+These carry state and have getters/setters (and a constructor that seeds the value):
+
+| Component | Holds | Key members |
+|-----------|-------|-------------|
+| `ModelComponent` | The entity's render model | `new ModelComponent(Model)`, `getModel()` |
+| `PersistentModel` | A model that persists across reloads | `new PersistentModel(Model.ModelReference)`, `getModelReference()` / `setModelReference(...)` |
+| `DisplayNameComponent` | Floating name | `new DisplayNameComponent(Message)`, `getDisplayName()` |
+| `EntityScaleComponent` | Uniform render scale | `new EntityScaleComponent(float)`, `getScale()` / `setScale(float)` |
+| `HeadRotation` | Head look direction | `new HeadRotation(Vector3f)`, `getRotation()` / `setRotation(...)`, `getDirection()` (→ `Vector3d`) |
+| `DynamicLight` | Light emitted by the entity | `new DynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
+| `PersistentDynamicLight` | Persisted dynamic light | `new PersistentDynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
+| `BoundingBox` | Collision/selection box | `new BoundingBox(Box)`, `getBoundingBox()` / `setBoundingBox(...)`, `getDetailBoxes()` |
+| `AudioComponent` | Looping sound-event ids on the entity | `getSoundEventIds()` (`int[]`), `addSound(int)` |
+| `FromWorldGen` / `WorldGenId` | Tags an entity with its world-gen id | `new FromWorldGen(int)` / `new WorldGenId(int)`, `getWorldGenId()` |
+
+### Marker / singleton components
+
+These hold no per-entity state — presence alone is the signal. They expose a shared instance rather than a public constructor (`INSTANCE` or static `get()`):
+
+| Component | Effect | Accessor |
+|-----------|--------|----------|
+| `Interactable` | Entity can be interacted with | `Interactable.INSTANCE` |
+| `Intangible` | Entity ignores collision | `Intangible.INSTANCE` |
+| `HiddenFromAdventurePlayers` | Hidden from players in Adventure mode | `HiddenFromAdventurePlayers.INSTANCE` |
+| `NPCMarkerComponent` | Tags the entity as an NPC | `NPCMarkerComponent.get()` |
+| `PropComponent` | Tags the entity as a static prop | `PropComponent.get()` |
+
+### Usage
+
+```java
+// Give an entity a custom render model and a floating name.
+store.addComponent(ref, ModelComponent.getComponentType(), new ModelComponent(model));
+store.addComponent(ref, DisplayNameComponent.getComponentType(),
+        new DisplayNameComponent(Message.raw("Shopkeeper")));
+
+// Scale it up and make it non-colliding (marker component via its shared instance).
+store.addComponent(ref, EntityScaleComponent.getComponentType(), new EntityScaleComponent(1.5f));
+store.addComponent(ref, Intangible.getComponentType(), Intangible.INSTANCE);
+
+// Read a component back.
+ModelComponent mc = store.getComponent(ref, ModelComponent.getComponentType());
+```
+
+> [!NOTE]
+> Components ending in `consumeNetworkOutdated()` (e.g. `ModelComponent`, `EntityScaleComponent`, `DynamicLight`, `AudioComponent`) are network-synced: mutating them marks the entity dirty so the change is pushed to clients on the next tick. The `Persistent*` variants additionally survive save/reload.
+
+---
+
 ## Entity Stats (EntityStatMap)
 
 Component that holds entity stats like health, stamina, mana, etc.

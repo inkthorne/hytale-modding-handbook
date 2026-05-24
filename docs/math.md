@@ -977,6 +977,66 @@ box.forEachBlock(offsetX, offsetY, offsetZ, scale, (x, y, z) -> {
 
 ---
 
+## Block Shape Iteration
+
+**Package:** `com.hypixel.hytale.math.block`
+
+A family of static utilities that enumerate the integer block coordinates forming a geometric shape — spheres, cubes, cones, cylinders, domes, pyramids, tori, and diamonds. These are the math behind builder-tool brushes: they generate coordinates only and have **no world dependency**, so you pair them with your own chunk/world block-set calls (see [World block access](blocks.md#world-block-access)) to actually place or inspect blocks.
+
+Each call is a zero-allocation visitor: it invokes a `TriIntObjPredicate<T>` once per block position, threading a caller-supplied context object `T` through every callback so no lambda capture is needed on hot paths.
+
+### Key Classes
+
+| Class | Shape |
+|-------|-------|
+| `BlockSphereUtil` | Solid/surface sphere (also `forEachBlockExact` with a `double` radius) |
+| `BlockCubeUtil` | Axis-aligned box (int args or two `Vector3i` corners) |
+| `BlockConeUtil` | Cone, plus `forEachBlockInverted` for an upside-down cone |
+| `BlockCylinderUtil` | Cylinder |
+| `BlockDomeUtil` | Hemisphere (dome) |
+| `BlockInvertedDomeUtil` | Inverted hemisphere |
+| `BlockPyramidUtil` | Pyramid |
+| `BlockTorusUtil` | Torus |
+| `BlockDiamondUtil` | Octahedron (diamond) |
+| `BlockUtil` | Block-coordinate packing helpers (below) — not a shape |
+
+### The callback contract
+
+```java
+// com.hypixel.hytale.function.predicate.TriIntObjPredicate<T>
+boolean test(int x, int y, int z, T context);   // return true to continue, false to stop early
+```
+
+`forEachBlock` overloads return `boolean` (whether iteration ran to completion). The leading three `int`s are always the **center** block coordinates `(x, y, z)` — corroborated by `BlockSphereUtil.forEachBlockExact(int, int, int, double radius, T, …)` — and the remaining `int`s are the shape's dimensions (radius, height, …). Most shapes provide several overloads adding dimensions or `boolean` flags (e.g. hollow/filled).
+
+```java
+// Enumerate every block position inside a radius-5 sphere centered at (cx, cy, cz).
+// The context object (here a counter) is threaded through to avoid lambda capture.
+int[] count = {0};
+BlockSphereUtil.forEachBlock(cx, cy, cz, 5, count, (x, y, z, ctr) -> {
+    ctr[0]++;
+    // place / inspect the block at (x, y, z) via your World or chunk accessor here
+    return true;   // return false to stop iterating early
+});
+```
+
+> [!QUESTION]
+> Member signatures are verified against `HytaleServer.jar`, and the first three `int`s are the center. The exact **order and meaning of the remaining dimension parameters per overload** (e.g. which `int` is base-radius vs. height on a cone, or what the trailing `boolean` toggles) are not labelled in the bytecode and not exercised by any inspectable example — confirm the specific overload against the jar/usage before relying on it.
+
+### BlockUtil — coordinate packing
+
+`BlockUtil` packs a block position into a single `long` key (handy for maps/sets of block positions):
+
+```java
+long key = BlockUtil.pack(x, y, z);        // also pack(Vector3i) / packUnchecked(x, y, z)
+int bx = BlockUtil.unpackX(key);
+int by = BlockUtil.unpackY(key);
+int bz = BlockUtil.unpackZ(key);
+Vector3i pos = BlockUtil.unpack(key);
+```
+
+---
+
 ## MathUtil
 
 **Package:** `com.hypixel.hytale.math.util`

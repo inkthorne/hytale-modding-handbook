@@ -353,15 +353,45 @@ for root, _, files in os.walk(os.path.join(CLS, BUILTIN)):
         for s in p[2]:
             for m in dre.findall(s): bref.add(m.split("$", 1)[0])
 
-# 3. documented symbols (FQCN anywhere + backtick simple names)
-dfq = set(); dsimple = set()
+# 3. harvest documented symbols, in tiers, so "described in prose" is not
+#    conflated with "absent". For each doc we gather:
+#      dfq        - FQCNs mentioned anywhere
+#      code_names - capitalized identifiers inside code contexts (fenced ``` or
+#                   inline `...`), i.e. used in a signature/snippet
+#      alltext    - full concatenated doc text, for plain-prose word matching
+dfq = set(); code_names = set(); alltext = []; codetext = []
 fq = re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
-sm = re.compile(r'`([A-Z][A-Za-z0-9_]*)`')
+fenced = re.compile(r'```.*?```', re.S)
+inline = re.compile(r'`[^`\n]+`')
+ident = re.compile(r'\b[A-Z][A-Za-z0-9_]*\b')
+hump = re.compile(r'[a-z][A-Z]')          # CamelCase marker (RequiredArg, ModelComponent)
 for f in glob.glob("docs/*.md"):
-    t = open(f).read(); dfq.update(fq.findall(t)); dsimple.update(sm.findall(t))
+    t = open(f).read(); alltext.append(t); dfq.update(fq.findall(t))
+    code = " ".join(fenced.findall(t)) + " " + " ".join(inline.findall(t))
+    codetext.append(code); code_names.update(ident.findall(code))
+alltext = "\n".join(alltext); codetext = "\n".join(codetext)
 
-def documented(internal):
-    return (internal.replace("/", ".") in dfq) or (internal.rsplit("/", 1)[-1] in dsimple)
+def prose_mentioned(simple):
+    # A bare prose mention only counts for names specific enough not to collide
+    # with ordinary capitalized English: CamelCase (has a lower->Upper hump) or
+    # reasonably long. Short single-word names (Ban, Coord, Order) must appear
+    # in a code context to count, handled by the code_names tier.
+    if not (re.search(r'[a-z][A-Z]', simple) or len(simple) >= 6):
+        return False
+    return re.search(r'\b' + re.escape(simple) + r'\b', alltext) is not None
+
+def tier(internal):
+    fqcn = internal.replace("/", "."); simple = internal.rsplit("/", 1)[-1]
+    if fqcn in dfq or simple in code_names:
+        return "documented"                       # FQCN or whole-word token in code
+    # CamelCase names taught via a builder method (RequiredArg -> withRequiredArg)
+    # show up only as a substring inside a code context. Restrict to CamelCase so
+    # short words (Ban, Order, Coord) can't substring-collide.
+    if hump.search(simple) and simple in codetext:
+        return "documented"
+    if prose_mentioned(simple):
+        return "mentioned"
+    return "absent"
 
 def subpkg(internal):
     for pre in CAND:
@@ -371,16 +401,26 @@ def subpkg(internal):
     return "?"
 
 pub_b = [c for c in cand if c in bref]
-undoc_b = [c for c in pub_b if not documented(c)]
+tiers = {"documented": [], "mentioned": [], "absent": []}
+for c in pub_b: tiers[tier(c)].append(c)
 print(f"  {len(cand)} public top-level candidate classes "
       f"(server.core/component/math)")
-print(f"  {len(pub_b)} are also builtin-referenced (high-confidence plugin API)")
-print(f"  {len(undoc_b)} of those appear in NO doc page — grouped below:")
-groups = defaultdict(list)
-for c in undoc_b: groups[subpkg(c)].append(c.rsplit("/", 1)[-1])
-for g in sorted(groups, key=lambda k: (-len(groups[k]), k)):
-    print(f"      [{len(groups[g]):>3}] {g}")
-    print("            " + ", ".join(sorted(groups[g])))
+print(f"  {len(pub_b)} are also builtin-referenced (high-confidence plugin API). Of those:")
+print(f"      documented      {len(tiers['documented']):>4}  (named in a code block / signature)")
+print(f"      mentioned-only  {len(tiers['mentioned']):>4}  (in prose but no snippet — thin, candidate to deepen)")
+print(f"      ABSENT          {len(tiers['absent']):>4}  (named nowhere — the real coverage gap)")
+mg = defaultdict(int)
+for c in tiers["mentioned"]: mg[subpkg(c)] += 1
+if mg:
+    print("  mentioned-only by subpackage:")
+    for g in sorted(mg, key=lambda k: (-mg[k], k)):
+        print(f"      [{mg[g]:>3}] {g}")
+print("  ABSENT by subpackage:")
+ag = defaultdict(list)
+for c in tiers["absent"]: ag[subpkg(c)].append(c.rsplit("/", 1)[-1])
+for g in sorted(ag, key=lambda k: (-len(ag[k]), k)):
+    print(f"      [{len(ag[g]):>3}] {g}")
+    print("            " + ", ".join(sorted(ag[g])))
 PY
   rm -rf "$TMPCLS"
 else

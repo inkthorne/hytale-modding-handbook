@@ -1692,6 +1692,7 @@ health.removeBlock(world, pos);                             // clear all tracked
 - Always check if chunk is loaded before accessing blocks
 - Use async chunk loading for non-critical operations to avoid blocking
 - Block events are ECS events; use `EntityEventSystem` to handle them
+- To place blocks in geometric shapes (spheres, cubes, cones, …), use the coordinate iterators in [Block Shape Iteration](math.md#block-shape-iteration)
 
 ---
 

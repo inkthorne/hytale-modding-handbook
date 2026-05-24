@@ -20,6 +20,11 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
  *   /sort name - Sort alphabetically
  *   /sort type - Sort by item type
  *   /sort rarity - Sort by rarity
+ *
+ * <p>Reaches the storage section via its component type, then calls
+ * {@code sortItems(SortType)} on that section's {@link SortType}-aware container.
+ * The {@link SortType} enum names map directly to the command argument, so we
+ * parse the player's input with {@code SortType.valueOf(...)}.
  */
 public class SortCommand extends AbstractPlayerCommand {
 
@@ -51,6 +56,7 @@ public class SortCommand extends AbstractPlayerCommand {
             return;
         }
 
+        // Grab the storage section's container and sort it in place.
         store.getComponent(ref, InventoryComponent.Storage.getComponentType()).getInventory().sortItems(sortType);
         playerRef.sendMessage(Message.raw("Sorted storage by " + sortType.name().toLowerCase()));
     }

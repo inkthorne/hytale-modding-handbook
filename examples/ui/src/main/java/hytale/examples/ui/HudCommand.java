@@ -16,6 +16,11 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 /**
  * Toggles HUD components on/off.
  * Usage: /hud <show|hide>
+ *
+ * <p>This toggles Hytale's <i>built-in</i> HUD pieces (hotbar, health, reticle, ...)
+ * via {@code setVisibleHudComponents}, which takes the full set that should be
+ * visible — so passing no components hides everything. This is distinct from a
+ * <i>custom</i> HUD overlay you draw yourself (see {@link StatusHudCommand}).
  */
 public class HudCommand extends AbstractPlayerCommand {
 
@@ -48,6 +53,7 @@ public class HudCommand extends AbstractPlayerCommand {
                 HudComponent.Reticle);
             playerRef.sendMessage(Message.raw("HUD components shown"));
         } else {
+            // No components in the visible set = everything hidden.
             player.getHudManager().setVisibleHudComponents(playerRef);
             playerRef.sendMessage(Message.raw("HUD components hidden"));
         }

@@ -53,6 +53,9 @@ public class CommandsPlugin extends JavaPlugin {
     @Override
     protected void setup() {
         getCommandRegistry().registerCommand(new HelloCommand());
+        getCommandRegistry().registerCommand(new TeleportCommand());
+
+        getLogger().atInfo().log("CommandsExample plugin loaded!");
     }
 }
 ```
@@ -60,18 +63,33 @@ public class CommandsPlugin extends JavaPlugin {
 ### Command with Arguments
 ```java
 public class TeleportCommand extends AbstractPlayerCommand {
-    private final RequiredArg<RelativeDoublePosition> posArg;
+    private final RequiredArg<RelativeDoublePosition> positionArg;
 
     public TeleportCommand() {
         super("tp", "Teleport to a position");
-        posArg = withRequiredArg("position", "Target", ArgTypes.RELATIVE_POSITION);
+        positionArg = withRequiredArg("position", "Target position", ArgTypes.RELATIVE_POSITION);
     }
 
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-        RelativeDoublePosition pos = ctx.get(posArg);
+        RelativeDoublePosition pos = ctx.get(positionArg);
         // Use pos...
     }
+}
+```
+
+### Opening Commands to Non-Ops
+By default each command auto-generates a permission node that only ops hold, so
+a normal player gets "no permission". Both example commands override
+`canGeneratePermission()` to return `false` so anyone can run them:
+```java
+// By default each command auto-generates a permission node (here "hello")
+// that only ops hold (the OP group carries the '*' wildcard), so a normal
+// player gets "no permission". Returning false skips node generation, leaving
+// the command open to everyone. Use requirePermission("...") to gate instead.
+@Override
+protected boolean canGeneratePermission() {
+    return false;
 }
 ```

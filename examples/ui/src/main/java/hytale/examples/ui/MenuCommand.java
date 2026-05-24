@@ -13,6 +13,11 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 /**
  * Opens a custom UI page for the player.
  * Usage: /menu
+ *
+ * <p>A "page" is a full-screen interface the player opens and dismisses (unlike a
+ * HUD overlay, which stays on screen during play — see {@link StatusHudCommand}).
+ * Pages are shown through the player's page manager; the page itself decides what
+ * to draw and when it can be closed (here, {@code CanDismiss} / press ESC).
  */
 public class MenuCommand extends AbstractPlayerCommand {
 
@@ -32,6 +37,7 @@ public class MenuCommand extends AbstractPlayerCommand {
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
         Player player = store.getComponent(ref, Player.getComponentType());
         SimpleMenuPage page = new SimpleMenuPage(playerRef);
+        // Hand the page to the player's page manager to display it.
         player.getPageManager().openCustomPage(ref, store, page);
     }
 }

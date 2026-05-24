@@ -20,6 +20,12 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
  *   /inv-clear all - Clear entire inventory
  *   /inv-clear hotbar - Clear only hotbar
  *   /inv-clear storage - Clear only storage
+ *
+ * <p>A player's inventory is not one object: each section (hotbar, storage,
+ * armor, ...) is a separate component. This example shows the two ways to reach
+ * them — a combined view spanning several sections at once
+ * ({@code InventoryComponent.getCombined(...)}), or one section's container via
+ * its component type ({@code InventoryComponent.Hotbar.getComponentType()}).
  */
 public class ClearCommand extends AbstractPlayerCommand {
 
@@ -43,6 +49,8 @@ public class ClearCommand extends AbstractPlayerCommand {
         String section = ctx.get(sectionArg).toLowerCase();
 
         if (section.equals("all")) {
+            // EVERYTHING is a combined view over every section; clearing it
+            // empties the whole inventory in one call.
             InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING).clear();
             playerRef.sendMessage(Message.raw("Cleared entire inventory"));
             return;
@@ -61,6 +69,8 @@ public class ClearCommand extends AbstractPlayerCommand {
     }
 
     private ItemContainer getSectionContainer(Store<EntityStore> store, Ref<EntityStore> ref, String section) {
+        // Each section is its own component type; getComponent(...).getInventory()
+        // returns that section's ItemContainer.
         var type = switch (section) {
             case "hotbar" -> InventoryComponent.Hotbar.getComponentType();
             case "storage" -> InventoryComponent.Storage.getComponentType();

@@ -16,6 +16,12 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
  * Inspect current inventory contents.
  * Usage: /inspect
  * Shows: held item, hotbar summary, total items
+ *
+ * <p>Read-only counterpart to the other inventory commands. It demonstrates two
+ * access patterns: the static {@code InventoryComponent.getItemInHand(store, ref)}
+ * for the held item, and reading individual sections via their component types
+ * (e.g. {@code InventoryComponent.Storage.getComponentType()}). Each section's
+ * {@link ItemContainer} is walked with {@code forEach} to tally items.
  */
 public class InspectCommand extends AbstractPlayerCommand {
 
@@ -33,7 +39,7 @@ public class InspectCommand extends AbstractPlayerCommand {
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-        // Show held item
+        // Held item comes from a static helper, not a section container.
         ItemStack heldItem = InventoryComponent.getItemInHand(store, ref);
         if (heldItem.isEmpty()) {
             playerRef.sendMessage(Message.raw("Held item: (empty)"));

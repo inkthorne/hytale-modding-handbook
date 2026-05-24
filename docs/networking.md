@@ -186,6 +186,37 @@ This enum is commonly used with:
 
 ---
 
+## Voice Chat
+
+**Package:** `com.hypixel.hytale.server.core.modules.voice`
+
+A core `JavaPlugin` module implements **proximity voice chat** — routing client voice packets to nearby players based on distance. Plugins do not handle the raw audio (that is internal packet plumbing via `VoiceRouter`/`VoicePacketHandler`), but the module exposes a control surface for toggling voice and reading per-player state.
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| `VoiceModule` | Core module; singleton via `VoiceModule.get()` |
+| `VoiceModuleConfig` | Proximity tuning: `isVoiceEnabled()`, `getMaxHearingDistance()`, `getFullVolumeDistance()`, `getMutedPlayers()` (codec-backed config) |
+| `VoicePlayerState` | Per-player voice state, fetched via `VoiceModule.get().getPlayerState(UUID)` |
+| `VoiceRouter` | Internal distance-based router (`getVoiceRouter()`); not part of the plugin-authoring surface |
+
+### Control surface
+
+| `VoiceModule` method | Description |
+|----------------------|-------------|
+| `static VoiceModule get()` | The module singleton |
+| `isVoiceEnabled()` / `setVoiceEnabled(boolean)` | Globally toggle voice chat |
+| `isDeadPlayersCanHear()` | Whether dead players still receive voice |
+| `getPlayerState(UUID)` | The `VoicePlayerState` for a player |
+| `getVoiceRouter()` | The internal router (advanced/internal use) |
+| `scheduleImmediatePositionUpdate(PlayerRef)` | Force a speaker-position refresh for a player |
+
+> [!WARNING]
+> Verified against `HytaleServer.jar`, but no inspectable first-party plugin in build-12 uses this module, and audio routing is internal. The toggle/state surface above is real; treat anything below it (router internals) as engine plumbing, not a stable plugin API.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are literal message fragments thrown by the build-12 protocol deserializer (verified against `HytaleServer.jar`).

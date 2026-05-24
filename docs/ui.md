@@ -295,6 +295,43 @@ hud.hideHudComponents(playerRef, HudComponent.Chat);
 
 ---
 
+## Entity-Attached UI
+
+**Package:** `com.hypixel.hytale.server.core.modules.entityui` (+ `.asset`)
+
+Distinct from the page/window/HUD system above, *entity UI* renders elements anchored to an entity in the world — floating combat-damage numbers and the stat bars that appear above a mob. Unlike `.ui` pages (player-screen-space, opened via a manager), entity UI components are **JSON assets** attached to an entity through an ECS component, then streamed to nearby clients.
+
+### Architecture
+
+```
+EntityUIModule (core JavaPlugin)
+└── getUIComponentListType() ─▶ ComponentType<EntityStore, UIComponentList>
+
+UIComponentList   (Component<EntityStore> on the entity)
+└── tracks the active EntityUIComponent asset ids for that entity
+
+EntityUIComponent (abstract JSON asset · NetworkSerializable)
+├── CombatTextUIComponent   (floating damage/heal text)
+└── EntityStatUIComponent   (stat bar, e.g. health, above the entity)
+```
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| `EntityUIModule` | Core module; `EntityUIModule.get()` exposes `getUIComponentListType()` |
+| `UIComponentList` | `Component<EntityStore>` on the entity; holds the active component ids (`getComponentIds()`), `update()` to re-sync |
+| `EntityUIComponent` (`.asset`) | Abstract base for entity-anchored UI assets; asset-store backed (`getAssetStore()`, `getAssetMap()`), serialized to the client via `toPacket()` |
+| `CombatTextUIComponent` (`.asset`) | Concrete asset for floating combat text |
+| `EntityStatUIComponent` (`.asset`) | Concrete asset for an entity stat bar |
+
+The concrete components are codec-backed JSON assets (each carries a `CODEC`), loaded from the asset store and addressed by string id — the same asset-loading model as other typed assets (see [Codecs](codecs.md)).
+
+> [!QUESTION]
+> The component **classes and asset hierarchy** are verified against `HytaleServer.jar`, but the JSON schema for authoring a `CombatTextUIComponent`/`EntityStatUIComponent` and the exact call to attach one to a live entity are not exercised by any inspectable first-party plugin in build-12 (only `UIComponentList` is lightly referenced). The fields and attach flow are therefore not documented here rather than guessed — extract them from `Assets.zip` against a future build before relying on them.
+
+---
+
 ## Event Handling
 
 UI events are handled server-side:

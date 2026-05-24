@@ -200,6 +200,44 @@ protected void setup() {
 
 ---
 
+## Access Control (Bans & Whitelist)
+
+**Package:** `com.hypixel.hytale.server.core.modules.accesscontrol`
+
+A separate subsystem from permissions, access control decides **whether a player may connect at all** (bans, whitelist) rather than what an already-connected player is allowed to do. It ships as a core `JavaPlugin` module (`AccessControlModule`) and provides the built-in `/ban`, `/unban`, and `/whitelist …` commands — but it is also an **extension point**: a plugin can register its own access source.
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| `AccessControlModule` | Core module; singleton via `AccessControlModule.get()`. Registration entry points below |
+| `AccessProvider` (SPI, `.provider`) | A pluggable access source. `getDisconnectReason(UUID)` returns `CompletableFuture<Optional<Message>>` — a present `Message` denies the connection with that reason; empty allows it |
+| `Ban` (SPI, `.ban`) | Extends `AccessProvider`; a single ban with `getTarget()`, `getBy()`, `getTimestamp()`, `getReason()`, `isInEffect()`, `getType()`, `toJsonObject()` |
+| `BanParser` (SPI, `.ban`) | Deserializes a `Ban` from a `JsonObject` (`parse(JsonObject)`); register one per ban `type` string |
+| `InfiniteBan` / `TimedBan` | Built-in `Ban` implementations (permanent / time-limited) |
+
+### Registering a custom provider
+
+`AccessControlModule.get()` exposes:
+
+| Method | Description |
+|--------|-------------|
+| `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection |
+| `registerBanParser(String type, BanParser)` | Register a deserializer for a custom ban `type` |
+| `parseBan(String type, JsonObject)` | Parse a stored ban via the registered parser for `type` |
+
+```java
+AccessControlModule.get().registerAccessProvider(uuid ->
+    isOnMyExternalBlocklist(uuid)
+        ? CompletableFuture.completedFuture(Optional.of(Message.raw("Blocked by external list")))
+        : CompletableFuture.completedFuture(Optional.empty()));
+```
+
+> [!WARNING]
+> Verified against `HytaleServer.jar`. No first-party content plugin in build-12 references this module, so the registration entry points are documented from their signatures; the lifecycle timing (when during startup to call `registerAccessProvider`) is not demonstrated by an inspectable plugin — register during your plugin `setup()` and test against your target build.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 server (verified against `HytaleServer.jar`).

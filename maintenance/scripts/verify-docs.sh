@@ -274,9 +274,117 @@ PY
     warn "$M of $C gotcha error string(s) not found in the jar (fabricated, paraphrased, or stale?):"
     echo "$OUT" | grep '^MISS' | sed 's/^MISS/      /'
   fi
-  rm -rf "$TMPCLS" "$POOL"
+  rm -f "$POOL"     # keep $TMPCLS — the coverage check below reuses it
 else
   warn "skipped (no jar)"
+fi
+
+# =====================================================================
+section "[ADVISORY] Documentation coverage vs public API surface"
+# Reports plugin-facing public classes that no doc page mentions, so coverage
+# holes resurface after every game update. The "plugin-facing surface" is
+# inferred from two signals (there is no public/internal annotation in the jar):
+#   1. Package  — candidate top-level (no $) classes under server.core.**,
+#      component, math that are PUBLIC (read from the class-file access flags).
+#   2. Intent   — whether com.hypixel.hytale.builtin.* references the class
+#      (Class-pool entries + type descriptors mined from Utf8 constants).
+# Builtin-referenced + public = high-confidence plugin API. Absence of a builtin
+# reference is a weak signal only: core JavaPlugin *modules* (blockhealth, voice,
+# cosmetics, ...) expose APIs they don't themselves call, so a public class in a
+# plugin-facing package can still be intended for plugins. Treat this as a guide
+# for humans, never a gate.
+if [ -n "${TMPCLS:-}" ] && [ -d "$TMPCLS" ]; then
+  python3 - "$TMPCLS" <<'PY'
+import sys, os, struct, re, glob
+from collections import defaultdict
+CLS = sys.argv[1]
+ACC_PUBLIC = 0x0001
+CAND = ("com/hypixel/hytale/server/core/", "com/hypixel/hytale/component/",
+        "com/hypixel/hytale/math/")
+BUILTIN = "com/hypixel/hytale/builtin"
+
+def parse(path):
+    """(access_flags, [class-ref names], [utf8 values]) or None."""
+    d = open(path, "rb").read()
+    if d[:4] != b"\xca\xfe\xba\xbe": return None
+    n = struct.unpack_from(">H", d, 8)[0]; off = 10; u = {}; cl = {}; i = 1
+    while i < n:
+        t = d[off]; off += 1
+        if t == 1:
+            ln = struct.unpack_from(">H", d, off)[0]; off += 2
+            u[i] = d[off:off+ln].decode("utf-8", "replace"); off += ln
+        elif t in (3, 4): off += 4
+        elif t in (5, 6): off += 8; i += 1
+        elif t == 7: cl[i] = struct.unpack_from(">H", d, off)[0]; off += 2
+        elif t == 8: off += 2
+        elif t in (9, 10, 11, 12): off += 4
+        elif t == 15: off += 3
+        elif t == 16: off += 2
+        elif t in (17, 18): off += 4
+        elif t in (19, 20): off += 2
+        else: return None
+        i += 1
+    acc = struct.unpack_from(">H", d, off)[0]
+    return acc, [u[v] for v in cl.values() if v in u], list(u.values())
+
+# 1. candidate public top-level classes
+cand = {}
+for pre in CAND:
+    base = os.path.join(CLS, pre)
+    for root, _, files in os.walk(base):
+        for fn in files:
+            if not fn.endswith(".class") or "$" in fn: continue
+            p = parse(os.path.join(root, fn))
+            if p and (p[0] & ACC_PUBLIC):
+                internal = os.path.relpath(os.path.join(root, fn), CLS)[:-6].replace(os.sep, "/")
+                cand[internal] = p[0]
+
+# 2. builtin references (Class entries + type descriptors in Utf8)
+bref = set(); dre = re.compile(r'com/hypixel/hytale/[A-Za-z0-9_/$]+')
+for root, _, files in os.walk(os.path.join(CLS, BUILTIN)):
+    for fn in files:
+        if not fn.endswith(".class"): continue
+        p = parse(os.path.join(root, fn))
+        if not p: continue
+        for r in p[1]:
+            r = r.strip("[")
+            if r.startswith("L") and r.endswith(";"): r = r[1:-1]
+            bref.add(r)
+        for s in p[2]:
+            for m in dre.findall(s): bref.add(m.split("$", 1)[0])
+
+# 3. documented symbols (FQCN anywhere + backtick simple names)
+dfq = set(); dsimple = set()
+fq = re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
+sm = re.compile(r'`([A-Z][A-Za-z0-9_]*)`')
+for f in glob.glob("docs/*.md"):
+    t = open(f).read(); dfq.update(fq.findall(t)); dsimple.update(sm.findall(t))
+
+def documented(internal):
+    return (internal.replace("/", ".") in dfq) or (internal.rsplit("/", 1)[-1] in dsimple)
+
+def subpkg(internal):
+    for pre in CAND:
+        if internal.startswith(pre):
+            rest = internal[len(pre):].split("/"); tag = pre.split("/")[-2]
+            return tag + ("/" + "/".join(rest[:-1]) if len(rest) > 1 else "")
+    return "?"
+
+pub_b = [c for c in cand if c in bref]
+undoc_b = [c for c in pub_b if not documented(c)]
+print(f"  {len(cand)} public top-level candidate classes "
+      f"(server.core/component/math)")
+print(f"  {len(pub_b)} are also builtin-referenced (high-confidence plugin API)")
+print(f"  {len(undoc_b)} of those appear in NO doc page — grouped below:")
+groups = defaultdict(list)
+for c in undoc_b: groups[subpkg(c)].append(c.rsplit("/", 1)[-1])
+for g in sorted(groups, key=lambda k: (-len(groups[k]), k)):
+    print(f"      [{len(groups[g]):>3}] {g}")
+    print("            " + ", ".join(sorted(groups[g])))
+PY
+  rm -rf "$TMPCLS"
+else
+  warn "skipped (no extracted game classes)"
 fi
 
 # =====================================================================

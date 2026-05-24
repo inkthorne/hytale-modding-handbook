@@ -524,6 +524,59 @@ For crafting-related events (`CraftRecipeEvent`, `CraftRecipeEvent.Pre`, `CraftR
 
 ---
 
+## Cosmetics (Player Skins & Emotes)
+
+**Package:** `com.hypixel.hytale.server.core.cosmetics`
+
+A core `JavaPlugin` module manages player appearance — the layered skin parts (face, eyes, eyebrows, ears, hair, underwear, body characteristics), skin-tone gradients, eye colors, and emotes. Plugins use it to build the renderable model for a skin, validate a skin, or enumerate the cosmetic catalog.
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| `CosmeticsModule` | Core module; singleton via `CosmeticsModule.get()`. Builds models from skins and validates skins |
+| `CosmeticRegistry` | The cosmetic catalog — typed maps of available emotes, eye colors, gradient sets, and body-part assets |
+| `Emote` | A single emote: `getId()`, `getName()`, `getAnimation()` |
+| `CosmeticType` (enum) | Catalog categories: `EMOTES`, `EMOTES_INGAME`, `SKIN_TONES`, `EYE_COLORS`, `GRADIENT_SETS`, `BODY_CHARACTERISTICS`, `UNDERWEAR`, `EYEBROWS`, `EARS`, `EYES`, `FACE`, `MOUTHS`, … |
+| `BodyType` (enum) | `Masculine`, `Feminine` |
+
+> [!NOTE]
+> Two different `PlayerSkin` types exist. `CosmeticsModule`'s API takes the **protocol** skin `com.hypixel.hytale.protocol.PlayerSkin` (the wire representation), while `com.hypixel.hytale.server.core.cosmetics.PlayerSkin` is the BSON-backed storage form. Don't mix them.
+
+### CosmeticsModule methods
+
+| Method | Description |
+|--------|-------------|
+| `static CosmeticsModule get()` | The module singleton |
+| `getRegistry()` | The `CosmeticRegistry` catalog |
+| `createModel(protocol.PlayerSkin)` | Builds the renderable `Model` (`...asset.type.model.config.Model`) for a skin |
+| `createModel(protocol.PlayerSkin, float scale)` | As above, at a given scale |
+| `createRandomModel(Random)` | A randomized model |
+| `generateRandomSkin(Random)` | A randomized `protocol.PlayerSkin` |
+| `validateSkin(protocol.PlayerSkin)` | Throws `CosmeticsModule.InvalidSkinException` if the skin references unknown parts |
+
+### CosmeticRegistry accessors
+
+Each returns a `Map<String, …>` keyed by asset id: `getEmotes()`, `getEmotesInGame()`, `getEyeColors()` (→ `PlayerSkinTintColor`), `getGradientSets()` (→ `PlayerSkinGradientSet`), `getBodyCharacteristics()`, `getUnderwear()`, `getEyebrows()`, `getEars()`, `getEyes()` (→ `PlayerSkinPart`).
+
+```java
+CosmeticsModule cosmetics = CosmeticsModule.get();
+
+// Enumerate available emotes
+for (Emote emote : cosmetics.getRegistry().getEmotes().values()) {
+    System.out.println(emote.getId() + " -> " + emote.getAnimation());
+}
+
+// Build a renderable model from a (protocol) skin, validating first
+cosmetics.validateSkin(skin);           // throws InvalidSkinException if invalid
+Model model = cosmetics.createModel(skin);
+```
+
+> [!WARNING]
+> Publicly exposed, but no first-party content plugin in build-12 references these classes (only `CosmeticsModule` itself, 8×, from the server bootstrap). Signatures above are verified against `HytaleServer.jar`; the end-to-end "apply this skin to a live player entity" flow is not demonstrated by any inspectable plugin and is intentionally not invented here.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 color parser (verified against `HytaleServer.jar`).

@@ -1624,6 +1624,68 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
 
 ---
 
+## Block Health & Fragility
+
+**Package:** `com.hypixel.hytale.server.core.modules.blockhealth`
+
+A separate runtime subsystem tracks per-block *durability* — how damaged a block is between hits, independent of the one-shot [`DamageBlockEvent`](#damageblockevent) fired on a single strike. It is shipped as a core `JavaPlugin` module (`BlockHealthModule`) that registers a `ChunkStore` component, so damage state is stored and persisted alongside the chunk rather than on individual block instances.
+
+> [!NOTE]
+> Block health is stored on the **chunk**, not the block. A `BlockHealthChunk` component holds a sparse map keyed by `Vector3i` block position — only damaged or fragile blocks occupy entries; undamaged blocks have none.
+
+### Key Classes
+
+| Class | Description |
+|-------|-------------|
+| `BlockHealthModule` | Core `JavaPlugin` module; singleton accessor `BlockHealthModule.get()` exposes the chunk-component type |
+| `BlockHealthChunk` | `Component<ChunkStore>` holding the position→health and position→fragility maps for one chunk; carries the damage/repair API |
+| `BlockHealth` | Per-block durability state: current health, last-damage game time, destroyed/full-health flags |
+| `FragileBlock` | Marks a block position as fragile and records how long (`durationSeconds`) the fragility lasts |
+
+### Accessing the component
+
+`BlockHealthModule.get().getBlockHealthChunkComponentType()` returns the `ComponentType<ChunkStore, BlockHealthChunk>`. Read the `BlockHealthChunk` off a loaded chunk's `ChunkStore` with that type using the standard component-access pattern (see [Components](components.md) and [World block access](#world-block-access)). All mutating calls take the world + block position so the change can be re-broadcast to clients.
+
+```java
+// Inside a system/handler that already has the World and a Vector3i block pos:
+BlockHealthChunk health = /* chunk's ChunkStore component, via the type above */;
+
+Instant gameTime = /* current game-time Instant */;          // damageBlock stamps this
+health.damageBlock(gameTime, world, pos, 5.0f);             // apply 5 damage
+float remaining = health.getBlockHealth(pos);               // query current health
+health.repairBlock(world, pos, 2.0f);                       // heal 2
+health.removeBlock(world, pos);                             // clear all tracked state
+```
+
+### BlockHealthChunk methods
+
+| Method | Description |
+|--------|-------------|
+| `damageBlock(Instant gameTime, World, Vector3i, float amount)` | Applies damage; returns the updated `BlockHealth`. Stamps the last-damage time |
+| `repairBlock(World, Vector3i, float amount)` | Heals the block; returns the updated `BlockHealth` |
+| `removeBlock(World, Vector3i)` | Drops all health/fragility tracking for the position |
+| `getBlockHealth(Vector3i)` | Current health value for the position |
+| `makeBlockFragile(Vector3i, float durationSeconds)` | Marks the position fragile for a duration |
+| `isBlockFragile(Vector3i)` | Whether the position is currently fragile |
+| `getBlockHealthMap()` | `Map<Vector3i, BlockHealth>` of all damaged blocks in the chunk |
+| `getBlockFragilityMap()` | `Map<Vector3i, FragileBlock>` of all fragile blocks in the chunk |
+| `createBlockDamagePackets(List<ToClientPacket>)` | Appends the chunk's damage-overlay packets (used to sync crack visuals to clients) |
+
+### BlockHealth methods
+
+| Member | Description |
+|--------|-------------|
+| `NO_DAMAGE_INSTANCE` (static) | Shared instance representing an undamaged block |
+| `getHealth()` / `setHealth(float)` | Current durability value |
+| `getLastDamageGameTime()` / `setLastDamageGameTime(Instant)` | When the block was last hit (drives regen timing) |
+| `isDestroyed()` | Health has reached zero |
+| `isFullHealth()` | Block is at maximum durability |
+
+> [!WARNING]
+> This is engine-internal infrastructure exposed publicly; no first-party content plugin in build-12 references it. The class/method surface above is verified against `HytaleServer.jar`, but the intended end-to-end authoring flow (how a custom block declares its max health and regen) is not exercised by any shipped plugin — treat the worked example as illustrative of the API shape, not a guaranteed recipe.
+
+---
+
 ## Notes
 - Block manipulation typically goes through chunk accessors
 - Block states persist additional data per-block instance

@@ -491,13 +491,14 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.ser
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.CustomPageSupplier;
 
 public class MyPageSupplier implements CustomPageSupplier {
-    // Define codec for JSON deserialization
-    public static final BuilderCodec<MyPageSupplier> CODEC = BuilderCodec.of(
-        MyPageSupplier::new,
-        BuilderCodec.field("customProperty", String.class, s -> s.customProperty, "default")
-    );
+    // Define codec for JSON deserialization (see codecs.md#buildercodect)
+    public static final BuilderCodec<MyPageSupplier> CODEC =
+        BuilderCodec.builder(MyPageSupplier.class, MyPageSupplier::new)
+            .addField(new KeyedCodec<>("customProperty", Codec.STRING),
+                      (s, v) -> s.customProperty = v, s -> s.customProperty)
+            .build();
 
-    protected String customProperty;
+    protected String customProperty = "default";   // default when the JSON key is absent
 
     @Override
     public CustomUIPage tryCreate(Ref<EntityStore> ref,
@@ -574,12 +575,13 @@ This example shows a custom shop page that accepts a shop ID from JSON:
 **ShopPageSupplier.java:**
 ```java
 public class ShopPageSupplier implements OpenCustomUIInteraction.CustomPageSupplier {
-    public static final BuilderCodec<ShopPageSupplier> CODEC = BuilderCodec.of(
-        ShopPageSupplier::new,
-        BuilderCodec.field("shopId", String.class, s -> s.shopId, "default_shop")
-    );
+    public static final BuilderCodec<ShopPageSupplier> CODEC =
+        BuilderCodec.builder(ShopPageSupplier.class, ShopPageSupplier::new)
+            .addField(new KeyedCodec<>("shopId", Codec.STRING),
+                      (s, v) -> s.shopId = v, s -> s.shopId)
+            .build();
 
-    protected String shopId;
+    protected String shopId = "default_shop";
 
     @Override
     public CustomUIPage tryCreate(Ref<EntityStore> ref,

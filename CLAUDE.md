@@ -68,7 +68,7 @@ Run the regression checker after any game update (or before trusting/extending a
 ./maintenance/scripts/verify-docs.sh --no-build   # skip example compilation (faster)
 ```
 
-It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`, all intra-doc anchor links resolve, and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since build-12 — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
+It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all intra-doc anchor links resolve; and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since build-12 — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
 
 ## Architecture
 

@@ -641,10 +641,19 @@ The `InteractionManager` is used when processing trigger blocks:
 CollisionResult result = new CollisionResult(false, true);  // Enable triggers
 module.findIntersections(world, hitbox, position, result, true, false);
 
-// Process triggers with interaction manager
-InteractionManager manager = store.getComponent(ref, InteractionManager.getComponentType());
+// Process triggers with the entity's interaction manager (see note below)
 result.defaultTriggerBlocksProcessing(manager, entity, ref, flag, accessor);
 ```
+
+> [!question]
+> Unlike the other components on this page, `InteractionManager` does **not**
+> expose a static `getComponentType()` accessor in build-12 (verified via
+> `javap`), so the `store.getComponent(ref, …)` retrieval used elsewhere does not
+> apply here. Its only public constructor is
+> `InteractionManager(LivingEntity, PlayerRef, IInteractionSimulationHandler)`.
+> The exact supported way for a plugin to obtain an existing entity's
+> `InteractionManager` is unconfirmed from bytecode alone — treat `manager` above
+> as already-resolved rather than copying a specific lookup call.
 
 ---
 

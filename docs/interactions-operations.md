@@ -482,7 +482,7 @@ public class MyCustomOp implements Operation {
 
     @Override
     public InteractionRules getRules() {
-        return InteractionRules.DEFAULT;
+        return InteractionRules.DEFAULT_RULES;
     }
 
     @Override

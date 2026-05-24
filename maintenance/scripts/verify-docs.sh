@@ -93,6 +93,28 @@ else
 fi
 
 # =====================================================================
+section "[HARD] Documented API symbols resolve in the jar"
+# Beyond class existence (above), this verifies the *members* docs name in the
+# high-confidence static/qualified form `Receiver.member` (where Receiver is a
+# real jar class) actually exist on that class — walking superclasses so
+# inherited members count. Calibrated to skip JSON/DSL key paths, prose negative
+# examples ("there is no `Codec.BOOL`"), locally-declared example types, and
+# private-but-present members. See maintenance/scripts/check-symbols.py.
+if [ -f "$JAR" ]; then
+  OUT="$(python3 maintenance/scripts/check-symbols.py "$JAR" 2>&1)"
+  C="$(echo "$OUT" | awk '/^CHECKED_MEMBERS/{print $2}')"
+  N="$(echo "$OUT" | awk '/^FINDINGS/{print $2}')"
+  if [ "${N:-1}" -eq 0 ]; then
+    pass "$C documented member symbol(s) all resolve"
+  else
+    fail "$N documented symbol(s) do not resolve in the jar (stale/typo/fabricated):"
+    echo "$OUT" | grep '^FIND' | sed 's/^FIND/      /'
+  fi
+else
+  warn "skipped (no jar)"
+fi
+
+# =====================================================================
 section "[HARD] Intra-doc anchor links resolve"
 OUT="$(python3 - <<'PY'
 import re, glob, os

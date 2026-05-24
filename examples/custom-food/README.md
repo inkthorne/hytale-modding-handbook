@@ -24,17 +24,28 @@ key to most JSON modding — items, NPCs, potions, drops, and more all work this
 
 ```
 custom-food/
-├── manifest.json                       # declares the pack to the game
+├── manifest.json                            # declares the pack to the game
 └── Server/
     ├── Item/
-    │   └── Food_Hearty_Snack.json       # the new item
+    │   └── Items/
+    │       └── Food/
+    │           └── Food_Hearty_Snack.json   # the new item
     └── Languages/
         └── en-US/
-            └── server.lang              # the item's display name + description
+            └── server.lang                  # the item's display name + description
 ```
 
 JSON files **cannot contain comments**, so every field is explained here in the
 README instead of inline.
+
+> **Why `Server/Item/Items/`, not just `Server/Item/`?** The game decides an
+> asset's *type* from its folder. Under `Server/Item/`, the subfolder `Items/`
+> means "item definitions", `Interactions/` means interactions, `ResourceTypes/`
+> means resource types, and so on. A `.json` placed directly in `Server/Item/`
+> matches no type and is silently ignored — it loads without error but never
+> registers, so `/give` can't find it. Item id = the filename without `.json`
+> (`Food_Hearty_Snack`); the subfolders under `Items/` are just for organization
+> and don't change the id.
 
 ### `manifest.json` — declaring the pack
 
@@ -68,7 +79,7 @@ README instead of inline.
 > ```
 > Re-pin this field after a game update. Full details: [02-structure.md → ServerVersion](../../docs/02-structure.md#serverversion-target-server-version).
 
-### `Server/Item/Food_Hearty_Snack.json` — the item
+### `Server/Item/Items/Food/Food_Hearty_Snack.json` — the item
 
 ```json
 {

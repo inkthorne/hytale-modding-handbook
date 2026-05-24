@@ -5,9 +5,8 @@ nav_order: 0
 
 # Hytale Modding Handbook
 
-A human-readable reference for building Hytale server plugins and asset packs —
-the **descriptions, gotchas, and working examples** that the official
-auto-generated API reference doesn't have. Verified against the current game build.
+A server-plugin & asset API reference with the **descriptions, gotchas, and
+working examples**.
 
 ## Start here
 

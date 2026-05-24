@@ -1,7 +1,7 @@
 title: Hytale Modding Handbook
 description: >-
-  A Hytale server-plugin & asset API reference — the descriptions, gotchas,
-  and working examples the official auto-generated reference doesn't have.
+  The Hytale Modding Handbook — a server-plugin & asset API reference with the
+  descriptions, gotchas, and working examples.
 url: https://inkthorne.github.io
 baseurl: /hytale-modding-handbook
 

@@ -6,6 +6,15 @@
   },
   "Quality": "Uncommon",
   "Icon": "Icons/ItemsGenerated/Food_Pie_Apple.png",
+  "BlockType": {
+    "Material": "Empty",
+    "DrawType": "Model",
+    "CustomModel": "Items/Consumables/Food/Pie.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Items/Consumables/Food/Pie_Textures/Apple.png", "Weight": 1 }
+    ],
+    "ParticleColor": "#e5b132"
+  },
   "MaxStack": 16,
   "InteractionVars": {
     "Effect": {

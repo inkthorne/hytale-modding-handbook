@@ -79,6 +79,15 @@ README instead of inline.
   },
   "Quality": "Uncommon",
   "Icon": "Icons/ItemsGenerated/Food_Pie_Apple.png",
+  "BlockType": {
+    "Material": "Empty",
+    "DrawType": "Model",
+    "CustomModel": "Items/Consumables/Food/Pie.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Items/Consumables/Food/Pie_Textures/Apple.png", "Weight": 1 }
+    ],
+    "ParticleColor": "#e5b132"
+  },
   "MaxStack": 16,
   "InteractionVars": {
     "Effect": {
@@ -103,6 +112,7 @@ README instead of inline.
 | `TranslationProperties.Name` / `.Description` | Point to text *keys*, not the text itself. The actual words live in `server.lang` (see below). The `server.` prefix maps to the `server.lang` file. |
 | `Quality` | Rarity tier — sets the item's border colour and sort order. `Uncommon` = green. (Tiers: Common, Uncommon, Rare, Epic, Legendary.) |
 | `Icon` | The inventory picture. **This is the "no art" trick:** it points at an icon that already ships with the game (apple pie), so you draw nothing. |
+| `BlockType` | The 3D model shown when the item is **held or dropped** in the world (the `Icon` only covers the inventory thumbnail). We reuse the game's apple-pie model + texture so the held item matches the icon — again, no new art. **If you omit this**, the item inherits `Template_Food`'s default held model, which is a corn cob — so you'd get an apple-pie icon but a corn cob in hand. |
 | `MaxStack` | How many stack in one slot. The template's default is 25; we override to 16 just to show an override taking effect. |
 | `InteractionVars.Effect` | What happens when you eat it. A list of `ApplyEffect` entries, each naming a real effect by `EffectId`. |
 
@@ -136,9 +146,12 @@ You now have everything you need to make your own food. Try editing one field at
 time and reloading:
 
 - **Different look?** Swap the `Icon` for another shipped icon, e.g.
-  `Icons/ItemsGenerated/Food_Bread.png` or `Icons/ItemsGenerated/Food_Kebab_Meat.png`.
-  (Browse the game's `Common/Icons/ItemsGenerated/` for the full list — see "Where
-  the real assets live" below.)
+  `Icons/ItemsGenerated/Food_Bread.png`, `Icons/ItemsGenerated/Food_Skewer_Meat.png`,
+  or `Icons/ItemsGenerated/Food_Pie_Meat.png`. (Icon filenames don't always match the
+  item name — browse the game's `Common/Icons/ItemsGenerated/` for the real list; see
+  "Where the real assets live" below.) If you want the held model to match too, point
+  `BlockType.CustomModel` / `CustomModelTexture` at a model under
+  `Common/Items/Consumables/Food/`.
 - **Different effect?** Change an `EffectId`. Other real food effects include
   `Food_Instant_Heal_T1` / `_T3` (weaker / stronger heal), `HealthRegen_Buff_T2`
   (heal-over-time), and `FruitVeggie_Buff_T1` (+max stamina).

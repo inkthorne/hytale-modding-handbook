@@ -44,7 +44,7 @@ public class EntityCountHud extends CustomUIHud {
      *
      * @param total   total number of entities in the world
      * @param players entities that have a {@code Player} component
-     * @param npcs    entities that have an {@code NPCMarkerComponent}
+     * @param npcs    entities that have an {@code NPCEntity} component
      * @param other   everything else (projectiles, dropped items, and so on)
      */
     public void updateCounts(int total, int players, int npcs, int other) {

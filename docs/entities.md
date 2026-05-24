@@ -362,8 +362,15 @@ These hold no per-entity state — presence alone is the signal. They expose a s
 | `Interactable` | Entity can be interacted with | `Interactable.INSTANCE` |
 | `Intangible` | Entity ignores collision | `Intangible.INSTANCE` |
 | `HiddenFromAdventurePlayers` | Hidden from players in Adventure mode | `HiddenFromAdventurePlayers.INSTANCE` |
-| `NPCMarkerComponent` | Tags the entity as an NPC | `NPCMarkerComponent.get()` |
+| `NPCMarkerComponent` | Tags the entity as an NPC — **deprecated, see note** | `NPCMarkerComponent.get()` |
 | `PropComponent` | Tags the entity as a static prop | `PropComponent.get()` |
+
+> **Deprecated (build-12):** `NPCMarkerComponent` is
+> `@Deprecated(forRemoval = true)`. The engine still attaches it to every NPC, so
+> it works today, but it is slated for removal. To identify or count NPCs, query
+> the `NPCEntity` component instead — `store.getEntityCountFor(NPCEntity.getComponentType())`
+> (`com.hypixel.hytale.server.npc.entities.NPCEntity`, not deprecated). The
+> entity-count example uses `NPCEntity` for this reason.
 
 ### Usage
 

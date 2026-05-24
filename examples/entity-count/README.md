@@ -22,14 +22,15 @@ Toggles the entity-count HUD in the top-right corner.
 The HUD displays:
 - **Total** — every entity in the world's store (`store.getEntityCount()`)
 - **Players** — entities with a `Player` component (`store.getEntityCountFor(Player.getComponentType())`)
-- **NPCs** — entities with an `NPCMarkerComponent` (`store.getEntityCountFor(NPCMarkerComponent.getComponentType())`)
+- **NPCs** — entities with an `NPCEntity` component (`store.getEntityCountFor(NPCEntity.getComponentType())`)
 - **Other** — the remainder (`Total − Players − NPCs`): projectiles, dropped items, and internal entities
 
 To see the numbers move, walk near mobs, drop items, or have another player join.
 
 > **ECS aside:** there is no "mob" or "NPC" entity *type* in Hytale — every
-> creature is a generic entity tagged with an `NPCMarkerComponent`. You don't
-> ask "what type is this entity?", you ask "which components does it carry?".
+> creature is a generic entity tagged with an `NPCEntity` component (in this ECS
+> even `Player` and `NPCEntity` are components you query, not Java types). You
+> don't ask "what type is this entity?", you ask "which components does it carry?".
 > That is why each HUD line is a component query, and why **Total counts the
 > store, not visible objects** — the store also holds internal entities.
 

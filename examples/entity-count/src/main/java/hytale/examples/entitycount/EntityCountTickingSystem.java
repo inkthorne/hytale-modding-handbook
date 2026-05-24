@@ -6,9 +6,9 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.modules.entity.component.NPCMarkerComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.npc.entities.NPCEntity;
 
 import java.util.Map;
 import java.util.UUID;
@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Hytale stores entities using an Entity Component System (ECS). The short
  * version: an entity is just an id, and what it "is" comes from the
  * <b>components</b> attached to it (a {@code Player} component, an
- * {@code NPCMarkerComponent}, and so on). You don't ask "what type is this
+ * {@code NPCEntity} component, and so on). You don't ask "what type is this
  * entity?" — you ask "which components does it have?". That is exactly how we
  * count below.
  *
@@ -101,9 +101,12 @@ public class EntityCountTickingSystem extends EntityTickingSystem<EntityStore> {
 
         // Count entities by asking the store how many carry a given component.
         // This is the ECS idea in action: classify entities by their components.
-        int total = store.getEntityCount();                                        // every entity
-        int players = store.getEntityCountFor(Player.getComponentType());          // has Player
-        int npcs = store.getEntityCountFor(NPCMarkerComponent.getComponentType()); // has NPC marker
+        int total = store.getEntityCount();                                  // every entity
+        int players = store.getEntityCountFor(Player.getComponentType());    // has Player
+        // Count NPCs by the NPCEntity component the engine tags every NPC with.
+        // (The older NPCMarkerComponent counts the same set but is
+        // @Deprecated(forRemoval) — see docs/entities.md.)
+        int npcs = store.getEntityCountFor(NPCEntity.getComponentType());
 
         // Whatever is left over: projectiles, dropped items, and internal
         // entities the engine keeps. (max(0, ...) is just a safety net.)

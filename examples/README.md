@@ -8,6 +8,7 @@ no build), then move on to the plugins once you want to run code.
 | Example | Type | What it demonstrates | Commands |
 |---------|------|----------------------|----------|
 | [custom-food/](./custom-food/) | Pack | Pure-JSON content: a custom food item from a template, no code or art | — |
+| [custom-drop/](./custom-drop/) | Pack | Pure-JSON loot tables: override a creature's drop table so your item drops in the world | — |
 | [commands/](./commands/) | Plugin | The command system: registering commands and reading arguments | `/hello`, `/tp <x> <y> <z>` |
 | [ui/](./ui/) | Plugin | Custom UI pages and HUD management | `/menu`, `/hud <show\|hide>`, `/statushud <show\|hide\|update>` |
 | [inventory/](./inventory/) | Plugin | The inventory API: item stacks, containers, transactions | `/give <item> <qty>`, `/inv-clear <section>` |
@@ -22,6 +23,14 @@ in-game icon and shipped heal/buff effects (so there's nothing to compile or dra
 Teaches the "copy a template, override a few fields" pattern that underlies most JSON
 modding. See its own [README](./custom-food/README.md) for install/test steps —
 it deploys by copying the folder, not by building a jar.
+
+### [custom-drop/](./custom-drop/)
+The level-2 pack — still pure JSON, no build. Where `custom-food` *defines* an item,
+this makes it **drop in the world** by overriding a chicken's loot table. Teaches the
+drop-system **composition tree** (`Multiple` vs `Choice`, weights, `Empty`, multi-roll)
+as a contrast to `custom-food`'s inheritance, plus that an override **replaces the whole
+file**. Depends on `custom-food` for the dropped item — packs compose. See its own
+[README](./custom-drop/README.md).
 
 ### [commands/](./commands/)
 The starting point for plugins. Shows how to register a command, declare required

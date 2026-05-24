@@ -1,0 +1,60 @@
+{
+  "Container": {
+    "$Comment": "Overrides the shipped NPCs/Livestock/Drop_Chicken.json. An override REPLACES the whole file, so the original raw chicken + light hide drops are re-included below, plus a new chance to drop the Hearty Snack from the custom-food pack.",
+    "Type": "Multiple",
+    "Containers": [
+      {
+        "Type": "Choice",
+        "Weight": 100,
+        "$Comment": "Original drop, kept: raw chicken, always.",
+        "Containers": [
+          {
+            "Type": "Single",
+            "Item": {
+              "ItemId": "Food_Chicken_Raw",
+              "QuantityMin": 1,
+              "QuantityMax": 2
+            }
+          }
+        ]
+      },
+      {
+        "Type": "Choice",
+        "Weight": 100,
+        "$Comment": "Original drop, kept: light hide, always.",
+        "Containers": [
+          {
+            "Type": "Single",
+            "Item": {
+              "ItemId": "Ingredient_Hide_Light",
+              "QuantityMin": 1,
+              "QuantityMax": 2
+            }
+          }
+        ]
+      },
+      {
+        "Type": "Choice",
+        "Weight": 100,
+        "$Comment": "NEW: this Choice always fires (Weight 100 inside the Multiple), then picks ONE of its children by weight — the snack or nothing.",
+        "Containers": [
+          {
+            "Type": "Single",
+            "Weight": 100,
+            "$Comment": "Set HIGH for testing so one kill confirms the wiring. For real play lower it (e.g. Snack 5 / Empty 95 = a 5% drop).",
+            "Item": {
+              "ItemId": "Food_Hearty_Snack",
+              "QuantityMin": 1,
+              "QuantityMax": 1
+            }
+          },
+          {
+            "Type": "Empty",
+            "Weight": 0,
+            "$Comment": "Raise this weight to make the snack rarer. Empty = the 'chance for nothing' outcome; only valid inside a Choice/Multiple."
+          }
+        ]
+      }
+    ]
+  }
+}

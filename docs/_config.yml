@@ -5,6 +5,9 @@ description: >-
 url: https://inkthorne.github.io
 baseurl: /hytale-modding-handbook
 
+# Google Search Console site verification (emitted as a meta tag by jekyll-seo-tag)
+google_site_verification: lda6iuJ9CP3rDGQrFaLuMYyygR61GKYVzTFU8vCwSac
+
 # Theme: just-the-docs (sidebar nav + built-in search), pinned for GitHub Pages compatibility
 remote_theme: just-the-docs/just-the-docs@v0.7.0
 

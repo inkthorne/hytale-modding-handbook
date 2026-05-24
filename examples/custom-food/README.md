@@ -198,6 +198,9 @@ time and reloading:
    slot). The +5% max-health "Hearty" buff appears in your status effects for 45
    seconds. Note the *instant heal* is only visible if you've taken damage first — at
    full health there's nothing to restore, so take a little damage before testing.
+   When you're done, `/gamemode Creative` switches you straight back — game mode is a
+   live per-player toggle, so you can flip between modes in the same world without
+   reloading.
 
 > If the item appears but shows the name `server.items.Food_Hearty_Snack.name`
 > instead of "Hearty Snack", the `server.lang` file isn't being picked up — check it

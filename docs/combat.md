@@ -13,6 +13,11 @@ This document covers damage events, combat systems, and kill feed customization.
 
 > **See also:** For JSON-based combat configuration (damage interactions, effects, target selectors), see [Interactions API Reference](interactions.md#reference). For effect and stat asset definitions, see [Effects & Stats Reference](effects-stats.md).
 
+> **Player-vs-player is gated per world, not globally.** Damage between players is enabled by
+> the `IsPvpEnabled` flag in each world's `config.json` (default `false` on the shipped
+> worlds). The `Damage` events and systems below fire only once PvP is enabled for that world.
+> See [Universes & Save Format → per-world `config.json`](universe-saves.md#the-per-world-configjson).
+
 ## Overview
 
 Implemented mainly in `com.hypixel.hytale.server.core.modules.entity.damage` (with JSON-driven combat config) and provides:

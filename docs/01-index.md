@@ -25,6 +25,7 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [entities.md](entities.md) | Covers the entity system including Player and Entity classes, entity stats, velocity management, and interaction chains. |
 | [player.md](player.md) | Describes player-specific functionality including messaging, permissions, connect/disconnect events, and interaction events. |
 | [world.md](world.md) | Comprehensive world management API covering the World class, chunks, chunk tracking, configuration, and lifecycle events. |
+| [universe-saves.md](universe-saves.md) | Save / universe format for dedicated servers: per-world config.json, binding a world to a WorldStructure, the Defaults.World spawn selection, IsPvpEnabled, and the CreativeHub crossroads. |
 | [events.md](events.md) | Core event system documentation covering registration methods, event priorities, keyed vs non-keyed events, and ECS patterns. |
 | [components.md](components.md) | Entity Component System (ECS) documentation including Store, Ref, queries, CommandBuffer, and ticking systems. |
 | [permissions.md](permissions.md) | Covers permission checking for players and commands, plus permission-related events like group changes. |
@@ -64,7 +65,7 @@ _Documents Java classes/methods — verify with `javap` against `HytaleServer.ja
 ### JSON asset format
 _Documents on-disk JSON asset file formats — verify against the extracted `Assets.zip`._
 
-[Audio System](audio.md)  [Biome System](worldgen-biomes.md)  [Block Animation Format (.blockyanim)](blockyanim-format.md)  [Block Items](items-blocks.md)  [Block Model Format (.blockymodel)](blockymodel-format.md)  [Caves](worldgen-caves.md)  [Combat & Effects Interactions](interactions-combat.md)  [Combo System Interactions](interactions-combo.md)  [Consumable Items](items-consumables.md)  [Control Flow Interactions](interactions-flow.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Entity & World Interactions](interactions-world.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefab Categories](prefabs-categories.md)  [Props & Structure Placement](worldgen-prefabs.md)  [Terrain Density Graphs](worldgen-terrain.md)  [Tool Items](items-tools.md)  [Weapon Items](items-weapons.md)  [World Generation](worldgen.md)  [World Structures (Zones)](worldgen-zones.md)
+[Audio System](audio.md)  [Biome System](worldgen-biomes.md)  [Block Animation Format (.blockyanim)](blockyanim-format.md)  [Block Items](items-blocks.md)  [Block Model Format (.blockymodel)](blockymodel-format.md)  [Caves](worldgen-caves.md)  [Combat & Effects Interactions](interactions-combat.md)  [Combo System Interactions](interactions-combo.md)  [Consumable Items](items-consumables.md)  [Control Flow Interactions](interactions-flow.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Entity & World Interactions](interactions-world.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefab Categories](prefabs-categories.md)  [Props & Structure Placement](worldgen-prefabs.md)  [Terrain Density Graphs](worldgen-terrain.md)  [Tool Items](items-tools.md)  [Weapon Items](items-weapons.md)  [Universes & Save Format](universe-saves.md)  [World Generation](worldgen.md)  [World Structures (Zones)](worldgen-zones.md)
 
 ### UI DSL
 _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
@@ -217,6 +218,7 @@ JSON asset types used in Hytale's data-driven systems.
 - entities.md - Players, entities, stats, velocity, and entity events
 - player.md - Player events and messaging
 - world.md - World access, world events, and chunk events
+- universe-saves.md - Save/universe format, dedicated-server config, and binding worlds to structures
 - events.md - Core event system patterns
 - components.md - ECS system
 

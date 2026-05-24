@@ -18,6 +18,6 @@ working examples**.
 
 - [Commands API](commands.md) · [Events](events.md) · [Components (ECS)](components.md)
 - [Inventory](inventory.md) · [Items](items.md) · [Entities](entities.md) · [Player](player.md)
-- [World](world.md) · [Worldgen / terrain](worldgen-terrain.md) · [UI API](ui-api.md)
+- [World](world.md) · [Universes & saves](universe-saves.md) · [Worldgen / terrain](worldgen-terrain.md) · [UI API](ui-api.md)
 
 Use the sidebar or the search box above to jump to any topic.

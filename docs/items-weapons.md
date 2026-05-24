@@ -1,6 +1,6 @@
 # Weapon Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item`
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 

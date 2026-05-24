@@ -1,6 +1,6 @@
 # Item Definitions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item`
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
@@ -676,6 +676,16 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
   }
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 item/recipe loaders (verified against `HytaleServer.jar`).
+
+- **`One and only one of BlockTag or ItemId must be set!`** → a recipe/material entry (e.g. a `Recipe.Input` element) declared both a block-tag and an `ItemId`, or neither. Fix: give each input exactly one of `ItemId`, `ResourceTypeId`, or a tag — not several.
+- **`itemId, resourceTypeId and tag cannot all be null!`** → a `MaterialQuantity` (recipe input/output) was declared with no identifier at all. Fix: set one of `ItemId`, `ResourceTypeId`, or `tag` on every material entry.
+- **Symptom:** a child item ignores properties it should inherit (or fails to load) → the `Parent` value does not exactly match a template's asset id. Asset ids are case-sensitive and carry no namespace prefix. Fix: set `Parent` to the exact template filename without `.json`, e.g. `Template_Weapon_Sword` (see [Inheritance System](#inheritance-system)).
 
 ---
 

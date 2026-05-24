@@ -1,6 +1,6 @@
 # Block Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item`
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 >
@@ -1178,6 +1178,17 @@ block first, and on failure falls back to placing the held block:
 
 A matching root interaction (`Server/Item/RootInteractions/Block_Secondary.json`) wraps it
 with a cooldown and creative settings and references the interaction by name.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 block loader (verified against `HytaleServer.jar`).
+
+- **`Block type not found`** → a `BlockType` key referenced for placement/lookup does not resolve to a loaded block. Fix: confirm the owning item loaded and the key matches the item's id exactly (case-sensitive).
+- **`does not have an associated item!`** → a block type exists but no item carries it, so it cannot be obtained or placed. Fix: define the `BlockType` inside an item file rather than as a standalone block (a block "can only be defined within an Item and not standalone").
+- **`itemId cannot be BlockTypeKey.EMPTY!`** → an item/block operation was handed the empty block-type key. Fix: pass a real block-bearing item id, not an empty/placeholder key.
+- **Symptom:** a placeable block fails to register even though the JSON parses → the `BlockType` block was placed in a standalone block file instead of under an item's `BlockType` property. Fix: nest `BlockType` inside the item definition under `Server/Item/Items/`.
 
 ---
 

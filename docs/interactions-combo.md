@@ -1,6 +1,6 @@
 # Combo System Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -1176,3 +1176,13 @@ This pattern cancels both primary and secondary attack chains before switching t
 - [ChainingInteraction](#chaininginteraction) - The chain type that CancelChain resets
 - [ChainFlagInteraction](#chainflaginteraction) - Often used together (flag triggers special, then cancel resets)
 - [FirstClickInteraction](#firstclickinteraction) - Common parent for charged attacks that trigger CancelChain
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** a combo never advances past the first hit → the next input arrived after the `ChainingAllowance` window closed, so the chain reset to the start. Fix: widen `ChainingAllowance`, and remember the window opens *during* the current attack animation (see [ChainingAllowance Timing](#chainingallowance-timing)).
+- **Symptom:** a `ChainFlag` set in one chain never triggers a branch in another → the two chains don't share the same `ChainId`. Fix: give both interactions the identical `ChainId` so they share flag state (see [ChainId and Cross-Interaction Sync](#chainid-and-cross-interaction-sync)).
+- **Symptom:** a flag-triggered branch only fires once → flags are consumed (reset) immediately after triggering. Fix: re-set the flag with `ChainFlag` each time you need the branch to fire again.
+- **Symptom:** a `Charging` interaction releases the wrong tier (or nothing) → the `Next` map keys are **strings** representing charge-time thresholds, and the system picks the highest threshold reached. Fix: include a `"0"` entry for immediate release, and use string keys like `"0.5"`, not numbers (see [The Next Map System](#the-next-map-system)).
+- **Symptom:** `CancelChain` wiped flags you wanted to keep → cancelling a chain also clears any flags set via `ChainFlag`, and always resets to index 0 (no partial reset). Fix: don't rely on flag persistence across a cancel; re-establish state afterward.

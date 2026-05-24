@@ -1,6 +1,6 @@
 # Crafting System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
 
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 
@@ -987,6 +987,17 @@ Allow crafting at different benches:
 
 ---
 
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 crafting/recipe loaders (verified against `HytaleServer.jar`).
+
+- **`KnowledgeRequired in recipe can't be set for non crafting recipes`** → `KnowledgeRequired: true` was set on a recipe whose bench `Type` is not `Crafting` (e.g. `Processing` or a salvage recipe). Fix: only set `KnowledgeRequired` on standard `Crafting` recipes; remove it from processing/salvage recipes.
+- **`CraftingRecipe can't be null!`** → a recipe reference resolved to nothing — typically a recipe id or `Parent` that does not match a loaded recipe asset. Fix: confirm the recipe asset loaded and the referenced id matches exactly (case-sensitive).
+- **Symptom:** a recipe loads but never appears at the bench → the `BenchRequirement` `Id`/`Categories` do not match the target bench's configured categories, or `RequiredTierLevel` exceeds the bench's tier. Fix: match `Id`/`Categories` to the bench (see [BenchRequirement](#benchrequirement)) and lower `RequiredTierLevel`.
+- **Symptom:** a recipe declares no usable input or output and fails to register → `Input`/`Output` resolved empty (every `MaterialQuantity` must carry an `ItemId`, `ResourceTypeId`, or tag). Fix: give the recipe at least one valid input and a `PrimaryOutput`/`Output`.
+
+---
+
 ## Related Documentation
 
 - [Items Reference](items.md) - Common item properties
@@ -994,3 +1005,7 @@ Allow crafting at different benches:
 - [Consumables](items-consumables.md) - Food and potion items with recipes
 - [Weapons](items-weapons.md) - Weapon items with recipes
 - [Tools](items-tools.md) - Tool items
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

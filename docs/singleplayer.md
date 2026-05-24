@@ -1,6 +1,6 @@
 # Singleplayer API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Events for singleplayer-specific functionality.
 
@@ -61,3 +61,16 @@ protected void setup() {
 
 - This event is specific to singleplayer/local server mode
 - Use this to customize behavior based on access level in singleplayer scenarios
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 singleplayer module (verified against `HytaleServer.jar`).
+
+- **`SetServerAccess can only be used by the owner of the singleplayer world!`** / **`UpdateServerAccess can only be by the owner of the singleplayer world!`** → a non-owner attempted to set or change the singleplayer world's access level. Fix: only the world owner may change access; gate any access-changing logic on owner identity.
+- **`Offline singleplayer mode requires the game must be launched through the official launcher.`** → offline singleplayer was started outside the official launcher. Fix: launch through the official Hytale launcher.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

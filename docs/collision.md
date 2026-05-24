@@ -1,6 +1,6 @@
 # Collision API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers block and character collision detection: the module, query results, the various collision-data types, configuration, and evaluators.
 
@@ -729,3 +729,19 @@ result.setCollisionByMaterial(
     CollisionMaterial.MATERIAL_FLUID
 );
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 collision subsystem (verified against `HytaleServer.jar`).
+
+- **`Must provide supplier for CollisionDataArray`** → a `CollisionDataArray` was used without an element supplier configured. Fix: this is internal — use a `CollisionResult` (which sets up its arrays), rather than constructing `CollisionDataArray` directly.
+- **Symptom:** trigger-block queries return nothing → trigger checking wasn't enabled on the `CollisionResult`. Fix: construct it with `new CollisionResult(false, true)` (or call `enableTriggerBlocks()`) before `findIntersections(..., true, false)` (see [Check for Trigger Blocks](#check-for-trigger-blocks)).
+- **Symptom:** `intersectBox(...)` always looks "true" when used in an `if` → it returns an int result code, not a boolean. Fix: use `isBoxIntersecting(...)` for a boolean, or compare the returned code.
+- **Symptom:** `setBox(...)`/`setPosition(...)`/`expandBox(...)` on `BoxBlockIntersectionEvaluator` seem to discard configuration → these return the evaluator (builder pattern), they are not void mutators. Fix: chain the calls or capture the returned instance.
+- **Symptom:** `validatePosition` "succeeds" but the entity is mid-air/on-ground checks fail → the result is a flag set, not a single value. Fix: test `== VALIDATE_OK` for validity and mask with `& VALIDATE_ON_GROUND` (etc.) for the individual flags (see [Validate Entity Position](#validate-entity-position)).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

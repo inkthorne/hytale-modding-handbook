@@ -220,6 +220,88 @@ if [ "$MM" -eq 0 ]; then pass "no JSON/DSL-tagged doc references Java classes"; 
 fi
 
 # =====================================================================
+section "[ADVISORY] Gotcha error strings trace to the jar"
+# In a "## Gotchas" section, a literal runtime/game error string is written as a
+# bold-backtick lead at the start of a bullet:  - **`exact string`** -> cause...
+# This check verifies each such string actually occurs in the jar's string pool,
+# so a fabricated or stale error message gets flagged (it can't silently rot).
+# Bullets that lead with **Symptom:** or **Compile error** are NOT jar-checked
+# (compiler text and behavioral symptoms aren't game-jar string constants).
+if [ -f "$JAR" ]; then
+  POOL="$(mktemp)"
+  # Extract string constants from the game classes once (a few seconds).
+  TMPCLS="$(mktemp -d)"
+  ( cd "$TMPCLS" && unzip -oq "$JAR" 'com/hypixel/*' 2>/dev/null )
+  find "$TMPCLS" -name '*.class' -print0 | xargs -0 strings -n 6 2>/dev/null > "$POOL"
+  OUT="$(python3 - "$POOL" <<'PY'
+import re, glob, os, sys
+pool = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+# capture the bullet lead: - **`...`**  (only inside a "## Gotchas" section)
+lead = re.compile(r'^\s*-\s+\*\*`([^`]+)`\*\*')
+skip = re.compile(r'^\s*-\s+\*\*(Symptom|Compile)', re.I)
+checked = miss = 0
+misses = []
+for f in sorted(glob.glob("docs/*.md")):
+    bn = os.path.basename(f)
+    in_g = False
+    for ln, line in enumerate(open(f), 1):
+        h = re.match(r'^##\s+(.*)', line)
+        if h:
+            in_g = "gotcha" in h.group(1).lower()
+            continue
+        if not in_g or skip.match(line):
+            continue
+        m = lead.match(line)
+        if not m:
+            continue
+        s = m.group(1).strip()
+        checked += 1
+        if s not in pool:
+            miss += 1
+            misses.append(f"{bn}:{ln}: {s}")
+print(f"CHECKED {checked}")
+for x in misses:
+    print(f"MISS {x}")
+PY
+)"
+  C="$(echo "$OUT" | awk '/^CHECKED/{print $2}')"
+  M="$(echo "$OUT" | grep -c '^MISS' || true)"
+  if [ "${C:-0}" -eq 0 ]; then
+    info "no bold-backtick gotcha strings to verify yet"
+  elif [ "$M" -eq 0 ]; then
+    pass "$C gotcha error string(s) all trace to the jar"
+  else
+    warn "$M of $C gotcha error string(s) not found in the jar (fabricated, paraphrased, or stale?):"
+    echo "$OUT" | grep '^MISS' | sed 's/^MISS/      /'
+  fi
+  rm -rf "$TMPCLS" "$POOL"
+else
+  warn "skipped (no jar)"
+fi
+
+# =====================================================================
+section "[INFO] Version stamps on topic pages"
+# Topic pages should carry a build stamp so readers know what build the page
+# describes. Navigational pages (00/01/02) are exempt.
+python3 - <<'PY'
+import re, glob, os
+nav = {"00-overview.md", "01-index.md", "02-structure.md"}
+stamp = re.compile(r'Verified against build-\d+')
+missing = []
+total = 0
+for p in sorted(glob.glob("docs/*.md")):
+    bn = os.path.basename(p)
+    if bn in nav:
+        continue
+    total += 1
+    if not stamp.search(open(p).read()):
+        missing.append(bn)
+print(f"  {total-len(missing)}/{total} topic pages carry a build stamp")
+for m in missing:
+    print(f"      unstamped: {m}")
+PY
+
+# =====================================================================
 if [ "$DO_FIELDS" -eq 1 ]; then
 section "[ADVISORY] Documented JSON fields appear in real assets"
 if [ -d "$ASSETS" ]; then

@@ -1,6 +1,6 @@
 # Fluids API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Covers the `Fluid` asset type (water, lava, etc.) and how fluid data is surfaced through collision queries.
 
@@ -99,3 +99,16 @@ Fluid fluid = config.fluid;
 int fluidId = config.fluidId;
 byte fluidLevel = config.fluidLevel;  // 0-7, where 0 is full
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 fluid system (verified against `HytaleServer.jar`).
+
+- **`Attempted to register an invalid Fluid`** → fluid registration received a malformed/invalid fluid asset. Fix: register a valid `Fluid` asset.
+- **Symptom:** a collision reports a fluid even where there is none → `collision.fluid` is non-null but set to the `Fluid.EMPTY` sentinel. Fix: guard with `collision.fluid != null && collision.fluid != Fluid.EMPTY` (and treat `Fluid.UNKNOWN` as unresolved), as in the usage example above.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

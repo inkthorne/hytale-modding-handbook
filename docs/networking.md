@@ -1,6 +1,6 @@
 # Networking API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 ## Overview
 
@@ -183,3 +183,17 @@ This enum is commonly used with:
 - ByteBuf is from Netty (io.netty.buffer.ByteBuf)
 - Serialization follows a consistent pattern across all protocol types
 - Direction is distinct from `Vector3f` - it represents rotation, not position/velocity
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are literal message fragments thrown by the build-12 protocol deserializer (verified against `HytaleServer.jar`).
+
+- **`Buffer too small: expected at least`** → deserialization read past the end of the `ByteBuf`; the buffer held fewer bytes than the field required. Fix: validate the buffer length first (`validateStructure` / `computeBytesConsumed`) before reading, and ensure the writer wrote the full payload.
+- **`Buffer overflow reading`** → a length/count field in the buffer claimed more data than is actually present for that field. Fix: ensure the serialized length prefix matches the bytes written, and that reader and writer use the same field order/encoding.
+- **Symptom:** a custom `NetworkSerializable` round-trips incorrectly or over/under-reads → reader and writer disagree on field order or `MAX_SIZE`. Fix: serialize and deserialize fields in the exact same order, and size the buffer to `MAX_SIZE`.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

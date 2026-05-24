@@ -1,6 +1,6 @@
 # Effects & Stats Reference
 
-**Doc type:** JSON asset format · **Assets:** `Server/Entity`
+**Doc type:** JSON asset format · **Assets:** `Server/Entity` · **Verified against build-12**
 
 This document covers the JSON asset structure for status effects and entity stats.
 
@@ -714,3 +714,16 @@ This oxygen stat:
 - Regenerates quickly (25/0.5s) when alive and not suffocating
 - Refills instantly for players in Creative mode
 - Drains 3/0.5s while suffocating
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 effect/stat subsystem (verified against `HytaleServer.jar`).
+
+- **`Unknown EntityEffect with index`** → an effect was applied/cleared by an id that doesn't resolve to a loaded effect asset (e.g. an `ApplyEffect`/`ClearEntityEffect` `EffectId`/`EntityEffectId` typo). Fix: the id must match an effect file under `Server/Entity/Effects/` exactly (case-sensitive).
+- **Symptom:** a `DamageResistance` of `0` lets full damage through and `1.0` blocks everything (feels inverted) → for `Multiplicative`, `Amount` is the *fraction removed* (`1.0` = immune, `0` = no resistance). Fix: use `Amount` as the removed fraction, not the surviving fraction.
+- **Symptom:** a `Multiplicative` `RawStatModifiers` `Amount` of `1.15` doesn't add 15% → for `Multiplicative` the value is a factor (`1.15` ≈ +15%, `1.0` = no change), not an additive bonus. Fix: use `Additive` with the flat delta if you want a plain add.
+- **Symptom:** a stat with `Max: 0` (e.g. Mana) never holds any value → its cap starts at 0 and is meant to be raised by gear/effects granting max. Fix: grant a max-stat modifier rather than only adding current value.
+- **Symptom:** a `Regenerating` rule never ticks → one of its `Conditions` is unmet, and all conditions in the array must be true. Fix: check each `Id` (and any `Inverse`), since e.g. `NoDamageTaken`/`CheckPlayerGameMode` silently gate the whole rule.
+- **Symptom:** an effect doesn't refresh/stack as expected → behavior is set by `OverlapBehavior` (`Overwrite` replaces, `Extend` adds duration). Fix: set `OverlapBehavior` explicitly for re-application.

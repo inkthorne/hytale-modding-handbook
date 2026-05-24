@@ -1,6 +1,6 @@
 # World Structures (Zones)
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
 
 The "zone" in Hytale's data is a **world structure** file under
 `Server/HytaleGenerator/WorldStructures/`. A world structure assigns biomes across the
@@ -299,6 +299,19 @@ No ranges; a flat density and a single default biome.
   ]
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 world-structure loader (verified against `HytaleServer.jar`).
+
+- **`Invalid json-type for Biomes property. Must be an array!`** → the `Biomes` top-level key is present but not a JSON array. Fix: make `Biomes` an array of assignment objects (it may be empty, but it must be `[]`, not an object/scalar).
+- **`Invalid json-type for biome entry. Must be an object!`** → an element of the `Biomes` array is not an object. Fix: each entry must be an object like `{ "Biome": "...", "Min": -1, "Max": 0 }`.
+- **`Unexpected type for 'UniqueZones' field, expected array`** → the `UniqueZones` field is the wrong JSON type. Fix: declare it as an array.
+- **`Unexpected type for unique zone entry:`** / **`Unexpected type for 'Parent' field in unique zone entry:`** → an entry in `UniqueZones` (or its `Parent` field) is the wrong type. Fix: each unique-zone entry must be an object and `Parent` must be the expected scalar type.
+- **`Could not resolve all unique climate zones, resolved`** → the climate/zone resolver could not place every declared unique zone. Fix: reduce the number of unique zones or widen their candidate ranges so they all fit.
+- **Symptom:** you added a `ZonePatternGenerator`, `BiomePatternGenerator`, Voronoi `CellSize`, `ZoneDiscoveryConfig`, or `CaveGenerator` block and it is ignored → none of those exist in the format. Fix: biome distribution is driven entirely by the `Density` field and the `Biomes` ranges (see [Top-Level Structure](#top-level-structure)).
 
 ---
 

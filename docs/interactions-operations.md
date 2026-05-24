@@ -1,6 +1,6 @@
 # Operation System
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) first for an overview of the interaction system.
 >
@@ -551,3 +551,18 @@ public void tick(..., boolean isFirstTick, ...) {
 - [interactions.md](interactions.md) - Interaction types and configuration
 - [interactions-combo.md](interactions-combo.md) - Combo and chaining systems
 - [interactions-flow.md](interactions-flow.md) - Control flow interactions
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 operation system (verified against `HytaleServer.jar`).
+
+- **`No operations to execute`** → an interaction compiled to an empty `Operation[]` (e.g. a container interaction whose children all dropped out). Fix: ensure `compile(OperationsBuilder)` adds at least one operation.
+- **`Could not find the origin for the operation.`** → the runtime could not locate the operation's origin while resolving a jump/label. Fix: every `createUnresolvedLabel()` must be paired with a `resolveLabel(...)` before `build()` (see [Label System](#label-system)).
+- **`This operation does not allow you to jump to an operation in the future, only the past. Index name:`** → a runtime `context.jump(...)` targeted a label resolved *later* in the sequence. Fix: only jump backward (e.g. loops); for skip-forward branching, structure with a label resolved at the skip point rather than jumping past unresolved operations.
+- **`Cannot set a negative operation index:`** / **`Cannot set an operation index higher than the highest operation index:`** → `setOperationCounter(...)` (or a jump) addressed a slot outside the built operation array. Fix: keep the counter within `[0, build().length - 1]`; advance by `+1` rather than computing arbitrary indices.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

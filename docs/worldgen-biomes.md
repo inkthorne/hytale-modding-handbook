@@ -1,6 +1,6 @@
 # Biome System
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
 
 A biome is a node-graph file under `Server/HytaleGenerator/Biomes/`. It defines the
 terrain heightfield, the materials that fill solid and empty space, optional scattered
@@ -383,6 +383,14 @@ The smallest complete shape — flat-ish terrain, dirt fill, required empty bran
 
 (`Void.json` is essentially this with a `Constant` density of `0`, an `Empty` material,
 and a `Constant` environment/tint.)
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** a world structure's `"Biome": "Plains1_Oak"` entry resolves to a missing/default biome even though `Plains1_Oak.json` exists → references use the **file name** (without extension), not the file's `Name` display field, and the match is case-sensitive. Fix: reference the exact file name, e.g. `Plains1/Plains1_Oak.json` → `"Plains1_Oak"`.
+- **Symptom:** you added `LayerContainer`, `CoverContainer`, `WaterContainer`, `PrefabContainer`, or a `TileBiome`/`CustomBiome` type and it is silently ignored → none of those exist in the format. Fix: terrain is a `DAOTerrain`→`Density` node graph, materials are a `MaterialProvider` graph, and water is a fluid `Material` placed by the `Empty` branch of the material provider (see [Top-Level Structure](#top-level-structure)).
+- **Symptom:** a top-level key like `Terrain` or `MaterialProvider` is missing and the biome fails to load → `Name`, `Terrain`, and `MaterialProvider` are required. Fix: provide all three; `Density`, `Props`, `EnvironmentProvider`, and `TintProvider` are optional.
 
 ---
 

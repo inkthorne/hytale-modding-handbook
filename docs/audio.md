@@ -1,6 +1,6 @@
 # Audio System
 
-**Doc type:** JSON asset format · **Assets:** `Server/Audio`
+**Doc type:** JSON asset format · **Assets:** `Server/Audio` · **Verified against build-12**
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 
@@ -777,3 +777,12 @@ All audio assets use JSON format:
 | Sound Set | `SoundSets/*.json` | Named sound groups |
 
 Sound files themselves are `.ogg` format located in `Common/Sounds/`.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are literal message fragments thrown by the build-12 audio system (verified against `HytaleServer.jar`).
+
+- **`has a looping layer and is not a oneshot sound`** → a sound event used as a one-shot contains a layer marked `"Looping": true`. Fix: a one-shot sound's layers must not loop; clear `Looping` on those layers, or play it as a continuous/ambient sound instead.
+- **Symptom:** a referenced `.ogg` plays as silence or fails to load → the `Files`/`Track` path is wrong or the file is missing. Fix: sound files live under `Common/Sounds/`; reference them by their path relative to that root (e.g. `Sounds/Items/Candle/Candle_Loop_01.ogg`).

@@ -1,6 +1,6 @@
 # Adventure API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 
@@ -471,3 +471,7 @@ public class AdventurePlugin extends JavaPlugin {
     }
 }
 ```
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

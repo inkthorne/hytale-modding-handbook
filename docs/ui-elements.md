@@ -1,6 +1,6 @@
 # UI Elements Reference
 
-**Doc type:** UI DSL · **Assets:** `Common/UI`
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**
 
 Comprehensive reference for all UI element types in Hytale's DSL.
 
@@ -696,6 +696,14 @@ TabNavigation #TopTabs {
     }
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** the root element is dropped or the `.ui` file fails to load when the outermost `Group` has an `#Id` → the root `Group` must be ID-less. Fix: leave the root anonymous and put IDs on its child elements (see [Group](#group)).
+- **Symptom:** flat `Style: (FontSize: …, TextColor: …)` on a `TextButton` doesn't style its text → unlike `Label` (which uses direct styling), `TextButton` text styling lives in a per-state nested `LabelStyle`. Fix: write `Style: (Default: (LabelStyle: (…)))` (see [Styling](ui-styling.md#textbutton-syntax)).
+- **Symptom:** an `OnActivating`/`SendData` handler placed on a `Button`/`TextButton` in the `.ui` file never fires → event handlers are not part of the `.ui` DSL. Fix: register the binding server-side via `eventBuilder.addEventBinding(...)` and handle it in `handleDataEvent` (see [Java API](ui-api.md#event-handling-in-custom-pages)).
 
 ---
 

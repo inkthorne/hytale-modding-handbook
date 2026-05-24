@@ -1,6 +1,6 @@
 # UI Styling & Layout
 
-**Doc type:** UI DSL · **Assets:** `Common/UI`
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**
 
 Complete reference for positioning, layout, and visual styling in Hytale's UI DSL.
 
@@ -568,6 +568,16 @@ Group {
     }
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 color parser (verified against `HytaleServer.jar`).
+
+- **`Invalid color format, expected: #RGBA, #RRGGBBAA, rgba(#RGB,A), rgba(#RRGGBB,A) or rgba(R,G,B,A)`** → a color string the parser couldn't recognize (a malformed hex value or an unsupported alpha form). Fix: use a documented form — `#RRGGBB`, or the object form `(Color: #RRGGBB(alpha))` with alpha `0.0`–`1.0` (see [Color Format](#color-format)).
+- **`Hex color must start with '#'`** → a hex color value was missing its leading `#`. Fix: prefix the value, e.g. `TextColor: #FFFFFF`.
+- **Symptom:** a direct `Style: (FontSize: …, TextColor: …)` on a `TextButton` has no effect on its label → `TextButton` takes text styling from a per-state nested `LabelStyle`, not a flat `Style`. Fix: write `Style: (Default: (LabelStyle: (…)))` (see [TextButton Syntax](#textbutton-syntax)).
 
 ---
 

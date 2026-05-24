@@ -1,6 +1,6 @@
 # Projectiles API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers spawning and simulating projectiles: the module, asset-based configuration, physics, ECS components, and impact/bounce callbacks.
 
@@ -550,3 +550,18 @@ if (projectileComp != null) {
     // Entity is a projectile
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 projectile subsystem (verified against `HytaleServer.jar`).
+
+- **`has no valid ProjectileConfig`** → an entity/interaction tried to launch a projectile whose `ProjectileConfig` could not be resolved. Fix: pass a config obtained from `ProjectileConfig.getAssetMap().get(id)` and verify the id exists.
+- **`No projectile config typeName provided`** → a `ProjectileInteraction` (or launch config) omitted the projectile config type name. Fix: set the projectile config reference in the interaction JSON.
+- **Symptom:** `ProjectileConfig.getAssetMap().get("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive). Fix: use the exact asset-file id and null-check before spawning.
+- **Symptom:** a projectile bounces forever or never stops → bounce limits come from `StandardPhysicsConfig`. Fix: compare `physics.getBounces()` against `config.getBounceCount()` and check `getBounceLimit()`/`getBounciness()` (see [StandardPhysicsProvider](#standardphysicsprovider)).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

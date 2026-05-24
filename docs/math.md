@@ -1,6 +1,6 @@
 # Math / Vector API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 ## Overview
 
@@ -1132,3 +1132,17 @@ float max = range.getMax();
 ```
 
 Also available: `FloatRange`, `IntRange` in `com.hypixel.hytale.math.range`
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 math types (verified against `HytaleServer.jar`).
+
+- **`Invalid Vector3f format: must be three comma-separated floats`** / **`Invalid Vector3d format: must be three comma-separated doubles`** → a string-form vector did not parse as exactly three comma-separated numbers. Fix: format as `x,y,z` (e.g. `1.0,2.0,3.0`).
+- **`Plane normal can't be a zero vector.`** → a plane was constructed from a zero-length normal. Fix: pass a non-zero (ideally unit-length) normal.
+- **Symptom:** `matrix.invert()` returns `false` and the matrix is left unchanged → the matrix is singular (non-invertible). Fix: check the boolean result before using the matrix rather than assuming inversion succeeded.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

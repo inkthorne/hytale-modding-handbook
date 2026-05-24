@@ -1,6 +1,6 @@
 # Entities API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
 
@@ -688,3 +688,18 @@ protected void setup() {
 For ECS inventory events like `SwitchActiveSlotEvent` and `DropItemEvent`, see the [Inventory Events section in inventory.md](inventory.md#inventory-events).
 
 See [events.md](events.md) for general `EntityEventSystem` usage patterns.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 entity subsystem (verified against `HytaleServer.jar`).
+
+- **`No EntityStatType found for index`** → an `EntityStatMap` call was given a stat index that no registered stat type maps to (e.g. a hardcoded/stale integer). Fix: obtain indices from `DefaultEntityStatTypes` (`getHealth()`, `getStamina()`, ...) rather than literals.
+- **Symptom:** server-side `velocity.addForce(...)`/`velocity.set(...)` appear to do nothing on players → players are client-authoritative for movement, so direct velocity writes are not synchronized. Fix: use `velocity.addInstruction(impulse, config, ChangeVelocityType.Add)`, which queues a client-synced change (see [Player vs NPC Velocity](#important-player-vs-npc-velocity)).
+- **Symptom:** `store.getComponent(ref, Player.getComponentType())` returns `null` for a command sender → the entity isn't a full `Player` (or you used the wrong ref). Fix: for messaging/identity use the `PlayerRef` you were handed; only fetch the `Player` component when you need permissions/inventory/UI, and null-check it.
+- **Symptom:** a `LivingEntityUseBlockEvent` handler never fires for a specific block → the event is keyed by block-type string, so `register(LivingEntityUseBlockEvent.class, "Bench_Builders", ...)` only matches that exact key. Fix: use `registerGlobal(...)` to catch all block uses, or pass the precise block-type key.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

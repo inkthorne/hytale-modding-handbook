@@ -1,6 +1,6 @@
 # Combat API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 This document covers damage events, combat systems, and kill feed customization.
 
@@ -836,3 +836,21 @@ buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback)
 > **Note:** Knockback applied via code bypasses the armor/wielding reduction systems unless you manually calculate and apply modifiers.
 
 > **See also:** For direct velocity manipulation without the component system, see [Knockback from Damage in entities.md](entities.md#example-knockback-from-damage).
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 combat subsystem (verified against `HytaleServer.jar`).
+
+- **`Invalid DamageCause`** → a `DamageCauseId` (in `DamageParameters`) names a cause that isn't a registered `DamageCause` asset. Fix: use a valid id such as `Physical`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
+- **`Missing default DamageCause assets`** → the default `DamageCause` assets failed to load. Fix: an asset-pack/install problem, not a plugin bug; verify the game install and `Assets.zip`.
+- **`Invalid EntityStatOnHit in EntityStatsOnHit`** → an entry in a damage interaction's `EntityStatsOnHit` array is malformed. Fix: each entry needs a valid `EntityStatId` (e.g. `SignatureEnergy`, `Stamina`, `Health`, `Mana`) and a numeric `Amount`.
+- **Symptom:** a `DamageEventSystem` throws or matches nothing because `getQuery()` returned `null` → unlike `KillFeedEvent` handlers, a damage system needs a real query. Fix: return `DamageDataComponent.getComponentType()` from `getQuery()`.
+- **Symptom:** your damage handler reads the wrong entity as the attacker → the `Damage` event fires on the **victim**. Fix: cast `getSource()` to `Damage.EntitySource` and call `getRef()` for the attacker.
+- **Symptom:** `KnockbackComponent` added via code ignores armor/shield reduction → code-applied knockback bypasses the `ArmorKnockbackReduction`/`WieldingKnockbackReduction` systems. Fix: apply knockback through a damage interaction's `Knockback` config, or compute and add the `modifiers` yourself.
+- **Symptom:** a `RunTime` "click-once-to-block" never persists after releasing input → `RunTime` is only an upper bound on a held block, not a commitment. Fix: there is no JSON-only persistent block; it requires custom Java (see [Timed Blocking](#timed-blocking-and-parry-mechanics)).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

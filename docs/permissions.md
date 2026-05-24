@@ -1,6 +1,6 @@
 # Permissions API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers checking permissions on players and commands, plus events fired when player or group permissions change.
 
@@ -197,3 +197,17 @@ protected void setup() {
         System.out.println("Group " + group + " gained permissions: " + added);
     });
 }
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 server (verified against `HytaleServer.jar`).
+
+- **`Cannot change permissions after a command has already been registered`** → `requirePermission(...)` (or a permission-group setter) was called after the command was registered. Fix: call `requirePermission("node")` in the command constructor, before `registerCommand()`.
+- **Symptom:** `hasPermission("node")` returns `false` for a node nobody has explicitly set → the single-arg overload defaults to `false` when the node is unset. Fix: use `hasPermission("node", true)` when "unset" should mean allowed (see [With Default Value](#with-default-value)).
+- **Symptom:** a freshly registered command replies *"no permission"* for ordinary players even without `requirePermission(...)` → every command auto-generates a permission node that only ops hold. Fix: override `canGeneratePermission()` to return `false`, or `requirePermission("node")` and grant it. See [Commands: Permission model](commands.md#permission-model-why-a-new-command-says-no-permission).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

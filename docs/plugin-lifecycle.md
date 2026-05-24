@@ -1,6 +1,6 @@
 # Plugin Lifecycle API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers the plugin entry point, its lifecycle phases, the registries and core modules it exposes, the `manifest.json` format, logging, and server/plugin lifecycle events.
 
@@ -626,3 +626,20 @@ public class MyPlugin extends JavaPlugin {
         // Clean up plugin resources
     }
 }
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 plugin loader (verified against `HytaleServer.jar`).
+
+- **`Failed to find main class!`** → the `Main` field in `manifest.json` doesn't point at a class on the plugin's classpath. Fix: set `Main` to the fully qualified name of your `JavaPlugin` subclass (see [manifest.json](#manifestjson)).
+- **`Requires default constructor!`** → the main class lacks the constructor the loader needs. Fix: declare `public YourPlugin(JavaPluginInit init) { super(init); }` (see [Required Constructor](#required-constructor)).
+- **`does not extend JavaPlugin`** → the class named by `Main` is not a `JavaPlugin` subclass. Fix: extend `JavaPlugin`.
+- **`Expected PluginState.SETUP but found`** → a setup-only operation ran outside the `setup()` phase (the plugin was in a different `PluginState`). Fix: register commands/events/tasks from within `setup()`, not from a constructor or a later phase.
+- **`Unknown owner type, please use PluginBase or CommandManager`** → command registration received an owner that is neither a plugin nor the command manager. Fix: register through `getCommandRegistry()` from your `JavaPlugin`.
+- **Symptom:** a `manifest.json` parse/decode failure aborts loading the plugin → the `Group`, `Name`, and `Main` fields are required and PascalCase. Fix: provide all three with the exact casing shown in [Required Fields](#required-fields).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

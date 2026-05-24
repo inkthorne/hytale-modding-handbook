@@ -1,6 +1,6 @@
 # Block Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
 
 Block definitions configure every placeable block in Hytale, from terrain and ores to furniture, doors, and fluids. Blocks are defined as items with a `BlockType` property that specifies rendering, collision, sounds, particles, and interaction behavior.
 
@@ -1633,6 +1633,18 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
 
 ---
 
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 block system (verified against `HytaleServer.jar`).
+
+- **`itemId cannot be BlockTypeKey.EMPTY!`** → an operation received the empty/air block key where a real block was required. Fix: pass a concrete block type key, not `EMPTY_KEY` (see [Java API Reference](#java-api-reference)).
+- **`One and only one of BlockTag or ItemId must be set!`** → a config entry set both `BlockTag` and `ItemId`, or neither. Fix: specify exactly one of the two.
+- **`Block entry cannot be empty`** → a block list/entry was left blank. Fix: provide a non-empty block type key.
+- **`Cannot select from empty blocks list`** → a block-selection operation ran against an empty list. Fix: ensure the list contains at least one block before selecting.
+- **Symptom:** a block listed in a `Server/BlockTypeList/<Category>.json` `Types[]` array is dropped at load (the loader reports it `contains invalid block … skipping`) → the key does not resolve to a real `BlockType`. Fix: use exact, correctly-cased block type keys (see [Block Type Lists](#block-type-lists)).
+
+---
+
 ## Related Documentation
 
 - [Items](items.md) - Item system and inheritance
@@ -1641,3 +1653,7 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
 - [Components](components.md) - ECS components including BlockEntity
 - [Events](events.md) - Block-related events
 - [Drops](drops.md) - Drop tables and loot configuration
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

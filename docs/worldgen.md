@@ -1,6 +1,6 @@
 # World Generation
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as
@@ -270,6 +270,16 @@ idea, e.g. `Example_CellNoise2D.json`, `Example_Curve_Mapper.json`, `Example_Mix
 Production biomes such as `Biomes/Plains1/Plains1_Oak.json` are large because every node
 in the chain is inlined. To find a specific concept, search for a `Type` value across the
 folder rather than reading a whole file top to bottom.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 world-generator loader (verified against `HytaleServer.jar`).
+
+- **`Invalid world gen name:`** → a world generator was registered/referenced with an empty or malformed name. Fix: use a valid generator name.
+- **`World gen path must be within a trusted directory:`** → a generator's resource path points outside the allowed roots. Fix: keep generator assets under the trusted `Server/HytaleGenerator/` tree.
+- **Symptom:** a node fails to load with a `Property … must be of type …` message → a node parameter has the wrong JSON type (e.g. a string where a number is expected). Fix: match the parameter to its declared type; the load-bearing fields on every node are `Type`, its parameters, and child references under `Inputs` (see [The Node-Graph Model](#the-node-graph-model)).
 
 ---
 

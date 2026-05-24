@@ -1,6 +1,6 @@
 # Interactions API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 > **Note:** For `InteractionManager` (the entity component that manages interaction chains), see [entities.md](entities.md#interactionmanager).
 >
@@ -719,3 +719,19 @@ Interaction (abstract)
 ```
 
 **Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config`
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 interaction system (verified against `HytaleServer.jar`).
+
+- **`No such interaction:`** / **`No interaction ID found for`** → a string reference (in `Next`, `Interactions`, `Serial`, etc.) points to an interaction ID that was never loaded. Fix: the ID must match a `.json` filename (minus the extension) under `Server/Item/Interactions/` or `Server/Item/RootInteractions/`; see [Asset Discovery](#asset-discovery).
+- **`Missing interaction:`** → an interaction expected at lookup time is absent from the asset store. Fix: ensure the referenced asset ships in your asset pack and loaded without error.
+- **`No interactions are defined for`** → a root interaction has an empty (or missing) `Interactions` list, so there is nothing to run. Fix: list at least one nested interaction in the root's `Interactions` array.
+- **Symptom:** an ID resolves at runtime but the interaction silently does nothing → `getInteractionOrUnknown(...)` returns the *unknown* placeholder rather than throwing for a bad ID. Fix: guard with `!interaction.isUnknown()` before using a looked-up `Interaction` (see [Getting an Interaction](#getting-an-interaction)).
+- **Symptom:** an interaction never starts even though the input fires → another interaction's `Rules` block it. `BlockedBy`/`Blocking` (and the default rules applied per `InteractionType` when `Rules` is unset) gate starting. Fix: review the [InteractionRules](#interactionrules) of both interactions, or set a `*Bypass` condition.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

@@ -1,6 +1,6 @@
 # UI System
 
-**Doc type:** Guide
+**Doc type:** Guide · **Verified against build-12**
 
 Hytale provides a comprehensive UI system for creating custom interfaces. UIs are defined using a curly-brace DSL format and managed through server-side Java APIs.
 
@@ -117,6 +117,8 @@ Group {
 ```
 
 ### 2. Create a Custom Page Class
+
+Full working example: [`examples/ui/.../SimpleMenuPage.java`](../examples/ui/src/main/java/hytale/examples/ui/pages/SimpleMenuPage.java) (a display-only page loaded from `SimpleMenuPage.ui`).
 
 ```java
 public class MyPage extends BasicCustomUIPage {
@@ -329,6 +331,14 @@ public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, Stri
 | `ValueChanged` | Input field changes |
 | `SlotClicking` | Inventory slot clicks |
 | `MouseEntered` / `MouseExited` | Hover effects |
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** the root `Group` in your `.ui` file is ignored or the page fails to render → the outermost `Group` must be **anonymous**. Fix: never give the root `Group` an `#Id`; put IDs on its children instead (see [Key Rules](#key-rules)).
+- **Symptom:** the page opens empty / the client cannot find your `.ui` file → either the file is outside `Common/UI/Custom/` or the manifest is missing the asset pack flag. Fix: place `.ui` files under `src/main/resources/Common/UI/Custom/` and add `"IncludesAssetPack": true` to `manifest.json`.
+- **Symptom:** an `OnActivating: (SendData: ...)` handler written in a `.ui` file does nothing → event handlers are **not** supported in `.ui` markup. Fix: register events server-side with `eventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "MyButton")` (see [Event Handling](#event-handling)).
 
 ---
 

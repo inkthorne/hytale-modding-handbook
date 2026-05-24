@@ -1,6 +1,6 @@
 # Terrain Density Graphs
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
 
 Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
 **node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
@@ -402,6 +402,18 @@ in any asset file and they are not part of the format:
 "Type"s), per-layer `Conditions` with `SlopeMin`/`SlopeMax`/`HeightMin`, and the
 `BlockPopulator`/`BlockPriorityChunk` priority table. Terrain is the density graph plus a
 `MaterialProvider`, nothing more.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 density-graph loader (verified against `HytaleServer.jar`).
+
+- **`Number of noises must match number of thresholds`** → a threshold-selecting density node has unequal counts of noise inputs and threshold values. Fix: supply one threshold boundary per noise band.
+- **`Threshold array must contain at least one entry!`** → an empty threshold array. Fix: provide at least one entry.
+- **`Thresholds must be in ascending order and cannot be equal`** → threshold values are out of order or contain duplicates. Fix: list thresholds strictly low→high with no repeats.
+- **`Density Index out of bounds in MultiMix node`** → a `MultiMix`-style density node references an input index that does not exist. Fix: keep referenced indices within the node's input count.
+- **Symptom:** you added a `LayerContainer`, `StaticLayers`/`DynamicLayers`, a `HeightSupplier` `Type`, or per-layer `Conditions`/`SlopeMin` and they are ignored → none of those exist in the format. Fix: terrain is the `Density` node graph plus a `MaterialProvider` (see [What does NOT exist](#what-does-not-exist)).
 
 ---
 

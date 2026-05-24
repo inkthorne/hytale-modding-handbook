@@ -1,6 +1,6 @@
 # Drop System
 
-**Doc type:** JSON asset format · **Assets:** `Server/Drops`
+**Doc type:** JSON asset format · **Assets:** `Server/Drops` · **Verified against build-12**
 
 Drop files define loot tables for blocks, NPCs, containers, and world prefabs. They use a hierarchical container system that supports guaranteed drops, weighted random selection, and modular composition through references.
 
@@ -1133,6 +1133,18 @@ Prefab encounter loot files combine encounter-specific rolls with a shared zone 
 ```
 
 The referenced `Zone3_Encounters_Tier3.json` is itself a normal drop file (with its own `Container` root), letting many faction tables reuse one shared loot pool.
+
+---
+
+## Gotchas & Errors
+
+These are authoring symptoms for drop JSON, sourced from the documented format above (no literal game error strings apply to drop files).
+
+- **Symptom:** a drop file is ignored or errors on load → the root isn't wrapped in a top-level `Container` object. Fix: every drop file is `{ "Container": { "Type": ... } }`; the only exception is a no-drop file, which is literally `{}` (see [Root structure](#drop-system)).
+- **Symptom:** a `Droplist` reference resolves to nothing → `DroplistId` is a **flat id**, not a directory path. Fix: use the flat id (e.g. `Zone1_Encounters_Tier1`), not `Prefabs/Zone1_Encounters_Tier1`.
+- **Symptom:** items don't drop / drop with wrong rarity because every child fires → `Multiple` evaluates **all** children (child `Weight` is a 0-100 percent chance), while `Choice` picks **one** child by relative weight. Fix: use `Choice` for "pick one of", `Multiple` for "roll each independently".
+- **Symptom:** a "chance for nothing" outcome never happens → `Empty` only works as a child inside a `Choice`/`Multiple`, never as a standalone file root. Fix: add an `Empty` child with a `Weight` inside a `Choice`.
+- **Symptom:** an item never appears though it's listed → `ItemId` didn't match a real item definition (ids are case-sensitive). Fix: use the exact item id from [Item Definitions](items.md).
 
 ---
 

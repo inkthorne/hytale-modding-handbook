@@ -1,6 +1,6 @@
 # InteractionContext
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) and [Operation System](interactions-operations.md) first.
 >
@@ -539,3 +539,18 @@ public class CheckCriticalHitOp implements Operation {
 - [interactions.md](interactions.md) - Interaction types and configuration
 - [items.md](items.md) - Item definitions and InteractionVars
 - [entities.md](entities.md#interactionmanager) - InteractionManager component
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** code won't compile against `context.getMeta(...)` / `setMeta(...)` → `InteractionContext` exposes no such convenience methods. Fix: go through the `DynamicMetaStore` from `getMetaStore()`, using `getMetaObject(key)` / `putMetaObject(key, value)`.
+- **Symptom:** `context.advanceOperation()` won't compile → there is no `advanceOperation()` method. Fix: read/write the position directly with `getOperationCounter()` / `setOperationCounter(counter + 1)`.
+- **Symptom:** you can't construct your own `MetaKey<T>` → `MetaKey` has a package-private constructor and no public `create(...)` factory, so plugins cannot define arbitrary keys. Fix: use the predefined standard keys on `Interaction` (e.g. `Interaction.TARGET_ENTITY`), or carry custom data via the item's `InteractionVars`.
+- **Symptom:** a meta read returns `null` mid-chain → meta values are only present if an earlier operation set them, and a skipped/branched-past operation never runs. Fix: null-check every `getMetaObject(...)` result before use (e.g. `TARGET_ENTITY` is unset until a `Selector` runs).
+- **Symptom:** `getInteractionVars()` values come back as the wrong type → it returns a plain `Map<String, String>`; there are no typed accessors. Fix: parse manually (`Float.parseFloat`, `Integer.parseInt`) and supply your own defaults.
+- **Symptom:** `getOriginalItemType()` doesn't `.equals()` an `ItemType` → it returns an `Item` (the item config), not an `ItemType`. Fix: compare against the right type when detecting item swaps.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

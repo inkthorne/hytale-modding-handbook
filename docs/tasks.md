@@ -1,6 +1,6 @@
 # Tasks API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This page covers registering async and scheduled tasks so the plugin system can track them across the plugin lifecycle.
 
@@ -129,3 +129,17 @@ getTaskRegistry().registerTask(task);
 - Registered tasks are tracked by the plugin system
 - Tasks are cleaned up when the plugin is disabled
 - Use for operations that need to run outside the main thread
+
+---
+
+## Gotchas & Errors
+
+These are observable behaviors of the build-12 task system; no literal error strings are thrown by `TaskRegistry` itself.
+
+- **Symptom:** a long-running future keeps running after the plugin is disabled/reloaded → you never registered it, so the plugin system can't cancel it on shutdown. Fix: wrap it with `getTaskRegistry().registerTask(future)` (registered tasks are cleaned up when the plugin is disabled).
+- **Symptom:** game-state reads inside a `runAsync` task race against the server → registered tasks run outside the main thread. Fix: don't touch the live entity `Store` directly from a task thread; marshal world reads/writes back onto the world thread.
+- **Compile error** on `registerTask(...)` → both overloads accept only `CompletableFuture<Void>` or `ScheduledFuture<Void>`. Fix: type the future as `<Void>` (return `null` from a scheduled callable).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

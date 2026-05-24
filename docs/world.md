@@ -1,6 +1,6 @@
 # World API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Covers the runtime `World` object, its chunks, per-player chunk tracking, gameplay configuration, and the world/chunk lifecycle events plugins can observe.
 
@@ -911,3 +911,19 @@ protected void setup() {
     getEntityStoreRegistry().registerSystem(new ChunkUnloadSystem());
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 world system (verified against `HytaleServer.jar`).
+
+- **`Player is already in a world`** → you called `addPlayer()` for a `PlayerRef` that is already in a world. Fix: remove it from its current world first, or skip the add.
+- **`Entity is already in a world!`** → `addEntity()` was called on an entity already added to a world. Fix: add each entity once; check before re-adding.
+- **`Entity is already not in a world!`** → a remove was called on an entity that is not in any world. Fix: guard the removal so it only runs for entities currently in a world.
+- **`This world has already been shutdown!`** → an operation ran against a world that was already shut down. Fix: stop touching the world reference after shutdown.
+- **`Cannot demote empty chunk section!`** → a chunk-palette/section operation ran against an empty section. Fix: operate on a loaded chunk section with content; verify the chunk is loaded first (e.g. `getChunkIfLoaded()` returns non-null).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

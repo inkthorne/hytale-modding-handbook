@@ -1,6 +1,6 @@
 # NPC API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This document covers NPC loading events and AI sensor systems.
 
@@ -282,3 +282,18 @@ protected void setup() {
     });
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 NPC subsystem (verified against `HytaleServer.jar`).
+
+- **`Map of all NPCs must not be empty in AllNPCsLoadedEvent`** → the event was constructed/fired with an empty NPC map. Fix: this is an internal invariant — if you see it, NPC assets failed to load; check the server log for earlier role-load failures rather than the event handler.
+- **`Roles do not have component indexes!`** → NPC role component indexes were queried before roles finished loading. Fix: do role/component work from inside an `AllNPCsLoadedEvent` handler (which fires once all NPCs are loaded), not at plugin `setup()` time.
+- **Symptom:** an `AllNPCsLoadedEvent` listener registered with `register(...)` never fires → it is a **non-keyed** event. Fix: register it without a key (as shown above); a keyed `register(class, "key", ...)` overload will not match.
+- **Symptom:** sensor/`EventSearchType` configuration in plugin code has no effect → sensors are driven by NPC definition JSON, not plugin code; the Java events are read-only hooks. Fix: configure detection in the role's `Instructions`/`Component_Sensor_*` (see [NPC Roles](npc-roles.md#sensors)).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

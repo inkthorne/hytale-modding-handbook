@@ -1,6 +1,6 @@
 # Block Model Format (.blockymodel)
 
-**Doc type:** JSON asset format · **Assets:** `Common`
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against build-12**
 
 This document describes the `.blockymodel` file format used for defining 3D geometry in Hytale.
 
@@ -476,3 +476,12 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 8. **Use doubleSided for thin geometry** - Quads and thin boxes should usually have `"doubleSided": true` to be visible from both sides
 
 9. **Match texture layouts to your texture atlas** - Coordinate the `textureLayout` offsets with your actual texture file layout
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 model loader (verified against `HytaleServer.jar`).
+
+- **`You cannot set shape width to be less than or equal to zero. Width:`** / **`You cannot set shape height to be less than or equal to zero. Height:`** → a shape was given a non-positive dimension. Fix: every shape dimension must be `> 0`.
+- **Symptom:** an animation does not move the part you expect → a `.blockyanim` references a node name that does not exist in this model. Fix: node names must match exactly between the `.blockymodel` and the `.blockyanim`.
+- **Symptom:** the model is not picked up by the game → it is in the wrong folder. Fix: place models under the correct `Common/` location for their kind (`Blocks/Models/`, `Characters/`, `Items/`, `NPC/`).
+- **Symptom:** thin geometry is invisible from one side → quads/thin boxes default to single-sided. Fix: set `"doubleSided": true`.

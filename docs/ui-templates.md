@@ -1,6 +1,6 @@
 # UI Templates, Variables & Localization
 
-**Doc type:** UI DSL · **Assets:** `Common/UI`
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**
 
 Advanced DSL features for reusable UI components and localization.
 
@@ -713,6 +713,14 @@ Button #MyButton {
 // In your CustomUIPage build method
 eventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "MyButton");
 ```
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** a `%namespace.key` displays as the literal key text on the client → the key was never registered server-side. Fix: register it (see [Server-Side Registration](#server-side-registration) and [Internationalization](i18n.md)), and provide fallback text.
+- **Symptom:** an event binding or `cmd.set("#Id…")` targets an element that "exists" but never updates → element IDs are **case-sensitive**, so `#myButton` and `#MyButton` are different elements. Fix: match the exact casing used in the `.ui` file (see [ID Requirements](#id-requirements)).
+- **Symptom:** `addEventBinding`/`cmd.set` silently does nothing for an ID you copied from a binding call → command/targeting selectors need the leading `#` (`cmd.set("#MyButton.Text", …)`), but event-binding IDs are passed **without** `#` (`addEventBinding(…, "MyButton")`). Fix: use `#` only in targeting selectors, not in `addEventBinding` IDs.
 
 ---
 

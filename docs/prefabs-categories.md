@@ -1,6 +1,6 @@
 # Prefab Categories
 
-**Doc type:** JSON asset format · **Assets:** `Server/Prefabs`
+**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**
 
 Hytale includes ~7,824 prefab files organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 
@@ -709,6 +709,16 @@ World generation references prefabs through PrefabList files that group related 
   ]
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab-list system (verified against `HytaleServer.jar`).
+
+- **`No prefab found in prefab list. Please double check your PrefabList asset.`** → a `PrefabList` resolved but yielded no prefab — usually a `Path` that matches no files, or `Recursive: false` over an empty directory. Fix: verify the `Path` points at real prefab files and matches the on-disk casing (see [PrefabList Integration](#prefablist-integration)).
+- **`PrefabList asset not found: `** → a referenced `PrefabList` id does not exist. Fix: confirm the `Server/PrefabList/*.json` file exists and the referenced id matches exactly.
+- **`Prefabs are defined but could not find a valid entry!`** → prefab entries are declared but none resolved to a usable prefab. Fix: check that each entry's `RootDirectory`/`Path` resolves and the directories actually contain `.prefab.json` files.
 
 ---
 

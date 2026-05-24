@@ -1,6 +1,6 @@
 # Components (ECS) API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Hytale uses an Entity Component System (ECS) architecture. Entities are composed of components stored in typed stores.
 
@@ -953,6 +953,9 @@ public Query<ECS_TYPE> getQuery();
 ```
 
 #### Example: Per-Player Ticking System
+
+Full working example: [`examples/entity-count/.../EntityCountTickingSystem.java`](../examples/entity-count/src/main/java/hytale/examples/entitycount/EntityCountTickingSystem.java) (counts world entities each tick, filtered to `Player.getComponentType()`, and pushes totals to a live HUD).
+
 ```java
 import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
@@ -987,3 +990,21 @@ protected void setup() {
     getEntityStoreRegistry().registerSystem(new MyTickingSystem());
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 component system (verified against `HytaleServer.jar`).
+
+- **`Entity already contains component type:`** → you added a component to an entity that already has one of that type. Fix: use `putComponent`/`replaceComponent` to overwrite, or `ensureAndGetComponent` to add-or-get.
+- **`ComponentType is already in Archetype!`** → an archetype build added the same `ComponentType` twice. Fix: add each component type to a `Holder`/`Archetype` only once.
+- **`ComponentType is not in archetype:`** → you removed (or read by required slot) a component the entity doesn't have. Fix: guard with `archetype.contains(type)` / `getComponent(...) != null`, or use `tryRemoveComponent` / `removeComponentIfExists`.
+- **`eventTypeClass must extend EcsEvent!`** → `registerEntityEventType`/`registerWorldEventType` got a class that isn't an `EcsEvent`. Fix: make your ECS event class extend `EcsEvent` (or `CancellableEcsEvent`).
+- **`System is already registered!`** → the same system instance was passed to `registerSystem()` twice. Fix: register each system instance once (registering in `setup()` already runs once per plugin load).
+- **`System dependency isn't registered:`** → a system declares a dependency on another system that wasn't registered first. Fix: register the dependency system before the dependent one.
+- **Symptom:** modifying an entity's components directly inside a `tick()`/`handle()` iteration corrupts iteration → structural changes during iteration are unsafe. Fix: route add/remove/spawn through the `CommandBuffer` passed in (operations are applied after iteration completes).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

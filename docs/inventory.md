@@ -1,6 +1,6 @@
 # Inventory API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 
@@ -762,6 +762,9 @@ if (addedQuantity == requestedQuantity) {
 ```
 
 **Complete give item pattern:**
+
+Full working example: [`examples/inventory/.../GiveCommand.java`](../examples/inventory/src/main/java/hytale/examples/inventory/GiveCommand.java) (compiles against the build-12 jar).
+
 ```java
 public void giveItem(PlayerRef playerRef, Player player, String itemId, int quantity) {
     ItemStack itemStack = new ItemStack(itemId, quantity);
@@ -1323,3 +1326,20 @@ protected void setup() {
     getEntityStoreRegistry().registerSystem(new SlotSwitchSystem());
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 inventory system (verified against `HytaleServer.jar`).
+
+- **Symptom:** an item given with the wrong case (e.g. `plant_fruit_apple`) is accepted but renders as a `?` placeholder on the client → item ids are **case-sensitive on the client**, while `getItem()` resolves loosely server-side (so a mis-cased id is not `Item.UNKNOWN`). Fix: use the exact asset-file casing, e.g. `Plant_Fruit_Apple`.
+- **Symptom:** `ItemStack.isValid()` rejects an item you know exists → `isValid()` can reject valid items in some cases. Fix: test `stack.getItem() == Item.UNKNOWN` instead (see [Validating Item IDs](#validating-item-ids)).
+- **Symptom:** items appear not to be added even though there is space → you discarded the transaction result. Fix: check `result.succeeded()` and inspect `result.getRemainder()` rather than assuming success.
+- **`Container must have something to drop!`** → a drop operation was called on an empty container. Fix: guard with `!container.isEmpty()` first.
+- **`setSlot(int, ItemStack) is not supported in EmptyItemContainer`** → you mutated the shared empty-container singleton (e.g. a section the entity doesn't have). Fix: operate on a real section/container obtained from the live `Inventory`.
+- **`cannot select an active slot`** → an active-slot setter received a slot that the target section can't make active. Fix: pass a valid in-range slot for that section.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

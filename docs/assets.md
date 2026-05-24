@@ -1,6 +1,6 @@
 # Assets API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 The assets system loads, registers, and looks up data-driven game content (items, blocks, models, and custom plugin types) backed by JSON files and codec serialization.
 
@@ -780,3 +780,19 @@ protected void setup() {
     });
 }
 ```
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 asset system (verified against `HytaleServer.jar`).
+
+- **`assetPackSubPath cannot be null when assetPackMode is enabled`** → asset-pack mode was turned on without a sub-path for the pack's files. Fix: supply the pack sub-path, or leave asset-pack mode disabled.
+- **Symptom:** your plugin's JSON files under `Server/[Type]/` are never loaded → the manifest is missing the asset-pack flag. Fix: add `"IncludesAssetPack": true` to `manifest.json` so the server scans your resources (see [Creating Custom Asset Types](#creating-custom-asset-types)).
+- **Symptom:** an asset id with the wrong case resolves loosely server-side but renders as a `?` placeholder on the client → asset/item ids are **case-sensitive on the client**. Fix: use the exact asset-file casing (e.g. `Plant_Fruit_Apple`, not `plant_fruit_apple`).
+- **Symptom:** the whole asset pack silently fails to load after a game update → the manifest's `ServerVersion` no longer matches the running server. `AssetModule` compares it with `String.equals`, so it must **exactly equal** the server's `Implementation-Version`. Fix: re-pin `ServerVersion` to the current build's value (see [docs/02-structure.md → ServerVersion](02-structure.md#serverversion-target-server-version)).
+- **Symptom:** an asset is found under an unexpected key → asset keys default to the **filename without extension** (`Fireball.json` → key `"Fireball"`). Fix: name the file to match the key you intend to look up.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

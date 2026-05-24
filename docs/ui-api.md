@@ -1,6 +1,6 @@
 # UI Java API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Server-side Java API reference for Hytale's UI system.
 
@@ -389,6 +389,8 @@ void onDismiss(Ref<EntityStore> ref, Store<EntityStore> store)
 | `CanDismissOrCloseThroughInteraction` | Player can dismiss, or the page can be closed via an interaction |
 
 ### Implementation Example
+
+Full working example: [`examples/ui/.../SimpleMenuPage.java`](../examples/ui/src/main/java/hytale/examples/ui/pages/SimpleMenuPage.java) (a display-only `BasicCustomUIPage` that loads its layout from a `.ui` file).
 
 ```java
 public class MyCustomPage extends BasicCustomUIPage {
@@ -927,6 +929,9 @@ getEventRegistry().register(SomeEvent.class, event -> {
 > **See also:** [Commands API](commands.md) for command context details
 
 ### Implementation Example
+
+Full working example: [`examples/ui/.../StatusHud.java`](../examples/ui/src/main/java/hytale/examples/ui/StatusHud.java) (and its driver [`StatusHudCommand.java`](../examples/ui/src/main/java/hytale/examples/ui/StatusHudCommand.java), which stores one HUD per player and calls `updateStats`).
+
 ```java
 public class StatusHud extends CustomUIHud {
     public StatusHud(PlayerRef playerRef) {
@@ -1468,6 +1473,16 @@ windows.closeWindow(ref, opened.getId(), store);
 
 ---
 
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 UI system (verified against `HytaleServer.jar`).
+
+- **`CustomUIPage doesn't support events!`** → you registered an event binding (or an event was dispatched) on a page whose `build()` override only takes `UICommandBuilder` — the display-only `BasicCustomUIPage` form has no `UIEventBuilder`. Fix: override the four-argument `build(Ref, UICommandBuilder, UIEventBuilder, Store)` and register bindings there (see [Event Handling in Custom Pages](#event-handling-in-custom-pages)).
+- **Symptom:** a second `setCustomHud()` call makes your first custom HUD disappear → `HudManager` stores a single `customHud` per player, so each call replaces the previous one. Fix: combine elements into one `CustomUIHud`, and pass `null` to `setCustomHud()` to remove it (see [Multiple HUDs](#multiple-huds)).
+- **Symptom:** a `CustomUIHud` ignores `addEventBinding`/click handling → `CustomUIHud.build()` receives only `UICommandBuilder`, never `UIEventBuilder`; HUDs cannot handle events. Fix: use a [`CustomUIPage`](#customuipage) for interactive UI (see [Event Handling](#event-handling)).
+
+---
+
 ## Related Documentation
 
 - [UI Overview](ui.md) - System architecture and quick start
@@ -1476,3 +1491,7 @@ windows.closeWindow(ref, opened.getId(), store);
 - [Templates](ui-templates.md) - Variables and localization
 - [Plugin Lifecycle](plugin-lifecycle.md) - Plugin setup
 - [Player API](player.md) - Player events
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

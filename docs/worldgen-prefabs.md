@@ -1,6 +1,6 @@
 # Props & Structure Placement
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator`
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
 
 Hytale places trees, rocks, plants, ores, encounters and structures through **props**. A biome
 carries a `Props[]` array; each entry pairs a set of **positions** (where to try placing) with an
@@ -390,6 +390,18 @@ in any asset file and they are not part of the format:
 `Props[]` entries plus `Assignments/` graphs (`FieldFunction` -> `Delimiter` -> `Weighted` ->
 `Constant`/`Union` -> `Prefab`/`Cluster`/`Column`/`Cuboid`/`Density`), all under
 `Server/HytaleGenerator/`.
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab/prop loader (verified against `HytaleServer.jar`).
+
+- **`Prefabs are empty! Key: Prefab`** → a `Prefab` prop resolved to no prefab paths. Fix: give the prop a non-empty `WeightedPrefabPaths[]` (see [Prefab](#prefab)).
+- **`prefab pool contains empty list`** → a prefab pool/group entry holds an empty list. Fix: ensure every pool contains at least one path.
+- **`prefab pool contains list with null element`** → a prefab pool list has a null/missing path entry. Fix: remove the null and provide a valid resource path.
+- **`Prefab nesting limit exceeded!`** → a prefab references other prefabs that nest too deeply (a cycle, or excessive depth). Fix: flatten the prefab references / break the cycle.
+- **Symptom:** you added a `PrefabContainer`, `PrefabPopulator`, `UniquePrefabContainer`, `RotationMode`, `FitHeightmap`, or a weighted top-level `PrefabList` and it is ignored → none of those exist in the format. Fix: use biome `Props[]` entries plus `Assignments/` graphs (see [What does NOT exist](#what-does-not-exist)).
 
 ---
 

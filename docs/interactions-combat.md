@@ -1,6 +1,6 @@
 # Combat & Effects Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -1071,3 +1071,11 @@ Use Interrupt alone for light staggers (enemy can recover quickly). Use both for
 - [ChainingInteraction](interactions-combo.md#chaininginteraction) - Create interruptible combo chains
 - [DamageEntity](#damageentity) - Deal damage alongside interrupt
 - [Selector](#selector) - Target multiple entities for AOE interrupts
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** a `DamageEntity` with a flat `Damage` (or `Amount`) number deals no damage → there is no flat-amount field; the amount comes from `DamageCalculator`. Fix: put the value under `DamageCalculator.BaseDamage` (e.g. `{ "Physical": 5 }`), and place knockback/sounds under `DamageEffects` (see [DamageEntity](#damageentity)).
+- **Symptom:** a single `Selector` sweep only damages each entity (or block) once even though the hitbox overlaps it on several frames → by design, a single selector cannot hit the same entity or block more than once. Fix: use a separate `Selector` (or re-trigger the interaction) for a second hit; don't rely on the same sweep hitting twice.
+- **Symptom:** a `HitEntity` interaction never fires even when the swing looks like a hit → the selector's `TestLineOfSight` blocked the target, or `IgnoreOwner` excluded the attacker. Fix: verify line-of-sight is clear and the intended target is not the owner; loosen `TestLineOfSight` for through-wall attacks.

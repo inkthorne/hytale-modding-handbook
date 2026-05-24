@@ -1,6 +1,6 @@
 # Commands API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
 
@@ -88,16 +88,29 @@ protected abstract void execute(
 ```
 
 ### Usage Example
+
+Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the build-12 jar).
+
 ```java
-public class MyCommand extends AbstractPlayerCommand {
-    public MyCommand() {
-        super("mycommand", "Does something cool");
+public class HelloCommand extends AbstractPlayerCommand {
+
+    public HelloCommand() {
+        super("hello", "Sends a friendly greeting");
+    }
+
+    // By default each command auto-generates a permission node (here "hello")
+    // that only ops hold (the OP group carries the '*' wildcard), so a normal
+    // player gets "no permission". Returning false skips node generation, leaving
+    // the command open to everyone. Use requirePermission("...") to gate instead.
+    @Override
+    protected boolean canGeneratePermission() {
+        return false;
     }
 
     @Override
     protected void execute(CommandContext ctx, Store<EntityStore> store,
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-        playerRef.sendMessage(Message.raw("Hello!"));
+        playerRef.sendMessage(Message.raw("Hello, " + playerRef.getUsername() + "!"));
     }
 }
 ```
@@ -563,3 +576,20 @@ public class DifficultyCommand extends AbstractPlayerCommand {
 ```
 
 > **See also:** [Math/Vector API](math.md#core-types)
+
+## Gotchas & Errors
+
+Error strings below are the literal messages thrown by the build-12 command system (verified against `HytaleServer.jar`).
+
+- **`Registered commands must define a name`** → you constructed a command with a null/empty name. Fix: pass a non-empty name to `super("name", ...)`.
+- **`Cannot create a Required Argument with 0 parameters.`** → a custom `ArgumentType` reports zero input tokens. Fix: make `getNumberOfParameters()` return ≥ 1.
+- **`Cannot register additional required arguments after a greedy string argument`** → a greedy/list string argument consumes the rest of the line, so nothing may follow it. Fix: declare the greedy argument last.
+- **`Cannot add a subcommand with no name`** / **`Cannot have multiple subcommands with the same name`** → `addSubCommand()` got an unnamed or duplicate child. Fix: give each subcommand a unique, non-empty name.
+- **`Cannot re-use subcommands. Only one parent command allowed for each subcommand`** → the same `AbstractCommand` instance was added under two parents. Fix: construct a separate instance per parent.
+- **`Cannot add new arguments when a command has already completed registration`** → you called `withRequiredArg`/`addAliases`/`requirePermission`/etc. after the command was registered. Fix: declare all arguments, aliases, and permissions in the constructor, before `registerCommand()`. (The same guard exists as `Cannot add aliases…`, `Cannot change permissions…`, `Cannot add new subcommands…`.)
+- **`Unknown owner type, please use PluginBase or CommandManager`** → `setOwner()` received something that is neither a plugin nor the command manager. Fix: register through `getCommandRegistry()` from your `JavaPlugin`.
+- **Symptom:** a freshly registered `/mycommand` replies *"no permission"* for ordinary players → every command auto-generates a permission node that only ops hold. Fix: override `canGeneratePermission()` to return `false`, or `requirePermission("node")` and grant it. See [Permission model](#permission-model-why-a-new-command-says-no-permission).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

@@ -1,6 +1,6 @@
 # Prefabs API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs`
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 
@@ -964,6 +964,18 @@ The world generator selects prefabs from these lists based on biome rules and pl
 
 ---
 
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab system (verified against `HytaleServer.jar`).
+
+- **`Could not locate prefab: `** → a prefab path/name handed to `PrefabStore` does not resolve to a stored prefab. Fix: use the exact string path the prefab is registered under (case-sensitive), not the internal integer id from `getPrefabId()`.
+- **`Invalid prefab name: `** / **`Invalid prefab path: `** → an empty or malformed prefab name/path was supplied. Fix: pass a non-empty, well-formed name/path.
+- **`PrefabList asset not found: `** → a referenced `PrefabList` asset id does not exist. Fix: confirm the `Server/PrefabList/*.json` file exists and the id matches exactly.
+- **`prefab pool contains empty list`** / **`prefab pool contains list with null element`** → a weighted prefab pool was built with an empty entry list or a null member. Fix: ensure every pool entry is populated and non-null.
+- **`Cannot have a negative y level for pasting prefabs`** → a paste/placement was requested at a negative Y. Fix: place prefabs at a non-negative Y level.
+
+---
+
 ## Related Documentation
 
 - [Prefab Categories](prefabs-categories.md) - Full taxonomy of all 2,455+ prefab files
@@ -971,3 +983,7 @@ The world generator selects prefabs from these lists based on biome rules and pl
 - [SpawnPrefab Interaction](interactions-world.md#spawnprefab) - Spawning prefabs via interactions
 - [World API](world.md) - World and chunk operations
 - [Block System](blocks.md) - Block types and properties
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

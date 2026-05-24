@@ -1,6 +1,6 @@
 # Control Flow Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -2475,3 +2475,12 @@ Items referencing this template provide their own `Effect` variable to inject cu
 For target selection in combat interactions, see the **[Selector](interactions-combat.md#selector)** interaction in the Combat Interactions documentation.
 
 The `Selector` interaction type defines hitbox shapes (`Horizontal`, `AOECircle`, `Stab`, `Raycast`) and executes interactions when entities or blocks are hit.
+
+---
+
+## Gotchas & Errors
+
+- **Symptom:** a `Replace` logs a SEVERE error in the server log → `DefaultOk` is `false`/omitted and the `Var` was not provided by the item. It still falls back to `DefaultValue`, but noisily. Fix: set `"DefaultOk": true` when the variable is genuinely optional, or have the referencing item define the variable (see [DefaultOk Behavior](#defaultok-behavior)).
+- **Symptom:** the same effect (e.g. damage) only applies once when run under `Parallel`, not per-branch → `Parallel` branches execute against duplicated contexts, so changes to the shared context are not additive. Fix: use `Serial` for effects that must stack (see the Parallel notes around [duplicated context](#parallel)).
+- **Symptom:** branches after a `Parallel` run before all forks finish → there is no built-in join/sync point for parallel forks. Fix: wrap in a `Simple` interaction with a `RunTime` long enough to cover the branches, or restructure with `Serial`.
+- **Symptom:** a `Condition` / `StatsCondition` interaction does nothing → no branch matched the current game-mode/stat/state and there was no fallthrough target. Fix: provide a default/`Next` branch so the interaction has somewhere to go when no condition matches.

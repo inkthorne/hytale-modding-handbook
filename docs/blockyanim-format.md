@@ -1,6 +1,6 @@
 # Block Animation Format (.blockyanim)
 
-**Doc type:** JSON asset format · **Assets:** `Common`
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against build-12**
 
 This document describes the `.blockyanim` file format used for animating block states in Hytale.
 
@@ -284,3 +284,9 @@ The animation path is relative to `Common/` and omits the `.blockyanim` extensio
 3. **Match node names exactly** - Node names must match those in the `.blockymodel` file
 4. **Consider reverse animations** - Doors need both open and close animations
 5. **Test at 20 FPS** - Remember the fixed frame rate when timing animations
+
+## Gotchas & Errors
+
+- **Symptom:** an animation has no visible effect on the model → its node animations name nodes that don't exist in the target `.blockymodel`. Fix: node names must match exactly between the `.blockyanim` and the `.blockymodel`.
+- **Symptom:** timings feel too fast or too slow → keyframe time values are interpreted as frames at a **fixed 20 FPS**, not seconds. Fix: convert seconds to frames (1 second = 20 frames).
+- **Symptom:** a one-shot animation (door, chest) snaps back to its start instead of holding → `holdLastKeyframe` defaults to looping. Fix: set `"holdLastKeyframe": true` for play-once animations; leave it `false` for looping ones.

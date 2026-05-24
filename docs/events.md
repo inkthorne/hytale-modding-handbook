@@ -1,6 +1,6 @@
 # Events API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 This document covers the core event system. For specific event classes, see the relevant domain documentation:
 
@@ -489,3 +489,18 @@ if (event.isCancelled()) {
 3. **Use keyed registration** - When you only care about specific event keys, use keyed registration for better performance
 4. **Prefer ECS systems** - For ECS events, always use `EntityEventSystem` rather than trying to work around it
 5. **Register in setup()** - Always register event handlers in your plugin's `setup()` method
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 event/ECS-event system (verified against `HytaleServer.jar`).
+
+- **`eventTypeClass must extend EcsEvent!`** → an ECS event class registered via `registerEntityEventType`/`registerWorldEventType` (or used by an `EntityEventSystem`) does not extend `EcsEvent`. Fix: extend `EcsEvent`, or `CancellableEcsEvent` for cancellable ones.
+- **Symptom:** a handler registered with `register()` on a keyed event (e.g. `PlayerInteractEvent`) never fires → keyed events are filtered by key, so a plain `register()` only matches the default/`Void` key. Fix: use `registerGlobal()` for all keys, or `register(EventClass, key, handler)` for a specific key (see [Keyed vs Non-Keyed Events](#keyed-vs-non-keyed-events)).
+- **Symptom:** an ECS event (e.g. `PlaceBlockEvent`, `Damage`) handler can't reach the acting player → ECS events carry no direct player accessor. Fix: handle them in an `EntityEventSystem` and read components via `chunk.getComponent(index, type)` (see [ECS Events](#ecs-events-entityeventsystem)).
+- **Symptom:** a later handler re-processes an event another handler already cancelled → cancellation does not stop dispatch. Fix: check `event.isCancelled()` first, and use an earlier `EventPriority` (e.g. `EARLY`) when you intend to cancel before others run.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

@@ -1,6 +1,6 @@
 # Codecs API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Hytale uses a codec-based serialization system for data persistence, configuration, and asset loading. It is built on **BSON** (`org.bson.BsonValue` / `org.bson.BsonDocument`) and can also read JSON directly.
 
@@ -449,3 +449,20 @@ You then chain `.append(...).add()` for each field exactly as with `BuilderCodec
 - Decode errors throw exceptions (e.g. `BsonSerializationException`); there is no `DataResult` wrapper.
 </content>
 </invoke>
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 codec system (verified against `HytaleServer.jar`).
+
+- **`codec parameter can't be null`** / **`encode parameter can't be null`** / **`decode parameter can't be null`** → a null was passed where a codec or the value/document to encode/decode was required. Fix: ensure the codec and target are non-null before the call.
+- **`This BuilderCodec is for an abstract or direct codec. To use this codec you must specify an existing object to decode into.`** → you called the no-argument decode on an abstract/direct `BuilderCodec` that has no blank-instance supplier. Fix: decode into an existing instance, or build the codec from a concrete supplier (`BuilderCodec.builder(...)`).
+- **`Codec key is already registered. Given:`** → two types were registered under the same id in a codec map. Fix: give each registered type a unique id in `register(id, type, codec)`.
+- **`Expected a JSON object`** → a JSON value was decoded where an object (`{...}`) was required, but the element was a scalar/array/null. Fix: pass an object node to the object codec.
+- **`JSON config cannot be null when creating builder`** → `withConfig(...)` / builder creation received a null JSON config source. Fix: provide a non-null config.
+- **`Codec cannot be null if persistence is enabled.`** → persistence was enabled but no codec was supplied to serialize the persisted value. Fix: pass a codec, or disable persistence.
+- **`VarInt cannot encode negative values:`** → a negative number was written as a VarInt. Fix: VarInts are unsigned; use a signed/zigzag encoding for values that can be negative.
+- **Symptom:** custom polymorphic types fail to resolve with a *"Failed to find codec for"* style error → the concrete type was never registered. Fix: register each subtype via `getCodecRegistry(...)` during `setup()` using the 3-arg `register(id, type, codec)` (there is no 2-arg `register("name", instance)`).
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

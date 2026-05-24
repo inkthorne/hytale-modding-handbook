@@ -1,6 +1,6 @@
 # Asset Editor Events API
 
-**Doc type:** Java API
+**Doc type:** Java API · **Verified against build-12**
 
 Events for the built-in asset editor system.
 
@@ -202,3 +202,12 @@ protected void setup() {
 ```
 
 > **See also:** [Event Registration](plugin-lifecycle.md#server-lifecycle-events)
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 asset-editor system (verified against `HytaleServer.jar`).
+
+- **`Unable to process AssetEditorUpdateJsonAsset packet. Player ref is invalid!`** → an editor packet arrived referencing a player who has disconnected or whose ref is no longer valid. Fix: this is a transient/disconnect condition rather than a plugin bug; handle `AssetEditorClientDisconnectEvent` and avoid relying on a player ref after disconnect.
+- **Symptom:** an autocomplete request never returns results → an `AssetEditorFetchAutoCompleteDataEvent` handler registered via `registerAsyncGlobal` did not complete its future. Fix: always return the event from the `thenApply` chain (and call `setResults(...)`), so the future completes. see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

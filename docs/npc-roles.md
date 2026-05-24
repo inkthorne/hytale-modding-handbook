@@ -1,6 +1,6 @@
 # NPC Roles
 
-**Doc type:** JSON asset format · **Assets:** `Server/NPC`
+**Doc type:** JSON asset format · **Assets:** `Server/NPC` · **Verified against build-12**
 
 This document covers NPC role asset definitions, including templates, variants, behaviors, and spawning configurations. These assets are found in `Assets.zip` under `Server/NPC/`.
 
@@ -823,3 +823,18 @@ Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. C
 | Flock Files | 8 | Flock size configurations |
 | Spawn Beacons | 75 | Spawn configurations |
 | CAE Files | 28 | Combat balancing |
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 NPC role/spawn loader (verified against `HytaleServer.jar`).
+
+- **`Unable to spawn entity with invalid role index`** → a spawn beacon `NPCs` entry references a role `Id` that does not resolve to a loaded role. Fix: the `Id` must match an existing variant's name exactly (case-sensitive), e.g. `Goblin_Scrapper`.
+- **`attempted to spawn invalid NPC role`** → a spawn marker named a role that failed to load or doesn't exist. Fix: confirm the referenced role file is present under `Server/NPC/Roles/` and validated.
+- **`Cannot have more than one combat state in an NPC`** → a role's `Instructions`/state machine declares more than one combat state. Fix: keep a single combat state per role.
+- **`No such state for combat evaluator`** → a CAE `ActionSets`/`SubState` references a state that the role does not define. Fix: every CAE state/sub-state must correspond to a state used by the role's `Instructions`.
+- **Symptom:** a `Variant` ignores its `Reference` template's values → the `Reference` short name didn't resolve, or you put `{Value, Description}` objects in `Modify`. Fix: reference the template by its exact short name, and in `Modify` use plain values (the `{Value, Description}` form belongs only in a template's `Parameters` block).
+- **Symptom:** a `Compute` expression evaluates to nothing/default → the named parameter isn't declared in any `Parameters` block up the template chain. Fix: declare the parameter (in the template or an overriding variant `Parameters` block) before reading it with `{ "Compute": "..." }`.
+
+---

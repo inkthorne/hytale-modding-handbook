@@ -1,6 +1,6 @@
 # Entity & World Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions`
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -977,3 +977,15 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 - [ChangeState](interactions-world.md#changestate) - Used in Failed for guard break stagger
 - [ChangeStat](interactions-combat.md#changestat) - Modify stamina, signature energy on block
 - [Replace](interactions-flow.md#replace) - Used in Forks for weapon-specific bash attacks
+
+---
+
+## Gotchas & Errors
+
+Backtick-quoted error strings below are the literal messages thrown by the build-12 server (verified against `HytaleServer.jar`).
+
+- **`State transition edge cannot be defined from a state to itself:`** → a `ChangeState` `Changes` entry maps a state to itself (e.g. `"Off": "Off"`). Fix: every `Changes` key must map to a *different* target state; use distinct from→to names (see [State Transition Map](#state-transition-map-changes)).
+- **`No projectile config typeName provided`** → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
+- **`has no valid ProjectileConfig:`** → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
+- **Symptom:** a `ChangeState` does nothing → the current state isn't a key in the `Changes` map, so no transition matches. Fix: include the entity/block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
+- **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabId` doesn't resolve to a loaded prefab. Fix: use a prefab ID that exists in the loaded asset set (filename without extension).

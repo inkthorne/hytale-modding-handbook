@@ -1,0 +1,26 @@
+// GitHub-dark-inspired color scheme for just-the-docs.
+// Starts from the theme's built-in dark scheme, then overrides surface colors
+// to match GitHub's dark palette.
+@import "./color_schemes/dark";
+
+// Surfaces
+$body-background-color:       #0d1117; // GitHub canvas.default
+$sidebar-color:               #010409; // canvas.inset (darker rail)
+$search-background-color:     #0d1117;
+$table-background-color:      #161b22; // canvas.subtle
+$code-background-color:       #161b22;
+$feedback-color:              #161b22;
+
+// Text
+$body-text-color:             #c9d1d9; // fg.default
+$body-heading-color:          #e6edf3; // fg.emphasis
+$nav-child-link-color:        #8b949e; // fg.muted
+$search-result-preview-color: #8b949e;
+
+// Accents
+$link-color:                  #58a6ff; // accent.fg
+$btn-primary-color:           #238636; // success.emphasis (GitHub green button)
+$base-button-color:           #21262d; // canvas button bg
+
+// Lines
+$border-color:                #30363d; // border.default

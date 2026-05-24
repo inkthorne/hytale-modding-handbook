@@ -13,7 +13,7 @@ plugins:
   - jekyll-sitemap
 
 # just-the-docs options
-color_scheme: dark
+color_scheme: github-dark
 search_enabled: true
 heading_anchors: true
 aux_links:

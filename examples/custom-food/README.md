@@ -146,8 +146,14 @@ time and reloading:
 
 ## How to test it in your dev game
 
-1. **Install the pack.** Copy this whole `custom-food/` folder into your Hytale Mods
-   folder:
+1. **Install the pack.** On Linux/bash, run the deploy script — it copies the asset
+   files into a `custom-food/` pack folder in your Mods directory (resolving the path
+   the same way the plugin examples do):
+   ```bash
+   ./deploy.sh
+   ```
+   Or copy it by hand into your Hytale Mods folder (the pack is just `manifest.json`
+   + `Server/`):
    - **Windows:** `%APPDATA%\Hytale\UserData\Mods\`
    - **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`
 2. **Start the game / server.** Watch the log — a pack with a broken asset reference

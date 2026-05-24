@@ -41,7 +41,8 @@ MyPack/          (or MyPack.zip)
 ├── manifest.json
 ├── Server/
 │   ├── Item/
-│   │   └── MyWeapon.json
+│   │   └── Items/
+│   │       └── MyWeapon.json
 │   └── Drops/
 │       └── MyLootTable.json
 └── Common/
@@ -49,6 +50,14 @@ MyPack/          (or MyPack.zip)
         └── Custom/
             └── MyPage.ui
 ```
+
+> **Folder determines asset type.** The game decides what an asset *is* from the
+> folder it sits in. `Server/Item/` is itself subdivided by type — item definitions
+> go in `Server/Item/Items/`, interactions in `Server/Item/Interactions/`, resource
+> types in `Server/Item/ResourceTypes/`, and so on. A `.json` placed directly in
+> `Server/Item/` matches no type and is **silently ignored** (it loads with no error
+> but never registers, so commands like `/give` can't find it). By contrast,
+> `Server/Drops/` *is* a leaf type folder, so loot tables sit directly inside it.
 
 ### Pack Manifest
 
@@ -82,7 +91,8 @@ my-plugin/
 │           ├── manifest.json
 │           ├── Server/
 │           │   └── Item/
-│           │       └── MyItem.json
+│           │       └── Items/
+│           │           └── MyItem.json
 │           └── Common/
 │               └── UI/
 │                   └── Custom/
@@ -166,7 +176,7 @@ Assets in `Server/` are only loaded by the server and are **not sent to clients*
 
 | Directory | Contents |
 |-----------|----------|
-| `Server/Item/` | Item definitions (.json) |
+| `Server/Item/Items/` | Item definitions (.json) — see the folder-determines-type note under [Pack Structure](#pack-structure) |
 | `Server/Audio/` | Audio configurations (.json) |
 | `Server/Drops/` | Loot tables (.json) |
 | `Server/HytaleGenerator/` | World generation configs (.json) |
@@ -251,7 +261,8 @@ CustomSword/
 ├── manifest.json
 └── Server/
     └── Item/
-        └── CustomSword.json
+        └── Items/
+            └── CustomSword.json
 ```
 
 **manifest.json:**
@@ -263,16 +274,19 @@ CustomSword/
 }
 ```
 
-**Server/Item/CustomSword.json:**
+**Server/Item/Items/CustomSword.json:**
 ```json
 {
-  "Parent": "Hytale/Item/Weapon/Template_Weapon_Sword",
+  "Parent": "Template_Weapon_Sword",
   "Name": "Custom Sword",
   "InteractionVars": {
     "BaseDamage": 15
   }
 }
 ```
+
+`Parent` references the template by its **id** (the filename without `.json`), not by
+a path — the game resolves item ids globally regardless of which folder they live in.
 
 ### Plugin Without Assets (Commands Only)
 

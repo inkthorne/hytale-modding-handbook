@@ -188,9 +188,16 @@ time and reloading:
    /give Food_Hearty_Snack 1
    ```
    (The id is the JSON file's name without `.json`. Item ids are case-sensitive.)
-4. **Eat it.** Hold it and **right-click** (the consume slot). Watch your health bar
-   jump, then watch the +5% max-health "Hearty" buff appear in your status effects
-   for 45 seconds.
+4. **Switch to Adventure mode.** Food can only be eaten in **Adventure** mode — the
+   consume interaction is gated to it (`"RequiredGameMode": "Adventure"`). In Creative,
+   right-click *throws* the item instead of eating it. Switch with:
+   ```
+   /gamemode Adventure
+   ```
+5. **Eat it.** While in Adventure mode, hold the snack and **right-click** (the consume
+   slot). The +5% max-health "Hearty" buff appears in your status effects for 45
+   seconds. Note the *instant heal* is only visible if you've taken damage first — at
+   full health there's nothing to restore, so take a little damage before testing.
 
 > If the item appears but shows the name `server.items.Food_Hearty_Snack.name`
 > instead of "Hearty Snack", the `server.lang` file isn't being picked up — check it

@@ -23,6 +23,8 @@ Defined as JSON assets under `Server/Item` and covers:
 - Stat-check conditions gating potion effects
 - Recipes for building custom food and potion items
 
+> **Gotcha — consuming requires Adventure mode.** Every consume interaction is gated by a condition with `"RequiredGameMode": "Adventure"` (see `Server/Item/Interactions/Consumables/Condition_Consume_Food*.json` and the potion equivalents), and its `Failed` branch routes to `Block_Secondary`. So food and potions **cannot be eaten/drunk in Creative mode** — the right-click consume is blocked, and the input falls through to Creative's default behavior (throwing the held item). To test a consumable, switch to Adventure first (`/gamemode Adventure`). A custom food that "does nothing on right-click" is almost always this, not a broken item.
+
 ## Architecture
 ```
 Consumable item (Consumable: true)

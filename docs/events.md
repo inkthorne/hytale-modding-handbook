@@ -1,3 +1,8 @@
+---
+title: Events API
+description: Handle Hytale server events in Java — the EventRegistry for sync, async, global, and keyed listeners, EventPriority ordering, and ECS component-system events.
+---
+
 # Events API
 
 **Doc type:** Java API · **Verified against build-12**

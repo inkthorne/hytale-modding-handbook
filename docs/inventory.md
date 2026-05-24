@@ -1,3 +1,8 @@
+---
+title: Inventory API
+description: Manage Hytale player inventories in Java — the sectioned Inventory (hotbar, storage, armor), ItemStack metadata, containers, transactions, crafting recipes, and inventory events.
+---
+
 # Inventory API
 
 **Doc type:** Java API · **Verified against build-12**

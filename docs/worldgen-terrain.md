@@ -1,3 +1,8 @@
+---
+title: Terrain Density Graphs
+description: Shape Hytale terrain with JSON density node graphs — per-biome DAOTerrain heightfields, density combiners (Sum/Min/Max/Mix), noise sources, and shaping nodes.
+---
+
 # Terrain Density Graphs
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

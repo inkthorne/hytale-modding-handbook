@@ -40,6 +40,7 @@ InteractionContext (passed to every operation tick)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `InteractionContext` | `server.core.entity` | Execution-state container passed to operations |

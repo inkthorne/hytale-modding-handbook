@@ -25,6 +25,7 @@ ExtraInfo                       per-encode/decode context (validation, version, 
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Codec<T>` | `codec` | Base interface; encode/decode a value to/from `BsonValue` |

@@ -30,6 +30,7 @@ EditorClientEvent<KeyType> (base — exposes EditorClient)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `EditorClientEvent<KeyType>` | `builtin.asseteditor.event` | Abstract base for editor events; exposes `getEditorClient()` |

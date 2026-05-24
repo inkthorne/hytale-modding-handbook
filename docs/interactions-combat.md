@@ -36,6 +36,7 @@ Combat & Effects
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `SimpleInteraction` | `config` (server + `protocol`) | Base building-block interaction; delays, animations, sounds, flow control |

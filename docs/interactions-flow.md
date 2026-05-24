@@ -37,6 +37,7 @@ Control Flow
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Serial` (`SerialInteraction`) | `config/none/SerialInteraction` | Runs child interactions sequentially |

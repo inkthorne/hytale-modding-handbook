@@ -38,6 +38,7 @@ CollisionModule  (findCollisions, findIntersections, validatePosition)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `CollisionModule` | `modules.collision` | Main module for collision detection and queries |

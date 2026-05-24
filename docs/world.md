@@ -34,6 +34,7 @@ World (tick thread)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `World` | `server.core.universe.world` | The game world; tick thread exposing players, entities, chunks, and config |
@@ -707,6 +708,7 @@ Fired when a world is being removed. Implements `ICancellable`.
 | `setCancelled(boolean)` | `void` | Cancel or uncancel the event |
 
 **RemovalReason Enum:**
+
 | Value | Description |
 |-------|-------------|
 | `GENERAL` | Normal removal |

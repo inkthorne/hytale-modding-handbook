@@ -30,6 +30,7 @@ Combo System (coordinated by shared ChainId)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `ChainingInteraction` | `config/client/ChainingInteraction` | Sequential combo chains with timing windows and `Flags` branches |
@@ -95,6 +96,7 @@ Defines how long (in seconds) the player has to execute the next attack before t
 ```
 
 **Values by weapon:**
+
 | Weapon | ChainingAllowance |
 |--------|-------------------|
 | Sword | 2.0s |

@@ -32,6 +32,7 @@ PrefabStore  (load / save / locate)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `PrefabStore` | `server.core.prefab` | Central store for loading/saving prefabs; `PrefabStore.get()` |

@@ -20,6 +20,7 @@ TaskRegistry (getTaskRegistry())
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `TaskRegistry` | `server.core.task` | Registers async tasks for lifecycle tracking |

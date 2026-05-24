@@ -32,6 +32,7 @@ Entity (ECS-backed entity + lifecycle)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Entity` | `server.core.entity` | Base class for all entities; lifecycle and identity |

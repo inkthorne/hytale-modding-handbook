@@ -37,6 +37,7 @@ Combat
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Damage` | `server.core.modules.entity.damage` | ECS event fired when damage occurs; cancellable |

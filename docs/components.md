@@ -32,6 +32,7 @@ ComponentRegistry (per ECS type: EntityStore / ChunkStore)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Store<ECS_TYPE>` | `component` | Container for entities and components; implements `ComponentAccessor` |

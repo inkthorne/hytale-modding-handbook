@@ -33,6 +33,7 @@ Item definition (Server/Item/Items/*.json)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | Item definition | `Server/Item/Items/*.json` | A single item; properties listed under Common Properties |

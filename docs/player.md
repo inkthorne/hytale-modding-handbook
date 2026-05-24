@@ -34,6 +34,7 @@ Player-scoped managers
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Message` | `server.core` | Fluent chat-message builder (formatting, translations, composition) |
@@ -280,6 +281,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 ### Enum Values by Category
 
 **Player Input Actions:**
+
 | Value | Description |
 |-------|-------------|
 | `Primary` | Primary action (left click / attack) |
@@ -289,6 +291,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `Ability3` | Third ability slot |
 
 **Object Interactions:**
+
 | Value | Description |
 |-------|-------------|
 | `Use` | Using an object |
@@ -296,6 +299,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `Pickup` | Picking up an item |
 
 **Collision Events:**
+
 | Value | Description |
 |-------|-------------|
 | `CollisionEnter` | Entity enters collision |
@@ -303,6 +307,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `Collision` | Ongoing collision |
 
 **Inventory Events:**
+
 | Value | Description |
 |-------|-------------|
 | `SwapTo` | Swapping to a slot |
@@ -312,6 +317,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `Equipped` | Item equipped |
 
 **Projectile Events:**
+
 | Value | Description |
 |-------|-------------|
 | `ProjectileSpawn` | Projectile created |
@@ -320,6 +326,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `ProjectileBounce` | Projectile bounced |
 
 **Other Events:**
+
 | Value | Description |
 |-------|-------------|
 | `Death` | Entity death |

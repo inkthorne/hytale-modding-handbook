@@ -36,6 +36,7 @@ Crafting
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Bench` | `BlockType.Bench` (item property) | Bench config; `Type`, categories, tier levels |

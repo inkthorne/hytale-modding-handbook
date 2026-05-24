@@ -38,6 +38,7 @@ BlockType (item property)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `BlockType` | item property | Block config attached to an item to make it placeable |

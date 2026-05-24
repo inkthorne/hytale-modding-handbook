@@ -34,6 +34,7 @@ Weapon item (inherits a Template_Weapon_* template)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Template_Weapon_Sword` | `Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json` | Sword template; 4-hit combo + Vortexstrike |

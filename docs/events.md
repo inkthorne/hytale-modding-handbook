@@ -53,6 +53,7 @@ EventRegistry (getEventRegistry())
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `EventRegistry` | `event` | Registers event listeners |

@@ -45,6 +45,7 @@ com.hypixel.hytale.math
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Vector3d` | `math.vector` | Double-precision 3D vector (positions, velocities, directions) |

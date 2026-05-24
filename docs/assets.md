@@ -29,6 +29,7 @@ AssetRegistry (plugin entry: getAssetRegistry())
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `AssetRegistry` | `server.core.plugin.registry` | Registers custom asset stores; obtained via `getAssetRegistry()` |
@@ -356,6 +357,7 @@ IndexedLookupTableAssetMap<String, MyAsset>
 ```
 
 **When to use each:**
+
 | Use Case | AssetMap Type |
 |----------|---------------|
 | Most plugins | `DefaultAssetMap` |
@@ -717,6 +719,7 @@ Fired during asset loading phase. Supports priority-based loading order.
 | `failed(boolean, String)` | `void` | Mark asset loading as failed |
 
 **Priority Constants:**
+
 | Constant | Description |
 |----------|-------------|
 | `PRIORITY_LOAD_COMMON` | Load common assets first |

@@ -34,6 +34,7 @@ JavaPlugin (your entry point)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `JavaPlugin` | `server.core.plugin` | Abstract base class your plugin extends |

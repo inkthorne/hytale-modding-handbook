@@ -32,6 +32,7 @@ Tool item (inherits Tool_<Family>_Crude base)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Tool` | item property | Tool config: specs, speed, durability rules |

@@ -38,6 +38,7 @@ Entity & World
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `SpawnPrefabInteraction` | `config/server/SpawnPrefabInteraction` | Spawns entity prefabs at a location |

@@ -18,6 +18,7 @@ Protocol types (com.hypixel.hytale.protocol)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `NetworkSerializable<Packet>` | `server.core.io` | Interface for types serializable to network packets (`toPacket()`) |
@@ -131,6 +132,7 @@ float pitch = offset.pitch;
 Enum specifying which side (client or server) should provide data for an interaction.
 
 ### Values
+
 | Value | Description |
 |-------|-------------|
 | `Client` | Wait for data from client before executing |

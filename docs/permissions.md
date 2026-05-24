@@ -26,6 +26,7 @@ Permission Events (event.events.permissions)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `PermissionHolder` | `server.core.permissions` | Interface for entities that can hold permissions; `Player` implements it |

@@ -29,6 +29,7 @@ CommandRegistry
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `AbstractCommand` | `server.core.command.system` | Base class for all commands; argument and permission API |

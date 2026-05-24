@@ -32,6 +32,7 @@ Server/Prefabs/
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | Trees | `Server/Prefabs/Trees/` | Growth stages, species, biome variants (~1126) |

@@ -33,6 +33,7 @@ Player map state
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `DiscoverInstanceEvent` | `builtin.instances.event` | Base ECS event for instance discovery |

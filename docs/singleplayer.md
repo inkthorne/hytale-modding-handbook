@@ -19,6 +19,7 @@ com.hypixel.hytale.server.core.modules.singleplayer
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `SingleplayerRequestAccessEvent` | `server.core.modules.singleplayer` | Fired when singleplayer requests a specific access level |

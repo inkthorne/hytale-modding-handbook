@@ -72,6 +72,7 @@ Build pipeline (shared by pages/windows/HUD):
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `BasicCustomUIPage` | `server.core.entity.entities.player.pages` | Base class for plugin-defined full-screen pages |

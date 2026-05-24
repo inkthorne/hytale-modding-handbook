@@ -34,6 +34,7 @@ Consumption interactions
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Template_Food` | `Server/Item/Items/Food/Template_Food.json` | Base template for prepared food items |

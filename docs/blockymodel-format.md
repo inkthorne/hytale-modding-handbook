@@ -30,6 +30,7 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 ```
 
 ## Key Classes
+
 | Section | Location | Description |
 |---------|----------|-------------|
 | Top-level fields | `.blockymodel` root | `nodes` array and optional `lod` mode |
@@ -99,6 +100,7 @@ Each node in the hierarchy can contain geometry and/or child nodes:
 Position values are in pixels (16 pixels = 1 block unit). Orientation uses quaternion format where `{x: 0, y: 0, z: 0, w: 1}` represents no rotation.
 
 Common quaternion values:
+
 | Rotation | Quaternion |
 |----------|------------|
 | No rotation | `{x: 0, y: 0, z: 0, w: 1}` |

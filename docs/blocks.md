@@ -81,6 +81,7 @@ Java runtime
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `BlockType` | `server.core.asset.type.blocktype.config` | Core block-type configuration; all block properties |

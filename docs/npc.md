@@ -30,6 +30,7 @@ NPC System
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `AllNPCsLoadedEvent` | `server.npc` | Fired once when all NPCs finish loading |

@@ -32,6 +32,7 @@ Server/Audio/
 ```
 
 ## Key Classes
+
 | Section | Location | Description |
 |---------|----------|-------------|
 | Sound Event | `Server/Audio/SoundEvents/*.json` | Layered sound definition with variation and attenuation |

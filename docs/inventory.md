@@ -41,6 +41,7 @@ Inventory  (player; sectioned)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Inventory` | `server.core.inventory` | Player inventory with multiple sections |

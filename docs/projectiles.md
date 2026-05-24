@@ -32,6 +32,7 @@ ProjectileModule  (spawnProjectile, component-type accessors)
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `ProjectileModule` | `modules.projectile` | Spawns and manages projectiles |

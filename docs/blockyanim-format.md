@@ -29,6 +29,7 @@ Blockyanim files define animations for block models, controlling how individual 
 ```
 
 ## Key Classes
+
 | Section | Location | Description |
 |---------|----------|-------------|
 | Top-level fields | `.blockyanim` root | `formatVersion`, `duration`, `holdLastKeyframe`, `nodeAnimations` |

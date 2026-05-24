@@ -36,6 +36,7 @@ File browser: FileBrowserConfig ──▶ ServerFileBrowser
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `UICommandBuilder` | `server.core.ui.builder` | Builds UI update commands (append, set, clear, remove) |
@@ -978,6 +979,7 @@ void update(boolean clear, UICommandBuilder cmd)
 - `clear=true` — Remove all content before applying commands (full rebuild)
 
 **When to use each:**
+
 | Scenario | Use |
 |----------|-----|
 | Updating text, values, properties | `update(false, cmd)` |

@@ -27,6 +27,7 @@ Collision exposure
 ```
 
 ## Key Classes
+
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Fluid` | `server.core.asset.type.fluid` | Asset type for fluid blocks (water, lava, etc.) |

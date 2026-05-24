@@ -1,0 +1,24 @@
+{
+  "Parent": "Template_Food",
+  "TranslationProperties": {
+    "Name": "server.items.Food_Hearty_Snack.name",
+    "Description": "server.items.Food_Hearty_Snack.description"
+  },
+  "Quality": "Uncommon",
+  "Icon": "Icons/ItemsGenerated/Food_Pie_Apple.png",
+  "MaxStack": 16,
+  "InteractionVars": {
+    "Effect": {
+      "Interactions": [
+        {
+          "Type": "ApplyEffect",
+          "EffectId": "Food_Instant_Heal_T2"
+        },
+        {
+          "Type": "ApplyEffect",
+          "EffectId": "Meat_Buff_T1"
+        }
+      ]
+    }
+  }
+}

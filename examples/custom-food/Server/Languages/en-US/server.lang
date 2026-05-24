@@ -1,0 +1,6 @@
+# Display text for the Custom Food pack.
+# Format: key = value  (the "server." prefix in an item's TranslationProperties
+# maps to this file; "server.items.Food_Hearty_Snack.name" -> "items.Food_Hearty_Snack.name").
+
+items.Food_Hearty_Snack.name = Hearty Snack
+items.Food_Hearty_Snack.description = Instantly restores health and grants a short Hearty buff (+5% max health for 45s).

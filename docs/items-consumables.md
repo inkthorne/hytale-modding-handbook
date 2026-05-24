@@ -823,6 +823,8 @@ Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "
 }
 ```
 
+> **Try it:** [`examples/custom-food`](../examples/custom-food/) is a complete, no-code, no-art **pack** built from exactly this pattern — a runnable copy of a custom food item with a beginner walkthrough of every field.
+
 ### Custom Potion Item
 
 ```json

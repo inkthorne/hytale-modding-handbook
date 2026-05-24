@@ -1,0 +1,10 @@
+{
+  "Group": "inkthorne",
+  "Name": "Custom Food",
+  "Version": "1.0.0",
+  "Authors": [
+    { "Name": "inkthorne" }
+  ],
+  "ServerVersion": "2026.03.26-89796e57b",
+  "IncludesAssetPack": true
+}

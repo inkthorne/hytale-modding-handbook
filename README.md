@@ -109,6 +109,12 @@ Demonstrates the ECS ticking-system pattern with:
 - Counting entities by component (`Total`/`Players`/`NPCs`/`Other`)
 - Pushing live values to a `CustomUIHud` overlay
 
+### [examples/custom-food/](./examples/custom-food/)
+A no-code, no-art **Pack** (pure JSON, no Java) for beginners:
+- Adds a custom food item by extending the real `Template_Food`
+- Reuses an existing in-game icon and real heal/buff effects — nothing to compile or draw
+- Teaches the "copy a template, override a few fields" pattern at the heart of JSON modding
+
 ## Requirements
 
 - Hytale installed (uses `HytaleServer.jar` from the local install)

@@ -1,3 +1,10 @@
+---
+title: "Fluids API"
+description: "Define Hytale fluids in Java — the Fluid asset's identity and properties, fluid level, light emission, entity damage, spread Ticker behavior, and interaction rules like water plus lava."
+seo:
+  type: TechArticle
+---
+
 # Fluids API
 
 **Doc type:** Java API · **Verified against build-12**

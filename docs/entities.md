@@ -1,3 +1,10 @@
+---
+title: "Entities API"
+description: "Work with Hytale entities in Java — the Entity to LivingEntity to Player hierarchy, PlayerRef handles, EntityStatMap for reading/modifying health and stats, and interaction chains."
+seo:
+  type: TechArticle
+---
+
 # Entities API
 
 **Doc type:** Java API · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "Math / Vector API"
+description: "Hytale's Java math library — Vector3d/Vector3f vectors, matrices, quaternions, shapes, and utilities for positions, velocities, directions, and rotations."
+seo:
+  type: TechArticle
+---
+
 # Math / Vector API
 
 **Doc type:** Java API · **Verified against build-12**

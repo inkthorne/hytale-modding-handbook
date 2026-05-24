@@ -1,3 +1,10 @@
+---
+title: "Crafting System"
+description: "Hytale crafting in JSON plus Java — bench types (Crafting, Processing, DiagramCrafting, StructuralCrafting), recipe structure, input types (ItemId vs ResourceTypeId), and bench requirements."
+seo:
+  type: TechArticle
+---
+
 # Crafting System
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

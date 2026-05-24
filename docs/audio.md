@@ -1,3 +1,10 @@
+---
+title: "Audio System"
+description: "Define Hytale audio with JSON formats — multi-layer sound events with volume/pitch variation and spatial attenuation, audio categories for mixing, and ambient soundscapes."
+seo:
+  type: TechArticle
+---
+
 # Audio System
 
 **Doc type:** JSON asset format · **Assets:** `Server/Audio` · **Verified against build-12**

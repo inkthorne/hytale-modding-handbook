@@ -1,3 +1,10 @@
+---
+title: "Codecs API"
+description: "Serialize Hytale Java values with codecs — convert to/from BsonValue via the Codec<T> interface and the ExtraInfo context carrying validation, version, and key-path data."
+seo:
+  type: TechArticle
+---
+
 # Codecs API
 
 **Doc type:** Java API · **Verified against build-12**

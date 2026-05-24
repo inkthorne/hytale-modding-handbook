@@ -1,3 +1,10 @@
+---
+title: "Tasks API"
+description: "Schedule Hytale plugin tasks in Java — the TaskRegistry tracking CompletableFuture and ScheduledFuture tasks, TaskRegistration handles, and automatic cleanup on plugin disable."
+seo:
+  type: TechArticle
+---
+
 # Tasks API
 
 **Doc type:** Java API · **Verified against build-12**

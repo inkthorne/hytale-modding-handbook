@@ -1,3 +1,10 @@
+---
+title: "Getting Started with Hytale Modding"
+description: "Get started with Hytale modding — an introduction to building server plugins and asset packs, the toolchain, project structure, and where to go next."
+seo:
+  type: TechArticle
+---
+
 # Getting Started with Hytale Modding
 
 **Doc type:** Guide

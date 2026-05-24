@@ -1,3 +1,10 @@
+---
+title: "World Structures (Zones)"
+description: "Define Hytale biome zones in JSON — biome assignment by mapping density to NoiseRange ranges, a DefaultBiome fallback, transition-width controls, and the biome-map density graph."
+seo:
+  type: TechArticle
+---
+
 # World Structures (Zones)
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "World Generation"
+description: "Hytale world generation in JSON node graphs — the typed node-graph model, density graphs driving terrain height, cave carving and biome selection, and material providers."
+seo:
+  type: TechArticle
+---
+
 # World Generation
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

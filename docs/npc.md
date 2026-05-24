@@ -1,3 +1,10 @@
+---
+title: "NPC API"
+description: "Work with Hytale NPCs in Java — NPC loading events (AllNPCsLoadedEvent, LoadedNPCEvent), BuilderInfo metadata describing each definition, and AI sensor events for entity detection."
+seo:
+  type: TechArticle
+---
+
 # NPC API
 
 **Doc type:** Java API · **Verified against build-12**

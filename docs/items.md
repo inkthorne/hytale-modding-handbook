@@ -1,3 +1,10 @@
+---
+title: "Item Definitions"
+description: "Define Hytale items in JSON — common item properties (identity, visuals, stacking, durability), template inheritance via Parent and InteractionVars, quality tiers, and UI categories."
+seo:
+  type: TechArticle
+---
+
 # Item Definitions
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

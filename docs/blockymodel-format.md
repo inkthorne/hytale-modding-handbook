@@ -1,3 +1,10 @@
+---
+title: "Block Model Format (.blockymodel)"
+description: "The Hytale .blockymodel format — build 3D models from a hierarchical node system of mesh shapes and child nodes, for non-cube blocks, furniture, items, and decorations."
+seo:
+  type: TechArticle
+---
+
 # Block Model Format (.blockymodel)
 
 **Doc type:** JSON asset format · **Assets:** `Common` · **Verified against build-12**

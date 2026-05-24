@@ -1,3 +1,10 @@
+---
+title: "Biome System"
+description: "Define Hytale biomes in JSON node graphs — a Terrain heightfield (DAOTerrain), a MaterialProvider choosing solid vs empty blocks, prop scattering, and environment profiles."
+seo:
+  type: TechArticle
+---
+
 # Biome System
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

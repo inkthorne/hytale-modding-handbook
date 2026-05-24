@@ -1,3 +1,10 @@
+---
+title: "Networking API"
+description: "Hytale network serialization in Java — the NetworkSerializable<Packet> interface for protocol communication, implemented by asset types like ProjectileConfig, Interaction, and Model."
+seo:
+  type: TechArticle
+---
+
 # Networking API
 
 **Doc type:** Java API · **Verified against build-12**

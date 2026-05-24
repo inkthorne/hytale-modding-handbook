@@ -1,3 +1,10 @@
+---
+title: "Asset Editor Events API"
+description: "Hook Hytale's in-game Asset Editor in Java — the EditorClientEvent base, button and asset-creation events, selection and disconnect events, and async autocomplete/dataset requests."
+seo:
+  type: TechArticle
+---
+
 # Asset Editor Events API
 
 **Doc type:** Java API · **Verified against build-12**

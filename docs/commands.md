@@ -1,6 +1,8 @@
 ---
-title: Commands API
-description: Create Hytale server commands in Java — player, world, and target base classes, typed argument parsing and validation, subcommands, permissions, and built-in arg types.
+title: "Commands API"
+description: "Create Hytale server commands in Java — player, world, and target base classes, typed argument parsing and validation, subcommands, permissions, and built-in arg types."
+seo:
+  type: TechArticle
 ---
 
 # Commands API

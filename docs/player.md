@@ -1,3 +1,10 @@
+---
+title: "Player API"
+description: "Work with Hytale players in Java — the fluent Message builder for chat text, formatting and translations; connection, chat, interaction, craft, and input events; and player permissions."
+seo:
+  type: TechArticle
+---
+
 # Player API
 
 **Doc type:** Java API · **Verified against build-12**

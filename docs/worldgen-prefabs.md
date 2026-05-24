@@ -1,3 +1,10 @@
+---
+title: "Props & Structure Placement"
+description: "Place props and structures in Hytale worldgen — a biome Props[] array pairing positions with assignments, shared Assignments graphs, field/range/weight gating, and prop builders."
+seo:
+  type: TechArticle
+---
+
 # Props & Structure Placement
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

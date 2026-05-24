@@ -1,3 +1,10 @@
+---
+title: "Weapon Items"
+description: "Define Hytale weapons in JSON — Template_Weapon families with signature abilities, Primary/Secondary/Ability interaction slots, weapon stats, dual-wield rendering, and damage overrides."
+seo:
+  type: TechArticle
+---
+
 # Weapon Items
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

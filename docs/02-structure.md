@@ -1,3 +1,10 @@
+---
+title: "Pack vs Plugin Directory Structure"
+description: "Hytale mod project structure — Pack (JSON/asset content) vs Plugin (Java code), the Server/ and Common/ directories, and manifest configuration."
+seo:
+  type: TechArticle
+---
+
 # Pack vs Plugin Directory Structure
 
 **Doc type:** Guide

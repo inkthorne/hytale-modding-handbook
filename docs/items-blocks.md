@@ -1,3 +1,10 @@
+---
+title: "Block Items"
+description: "Define Hytale block items in JSON — the BlockType property (Material, DrawType, Opacity, HitboxType, Flags), textures and custom models, gathering and drops, and light and particles."
+seo:
+  type: TechArticle
+---
+
 # Block Items
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "Interactions API"
+description: "Hytale interactions in JSON — the Interaction base class and SimpleInteraction hierarchy, root vs nested interactions, input-triggered entry points, and asset-store registration."
+seo:
+  type: TechArticle
+---
+
 # Interactions API
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

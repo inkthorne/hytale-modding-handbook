@@ -1,3 +1,10 @@
+---
+title: "Block Animation Format (.blockyanim)"
+description: "The Hytale .blockyanim format — animate block-model parts (move, rotate, scale, toggle visibility) over time for doors, chests, fire, and mechanical effects."
+seo:
+  type: TechArticle
+---
+
 # Block Animation Format (.blockyanim)
 
 **Doc type:** JSON asset format · **Assets:** `Common` · **Verified against build-12**

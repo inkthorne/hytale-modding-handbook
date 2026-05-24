@@ -1,3 +1,10 @@
+---
+title: "Consumable Items"
+description: "Define Hytale consumables in JSON — food items with tiers and buffs, potions for instant effects and transformations, timed consumption, and consumable interactions."
+seo:
+  type: TechArticle
+---
+
 # Consumable Items
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

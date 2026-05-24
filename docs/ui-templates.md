@@ -1,3 +1,10 @@
+---
+title: "UI Templates, Variables & Localization"
+description: "Advanced Hytale .ui DSL — file imports for libraries like Common.ui, instantiating named templates, variables for shared constants, the spread operator, and localization."
+seo:
+  type: TechArticle
+---
+
 # UI Templates, Variables & Localization
 
 **Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "Block Definitions"
+description: "Define Hytale blocks — visual assets (.blockymodel models, .blockyanim animations) in Common/Blocks and JSON game logic in Server/Item with properties, interactions, and behavior."
+seo:
+  type: TechArticle
+---
+
 # Block Definitions
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

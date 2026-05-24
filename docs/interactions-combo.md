@@ -1,3 +1,10 @@
+---
+title: "Combo System Interactions"
+description: "Build Hytale weapon combos with JSON interactions — Chaining for sequential combo chains with timing windows, FirstClick tap/hold branching, and charged-attack inputs."
+seo:
+  type: TechArticle
+---
+
 # Combo System Interactions
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

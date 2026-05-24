@@ -1,3 +1,10 @@
+---
+title: "Plugin Lifecycle API"
+description: "The Hytale JavaPlugin lifecycle — overridable hooks (setup, start, preLoad, shutdown), registry accessors for commands/events/tasks/entities/assets, and static accessors for core modules."
+seo:
+  type: TechArticle
+---
+
 # Plugin Lifecycle API
 
 **Doc type:** Java API · **Verified against build-12**

@@ -1,6 +1,8 @@
 ---
-title: Collision API
-description: Query Hytale collisions in Java — CollisionModule detection and position validation, CollisionResult data, block and character collision types, filters, and configs.
+title: "Collision API"
+description: "Query Hytale collisions in Java — CollisionModule detection and position validation, CollisionResult data, block and character collision types, filters, and configs."
+seo:
+  type: TechArticle
 ---
 
 # Collision API

@@ -1,3 +1,10 @@
+---
+title: "NPC Roles"
+description: "Define Hytale NPC roles in JSON — abstract Template and concrete Variant roles, a Parameters/Compute system, attitude definitions between groups, and groups and flocks for spawning."
+seo:
+  type: TechArticle
+---
+
 # NPC Roles
 
 **Doc type:** JSON asset format · **Assets:** `Server/NPC` · **Verified against build-12**

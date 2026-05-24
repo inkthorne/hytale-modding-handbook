@@ -1,3 +1,10 @@
+---
+title: "Combat & Effects Interactions"
+description: "Hytale combat interactions in JSON — the Simple interaction for delays/animations/sounds/particles, Selector for melee/AOE/raycast targeting, and damage and effect application."
+seo:
+  type: TechArticle
+---
+
 # Combat & Effects Interactions
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

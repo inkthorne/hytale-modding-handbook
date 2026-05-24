@@ -1,3 +1,10 @@
+---
+title: "Effects & Stats Reference"
+description: "Hytale status effects and stats in JSON — buffs, debuffs, DoT and transformations, damage immunity and resistance modifiers, and stat modifiers with calculation control."
+seo:
+  type: TechArticle
+---
+
 # Effects & Stats Reference
 
 **Doc type:** JSON asset format · **Assets:** `Server/Entity` · **Verified against build-12**

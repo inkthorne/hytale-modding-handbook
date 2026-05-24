@@ -1,3 +1,10 @@
+---
+title: "Assets API"
+description: "Work with Hytale assets in Java — the central HytaleAssetStore, per-type AssetMap lookups, and a plugin-facing AssetRegistry for registering custom asset stores."
+seo:
+  type: TechArticle
+---
+
 # Assets API
 
 **Doc type:** Java API · **Verified against build-12**

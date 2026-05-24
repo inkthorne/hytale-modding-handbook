@@ -1,3 +1,10 @@
+---
+title: "Control Flow Interactions"
+description: "Control Hytale interaction flow in JSON — Serial and Parallel composition of child interactions and conditional branching on state, stats, effects, blocks, cooldowns, and placement."
+seo:
+  type: TechArticle
+---
+
 # Control Flow Interactions
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "Operation System"
+description: "Hytale's interaction Operation system — how interactions compile to operation arrays via OperationsBuilder, execute per-tick, control flow with labels and jumps, and sync to clients."
+seo:
+  type: TechArticle
+---
+
 # Operation System
 
 **Doc type:** Java API · **Verified against build-12**

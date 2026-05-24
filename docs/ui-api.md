@@ -1,6 +1,8 @@
 ---
-title: UI Java API
-description: Build Hytale server-side UI in Java — UICommandBuilder and UIEventBuilder, positioning primitives (Anchor, Area, Value), and event bindings for player interfaces.
+title: "UI Java API"
+description: "Build Hytale server-side UI in Java — UICommandBuilder and UIEventBuilder, positioning primitives (Anchor, Area, Value), and event bindings for player interfaces."
+seo:
+  type: TechArticle
 ---
 
 # UI Java API

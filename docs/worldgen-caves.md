@@ -1,3 +1,10 @@
+---
+title: "Caves"
+description: "Generate Hytale caves with JSON density fields — cave volumes as density graphs, carving into terrain via Min, depth-band confinement with CurveMapper, and tunnel shaping from noise."
+seo:
+  type: TechArticle
+---
+
 # Caves
 
 **Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**

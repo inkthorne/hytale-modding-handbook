@@ -1,3 +1,10 @@
+---
+title: "Singleplayer API"
+description: "The Hytale singleplayer API in Java — the SingleplayerRequestAccessEvent exposing the requested Access level for gating singleplayer access."
+seo:
+  type: TechArticle
+---
+
 # Singleplayer API
 
 **Doc type:** Java API · **Verified against build-12**

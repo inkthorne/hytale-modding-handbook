@@ -1,3 +1,10 @@
+---
+title: "Tool Items"
+description: "Define Hytale tools in JSON — the Tool property (Specs power per gather type, Speed, durability loss), GatherType categories and quality gating, and material tiers with power scaling."
+seo:
+  type: TechArticle
+---
+
 # Tool Items
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "UI Elements Reference"
+description: "Hytale .ui DSL element reference — containers and layout (Group), text (Label, TimerLabel), buttons (Button, TextButton, ActionButton), and inputs (TextField, CheckBox, Slider, Dropdown)."
+seo:
+  type: TechArticle
+---
+
 # UI Elements Reference
 
 **Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**

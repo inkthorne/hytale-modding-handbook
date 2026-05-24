@@ -1,3 +1,10 @@
+---
+title: "InteractionContext"
+description: "The Hytale InteractionContext — access entity references (owner, executor, targets), the held item, the meta store (hit locations, targets), and item-defined InteractionVars at runtime."
+seo:
+  type: TechArticle
+---
+
 # InteractionContext
 
 **Doc type:** Java API · **Verified against build-12**

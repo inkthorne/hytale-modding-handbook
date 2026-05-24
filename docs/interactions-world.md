@@ -1,3 +1,10 @@
+---
+title: "Entity & World Interactions"
+description: "Hytale entity and world interactions in JSON — entity lifecycle (SpawnPrefab, RemoveEntity, LaunchProjectile), player messaging and custom UI, and inventory/equipment changes."
+seo:
+  type: TechArticle
+---
+
 # Entity & World Interactions
 
 **Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

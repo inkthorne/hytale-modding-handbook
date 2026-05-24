@@ -1,3 +1,10 @@
+---
+title: "Combat API"
+description: "Handle Hytale combat in Java — the Damage ECS event and DamageEventSystem, damage source types (entity, environment, projectile, command), and JSON-driven combat config."
+seo:
+  type: TechArticle
+---
+
 # Combat API
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**

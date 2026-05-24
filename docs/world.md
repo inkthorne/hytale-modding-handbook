@@ -1,3 +1,10 @@
+---
+title: "World API"
+description: "Work with the Hytale World in Java — the World tick thread exposing players, entities, chunks, and ECS stores, per-chunk block/state/terrain access, and per-player chunk loading."
+seo:
+  type: TechArticle
+---
+
 # World API
 
 **Doc type:** Java API · **Verified against build-12**

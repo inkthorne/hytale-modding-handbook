@@ -1,3 +1,10 @@
+---
+title: "UI Styling & Layout"
+description: "Style and lay out Hytale UI in .ui DSL — Anchor positioning and sizing, LayoutMode child arrangement, Padding spacing, and Background colors, textures, and 9-slice patches."
+seo:
+  type: TechArticle
+---
+
 # UI Styling & Layout
 
 **Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against build-12**

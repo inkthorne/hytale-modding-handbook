@@ -1,3 +1,10 @@
+---
+title: "Projectiles API"
+description: "Spawn and manage Hytale projectiles in Java — the ProjectileModule, asset-based ProjectileConfig for ballistics and visuals, physics via PhysicsConfig, and projectile interactions."
+seo:
+  type: TechArticle
+---
+
 # Projectiles API
 
 **Doc type:** Java API · **Verified against build-12**

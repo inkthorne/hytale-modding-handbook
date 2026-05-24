@@ -1,3 +1,10 @@
+---
+title: "Drop System"
+description: "Define Hytale loot with the JSON Drop System — a hierarchical Container tree (Multiple, Choice, Single, Droplist), guaranteed and weighted drops, multi-roll loot, and modular composition."
+seo:
+  type: TechArticle
+---
+
 # Drop System
 
 **Doc type:** JSON asset format · **Assets:** `Server/Drops` · **Verified against build-12**

@@ -1,3 +1,10 @@
+---
+title: "UI System"
+description: "The Hytale UI system — .ui DSL files for structure and styling, a Java API to build commands and manage pages/windows/HUD, and the asset pack of UI textures and resources."
+seo:
+  type: TechArticle
+---
+
 # UI System
 
 **Doc type:** Guide · **Verified against build-12**

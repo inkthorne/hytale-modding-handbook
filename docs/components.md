@@ -1,3 +1,10 @@
+---
+title: "Components (ECS) API"
+description: "Use Hytale's Entity Component System in Java — typed component Stores accessed via Ref handles, Component/Resource type descriptors, and entity composition via Holder blueprints."
+seo:
+  type: TechArticle
+---
+
 # Components (ECS) API
 
 **Doc type:** Java API · **Verified against build-12**

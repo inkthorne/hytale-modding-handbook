@@ -1,3 +1,10 @@
+---
+title: "Documentation Index"
+description: "Index of the Hytale Modding Handbook — find the reference page for commands, items, world generation, UI, NPCs, interactions, and the rest of the API."
+seo:
+  type: TechArticle
+---
+
 # Documentation Index
 
 **Doc type:** Index

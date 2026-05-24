@@ -1,3 +1,10 @@
+---
+title: "Permissions API"
+description: "Check Hytale permissions in Java — the PermissionHolder interface (implemented by Player), permission checks with default values, command-level permissions, and permission events."
+seo:
+  type: TechArticle
+---
+
 # Permissions API
 
 **Doc type:** Java API · **Verified against build-12**

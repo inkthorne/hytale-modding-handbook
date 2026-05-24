@@ -1,3 +1,10 @@
+---
+title: "Adventure API"
+description: "Build Hytale adventure content in Java — ECS events for instance and zone discovery, adventure objectives, and world-instance integration."
+seo:
+  type: TechArticle
+---
+
 # Adventure API
 
 **Doc type:** Java API · **Verified against build-12**

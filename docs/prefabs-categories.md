@@ -1,3 +1,10 @@
+---
+title: "Prefab Categories"
+description: "Hytale prefab categories in JSON — trees, rocks, NPC structures, monuments, mineshafts, dungeons, caves, plants, and spawn; naming conventions and growth-stage directory layout."
+seo:
+  type: TechArticle
+---
+
 # Prefab Categories
 
 **Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**

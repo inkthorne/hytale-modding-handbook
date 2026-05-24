@@ -1,3 +1,10 @@
+---
+title: "Prefabs API"
+description: "Work with Hytale prefabs in Java — the PrefabStore for loading/saving server, asset, and world-gen prefabs, BlockSelection payloads of blocks/fluids/entities, and placement with rotation."
+seo:
+  type: TechArticle
+---
+
 # Prefabs API
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**

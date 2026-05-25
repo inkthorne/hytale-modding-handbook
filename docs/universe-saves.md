@@ -1,6 +1,6 @@
 ---
 title: "Universes & Save Format"
-description: "How a Hytale save is structured for a dedicated server — the universe/worlds layout, the per-world config.json that binds a world to a worldgen WorldStructure, the server config.json (Defaults.World spawn selection, IsPvpEnabled), and how the creative crossroads is the CreativeHub plugin."
+description: "How a Hytale save is structured for a dedicated server — the universe/worlds layout, the per-world config.json that binds a world to a worldgen WorldStructure, the server config.json (Defaults.World spawn selection, IsPvpEnabled), how the creative crossroads is the CreativeHub plugin, and the workflow for moving a creative-authored world onto a dedicated server."
 seo:
   type: TechArticle
 ---
@@ -56,7 +56,7 @@ A creative singleplayer save writes only a subset:
 {
   "Backup": { "Enabled": true, "FrequencyMinutes": 30, "Directory": "backup", "MaxCount": 5, "ArchiveMaxCount": 5 },
   "Version": 4,
-  "Mods": { "inkthorne:Example Entity Count": { "Enabled": true } }
+  "Mods": { "author-id:Example Mod": { "Enabled": true } }
 }
 ```
 
@@ -112,9 +112,9 @@ Each `universe/worlds/<name>/config.json` defines one world. A flat creative wor
 ```json
 {
   "Version": 4,
-  "UUID": { "$binary": "fPvCX3Y/RoarqbEG5zJogw==", "$type": "04" },
+  "UUID": { "$binary": "AAAAAAAAAAAAAAAAAAAAAA==", "$type": "04" },
   "DisplayName": "Default Flat",
-  "Seed": 1779519412083,
+  "Seed": 123456789,
   "SpawnProvider": { "Id": "Global", "SpawnPoint": { "X": 0.5, "Y": 80.0, "Z": 0.5, "Yaw": 180.0 } },
   "WorldGen": { "Type": "HytaleGenerator", "WorldStructure": "Default_Flat" },
   "GameMode": "Creative",
@@ -174,7 +174,7 @@ when empty:
 ```json
 "Plugin": { "Instance": {
   "RemovalConditions": [ { "Type": "WorldEmpty", "TimeoutSeconds": 300.0 } ],
-  "ReturnPoint": { "World": { ... }, "ReturnPoint": { "X": 374.5, "Y": 121.0, "Z": 86.5 }, "ReturnOnReconnect": true }
+  "ReturnPoint": { "World": { ... }, "ReturnPoint": { "X": 0.5, "Y": 64.0, "Z": 0.5 }, "ReturnOnReconnect": true }
 } }
 ```
 
@@ -182,6 +182,33 @@ From the crossroads, portals move the player to the separate destination worlds 
 `flat_world` bound to `Default_Flat`, `zone3_taiga1_world` bound to `Zone3_Taiga1`). **The
 crossroads is not terrain — it exists only because the `CreativeHub` plugin is attached to the
 spawn world. Remove that plugin block and players spawn directly into the world.**
+
+## A universe runs many worlds at once
+
+A universe is not one world with sub-areas — it is a set of independent worlds that all load and
+**tick concurrently**. `Universe` holds a name→world map, and each `World` is its own tick thread
+with its own terrain, chunks, and per-world settings. The boot log lists each one as it loads:
+
+```
+[World|arena]   Added world 'arena'
+[World|default] Added world 'default'
+```
+
+Consequences worth designing around:
+
+- **Worlds are isolated.** Separate terrain, and separate *per-player* position — each
+  `players/<uuid>.json` stores a `PerWorldData` entry per world, and `PlayerData.World` is the
+  player's current world. A returning player is restored to the world they last logged out in,
+  which is why `Defaults.World` only governs players with no record (see the gotcha below).
+- **Gameplay rules are per world, not global.** One world can be `Creative` with PvP off while
+  another is `Adventure` with PvP on — `GameMode`, `IsPvpEnabled`, day length, etc. live in each
+  world's own `config.json`.
+- **Players don't pick a world freely** — they need *transport* between worlds: a portal (the
+  built-in `Portals` plugin / a `Portal` block), a teleport, or a hub like the
+  [CreativeHub](#the-crossroads-is-the-creativehub-plugin). A loaded world with no route into it is
+  simply unreachable in normal play.
+- **Each loaded world costs memory and CPU** because it ticks. Temporary instance worlds avoid this
+  by auto-unloading when empty (`RemovalConditions: WorldEmpty`); persistent worlds stay resident.
 
 ## Worked example: a flat PvP arena server
 
@@ -209,17 +236,104 @@ To build the arena by hand first, generate it in a flat creative world (a world 
 `Default_Flat`), then host that save with the two edits above (drop `CreativeHub`, flip
 `IsPvpEnabled`, set `Defaults.World`).
 
+## Workflow: a creative-authored world → dedicated server
+
+The common path: you build a world in **creative singleplayer**, then host that same world on a
+dedicated server. A singleplayer save and a dedicated server consume the **identical on-disk
+format** (see top of this page), so "moving" the world is mostly copying the save directory and
+editing two config files — no export step.
+
+### Where your authored blocks live
+
+Your creative edits are written into the **world's `chunks/`** directory, e.g.
+`universe/worlds/flat_world/chunks/`. The world is keyed by its **folder name** (`flat_world`),
+*not* its `DisplayName` (`"Default Flat"`) and *not* the save name. Note that in creative you
+spawn into the `default` world — the [CreativeHub crossroads](#the-crossroads-is-the-creativehub-plugin)
+— and portal *out* to the flat world; the blocks you placed are in the destination world's
+folder, not in `default/`.
+
+### Steps
+
+**1. Flush the save.** Fully exit the game (or stop the server) before copying. Chunk and config
+writes are flushed on shutdown; copying a running save can capture a half-written `config.json`
+(the `.bak` siblings are the previous good copy, not a live mirror).
+
+**2. Copy the whole save directory** `UserData/Saves/<save>/` to the server host. It carries
+everything the universe needs: the root `config.json`, `universe/worlds/<name>/` (with `chunks/`,
+`resources/`, `instance.bson`), `universe/players/`, and `permissions.json` / `bans.json` /
+`whitelist.json`. Copying the entire save is the safe default; dropping a single
+`worlds/<name>/` folder into an existing universe also works but only if you also point a spawn
+at it (next step).
+
+**3. Pick the spawn world.** A creative save has no `Defaults` block, so the server falls back to
+the world literally named `default` — which is the **crossroads**, not your build. Set
+`Defaults.World` to your world's folder name so players land directly in it:
+
+```json
+"Defaults": { "World": "flat_world", "GameMode": "Adventure" }
+```
+
+Because `Defaults.World` bypasses `default` entirely, the crossroads never loads — you do **not**
+also need to remove `default`'s `CreativeHub` plugin (though clearing it to `"Plugin": {}` is
+harmless cleanup).
+
+**4. Add dedicated-server fields.** A singleplayer root `config.json` omits server fields. Add the
+ones you need alongside `Backup`/`Version`/`Mods`:
+
+```json
+"ServerName": "My Arena", "MOTD": "...", "MaxPlayers": 20, "Password": ""
+```
+
+**5. Set per-world gameplay.** Game mode and PvP are **per world** — edit
+`universe/worlds/<name>/config.json`, not the root config. A creative-built world ships as
+`"GameMode": "Creative"`; flip it for play and enable PvP if wanted:
+
+```json
+"GameMode": "Adventure",
+"IsPvpEnabled": true
+```
+
+**6. Install any mods the world needs.** A dedicated server loads mods from the `mods/` directory in
+its **working directory** (the save root), and the root `config.json` `Mods` map enables/disables
+them by id. Copying the save carries each mod's saved *state* (under `mods/<ModName>/`) but not the
+mod code itself — install the mod jars/packs the world expects (anything in its `RequiredPlugins`,
+or listed in your `Mods` config) on the server. A world bound to a **shipped** `WorldStructure`
+(like `Default_Flat`) needs no custom mod.
+
+**7. Run the server pointed at the save.** The dedicated server *is* the same
+`HytaleServer.jar`. It has **no save-path/universe argument** — it resolves `config.json`,
+`universe/`, and `mods/` relative to its **working directory**, so you run it *from inside the
+save directory*. It does need to be pointed at the game assets with `--assets`:
+
+```bash
+cd /path/to/save-directory
+java -jar /path/to/Server/HytaleServer.jar --assets /path/to/Assets.zip
+```
+
+Optional flags include `--backup` and `--backup-dir <dir>` for periodic world backups. Players join
+and spawn directly into your authored world.
+
 ## Gotchas & Errors
 
 - **Players still spawn at the crossroads** → the spawn world still has
   `"Plugin": { "CreativeHub": { ... } }`. Clear it to `"Plugin": {}`.
 - **`Defaults.World` has no effect** → the value must match a `universe/worlds/<name>/`
-  folder name (lookup is case-insensitive). A name with no matching folder yields no default
-  world.
+  folder name. The name is **lowercased** before lookup, so use a lowercase folder name; a value
+  with no matching folder yields no default world.
 - **No `Defaults` block** → the server falls back to the world named `default`; if you want a
   different spawn world you must add `Defaults`.
 - **PvP not working** → `IsPvpEnabled` is **per world**, not global. Set it on the specific
   world players fight in.
+- **Returning players don't land at `Defaults.World`** → `Defaults.World` only places players
+  with **no saved location**. Each `universe/players/<uuid>.json` records `PlayerData.World`, so a
+  player who was last in another world (or the now-gone creative crossroads instance) is restored
+  there. For a clean dedicated start, delete `universe/players/` before first boot so everyone
+  spawns via `Defaults`.
+- **Players spawn holding editor tools / in Creative** → that state lives in per-player data
+  (`ToolInventory` holds `EditorTool_*`, and game mode can be saved per player). It came over with
+  `universe/players/`; clearing that directory (above) resets it.
+- **Copied save won't load / is corrupt** → the save was copied while the game/server was still
+  running. Stop it first so chunks and `config.json` are flushed, then copy.
 
 ## Related Documentation
 

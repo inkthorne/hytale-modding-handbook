@@ -13,6 +13,7 @@ no build), then move on to the plugins once you want to run code.
 | [ui/](./ui/) | Plugin | Custom UI pages and HUD management | `/menu`, `/hud <show\|hide>`, `/statushud <show\|hide\|update>` |
 | [inventory/](./inventory/) | Plugin | The inventory API: item stacks, containers, transactions | `/give <item> <qty>`, `/inv-clear <section>` |
 | [entity-count/](./entity-count/) | Plugin | The ECS ticking-system pattern: per-tick code that reads the entity store | `/entitycount <show\|hide>` |
+| [item-respawner/](./item-respawner/) | Plugin | A stateful, editable placeable block: custom block-entity component + chunk-store ticking + item spawning, persisted across reloads, with a press-F settings GUI | — |
 
 ## What each one covers
 
@@ -52,6 +53,17 @@ The Entity Component System (ECS). An `EntityTickingSystem` runs every tick on t
 world thread, counts entities by the components they carry
 (`Total` / `Players` / `NPCs` / `Other`), and pushes the live numbers to a
 `CustomUIHud`. The clearest example of "run code on the server's heartbeat."
+
+### [item-respawner/](./item-respawner/)
+The most involved example: a **stateful, editable placeable block**. It combines a
+custom block-item, a custom **block-entity component** (`Component<ChunkStore>`
+with a persistence codec), a **ticking system over the chunk store**
+(`EntityTickingSystem<ChunkStore>`), **item-entity spawning**, and a **press-F
+settings GUI** bound to the block — a pedestal that drops an item and respawns it
+on an interval, only when the previous one is gone, surviving world reloads
+without duplicating, with the item and delay editable in-world. The verified
+recipe behind it is in
+[`docs/blocks.md`](../docs/blocks.md#custom-block-entity-components).
 
 ## Building and deploying
 

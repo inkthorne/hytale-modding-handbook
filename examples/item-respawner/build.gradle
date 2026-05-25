@@ -1,0 +1,26 @@
+plugins {
+    id 'java'
+}
+
+apply from: '../hytale-paths.gradle'
+
+group = 'hytale.examples'
+version = '0.1.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly files(hytaleServerJar)
+}
+
+jar {
+    archiveBaseName.set('example-item-respawner')
+    archiveVersion.set('')
+}

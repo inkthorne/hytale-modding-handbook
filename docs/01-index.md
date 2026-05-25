@@ -32,7 +32,7 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [inventory.md](inventory.md) | Complete inventory management API including item stacks, containers, transactions, crafting recipes, and related events. |
 | [tasks.md](tasks.md) | Documents the task registration system for tracking async futures and scheduled tasks throughout plugin lifecycle. |
 | [ui.md](ui.md) | UI system covering pages, windows, HUD, DSL syntax, elements, styling, and Java API. |
-| [blocks.md](blocks.md) | Covers the block system including block states, BlockType properties, block events (place/break/use/damage), and world access. |
+| [blocks.md](blocks.md) | Covers the block system including block states, BlockType properties, block events (place/break/use/damage), world access, and authoring custom block-entity components (per-block state, chunk-store ticking, item spawning, persistence, and a press-F settings GUI). |
 | [assets.md](assets.md) | Asset registry system for custom assets, asset stores, built-in asset access, and asset lifecycle events. |
 | [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |

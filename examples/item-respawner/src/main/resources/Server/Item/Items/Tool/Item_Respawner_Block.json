@@ -1,0 +1,49 @@
+{
+  "TranslationProperties": {
+    "Name": "server.items.Item_Respawner_Block.name",
+    "Description": "server.items.Item_Respawner_Block.description"
+  },
+  "Icon": "Icons/ItemsGenerated/Block_Spawner_Block.png",
+  "Quality": "Technical",
+  "Categories": ["Blocks.Rocks"],
+  "MaxStack": 10,
+  "PlayerAnimationsId": "Block",
+  "ItemSoundSetId": "ISS_Blocks_Stone",
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "Group": "Stone",
+    "CustomModel": "Blocks/Structures/Pillars/Pillar_Base.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Blocks/Structures/Pillars/Pillar_Base_Textures/Marble_Brick.png", "Weight": 1 }
+    ],
+    "BlockSoundSetId": "Stone",
+    "BlockParticleSetId": "Stone",
+    "ParticleColor": "#d5d5c8",
+    "Flags": { "IsUsable": true },
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks"
+      }
+    },
+    "Interactions": {
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "OpenCustomUI",
+            "Page": { "Id": "ItemRespawner" }
+          }
+        ]
+      }
+    },
+    "BlockEntity": {
+      "Components": {
+        "ItemRespawner": {
+          "Item": "Weapon_Crossbow_Iron",
+          "IntervalSeconds": 20
+        }
+      }
+    }
+  }
+}

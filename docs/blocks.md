@@ -142,13 +142,13 @@ All block items support standard item properties plus `BlockType`:
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
-    "Opacity": "Opaque",
+    "Opacity": "Solid",
     "Group": "Rock",
     "Textures": [
       { "Weight": 1, "All": "BlockTextures/Rock_Stone.png" }
     ],
     "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Rock",
+    "BlockParticleSetId": "Stone",
     "ParticleColor": "#808080",
     "Gathering": {
       "Breaking": {
@@ -171,7 +171,7 @@ The `BlockType` object defines how a block renders, collides, and behaves in the
 |----------|------|-------------|
 | `DrawType` | string | Rendering mode: `"Cube"`, `"Model"` |
 | `Material` | string | Physical type: `"Solid"`, `"Empty"` |
-| `Opacity` | string | Visual transparency: `"Opaque"`, `"Transparent"` |
+| `Opacity` | string | Visual transparency: `"Solid"`, `"Transparent"`, `"Semitransparent"`, `"Cutout"` |
 | `Group` | string | Block family for texture blending |
 | `Textures` | array | Texture definitions with variants |
 | `CustomModel` | string | Path to `.blockymodel` file |
@@ -653,7 +653,7 @@ Reference in BlockType with optional color:
 ```json
 {
   "BlockType": {
-    "BlockParticleSetId": "Rock",
+    "BlockParticleSetId": "Stone",
     "ParticleColor": "#808080"
   }
 }
@@ -663,7 +663,7 @@ Reference in BlockType with optional color:
 
 | ID | Effect Type |
 |----|-------------|
-| `Rock` | Stone chips |
+| `Stone` | Stone chips |
 | `Wood` | Wood splinters |
 | `Dust` | Soft material dust |
 | `Water` | Water splashes |
@@ -820,7 +820,7 @@ Some blocks have associated entity components:
 | `Container` | Storage blocks |
 | `CraftingBench` | Crafting stations |
 
-See [Items - Blocks](items-blocks.md) for detailed BlockEntity documentation.
+See [Items - Blocks](items-blocks.md) for detailed BlockEntity documentation, and [Custom Block-Entity Components](#custom-block-entity-components) below for a verified end-to-end recipe (define your own component, tick it, spawn entities from it, and persist its state).
 
 ---
 
@@ -920,13 +920,13 @@ Used for:
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
-    "Opacity": "Opaque",
+    "Opacity": "Solid",
     "Group": "Rock",
     "Textures": [
       { "Weight": 1, "All": "BlockTextures/My_Block.png" }
     ],
     "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Rock",
+    "BlockParticleSetId": "Stone",
     "ParticleColor": "#808080",
     "Gathering": {
       "Breaking": {
@@ -1691,6 +1691,272 @@ health.removeBlock(world, pos);                             // clear all tracked
 
 > [!WARNING]
 > This is engine-internal infrastructure exposed publicly; no first-party content plugin in build-12 references it. The class/method surface above is verified against `HytaleServer.jar`, but the intended end-to-end authoring flow (how a custom block declares its max health and regen) is not exercised by any shipped plugin — treat the worked example as illustrative of the API shape, not a guaranteed recipe.
+
+---
+
+## Custom Block-Entity Components
+
+**Verified against build-12** (server `2026.03.26-89796e57b`), end to end against a live server — this is a guaranteed recipe, not an illustrative sketch. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
+
+A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `Container`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
+
+Block-entity components live on the **`ChunkStore`** — the ECS store that backs chunks and blocks (see [Components](components.md)), distinct from the `EntityStore` that holds players, mobs, and dropped items. Living on the `ChunkStore` is what makes the state save and load with the chunk.
+
+### 1. The component
+
+Implement `Component<ChunkStore>`. Give it a `BuilderCodec` (see [Codecs](codecs.md)) that lists the persisted fields, a no-arg constructor, and a `clone()` (the engine clones the JSON-defined template to instantiate each placed block).
+
+```java
+public class ItemRespawner implements Component<ChunkStore> {
+
+    public static final BuilderCodec<ItemRespawner> CODEC =
+        BuilderCodec.builder(ItemRespawner.class, ItemRespawner::new)
+            .addField(new KeyedCodec<>("Item", Codec.STRING),
+                      (s, v) -> s.item = v, s -> s.item)
+            .addField(new KeyedCodec<>("IntervalSeconds", Codec.INTEGER),
+                      (s, v) -> s.intervalSeconds = v, s -> s.intervalSeconds)
+            .build();
+
+    private String item = "Weapon_Crossbow_Iron";
+    private int intervalSeconds = 20;
+
+    public ItemRespawner() {}
+
+    // getters/setters ...
+
+    @Override
+    public ItemRespawner clone() {
+        ItemRespawner copy = new ItemRespawner();
+        copy.item = this.item;
+        copy.intervalSeconds = this.intervalSeconds;
+        return copy;
+    }
+}
+```
+
+Each `addField` key (`"Item"`, `"IntervalSeconds"`) is the JSON key authors set in the block definition. Fields absent from the data keep their defaults.
+
+### 2. Wire it to a block
+
+Define a normal block-item, and nest your component under `BlockType.BlockEntity.Components` keyed by the **name you register it under** (step 3). The object's keys map to the codec fields:
+
+```json
+{
+  "BlockType": {
+    "Material": "Solid",
+    "DrawType": "Model",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Structures/Pillars/Pillar_Base.blockymodel",
+    "CustomModelTexture": [
+      { "Texture": "Blocks/Structures/Pillars/Pillar_Base_Textures/Marble_Brick.png", "Weight": 1 }
+    ],
+    "Flags": { "IsUsable": true },
+    "Interactions": {
+      "Use": { "Interactions": [ { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } } ] }
+    },
+    "BlockEntity": {
+      "Components": {
+        "ItemRespawner": { "Item": "Weapon_Crossbow_Iron", "IntervalSeconds": 20 }
+      }
+    }
+  }
+}
+```
+
+The carrier block is just a normal block — here a visible, solid pedestal reusing a shipped marble pillar-base model so the spawned item rests on top and the block is targetable (needed for the press-F GUI in step 7). It could equally be a plain cube, or even invisible and walk-through (`Material: "Empty"` + `DrawType: "Empty"`, as shipped crops and the `Barrier` block are) if you don't need to interact with it. The `Use` → `OpenCustomUI` interaction and `Flags.IsUsable` are only needed for the editing GUI; drop them for a fixed-config spawner.
+
+### 3. Register the component and a system
+
+In your plugin's `setup()`, register against **`getChunkStoreRegistry()`** (not the entity-store registry). `registerComponent` returns the `ComponentType` handle; pass it to your system:
+
+```java
+ComponentType<ChunkStore, ItemRespawner> type = getChunkStoreRegistry()
+    .registerComponent(ItemRespawner.class, "ItemRespawner", ItemRespawner.CODEC);
+getChunkStoreRegistry().registerSystem(new ItemRespawnerSystem(type));
+```
+
+The string `"ItemRespawner"` is exactly the JSON key from step 2.
+
+### 4. Tick over placed blocks
+
+`EntityTickingSystem` is generic over the store type, so `EntityTickingSystem<ChunkStore>` ticks block-entities the same way `EntityTickingSystem<EntityStore>` ticks entities — this is the base the engine's own fluid ticker uses. `getQuery()` restricts the tick to block-entities carrying both your component and the engine's `BlockModule.BlockStateInfo` (which every placed block-entity has, and which carries the block's location):
+
+```java
+public class ItemRespawnerSystem extends EntityTickingSystem<ChunkStore> {
+    private final ComponentType<ChunkStore, ItemRespawner> type;
+    private final Query<ChunkStore> query;
+
+    public ItemRespawnerSystem(ComponentType<ChunkStore, ItemRespawner> type) {
+        this.type = type;
+        this.query = Query.and(type, BlockModule.BlockStateInfo.getComponentType());
+    }
+
+    @Override public Query<ChunkStore> getQuery() { return query; }
+
+    // We mutate the EntityStore from here (step 5), so keep the tick single-threaded.
+    @Override public boolean isParallel(int chunkCount, int entityCount) { return false; }
+
+    @Override
+    public void tick(float deltaTime, int index, ArchetypeChunk<ChunkStore> chunk,
+                     Store<ChunkStore> store, CommandBuffer<ChunkStore> buffer) {
+        ItemRespawner spawner = chunk.getComponent(index, type);
+        var info = chunk.getComponent(index, BlockModule.BlockStateInfo.getComponentType());
+        if (spawner == null || info == null) return;
+        // ... resolve position (step 4b), then spawn/respawn (step 5) ...
+    }
+}
+```
+
+#### 4b. Resolving the block's world position
+
+`BlockStateInfo` carries a reference to the owning chunk plus the block's packed index within it. Unpack with `ChunkUtil` and offset by the chunk origin:
+
+```java
+Ref<ChunkStore> chunkRef = info.getChunkRef();
+if (!chunkRef.isValid()) return;
+WorldChunk worldChunk = store.getComponent(chunkRef, WorldChunk.getComponentType());
+if (worldChunk == null) return;
+
+int i = info.getIndex();
+int x = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getX(), ChunkUtil.xFromBlockInColumn(i));
+int y = ChunkUtil.yFromBlockInColumn(i);
+int z = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getZ(), ChunkUtil.zFromBlockInColumn(i));
+
+World world = store.getExternalData().getWorld();   // ChunkStore -> World
+```
+
+### 5. Spawning an item-entity from the block
+
+The item you drop is a normal entity in the **`EntityStore`**, reached via the `World`. Build a dropped-item `Holder` with `ItemComponent.generateItemDrop(...)` and insert it with `Store.addEntity(...)`:
+
+```java
+EntityStore entityStore = world.getEntityStore();
+Store<EntityStore> entities = entityStore.getStore();   // also a ComponentAccessor
+
+ItemStack stack = new ItemStack(spawner.getItem(), 1);
+Vector3d pos = new Vector3d(x + 0.5, y + 1.1, z + 0.5);   // rest on top of the pedestal
+Holder<EntityStore> drop = ItemComponent.generateItemDrop(
+        entities, stack, pos, Vector3f.ZERO, 0f, 0f, 0f);   // last three floats = velocity
+if (drop == null) return;   // null on an invalid/empty stack
+Ref<EntityStore> ref = entities.addEntity(drop, AddReason.SPAWN);
+```
+
+`generateItemDrop` attaches everything a pickup needs (transform, velocity, physics, a UUID, and a despawn timer) and returns `null` for an invalid item id, so a bad `Item` value fails safe. The drop carries the engine's standard despawn timer — an untouched pickup eventually despawns, after which your "is it still here?" check (below) treats it as gone.
+
+> Because this mutates the `EntityStore` while iterating the `ChunkStore`, override `isParallel(...)` to return `false` (shown in step 4) so the tick runs single-threaded. The `CommandBuffer<ChunkStore>` the tick receives cannot insert `EntityStore` entities — it's typed to the chunk store — which is why the spawn goes through `world.getEntityStore().getStore()` directly.
+
+### 6. "Only if not already present" + surviving reloads
+
+To avoid spawning a second item while one is still lying there, remember what you spawned and check it each tick. Within one session, hold the `Ref` that `addEntity` returned: `Ref.isValid()` is `true` while the item exists and flips to `false` the instant it's picked up or despawns.
+
+A `Ref` is a transient, in-memory handle — it does **not** survive a reload, but the dropped item (saved with the world) does. To keep the two in sync, also persist the spawned item's `UUID` (add it to the codec with `Codec.UUID_BINARY`) and re-acquire the `Ref` on load via `EntityStore.getRefFromUUID(uuid)`:
+
+```java
+// re-acquire after a reload, when the transient Ref is gone but the UUID persisted
+Ref<EntityStore> ref = spawner.getSpawnedRef();
+if ((ref == null || !ref.isValid()) && spawner.getSpawnedUuid() != null) {
+    ref = entityStore.getRefFromUUID(spawner.getSpawnedUuid());
+    spawner.setSpawnedRef(ref);
+}
+if (ref != null && ref.isValid()) {
+    // still present — capture the UUID once the engine assigns it (see gotcha), then wait
+    return;
+}
+// gone — count up deltaTime; spawn again once IntervalSeconds elapses
+```
+
+The engine provides a ready-made wrapper for exactly this — `com.hypixel.hytale.server.core.entity.reference.PersistentRef` (a UUID + cached `Ref`, with its own `CODEC`, that re-resolves through `getRefFromUUID`). Its `getEntity(accessor)` returns the live `Ref` or `null`. The engine's own mob and chicken-coop spawner blocks (`SpawnMarkerBlock`, `CoopBlock`) persist a `PersistentRef` this way. The example tracks the `Ref` and `UUID` by hand only to make the moving parts explicit.
+
+### 7. Editing block-entity state in-world (press-F GUI)
+
+To let players reconfigure a placed block (its `Item`, `IntervalSeconds`, …) without commands, open a custom UI page bound to that specific block-entity. This is how the shipped `Prefab_Spawner_Block` is edited, and it's three pieces:
+
+**A. A `Use` interaction in the block JSON** (step 2) opens a page by id:
+
+```json
+"Flags": { "IsUsable": true },
+"Interactions": {
+  "Use": { "Interactions": [ { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } } ] }
+}
+```
+
+**B. A page extending `InteractiveCustomUIPage<T>`**, where `T` is a small codec-backed data class for the submitted form. `build()` loads the `.ui` layout, seeds each field from the component, and binds the Save button to send the field values back; the base decodes them into `T` and calls `handleDataEvent()`, where you write to the component and persist with `BlockStateInfo.markNeedsSaving()`:
+
+```java
+public class ItemRespawnerSettingsPage extends InteractiveCustomUIPage<ItemRespawnerSettingsData> {
+    private final BlockModule.BlockStateInfo info;
+    private final ItemRespawner state;
+
+    public ItemRespawnerSettingsPage(PlayerRef player, BlockModule.BlockStateInfo info,
+                                     ItemRespawner state, CustomPageLifetime lifetime) {
+        super(player, lifetime, ItemRespawnerSettingsData.CODEC);   // base decodes the form via this codec
+        this.info = info;
+        this.state = state;
+    }
+
+    @Override
+    public void build(Ref<EntityStore> player, UICommandBuilder cmd, UIEventBuilder evt, Store<EntityStore> store) {
+        cmd.append("Pages/ItemRespawnerSettingsPage.ui");      // path relative to Common/UI/Custom/
+        cmd.set("#Item.Value", state.getItem());              // seed fields from current state
+        cmd.set("#IntervalSeconds.Value", (double) state.getIntervalSeconds());
+        // on Save, send each named element's value back under the codec's @-keys
+        EventData data = new EventData()
+                .append("@Item", "#Item.Value")
+                .append("@IntervalSeconds", "#IntervalSeconds.Value");
+        evt.addEventBinding(CustomUIEventBindingType.Activating, "#SaveButton", data);
+    }
+
+    @Override
+    public void handleDataEvent(Ref<EntityStore> player, Store<EntityStore> store, ItemRespawnerSettingsData data) {
+        state.setItem(data.getItem());
+        state.setIntervalSeconds((int) Math.round(data.getIntervalSeconds()));
+        info.markNeedsSaving();   // persist the edited block-entity with its chunk
+        close();
+    }
+}
+```
+
+The data class is a plain object whose `BuilderCodec` keys are the `@`-names bound in `build()` (`@Item`, `@IntervalSeconds`); the `.ui` file provides the named input elements (`#Item`, `#IntervalSeconds`, `#SaveButton`).
+
+**C. Bind the page id to the block** in `setup()`. `registerBlockEntityCustomPage` hands your supplier the targeted block-entity's `Ref`; read its components (via `ref.getStore()`) and construct the page:
+
+```java
+OpenCustomUIInteraction.registerBlockEntityCustomPage(
+    this, ItemRespawnerSettingsPage.class, "ItemRespawner",   // id matches OpenCustomUI Page.Id
+    (player, blockRef) -> {
+        Store<ChunkStore> s = blockRef.getStore();
+        var info = s.getComponent(blockRef, BlockModule.BlockStateInfo.getComponentType());
+        ItemRespawner state = s.getComponent(blockRef, type);   // the ComponentType from step 3
+        return (info == null || state == null) ? null
+            : new ItemRespawnerSettingsPage(player, info, state, CustomPageLifetime.CanDismissOrCloseThroughInteraction);
+    });
+```
+
+Because the supplier reads the components off the targeted block's `Ref`, the page is always bound to the exact block the player pressed F on — edits land on that block's state and persist with it.
+
+### Key classes for this recipe
+
+| Class | Package | Role |
+|-------|---------|------|
+| `Component<ChunkStore>` | `component` | Interface your block-entity state implements |
+| `ComponentRegistryProxy` | `component` | `getChunkStoreRegistry()`; `registerComponent` / `registerSystem` |
+| `BlockModule.BlockStateInfo` | `server.core.modules.block` | Per-block-entity component holding `getChunkRef()` + `getIndex()` |
+| `ChunkUtil` | `math.util` | `xFromBlockInColumn` / `yFromBlockInColumn` / `zFromBlockInColumn` / `worldCoordFromLocalCoord` |
+| `EntityTickingSystem<ChunkStore>` | `component.system.tick` | Per-tick system over block-entities |
+| `ItemComponent` | `server.core.modules.entity.item` | `generateItemDrop(...)` builds a dropped-item `Holder` |
+| `PersistentRef` | `server.core.entity.reference` | Save-surviving reference to a spawned entity |
+| `InteractiveCustomUIPage<T>` | `server.core.entity.entities.player.pages` | Form page; decodes the submission into `T` and calls `handleDataEvent` (step 7) |
+| `OpenCustomUIInteraction` | `server.core.modules.interaction.interaction.config.server` | `registerBlockEntityCustomPage(...)` binds a page id to a block-entity (step 7) |
+
+### Gotchas
+
+- **Register on the chunk store, not the entity store.** Block-entity components and their systems go through `getChunkStoreRegistry()`. Registering on `getEntityStoreRegistry()` means your `tick()` never sees placed blocks.
+- **The JSON key is the registration name.** `BlockEntity.Components.<Key>` must match the string passed to `registerComponent(class, "<Key>", codec)` exactly, or the component silently never attaches.
+- **A fresh drop's UUID is null for a tick.** `generateItemDrop` ensures a `UUIDComponent`, but the actual UUID is assigned slightly later — reading it immediately after `addEntity` yields `null`. Capture it lazily on a later tick (the live `Ref` covers the gap), or use `PersistentRef`.
+- **`world.getEntity(uuid)` won't find a dropped item.** That method returns high-level `Entity` wrappers (players/NPCs); a bare item holder isn't one. Use `EntityStore.getRefFromUUID(uuid)` (or a `PersistentRef`) for the existence check instead.
+- **Keep the tick single-threaded if it spawns entities.** `EntityTickingSystem` may run in parallel by default; override `isParallel(...)` to `false` when the body mutates another store.
+- **`Opacity` has no `"Opaque"` value.** The valid `Opacity` values are `Solid`, `Transparent`, `Semitransparent`, and `Cutout`. A `Model`-draw block uses `"Transparent"`; an invalid value fails JSON decode and the whole mod refuses to load. (Likewise, asset *ids* like `BlockParticleSetId` / `ItemSoundSetId` must name a real shipped asset — copy them from a real block of the same material rather than guessing.)
+- **A press-F GUI needs a targetable block.** An invisible, non-collidable carrier (`Material/DrawType: "Empty"`) can't be aimed at, so `OpenCustomUI` never fires. Use a visible, solid block (as in step 2) when you want the editing GUI.
 
 ---
 

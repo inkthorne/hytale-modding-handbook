@@ -1,0 +1,12 @@
+# Display text for the Item Respawner pack.
+# Format: key = value  (the "server." prefix in an item's TranslationProperties
+# maps to this file; "server.items.Item_Respawner_Block.name" -> "items.Item_Respawner_Block.name").
+
+items.Item_Respawner_Block.name = Item Respawner
+items.Item_Respawner_Block.description = A pedestal that drops the configured item (a crossbow by default) on top and respawns it after a delay once it's gone — Quake-style. Press F to choose the item and interval.
+
+# Settings GUI (opened by pressing F on the block). The "server." prefix maps here,
+# so "server.customUI.itemRespawnerSettingsPage.title" -> "customUI.itemRespawnerSettingsPage.title".
+customUI.itemRespawnerSettingsPage.title = Item Respawner
+customUI.itemRespawnerSettingsPage.item = Item id to spawn
+customUI.itemRespawnerSettingsPage.intervalSeconds = Respawn delay (seconds)

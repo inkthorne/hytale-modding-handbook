@@ -1,0 +1,13 @@
+{
+  "Group": "inkthorne",
+  "Name": "Example Item Respawner",
+  "Version": "0.1.0",
+  "Authors": [
+    {
+      "Name": "inkthorne"
+    }
+  ],
+  "Main": "hytale.examples.itemrespawner.ItemRespawnerPlugin",
+  "ServerVersion": "2026.03.26-89796e57b",
+  "IncludesAssetPack": true
+}

@@ -44,7 +44,7 @@ This example wires together several ideas:
 
 | Piece | Role |
 |-------|------|
-| `Item_Respawner_Block.json` | Block-item definition. `BlockType.BlockEntity.Components.ItemRespawner` attaches the component to every placed instance; `Use → OpenCustomUI` opens the settings page on press-F. The visible model is a shipped marble pillar-base. |
+| `Item_Respawner_Block.json` | Block-item definition. `BlockType.BlockEntity.Components.ItemRespawner` attaches the component to every placed instance; `Use → OpenCustomUI` opens the settings page on press-F. The visible model is a shipped marble pillar-base. The inventory `Icon` reuses a shipped spawner-block icon (`Block_Spawner_Block.png`) as a placeholder — it deliberately doesn't match the model; swap it for your own if you ship this. |
 | `ItemRespawner` | `Component<ChunkStore>` holding the config (`Item`, `IntervalSeconds`) and the spawned item's identity. A `BuilderCodec` persists it with the chunk. |
 | `ItemRespawnerSystem` | `EntityTickingSystem<ChunkStore>`. Each tick, per placed pedestal: resolves the block's world position, checks whether its item still exists, and respawns it once the interval elapses. |
 | `ItemRespawnerSettingsPage` | `InteractiveCustomUIPage` bound to the block. `build()` seeds the form from the component; `handleDataEvent()` writes edits back and calls `markNeedsSaving()`. |
@@ -70,6 +70,12 @@ item and spawn a duplicate.
 > it a tick or so later, so the UUID is captured lazily on a later tick (the live
 > `Ref` covers the gap). This is why the component stores both a transient `Ref`
 > and a persisted `UUID`.
+
+Note that "gone" also covers **natural despawn**: a dropped item has its own
+lifetime (`ItemEntityConfig`), so an untouched pickup eventually despawns on its
+own. When it does, `Ref.isValid()` flips false exactly as if a player had grabbed
+it, and the respawner re-drops after the interval — so even a never-touched
+pedestal refreshes its item on the despawn cycle, not just on pickup.
 
 ### The press-F settings GUI
 

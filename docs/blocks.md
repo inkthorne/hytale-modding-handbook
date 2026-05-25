@@ -1696,7 +1696,7 @@ health.removeBlock(world, pos);                             // clear all tracked
 
 ## Custom Block-Entity Components
 
-**Verified against build-12** (server `2026.03.26-89796e57b`), end to end against a live server — this is a guaranteed recipe, not an illustrative sketch. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
+**Verified against build-12**, end to end against a live server — this is a guaranteed recipe, not an illustrative sketch. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
 
 A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `Container`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
 

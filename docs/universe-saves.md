@@ -313,6 +313,50 @@ java -jar /path/to/Server/HytaleServer.jar --assets /path/to/Assets.zip
 Optional flags include `--backup` and `--backup-dir <dir>` for periodic world backups. Players join
 and spawn directly into your authored world.
 
+## Updating a world on a running server
+
+A persistent world is **resident while the server runs** — it stays loaded and ticking even with no
+players in it (only temporary instance worlds auto-unload when empty). So you **cannot** simply copy
+updated files over a world's directory on a live server: the server serves that world from memory
+(your copy has no effect), it will **overwrite your files** on its next save (auto-backup, chunk
+unload, or shutdown), and writing under the live process risks corruption.
+
+Take just that one world offline first — no full restart needed. The server exposes per-world
+console commands:
+
+| Command | Effect |
+|---------|--------|
+| `/world save <name>` (or `/world save all`) | Flush the world to disk |
+| `/world remove <name>` (alias `rm`) | Unload the world from the running universe (does not delete its files unless the world's `DeleteOnRemove` is set). You can't remove the only loaded world, and removing the world named by `Defaults.World` requires reassigning the default first. |
+| `/world load <name>` | Load an on-disk world that isn't currently loaded |
+| `/world add <name> [gen …]` | Create a new world |
+
+So the live update loop is:
+
+1. Close the route in (disable/remove the portal to the world) so no one enters mid-swap.
+2. `/world save <name>` then `/world remove <name>`.
+3. Replace the files on disk (see below).
+4. `/world load <name>`.
+5. Reopen the route.
+
+### Update the build, not the identity
+
+Re-edit a world **in the same save** and its **UUID stays the same** — the UUID is assigned at
+creation and persisted in the world's `config.json`, not regenerated on edit. That matters because
+**portals target their destination by UUID**: the `PortalDevice` component stores a
+`destinationWorldUuid`. A world swapped in with a *different* UUID (e.g. rebuilt in a fresh save)
+leaves every portal pointing at a missing world. When a world is removed, the Portals plugin turns
+off portals into it automatically; loading the same world back (same UUID) reconnects them.
+
+To update a world safely:
+
+- **Copy the build, not the config.** Copy `chunks/` (and `resources/` / `instance.bson` for
+  map/metadata), but **leave the destination `config.json` in place**. The server's copy holds the
+  world's identity (UUID) and your server-side settings (`GameMode`, `IsPvpEnabled`, `DisplayName`,
+  spawn point); overwriting it with a singleplayer copy reverts those.
+- **Match the destination folder name.** A world is keyed by its folder name — copy into the
+  existing `worlds/<name>/`, don't create a second folder under a different name.
+
 ## Gotchas & Errors
 
 - **Players still spawn at the crossroads** → the spawn world still has

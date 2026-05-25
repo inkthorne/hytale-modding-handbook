@@ -1752,7 +1752,15 @@ Define a normal block-item, and nest your component under `BlockType.BlockEntity
     ],
     "Flags": { "IsUsable": true },
     "Interactions": {
-      "Use": { "Interactions": [ { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } } ] }
+      "Use": {
+        "Interactions": [
+          {
+            "Type": "Condition",
+            "RequiredGameMode": "Creative",
+            "Next": { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } }
+          }
+        ]
+      }
     },
     "BlockEntity": {
       "Components": {
@@ -1764,6 +1772,10 @@ Define a normal block-item, and nest your component under `BlockType.BlockEntity
 ```
 
 The carrier block is just a normal block — here a visible, solid pedestal reusing a shipped marble pillar-base model so the spawned item rests on top and the block is targetable (needed for the press-F GUI in step 7). It could equally be a plain cube, or even invisible and walk-through (`Material: "Empty"` + `DrawType: "Empty"`, as shipped crops and the `Barrier` block are) if you don't need to interact with it. The `Use` → `OpenCustomUI` interaction and `Flags.IsUsable` are only needed for the editing GUI; drop them for a fixed-config spawner.
+
+Two deliberate choices here:
+- **No `Gathering`.** Omitting the gathering config makes the block unbreakable by mining in adventure/survival (the same way `Rock_Bedrock` and `Barrier` are), while creative's instant-break can still remove it. Add a `Gathering.Breaking` block if you want it mineable.
+- **`Condition` → `Creative`.** Wrapping `OpenCustomUI` in a `Condition` with `RequiredGameMode: "Creative"` means the GUI only opens for creative-mode players, so adventure players can't reconfigure the block (see the prompt caveat in step 7).
 
 ### 3. Register the component and a system
 
@@ -1871,14 +1883,25 @@ The engine provides a ready-made wrapper for exactly this — `com.hypixel.hytal
 
 To let players reconfigure a placed block (its `Item`, `IntervalSeconds`, …) without commands, open a custom UI page bound to that specific block-entity. This is how the shipped `Prefab_Spawner_Block` is edited, and it's three pieces:
 
-**A. A `Use` interaction in the block JSON** (step 2) opens a page by id:
+**A. A `Use` interaction in the block JSON** (step 2) opens a page by id. Wrap it in a `Condition` so only creative-mode players can edit:
 
 ```json
 "Flags": { "IsUsable": true },
 "Interactions": {
-  "Use": { "Interactions": [ { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } } ] }
+  "Use": {
+    "Interactions": [
+      {
+        "Type": "Condition",
+        "RequiredGameMode": "Creative",
+        "Next": { "Type": "OpenCustomUI", "Page": { "Id": "ItemRespawner" } }
+      }
+    ]
+  }
 }
 ```
+
+> [!NOTE]
+> **The interact prompt ("press F") shows for _any_ block with an interaction, in every game mode** — it's emitted by the engine's interaction tracker based solely on the block having interactions, and ignores `IsUsable`, game mode, and the `Condition` above. So the `Condition` stops adventure players from *opening* the GUI, but they still *see* the prompt. To suppress the prompt entirely (no interaction on the block at all), trigger the GUI from a command instead — open the same page with `player.getPageManager().openCustomPage(...)` from an `AbstractWorldCommand` that targets the looked-at block.
 
 **B. A page extending `InteractiveCustomUIPage<T>`**, where `T` is a small codec-backed data class for the submitted form. `build()` loads the `.ui` layout, seeds each field from the component, and binds the Save button to send the field values back; the base decodes them into `T` and calls `handleDataEvent()`, where you write to the component and persist with `BlockStateInfo.markNeedsSaving()`:
 
@@ -1957,6 +1980,8 @@ Because the supplier reads the components off the targeted block's `Ref`, the pa
 - **Keep the tick single-threaded if it spawns entities.** `EntityTickingSystem` may run in parallel by default; override `isParallel(...)` to `false` when the body mutates another store.
 - **`Opacity` has no `"Opaque"` value.** The valid `Opacity` values are `Solid`, `Transparent`, `Semitransparent`, and `Cutout`. A `Model`-draw block uses `"Transparent"`; an invalid value fails JSON decode and the whole mod refuses to load. (Likewise, asset *ids* like `BlockParticleSetId` / `ItemSoundSetId` must name a real shipped asset — copy them from a real block of the same material rather than guessing.)
 - **A press-F GUI needs a targetable block.** An invisible, non-collidable carrier (`Material/DrawType: "Empty"`) can't be aimed at, so `OpenCustomUI` never fires. Use a visible, solid block (as in step 2) when you want the editing GUI.
+- **The interact prompt can't be game-mode-gated from block config.** Any block with an interaction shows the "press F" prompt in every mode; `IsUsable`, game mode, and `Condition` don't affect it (they gate the *action*, not the prompt). For a prompt-free block, drop the interaction and open the GUI from a command (step 7 note).
+- **Omit `Gathering` for an unbreakable block.** A block with no `Gathering.Breaking` can't be mined in adventure/survival (like `Rock_Bedrock`), but creative instant-break still removes it.
 
 ---
 

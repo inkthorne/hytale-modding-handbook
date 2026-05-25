@@ -22,17 +22,16 @@
     "BlockParticleSetId": "Stone",
     "ParticleColor": "#d5d5c8",
     "Flags": { "IsUsable": true },
-    "Gathering": {
-      "Breaking": {
-        "GatherType": "Rocks"
-      }
-    },
     "Interactions": {
       "Use": {
         "Interactions": [
           {
-            "Type": "OpenCustomUI",
-            "Page": { "Id": "ItemRespawner" }
+            "Type": "Condition",
+            "RequiredGameMode": "Creative",
+            "Next": {
+              "Type": "OpenCustomUI",
+              "Page": { "Id": "ItemRespawner" }
+            }
           }
         ]
       }

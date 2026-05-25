@@ -32,8 +32,9 @@ This example wires together several ideas:
 1. Obtain the **Item Respawner** (creative inventory → search "Item Respawner",
    or `/give <player> Item_Respawner_Block 1`) and place it — a marble pedestal.
 2. A crossbow drops on top within a tick.
-3. **Press F** on the pedestal → a settings GUI with an **item id** field and a
-   **respawn delay** field. Change them and hit *Save Changes*.
+3. In **creative mode**, **press F** on the pedestal → a settings GUI with an
+   **item id** field and a **respawn delay** field. Change them and hit *Save
+   Changes*. (Editing is creative-only — see "Creative-only editing" below.)
 4. Pick the item up — a replacement appears after the configured delay, **and not
    before**; the new settings apply on the next respawn.
 5. Leave the world and return — the same single item is still there (no
@@ -81,6 +82,21 @@ handed the targeted block-entity's `Ref`, reads its `BlockStateInfo` +
 values, which the base decodes into an `ItemRespawnerSettingsData` and passes to
 `handleDataEvent()`, where they're written to the component and persisted with
 `BlockStateInfo.markNeedsSaving()`.
+
+### Creative-only editing, and the prompt caveat
+
+The `Use` interaction is wrapped in a `Condition` with `RequiredGameMode: "Creative"`,
+so only creative-mode players can open the GUI — adventure players pressing F get
+nothing. The block is also **unbreakable in adventure/survival** (it has no
+`Gathering`, like `Rock_Bedrock`); creative instant-break still removes it.
+
+One engine limitation to be aware of: the **"press F" prompt still appears in
+adventure mode**. The prompt is shown for any block that has an interaction,
+regardless of game mode or the `Condition` — so the `Condition` blocks the
+*action* but not the *prompt*. Fully hiding the prompt would mean removing the
+block interaction and opening the GUI from a command instead
+(`PageManager.openCustomPage(...)`); this example keeps the press-F interaction
+for simplicity.
 
 ## Configuring it (defaults)
 

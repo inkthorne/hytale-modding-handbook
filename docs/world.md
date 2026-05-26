@@ -546,7 +546,8 @@ Configuration for world-specific gameplay settings like block rules and day/nigh
 > live on `com.hypixel.hytale.server.core.asset.type.gameplay.WorldConfig`, reached via
 > `world.getGameplayConfig().getWorldConfig()`. The separate `World.getWorldConfig()` method
 > returns a *different* class, `com.hypixel.hytale.server.core.universe.world.WorldConfig`,
-> which does **not** expose these gameplay accessors.
+> which does **not** expose these gameplay accessors. (The universe `WorldConfig` is where
+> `get/setSpawnProvider` live — see [Controlling Respawn Location](#controlling-respawn-location).)
 
 #### Key Methods
 ```java
@@ -616,6 +617,73 @@ DeathConfig config = world.getDeathConfig();
 ItemsLossMode lossMode = config.getItemsLossMode();
 double lossPercent = config.getItemsAmountLossPercentage();
 ```
+
+#### Respawn flow
+
+`getRespawnController()` returns the policy that decides where a dead player reappears. Two built-ins
+exist (`com.hypixel.hytale.server.core.asset.type.gameplay.respawn`):
+
+| Controller | Behavior |
+|------------|----------|
+| `HomeOrSpawnPoint` (default) | Uses the player's personal respawn point if set, else the world spawn provider |
+| `WorldSpawnPoint` | Always uses the world spawn provider |
+
+Both ultimately delegate placement to the world's **spawn provider**, which is the seam to override —
+see below.
+
+---
+
+### Controlling Respawn Location
+
+To control where players spawn (and respawn), install an `ISpawnProvider` rather than teleporting
+players manually. The respawn controller calls the provider and adds the `Teleport` component itself,
+so there is no manual-teleport race.
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.spawn` (note: *not* under
+`asset.type.gameplay.respawn`). The provider lives on the **universe** `WorldConfig`
+(`World.getWorldConfig()`), distinct from the gameplay `WorldConfig`/`DeathConfig` above:
+
+```java
+world.getWorldConfig().setSpawnProvider(provider);   // universe.world.WorldConfig
+```
+
+The interface has several overloads, but the only one you must implement is
+`Transform getSpawnPoint(World, UUID)` — the default `getSpawnPoint(Ref, ComponentAccessor)` and
+`getSpawnPoint(Entity)` overloads resolve the UUID/World for you and delegate to it.
+
+```java
+import com.hypixel.hytale.math.vector.Transform;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.spawn.ISpawnProvider;
+import java.util.UUID;
+
+public class ArenaSpawnProvider implements ISpawnProvider {
+    @Override
+    public Transform getSpawnPoint(World world, UUID player) {
+        return pickSpawn(player);   // your placement logic
+    }
+
+    @Override public Transform[] getSpawnPoints() { return new Transform[0]; } // deprecated, still abstract
+    @Override public boolean isWithinSpawnDistance(com.hypixel.hytale.math.vector.Vector3d p, double d) { return true; }
+}
+```
+
+Built-ins worth referencing instead of rolling your own:
+
+| Provider | Use |
+|----------|-----|
+| `GlobalSpawnProvider(Transform)` | One fixed spawn for everyone |
+| `IndividualSpawnProvider(Transform[])` | Round-robins / assigns from a set of points |
+| `FitToHeightMapSpawnProvider(ISpawnProvider)` | Wraps another provider and ground-snaps a sentinel `y < 0` to the terrain height |
+
+> **⚠️ `getSpawnPoint` is polled, not called once.** It can be invoked repeatedly while the death
+> screen is open, not only at the instant of respawn. A provider that returns a *fresh random* point
+> each call makes the spawn visibly jitter every tick. Compute once and **cache per player** (keyed on
+> the `UUID`), invalidating the cache on respawn (e.g. from a `RespawnSystems.OnRespawnSystem` — see
+> [combat.md → Reacting to Death & Respawn](combat.md#reacting-to-death--respawn)).
+
+Because no world exists at plugin `setup()` time, install the provider per-world from a
+`StartWorldEvent` handler — see [World Events](#world-events) below.
 
 ---
 

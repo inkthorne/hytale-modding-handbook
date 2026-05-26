@@ -389,6 +389,89 @@ When an entity is killed, the events fire in this order:
 
 ---
 
+## Reacting to Death & Respawn
+
+`KillFeedEvent` is the hook for *messaging* (kill-feed entry, killer/victim notifications) — not the
+hook for reacting to the death/respawn lifecycle itself. The engine signals death and respawn by
+**adding and removing a component**, not by firing an event:
+
+- On death, the engine **adds** `DeathComponent`
+  (`com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent`) to the entity.
+- On respawn, it **removes** that component.
+
+Observe those transitions with a `RefChangeSystem<EntityStore, DeathComponent>`. Two engine base
+classes (in `...modules.entity.damage`) make this turnkey by hardcoding the component type and leaving
+exactly one callback for you to override:
+
+| Base class | Override | Fires |
+|------------|----------|-------|
+| `DeathSystems.OnDeathSystem` | `onComponentAdded(...)` | when the entity dies |
+| `RespawnSystems.OnRespawnSystem` | `onComponentRemoved(...)` | when the entity respawns |
+
+Both extend `RefChangeSystem` (`com.hypixel.hytale.component.system.RefChangeSystem`), which is a
+`QuerySystem` — so you must supply `getQuery()`. A `ComponentType` is usable as a `Query`, so returning
+`Player.getComponentType()` scopes the system to players (this is exactly what the engine's own
+`ResetPlayerRespawnSystem` does).
+
+```java
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
+import com.hypixel.hytale.server.core.modules.entity.damage.DeathSystems;
+import com.hypixel.hytale.server.core.modules.entity.damage.RespawnSystems;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+
+// Fires the moment a player dies.
+public class OnPlayerDeath extends DeathSystems.OnDeathSystem {
+    @Override
+    public void onComponentAdded(Ref<EntityStore> ref, DeathComponent death,
+                                 Store<EntityStore> store, CommandBuffer<EntityStore> buffer) {
+        // The Damage that killed them is on the component; the killer (if any) is its source.
+        // Damage dmg = death.getDeathInfo();
+        // if (dmg.getSource() instanceof Damage.EntitySource es) { Ref<EntityStore> killer = es.getRef(); }
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Player.getComponentType();
+    }
+}
+
+// Fires the moment a player respawns.
+public class OnPlayerRespawn extends RespawnSystems.OnRespawnSystem {
+    @Override
+    public void onComponentRemoved(Ref<EntityStore> ref, DeathComponent death,
+                                   Store<EntityStore> store, CommandBuffer<EntityStore> buffer) {
+        // e.g. reset inventory / grant a loadout here (see inventory.md)
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Player.getComponentType();
+    }
+}
+```
+
+Register them from `setup()` like any other system:
+
+```java
+getEntityStoreRegistry().registerSystem(new OnPlayerDeath());
+getEntityStoreRegistry().registerSystem(new OnPlayerRespawn());
+```
+
+> The killer/victim refs are reconstructed from the `Damage` (see [Damage Source Types](#damage-source-types)):
+> `getTargetRef()` on `KillFeedEvent.KillerMessage` is the **victim**, and `Damage.EntitySource.getRef()`
+> is the **attacker**. `DeathComponent.getDeathInfo()` gives you the same `Damage` from inside an
+> `OnDeathSystem`.
+
+To control *where* a player respawns, override the world's spawn provider rather than teleporting
+manually — see [world.md → Controlling Respawn Location](world.md#controlling-respawn-location).
+
+---
+
 ## Damage Handling Examples
 
 ### Cancel Damage

@@ -127,6 +127,29 @@ CombinedItemContainer getCombinedBackpackStorageHotbarFirst()
 CombinedItemContainer getCombinedStorageHotbarBackpack()
 ```
 
+### Combined container from an ECS system (clear + grant loadout)
+
+The instance accessors above assume you already hold an inventory object. Inside an ECS system you
+typically only have a `Store`/`ComponentAccessor` and a `Ref` — use the **static**
+`InventoryComponent.getCombined(...)`, which takes a `ComponentAccessor<EntityStore>`, a
+`Ref<EntityStore>`, and one or more section selectors. Predefined selectors are
+`ComponentType[]` constants on `InventoryComponent`: `EVERYTHING`, `HOTBAR_FIRST`,
+`HOTBAR_STORAGE_BACKPACK`, `BACKPACK_STORAGE_HOTBAR`, `ARMOR_HOTBAR_UTILITY_STORAGE`, … .
+
+```java
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.container.CombinedItemContainer;
+
+// e.g. from a RespawnSystems.OnRespawnSystem (see combat.md):
+CombinedItemContainer inv = InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING);
+inv.clear();                                          // returns a transaction
+inv.addItemStack(new ItemStack("Weapon_Sword_Wood", 1));
+```
+
+`clear()` and `addItemStack(ItemStack)` are inherited from the `ItemContainer` base and return
+transaction objects. `ItemStack` has `ItemStack(String)` and `ItemStack(String, int)` constructors.
+
 ### Active Slots
 ```java
 // Hotbar

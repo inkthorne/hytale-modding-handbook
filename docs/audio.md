@@ -7,7 +7,7 @@ seo:
 
 # Audio System
 
-**Doc type:** JSON asset format · **Assets:** `Server/Audio` · **Verified against build-12**
+**Doc type:** JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.5.0**
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 

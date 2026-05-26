@@ -7,7 +7,7 @@ seo:
 
 # World API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 Covers the runtime `World` object, its chunks, per-player chunk tracking, gameplay configuration, and the world/chunk lifecycle events plugins can observe.
 
@@ -106,8 +106,8 @@ CompletableFuture<Void> drainPlayersTo(World targetWorld, Collection<PlayerRef> 
 ```java
 Entity getEntity(UUID uuid)
 Ref<EntityStore> getEntityRef(UUID uuid)
-<T extends Entity> T spawnEntity(T entity, Vector3d position, Vector3f rotation)
-<T extends Entity> T addEntity(T entity, Vector3d position, Vector3f rotation, AddReason reason)
+<T extends Entity> T spawnEntity(T entity, Vector3d position, Rotation3f rotation)
+<T extends Entity> T addEntity(T entity, Vector3d position, Rotation3f rotation, AddReason reason)
 ```
 
 ### Chunks
@@ -664,7 +664,7 @@ public class ArenaSpawnProvider implements ISpawnProvider {
     }
 
     @Override public Transform[] getSpawnPoints() { return new Transform[0]; } // deprecated, still abstract
-    @Override public boolean isWithinSpawnDistance(com.hypixel.hytale.math.vector.Vector3d p, double d) { return true; }
+    @Override public boolean isWithinSpawnDistance(org.joml.Vector3d p, double d) { return true; }
 }
 ```
 

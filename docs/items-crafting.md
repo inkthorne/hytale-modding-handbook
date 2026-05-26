@@ -7,7 +7,7 @@ seo:
 
 # Crafting System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.0**
 
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 

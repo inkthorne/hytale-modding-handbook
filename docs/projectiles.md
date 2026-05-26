@@ -7,7 +7,7 @@ seo:
 
 # Projectiles API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 This page covers spawning and simulating projectiles: the module, asset-based configuration, physics, ECS components, and impact/bounce callbacks.
 

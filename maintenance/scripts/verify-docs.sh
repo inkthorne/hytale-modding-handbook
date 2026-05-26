@@ -456,7 +456,7 @@ section "[INFO] Version stamps on topic pages"
 python3 - <<'PY'
 import re, glob, os
 nav = {"00-overview.md", "01-index.md", "02-structure.md"}
-stamp = re.compile(r'Verified against build-\d+')
+stamp = re.compile(r'Verified against (?:build-\d+|\d+\.\d+\.\d+)')
 missing = []
 total = 0
 for p in sorted(glob.glob("docs/*.md")):

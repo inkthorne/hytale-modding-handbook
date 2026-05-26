@@ -10,8 +10,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
 import com.hypixel.hytale.math.util.ChunkUtil;
-import com.hypixel.hytale.math.vector.Vector3d;
-import com.hypixel.hytale.math.vector.Vector3f;
+import com.hypixel.hytale.math.vector.Rotation3f;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
@@ -19,6 +18,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import org.joml.Vector3d;
 
 /**
  * Runs every tick over each placed Item Respawner block and keeps it stocked: if
@@ -129,7 +129,7 @@ public class ItemRespawnerSystem extends EntityTickingSystem<ChunkStore> {
         ItemStack stack = new ItemStack(spawner.getItem(), 1);
         Vector3d position = new Vector3d(x + 0.5, y + 1.1, z + 0.5);
         Holder<EntityStore> drop = ItemComponent.generateItemDrop(
-                entities, stack, position, Vector3f.ZERO, 0.0f, 0.0f, 0.0f);
+                entities, stack, position, new Rotation3f(), 0.0f, 0.0f, 0.0f);
         if (drop == null) {
             // Bad item id (or empty stack). Back off so we don't spin every tick.
             spawner.setSecondsSinceMissing(0.0f);

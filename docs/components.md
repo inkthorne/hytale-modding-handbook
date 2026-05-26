@@ -7,7 +7,7 @@ seo:
 
 # Components (ECS) API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 Hytale uses an Entity Component System (ECS) architecture. Entities are composed of components stored in typed stores.
 

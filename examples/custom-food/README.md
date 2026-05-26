@@ -57,7 +57,7 @@ README instead of inline.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "2026.03.26-89796e57b",
+  "ServerVersion": "0.5.0",
   "IncludesAssetPack": true
 }
 ```

@@ -7,7 +7,7 @@ seo:
 
 # Entities API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
 
@@ -363,7 +363,7 @@ These carry state and have getters/setters (and a constructor that seeds the val
 | `PersistentModel` | A model that persists across reloads | `new PersistentModel(Model.ModelReference)`, `getModelReference()` / `setModelReference(...)` |
 | `DisplayNameComponent` | Floating name | `new DisplayNameComponent(Message)`, `getDisplayName()` |
 | `EntityScaleComponent` | Uniform render scale | `new EntityScaleComponent(float)`, `getScale()` / `setScale(float)` |
-| `HeadRotation` | Head look direction | `new HeadRotation(Vector3f)`, `getRotation()` / `setRotation(...)`, `getDirection()` (→ `Vector3d`) |
+| `HeadRotation` | Head look direction | `new HeadRotation(Rotation3fc)`, `getRotation()` (→ `Rotation3f`) / `setRotation(...)`, `getDirection()` (→ `Vector3d`) |
 | `DynamicLight` | Light emitted by the entity | `new DynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
 | `PersistentDynamicLight` | Persisted dynamic light | `new PersistentDynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
 | `BoundingBox` | Collision/selection box | `new BoundingBox(Box)`, `getBoundingBox()` / `setBoundingBox(...)`, `getDetailBoxes()` |
@@ -605,9 +605,9 @@ public void launchPlayer(Store<EntityStore> store, Ref<EntityStore> ref) {
 // In a damage system, apply knockback to the damaged entity
 public void applyKnockback(Velocity velocity, Vector3d direction, double force) {
     Vector3d knockback = new Vector3d(
-        direction.getX() * force,
+        direction.x() * force,
         5.0,  // Small upward component
-        direction.getZ() * force
+        direction.z() * force
     );
     VelocityConfig config = new VelocityConfig();
     velocity.addInstruction(knockback, config, ChangeVelocityType.Add);

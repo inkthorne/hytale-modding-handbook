@@ -7,7 +7,7 @@ seo:
 
 # Commands API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
 
@@ -458,7 +458,7 @@ ArgTypes.RELATIVE_BLOCK_POSITION  // Integer position with ~ support
 ArgTypes.RELATIVE_CHUNK_POSITION  // Chunk position with ~ support
 ArgTypes.VECTOR3I                 // Vector3i (x y z integers)
 ArgTypes.VECTOR2I                 // Vector2i (x y integers)
-ArgTypes.ROTATION                 // Vector3f rotation
+ArgTypes.ROTATION                 // Rotation3fc (pitch/yaw/roll)
 ArgTypes.RELATIVE_INTEGER         // Integer with ~ support
 ArgTypes.RELATIVE_FLOAT           // Float with ~ support
 ```
@@ -550,8 +550,8 @@ public class SpawnCommand extends AbstractPlayerCommand {
 
         // Use the resolved absolute position
         playerRef.sendMessage(Message.raw(
-            "Spawning at: " + targetPosition.getX() + ", " +
-            targetPosition.getY() + ", " + targetPosition.getZ()
+            "Spawning at: " + targetPosition.x() + ", " +
+            targetPosition.y() + ", " + targetPosition.z()
         ));
     }
 }

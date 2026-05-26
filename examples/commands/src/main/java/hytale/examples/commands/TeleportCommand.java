@@ -3,7 +3,7 @@ package hytale.examples.commands;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.math.vector.Transform;
-import com.hypixel.hytale.math.vector.Vector3d;
+import org.joml.Vector3d;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
@@ -51,6 +51,6 @@ public class TeleportCommand extends AbstractPlayerCommand {
     }
 
     private String formatPosition(Vector3d pos) {
-        return String.format("%.1f, %.1f, %.1f", pos.getX(), pos.getY(), pos.getZ());
+        return String.format("%.1f, %.1f, %.1f", pos.x(), pos.y(), pos.z());
     }
 }

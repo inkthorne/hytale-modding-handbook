@@ -7,7 +7,7 @@ seo:
 
 # Assets API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 The assets system loads, registers, and looks up data-driven game content (items, blocks, models, and custom plugin types) backed by JSON files and codec serialization.
 

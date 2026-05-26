@@ -7,7 +7,7 @@ seo:
 
 # Prefabs API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.5.0**
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 
@@ -281,9 +281,9 @@ BlockSelection prefab = store.getServerPrefab("structures/tower");
 // Place at player position
 Transform transform = playerRef.getTransform();
 Vector3i pos = new Vector3i(
-    (int) transform.getPosition().getX(),
-    (int) transform.getPosition().getY(),
-    (int) transform.getPosition().getZ()
+    (int) transform.getPosition().x(),
+    (int) transform.getPosition().y(),
+    (int) transform.getPosition().z()
 );
 
 // Place returns undo selection
@@ -576,7 +576,7 @@ protected void setup() {
 
 ```java
 import com.hypixel.hytale.math.Axis;
-import com.hypixel.hytale.math.vector.Vector3i;
+import org.joml.Vector3i;
 import com.hypixel.hytale.server.core.prefab.PrefabStore;
 import com.hypixel.hytale.server.core.prefab.PrefabRotation;
 import com.hypixel.hytale.server.core.prefab.PrefabWeights;
@@ -597,9 +597,9 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
     // Get player position
     Transform transform = playerRef.getTransform();
     Vector3i placePos = new Vector3i(
-        (int) transform.getPosition().getX() + 5,
-        (int) transform.getPosition().getY(),
-        (int) transform.getPosition().getZ()
+        (int) transform.getPosition().x() + 5,
+        (int) transform.getPosition().y(),
+        (int) transform.getPosition().z()
     );
 
     // Rotate 90 degrees

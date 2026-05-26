@@ -71,7 +71,7 @@ JSON to self-document.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "2026.03.26-89796e57b",
+  "ServerVersion": "0.5.0",
   "IncludesAssetPack": true
 }
 ```
@@ -203,7 +203,7 @@ So a child `Weight` under `Multiple` is an absolute percentage; a child `Weight`
 
 > [!note]
 > The JSON here is fully verified against the game's shipped assets (build
-> `2026.03.26-89796e57b`): the override path, the chicken's original drop contents, and
+> `0.5.0`): the override path, the chicken's original drop contents, and
 > every `ItemId` were copied from the extracted `Assets.zip`, and the chicken role's
 > `"DropList": "Drop_Chicken"` confirms a same-path file overrides the shipped table. The
 > end-to-end in-game kill test (steps 3–5) is the one thing to run yourself — it needs a

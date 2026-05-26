@@ -10,11 +10,11 @@ game update to see exactly which assets changed before re-checking docs.
 
 | Field | Value |
 |-------|-------|
-| Build | `build-12` (from `install/release/package/sig/build-12/`) |
-| Captured | 2026-05-22 |
-| `Assets.zip` mtime | 2026-05-22 11:08 |
-| `Assets.zip` size | 3,411,196,468 bytes (~3.4 GB, 59,518 files) |
-| `CommonAssetsIndex.hashes` | 24,748 entries; sha256 `e281861818f20307c04c613b373f2929b13c2aec798b4e72c70fc9057081a2d2` |
+| Build | `0.5.0` (Update 5; `Implementation-Version` = `0.5.0`, from `install/release/package/sig/build-13/`) |
+| Captured | 2026-05-26 |
+| `Assets.zip` mtime | 2026-05-26 10:23 |
+| `Assets.zip` size | 3,428,474,018 bytes (~3.4 GB; 60,798 extracted files) |
+| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `77b9732421d6ed116376ba0eb3cf1921b937d96f05d50bd46258c50e7120f736` |
 
 `CommonAssetsIndex.hashes` is Hytale's own per-asset SHA-256 index (paths are
 relative to `Common/`), copied verbatim from the extracted assets. It is the
@@ -33,6 +33,7 @@ diff maintenance/baseline/CommonAssetsIndex.hashes ~/.cache/hytale-assets/Common
 - Changed/added/removed lines → those exact assets changed. Re-verify any doc
   that references them (asset paths whose hash changed are the ones to re-check).
 
-Also compare the build marker: if `install/.../sig/` now shows `build-13+`,
-the game updated. Update the table above and refresh this snapshot once the
-docs have been re-verified against the new build.
+Also compare the build marker: if `install/.../sig/` now shows `build-14+`
+(or `Implementation-Version` advances past `0.5.0`), the game updated. Update the
+table above and refresh this snapshot once the docs have been re-verified against
+the new build.

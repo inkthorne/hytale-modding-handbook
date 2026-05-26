@@ -7,7 +7,7 @@ seo:
 
 # Operation System
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) first for an overview of the interaction system.
 >

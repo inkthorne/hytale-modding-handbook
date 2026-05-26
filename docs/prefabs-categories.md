@@ -7,7 +7,7 @@ seo:
 
 # Prefab Categories
 
-**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against build-12**
+**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.5.0**
 
 Hytale includes ~7,824 prefab files organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 

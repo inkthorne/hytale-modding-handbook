@@ -7,7 +7,7 @@ seo:
 
 # Props & Structure Placement
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against build-12**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.0**
 
 Hytale places trees, rocks, plants, ores, encounters and structures through **props**. A biome
 carries a `Props[]` array; each entry pairs a set of **positions** (where to try placing) with an

@@ -25,8 +25,11 @@ public class EntityCountHud extends CustomUIHud {
     private int lastNpcs = -1;
     private int lastOther = -1;
 
+    /** Stable key identifying this HUD on the player; pass to removeCustomHud() to hide it. */
+    public static final String KEY = "entity-count-hud";
+
     public EntityCountHud(PlayerRef playerRef) {
-        super(playerRef);
+        super(playerRef, KEY);
     }
 
     /**

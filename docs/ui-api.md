@@ -7,7 +7,7 @@ seo:
 
 # UI Java API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 Server-side Java API reference for Hytale's UI system.
 
@@ -851,8 +851,9 @@ windows.closeWindow(ref, slotId, store);
 Manage HUD visibility and custom HUD elements.
 
 ```java
-// Custom HUD
-CustomUIHud getCustomHud()
+// Custom HUD — keyed lookups
+CustomUIHud getCustomHud(String key)
+Map<String, CustomUIHud> getCustomHuds()
 
 // Visibility control
 Set<HudComponent> getVisibleHudComponents()
@@ -864,8 +865,9 @@ void showHudComponents(PlayerRef playerRef, HudComponent... components)
 void showHudComponents(PlayerRef playerRef, Set<HudComponent> components)
 void hideHudComponents(PlayerRef playerRef, HudComponent... components)
 
-// Custom HUD
-void setCustomHud(PlayerRef playerRef, CustomUIHud hud)
+// Custom HUD — add shows it (calls show()); remove hides it by key
+void addCustomHud(PlayerRef playerRef, CustomUIHud hud)
+void removeCustomHud(PlayerRef playerRef, String key)
 
 // Reset
 void resetHud(PlayerRef playerRef)
@@ -942,8 +944,9 @@ Abstract base class for custom HUD overlays. Extend this to add your own icons, 
 
 ### API
 ```java
-// Constructor
-CustomUIHud(PlayerRef playerRef)
+// Constructors — every HUD is identified by a String key (unique per player)
+CustomUIHud(PlayerRef playerRef, String key)
+CustomUIHud(PlayerRef playerRef, String key, int zOrder)
 
 // Abstract - must implement
 protected abstract void build(UICommandBuilder cmd)
@@ -954,7 +957,14 @@ void update(boolean clear, UICommandBuilder cmd)  // Update with commands
 
 // Access
 PlayerRef getPlayerRef()
+String getKey()                                // The key passed to the constructor
+int getZOrder()
+void setZOrder(int zOrder)                     // Draw order vs. other custom HUDs
 ```
+
+> The **key** identifies this HUD on the player. `addCustomHud()` replaces any existing HUD registered under
+> the same key; `removeCustomHud(playerRef, key)` hides it. Pick a stable key per HUD type (e.g. a
+> `public static final String KEY` constant) and reuse it for both calls.
 
 ### CustomUIHud vs Native HUD Components
 
@@ -963,7 +973,7 @@ CustomUIHud creates a **separate overlay layer** that renders alongside (not ins
 | System | What It Controls | How to Use |
 |--------|------------------|------------|
 | Native HudComponents | Built-in elements (Health bar, Mana bar, Hotbar, etc.) | `hud.showHudComponents()`, `hud.hideHudComponents()` |
-| CustomUIHud | Your custom overlay (text, icons, panels) | `hud.setCustomHud()` |
+| CustomUIHud | Your custom overlay (text, icons, panels) | `hud.addCustomHud()` / `hud.removeCustomHud(key)` |
 
 **Key point:** CustomUIHud does NOT modify or extend the native HUD. To display custom health/mana values:
 - Create a CustomUIHud with your own Label elements
@@ -977,7 +987,7 @@ HudManager hud = player.getHudManager();
 hud.hideHudComponents(playerRef, HudComponent.Health, HudComponent.Mana);
 
 // Show custom HUD with your own health/mana display
-hud.setCustomHud(playerRef, new StatusHud(playerRef));
+hud.addCustomHud(playerRef, new StatusHud(playerRef));
 ```
 
 ### Obtaining ECS Context for UI Operations
@@ -991,7 +1001,7 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
                       Ref<EntityStore> ref, PlayerRef playerRef, World world) {
     // store, ref, playerRef provided by command framework
     Player player = store.getComponent(ref, Player.getComponentType());
-    player.getHudManager().setCustomHud(playerRef, new StatusHud(playerRef));
+    player.getHudManager().addCustomHud(playerRef, new StatusHud(playerRef));
 }
 ```
 
@@ -1005,7 +1015,7 @@ getEventRegistry().register(SomeEvent.class, event -> {
 });
 ```
 
-> **`setCustomHud(...)` and any store/chunk access must run on the world thread.** A *global*
+> **`addCustomHud(...)` and any store/chunk access must run on the world thread.** A *global*
 > event consumer (e.g. `AddPlayerToWorldEvent`) runs on a `ForkJoinPool.commonPool` worker, so
 > attaching a HUD or touching the store there throws
 > `IllegalStateException: Assert not in thread! ... but was in Thread[ForkJoinPool.commonPool-worker-N]`.
@@ -1022,8 +1032,10 @@ Full working example: [`examples/ui/.../StatusHud.java`](../examples/ui/src/main
 
 ```java
 public class StatusHud extends CustomUIHud {
+    public static final String KEY = "status-hud";
+
     public StatusHud(PlayerRef playerRef) {
-        super(playerRef);
+        super(playerRef, KEY);
     }
 
     @Override
@@ -1047,10 +1059,13 @@ public class StatusHud extends CustomUIHud {
 Player player = store.getComponent(ref, Player.getComponentType());
 HudManager hud = player.getHudManager();
 StatusHud statusHud = new StatusHud(playerRef);
-hud.setCustomHud(playerRef, statusHud);
+hud.addCustomHud(playerRef, statusHud);   // shows it (calls build() + show())
 
 // Later, update the HUD
 statusHud.updateStats(85, 50);
+
+// To hide it again, remove by key
+hud.removeCustomHud(playerRef, StatusHud.KEY);
 ```
 
 ### Dynamic Updates
@@ -1093,7 +1108,7 @@ customHud.update(true, rebuildCmd);
 | `show()` | Initial display or force refresh | Calls `build()` internally, sends full UI to client |
 | `update(clear, cmd)` | After initial display | Sends only the specified commands without re-calling `build()` |
 
-The `show()` method is called automatically when you call `setCustomHud()`. Use `update()` for all subsequent changes.
+The `show()` method is called automatically when you call `addCustomHud()`. Use `update()` for all subsequent changes.
 
 ### UICommandBuilder Method Support
 
@@ -1155,21 +1170,22 @@ For UIs that need to respond to user interaction (button clicks, input changes, 
 
 ### Multiple HUDs
 
-**Only one CustomUIHud can be active per player.** The `HudManager` stores a single `customHud` reference. Calling `setCustomHud()` replaces any existing custom HUD.
-
-To display multiple HUD elements simultaneously:
-1. **Combine in one HUD:** Include all elements in a single CustomUIHud with multiple containers
-2. **Use native components:** Combine CustomUIHud with built-in `HudComponent` elements
+**A player can have multiple custom HUDs at once, each identified by its key.** The `HudManager` keeps a
+`Map<String, CustomUIHud>` (see `getCustomHuds()`), so `addCustomHud()` registers one HUD per key and only
+replaces a HUD that shares the *same* key. Use distinct keys to stack independent overlays (e.g. a status panel
+and a minimap), and `setZOrder(int)` to control which draws on top.
 
 ```java
-// Example: Combined HUD with multiple sections
-public class CombinedHud extends CustomUIHud {
-    @Override
-    protected void build(UICommandBuilder cmd) {
-        cmd.append("CombinedHud.ui");  // Contains both status and minimap sections
-    }
-}
+// Two independent overlays, shown side by side
+hud.addCustomHud(playerRef, new StatusHud(playerRef));    // key "status-hud"
+hud.addCustomHud(playerRef, new MinimapHud(playerRef));   // key "minimap-hud"
+
+// Remove just one of them, by key
+hud.removeCustomHud(playerRef, StatusHud.KEY);
 ```
+
+You can still **combine elements into a single HUD** (one `CustomUIHud` whose `.ui` file has multiple containers)
+when they're logically one overlay — but it's no longer required just to show more than one thing.
 
 ### .ui File Example (StatusHud.ui)
 ```
@@ -1208,10 +1224,10 @@ CustomUIHud requires the plugin manifest to include:
 The `"IncludesAssetPack": true` setting is **required** for any plugin using custom `.ui` files.
 
 ### Removing Custom HUD
-To remove a custom HUD, set it to null or reset the HUD:
+To remove a custom HUD, remove it by key — or reset all HUD state:
 
 ```java
-hud.setCustomHud(playerRef, null);
+hud.removeCustomHud(playerRef, StatusHud.KEY);
 // Or reset everything:
 hud.resetHud(playerRef);
 ```
@@ -1244,8 +1260,8 @@ public class StatusHudManager {
         // Get or create HUD instance
         StatusHud hud = playerHuds.computeIfAbsent(playerId, id -> new StatusHud(playerRef));
 
-        // Register with HudManager
-        player.getHudManager().setCustomHud(playerRef, hud);
+        // Register with HudManager (shows it)
+        player.getHudManager().addCustomHud(playerRef, hud);
     }
 
     /**
@@ -1265,9 +1281,9 @@ public class StatusHudManager {
      * Hide and remove HUD for a player.
      */
     public static void hideHud(PlayerRef playerRef, Player player) {
-        UUID playerId = playerRef.getUUID();
+        UUID playerId = playerRef.getUuid();
         playerHuds.remove(playerId);
-        player.getHudManager().setCustomHud(playerRef, null);
+        player.getHudManager().removeCustomHud(playerRef, StatusHud.KEY);
     }
 
     /**
@@ -1573,11 +1589,11 @@ windows.closeWindow(ref, opened.getId(), store);
 Backtick-quoted error strings below are literal messages thrown by the UI system. The first two were verified against the build-12 `HytaleServer.jar`; the rest were observed at runtime (build-12) and may shift between builds.
 
 - **`CustomUIPage doesn't support events!`** → you registered an event binding (or an event was dispatched) on a page whose `build()` override only takes `UICommandBuilder` — the display-only `BasicCustomUIPage` form has no `UIEventBuilder`. Fix: override the four-argument `build(Ref, UICommandBuilder, UIEventBuilder, Store)` and register bindings there (see [Event Handling in Custom Pages](#event-handling-in-custom-pages)).
-- **Symptom:** a second `setCustomHud()` call makes your first custom HUD disappear → `HudManager` stores a single `customHud` per player, so each call replaces the previous one. Fix: combine elements into one `CustomUIHud`, and pass `null` to `setCustomHud()` to remove it (see [Multiple HUDs](#multiple-huds)).
+- **Symptom:** a second `addCustomHud()` call makes your first custom HUD disappear → both HUDs were constructed with the **same key**, and `HudManager` keys its `Map<String, CustomUIHud>` so a duplicate key replaces the previous HUD. Fix: give each HUD a distinct key (multiple keyed HUDs can coexist), and remove one with `removeCustomHud(playerRef, key)` (see [Multiple HUDs](#multiple-huds)).
 - **Symptom:** a `CustomUIHud` ignores `addEventBinding`/click handling → `CustomUIHud.build()` receives only `UICommandBuilder`, never `UIEventBuilder`; HUDs cannot handle events. Fix: use a [`CustomUIPage`](#customuipage) for interactive UI (see [Event Handling](#event-handling)).
 - **Symptom:** a `CustomUIHud` appears but the player gets a mouse cursor and can no longer mouse-look → any hit-testable element (a `Group` with a `Background`, `Label`s, etc.) grabs the pointer. A HUD has no event handling, so it should never be a hit-test target. Fix: set **`HitTestVisible: false`** on the root element *and its children* in the `.ui` (the engine's own `Common/UI/Custom/Pages/EntitySpawnPage.ui` does this).
 - **`failed to apply customui hud commands`** (client then disconnects) → you passed a `Message` to `UICommandBuilder.set(selector, value)` in a **HUD** (`build()`/`update()`). The `set(String, Message)` overload is fine for *pages* but not for the HUD layer. Fix: resolve text to a plain `String` before `set(...)`; for a translation key, resolve it server-side ([i18n](i18n.md#resolving-a-key-to-text-server-side)) — you can't defer localization to the client in a HUD label.
-- **Symptom:** `IllegalStateException: Assert not in thread!` (`ForkJoinPool.commonPool-worker-N`) when attaching a HUD or reading the store → you ran `setCustomHud(...)`/store access off the world thread, typically from a global event consumer. Fix: attach from an ECS system tick, a command, or `world.execute(Runnable)` (see [Obtaining ECS Context](#obtaining-ecs-context-for-ui-operations)).
+- **Symptom:** `IllegalStateException: Assert not in thread!` (`ForkJoinPool.commonPool-worker-N`) when attaching a HUD or reading the store → you ran `addCustomHud(...)`/store access off the world thread, typically from a global event consumer. Fix: attach from an ECS system tick, a command, or `world.execute(Runnable)` (see [Obtaining ECS Context](#obtaining-ecs-context-for-ui-operations)).
 - **Symptom:** a UUID-keyed HUD doesn't reappear after a player reconnects → the stored HUD is bound to the player's old `PlayerRef`. Fix: prune on `PlayerDisconnectEvent`, or rebuild when the stored HUD's `getPlayerRef()` differs from the current one (see [Managing HUD State Across Players](#managing-hud-state-across-players)).
 
 ---

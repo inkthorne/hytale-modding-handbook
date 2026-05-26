@@ -7,7 +7,7 @@ seo:
 
 # Networking API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 ## Overview
 
@@ -129,7 +129,7 @@ float yaw = offset.yaw;
 float pitch = offset.pitch;
 ```
 
-> **See also:** [Math API](math.md#vector3f)
+> **See also:** [Math API](math.md#rotation3f)
 
 ---
 

@@ -91,7 +91,7 @@ public class EntityCountCommand extends AbstractPlayerCommand {
 
         // Create the overlay and attach it to the player's screen.
         EntityCountHud hud = new EntityCountHud(playerRef);
-        player.getHudManager().setCustomHud(playerRef, hud);
+        player.getHudManager().addCustomHud(playerRef, hud);
 
         // Remember it so the ticking system knows to update this player's HUD.
         registry.put(playerId, hud);
@@ -100,8 +100,8 @@ public class EntityCountCommand extends AbstractPlayerCommand {
     }
 
     private void hideHud(Player player, PlayerRef playerRef, UUID playerId) {
-        // Passing null removes the custom HUD from the player's screen.
-        player.getHudManager().setCustomHud(playerRef, null);
+        // Remove the custom HUD from the player's screen by its key.
+        player.getHudManager().removeCustomHud(playerRef, EntityCountHud.KEY);
 
         // Stop tracking them so the ticking system leaves them alone.
         registry.remove(playerId);

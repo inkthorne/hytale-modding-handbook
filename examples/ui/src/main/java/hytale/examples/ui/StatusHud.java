@@ -20,8 +20,11 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
  */
 public class StatusHud extends CustomUIHud {
 
+    /** Stable key identifying this HUD on the player; pass to removeCustomHud() to hide it. */
+    public static final String KEY = "status-hud";
+
     public StatusHud(PlayerRef playerRef) {
-        super(playerRef);
+        super(playerRef, KEY);
     }
 
     @Override

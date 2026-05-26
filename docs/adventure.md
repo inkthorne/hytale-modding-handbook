@@ -7,7 +7,7 @@ seo:
 
 # Adventure API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 

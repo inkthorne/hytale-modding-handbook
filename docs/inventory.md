@@ -7,7 +7,7 @@ seo:
 
 # Inventory API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 
@@ -43,7 +43,7 @@ Inventory  (player; sectioned)
 │   └── BenchRequirement / BenchType
 └── Events (ECS)
     ├── InventoryChangeEvent / DropItemEvent
-    ├── InteractivelyPickupItemEvent / SwitchActiveSlotEvent
+    ├── InteractivelyPickupItemEvent / InventorySetActiveSlotEvent
     └── CraftRecipeEvent (Pre / Post)
 ```
 
@@ -73,10 +73,11 @@ Inventory  (player; sectioned)
 | `BenchRequirement` | `protocol` | Required crafting bench for a recipe |
 | `BenchType` | `protocol` | Crafting bench type enum |
 | `CraftRecipeEvent` | `server.core.event.events.ecs` | ECS event for crafting (`Pre`/`Post`) |
-| `InventoryChangeEvent` | `server.core.inventory` | Inventory contents changed |
+| `InventoryChangeEvent` | `server.core.event.events.ecs` | Inventory contents changed |
 | `DropItemEvent` | `server.core.event.events.ecs` | Item dropped |
 | `InteractivelyPickupItemEvent` | `server.core.event.events.ecs` | Item picked up interactively |
-| `SwitchActiveSlotEvent` | `server.core.event.events.ecs` | Active slot changed |
+| `InventorySetActiveSlotEvent` | `server.core.event.events.ecs` | Active slot changed (applied) |
+| `InventoryActiveSlotRequestEvent` | `server.core.event.events.ecs` | Active-slot change requested (cancellable) |
 
 ## Inventory
 **Package:** `com.hypixel.hytale.server.core.inventory`
@@ -1209,25 +1210,21 @@ Events related to inventory operations (dropping items, switching slots, picking
 
 ### Event Summary
 
-**Package:** `com.hypixel.hytale.server.core.inventory`
-
-| Class | Description |
-|-------|-------------|
-| `InventoryChangeEvent` | Inventory contents change (ECS event) |
-
 **Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
 | Class | Description |
 |-------|-------------|
+| `InventoryChangeEvent` | Inventory contents change (ECS event) |
 | `DropItemEvent` | Item is dropped (has `Drop` and `PlayerRequest` variants) |
 | `InteractivelyPickupItemEvent` | Item is picked up interactively |
-| `SwitchActiveSlotEvent` | Active inventory slot changes |
+| `InventorySetActiveSlotEvent` | Active inventory slot changed (applied) |
+| `InventoryActiveSlotRequestEvent` | Active-slot change requested (cancellable, pre-apply) |
 
 ---
 
 ### InventoryChangeEvent
 
-**Package:** `com.hypixel.hytale.server.core.inventory`
+**Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
 ECS event (extends `EcsEvent`) fired when an inventory's contents change. Handle it with an `EntityEventSystem`.
 
@@ -1245,7 +1242,7 @@ import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.InventoryChangeEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.InventoryChangeEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class InventoryChangeSystem extends EntityEventSystem<EntityStore, InventoryChangeEvent> {
@@ -1308,14 +1305,18 @@ ECS event fired when an item is picked up interactively (e.g., player collecting
 
 ---
 
-### SwitchActiveSlotEvent
+### InventorySetActiveSlotEvent
 
 **Package:** `com.hypixel.hytale.server.core.event.events.ecs`
 
-ECS event fired when the active inventory slot changes (e.g., player switching hotbar slot).
+ECS event fired when the active inventory slot has changed (e.g., player switching hotbar slot). This is the
+*applied* (post) event. To **veto or rewrite** a slot change before it applies, listen for
+`InventoryActiveSlotRequestEvent` instead — it extends `CancellableEcsEvent` and adds `setNewSlot(byte)`,
+`isServerRequest()` / `isClientRequest()`.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
+| `getInventorySectionId()` | `int` | The inventory section whose active slot changed |
 | `getPreviousSlot()` | `int` | The previous active slot |
 | `getNewSlot()` | `byte` | The new active slot |
 
@@ -1329,19 +1330,19 @@ import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.event.events.ecs.SwitchActiveSlotEvent;
+import com.hypixel.hytale.server.core.event.events.ecs.InventorySetActiveSlotEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-public class SlotSwitchSystem extends EntityEventSystem<EntityStore, SwitchActiveSlotEvent> {
+public class SlotSwitchSystem extends EntityEventSystem<EntityStore, InventorySetActiveSlotEvent> {
 
     public SlotSwitchSystem() {
-        super(SwitchActiveSlotEvent.class);
+        super(InventorySetActiveSlotEvent.class);
     }
 
     @Override
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
-                       SwitchActiveSlotEvent event) {
+                       InventorySetActiveSlotEvent event) {
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
             player.sendMessage(Message.raw(

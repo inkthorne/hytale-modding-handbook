@@ -7,7 +7,7 @@ seo:
 
 # Control Flow Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against build-12**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.5.0**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 

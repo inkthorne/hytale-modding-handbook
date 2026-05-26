@@ -7,7 +7,7 @@ seo:
 
 # Permissions API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 This page covers checking permissions on players and commands, plus events fired when player or group permissions change.
 

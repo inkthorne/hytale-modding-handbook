@@ -29,7 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  *
  * <p><b>Important:</b> Only one CustomUIHud can be active per player at a time.
- * Calling {@code setCustomHud()} replaces any existing custom HUD.
+ * Identified by a key (see {@link StatusHud#KEY}): addCustomHud() shows it,
+ * removeCustomHud(playerRef, key) hides it.
  *
  * @see StatusHud
  */
@@ -88,7 +89,7 @@ public class StatusHudCommand extends AbstractPlayerCommand {
 
         // Create and register the HUD
         StatusHud statusHud = new StatusHud(playerRef);
-        player.getHudManager().setCustomHud(playerRef, statusHud);
+        player.getHudManager().addCustomHud(playerRef, statusHud);
 
         // Store reference for later updates
         playerHuds.put(playerId, statusHud);
@@ -97,8 +98,8 @@ public class StatusHudCommand extends AbstractPlayerCommand {
     }
 
     private void hideHud(Player player, PlayerRef playerRef, UUID playerId) {
-        // Remove from HudManager
-        player.getHudManager().setCustomHud(playerRef, null);
+        // Remove from HudManager by key
+        player.getHudManager().removeCustomHud(playerRef, StatusHud.KEY);
 
         // Clean up our reference
         playerHuds.remove(playerId);

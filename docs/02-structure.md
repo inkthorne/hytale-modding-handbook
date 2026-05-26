@@ -133,7 +133,7 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ### ServerVersion (target server version)
 
-> Verified against build-12 (`com.hypixel.hytale.server.core.asset.AssetModule`). The literal value below is build-specific — see the caveat.
+> Verified against 0.5.0 (`com.hypixel.hytale.server.core.asset.AssetModule`). The literal value below is build-specific — see the caveat.
 
 Any mod with `"IncludesAssetPack": true` should declare the server build it targets, or the server logs a warning when the pack registers:
 
@@ -150,12 +150,12 @@ Add the `ServerVersion` field (a plain string, not a semver):
   "Name": "My Plugin",
   "Version": "1.0.0",
   "Main": "com.example.MyPlugin",
-  "ServerVersion": "2026.03.26-89796e57b",
+  "ServerVersion": "0.5.0",
   "IncludesAssetPack": true
 }
 ```
 
-The value must **exactly equal** the server's own version string (`AssetModule` compares with `String.equals`). That string is the running `HytaleServer.jar`'s `Implementation-Version` manifest attribute — on build-12 it is `2026.03.26-89796e57b`. Read the current value with:
+The value must **exactly equal** the server's own version string (`AssetModule` compares with `String.equals`). That string is the running `HytaleServer.jar`'s `Implementation-Version` manifest attribute — on the current build (Update 5) it is `0.5.0`. Read the current value with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
@@ -243,12 +243,12 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.ui.UIPlugin",
-  "ServerVersion": "2026.03.26-89796e57b",
+  "ServerVersion": "0.5.0",
   "IncludesAssetPack": true
 }
 ```
 
-(See [ServerVersion](#serverversion-target-server-version) — the example mods pin the build-12 value.)
+(See [ServerVersion](#serverversion-target-server-version) — the example mods pin the 0.5.0 value.)
 
 ## Examples
 

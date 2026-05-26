@@ -7,7 +7,7 @@ seo:
 
 # Asset Editor Events API
 
-**Doc type:** Java API · **Verified against build-12**
+**Doc type:** Java API · **Verified against 0.5.0**
 
 Events for the built-in asset editor system.
 

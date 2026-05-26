@@ -7,7 +7,7 @@ seo:
 
 # Block Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against build-12**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.0**
 
 Block definitions configure every placeable block in Hytale, from terrain and ores to furniture, doors, and fluids. Blocks are defined as items with a `BlockType` property that specifies rendering, collision, sounds, particles, and interaction behavior.
 
@@ -1848,7 +1848,7 @@ Store<EntityStore> entities = entityStore.getStore();   // also a ComponentAcces
 ItemStack stack = new ItemStack(spawner.getItem(), 1);
 Vector3d pos = new Vector3d(x + 0.5, y + 1.1, z + 0.5);   // rest on top of the pedestal
 Holder<EntityStore> drop = ItemComponent.generateItemDrop(
-        entities, stack, pos, Vector3f.ZERO, 0f, 0f, 0f);   // last three floats = velocity
+        entities, stack, pos, new Rotation3f(), 0f, 0f, 0f);   // Rotation3f + three velocity floats
 if (drop == null) return;   // null on an invalid/empty stack
 Ref<EntityStore> ref = entities.addEntity(drop, AddReason.SPAWN);
 ```

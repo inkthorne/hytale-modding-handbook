@@ -203,10 +203,22 @@ int getSectionId()
 ```
 
 Read the section's component off the entity store (see [Components](components.md)) and call `setActiveSlot(...)`.
-It fires an `InventorySetActiveSlotEvent` that the inventory systems handle to re-equip the held item *and*
-sync the client, so this is the correct way to change the active slot — you do **not** need to hand-send a
-`SetActiveSlot` to-client packet, and you should **not** mutate the component via a raw `replaceComponent(...)`
-(that would leave the client's hotbar highlight on the old slot).
+This is the correct non-deprecated way to change the slot server-side: it fires an `InventorySetActiveSlotEvent`
+that the inventory systems handle to re-equip the held item. Do **not** mutate the component via a raw
+`replaceComponent(...)` — that bypasses the event and the re-equip.
+
+> ⚠️ **The component call alone does not move the client's hotbar highlight.** Firing
+> `InventorySetActiveSlotEvent` updates *server* state (the right item is equipped) but does **not** push a
+> selection update to the client. For a **player-initiated** change (the player scrolled/swung) the client
+> already shows the right slot, so this is fine. But for a **server-initiated** change (respawn, scripted swap)
+> the highlight box stays on the old slot until the next client action (e.g. a swing) forces a refresh — so you
+> must also hand-send the to-client `SetActiveSlot` packet to update the selection UI:
+> ```java
+> playerRef.getPacketHandler().write(new SetActiveSlot(sectionId, slot)); // selection UI, client-side
+> ```
+> (`com.hypixel.hytale.protocol.packets.inventory.SetActiveSlot`, sent via
+> [`PlayerRef.getPacketHandler()`](entities.md#playerref).) Runtime-verified on 0.5.0: the event-fires-and-syncs
+> behavior is not observable from the jar bytecode — the server state is correct, but the client highlight is stale.
 
 ### Item Operations
 ```java

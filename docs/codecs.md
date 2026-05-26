@@ -266,6 +266,46 @@ Defaults come from the fields' initial values in the supplied blank instance (`M
 
 ---
 
+## Parent Inheritance (`InheritCodec`)
+
+`BuilderCodec` implements `InheritCodec`, which is what resolves the `"Parent": "<id>"` field
+pervasive in JSON assets (items, interactions, sound events, audio categories, …). When an asset
+declares a parent, the loader builds the parent instance first, then **deep-merges** the child's
+document over it via `BuilderCodec.decodeAndInherit(...)`. The merge is recursive and field-by-field:
+
+| Child document | Result |
+|----------------|--------|
+| Field **absent** | keeps the parent's value |
+| **Scalar / string** present | replaces the parent's value |
+| **Nested object** present (a field whose codec is itself a `BuilderCodec`) | **recurses** — merges key-by-key against the parent's object, so a *partial* object keeps the parent's other keys |
+| **Array / list** present | **replaces wholesale** — lists are not keyed, so there is no element-level merge |
+
+The array rule is the common gotcha: a partial `Specs` / `Layers` / `Input` / `Children` array
+**overwrites** the parent's entire list rather than appending to it. To keep the parent's elements
+plus your own, re-list all of them in the child.
+
+The nested-object rule is what makes partial overrides ergonomic. A child `DamageEffects` that sets
+only `WorldSoundEventId`, for example, keeps the parent's `Knockback`, `WorldParticles`, and
+`CameraEffect`:
+
+```json
+// parent interaction's DamageEffects: { Knockback, WorldParticles, CameraEffect }
+// child override:
+{
+  "DamageEffects": {
+    "WorldSoundEventId": "SFX_Sword_T2_Impact"
+  }
+}
+// merged result: Knockback + WorldParticles + CameraEffect (parent) + WorldSoundEventId (child)
+```
+
+> **`Parent` inheritance and asset-pack override are different mechanisms.** `Parent` is a
+> deep merge *within a single asset definition* (this section). Shipping a file at the *same id* as
+> another asset is a *whole-asset replace across assets* — see
+> [Assets API → Overriding base-game assets](assets.md#overriding-base-game-assets).
+
+---
+
 ## Plugin Configuration
 
 `PluginBase` loads config through a `BuilderCodec<T>`. Note the return type is `Config<T>` (`com.hypixel.hytale.server.core.util.Config`), **not** `T`.
@@ -455,8 +495,8 @@ You then chain `.append(...).add()` for each field exactly as with `BuilderCodec
 - `KeyedCodec` is the unit for object fields and for `ItemStack` metadata.
 - `StringCodecMapCodec`, `AssetCodecMapCodec`, and `MapKeyMapCodec` provide polymorphic dispatch; register concrete types through `getCodecRegistry(...)` during `setup()`.
 - Decode errors throw exceptions (e.g. `BsonSerializationException`); there is no `DataResult` wrapper.
-</content>
-</invoke>
+
+---
 
 ## Gotchas & Errors
 

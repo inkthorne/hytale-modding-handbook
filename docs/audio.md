@@ -7,7 +7,7 @@ seo:
 
 # Audio System
 
-**Doc type:** JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.5.0**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.5.0**
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 
@@ -818,6 +818,82 @@ The named keys are nested under a `SoundEvents` object, alongside a top-level
   "Category": "UI"
 }
 ```
+
+---
+
+## Playing Sounds from Java
+
+**Doc type:** Java API
+
+The JSON formats above *define* sounds; to actually **play** one from plugin code, call
+`com.hypixel.hytale.server.core.universe.world.SoundUtil` (every method is `static`). The wire
+packets (`PlaySoundEvent2D` / `PlaySoundEvent3D` / `PlaySoundEventLocalPlayer` /
+`PlaySoundEventEntity`, in `com.hypixel.hytale.protocol.packets.world`) take an **`int` sound-event
+index, not the string id** — `SoundUtil` is the wrapper that resolves, builds, and sends them.
+
+### Resolving a sound-event index
+
+Every method takes the sound event as an `int` index. Resolve a string id to its index through the
+sound-event asset map:
+
+```java
+import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
+
+int idx = SoundEvent.getAssetMap().getIndex("SFX_Sword_T2_Impact");
+```
+
+`getAssetMap()` returns an `IndexedLookupTableAssetMap<String, SoundEvent>`. `getIndex(id)` returns
+**`Integer.MIN_VALUE` for an unknown id** and **`SoundEvent.EMPTY_ID` (`0`)** for the empty-sentinel
+id — guard against both before playing:
+
+```java
+if (idx != Integer.MIN_VALUE && idx != SoundEvent.EMPTY_ID) {
+    // safe to play
+}
+```
+
+If you take the id from a command argument, `ArgTypes.SOUND_EVENT_ASSET` parses (with tab
+completion) to a `SoundEvent`; call `.getId()` and resolve the index as above. See
+[ArgTypes → Asset Types](commands.md#asset-types).
+
+### SoundCategory
+
+Every play call takes a `com.hypixel.hytale.protocol.SoundCategory` for mixing — one of `Music`,
+`Ambient`, `SFX`, `UI`, `Voice`. (`ArgTypes.SOUND_CATEGORY` parses one from a command.)
+
+### Choosing a method
+
+| Method | Heard by | Use for |
+|--------|----------|---------|
+| `playSoundEvent2dToPlayer(PlayerRef, int idx, SoundCategory[, float vol, float pitch])` | one player, non-spatial | UI clicks, previews, local feedback |
+| `playLocalPlayerSoundEvent(PlayerRef, int localIdx, int worldIdx, SoundCategory[, float vol, float pitch])` | one player | a local-vs-world paired sound |
+| `playSoundEvent3d(int idx, SoundCategory, double x, double y, double z, ComponentAccessor<EntityStore>)` | everyone nearby, spatial | combat hits, world events |
+| `playSoundEvent3d(int idx, SoundCategory, Vector3d pos, ComponentAccessor<EntityStore>)` | everyone nearby, spatial | same, with a JOML `Vector3d` |
+| `playSoundEvent3d(int, SoundCategory, double x,y,z, float vol, float pitch, Predicate<Ref<EntityStore>>, ComponentAccessor<EntityStore>)` | nearby listeners that pass the predicate | spatial sound with a listener filter |
+| `playSoundEvent3dToPlayer(Ref<EntityStore>, int, SoundCategory, double x,y,z[, float vol, float pitch], ComponentAccessor<EntityStore>)` | one player, spatial | a positioned sound for a single listener |
+| `playSoundEventEntity(int idx, int entityId, ComponentAccessor<EntityStore>[, float vol, float pitch])` | nearby, follows the entity | a sound attached to a moving entity |
+| `playItemSoundEvent(Ref<EntityStore>, Store<EntityStore>, Item, ItemSoundEvent)` | — | an item's `Drag`/`Drop` inventory sound |
+
+`Vector3d` is `org.joml.Vector3d` (see [math.md](math.md)). `vol`/`pitch` default to `1.0f` when
+omitted and are **multipliers** layered on top of the sound event's own `Volume`/`RandomSettings`,
+not absolute values.
+
+### Example: a spatial impact sound on hit
+
+```java
+import com.hypixel.hytale.server.core.universe.world.SoundUtil;
+import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
+import com.hypixel.hytale.protocol.SoundCategory;
+
+int idx = SoundEvent.getAssetMap().getIndex("SFX_Sword_T2_Impact");
+if (idx != Integer.MIN_VALUE && idx != SoundEvent.EMPTY_ID) {
+    SoundUtil.playSoundEvent3d(idx, SoundCategory.SFX, x, y, z, accessor);
+}
+```
+
+`SoundUtil.playSoundEvent3d` is the same path the trigger-volume
+[`PlaySound` effect](trigger-volumes.md#built-in-effect-types) and a JSON `WorldSoundEventId`
+ultimately resolve to.
 
 ---
 

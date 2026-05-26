@@ -865,6 +865,20 @@ Grant stats to attacker on successful hit:
 }
 ```
 
+### Impact Sounds (and silent weapons)
+
+`InteractionVars` is where per-item **impact sounds** are injected, not just damage. Each damage
+interaction's `DamageEffects` carries `WorldSoundEventId` (spatial, heard by all nearby) and
+`LocalSoundEventId` (only the attacker), exactly as in the [Iron Sword example](#example-child-iron-sword).
+
+The shared `Weapon_Sword_Primary_*_Damage` interactions (and the common `DamageEntityParent`) carry
+**no** sound of their own, so a weapon that doesn't override `DamageEffects` in its `InteractionVars`
+is **silent on hit**. In 0.5.0 several stock swords ship this way (e.g. Wood, Steel, Cutlass, Frost,
+Nexus, Runic, Silversteel) — if you base a weapon on one of those and want an impact sound, add a
+`DamageEffects` block per combo hit. (The exact silent-weapon list is version-specific.)
+
+To play a sound from Java instead of JSON, see [Audio → Playing Sounds from Java](audio.md#playing-sounds-from-java).
+
 ---
 
 ## Sound Sets

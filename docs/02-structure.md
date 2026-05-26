@@ -308,6 +308,8 @@ CustomSword/
 
 `Parent` references the template by its **id** (the filename without `.json`), not by
 a path — the game resolves item ids globally regardless of which folder they live in.
+Shipping a file at the **same id** as a vanilla asset *replaces* it (whole-asset, last-load-wins);
+see [Assets API → Overriding base-game assets](assets.md#overriding-base-game-assets).
 
 ### Plugin Without Assets (Commands Only)
 

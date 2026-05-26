@@ -659,6 +659,36 @@ Assets are loaded during server startup:
 
 ---
 
+## Overriding Base-Game Assets
+
+A plugin or pack can **replace a base-game asset** by shipping a resource at the **same id** as a
+vanilla one. Asset keys are the filename without extension, and ids resolve globally rather than by
+folder (see [Pack Structure](02-structure.md#pack-structure)), so a file at
+`src/main/resources/Server/Item/Items/Weapon/Sword/Weapon_Sword_Wood.json` registers under the key
+`Weapon_Sword_Wood` and takes the place of the vanilla sword of that id.
+
+**This is a whole-asset replace, not a merge with the vanilla file.** Your file *becomes* that id and
+then resolves its own `Parent` from scratch. Any field you omit falls back to the **`Parent`** (e.g.
+`Template_Weapon_Sword`), **not** to the vanilla file's value. So if the vanilla asset set its own
+deltas over the template (`Model` / `Texture` / `Icon` / `Quality` / `ItemLevel`, …), you must
+re-copy those into your override or they revert to the template's defaults. This is the opposite of
+`Parent` inheritance, which *is* a deep merge — see
+[Codecs API → Parent Inheritance](codecs.md#parent-inheritance-inheritcodec).
+
+### Load order and precedence
+
+Precedence is **last-load-wins**, and base-game assets load before mods:
+
+- Built-in assets load first; the server then loads packs from the Mods directory
+  (`AssetModule.loadPacksFromDirectory`). Each load `put`s into the asset map, overwriting any
+  existing key — so a pack's same-id asset wins over the base-game one. The replace is **silent**
+  (no duplicate-id warning is logged).
+- **Order *among* multiple packs is not a documented guarantee.** The loader iterates the Mods
+  directory with an *unsorted* `DirectoryStream` (filesystem order), so do **not** rely on one pack
+  overriding *another pack's* id — only the base-game-vs-pack precedence is dependable.
+
+---
+
 ## Notes
 - Assets are typically JSON-based configurations
 - Register custom assets during plugin `setup()`

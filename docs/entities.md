@@ -61,7 +61,9 @@ Entity (ECS-backed entity + lifecycle)
 ```
 Entity (abstract, implements Component<EntityStore>)
   └── LivingEntity (abstract)
-        └── Player (implements CommandSender, PermissionHolder)
+        └── Player (extends LivingEntity)
+                  // Update 5: Player no longer implements CommandSender/PermissionHolder —
+                  // PlayerRef does. Use the PlayerRef the framework hands you for those.
 
 InteractionManager (component for interaction chains)
 ```

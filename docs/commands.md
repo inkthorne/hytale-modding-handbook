@@ -97,7 +97,7 @@ protected abstract void execute(
 
 ### Usage Example
 
-Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the build-12 jar).
+Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.5.0 jar).
 
 ```java
 public class HelloCommand extends AbstractPlayerCommand {
@@ -204,8 +204,8 @@ Message getUsageShort(CommandSender sender, boolean showAliases)  // Get short u
 
 // Permissions
 void requirePermission(String permission)       // Require permission
-void setPermissionGroups(String... groups)      // Set permission groups
-void setPermissionGroup(GameMode mode)          // Set permission by game mode
+void setPermissionGroups(String... groups)      // Assign command to permission group(s)
+void setPermissionGroup(GameMode mode)          // @Deprecated (Update 5) — use setPermissionGroups(String...)
 boolean hasPermission(CommandSender sender)     // Check permission
 boolean canGeneratePermission()                 // Check if can auto-generate permission
 String generatePermissionNode()                 // Generate permission node string
@@ -223,7 +223,7 @@ MatchResult matches(String input, String alias, int depth)  // Check if input ma
 
 ### Permission model (why a new command says "no permission")
 
-> Verified against build-12 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
+> Verified against 0.5.0 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
 
 When a command is registered, `setOwner()` runs:
 
@@ -348,13 +348,15 @@ Interface for anything that can send commands and receive messages.
 
 ### Methods
 ```java
-String getDisplayName()  // Display name of sender
-UUID getUuid()           // UUID of sender
+String getUsername()  // Username of sender (renamed from getDisplayName() in Update 5)
+UUID getUuid()        // UUID of sender
 ```
 
+`CommandSender` extends `PermissionHolder`, so a sender can be permission-checked directly (`hasPermission(node)`).
+
 ### Implementations
-- `Player` - Player entities implement CommandSender
-- Console sender for server commands
+- `PlayerRef` - the player command sender (implements `CommandSender` + `PermissionHolder`). **Note (Update 5):** `Player` no longer implements `CommandSender`/`PermissionHolder` — use the `PlayerRef` the framework hands you.
+- `ConsoleSender` - server console / command-block sender
 
 ### Usage
 ```java
@@ -587,7 +589,7 @@ public class DifficultyCommand extends AbstractPlayerCommand {
 
 ## Gotchas & Errors
 
-Error strings below are the literal messages thrown by the build-12 command system (verified against `HytaleServer.jar`).
+Error strings below are the literal messages thrown by the 0.5.0 command system (verified against `HytaleServer.jar`).
 
 - **`Registered commands must define a name`** → you constructed a command with a null/empty name. Fix: pass a non-empty name to `super("name", ...)`.
 - **`Cannot create a Required Argument with 0 parameters.`** → a custom `ArgumentType` reports zero input tokens. Fix: make `getNumberOfParameters()` return ≥ 1.
@@ -596,7 +598,7 @@ Error strings below are the literal messages thrown by the build-12 command syst
 - **`Cannot re-use subcommands. Only one parent command allowed for each subcommand`** → the same `AbstractCommand` instance was added under two parents. Fix: construct a separate instance per parent.
 - **`Cannot add new arguments when a command has already completed registration`** → you called `withRequiredArg`/`addAliases`/`requirePermission`/etc. after the command was registered. Fix: declare all arguments, aliases, and permissions in the constructor, before `registerCommand()`. (The same guard exists as `Cannot add aliases…`, `Cannot change permissions…`, `Cannot add new subcommands…`.)
 - **`Unknown owner type, please use PluginBase or CommandManager`** → `setOwner()` received something that is neither a plugin nor the command manager. Fix: register through `getCommandRegistry()` from your `JavaPlugin`.
-- **Symptom:** a freshly registered `/mycommand` replies *"no permission"* for ordinary players → every command auto-generates a permission node that only ops hold. Fix: override `canGeneratePermission()` to return `false`, or `requirePermission("node")` and grant it. See [Permission model](#permission-model-why-a-new-command-says-no-permission).
+- **Symptom:** a freshly registered `/mycommand` replies *"no permission"* for ordinary players → every command auto-generates a permission node that the default `hytale:Adventurer` group doesn't hold (only `hytale:Admin`, via its `*` wildcard, does). Fix: override `canGeneratePermission()` to return `false`, or grant the node to a group (see [Permissions](permissions.md)). See [Permission model](#permission-model-why-a-new-command-says-no-permission).
 
 ---
 

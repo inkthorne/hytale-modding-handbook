@@ -1997,7 +1997,7 @@ Because the supplier reads the components off the targeted block's `Ref`, the pa
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 block system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the 0.5.0 block system (verified against `HytaleServer.jar`).
 
 - **`itemId cannot be BlockTypeKey.EMPTY!`** → an operation received the empty/air block key where a real block was required. Fix: pass a concrete block type key, not `EMPTY_KEY` (see [Java API Reference](#java-api-reference)).
 - **`One and only one of BlockTag or ItemId must be set!`** → a config entry set both `BlockTag` and `ItemId`, or neither. Fix: specify exactly one of the two.

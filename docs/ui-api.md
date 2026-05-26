@@ -514,6 +514,19 @@ EventTitleUtil.hideEventTitleFromWorld(fade, store);
 objects. To drive a **live countdown** without the text pulsing, re-send each second with `fadeIn`/`fadeOut`
 of `0`.
 
+**Caveat — titles queue, so set `duration` equal to your resend cadence.** The client plays each
+title for its full `duration` *sequentially* rather than replacing the current one. If you re-send a
+countdown every 1s with `duration` longer than 1s, a backlog of `(duration − interval)` accumulates
+*per title* and the displayed number falls behind the real timer (measured: a 16s countdown re-sent
+every 1.0s at `duration=1.2s` ended ~3.2s — i.e. `16 × 0.2s` — behind). Match `duration` to the
+cadence (`1.0f` for a per-second countdown) so each title plays exactly until the next arrives:
+
+```java
+EventTitleUtil.showEventTitleToWorld(
+    Message.raw("Next round in " + secondsLeft), subtitle, /*isMajor*/ true,
+    EventTitleUtil.DEFAULT_ZONE, /*duration*/ 1.0f, /*fadeIn*/ 0f, /*fadeOut*/ 0f, store);
+```
+
 ---
 
 ## Registering Pages for OpenCustomUI

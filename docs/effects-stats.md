@@ -410,9 +410,18 @@ ctrl.clearEffects(ref, accessor);   // remove everything
 - **Duration is in seconds** (a `float`), not ticks.
 - Effects **auto-clear on respawn** (the engine's `ClearEntityEffectsRespawnSystem`), so you don't
   need to strip CC from a player you're about to respawn.
-- **The `Frozen` component is not a player freeze.** `com.hypixel.hytale.server.core.entity.Frozen`
-  (singleton `Frozen.get()`, used by `NPCFreezeCommand`) does **not** stop a player's client-driven
-  movement — adding it to a player has no effect. Use the `Stun` / `Root` *effect* for players.
+- **Freezing players vs NPCs uses two different mechanisms — each a no-op on the other kind.**
+  Player movement is client-driven and is only halted by a **status effect** with
+  `MovementEffects.DisableAll` (`Stun` / `Root`); applying it to an NPC shows the VFX/tint but does
+  **not** stop its AI — a stunned bear keeps pathing and attacking. NPC AI is halted by the
+  **`Frozen` component** (`com.hypixel.hytale.server.core.entity.Frozen`, singleton `Frozen.get()` /
+  `Frozen.getComponentType()`, used by `NPCFreezeCommand`), which in turn does **nothing** to a
+  player. To freeze *everything* in an arena, apply both to every living entity — each is harmless on
+  the type it doesn't affect. Add/remove the `Frozen` component through the
+  [`CommandBuffer`](components.md#commandbufferecs_type) (it's a structural change), while `addEffect`
+  mutates `EffectControllerComponent` in place and is safe inline.
+- Note the asymmetry on respawn: status effects auto-clear (above), but the `Frozen` component does
+  **not** — remove it explicitly with `buffer.tryRemoveComponent(ref, Frozen.getComponentType())`.
 
 ---
 

@@ -161,30 +161,57 @@ Source for damage inflicted via commands.
 
 Asset type representing the cause/type of damage. Returned by `Damage.getCause()`.
 
-### Predefined Constants
+### Predefined Constants (all `@Deprecated`)
+
+> **⚠️ All eight `DamageCause.*` static fields are `@Deprecated` as of `0.5.0`.** `DamageCause`
+> is now an asset-store-backed type — the causes live as JSON assets under `Server/Entity/Damage/`,
+> and the static convenience fields are deprecated in favor of looking the cause up by id. See
+> [Obtaining a cause](#obtaining-a-cause-non-deprecated) below for the current API.
+
 ```java
-static DamageCause PHYSICAL       // Melee/physical attacks
-static DamageCause PROJECTILE     // Arrow/thrown item damage
-static DamageCause COMMAND        // Damage from commands
-static DamageCause DROWNING       // Underwater suffocation
-static DamageCause ENVIRONMENT    // Environmental hazards (lava, etc.)
-static DamageCause FALL           // Fall damage
-static DamageCause OUT_OF_WORLD   // Void damage
-static DamageCause SUFFOCATION    // Block suffocation
+@Deprecated static DamageCause PHYSICAL       // Melee/physical attacks
+@Deprecated static DamageCause PROJECTILE     // Arrow/thrown item damage
+@Deprecated static DamageCause COMMAND        // Damage from commands
+@Deprecated static DamageCause DROWNING       // Underwater suffocation
+@Deprecated static DamageCause ENVIRONMENT    // Environmental hazards (lava, etc.)
+@Deprecated static DamageCause FALL           // Fall damage
+@Deprecated static DamageCause OUT_OF_WORLD   // Void damage
+@Deprecated static DamageCause SUFFOCATION    // Block suffocation
 ```
 
-> **These are *not* compile-time constants — they are runtime asset lookups.** The fields are
-> `public static` but **non-final**, populated by the asset system, which finishes loading *after*
-> plugin `setup()`. They are **`null` until then**. Referencing one in a `static final` field (or
-> anywhere at class-load / `setup()` time) throws `ExceptionInInitializerError` /
-> `NullPointerException` (`DamageCause.getId()` on a null cause). Build `Damage` lazily, at
-> gameplay time, instead:
-> ```java
-> // NOT a static field. Construct at use-time, once assets are loaded:
-> Damage d = new Damage(Damage.NULL_SOURCE, DamageCause.COMMAND, amount);
-> ```
-> `DeathComponent.getDeathCause()` returns the cause of a death — handy for ignoring admin/`COMMAND`
-> kills in scoring.
+> **Beyond being deprecated, these are *not* compile-time constants — they are runtime asset
+> lookups.** The fields are `public static` but **non-final**, populated by the asset system, which
+> finishes loading *after* plugin `setup()`. They are **`null` until then**. Referencing one (or any
+> looked-up cause) in a `static final` field, at class-load, or at `setup()` time throws
+> `ExceptionInInitializerError` / `NullPointerException`. Resolve and build `Damage` lazily, at
+> gameplay time.
+
+### Obtaining a cause (non-deprecated)
+
+Look the cause up by id from the asset map instead of referencing the deprecated static field. The id
+is the asset filename — e.g. `Physical`, `Fall`, `Drowning`, `Projectile`, `Environment`, `Command`,
+`OutOfWorld`, `Suffocation` (plus `Bludgeoning`, `Elemental`, `Fire`, `Ice`, `Poison`, `Slashing`).
+
+> **Gotcha:** the map is an `IndexedLookupTableAssetMap`, which exposes `getIndex(String)` and
+> `getAsset(int)` but **no `getAsset(String)`** (unlike some other asset maps). Go id → index → cause:
+
+```java
+// id -> index -> cause
+int idx = DamageCause.getAssetMap().getIndex("Command");
+DamageCause cause = DamageCause.getAssetMap().getAsset(idx);
+```
+
+`Damage` also has an **index-based constructor**, so for construction you can skip resolving the
+object entirely (still lazily, once assets are loaded):
+
+```java
+// public Damage(Damage.Source, int causeIndex, float amount)
+int idx = DamageCause.getAssetMap().getIndex("Command");
+Damage d = new Damage(Damage.NULL_SOURCE, idx, amount);
+```
+
+> `DeathComponent.getDeathCause()` returns the cause of a death — handy for ignoring admin/`Command`
+> kills in scoring. Prefer comparing by `getId()` (or index) over `==` against the deprecated static.
 
 ### Methods
 ```java
@@ -205,10 +232,12 @@ public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                    Damage event) {
     DamageCause cause = event.getCause();
 
-    if (cause == DamageCause.FALL) {
+    // Compare by id rather than `== DamageCause.FALL` (the statics are deprecated).
+    String causeId = cause.getId();
+    if ("Fall".equals(causeId)) {
         // Handle fall damage specially
         event.setCancelled(true);  // No fall damage
-    } else if (cause == DamageCause.DROWNING) {
+    } else if ("Drowning".equals(causeId)) {
         // Reduce drowning damage
         System.out.println("Drowning damage: " + event.getAmount());
     }

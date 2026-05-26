@@ -59,7 +59,7 @@ Then read assets directly from `~/.cache/hytale-assets/` (`Common/` holds blocky
 
 ## Verifying documentation
 
-The `docs/` were fact-checked against game **build-12** (API docs via `javap` on `HytaleServer.jar`; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them.
+The `docs/` were fact-checked against game **build-12** — `HytaleServer.jar`'s `Implementation-Version` is `2026.03.26-89796e57b` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them.
 
 Run the regression checker after any game update (or before trusting/extending a doc):
 

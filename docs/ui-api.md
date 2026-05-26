@@ -460,6 +460,62 @@ public class InteractivePage extends BasicCustomUIPage {
 
 ---
 
+## Live updates & page replacement
+
+`PageManager` holds a **single current page** per player. Two consequences are easy to trip over:
+
+**Updating an open page in place.** Don't reopen the page to refresh a label or counter — push an
+incremental update from inside the page with the protected `CustomUIPage` methods:
+
+```java
+protected void sendUpdate(UICommandBuilder cmd)   // push incremental changes to the open page
+protected void sendUpdate()                       // re-run build() and push the result
+protected void rebuild()                          // rebuild the page contents
+protected void close()                            // close the page
+```
+
+For example, a page driving a live countdown can `sendUpdate(...)` a single label each second
+without rebuilding the whole page.
+
+**Opening a page replaces (and dismisses) the current one.** `openCustomPage(ref, store, page)`
+fires the **previous page's `onDismiss(...)`** before showing the new page. That callback is where a
+page can run teardown — but it also means *replacing* a page triggers whatever its `onDismiss` does.
+The engine's death screen relies on exactly this: dismissing or replacing `RespawnPage` respawns the
+player, which is why a plugin can't quietly swap in its own death screen (see
+[combat.md → The death screen *is* the respawn trigger](combat.md#the-death-screen-is-the-respawn-trigger)).
+
+---
+
+## EventTitleUtil — centered titles & banners
+
+**Package:** `com.hypixel.hytale.server.core.util`
+
+Shows a large centered **title** with a smaller **subtitle** (the engine's "event title" banner), to a
+single player, a whole world, or the universe.
+
+```java
+import com.hypixel.hytale.server.core.util.EventTitleUtil;
+
+// To one player (short form):
+EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor /*boolean*/);
+
+// To one player (full timing control) / to a world:
+EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor,
+        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);   // floats, in seconds
+EventTitleUtil.showEventTitleToWorld(title, subtitle, isMajor,
+        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, store);
+
+// Clear early:
+EventTitleUtil.hideEventTitleFromPlayer(playerRef, fade);
+EventTitleUtil.hideEventTitleFromWorld(fade, store);
+```
+
+`title` (primary) renders large, `subtitle` (secondary) small. `title`/`subtitle` are `Message`
+objects. To drive a **live countdown** without the text pulsing, re-send each second with `fadeIn`/`fadeOut`
+of `0`.
+
+---
+
 ## Registering Pages for OpenCustomUI
 
 To open custom pages via [`OpenCustomUI`](interactions-world.md#opencustomui) interactions in JSON, you must register a page supplier. This allows JSON asset files to reference your custom page by ID.

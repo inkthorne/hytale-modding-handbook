@@ -173,6 +173,19 @@ static DamageCause OUT_OF_WORLD   // Void damage
 static DamageCause SUFFOCATION    // Block suffocation
 ```
 
+> **These are *not* compile-time constants — they are runtime asset lookups.** The fields are
+> `public static` but **non-final**, populated by the asset system, which finishes loading *after*
+> plugin `setup()`. They are **`null` until then**. Referencing one in a `static final` field (or
+> anywhere at class-load / `setup()` time) throws `ExceptionInInitializerError` /
+> `NullPointerException` (`DamageCause.getId()` on a null cause). Build `Damage` lazily, at
+> gameplay time, instead:
+> ```java
+> // NOT a static field. Construct at use-time, once assets are loaded:
+> Damage d = new Damage(Damage.NULL_SOURCE, DamageCause.COMMAND, amount);
+> ```
+> `DeathComponent.getDeathCause()` returns the cause of a death — handy for ignoring admin/`COMMAND`
+> kills in scoring.
+
 ### Methods
 ```java
 String getId()
@@ -481,6 +494,49 @@ getEntityStoreRegistry().registerSystem(new OnPlayerRespawn());
 
 To control *where* a player respawns, override the world's spawn provider rather than teleporting
 manually — see [world.md → Controlling Respawn Location](world.md#controlling-respawn-location).
+
+### The death screen *is* the respawn trigger
+
+A natural instinct is to replace Hytale's death screen with a custom page (custom respawn UI, a
+death-cam, a "you died" overlay with your own button). **In build-12 this is not cleanly moddable**,
+because the engine's death screen and the respawn action are the same object.
+
+The flow, for a player whose `DeathComponent` was just added:
+
+- `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`) runs and, **if
+  `DeathComponent.isShowDeathMenu()` is true**, opens the death screen via
+  `player.getPageManager().openCustomPage(ref, store, new RespawnPage(...))`.
+- **`RespawnPage` *is* the respawn trigger.** Both of its exit paths call `DeathComponent.respawn(...)`:
+  - the **Respawn button** (`handleDataEvent`, action `"Respawn"`), and
+  - **`RespawnPage.onDismiss(...)`** — if the entity still has a `DeathComponent`.
+
+Because `PageManager` holds a **single** current page and `openCustomPage(...)` fires the **previous
+page's `onDismiss`** before showing the new one (see [ui-api.md → Live updates & page replacement](ui-api.md#live-updates--page-replacement)),
+**replacing the death screen respawns the player out from under your page.** You cannot swap in your
+own death/respawn page.
+
+**Can you suppress it instead?** `showDeathMenu` is the off-switch, but it is impractical to reach:
+
+- It **defaults `true`** (hard-coded in the `DeathComponent` constructor).
+- It is **not configurable** — `DeathConfig` has no field for it, and jar-wide **only `DeathComponent`
+  itself** calls `setShowDeathMenu`.
+- You would have to set it `false` **before `PlayerDeathScreen` runs** — but **engine systems run
+  before plugin-registered systems, and there is no system-ordering / priority API** (`System`,
+  `RefChangeSystem`, and `QuerySystem` expose no `getOrder`/`priority`/`runsBefore`). By the time your
+  `OnDeathSystem` fires, `RespawnPage` is already open.
+
+There is also **no auto-respawn timer** — `DeathComponent.respawn(...)` is only called by `RespawnPage`
+and `PlayerRespawnCommand`, so a dead player waits on the death screen until the button/dismiss. And
+`respawn(...)` is a **no-op on a live entity** (it returns a completed future if there's no
+`DeathComponent`), so you can't force-respawn someone you haven't killed.
+
+**Viable patterns instead of replacing the screen:**
+
+- **Let the native screen show, then drive an auto-respawn timer** — schedule
+  `DeathComponent.respawn(accessor, ref)` N seconds after death from your `OnDeathSystem`, and layer
+  your own info as a HUD/overlay ([ui-api.md](ui-api.md)).
+- **Re-skin the existing screen** by overriding its asset at
+  `Common/UI/Custom/Pages/RespawnPage.ui`. This is **global** — it affects every world on the server.
 
 ---
 

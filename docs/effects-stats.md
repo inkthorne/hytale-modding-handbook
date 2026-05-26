@@ -380,6 +380,42 @@ From `Server/Entity/Effects/Immunity/Immunity_Fire.json`:
 
 ---
 
+## Applying Effects from Java
+
+The JSON above defines effect *assets*; to apply one to an entity at runtime — for crowd control
+(freeze/stun/root), buffs on a custom item, etc. — go through the entity's **`EffectControllerComponent`**
+(`com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent`).
+
+The built-in CC assets live under `Server/Entity/Effects/Status/` — e.g. **`Stun`** and **`Root`**
+(`MovementEffects.DisableAll: true`; `Stun` also disables abilities), and **`Freeze`**.
+
+```java
+import com.hypixel.hytale.server.core.asset.type.entityeffect.config.EntityEffect;
+import com.hypixel.hytale.server.core.asset.type.entityeffect.config.OverlapBehavior;
+import com.hypixel.hytale.server.core.entity.effect.EffectControllerComponent;
+
+// Resolve the named asset → index → effect. getAsset takes an int, so resolve the name first:
+var effectMap = EntityEffect.getAssetMap();
+EntityEffect stun = effectMap.getAsset(effectMap.getIndex("Stun"));
+
+EffectControllerComponent ctrl =
+    store.getComponent(ref, EffectControllerComponent.getComponentType());
+
+// Duration is in SECONDS (float).
+ctrl.addEffect(ref, stun, 5.0f, OverlapBehavior.OVERWRITE, accessor);
+
+ctrl.clearEffects(ref, accessor);   // remove everything
+```
+
+- **Duration is in seconds** (a `float`), not ticks.
+- Effects **auto-clear on respawn** (the engine's `ClearEntityEffectsRespawnSystem`), so you don't
+  need to strip CC from a player you're about to respawn.
+- **The `Frozen` component is not a player freeze.** `com.hypixel.hytale.server.core.entity.Frozen`
+  (singleton `Frozen.get()`, used by `NPCFreezeCommand`) does **not** stop a player's client-driven
+  movement — adding it to a player has no effect. Use the `Stun` / `Root` *effect* for players.
+
+---
+
 ## Stat Definitions
 
 **Asset location:** `Server/Entity/Stats/` in Assets.zip

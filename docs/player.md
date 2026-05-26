@@ -104,6 +104,14 @@ String getAnsiMessage()
 FormattedMessage getFormattedMessage()  // Internal protocol format (see note below)
 ```
 
+> **`getRawText()` and `getMessageId()` are mutually exclusive** — exactly one is set,
+> depending on how the `Message` was built. `Message.raw(text)` stores `text` in `rawText`
+> (so `getRawText()` returns it, `getMessageId()` is `null`); `Message.translation(key)`
+> stores `key` in `messageId` (so `getMessageId()` returns it, `getRawText()` is `null`).
+> This matters when inspecting a `Message` you didn't build: an entity's
+> `DisplayNameComponent.getDisplayName()` is a **translation**, so read `getMessageId()`
+> (then resolve it server-side — see [i18n: resolving a key to text](i18n.md#resolving-a-key-to-text-server-side)), not `getRawText()`.
+
 ### FormattedMessage (Internal)
 
 **Package:** `com.hypixel.hytale.protocol`

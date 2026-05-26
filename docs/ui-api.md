@@ -936,6 +936,15 @@ getEventRegistry().register(SomeEvent.class, event -> {
 });
 ```
 
+> **`setCustomHud(...)` and any store/chunk access must run on the world thread.** A *global*
+> event consumer (e.g. `AddPlayerToWorldEvent`) runs on a `ForkJoinPool.commonPool` worker, so
+> attaching a HUD or touching the store there throws
+> `IllegalStateException: Assert not in thread! ... but was in Thread[ForkJoinPool.commonPool-worker-N]`.
+> `AddPlayerToWorldEvent` also fires **before** the world's chunks/players are loaded
+> (`loadedChunksCount=0`), so the store isn't readable yet even on the right thread. Attach from an
+> **ECS system tick**, a **command**, or `world.execute(Runnable)` (`World` implements `Executor`)
+> instead of a global event handler.
+
 > **See also:** [Commands API](commands.md) for command context details
 
 ### Implementation Example
@@ -959,7 +968,7 @@ public class StatusHud extends CustomUIHud {
      */
     public void updateStats(int health, int mana) {
         UICommandBuilder cmd = new UICommandBuilder();
-        cmd.set("#HealthLabel.Text", "Health: " + health);
+        cmd.set("#HealthLabel.Text", "Health: " + health);   // String — required in a HUD
         cmd.set("#ManaLabel.Text", "Mana: " + mana);
         update(false, cmd);  // false = apply incrementally
     }
@@ -1141,6 +1150,12 @@ hud.resetHud(playerRef);
 ### Managing HUD State Across Players
 
 When managing HUDs for multiple players (e.g., from commands), store HUD references in a thread-safe collection:
+
+> **Reconnect caveat:** a player who rejoins keeps the same `UUID` but gets a **new `PlayerRef`**.
+> The `computeIfAbsent` below returns the *stale* HUD (bound to the dead connection), so the overlay
+> won't reappear on the second join. Either remove the entry on `PlayerDisconnectEvent` (the
+> `onPlayerDisconnect` hook below does this — make sure it's actually wired up), or compare the stored
+> HUD's [`getPlayerRef()`](#customuihud) to the player's current `PlayerRef` and rebuild on mismatch.
 
 ```java
 import java.util.UUID;
@@ -1486,11 +1501,15 @@ windows.closeWindow(ref, opened.getId(), store);
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 UI system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are literal messages thrown by the UI system. The first two were verified against the build-12 `HytaleServer.jar`; the rest were observed at runtime on a newer bundled jar (`2026.03.26`) and may shift between builds.
 
 - **`CustomUIPage doesn't support events!`** → you registered an event binding (or an event was dispatched) on a page whose `build()` override only takes `UICommandBuilder` — the display-only `BasicCustomUIPage` form has no `UIEventBuilder`. Fix: override the four-argument `build(Ref, UICommandBuilder, UIEventBuilder, Store)` and register bindings there (see [Event Handling in Custom Pages](#event-handling-in-custom-pages)).
 - **Symptom:** a second `setCustomHud()` call makes your first custom HUD disappear → `HudManager` stores a single `customHud` per player, so each call replaces the previous one. Fix: combine elements into one `CustomUIHud`, and pass `null` to `setCustomHud()` to remove it (see [Multiple HUDs](#multiple-huds)).
 - **Symptom:** a `CustomUIHud` ignores `addEventBinding`/click handling → `CustomUIHud.build()` receives only `UICommandBuilder`, never `UIEventBuilder`; HUDs cannot handle events. Fix: use a [`CustomUIPage`](#customuipage) for interactive UI (see [Event Handling](#event-handling)).
+- **Symptom:** a `CustomUIHud` appears but the player gets a mouse cursor and can no longer mouse-look → any hit-testable element (a `Group` with a `Background`, `Label`s, etc.) grabs the pointer. A HUD has no event handling, so it should never be a hit-test target. Fix: set **`HitTestVisible: false`** on the root element *and its children* in the `.ui` (the engine's own `Common/UI/Custom/Pages/EntitySpawnPage.ui` does this).
+- **`failed to apply customui hud commands`** (client then disconnects) → you passed a `Message` to `UICommandBuilder.set(selector, value)` in a **HUD** (`build()`/`update()`). The `set(String, Message)` overload is fine for *pages* but not for the HUD layer. Fix: resolve text to a plain `String` before `set(...)`; for a translation key, resolve it server-side ([i18n](i18n.md#resolving-a-key-to-text-server-side)) — you can't defer localization to the client in a HUD label.
+- **Symptom:** `IllegalStateException: Assert not in thread!` (`ForkJoinPool.commonPool-worker-N`) when attaching a HUD or reading the store → you ran `setCustomHud(...)`/store access off the world thread, typically from a global event consumer. Fix: attach from an ECS system tick, a command, or `world.execute(Runnable)` (see [Obtaining ECS Context](#obtaining-ecs-context-for-ui-operations)).
+- **Symptom:** a UUID-keyed HUD doesn't reappear after a player reconnects → the stored HUD is bound to the player's old `PlayerRef`. Fix: prune on `PlayerDisconnectEvent`, or rebuild when the stored HUD's `getPlayerRef()` differs from the current one (see [Managing HUD State Across Players](#managing-hud-state-across-players)).
 
 ---
 

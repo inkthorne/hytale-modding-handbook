@@ -134,8 +134,8 @@ boolean hasPermission(String permission, boolean defaultValue)
 
 // Identity
 String getDisplayName()
-PlayerRef getPlayerRef()
-PacketHandler getPlayerConnection()
+PlayerRef getPlayerRef()           // @Deprecated(forRemoval=true) — still works; no 1:1 replacement
+PacketHandler getPlayerConnection()  // @Deprecated(forRemoval=true) — use PlayerRef.getPacketHandler()
 
 // Game State
 GameMode getGameMode()
@@ -191,6 +191,15 @@ boolean isWaitingForClientReady()
 // Component type for ECS access
 static ComponentType<EntityStore, Player> getComponentType()
 ```
+
+> **Deprecations (drift past build-12):** newer bundled jars mark `getPlayerConnection()`
+> and `getPlayerRef()` `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
+> `PacketHandler` from a `PlayerRef` via [`PlayerRef.getPacketHandler()`](#playerref) instead of
+> `getPlayerConnection()`. `getPlayerRef()` still works with no 1:1 replacement — prefer carrying
+> the `PlayerRef` the framework already hands you (command/event context). Likewise
+> [`World.getPlayers()`](world.md) is `@Deprecated(forRemoval=true)`; prefer `World.getPlayerRefs()`,
+> but note it returns `Collection<PlayerRef>` rather than `List<Player>`, so it's a different-typed
+> alternative, not a blind swap.
 
 ## LivingEntity
 **Package:** `com.hypixel.hytale.server.core.entity`

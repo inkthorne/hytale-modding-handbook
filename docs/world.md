@@ -89,7 +89,7 @@ See [Configuration Classes](#configuration-classes) below for details on WorldCo
 
 ### Players
 ```java
-List<Player> getPlayers()
+List<Player> getPlayers()          // @Deprecated(forRemoval=true) — prefer getPlayerRefs()
 int getPlayerCount()
 Collection<PlayerRef> getPlayerRefs()
 void trackPlayerRef(PlayerRef ref)
@@ -474,9 +474,9 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
     // Broadcast to all players in world
     world.sendMessage(Message.raw("Hello everyone!"));
 
-    // Get all players
-    for (Player player : world.getPlayers()) {
-        player.sendMessage(Message.raw("Individual message"));
+    // Get all players (getPlayerRefs() — getPlayers() is deprecated for removal)
+    for (PlayerRef ref : world.getPlayerRefs()) {
+        ref.sendMessage(Message.raw("Individual message"));
     }
 }
 ```

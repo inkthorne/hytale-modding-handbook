@@ -127,7 +127,14 @@ Source when damage comes from another entity (player or mob).
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getRef()` | `Ref<EntityStore>` | Reference to the attacking entity |
+| `getRef()` | `Ref<EntityStore>` | Reference to the attacking entity (the attacker for melee, the shooter for projectiles) |
+
+> **`ProjectileSource extends EntitySource`** (verified in the jar). A single
+> `if (source instanceof Damage.EntitySource es)` therefore catches **both melee and
+> projectile** kills, and `es.getRef()` returns the **attacker/shooter** in both cases —
+> which is what you want for attributing kills in a shooter. Only add a separate
+> [`Damage.ProjectileSource`](#damageprojectilesource) branch if you need the projectile
+> entity itself; check it **before** the `EntitySource` branch (subtype first).
 
 ### Damage.EnvironmentSource
 
@@ -135,7 +142,12 @@ Source for environmental damage (fall damage, drowning, lava, etc.).
 
 ### Damage.ProjectileSource
 
-Source for projectile damage (arrows, thrown items).
+Source for projectile damage (arrows, thrown items). **Extends [`Damage.EntitySource`](#damageentitysource)**, so it inherits `getRef()` (the shooter) and adds `getProjectile()`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getRef()` | `Ref<EntityStore>` | The shooter (inherited from `EntitySource`) |
+| `getProjectile()` | `Ref<EntityStore>` | The projectile entity (arrow, etc.) |
 
 ### Damage.CommandSource
 

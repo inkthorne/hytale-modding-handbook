@@ -178,6 +178,14 @@ void setActiveSlot(Holder<EntityStore> holder, int sectionId, byte slot)
 ItemStack getItemInHand()
 ```
 
+> **Use these helpers to switch slots — they sync the client.** The `Inventory.setActiveSlot(...)`
+> helpers re-equip the held item *and* refresh the client (they call the entity's
+> `invalidateEquipmentNetwork()` internally, verified in the jar). Do **not** mutate the
+> hotbar component directly (`InventoryComponent.Hotbar.setActiveSlot(byte)` +
+> `buffer.replaceComponent(...)`): that changes the held item server-side but leaves the
+> client's hotbar highlight on the old slot, forcing you to hand-send a `SetActiveSlot`
+> to-client packet to fix the HUD.
+
 ### Item Operations
 ```java
 void moveItem(int fromSection, int fromSlot, int toSection, int toSlot, int count)

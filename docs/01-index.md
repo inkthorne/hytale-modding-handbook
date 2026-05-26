@@ -37,7 +37,8 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |
 | [prefabs.md](prefabs.md) | Prefab system for placing pre-defined block/entity selections including transformations, placement, and prefab events. |
-| [math.md](math.md) | Comprehensive math library with vectors (Vector3d/f/i/l), matrices, transforms, Box AABB, and utility methods. |
+| [trigger-volumes.md](trigger-volumes.md) | Trigger Volume system (Update 5): authoring effect-asset JSON, the built-in effect/condition types, and extending it with custom TriggerEffect/TriggerCondition types from a plugin. |
+| [math.md](math.md) | JOML-based math library (org.joml Vector3d/3f/3i + Vector*Util companions), Rotation3f, Transform, Location, Box AABB, and utilities. |
 | [projectiles.md](projectiles.md) | Projectile spawning and management including ProjectileConfig assets, physics simulation, and projectile components. |
 | [collision.md](collision.md) | Collision detection and querying system for block and character collisions, results, and material-based filtering. |
 | [fluids.md](fluids.md) | Fluid asset type documentation for water, lava, and other fluids with damage and interaction properties. |
@@ -75,7 +76,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Block Definitions](blocks.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)
+[Block Definitions](blocks.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)
 
 ### Guides & Overviews
 

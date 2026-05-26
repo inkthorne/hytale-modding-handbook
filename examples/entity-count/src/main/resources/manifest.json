@@ -8,6 +8,6 @@
     }
   ],
   "Main": "hytale.examples.entitycount.EntityCountPlugin",
-  "ServerVersion": "0.5.0",
+  "ServerVersion": "^0.5.0",
   "IncludesAssetPack": true
 }

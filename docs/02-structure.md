@@ -133,16 +133,20 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ### ServerVersion (target server version)
 
-> Verified against 0.5.0 (`com.hypixel.hytale.server.core.asset.AssetModule`). The literal value below is build-specific — see the caveat.
+> Verified against 0.5.0 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
 
-Any mod with `"IncludesAssetPack": true` should declare the server build it targets, or the server logs a warning when the pack registers:
+> **Changed in Update 5.** `ServerVersion` is now a **semver range**, not a literal build string. It is parsed
+> into a `SemverRange` and checked by *range satisfaction* against the server's own version — the old
+> `String.equals` against a dated `2026.03.26-…` build stamp is gone. Old dated strings are deprecated; use range
+> syntax going forward.
+
+Any mod with `"IncludesAssetPack": true` should declare the server versions it targets, or the server logs a warning when the pack registers:
 
 ```
-Plugin '<name>' does not specify a target server version. You may encounter issues,
-please check for plugin updates. This will be a hard error in the future
+Plugin '<name>' does not specify a target server version. You may encounter issues
 ```
 
-Add the `ServerVersion` field (a plain string, not a semver):
+Add the `ServerVersion` field as a **semver range**:
 
 ```json
 {
@@ -150,20 +154,37 @@ Add the `ServerVersion` field (a plain string, not a semver):
   "Name": "My Plugin",
   "Version": "1.0.0",
   "Main": "com.example.MyPlugin",
-  "ServerVersion": "0.5.0",
+  "ServerVersion": "^0.5.0",
   "IncludesAssetPack": true
 }
 ```
 
-The value must **exactly equal** the server's own version string (`AssetModule` compares with `String.equals`). That string is the running `HytaleServer.jar`'s `Implementation-Version` manifest attribute — on the current build (Update 5) it is `0.5.0`. Read the current value with:
+`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.0` on Update 5. Read it with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 ```
 
+### Range syntax
+
+| Value | Matches |
+|-------|---------|
+| `^0.5.0` | Compatible with `0.5.x` (`>=0.5.0 <0.6.0`) — the recommended default |
+| `>=0.5.0 <0.6.0` | Explicit bounded range (equivalent to the caret above) |
+| `0.5.0` | Exactly `0.5.0` — valid, but brittle: won't match a `0.5.1` patch |
+| `*` | Any version (`SemverRange.WILDCARD`) — opts out of the check |
+
+A caret/range means you **no longer have to re-pin on every patch release** — the chief reason the old exact-string
+form was painful. Pin a range that reflects what your plugin actually tolerates.
+
+Warnings (all non-fatal):
+- **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues` (`INCOMPATIBLE`).
+- **Running version unparsable:** `Plugin '<name>' targets server version range '<range>' but the running server version '<v>' could not be parsed.` (`PARSE_FAILED`).
+- **Field missing:** `Plugin '<name>' does not specify a target server version. You may encounter issues` (`MISSING`).
+- The server also logs an aggregate `One or more plugins are targeting a different server version...`.
+
 Caveats:
-- The string embeds the build's git short-SHA, so it changes every game update. A mismatch downgrades the message to `Plugin '<name>' targets a different server version <v>...` — still a warning. There is **no permanent value**: `"*"` and any non-matching string both still warn (the wildcard falls into the "does not specify" branch). Re-pin this field after each game update.
-- `-Dhytale.allow_outdated_mods` only suppresses the separate SEVERE "one or more asset packs are targeting an older server version" failure — not this per-plugin warning.
+- **Pre-release tags are excluded.** A range like `>=0.5.0` does **not** match a pre-release such as `0.5.0-pre.3` (standard semver behavior) — target the stable release, or include the pre-release explicitly.
 - Packs **without** `IncludesAssetPack` (code-only plugins) are not checked, but the example plugins set it anyway for forward-compatibility ("will be a hard error in the future").
 
 ## Server/ vs Common/ Directories
@@ -243,12 +264,12 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.ui.UIPlugin",
-  "ServerVersion": "0.5.0",
+  "ServerVersion": "^0.5.0",
   "IncludesAssetPack": true
 }
 ```
 
-(See [ServerVersion](#serverversion-target-server-version) — the example mods pin the 0.5.0 value.)
+(See [ServerVersion](#serverversion-target-server-version) — the example mods target the `^0.5.0` range.)
 
 ## Examples
 

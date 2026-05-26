@@ -951,6 +951,10 @@ CustomUIHud(PlayerRef playerRef, String key, int zOrder)
 // Abstract - must implement
 protected abstract void build(UICommandBuilder cmd)
 
+// Lifecycle hook (Update 5) — optional override, called when the HUD is
+// removed/replaced (e.g. removeCustomHud, or addCustomHud reusing the key).
+protected void onRemove()
+
 // Update HUD
 void show()                                    // Force refresh (calls build() internally)
 void update(boolean clear, UICommandBuilder cmd)  // Update with commands

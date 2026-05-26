@@ -71,7 +71,7 @@ JSON to self-document.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "0.5.0",
+  "ServerVersion": "^0.5.0",
   "IncludesAssetPack": true
 }
 ```
@@ -83,16 +83,15 @@ JSON to self-document.
 | `Version` | Your pack's version. Bump it when you change things. |
 | `Authors` | Who made it. A list of `{ "Name": "..." }` objects. |
 | `IncludesAssetPack` | `true` because this pack contains assets (the drop file). |
-| `ServerVersion` | The exact game build this pack targets. **Build-specific** — see the note below. |
+| `ServerVersion` | The server version **range** this pack targets (semver). `^0.5.0` = compatible with `0.5.x`. |
 
-> **About `ServerVersion`:** it must *exactly* match the game's own version string, which
-> changes with every game update. If it doesn't match, the server still loads the pack but
-> logs a warning. To read the current value:
+> **About `ServerVersion`:** since Update 5 this is a **semver range**, not an exact build string. The server
+> checks whether its own version satisfies the range; if not, it still loads the pack but logs a warning. `^0.5.0`
+> means "any `0.5.x`", so you don't have to re-pin on every patch. To read the running server version:
 > ```bash
 > unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 > ```
-> Re-pin this field after a game update. Full details:
-> [02-structure.md → ServerVersion](../../docs/02-structure.md#serverversion-target-server-version).
+> Full details: [02-structure.md → ServerVersion](../../docs/02-structure.md#serverversion-target-server-version).
 
 ### `Server/Drops/NPCs/Livestock/Drop_Chicken.json` — the drop file
 

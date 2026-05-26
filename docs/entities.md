@@ -215,10 +215,13 @@ Inventory getInventory()
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 double getCurrentFallDistance()
 void setCurrentFallDistance(double distance)
-
-// Environment
-boolean canBreathe(Ref<EntityStore> ref, BlockMaterial material, int fluidLevel, ComponentAccessor<EntityStore> accessor)
 ```
+
+> **Changed in Update 5.** `LivingEntity#canBreathe(...)` was **removed**. Breathing state is now the
+> `BreathingComponent` ECS component (`getLastBreathingMaterial()`, `getLastFluidId()`, `isSuffocating()`), and you
+> override the breathing decision by handling `BreathingCheckEvent` — its `canBreathe()` / `setCanBreathe(boolean)`
+> let a system veto or force breathing (e.g. an aquatic-creature plugin). See [Events](events.md) for ECS event
+> handling.
 
 ## Entity
 **Package:** `com.hypixel.hytale.server.core.entity`
@@ -396,6 +399,10 @@ These hold no per-entity state — presence alone is the signal. They expose a s
 store.addComponent(ref, ModelComponent.getComponentType(), new ModelComponent(model));
 store.addComponent(ref, DisplayNameComponent.getComponentType(),
         new DisplayNameComponent(Message.raw("Shopkeeper")));
+// Note (Update 5): DisplayNameComponent is runtime-only — it is NOT saved with the entity.
+// To make a custom name survive a save/reload, also add PersistentDisplayName:
+store.addComponent(ref, PersistentDisplayName.getComponentType(),
+        new PersistentDisplayName(Message.raw("Shopkeeper")));
 
 // Scale it up and make it non-colliding (marker component via its shared instance).
 store.addComponent(ref, EntityScaleComponent.getComponentType(), new EntityScaleComponent(1.5f));
@@ -540,7 +547,7 @@ Players are **client-authoritative** for movement. The server cannot directly mo
 
 | Method | Use Case | Client Sync |
 |--------|----------|-------------|
-| `addForce(x,y,z)` | Server-side physics (untested) | No |
+| `addVelocity(x,y,z)` | Server-side physics (untested) | No |
 | `set(x,y,z)` | Server-side physics (untested) | No |
 | `addInstruction(...)` | **All entities** (players + NPCs) | Yes |
 
@@ -584,7 +591,7 @@ if (velocity != null) {
 }
 ```
 
-Note: `addForce()` and `set()` exist but haven't been verified to work.
+Note: `addVelocity()` (renamed from `addForce()` in Update 5) and `set()` exist but haven't been verified to work.
 
 ### Example: Launch Player Upward
 
@@ -787,7 +794,7 @@ See [events.md](events.md) for general `EntityEventSystem` usage patterns.
 Backtick-quoted error strings below are the literal messages thrown by the build-12 entity subsystem (verified against `HytaleServer.jar`).
 
 - **`No EntityStatType found for index`** → an `EntityStatMap` call was given a stat index that no registered stat type maps to (e.g. a hardcoded/stale integer). Fix: obtain indices from `DefaultEntityStatTypes` (`getHealth()`, `getStamina()`, ...) rather than literals.
-- **Symptom:** server-side `velocity.addForce(...)`/`velocity.set(...)` appear to do nothing on players → players are client-authoritative for movement, so direct velocity writes are not synchronized. Fix: use `velocity.addInstruction(impulse, config, ChangeVelocityType.Add)`, which queues a client-synced change (see [Player vs NPC Velocity](#important-player-vs-npc-velocity)).
+- **Symptom:** server-side `velocity.addVelocity(...)`/`velocity.set(...)` appear to do nothing on players → players are client-authoritative for movement, so direct velocity writes are not synchronized. Fix: use `velocity.addInstruction(impulse, config, ChangeVelocityType.Add)`, which queues a client-synced change (see [Player vs NPC Velocity](#important-player-vs-npc-velocity)). (`addVelocity` was named `addForce` before Update 5.)
 - **Symptom:** `store.getComponent(ref, Player.getComponentType())` returns `null` for a command sender → the entity isn't a full `Player` (or you used the wrong ref). Fix: for messaging/identity use the `PlayerRef` you were handed; only fetch the `Player` component when you need permissions/inventory/UI, and null-check it.
 - **Symptom:** a `LivingEntityUseBlockEvent` handler never fires for a specific block → the event is keyed by block-type string, so `register(LivingEntityUseBlockEvent.class, "Bench_Builders", ...)` only matches that exact key. Fix: use `registerGlobal(...)` to catch all block uses, or pass the precise block-type key.
 

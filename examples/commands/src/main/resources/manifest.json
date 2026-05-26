@@ -8,5 +8,5 @@
     }
   ],
   "Main": "hytale.examples.commands.CommandsPlugin",
-  "ServerVersion": "0.5.0"
+  "ServerVersion": "^0.5.0"
 }

@@ -1501,7 +1501,7 @@ windows.closeWindow(ref, opened.getId(), store);
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are literal messages thrown by the UI system. The first two were verified against the build-12 `HytaleServer.jar`; the rest were observed at runtime on a newer bundled jar (`2026.03.26`) and may shift between builds.
+Backtick-quoted error strings below are literal messages thrown by the UI system. The first two were verified against the build-12 `HytaleServer.jar`; the rest were observed at runtime (build-12) and may shift between builds.
 
 - **`CustomUIPage doesn't support events!`** → you registered an event binding (or an event was dispatched) on a page whose `build()` override only takes `UICommandBuilder` — the display-only `BasicCustomUIPage` form has no `UIEventBuilder`. Fix: override the four-argument `build(Ref, UICommandBuilder, UIEventBuilder, Store)` and register bindings there (see [Event Handling in Custom Pages](#event-handling-in-custom-pages)).
 - **Symptom:** a second `setCustomHud()` call makes your first custom HUD disappear → `HudManager` stores a single `customHud` per player, so each call replaces the previous one. Fix: combine elements into one `CustomUIHud`, and pass `null` to `setCustomHud()` to remove it (see [Multiple HUDs](#multiple-huds)).

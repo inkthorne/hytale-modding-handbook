@@ -192,8 +192,8 @@ boolean isWaitingForClientReady()
 static ComponentType<EntityStore, Player> getComponentType()
 ```
 
-> **Deprecations (drift past build-12):** newer bundled jars mark `getPlayerConnection()`
-> and `getPlayerRef()` `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
+> **Deprecations:** as of build-12, `getPlayerConnection()`
+> and `getPlayerRef()` are marked `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
 > `PacketHandler` from a `PlayerRef` via [`PlayerRef.getPacketHandler()`](#playerref) instead of
 > `getPlayerConnection()`. `getPlayerRef()` still works with no 1:1 replacement — prefer carrying
 > the `PlayerRef` the framework already hands you (command/event context). Likewise

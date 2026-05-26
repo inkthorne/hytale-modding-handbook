@@ -278,6 +278,10 @@ boolean isValid()
 Item getItem()
 String getBlockKey()
 boolean getOverrideDroppedItemAnimation()
+
+// Resolved display text — the per-stack override if set, else the item's default
+Message getDisplayName()
+Message getDisplayDescription()
 ```
 
 ### Modification Methods (Return New ItemStack)
@@ -305,6 +309,46 @@ ItemStack withMetadata(String key, BsonValue value)
 <T> T getFromMetadataOrNull(String key, Codec<T> codec)
 <T> T getFromMetadataOrDefault(String key, BuilderCodec<T> codec)
 ```
+
+### Display Name & Description Overrides
+
+New in Update 5: a stack can carry a **per-stack name and description** that overrides the item's defaults — useful
+for shop listings, RPG stat blocks, named/"unique" loot, and lore text. Both support rich formatting (color, bold,
+italics, parameters, and nested messages) because they are `Message` values.
+
+`getDisplayName()` / `getDisplayDescription()` **resolve** the display text: they return the override if the stack
+has one, otherwise the item's own localized default (`getItem().getTranslationMessage()` for the name). Read these
+rather than the item config when you want what the player actually sees.
+
+The override is stored in the stack's metadata as an `ItemDisplayMetadata`
+(`com.hypixel.hytale.server.core.asset.type.item.config.metadata`) under `ItemDisplayMetadata.KEYED_CODEC`. Since
+`ItemStack` is immutable, set it with `withMetadata(KeyedCodec, value)`:
+
+```java
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.asset.type.item.config.metadata.ItemDisplayMetadata;
+
+ItemStack sword = new ItemStack("Weapon_Sword_Iron", 1);
+
+ItemStack excalibur = sword.withMetadata(
+    ItemDisplayMetadata.KEYED_CODEC,
+    new ItemDisplayMetadata(
+        Message.raw("Excalibur").color("#FFD700").bold(true),   // golden, bold name
+        Message.raw("A legendary blade.").italic(true)          // description / lore
+    ));
+
+// Resolves to the override; a plain stack would return the item's default name.
+Message shown = excalibur.getDisplayName();
+```
+
+`ItemDisplayMetadata` exposes `getName()` / `getDescription()` and `setName(Message)` / `setDescription(Message)`;
+either may be `null` to override only one. To read an existing override directly (rather than the resolved value),
+use `stack.getFromMetadataOrNull(ItemDisplayMetadata.KEYED_CODEC)`.
+
+> **Formatting** comes from `Message` (`com.hypixel.hytale.server.core.Message`): build text with
+> `Message.raw(text)` or `Message.translation(key)`, then chain `.color("#RRGGBB")`, `.bold(true)`, `.italic(true)`,
+> and `.param(name, value)` to fill translation placeholders (the value may itself be a `Message`, so messages
+> nest). See [i18n](i18n.md) for translation keys.
 
 ### Comparison Methods
 ```java

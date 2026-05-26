@@ -106,6 +106,10 @@ Configures localization keys:
 }
 ```
 
+> These are the item's **defaults**. To override the name/description on a *single stack* at runtime (named loot,
+> shop listings, RPG stat blocks) — with color/bold/italic formatting — see
+> [ItemStack → Display Name & Description Overrides](inventory.md#display-name--description-overrides).
+
 ### IconProperties
 
 Controls how the item renders in the inventory:

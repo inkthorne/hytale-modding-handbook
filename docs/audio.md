@@ -30,8 +30,9 @@ Server/Audio/
 ├── AmbienceFX/       ambient soundscapes
 │   ├── AmbientBed    continuous looping Track
 │   ├── Sounds        periodic emitters (SoundEventId, Frequency, Radius)
-│   ├── Music         track playlists
+│   ├── Music         track playlists (legacy — superseded by MusicContainers, auto-migrated)
 │   └── Conditions    Environment/Weather tag patterns, light/time/altitude/walls
+├── MusicContainers/  composable music graph (Update 5): SingleTrack / Random / Sequence / Horizontal / Segment
 ├── EQ/               equalizer presets (4-band parametric)
 ├── Reverb/           environment reverb presets
 ├── ItemSounds/       ISS_* inventory drag/drop sound sets
@@ -46,7 +47,8 @@ Server/Audio/
 | Attenuation Preset | `Server/Audio/SoundEvents/SFX_Attn_*.json` | Shared `MaxDistance`/`StartAttenuationDistance` parents |
 | Audio Category | `Server/Audio/AudioCategories/*.json` | Volume mixing group with `Parent` inheritance |
 | Ambience | `Server/Audio/AmbienceFX/Ambience/*.json` | Conditional soundscape (bed + emitters) |
-| Music | `Server/Audio/AmbienceFX/Music/*.json` | Background music track playlists |
+| Music | `Server/Audio/AmbienceFX/Music/*.json` | Background music track playlists (legacy — see MusicContainer) |
+| Music Container | `Server/Audio/MusicContainers/*.json` | Composable music graph (Update 5): single track, random/sequence playlists, horizontal/segment layering |
 | EQ Preset | `Server/Audio/EQ/*.json` | 4-band parametric equalizer settings |
 | Reverb Preset | `Server/Audio/Reverb/*.json` | Acoustic environment reverb settings |
 | Item Sounds | `Server/Audio/ItemSounds/ISS_*.json` | Inventory drag/drop sound set (`ItemSoundSetId`) |
@@ -59,6 +61,7 @@ Server/Audio/
 | [SoundEvents](#soundevents) | `SoundEvents/` | 1,176 | Individual sound definitions with layers |
 | [AudioCategories](#audiocategories) | `AudioCategories/` | 95 | Volume/mixing groups with inheritance |
 | [AmbienceFX](#ambiencefx) | `AmbienceFX/` | 175 | Ambient soundscapes with conditions |
+| [MusicContainer](#musiccontainer) | `MusicContainers/` | — | Composable music graph (Update 5) |
 | [EQ](#eq-equalizer) | `EQ/` | 2 | Equalizer presets |
 | [Reverb](#reverb) | `Reverb/` | 21 | Environment reverb settings |
 | [ItemSounds](#itemsounds) | `ItemSounds/` | 36 | Inventory drag/drop sounds |
@@ -453,6 +456,10 @@ object with `Min`/`Max`):
 
 ### Music Configuration
 
+> **Legacy (Update 5).** The `Music` block below is **deprecated** in favour of a
+> [MusicContainer](#musiccontainer) reference; existing `Music`/`Tracks` definitions are **auto-migrated at runtime**
+> (into a generated `RandomMusicContainer`). Author new music as MusicContainer assets.
+
 Background music track playlists. `Tracks` is an array of plain `.ogg` file path
 strings (rooted at `Common/Sounds/`, typically under `Music/`). Music definitions
 usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Priority`:
@@ -507,6 +514,128 @@ usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Pri
   ]
 }
 ```
+
+---
+
+## MusicContainer
+
+**Location:** `Server/Audio/MusicContainers/`
+
+New in Update 5. A **music container** is a node in a small graph that describes *how* music plays — a single track,
+a weighted-random or sequential playlist, or layered/segmented arrangements that crossfade with game state. Each
+`.json` file is one container, keyed by its **id** (the filename without `.json`); containers reference each other
+by id, so you compose larger arrangements from smaller ones. This replaces the flat
+[AmbienceFX `Music` block](#music-configuration), which is now auto-migrated into a generated `RandomMusicContainer`.
+
+> The folder layout (`Tracks/`, `Playlists/`, …) is just organization — every `.json` under `MusicContainers/`
+> loads as a container regardless of subfolder.
+
+### Container types
+
+The object's `"Type"` field selects the container kind:
+
+| `Type` | Class | Plays |
+|--------|-------|-------|
+| `SingleTrack` | `SingleTrackMusicContainer` | One audio file (`Track`, an `.ogg` path under `Common/Sounds/`) |
+| `Random` | `RandomMusicContainer` | A `Children` list picked by weight; `Mode` is `Random` or `Shuffle` |
+| `Sequence` | `SequenceMusicContainer` | A `Children` list in order |
+| `Horizontal` | `HorizontalMusicContainer` | Phases (`Children`) transitioned horizontally with a default phase transition |
+| `Segment` | `SegmentMusicContainer` | Simultaneous `Layers` mixed/crossfaded by audio state (bar/beat aligned) |
+
+### Common fields
+
+All container types share these (from the `MusicContainer` base; omit any you don't need):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Type` | string | Discriminator — one of the types above |
+| `AudioCategory` | string | Mixing category (commonly `AudioCat_Music_In_Game`) |
+| `NameTranslationKey` | string | i18n key for the displayed track name |
+| `Volume` | float | Volume in dB |
+| `LoopCount` | int | Times to loop (`0` = forever) |
+| `Weight` | float | Selection weight when this container is a child of a `Random` container |
+| `SilenceAfter` / `ExitSilence` | range | `{ "Min": s, "Max": s }` silence (seconds) after playing / on exit |
+| `FadeInDuration` / `FadeOutDuration` | float | Fades (seconds) |
+| `TransitionType` | enum | `Crossfade`, `FadeOutFadeIn`, or `Immediate` |
+| `TransitionDuration` | float | Transition length (seconds) |
+| `PlayToCompletion` | bool | Finish the current track before transitioning |
+
+### SingleTrack
+
+The leaf — points at one audio file:
+
+```json
+{ "Type": "SingleTrack", "Track": "Music/Caves/Z1_Cave_Shallow_01.ogg" }
+```
+
+### Random / Sequence
+
+A playlist of child containers referenced by id under `Children` (each child entry uses `Parent` for the id, plus
+optional per-child `SilenceAfter` / `Weight`). `Random` shuffles/weights; `Sequence` plays in order.
+
+```json
+{
+  "Type": "Random",
+  "AudioCategory": "AudioCat_Music_In_Game",
+  "Mode": "Random",
+  "LoopCount": 0,
+  "AvoidRepeatCount": 3,
+  "ExitSilence": { "Min": 10, "Max": 20 },
+  "Children": [
+    { "Parent": "Track_Z1_Cave_01", "SilenceAfter": { "Min": 10, "Max": 20 } },
+    { "Parent": "Track_Z1_Cave_02", "SilenceAfter": { "Min": 10, "Max": 20 } },
+    { "Parent": "Track_Silence", "Weight": 0.95 }
+  ]
+}
+```
+
+`AvoidRepeatCount` (Random only) avoids replaying the last *n* picks. Children are other container ids — here
+`SingleTrack` tracks and a silence track.
+
+### Horizontal
+
+Phases that transition horizontally (e.g. exploration → combat) sharing a tempo. Adds
+`DefaultPhaseTransitionType` (a `MusicTransitionType`) and `DefaultPhaseTransitionDuration`; `Children` are the phase
+containers.
+
+### Segment (layered)
+
+Simultaneous **layers** mixed by **audio state** — the engine's cave music uses this to crossfade between shallow /
+volcanic / deep beds as the player moves. Each `LayerPlacement` has a `Name`, a nested `Container`, an optional
+`ClipStart`, and `StateBindings` that adjust each layer's volume (or `Mute`) per audio-state value. `EntryMarker` /
+`ExitMarker` are bar/beat-aligned points (`BarBeatDuration` = `bars` + `beats` + `ms`).
+
+```json
+{
+  "Type": "Segment",
+  "AudioCategory": "AudioCat_Music_In_Game",
+  "LoopCount": 1,
+  "Layers": [
+    {
+      "Name": "shallow",
+      "Container": { "Type": "SingleTrack", "Track": "Music/Caves/Z1_Cave_Shallow_01.ogg" },
+      "StateBindings": [
+        {
+          "AudioState": "AudioState_CaveRegion",
+          "Deltas": [
+            { "Value": "Shallow",  "VolumeDb": 0.0 },
+            { "Value": "Volcanic", "Mute": true },
+            { "Value": "Deep",     "Mute": true }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Referencing a container
+
+Containers are referenced by id — by other containers (`Children` / `Parent`, layer `Container`) and by gameplay.
+The Trigger Volume [`SetMusic` effect](trigger-volumes.md#built-in-effect-types) takes a `MusicContainer` id, and a
+plugin can build one in Java via the `*MusicContainer` config classes
+(`com.hypixel.hytale.server.core.asset.type.musiccontainer.config`) — each has a `getChildIds()` and a `CODEC`. The
+legacy migration path is `RandomMusicContainer.fromLegacy(...)`.
 
 ---
 

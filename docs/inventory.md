@@ -152,15 +152,16 @@ inv.addItemStack(new ItemStack("Weapon_Sword_Wood", 1));
 transaction objects. `ItemStack` has `ItemStack(String)` and `ItemStack(String, int)` constructors.
 
 ### Active Slots
+
+These read-only getters on `Inventory` are current:
+
 ```java
 // Hotbar
 byte getActiveHotbarSlot()
-void setActiveHotbarSlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
 ItemStack getActiveHotbarItem()
 
 // Tools
 byte getActiveToolsSlot()
-void setActiveToolsSlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
 ItemStack getToolsItem()
 ItemStack getActiveToolItem()
 boolean usingToolsItem()
@@ -168,24 +169,44 @@ void setUsingToolsItem(boolean using)
 
 // Utility
 byte getActiveUtilitySlot()
-void setActiveUtilitySlot(Ref<EntityStore> ref, byte slot, ComponentAccessor<EntityStore> accessor)
-void setActiveUtilitySlot(Holder<EntityStore> holder, byte slot)
 ItemStack getUtilityItem()
 
 // General
 byte getActiveSlot(int sectionId)
-void setActiveSlot(Ref<EntityStore> ref, int sectionId, byte slot, ComponentAccessor<EntityStore> accessor)
-void setActiveSlot(Holder<EntityStore> holder, int sectionId, byte slot)
 ItemStack getItemInHand()
 ```
 
-> **Use these helpers to switch slots — they sync the client.** The `Inventory.setActiveSlot(...)`
-> helpers re-equip the held item *and* refresh the client (they call the entity's
-> `invalidateEquipmentNetwork()` internally, verified in the jar). Do **not** mutate the
-> hotbar component directly (`InventoryComponent.Hotbar.setActiveSlot(byte)` +
-> `buffer.replaceComponent(...)`): that changes the held item server-side but leaves the
-> client's hotbar highlight on the old slot, forcing you to hand-send a `SetActiveSlot`
-> to-client packet to fix the HUD.
+> **All of `Inventory`'s slot *setters* are `@Deprecated(forRemoval=true)` in 0.5.0 — don't use them.**
+> The deprecated, removal-scheduled signatures are:
+> ```java
+> @Deprecated(forRemoval=true) void setActiveHotbarSlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
+> @Deprecated(forRemoval=true) void setActiveToolsSlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
+> @Deprecated(forRemoval=true) void setActiveUtilitySlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
+> @Deprecated(forRemoval=true) static void setActiveSlot(Ref<EntityStore>, int sectionId, byte, ComponentAccessor<EntityStore>)
+> ```
+> The static `com.hypixel.hytale.server.core.inventory.InventoryUtils.setActiveSlot(Ref, int, byte, ComponentAccessor)`
+> these delegate to is likewise `@Deprecated(forRemoval=true)`. There are **no `Holder`-based overloads on
+> `Inventory`** — set the slot through the per-section component instead (below).
+
+#### Setting the active slot (current API)
+
+The slot setters moved onto the per-section component. `com.hypixel.hytale.server.core.inventory.InventoryComponent.Hotbar`,
+`InventoryComponent.Tool`, and `InventoryComponent.Utility` all extend
+`com.hypixel.hytale.server.core.inventory.ActiveSlotInventoryComponent`, which exposes the non-deprecated setters:
+
+```java
+byte getActiveSlot()
+void setActiveSlot(byte slot, Holder<EntityStore> holder, ComponentAccessor<EntityStore> accessor)   // current path
+void setActiveSlot(byte slot, Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
+ItemStack getActiveItem()
+int getSectionId()
+```
+
+Read the section's component off the entity store (see [Components](components.md)) and call `setActiveSlot(...)`.
+It fires an `InventorySetActiveSlotEvent` that the inventory systems handle to re-equip the held item *and*
+sync the client, so this is the correct way to change the active slot — you do **not** need to hand-send a
+`SetActiveSlot` to-client packet, and you should **not** mutate the component via a raw `replaceComponent(...)`
+(that would leave the client's hotbar highlight on the old slot).
 
 ### Item Operations
 ```java

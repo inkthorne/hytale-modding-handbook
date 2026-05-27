@@ -412,8 +412,11 @@ ctrl.clearEffects(ref, accessor);   // remove everything
   need to strip CC from a player you're about to respawn.
 - **Freezing players vs NPCs uses two different mechanisms — each a no-op on the other kind.**
   Player movement is client-driven and is only halted by a **status effect** with
-  `MovementEffects.DisableAll` (`Stun` / `Root`); applying it to an NPC shows the VFX/tint but does
-  **not** stop its AI — a stunned bear keeps pathing and attacking. NPC AI is halted by the
+  `MovementEffects.DisableAll` (`Stun` / `Root`); applying **`DisableAll`** to an NPC shows the
+  VFX/tint but does **not** stop its AI — a stunned bear keeps pathing and attacking. (This caveat is
+  specific to `DisableAll`: a **`HorizontalSpeedMultiplier`** effect such as `Slow` *does* visibly
+  reduce NPC movement speed, and auto-expires via the effect's `Duration` — so "AOE slow" just means
+  applying the `Slow` effect, no custom NPC handling needed.) NPC AI is halted by the
   **`Frozen` component** (`com.hypixel.hytale.server.core.entity.Frozen`, singleton `Frozen.get()` /
   `Frozen.getComponentType()`, used by `NPCFreezeCommand`), which in turn does **nothing** to a
   player. To freeze *everything* in an arena, apply both to every living entity — each is harmless on
@@ -422,6 +425,13 @@ ctrl.clearEffects(ref, accessor);   // remove everything
   mutates `EffectControllerComponent` in place and is safe inline.
 - Note the asymmetry on respawn: status effects auto-clear (above), but the `Frozen` component does
   **not** — remove it explicitly with `buffer.tryRemoveComponent(ref, Frozen.getComponentType())`.
+- **Re-adding `Frozen` throws** — `CommandBuffer.addComponent` raises
+  `IllegalArgumentException: Entity already contains component type: ...` if the component is already
+  present (there is no `tryAddComponent`; see
+  [CommandBuffer](components.md#commandbufferecs_type)). A naive "freeze every tick" therefore crashes
+  on the second tick. Guard with `getComponent(ref, type) == null` first, or use
+  `ensureAndGetComponent`. This matters because `addEffect` (which mutates in place) is idempotent-ish
+  while the structural `addComponent` is not — don't assume the `Frozen` path behaves like the effect path.
 
 ---
 

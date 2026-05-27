@@ -129,6 +129,16 @@ The `Effects` object supports these properties:
 | `MovementEffects` | object | Movement modification effects |
 | `StartDelay` | float | Delay before effects begin |
 
+> ⚠️ **The generic `Effects` block has no `WorldParticles` field.** `Particles` above are
+> `ModelParticle`s attached to model bones (`InteractionEffects.particles`); there is **no**
+> world-space particle option here. Only [`DamageEffects`](#damageeffects-properties) (combat hits)
+> carries `WorldParticles`. A stray `"WorldParticles"` key in a generic `Effects` block is **silently
+> dropped** — the engine logs an `AssetStore` warning (`Unused key(s) in '<asset>': Effects.WorldParticles`)
+> and the particles never spawn (this is even latent in vanilla `Projectile_Config_Ice_Ball`'s
+> `ProjectileMiss`). Because the sibling `WorldSoundEventId` *is* a valid key, the **sound plays while
+> the particles vanish** — a misleading symptom. To spawn world-space particles outside a damage event,
+> spawn from code with [`ParticleUtil`](projectiles.md#spawning-particles-from-java).
+
 ### Sounds (World vs Local)
 
 **World sounds** are audible to all nearby players - use for attack impacts, explosions, and actions others should hear:
@@ -389,6 +399,20 @@ Used for ground slams and radial attacks.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Range` | float | Radius of the circular area |
+| `Offset` | object | `{ "X", "Y", "Z" }` offset of the disc center from the entity position |
+
+> ⚠️ **`AOECircle` is a flat, zero-height disc.** `AOECircleSelector` has only `Range` (radius) +
+> `Offset`, so a ground-level circle misses entities whose model center sits above the impact plane.
+> For vertical reach use **`AOECylinder`** (`AOECylinderSelector extends AOECircleSelector`), which
+> adds a `Height` field — though no shipped asset uses it (only `AOECircle`, `Horizontal`, `Stab`,
+> `Raycast` appear in `Server/`), so it is untested in content despite having a registered codec.
+>
+> ⚠️ **A selector in a *projectile's* `ProjectileHit`/`ProjectileMiss` does NOT sweep a radius** — it
+> resolves only the entity the projectile directly collides with (unlike a melee swing, which sweeps).
+> To do real AOE from a projectile impact, use `Type: "Explode"` ([damage + knockback only — no status
+> effect](#damageentity)), a [trigger volume](trigger-volumes.md), or a Java radius query
+> (`Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` — the static query
+> `ExplosionUtils.performExplosion` uses internally).
 
 #### Raycast (Straight line)
 
@@ -592,10 +616,15 @@ Most weapon attacks reference a shared `DamageEntityParent` via `"Parent"` inste
 | Property | Type | Description |
 |----------|------|-------------|
 | `Knockback` | object | Knockback configuration (see below) |
-| `WorldParticles` | array | Particles spawned at the hit location, each an object with `SystemId` (optional `Scale`) |
+| `WorldParticles` | array | Particles spawned at the hit location, each an object with `SystemId` and `Scale` (see note) |
 | `LocalSoundEventId` | string | Sound played for the attacker only |
 | `WorldSoundEventId` | string | Sound played at hit location for all nearby |
 | `StaminaDrainMultiplier` | float | Multiplier for stamina drain on hit |
+
+> ⚠️ **Always set `Scale` on particles.** Both `WorldParticle.scale` and `ModelParticle.scale` are
+> primitive `float`s — omit `"Scale"` and the value is `0.0`, which renders the particle
+> **invisibly**. Every explicit vanilla usage sets it (`"Scale": 1` or more); a config that omits it
+> is relying on a zero scale. This applies to the `Particles` array on the generic `Effects` block too.
 
 ### Knockback Properties
 

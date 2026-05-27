@@ -297,6 +297,36 @@ This is the base class for interactions that execute immediately, such as:
 - Instant abilities
 - Quick actions
 
+#### Registering a Custom Interaction Type (Java)
+
+A plugin can register its own interaction `Type` and reference it from JSON. `Interaction.CODEC` is
+the `AssetCodecMapCodec<String, Interaction>` type-dispatch map; register into it via
+[`PluginBase.getCodecRegistry(...)`](codecs.md#registering-custom-types-via-the-plugin-registry):
+
+1. Extend `SimpleInstantInteraction` and override
+   `firstRun(InteractionType, InteractionContext, CooldownHandler)` with your logic.
+2. Define a `BuilderCodec<MyInteraction>` (the
+   [`BuilderCodec.builder(...).append(...).build()`](codecs.md#defining-a-codec-for-an-object) idiom).
+3. Register in `setup()`:
+   ```java
+   getCodecRegistry(Interaction.CODEC)
+       .register("My_Type", MyInteraction.class, MyInteraction.CODEC);
+   ```
+4. Reference from JSON inline, or as a named interaction asset others reference by id:
+   ```json
+   { "Type": "My_Type", "MyField": 8 }
+   ```
+
+Namespace your `Type` ids (interaction/asset ids resolve globally and case-sensitively) — e.g. a
+`MyPlugin_` prefix. Key [`InteractionContext`](interactions-context.md) API inside such an interaction:
+
+- `getEntity()` → `Ref<EntityStore>` of the **executor**. For an interaction running in a projectile's
+  `ProjectileHit`/`ProjectileMiss`, this is the **projectile** — its `TransformComponent` position is
+  the impact point.
+- `getOwningEntity()` → the **caster/shooter** (exclude it from AOE so the shooter isn't self-hit).
+- `getCommandBuffer()` → a `CommandBuffer<EntityStore>` that also serves as the `ComponentAccessor`
+  for queries like `Selector.selectNearbyEntities(...)` and `EffectControllerComponent.addEffect(...)`.
+
 ### InteractionType Enum
 
 **Package:** `com.hypixel.hytale.protocol`

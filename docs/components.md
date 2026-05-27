@@ -370,6 +370,17 @@ Holder<ECS_TYPE> copyEntity(Ref<ECS_TYPE> ref, Holder<ECS_TYPE> outHolder)
 // Ensure component exists
 <T extends Component<ECS_TYPE>> void ensureComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
 <T extends Component<ECS_TYPE>> T ensureAndGetComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
+```
+
+> ⚠️ **`addComponent` throws if the component already exists** —
+> `IllegalArgumentException: Entity already contains component type: ...`. There is **no
+> `tryAddComponent`** (the remove side has `tryRemoveComponent`, but add does not). Guard with
+> `getComponent(ref, type) == null` first, or use `ensureAndGetComponent` for add-or-get semantics.
+> An **uncaught throw inside an interaction crashes the world thread**, which halts tick systems
+> game-wide (e.g. player stamina stops regenerating) and aborts the rest of the interaction chain
+> until restart — so this is not a localized failure.
+
+```java
 
 // Replace/put component
 <T extends Component<ECS_TYPE>> void replaceComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type, T component)

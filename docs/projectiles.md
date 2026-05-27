@@ -561,6 +561,34 @@ if (projectileComp != null) {
 
 ---
 
+## Spawning Particles from Java
+
+To spawn a particle effect at an arbitrary world position from code (e.g. a world-oriented impact
+burst that fires consistently on **both** direct hits and terrain misses), use
+`com.hypixel.hytale.server.core.universe.world.ParticleUtil`. It has many `spawnParticleEffect`
+overloads; the general one:
+
+```java
+ParticleUtil.spawnParticleEffect(
+    String systemId, Vector3d pos,
+    float pitch, float yaw, float roll,   // ROTATION IN RADIANS — (0,0,0) = world-aligned
+    float scale, float duration,
+    ComponentAccessor<EntityStore> accessor);   // a CommandBuffer works here
+```
+
+The three rotation floats are pitch/yaw/roll in **radians** (the `PlayVfxEffect` trigger calls this
+after `Math.toRadians(...)` on its degree fields). Simpler overloads exist —
+`spawnParticleEffect(String, Vector3d, ComponentAccessor)`,
+`spawnParticleEffect(WorldParticle, Vector3d, ...)`, and `Rotation3f`/`List<Ref>`/`Color` variants.
+
+Spawning from code with rotation `(0,0,0)` is how you get an **untilted, world-oriented** impact
+effect. A `ModelParticle` placed in JSON inherits its host entity's transform, so a particle attached
+to a pitched projectile tilts with the shot (`DetachedFromModel: true` only makes the system *persist*
+after despawn — it does not change spawn orientation). As with JSON particles, pass a non-zero
+`scale` — the field is a primitive `float` and `0` renders invisibly.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 projectile subsystem (verified against `HytaleServer.jar`).
@@ -569,6 +597,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`No projectile config typeName provided`** → a `ProjectileInteraction` (or launch config) omitted the projectile config type name. Fix: set the projectile config reference in the interaction JSON.
 - **Symptom:** `ProjectileConfig.getAssetMap().get("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive). Fix: use the exact asset-file id and null-check before spawning.
 - **Symptom:** a projectile bounces forever or never stops → bounce limits come from `StandardPhysicsConfig`. Fix: compare `physics.getBounces()` against `config.getBounceCount()` and check `getBounceLimit()`/`getBounciness()` (see [StandardPhysicsProvider](#standardphysicsprovider)).
+- **Symptom:** an `AOECircle`/`AOECylinder` selector in a projectile's `ProjectileHit`/`ProjectileMiss` affects only the directly-hit entity, never a radius → projectile-hosted selectors don't sweep (unlike melee). Fix: use `Type: "Explode"`, a trigger volume, or the Java radius query `Selector.selectNearbyEntities(...)` (see [interactions-combat.md → AOECircle](interactions-combat.md#aoecircle-area-of-effect)).
 
 ---
 

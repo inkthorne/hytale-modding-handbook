@@ -67,6 +67,25 @@ Weapon item (inherits a Template_Weapon_* template)
 
 ---
 
+## Handedness (one- vs two-handed)
+
+There is **no one/two-handed flag in item JSON**, and **no "TwoHanded" concept anywhere in
+`HytaleServer.jar`**. "Two-handed" is purely descriptive — it is determined by the weapon's animation
+rig (`PlayerAnimationsId`): `Staff`, `Bow`, `Crossbow`, `Spear`, `Battleaxe`, and `Rifle` read as
+two-handed; `Sword`, `Club`, `Mace`, `Daggers`, `Wand`, and `Spellbook` read as one-handed.
+
+A player **can equip** an offhand shield alongside any main-hand weapon, but can only **block with**
+it when the main-hand weapon is one-handed; held two-handed, the offhand shield is equipped-but-unusable.
+This offhand-block gate is **not** reachable from the server: overriding a two-handed weapon's
+`PlayerAnimationsId` to a one-handed rig (e.g. `Staff` → `Wand`) does **not** re-enable offhand blocking,
+and the server jar has no handedness logic — the gate is almost certainly **hardcoded client-side**.
+Don't chase it from a plugin or server asset.
+
+(Shields are themselves main-hand items — `Template_Weapon_Shield`, Primary = punch, Secondary =
+guard/bash — so a player holds *either* a shield as the active weapon, *or* a weapon plus an offhand shield.)
+
+---
+
 ## Template_Weapon_Sword
 
 **Location:** `Server/Item/Items/Weapon/Sword/Template_Weapon_Sword.json`
@@ -728,6 +747,14 @@ Crossbow manages three stats:
 - **Ammo** (max 6): Bolts currently loaded
 - **SignatureEnergy** (max 5): Energy for signature ability
 - **SignatureCharges** (max 1): Signature ready state
+
+> **Ammo and arrow items are interchangeable currency — inflating `Ammo` dupes arrows.** Each shot
+> spends one `Ammo` stat (granted 6 on equip via `Weapon.StatModifiers`); reloading **converts arrow
+> items → Ammo** (`Reload_ItemConsume` → `Common_StatAmmoReload_ItemConsume`, a `ModifyInventory`
+> removing `Weapon_Arrow_Crude`); and `SwapFrom` (`Weapon_Crossbow_Swap_From`) **refunds leftover Ammo
+> back into arrow items** on weapon swap. So raising the `Ammo` grant to fake "infinite ammo" lets a
+> player swap weapons to harvest the surplus as real arrows. The safe approach is to make *reload*
+> free — drop the arrow `ModifyInventory` from the reload chain — rather than inflating `Ammo`.
 
 ### DisplayEntityStatsHUD
 

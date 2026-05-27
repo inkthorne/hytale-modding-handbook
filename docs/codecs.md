@@ -279,6 +279,11 @@ document over it via `BuilderCodec.decodeAndInherit(...)`. The merge is recursiv
 | **Scalar / string** present | replaces the parent's value |
 | **Nested object** present (a field whose codec is itself a `BuilderCodec`) | **recurses** — merges key-by-key against the parent's object, so a *partial* object keeps the parent's other keys |
 | **Array / list** present | **replaces wholesale** — lists are not keyed, so there is no element-level merge |
+| **`null`** present | **suppresses** the inherited field — explicitly clears a value the parent set |
+
+The `null` rule is the inverse of "absent": omitting a field keeps the parent's value, while
+`"<field>": null` removes it. Verified with `Metal_Bronze_Ornate` (`Parent`: `Rock_Gold_Brick_Ornate`)
+setting `"Recipe": null` to make an otherwise-craftable item un-craftable in the variant.
 
 The array rule is the common gotcha: a partial `Specs` / `Layers` / `Input` / `Children` array
 **overwrites** the parent's entire list rather than appending to it. To keep the parent's elements

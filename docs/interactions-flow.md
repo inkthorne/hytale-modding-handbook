@@ -126,6 +126,13 @@ The `Interactions` property accepts an array where each entry can be:
 }
 ```
 
+> **References resolve by basename, scoped per namespace — not by path.** `Sword_Damage_Light` matches
+> the file of that basename regardless of which subfolder it sits in. `Interactions/` and
+> `RootInteractions/` are independent namespaces (the same basename may exist once in each), but within
+> a namespace basenames must be unique. A custom interaction therefore just needs a unique basename in
+> its namespace; the subfolder is organizational. (`Parent` is also supported on root interactions, not
+> just items and plain interactions — e.g. `RootInteractions/.../Lantern_Yellow` → `Lantern_Base`.)
+
 **Mixed format:**
 
 ```json

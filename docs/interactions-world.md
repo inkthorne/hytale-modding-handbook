@@ -314,6 +314,17 @@ Adjusts the quantity of the currently held item. Used to consume items on use (e
 }
 ```
 
+> **Gotcha — a non-matching `RequiredGameMode` skips the node and proceeds to `Next` (it does *not*
+> route to `Failed`).** So a weapon/block whose cost lives in a `ModifyInventory` with
+> `"RequiredGameMode": "Adventure"` fires/places **for free** in Creative and Survival, and only
+> charges in Adventure. This differs from the **`Condition`** pattern used by consumables, whose
+> `Failed` branch routes to `Block_Secondary` — which is why food/potions are *blocked* (not free)
+> outside Adventure (see [items-consumables.md](items-consumables.md)). To make an Adventure-mode
+> item cost nothing, copy the interaction and drop the `ModifyInventory` node while keeping its
+> `Next`. Note the cost can recur deeper in the tree (e.g. the Flame Crystal Staff consumes essence
+> in each `Weapon_Stick_Fire_Projectile_Charged_*` node, not at the entry), so grep the whole chain
+> before assuming a weapon is free.
+
 ---
 
 ## Block Interactions

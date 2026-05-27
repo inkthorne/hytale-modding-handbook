@@ -682,6 +682,37 @@ Built-ins worth referencing instead of rolling your own:
 > the `UUID`), invalidating the cache on respawn (e.g. from a `RespawnSystems.OnRespawnSystem` — see
 > [combat.md → Reacting to Death & Respawn](combat.md#reacting-to-death--respawn)).
 
+> **⚠️ `getSpawnPoint` runs OFF the world thread — reading the `Store` there crashes the join.**
+> The engine invokes it from `World.addPlayer` (→ `SpawnUtil.applyFirstSpawnTransform`) on a
+> **`ServerWorkerGroup`** thread, not the world thread. Any `Store` read inside the provider —
+> `Store.forEachChunk(...)`, `World.getNonTickingChunk(...)`, component reads — hits
+> `Store.assertThread` and throws `IllegalStateException: Assert not in thread!`. The server then
+> logs `SEVERE … Exception when player adding to universe` and disconnects the client with
+> `client.general.disconnect.universeException`, which the client shows as a **blank loading screen**
+> (`Server closed connection (code=0)` after everything reports "Prepared"). If the provider caches
+> per-`UUID`, the *first* joiner populates the cache off-thread without reading the store and joins
+> fine, so the crash only fires on the **second** joiner — "works solo, kicks the 2nd player" is the
+> signature. To read the store from a provider, marshal onto the world thread (`World` implements
+> `Executor`; `Store.isInThread()` detects whether you are already on it — guard to avoid self-deadlock):
+>
+> ```java
+> private Transform computeSpawn(World world, UUID uuid) {
+>     if (world.getChunkStore().getStore().isInThread()) {
+>         return computeOnThread(world, uuid);   // already on the world thread
+>     }
+>     CompletableFuture<Transform> r = new CompletableFuture<>();
+>     world.execute(() -> {                       // queue onto the world thread, block for the result
+>         try { r.complete(computeOnThread(world, uuid)); }
+>         catch (Throwable t) { r.completeExceptionally(t); }
+>     });
+>     return r.join();
+> }
+> ```
+>
+> This applies more broadly: engine **callbacks** (spawn providers, and likely other connection/setup
+> hooks) may run on a `ServerWorkerGroup` thread, where touching a `Store` throws. Ticking **Systems**
+> always run on the world thread and are safe; engine callbacks are not.
+
 Because no world exists at plugin `setup()` time, install the provider per-world from a
 `StartWorldEvent` handler — see [World Events](#world-events) below.
 

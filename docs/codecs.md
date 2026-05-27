@@ -7,7 +7,7 @@ seo:
 
 # Codecs API
 
-**Doc type:** Java API · **Verified against 0.5.0**
+**Doc type:** Java API · **Verified against 0.5.1**
 
 Hytale uses a codec-based serialization system for data persistence, configuration, and asset loading. It is built on **BSON** (`org.bson.BsonValue` / `org.bson.BsonDocument`) and can also read JSON directly.
 

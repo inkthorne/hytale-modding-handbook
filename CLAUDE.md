@@ -59,7 +59,7 @@ Then read assets directly from `~/.cache/hytale-assets/` (`Common/` holds blocky
 
 ## Verifying documentation
 
-The `docs/` were fact-checked against game **0.5.0** (Update 5) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.0` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)
+The `docs/` were fact-checked against game **0.5.1** (Update 5; build-14) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.1` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (0.5.1 is a patch of Update 5: the `CommonAssetsIndex.hashes` index is byte-identical to the 0.5.0/build-13 capture, so format docs carry over unchanged; the full API surface re-passes `verify-docs.sh` against the 0.5.1 jar.) (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)
 
 Run the regression checker after any game update (or before trusting/extending a doc):
 
@@ -68,7 +68,7 @@ Run the regression checker after any game update (or before trusting/extending a
 ./maintenance/scripts/verify-docs.sh --no-build   # skip example compilation (faster)
 ```
 
-It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all intra-doc anchor links resolve; and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since 0.5.0 — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
+It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all intra-doc anchor links resolve; and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since the baseline build — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
 
 ## Architecture
 

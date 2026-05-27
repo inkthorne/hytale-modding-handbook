@@ -7,7 +7,7 @@ seo:
 
 # Events API
 
-**Doc type:** Java API · **Verified against 0.5.0**
+**Doc type:** Java API · **Verified against 0.5.1**
 
 This document covers the core event system. For specific event classes, see the relevant domain documentation:
 

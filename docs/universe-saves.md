@@ -7,7 +7,7 @@ seo:
 
 # Universes & Save Format
 
-**Doc type:** Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.5.0**
+**Doc type:** Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.5.1**
 
 A Hytale **save is a universe of worlds**. When you host a dedicated server you point it at a
 save directory; that directory *is* the universe. This page documents the on-disk layout, the

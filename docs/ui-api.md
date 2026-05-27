@@ -7,7 +7,7 @@ seo:
 
 # UI Java API
 
-**Doc type:** Java API · **Verified against 0.5.0**
+**Doc type:** Java API · **Verified against 0.5.1**
 
 Server-side Java API reference for Hytale's UI system.
 

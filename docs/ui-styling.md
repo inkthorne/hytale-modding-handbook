@@ -7,7 +7,7 @@ seo:
 
 # UI Styling & Layout
 
-**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.5.0**
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.5.1**
 
 Complete reference for positioning, layout, and visual styling in Hytale's UI DSL.
 

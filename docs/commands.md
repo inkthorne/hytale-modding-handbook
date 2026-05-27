@@ -7,7 +7,7 @@ seo:
 
 # Commands API
 
-**Doc type:** Java API · **Verified against 0.5.0**
+**Doc type:** Java API · **Verified against 0.5.1**
 
 The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
 
@@ -223,7 +223,7 @@ MatchResult matches(String input, String alias, int depth)  // Check if input ma
 
 ### Permission model (why a new command says "no permission")
 
-> Verified against 0.5.0 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
+> Verified against 0.5.1 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
 
 When a command is registered, `setOwner()` runs:
 

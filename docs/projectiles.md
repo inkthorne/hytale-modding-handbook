@@ -71,6 +71,37 @@ ProjectileInteraction
   implements BallisticDataProvider
 ```
 
+## Two Projectile Schemas (Simple vs Config)
+
+Two different JSON asset trees both produce projectiles, but only one can run interactions on impact.
+Pick based on whether you need on-hit logic (effects, AOE, despawn handling).
+
+| | **Simple** (`Server/Projectiles/*.json`) | **Config** (`Server/ProjectileConfigs/*.json`) |
+|---|---|---|
+| Maps to | (native projectile asset) | `ProjectileConfig` |
+| Damage | top-level `Damage` (int) | via an on-hit `DamageEntity` interaction |
+| Physics | flat fields (`MuzzleVelocity`, `Gravity`, `Bounciness`, `TimeToLive`, …) | typed `Physics` object (`"Type": "Standard"`, …) + `LaunchForce`, `SpawnOffset` |
+| Particles/despawn | native (`HitParticles`, `MissParticles`, `TimeToLive`, `DeadTime`) — "just work", world-oriented | **none native** — you spawn particles and despawn from interactions |
+| Interactions | **none** | **`Interactions`** (`ProjectileSpawn` / `ProjectileHit` / `ProjectileMiss`) |
+| Launched via | the `LaunchProjectile` interaction (only field `projectileId` — no on-hit hook) | `{ "Type": "Projectile", "Config": "<id>" }` |
+
+Only the **config** schema can run interactions, so it's the one you need to apply effects, AOE, or
+custom on-hit logic. Hit routing: a **terrain/wall** hit fires **`ProjectileMiss`**; a **direct entity**
+hit fires **`ProjectileHit`** (confirmed in vanilla `Projectile_Config_Ice_Ball`, which restates both).
+
+### Gotchas authoring config-projectile `Interactions`
+
+- **`Interactions` is a `Map<InteractionType, String>`, not a nested object** — so on a `Parent`-inheriting
+  config, providing `Interactions` **replaces the whole handler map** rather than merging per-handler.
+  (The [`Parent` deep-merge](codecs.md#parent-inheritance-inheritcodec) recurses only for nested
+  `BuilderCodec` objects; a `Map` container, like an array, is replaced wholesale.) Restate **every**
+  handler you want — omit `ProjectileMiss` and terrain hits never despawn, so the projectile sticks in
+  the wall forever.
+- **No native `TimeToLive`** on config projectiles — they despawn via a `RemoveEntity` interaction.
+  Put a `{ "Type": "Simple", "RunTime": 0.2 }` (or `RunTime: 0`) **before** `RemoveEntity` so impact
+  effects dispatch before the entity is destroyed — the pattern vanilla `Projectile_Config_Ice_Ball`
+  uses in both its `ProjectileHit` and `ProjectileMiss`.
+
 ## ProjectileModule
 **Package:** `com.hypixel.hytale.server.core.modules.projectile`
 
@@ -582,10 +613,13 @@ after `Math.toRadians(...)` on its degree fields). Simpler overloads exist —
 `spawnParticleEffect(WorldParticle, Vector3d, ...)`, and `Rotation3f`/`List<Ref>`/`Color` variants.
 
 Spawning from code with rotation `(0,0,0)` is how you get an **untilted, world-oriented** impact
-effect. A `ModelParticle` placed in JSON inherits its host entity's transform, so a particle attached
-to a pitched projectile tilts with the shot (`DetachedFromModel: true` only makes the system *persist*
-after despawn — it does not change spawn orientation). As with JSON particles, pass a non-zero
-`scale` — the field is a primitive `float` and `0` renders invisibly.
+effect. A `ModelParticle` placed in JSON attaches to an `EntityPart` (`Self`, `Entity`, `PrimaryItem`,
+or `SecondaryItem` — there is **no world-space anchor**) and inherits that entity's transform, so a
+particle on a pitched projectile tilts with the shot — a flat ground decal looks wrong. `DetachedFromModel: true`
+only makes the system *persist* after the entity despawns; it does **not** change spawn orientation.
+For a world-oriented effect, use a `WorldParticle` (only available via `DamageEffects`, i.e. entity
+hits) or spawn from code with rotation `(0,0,0)`. As with JSON particles, pass a non-zero `scale` —
+the field is a primitive `float` and `0` renders invisibly.
 
 ---
 

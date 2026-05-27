@@ -409,10 +409,17 @@ Used for ground slams and radial attacks.
 >
 > ⚠️ **A selector in a *projectile's* `ProjectileHit`/`ProjectileMiss` does NOT sweep a radius** — it
 > resolves only the entity the projectile directly collides with (unlike a melee swing, which sweeps).
-> To do real AOE from a projectile impact, use `Type: "Explode"` ([damage + knockback only — no status
-> effect](#damageentity)), a [trigger volume](trigger-volumes.md), or a Java radius query
-> (`Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` — the static query
-> `ExplosionUtils.performExplosion` uses internally).
+> To do real AOE from a projectile impact, use `Type: "Explode"`, a [trigger volume](trigger-volumes.md),
+> or a Java radius query (`Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` —
+> the static query `ExplosionUtils.performExplosion` uses internally).
+>
+> ⚠️ **`Explode` (`ExplosionConfig`) cannot apply a status effect.** It does radius **damage +
+> knockback + `ModelParticles` + sound** (`damageEntities`, `entityDamageRadius`, `entityDamage`,
+> `knockback`, `particles`, `soundEventId`, plus block damage) — but has **no field for an
+> entity/status effect**. So `Explode` covers AOE *damage*, not AOE *slow/stun/etc.* For AOE **effects**
+> you need a Java radius query + `EffectControllerComponent.addEffect` (see
+> [interactions.md → Registering a Custom Interaction Type](interactions.md#registering-a-custom-interaction-type-java)),
+> a deployable/trap with `ApplyEffects` and `DamageAmount: 0`, or a trigger volume's `EntityEffect`.
 
 #### Raycast (Straight line)
 

@@ -426,7 +426,7 @@ From `Template_Animal_Neutral`:
 
 ## Behavior System (Instructions)
 
-The behavior system uses a state machine driven by nested instruction nodes. `Instructions` is an array of nodes; nodes may have a `Sensor` (the condition to evaluate), `Actions` (what to run on match), `BodyMotion`/`HeadMotion` (movement behavior), nested `Instructions`, and flags such as `Continue`, `Enabled` (often a `{ "Compute": ... }`), `ActionsBlocking`, and `Weight`/`Type: "Random"` for weighted random selection.
+The behavior system uses a state machine driven by nested instruction nodes. `Instructions` is an array of nodes; nodes may have a `Sensor` (the condition to evaluate), `Actions` (what to run on match), `BodyMotion`/`HeadMotion` (movement behavior), nested `Instructions`, and flags such as `Continue`, `Enabled` (often a `{ "Compute": ... }`), `ActionsBlocking`, and `Weight`/`Type: "Random"` for [weighted random selection](#randomized-instructions-type-random). A node's `Sensor` is optional: **if omitted, it always matches** (the explicit catch-all is `{ "Type": "Any" }`).
 
 ### States
 
@@ -535,6 +535,94 @@ Real instruction nodes carry the action via `Type` (there is no separate `Action
 ### Sensor → BodyMotion target hand-off
 
 Within a single instruction node, the `Sensor` and the `BodyMotion` share an `InfoProvider`. `SensorEntityBase` owns an `EntityPositionProvider` and exposes `getSensorInfo()`; when the sensor matches a target, the node's motion reads the matched entity/position back through `info.getPositionProvider()`. So a **target-relative motion must be paired with a target-producing sensor** — e.g. `"Sensor": { "Type": "Player", "Range": N, "LockOnTarget": true }`. `"Type": "Any"` is the catch-all (no target), making it a good fallback node. Sensor classes live in `com.hypixel.hytale.server.npc.corecomponents.entity` (`SensorPlayer`, `SensorTarget`, `SensorEntity`, `SensorSelf`, `SensorBeacon`, …).
+
+### Randomized instructions (Type: Random)
+
+A node with `"Type": "Random"` (class `InstructionRandomized`) picks **one** of its child `Instructions` by weight and runs it. The surprising default: the pick is **permanent** — it only re-rolls on a state change or an explicit reset. Add `ExecuteFor` to make it a timer-driven switch (the headline use case is alternating a `BodyMotion` on a timer).
+
+Fields read by `BuilderInstructionRandomized` (defaults from the bytecode):
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `Type` | string | — | Must be `"Random"` to select this builder. |
+| `Instructions` | array | — | The candidate branches. Each child's own `Weight` sets its odds. |
+| `ExecuteFor` | `[min, max]` | `[MAX, MAX]` | How long to run the chosen branch before re-rolling. Omitted ⇒ effectively never (the pick is permanent). Each entry must be `> 0` and `min ≤ max`. Units appear to be **seconds** (inferred — subtracted as the tick `dt`). |
+| `ResetOnStateChange` | bool | `true` | Re-roll when the NPC's AI state changes. |
+| `Sensor` | object | always matches | Gates the **whole** Random node; omit ⇒ always matches (general node behavior). |
+| `Name` | string | — | Lets a `ResetInstructions` action target this node to force a re-roll. |
+| `Enabled` / `Continue` / `Tag` | — | — | Standard node flags (see the intro above). |
+
+`Weight` is **not** a field of the Random node itself — it is read from each **direct child** (`Instruction.getWeight()`) to build the weighted map. Equal or absent weights ⇒ uniform.
+
+**Per-tick selection** (`InstructionRandomized.execute`, `dt` = the tick delta):
+
+```
+timeout -= dt
+if (timeout <= 0 || current == null) {
+    current  = weightedMap.get(random())                  // re-roll a branch by Weight
+    timeout  = randomRange(ExecuteFor[0], ExecuteFor[1])  // new random window
+}
+if (current.matches(self, role, dt, store))               // ← re-checked EVERY tick
+    current.execute()
+```
+
+A state change calls `clearOnce()`, which nulls `current` (forcing a re-roll next tick) only when `ResetOnStateChange` is `true`. Two non-obvious consequences:
+
+1. **No `ExecuteFor` ⇒ the pick is permanent.** The default window is `[Double.MAX_VALUE, Double.MAX_VALUE]`, so `timeout` never reaches 0. The builder's own long description: *"One will be selected at random and executed until the NPC state changes."* The only re-roll triggers are then (a) a state change while `ResetOnStateChange` is `true`, or (b) an explicit `ResetInstructions`. **Add `ExecuteFor` for a timed re-roll.**
+2. **The chosen branch's `Sensor` is re-evaluated every tick.** If it matched at pick time but stops matching mid-window (e.g. a `Player`-range sensor once the player walks off), the branch does **nothing** for the rest of the window — and the pick is **not** re-rolled; the NPC just idles. Workaround: give the branch a permissive top-level sensor (omit `Sensor`, or `"Type": "Any"`) and push the conditional logic into a nested `Instructions` fallthrough.
+
+#### Timed switch example
+
+`Inkwell_Chicken_Annoying` alternates every 5–12 s between orbiting the nearest player and wandering. The orbit branch is wrapped in `"Sensor": { "Type": "Any" }` with a nested fallthrough so it **wanders instead of freezing** when no player is in range (consequence #2 above):
+
+```json
+"Instructions": [
+  {
+    "Type": "Random",
+    "Continue": true,
+    "ExecuteFor": [ 5, 12 ],
+    "Instructions": [
+      {
+        "Weight": 1,
+        "Sensor": { "Type": "Any" },
+        "Instructions": [
+          {
+            "Sensor": { "Type": "Player", "Range": 30, "LockOnTarget": true },
+            "BodyMotion": { "Type": "Inkwell_Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 }
+          },
+          {
+            "Sensor": { "Type": "Any" },
+            "BodyMotion": { "Type": "WanderInCircle", "Radius": 6, "RelativeSpeed": 0.25 }
+          }
+        ]
+      },
+      {
+        "Weight": 1,
+        "Sensor": { "Type": "Any" },
+        "BodyMotion": { "Type": "WanderInCircle", "Radius": 6, "RelativeSpeed": 0.25 }
+      }
+    ]
+  }
+]
+```
+
+`Inkwell_Orbit` is a custom `BodyMotion` (see [Registering custom core components](#registering-custom-core-components-java)); for stock-only content swap in a vanilla motion — vanilla `Test_Random_Instruction.json` cycles `WanderInCircle` vs `Nothing` the same way.
+
+#### Forcing a re-roll: `Name` + `ResetInstructions`
+
+For the unbounded (no `ExecuteFor`) form, give the Random node a `Name` and have a separate instruction fire a `ResetInstructions` action to re-roll on demand. Vanilla `Test_Random_Instruction.json` shows both forms; this is its re-roll half:
+
+```json
+{ "Type": "Random", "Name": "Test", "Instructions": [ /* … branches … */ ] },
+{ "Instructions": [
+  { "Sensor": { "Type": "And", "Sensors": [
+      { "Type": "Player", "Range": 10, "LockOnTarget": true },
+      { "Type": "Damage" } ] },
+    "Actions": [ { "Type": "ResetInstructions", "Instructions": [ "Test" ] } ] }
+]}
+```
+
+Vanilla reference: `Server/NPC/Roles/_Core/Tests/Test_Random_Instruction.json` (both forms); production usage in `_Core/Templates/Template_{Livestock,Predator,Animal_Neutral,Intelligent}.json` and the reusable `_Core/Components/Steps/Component_Instruction_Combat_*.json` steps.
 
 ---
 

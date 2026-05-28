@@ -595,6 +595,8 @@ if (velocity != null) {
 
 Note: `addVelocity()` (renamed from `addForce()` in Update 5) and `set()` exist but haven't been verified to work.
 
+This API is for **discrete impulses** — knockback, launches, dashes. Do **not** drive an AI-controlled NPC's continuous movement by writing `Velocity` every tick; that fights the locomotion (steering-force) layer. Continuous NPC movement belongs in a `BodyMotion` — see [NPC Roles → Registering custom core components (Java)](npc-roles.md#registering-custom-core-components-java).
+
 ### Example: Launch Player Upward
 
 ```java

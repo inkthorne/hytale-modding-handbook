@@ -42,7 +42,7 @@ Server/NPC/
 ```
 
 ## Key Classes
-These are JSON asset constructs (file types / field schemas), not Java classes.
+The table below lists JSON asset constructs (file types / field schemas), not Java classes. Note, however, that the **behavior building blocks** these assets reference by `Type` — `Sensor`, `Action`, `BodyMotion`, `HeadMotion`, `EntityFilter` — *are* concrete Java classes (in `com.hypixel.hytale.server.npc.corecomponents.*`), and a plugin can register its own. The behavior system is data-*driven* but not code-closed; see [Registering custom core components (Java)](#registering-custom-core-components-java).
 
 | Construct | Location | Description |
 |-----------|----------|-------------|
@@ -71,6 +71,17 @@ The NPC system is organized into several directories:
 ---
 
 ## Role Types
+
+A role's top-level `Type` is one of four values registered by the role `BuilderFactory`:
+
+| `Type` | Spawnable | Description |
+|--------|-----------|-------------|
+| `Abstract` | No | Template/base; concrete roles inherit from it via `Reference` |
+| `Variant` | Yes | Concrete role referencing a template, overriding via `Modify` |
+| `Generic` | Yes | Concrete, **self-contained** role that defines its behavior inline (the type the engine's own `Test_*` roles use) |
+| `Role` | Yes | Concrete role (base concrete type) |
+
+Most shipped content is the `Abstract` template + `Variant` pair documented below. Reach for **`Generic`** when you want a standalone role that defines its own inline `Instructions` rather than inheriting them — see [the Variant `Modify` gotcha](#variants) for why inline behavior must use `Generic`, not `Variant`.
 
 ### Abstract Templates
 
@@ -153,6 +164,8 @@ A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field;
     }
 }
 ```
+
+> **Gotcha: a `Variant`'s `Modify` cannot hold `Instructions`.** Every value in a `Modify` block runs through the NPC **expression** system, which rejects a structural `Instructions` array. Shipping a `Variant` that overrides `Instructions` fails to load with `Illegal JSON value for expression: [{"Sensor":...}]`, and the role then silently never registers (it's absent from the spawn list). To give an NPC custom inline behavior, author a **`Type: "Generic"`** role with top-level `Instructions` instead — see [Inline behavior with a Generic role](#inline-behavior-with-a-generic-role).
 
 ---
 
@@ -464,16 +477,20 @@ Each entry in `Actions` is an object whose `Type` is the action. Common action t
 
 ### BodyMotion
 
-A node's `BodyMotion` is an object with a `Type`. Confirmed types include:
+A node's `BodyMotion` is an object with a `Type`. NPC locomotion is a **steering-force** system: each motion is a concrete Java class (under `com.hypixel.hytale.server.npc.corecomponents.movement`, plus `combat`) whose `Type` is the class name with the `BodyMotion` prefix stripped. The full built-in set:
 
 | Motion Type | Description |
 |-------------|-------------|
-| `Wander` / `WanderInCircle` | Random movement |
-| `Seek` | Move toward target |
-| `Flee` | Move away from target |
-| `MaintainDistance` | Keep a desired distance from target |
-| `Sequence` | Run a sequence of motions (optionally `Looped`) |
-| `Nothing` | Stand still |
+| `Wander` / `WanderInCircle` / `WanderInRect` | Random movement (in place / circle / rectangle) |
+| `Find` / `FindWithTarget` | Path to a found point / toward the sensor's target |
+| `MaintainDistance` | Keep a desired distance from target (strafes intermittently) |
+| `MoveAway` | Flee away from target |
+| `Land` / `TakeOff` / `Leave` | Flight transitions and despawn-departure |
+| `Teleport` | Teleport to target position |
+| `MatchLook` | Orient to match a look direction |
+| `Charge` / `AimCharge` | Combat charge attacks (`corecomponents.combat`) |
+
+There is **no built-in "orbit a target" motion** — `MaintainDistance` only strafes in duration/frequency bursts. A continuously circling motion has to be written as a custom `BodyMotion` (see [Registering custom core components (Java)](#registering-custom-core-components-java)).
 
 ### Instruction Tree Example
 
@@ -514,6 +531,110 @@ Real instruction nodes carry the action via `Type` (there is no separate `Action
     ]
 }
 ```
+
+### Sensor → BodyMotion target hand-off
+
+Within a single instruction node, the `Sensor` and the `BodyMotion` share an `InfoProvider`. `SensorEntityBase` owns an `EntityPositionProvider` and exposes `getSensorInfo()`; when the sensor matches a target, the node's motion reads the matched entity/position back through `info.getPositionProvider()`. So a **target-relative motion must be paired with a target-producing sensor** — e.g. `"Sensor": { "Type": "Player", "Range": N, "LockOnTarget": true }`. `"Type": "Any"` is the catch-all (no target), making it a good fallback node. Sensor classes live in `com.hypixel.hytale.server.npc.corecomponents.entity` (`SensorPlayer`, `SensorTarget`, `SensorEntity`, `SensorSelf`, `SensorBeacon`, …).
+
+---
+
+## Registering custom core components (Java)
+
+The behavior building blocks referenced by `Type` in role JSON — `BodyMotion`, `HeadMotion`, `Sensor`, `Action`, `EntityFilter` — are concrete Java classes, each with a `Builder*` companion that acts as its JSON codec. A plugin can **register its own** and reference it from role JSON by `Type`, exactly like a built-in.
+
+The core NPC plugin is itself a `JavaPlugin` with a static accessor and a registration method:
+
+```java
+// com.hypixel.hytale.server.npc.NPCPlugin
+public static NPCPlugin get();
+public <T> NPCPlugin registerCoreComponentType(String typeName, Supplier<Builder<T>> builder);
+// Category constants route a builder to the right factory:
+//   FACTORY_CLASS_ROLE / _BODY_MOTION / _HEAD_MOTION / _ACTION / _SENSOR /
+//   _INSTRUCTION / _TRANSIENT_PATH / _ACTION_LIST
+```
+
+A builder's `category()` decides which slot its `Type` is usable in — `BuilderBodyMotionBase.category()` returns `BodyMotion.class`, so registering a `BuilderBodyMotionX` makes `"Type": "X"` valid in any `BodyMotion` slot. Register in your plugin's `setup()`:
+
+```java
+NPCPlugin.get().registerCoreComponentType("Inkwell_Orbit", BuilderBodyMotionOrbit::new);
+```
+
+No manifest `Dependencies` entry is needed — the NPC plugin is core and always loads first (and a wrong `group:name` would only *break* your load).
+
+### The custom-`BodyMotion` contract
+
+Locomotion is a **steering-force** system: a motion writes a *desired-movement vector* into a `Steering`, and the engine integrates that with pathing, collision avoidance, and the motion controller. **Do not drive an AI NPC by writing the `Velocity` component each tick** — that fights the locomotion layer. (`Velocity` is for knockback/impulses; see the [Velocity API](entities.md#velocity-api). Continuous AI movement belongs in a `BodyMotion`.)
+
+```java
+// Motion side: extends com.hypixel.hytale.server.npc.corecomponents.BodyMotionBase
+public BodyMotionX(BuilderBodyMotionX builder, BuilderSupport support) { super(builder); /* read getters */ }
+
+// return false = motion inactive this tick (no target / nothing to do)
+public boolean computeSteering(Ref<EntityStore> self, Role role, InfoProvider info, double dt,
+                               Steering out, ComponentAccessor<EntityStore> acc) {
+    // Self position:
+    TransformComponent tf = acc.getComponent(self, TransformComponent.getComponentType());
+    Vector3d selfPos = tf.getPosition();                 // org.joml.Vector3d
+
+    // Target comes from the PAIRED SENSOR, not a world query:
+    IPositionProvider pp = info.getPositionProvider();   // com.hypixel.hytale.server.npc.sensorinfo.*
+    if (pp == null || !pp.hasPosition()) return false;
+    pp.providePosition(targetVec); pp.getTarget();       // position / Ref to the matched entity
+
+    // Write movement:
+    out.clear();
+    out.setTranslation(x, y, z);                         // direction
+    out.setTranslationRelativeSpeed(0.95);               // 0..1 fraction of the controller's MaxWalkSpeed
+    // out.setYaw(float);                                // OPTIONAL — see "Facing" below
+    return true;
+}
+```
+
+Reusable steering primitives live in `com.hypixel.hytale.server.npc.movement.steeringforces` (`SteeringForcePursue`, `SteeringForceEvade`, `SteeringForceWander`, `SteeringForceRotate`, `SteeringForceAvoidCollision`, `SteeringForceWithTarget`).
+
+The matching builder extends `BuilderBodyMotionBase` (whose `category()` returns `BodyMotion.class`). The framework calls `readCommonConfig(json)` then your `readConfig(json)`:
+
+```java
+@Override public BuilderBodyMotionX readConfig(JsonElement el) {
+    getDouble(el, "Radius", radiusHolder, 3.0, DoubleSingleValidator.greater0(),
+              getBuilderDescriptorState(), "short desc", null /* long desc */);
+    getBoolean(el, "Clockwise", clockwiseHolder, true, getBuilderDescriptorState(), "short", null);
+    return this;
+}
+@Override public BodyMotionX build(BuilderSupport s) { return new BodyMotionX(this, s); }
+@Override public BuilderDescriptorState getBuilderDescriptorState() { return BuilderDescriptorState.Stable; }
+@Override public String getShortDescription() { return "..."; }   // abstract — required
+@Override public String getLongDescription()  { return "..."; }   // abstract — required
+// getters resolve holders: radiusHolder.get(support.getExecutionContext())
+```
+
+Param holders (`DoubleHolder`, `BooleanHolder`, `NumberArrayHolder`, …) live in `com.hypixel.hytale.server.npc.asset.builder.holder`. The `getDouble` / `getBoolean` / `requireDoubleRange` config DSL lives on `BuilderBase`. Validators (optional, may be `null`) come from `com.hypixel.hytale.server.npc.asset.builder.validators`: `DoubleSingleValidator.greater0()` / `.greaterEqual0()`, `DoubleRangeValidator.between(a, b)` / `.fromExclToIncl(a, b)`.
+
+### Facing: forward-moving motions set no yaw
+
+Built-in forward-movers (`BodyMotionMoveAway`, `BodyMotionFindWithTarget`) set **no** rotation in `computeSteering` — the locomotion controller orients the NPC to its movement direction automatically. Only motions that want *decoupled* facing call `out.setYaw(...)` (e.g. `BodyMotionWanderBase` sets a wander heading; `MaintainDistance` faces its target while strafing). **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
+
+### Inline behavior with a Generic role
+
+A `Variant` cannot carry `Instructions` (see the [Variants gotcha](#variants)). To give an NPC custom inline behavior, author a self-contained `Type: "Generic"` role with top-level `Instructions`:
+
+```json
+{
+  "Type": "Generic",
+  "Appearance": "Chicken",
+  "MotionControllerList": [ { "Type": "Walk", "MaxWalkSpeed": 7, "Gravity": 10, "MaxFallSpeed": 20, "Acceleration": 10 } ],
+  "MaxHealth": { "Compute": "MaxHealth" },
+  "Parameters": { "MaxHealth": { "Value": 12, "Description": "..." } },
+  "Instructions": [
+    { "Sensor": { "Type": "Player", "Range": 30, "LockOnTarget": true },
+      "BodyMotion": { "Type": "Inkwell_Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 } },
+    { "Sensor": { "Type": "Any" }, "BodyMotion": { "Type": "WanderInCircle", "Radius": 6, "RelativeSpeed": 0.25 } }
+  ],
+  "NameTranslationKey": "server.npcRoles.Foo.name"
+}
+```
+
+The role id is the **filename without `.json`**. `"Appearance": "Chicken"` reuses a vanilla model by its *referenced* (unprefixed) id. A `BodyMotion`'s `RelativeSpeed` (0..1) scales against the controller's `MaxWalkSpeed`. The first node here uses a custom `Inkwell_Orbit` motion registered via `registerCoreComponentType`; the second is a vanilla fallback.
 
 ---
 

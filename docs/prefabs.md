@@ -7,7 +7,7 @@ seo:
 
 # Prefabs API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.5.1**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.5.2**
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 

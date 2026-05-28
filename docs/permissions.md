@@ -7,7 +7,7 @@ seo:
 
 # Permissions API
 
-**Doc type:** Java API · **Verified against 0.5.1**
+**Doc type:** Java API · **Verified against 0.5.2**
 
 This page covers the role-based permission system: checking permissions on players and commands, the built-in group hierarchy, registering your own permission nodes and groups, swapping the permission backend, and the events fired when player or group permissions change.
 

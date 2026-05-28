@@ -7,7 +7,7 @@ seo:
 
 # Entity & World Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.5.1**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.5.2**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 

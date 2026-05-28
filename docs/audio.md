@@ -185,7 +185,7 @@ files at the root of `SoundEvents/`:
 {
   "Layers": [
     {
-      "Files": ["Sounds/Weapons/Mace/Mace_Impact_01.ogg"],
+      "Files": ["Sounds/Weapons/Mace/Mace_T2_Signature_Impact_01.ogg"],
       "Volume": -2
     }
   ],
@@ -461,7 +461,7 @@ object with `Min`/`Max`):
 > (into a generated `RandomMusicContainer`). Author new music as MusicContainer assets.
 
 Background music track playlists. `Tracks` is an array of plain `.ogg` file path
-strings (rooted at `Common/Sounds/`, typically under `Music/`). Music definitions
+strings (rooted at `Common/`, typically under `Music/`). Music definitions
 usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Priority`:
 
 ```json
@@ -478,7 +478,7 @@ usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Pri
   },
   "Music": {
     "Tracks": [
-      "Music/Zone3/Z3D-OutlanderDungeon.ogg"
+      "Music/Zone3/Z3D_Outlander_Dungeon.ogg"
     ]
   },
   "AudioCategory": "AudioCat_Music",

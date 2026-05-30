@@ -7,7 +7,7 @@ seo:
 
 # Trigger Volumes
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.5.2**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.5.3**
 
 New in Update 5. A **trigger volume** is a 3D region (box, sphere, or cylinder) that runs a list of **effects**
 when something happens inside it — a player enters, a creature leaves, a block breaks, a tick elapses. Designers

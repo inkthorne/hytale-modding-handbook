@@ -7,7 +7,7 @@ seo:
 
 # Combat API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.5.2**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.5.3**
 
 This document covers damage events, combat systems, and kill feed customization.
 

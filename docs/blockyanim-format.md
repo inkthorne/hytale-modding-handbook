@@ -7,7 +7,7 @@ seo:
 
 # Block Animation Format (.blockyanim)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.5.2**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.5.3**
 
 This document describes the `.blockyanim` file format used for animating block states in Hytale.
 

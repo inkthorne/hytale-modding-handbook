@@ -7,7 +7,7 @@ seo:
 
 # Entities API
 
-**Doc type:** Java API · **Verified against 0.5.2**
+**Doc type:** Java API · **Verified against 0.5.3**
 
 This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
 

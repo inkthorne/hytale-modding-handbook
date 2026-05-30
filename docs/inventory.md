@@ -7,7 +7,7 @@ seo:
 
 # Inventory API
 
-**Doc type:** Java API · **Verified against 0.5.2**
+**Doc type:** Java API · **Verified against 0.5.3**
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 

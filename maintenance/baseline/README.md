@@ -10,11 +10,11 @@ game update to see exactly which assets changed before re-checking docs.
 
 | Field | Value |
 |-------|-------|
-| Build | `0.5.2` (Update 5; `Implementation-Version` = `0.5.2`, from `install/release/package/sig/build-15/`) |
-| Captured | 2026-05-27 (build-15); prior baselines build-14 (0.5.1) and build-13 (0.5.0) |
-| `Assets.zip` mtime | 2026-05-27 22:08 (build-15; was 2026-05-26 15:00 on build-14) |
-| `Assets.zip` size | 3,428,485,136 bytes (~3.4 GB; build-14 was 3,428,476,129 — Server-side delta only) |
-| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79` — content **unchanged** from build-14 (Common assets byte-identical; only the index's internal line ordering changed, so the raw sha differs from build-14's `77b9732421d6ed116376ba0eb3cf1921b937d96f05d50bd46258c50e7120f736`) |
+| Build | `0.5.3` (Update 5 patch; `Implementation-Version` = `0.5.3`, from `install/release/package/sig/build-16/`) |
+| Captured | 2026-05-30 (build-16); prior baselines build-15 (0.5.2), build-14 (0.5.1) and build-13 (0.5.0) |
+| `Assets.zip` mtime | 2026-05-30 11:48 (build-16; was 2026-05-27 22:08 on build-15) |
+| `Assets.zip` size | 3,428,506,917 bytes (~3.4 GB; build-15 was 3,428,485,136 — Server-side delta only) |
+| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `de2366d85f4ffc97b475788992d1dc798d94f649e4e020a1372394ce5b318563` — Common assets content **unchanged** from build-15 (set-identical; only the index's internal line ordering changed, so the raw sha differs from build-15's `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79`) |
 
 `CommonAssetsIndex.hashes` is Hytale's own per-asset SHA-256 index (paths are
 relative to `Common/`), copied verbatim from the extracted assets. It is the

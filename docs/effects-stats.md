@@ -7,7 +7,7 @@ seo:
 
 # Effects & Stats Reference
 
-**Doc type:** JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.2**
+**Doc type:** JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.3**
 
 This document covers the JSON asset structure for status effects and entity stats.
 

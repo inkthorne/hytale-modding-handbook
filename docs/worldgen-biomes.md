@@ -7,7 +7,7 @@ seo:
 
 # Biome System
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.2**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.3**
 
 A biome is a node-graph file under `Server/HytaleGenerator/Biomes/`. It defines the
 terrain heightfield, the materials that fill solid and empty space, optional scattered

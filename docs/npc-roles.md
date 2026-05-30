@@ -458,7 +458,8 @@ A node's `Sensor` is an object with a `Type`. Sensors can be composed with `And`
 | `Leash` | Distance from home exceeds `Range` |
 | `Time` | Time of day within `Period` |
 | `Block` / `DroppedItem` | Nearby block set or dropped items |
-| `Beacon` / `Alarm` / `Timer` | Flock beacons, alarms, named timers |
+| `Beacon` / `Alarm` / `Timer` | Flock beacons, alarms, named timers (see [Alarms](#alarms-setalarm--alarm)) |
+| `Flag` | Tests a per-NPC boolean (see [Flags](#flags-setflag--flag)) |
 
 ### Actions
 
@@ -468,10 +469,11 @@ Each entry in `Actions` is an object whose `Type` is the action. Common action t
 |-------------|-------------|
 | `State` | Change AI state (`{ "Type": "State", "State": "Alerted" }`) |
 | `PlayAnimation` | Trigger an animation in a slot |
-| `Attack` | Execute the configured attack |
+| `Attack` | Execute the configured attack (params + behavior in [The `Attack` action](#the-attack-action)) |
 | `JoinFlock` | Join a nearby flock |
 | `Timeout` | Wait for a `Delay` (optionally run a nested `Action`) |
-| `SetAlarm` / `TimerStart` | Schedule alarms and timers |
+| `SetAlarm` / `TimerStart` | Schedule alarms and timers (see [Alarms](#alarms-setalarm--alarm)) |
+| `SetFlag` | Write a per-NPC boolean (see [Flags](#flags-setflag--flag)) |
 | `OverrideAttitude` | Temporarily change attitude toward a target |
 | `Nothing` | No-op |
 
@@ -623,6 +625,69 @@ For the unbounded (no `ExecuteFor`) form, give the Random node a `Name` and have
 ```
 
 Vanilla reference: `Server/NPC/Roles/_Core/Tests/Test_Random_Instruction.json` (both forms); production usage in `_Core/Templates/Template_{Livestock,Predator,Animal_Neutral,Intelligent}.json` and the reusable `_Core/Components/Steps/Component_Instruction_Combat_*.json` steps.
+
+### The `Attack` action
+
+The `Attack` action (`com.hypixel.hytale.server.npc.corecomponents.combat.ActionAttack`, builder `…combat.builders.BuilderActionAttack`) fires a configured attack interaction. It is the action behind the `Attack` row in the [Actions table](#actions), and is the swing in the [melee-without-a-CAE](#melee-attacks-without-a-cae) path.
+
+JSON params (from `BuilderActionAttack`):
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `Attack` | string | Attack interaction id (e.g. `Root_NPC_Attack_Melee`). Defaults to the role's top-level `Attack` field if omitted. |
+| `AttackType` | enum | `Primary` (default) / `Secondary` / `Ability1` / `Ability2` / `Ability3` (`ActionAttack$AttackType`). |
+| `AttackPauseRange` | `[min, max]` | Pause **between** attacks — a throttle, in seconds. **Number array, not strings.** |
+| `AimingTimeRange` | `[min, max]` | How long to aim before striking, in seconds. Number array. |
+| `ChargeFor` / `ChargeDistance` | number | Charge-attack windup / distance. |
+| `MeleeConeAngle` | number | Cone half-angle the target must be within. |
+| `CheckLineOfSight` / `AvoidFriendlyFire` / `DamageFriendlies` / `SkipAiming` / `BallisticMode` | bool | Targeting/aiming toggles. |
+| `InteractionVars` | object | Per-action var overrides for the fired interaction. |
+
+**Behavior (from `ActionAttack.execute`):** the action is effectively **one-shot per completion**. While aiming or not yet on target it returns "not done" — keeping a [blocking action list](#actionlist-blocking-semantics-multi-tick-sequences) parked on it — and once on target it triggers the attack interaction **once** and returns done. `AttackPauseRange` throttles the gap *between* attacks; it is **not** a blocking wait baked into a single call (so `[0, 0]` is fine when re-entry is gated externally).
+
+```json
+{ "Type": "Attack", "Attack": { "Compute": "Attack" }, "AttackPauseRange": [ 1, 2 ] }
+```
+
+Vanilla reference: the `Flee.Attack` retaliation in `Template_Animal_Neutral.json`.
+
+### Alarms (`SetAlarm` / `Alarm`)
+
+Alarms are named per-NPC timers. `SetAlarm` arms one; the `Alarm` sensor reads its state.
+
+- **`SetAlarm` action** (`…corecomponents.timer.ActionSetAlarm`): `{ "Type": "SetAlarm", "Name": "<alarm>", "DurationRange": [ "<ISO8601>", "<ISO8601>" ] }`. Re-arms unconditionally to *now + minDuration + random within range*.
+- **`Alarm` sensor** (`…corecomponents.timer.SensorAlarm`): `{ "Type": "Alarm", "Name": "<alarm>", "State": "Unset"|"Set"|"Passed", "Clear": false }`. States (enum `SensorAlarm$State`): **`Unset`** = never armed; **`Set`** = armed but not yet elapsed; **`Passed`** = armed and elapsed. Optional `"Clear": true` unsets the alarm when it matches a passed state.
+
+> **⚠️ Gotcha: `DurationRange` is an array of ISO-8601 duration *strings*, not numbers.** e.g. `["PT8S","PT14S"]` (seconds) or the vanilla produce alarm's `["PT18H","PT48H"]`; `["P0D","P0D"]` unsets. The builder's holder type is `TemporalAmount[]` — passing numbers (`[8, 14]`) fails to load with `Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`, and the **entire role then silently drops from the spawn list** (see [Gotchas](#gotchas--errors)). This is specific to alarm durations: number arrays *are* correct for `Timeout.Delay`, `AttackPauseRange`, `AimingTimeRange`, `ExecuteFor`, and `TimerStart` ranges.
+
+**Spawn-init idiom** — run an action exactly once when an NPC spawns, by matching only the initial `Unset` state (mirrors `Template_Animal_Neutral`'s `Produce_Ready` alarm):
+
+```json
+{ "Sensor": { "Type": "Alarm", "Name": "X", "State": "Unset" },
+  "Actions": [ { "Type": "SetAlarm", "Name": "X", "DurationRange": [ "PT0S", "PT1S" ] } ] }
+```
+
+### Flags (`SetFlag` / `Flag`)
+
+Flags are per-NPC booleans. The `Flag` sensor tests one; the `SetFlag` action writes one.
+
+- **`Flag` sensor** (`…corecomponents.utility.SensorFlag`): `{ "Type": "Flag", "Name": "<flag>", "Set": true|false }` — tests the flag. Omitting `Set` tests for `true`.
+- **`SetFlag` action** (`…corecomponents.utility.ActionSetFlag`): `{ "Type": "SetFlag", "Name": "<flag>", "SetTo": true|false }` — writes the flag.
+
+> **⚠️ Asymmetric keys:** the sensor reads with **`Set`**, the action writes with **`SetTo`**. Easy to mix up.
+
+**Transition detection** — flags give you a clean "do X once when switching from mode A to mode B" without a full state machine: branch A raises a flag while active; branch B, on the tick it takes over, sees the flag still set, fires one action, and clears it. Vanilla refs: `_Core/Tests/Test_Flags.json` (toggles a flag on each `Damage`), `Template_Predator.json`, `Component_Instruction_Combat_Flock_Take_Turns.json`.
+
+> **Note:** `SetFlag` also appears in [the world/interaction docs](world.md) as a different surface (world/block flags); the NPC-role flag sensor/action documented here are the `corecomponents.utility` pair.
+
+### `ActionList` blocking semantics (multi-tick sequences)
+
+When an instruction node sets **`"ActionsBlocking": true`** (`com.hypixel.hytale.server.npc.instructions.ActionList`):
+
+- The action list becomes a **stateful sequence that spans ticks**: it keeps an `actionIndex`, executes `actions[actionIndex]`, and **advances only when an action returns `true`** (done). An action returning `false` parks the list on it. The list reports itself done only when the last action completes.
+- **Non-blocking** (`ActionsBlocking` absent/false): it fires **all** actions every tick — no index, no advancement.
+
+So a blocking `[PlayAnimation, Timeout 0.6, Attack, PlayAnimation, SetFlag]` runs **in order across ticks**: the `Timeout` parks the list while it counts, the [`Attack`](#the-attack-action) parks it while aiming then strikes once, and the trailing cleanup/flag-clear actions run exactly once at the end. This is the standard shape for composing windup → attack → cleanup.
 
 ---
 
@@ -912,9 +977,71 @@ Server/NPC/Spawn/Beacons/
 
 ---
 
+## Melee attacks without a CAE
+
+Hytale has **two** NPC melee paths, and the choice matters:
+
+- The **[CAE](#combat-action-evaluator-cae)** path (`_CombatConfig: CAE_…`, with `Ability` assets) — for intelligent, multi-ability combatants like Goblins.
+- A far lighter **interaction-var chain** that vanilla animals use (livestock, undead chicken) — no CAE, no `Ability` assets, just a single scripted swing on an otherwise non-combat creature. This is what the rest of this section documents.
+
+To give a creature the lightweight melee:
+
+- Set a role field **`"Attack": "<RootInteraction>"`** (e.g. `Root_NPC_Attack_Melee`) — also settable inline on the `Attack` action.
+- Run a **[`Type: "Attack"` action](#the-attack-action)** inside the role's `Instructions` (typically inside an [`ActionsBlocking`](#actionlist-blocking-semantics-multi-tick-sequences) windup sequence) to perform the swing.
+- Customize damage / animation / hit-geometry purely by overriding **named interaction vars** under the role's top-level **`InteractionVars`** (next subsection) — no CAE.
+
+Neutral animals ship with this machinery **off by default**: `Template_Animal_Neutral` exposes `Attack` (default `""`) and `AttackWhenStartled` (default `false`) and has a dormant "startled" retaliation in its `Flee` state. Set `AttackWhenStartled: true` plus an `Attack` interaction to enable it. The cleanest "give a creature a bite" exemplar is `Server/NPC/Roles/Undead/Chicken_Undead.json` (a `Template_Predator` variant that sets `"Attack": "Root_NPC_Attack_Melee"` and overrides the start anim + damage). The instruction pattern itself lives in `Template_Predator.json`: a target-in-`AttackDistance` + line-of-sight gate, `HeadMotion: Aim`, `ActionsBlocking`, then `Timeout (pre-delay) → Attack → Timeout (post-delay)`.
+
+### The interaction-var chain
+
+`Attack: "Root_NPC_Attack_Melee"` walks a chain of interactions (under `Server/Item/…/NPCs/`), each of which `Replace`s a **named var** with a default you can override at the role level:
+
+| Interaction | Sets var | Default | Overriding it customizes |
+|---|---|---|---|
+| `RootInteractions/NPCs/Root_NPC_Attack_Melee` | `Melee_Start` | `NPC_Attack_Melee_Simple` | the whole start (anim set + timing) |
+| `Interactions/NPCs/NPC_Attack_Melee_Simple` | `Melee_Selector` | `NPC_Attack_Selector_Left` | the **hit geometry** (see below) |
+| `Interactions/NPCs/NPC_Attack_Selector_Left` (`HitEntity`) | `Melee_Damage` | `NPC_Attack_Melee_Damage` | **damage + DamageEffects** |
+| `Interactions/NPCs/NPC_Attack_Melee_Damage` | — (`Parent: DamageEntityParent`) | — | base: `DamageCalculator` (Physical 5) + `DamageEffects` (knockback, `WorldSoundEventId`, `WorldParticles`) |
+
+A role overrides any link by declaring the var under top-level **`InteractionVars`**. The selector's `HitEntity` does `{"Type":"Replace","Var":"Melee_Damage","DefaultValue":{…}}`, so a role-level `Melee_Damage` wins (vanilla `Chicken_Undead` notes in its override: *"When NPC overrides the InteractionVars, this info in Template not applicable anymore"*). Example — lighten the bite to 2 physical, keep the default start/selector:
+
+```json
+"InteractionVars": {
+  "Melee_Damage": {
+    "Interactions": [
+      { "Parent": "NPC_Attack_Melee_Damage",
+        "DamageCalculator": { "Type": "Absolute", "BaseDamage": { "Physical": 2 }, "RandomPercentageModifier": 0.1 } }
+    ]
+  }
+}
+```
+
+> This `Replace` / `Var` / `DefaultValue` override-by-name mechanism is general to interactions — see [Interactions](interactions.md). The damage interaction itself is documented in [Combat](combat.md).
+
+### Melee hits are directional swept arcs — NPCs can miss
+
+`NPC_Attack_Selector_Left.json` is a `Type: Selector` whose geometry is a **humanoid sword-swing arc**:
+
+```json
+"Selector": {
+  "Id": "Horizontal", "Direction": "ToLeft", "TestLineOfSight": true,
+  "ExtendTop": 0.5, "ExtendBottom": 0.5, "StartDistance": 0.1, "EndDistance": 3.5,
+  "Length": 30, "RollOffset": 0, "YawStartOffset": -15
+}
+```
+
+It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough (that turns the head, not the body). It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
+
+So "why does my NPC sometimes not connect?" has a real mechanical answer: melee is a swept directional hitbox, not a homing hit. Two fixes:
+
+- **Rotate the body onto the target before the swing.** Add a `Seek` body-motion + a longer windup (`Timeout`) so the NPC turns onto the target *before* `Attack` fires. (Coming out of a circling/orbit motion an NPC faces its *tangential* heading ~90° off the target; turning ~90° took ≈0.6 s of windup in testing — 0.35 s under-rotated and missed.)
+- **Widen the arc.** Override `Melee_Selector` with a larger `Length`, a forward-centered `YawStartOffset`, and bigger `ExtendTop`/`ExtendBottom`.
+
+---
+
 ## Combat Action Evaluator (CAE)
 
-The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the Goblin Scrapper variant above).
+The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the Goblin Scrapper variant above). For the lighter, non-CAE animal melee path, see [Melee attacks without a CAE](#melee-attacks-without-a-cae).
 
 ### CAE Structure
 
@@ -1052,5 +1179,8 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`No such state for combat evaluator`** → a CAE `ActionSets`/`SubState` references a state that the role does not define. Fix: every CAE state/sub-state must correspond to a state used by the role's `Instructions`.
 - **Symptom:** a `Variant` ignores its `Reference` template's values → the `Reference` short name didn't resolve, or you put `{Value, Description}` objects in `Modify`. Fix: reference the template by its exact short name, and in `Modify` use plain values (the `{Value, Description}` form belongs only in a template's `Parameters` block).
 - **Symptom:** a `Compute` expression evaluates to nothing/default → the named parameter isn't declared in any `Parameters` block up the template chain. Fix: declare the parameter (in the template or an overriding variant `Parameters` block) before reading it with `{ "Compute": "..." }`.
+- **Symptom:** a role silently never registers (absent from the spawn list) after an edit → **any** load error drops the whole role, not just the offending field. The [`Variant`-with-`Instructions`](#variants) case is one instance; another common one is passing a number array to an alarm `DurationRange` (`Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`; see [Alarms](#alarms-setalarm--alarm)). Fix: check the server log for the load error and correct that field.
+- **`Reloading nonexistent role %s!`** (logged at `SEVERE` with an `[NPC|P]` prefix, every tick — from `RoleBuilderSystem`) → a saved-world entity references a role that failed to load **or was renamed**, and persists in the save spamming the log. Fix: remove/replace the stale entities, or restore the old role name.
+- **`Unknown JSON attribute '%s' found in %s: %s (JSON: %s)`** (WARN, non-fatal — from `BuilderBase`) → a custom/`$`-prefixed key other than the exact `$Comment` (e.g. `$Comment_Foo`); the second `%s` is the construct, e.g. `Role|Generic`. Only `$Comment` is whitelisted by the role parser, and you can't have two `$Comment`s at one object level (duplicate JSON key). Fix: consolidate prose into a single `$Comment`.
 
 ---

@@ -651,7 +651,7 @@ public class HitNotificationSystem extends DamageEventSystem {
 
 Damage interactions can grant stats to the attacker when they successfully hit an entity. This is configured via the `EntityStatsOnHit` property in damage interaction JSON files.
 
-> **See also:** [DamageEntity Interaction](interactions-combat.md#damageentity) for the complete structure including damage effects and target selectors.
+> **See also:** [DamageEntity Interaction](interactions-combat.md#damageentity) for the complete structure including damage effects and target selectors. For how **NPCs** deal melee damage without a CAE — the `Root_NPC_Attack_Melee` interaction-var chain (`Melee_Start` → `Melee_Selector` → `Melee_Damage`) and its directional swept-arc selector — see [Melee attacks without a CAE](npc-roles.md#melee-attacks-without-a-cae).
 
 **File locations:** `Server/Item/Interactions/Weapons/{WeaponType}/Primary/*_Damage.json`
 

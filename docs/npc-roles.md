@@ -575,7 +575,7 @@ A state change calls `clearOnce()`, which nulls `current` (forcing a re-roll nex
 
 #### Timed switch example
 
-`Inkwell_Chicken_Annoying` alternates every 5–12 s between orbiting the nearest player and wandering. The orbit branch is wrapped in `"Sensor": { "Type": "Any" }` with a nested fallthrough so it **wanders instead of freezing** when no player is in range (consequence #2 above):
+This role alternates every 5–12 s between orbiting the nearest player and wandering. The orbit branch is wrapped in `"Sensor": { "Type": "Any" }` with a nested fallthrough so it **wanders instead of freezing** when no player is in range (consequence #2 above). (`Orbit` here is a custom `BodyMotion` the plugin registers — see [Registering custom core components](#registering-custom-core-components-java); for stock-only content, swap in a vanilla motion.)
 
 ```json
 "Instructions": [
@@ -590,7 +590,7 @@ A state change calls `clearOnce()`, which nulls `current` (forcing a re-roll nex
         "Instructions": [
           {
             "Sensor": { "Type": "Player", "Range": 30, "LockOnTarget": true },
-            "BodyMotion": { "Type": "Inkwell_Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 }
+            "BodyMotion": { "Type": "Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 }
           },
           {
             "Sensor": { "Type": "Any" },
@@ -608,7 +608,7 @@ A state change calls `clearOnce()`, which nulls `current` (forcing a re-roll nex
 ]
 ```
 
-`Inkwell_Orbit` is a custom `BodyMotion` (see [Registering custom core components](#registering-custom-core-components-java)); for stock-only content swap in a vanilla motion — vanilla `Test_Random_Instruction.json` cycles `WanderInCircle` vs `Nothing` the same way.
+For a stock-only equivalent, vanilla `Test_Random_Instruction.json` cycles `WanderInCircle` vs `Nothing` the same way.
 
 #### Forcing a re-roll: `Name` + `ResetInstructions`
 
@@ -709,7 +709,7 @@ public <T> NPCPlugin registerCoreComponentType(String typeName, Supplier<Builder
 A builder's `category()` decides which slot its `Type` is usable in — `BuilderBodyMotionBase.category()` returns `BodyMotion.class`, so registering a `BuilderBodyMotionX` makes `"Type": "X"` valid in any `BodyMotion` slot. Register in your plugin's `setup()`:
 
 ```java
-NPCPlugin.get().registerCoreComponentType("Inkwell_Orbit", BuilderBodyMotionOrbit::new);
+NPCPlugin.get().registerCoreComponentType("Orbit", BuilderBodyMotionOrbit::new);
 ```
 
 No manifest `Dependencies` entry is needed — the NPC plugin is core and always loads first (and a wrong `group:name` would only *break* your load).
@@ -780,14 +780,14 @@ A `Variant` cannot carry `Instructions` (see the [Variants gotcha](#variants)). 
   "Parameters": { "MaxHealth": { "Value": 12, "Description": "..." } },
   "Instructions": [
     { "Sensor": { "Type": "Player", "Range": 30, "LockOnTarget": true },
-      "BodyMotion": { "Type": "Inkwell_Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 } },
+      "BodyMotion": { "Type": "Orbit", "Radius": 2.5, "RelativeSpeed": 0.95 } },
     { "Sensor": { "Type": "Any" }, "BodyMotion": { "Type": "WanderInCircle", "Radius": 6, "RelativeSpeed": 0.25 } }
   ],
   "NameTranslationKey": "server.npcRoles.Foo.name"
 }
 ```
 
-The role id is the **filename without `.json`**. `"Appearance": "Chicken"` reuses a vanilla model by its *referenced* (unprefixed) id. A `BodyMotion`'s `RelativeSpeed` (0..1) scales against the controller's `MaxWalkSpeed`. The first node here uses a custom `Inkwell_Orbit` motion registered via `registerCoreComponentType`; the second is a vanilla fallback.
+The role id is the **filename without `.json`**. `"Appearance": "Chicken"` reuses a vanilla model by its *referenced* (unprefixed) id. A `BodyMotion`'s `RelativeSpeed` (0..1) scales against the controller's `MaxWalkSpeed`. The first node here uses a custom `Orbit` motion registered via `registerCoreComponentType` (see above); the second is a vanilla fallback.
 
 ---
 

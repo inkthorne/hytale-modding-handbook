@@ -706,7 +706,7 @@ public <T> NPCPlugin registerCoreComponentType(String typeName, Supplier<Builder
 //   _INSTRUCTION / _TRANSIENT_PATH / _ACTION_LIST
 ```
 
-A builder's `category()` decides which slot its `Type` is usable in — `BuilderBodyMotionBase.category()` returns `BodyMotion.class`, so registering a `BuilderBodyMotionX` makes `"Type": "X"` valid in any `BodyMotion` slot. Register in your plugin's `setup()`:
+A builder's `category()` decides which slot its `Type` is usable in — `BuilderBodyMotionBase.category()` returns `BodyMotion.class`, so registering a `BuilderBodyMotionX` makes `"Type": "X"` valid in any `BodyMotion` slot. **Sensors and actions register exactly the same way** — only the builder base class (and thus its `category()`) differs. Register in your plugin's `setup()`:
 
 ```java
 NPCPlugin.get().registerCoreComponentType("Orbit", BuilderBodyMotionOrbit::new);
@@ -788,6 +788,39 @@ A `Variant` cannot carry `Instructions` (see the [Variants gotcha](#variants)). 
 ```
 
 The role id is the **filename without `.json`**. `"Appearance": "Chicken"` reuses a vanilla model by its *referenced* (unprefixed) id. A `BodyMotion`'s `RelativeSpeed` (0..1) scales against the controller's `MaxWalkSpeed`. The first node here uses a custom `Orbit` motion registered via `registerCoreComponentType` (see above); the second is a vanilla fallback.
+
+### Registering a custom sensor
+
+Sensors register through the same `registerCoreComponentType` call as body motions — the builder's `category()` routes the `Type` to the `Sensor` slot instead. The runtime side extends `SensorBase` (`com.hypixel.hytale.server.npc.corecomponents.SensorBase`) and implements `matches` — return `true` when the gate condition holds:
+
+```java
+// com.hypixel.hytale.server.npc.corecomponents.SensorBase
+public boolean matches(Ref<EntityStore> self, Role role, double dt, Store<EntityStore> store) {
+    // true only for the one flock member that currently holds the attack token
+    return holdsAttackToken(self, store);
+}
+```
+
+`SensorBase` also exposes `getSensorInfo()`, which supplies the target the paired `BodyMotion`/`Action` acts on (see [Sensor → BodyMotion target hand-off](#sensor--bodymotion-target-hand-off)). A **pure gate** sensor — one that only decides yes/no and provides no target of its own — may return `null` from `getSensorInfo()`; pair it with a target-producing sensor (`Player`, `Target`) via `And` so the node still acquires a target:
+
+```json
+{ "Type": "And", "Sensors": [
+  { "Type": "Player", "Range": 4, "LockOnTarget": true },
+  { "Type": "MyMod_FlockAttackToken" }
+] }
+```
+
+The builder extends `BuilderSensorBase` (`com.hypixel.hytale.server.npc.corecomponents.builders.BuilderSensorBase`) and overrides `readConfig(JsonElement)`, `build(BuilderSupport)`, and the description methods. `category()` is inherited from `BuilderSensorBase` and already returns the `Sensor` slot, so you do not override it.
+
+> **⚠️ FATAL TRAP — do NOT call `readCommonConfig(element)` from your `readConfig`.** The framework already applies the common `Enabled` / `Once` sensor config itself; calling `readCommonConfig` again **double-registers** those attributes and the role fails to load with terse errors like `FAIL: <role>.json: Once` and `FAIL: ... Enabled`, followed by `Reloading nonexistent role ...` spam. The engine's own flock-leader sensor builder, `BuilderSensorFlockLeader` (note: under `com.hypixel.hytale.server.flock.corecomponents.builders`, **not** `server.npc`), does **not** call it — its `readConfig` simply returns `this`. Yours should too: read only your own keys, then `return this`.
+
+Register it in `setup()` exactly like a body motion — the builder's `category()` routes it to the Sensor slot:
+
+```java
+NPCPlugin.get().registerCoreComponentType("MyMod_FlockAttackToken", BuilderMyTokenSensor::new);
+```
+
+> **Note: track NPC identity with `UUIDComponent`, not a raw `Ref`.** A `Ref<EntityStore>` is a reused `(store, index)` handle with **no stable identity across ticks**. To remember which flock member held the token last tick, read `UUIDComponent.getUuid()` (`com.hypixel.hytale.server.core.entity.UUIDComponent`) and key your bookkeeping on the returned `UUID`.
 
 ---
 
@@ -977,6 +1010,82 @@ Server/NPC/Spawn/Beacons/
 
 ---
 
+## Testing roles in-game
+
+The `com.hypixel.hytale.server.npc.commands` package provides console commands for spawning, removing, and debugging NPCs while iterating on a role. (For the broader command system see [commands.md](commands.md).)
+
+### Spawning NPCs (`/npc spawn`)
+
+```
+/npc spawn <role> [options]
+```
+
+Main options (`NPCSpawnCommand`):
+
+| Option | Meaning |
+| --- | --- |
+| `--count` | How many times to run the spawn loop (int, default `0`). |
+| `--flock` | Flock size (int) **or** a flock-asset id. Spawns a whole flock per loop iteration. |
+| `--radius` | Scatter radius for the spawned group. |
+| `--speed` | Movement-speed override. |
+| `--scale` | Body scale. |
+| `--position` | Explicit spawn position. |
+| `--posOffset` | Offset from the resolved position. |
+| `--headRotation` / `--bodyRotation` | Initial head / body yaw. |
+| `--frozen` | Spawn frozen (no AI ticking). |
+| `--spawnOnGround` | Snap to the ground. |
+| `--randomModel` | Pick a random model variant. |
+| `--randomRotation` | Randomize facing. |
+| `--bypassScaleLimits` | Allow scales outside the normal clamp. |
+| `--test` | Test-spawn mode. |
+
+> **Note: `--count` and `--flock` multiply.** The command runs the spawn loop `count` times, and each iteration spawns a whole flock of `--flock` members. So `--count=1 --flock=5` is one pack of 5, while `--count=5 --flock=5` is **25** NPCs (five packs of 5). (Confirmed in-game.)
+
+> **⚠️ Flock membership is wired only at spawn / world-gen time** by `com.hypixel.hytale.server.flock.FlockMembershipSystems`. NPCs placed by hand, via the entity menu, or via `/npc spawn` **without** `--flock` do **not** auto-form a flock — they have no `FlockMembership` component (`com.hypixel.hytale.server.flock.FlockMembership`, with `getFlockId()`). To exercise *any* flock behavior (beacons such as `Message_Attack`, take-turns, etc.) you **must** spawn with `--flock=N`.
+
+> **Note:** Group filters can resolve the dynamic token `$self` ("any NPC sharing my role") against the spawned flock. `Server/NPC/Groups/Self.json` is exactly `{"IncludeRoles":["$self"]}` — the take-turns and flock filters reference it.
+
+### Removing NPCs
+
+None of the built-in removal commands filter by role or type:
+
+| Command | Effect |
+| --- | --- |
+| `/npc clean` (`NPCCleanCommand`) | Removes **all** NPCs. |
+| `/entity clean` | Removes **all** entities. |
+| `/entity remove [--others]` | Removes the looked-at entity, or with `--others` removes everything *except* it. |
+| `/kill` | Affects **players only**. |
+
+There is no built-in "kill all of role X." To remove NPCs by role you need a plugin command — see [bulk entity operations in commands.md](commands.md#example-bulk-entity-operations).
+
+### Debug overlay (`/npc debug`)
+
+`/npc debug` drives the role debug overlay (backed by `RoleDebugFlags`, via `NPCDebugCommand`) on the selected / looked-at NPC(s):
+
+```
+/npc debug <set|toggle|show|clear|presets|defaults> "<Flag,Flag,...>"
+```
+
+- `set` **replaces** the current flag set; `toggle` **adds** to it.
+- `show` / `clear` / `defaults` display, clear, or reset the flags; `presets` lists every available flag.
+
+The comma-separated flag list **must be quoted** — e.g. `/npc debug set "DisplayState,DisplayFlock"` — see [Argument syntax](commands.md#argument-syntax-input-format).
+
+Genuinely useful flags (all from `RoleDebugFlags`):
+
+| Flag | Shows |
+| --- | --- |
+| `DisplayState` | The NPC's current role state. |
+| `DisplayFlock` | Flock id / membership. |
+| `DisplayTarget` | The current target. |
+| `VisMarkedTargets` | Marked targets, visualized. |
+| `VisSensorRanges` | Sensor detection ranges. |
+| `VisSeparation` | Flock separation steering. |
+| `TraceSensorFailures` | Why sensors are *not* matching. |
+| `Flock` | General flock-coordination tracing. |
+
+---
+
 ## Melee attacks without a CAE
 
 Hytale has **two** NPC melee paths, and the choice matters:
@@ -1036,6 +1145,22 @@ So "why does my NPC sometimes not connect?" has a real mechanical answer: melee 
 
 - **Rotate the body onto the target before the swing.** Add a `Seek` body-motion + a longer windup (`Timeout`) so the NPC turns onto the target *before* `Attack` fires. (Coming out of a circling/orbit motion an NPC faces its *tangential* heading ~90° off the target; turning ~90° took ≈0.6 s of windup in testing — 0.35 s under-rotated and missed.)
 - **Widen the arc.** Override `Melee_Selector` with a larger `Length`, a forward-centered `YawStartOffset`, and bigger `ExtendTop`/`ExtendBottom`.
+
+### Serializing a flock swarm — native take-turns can't hard-gate it
+
+The flock "take-turns" pattern (`Component_Instruction_Combat_Flock_Take_Turns`) passes an attack "baton" via flock beacons (`Message_Attack`) carrying a `Retreat` flag and a turn timer. But it only *influences positioning* — it does **not** hard-gate the attack:
+
+- `Template_Predator`'s combat-attack instruction is gated only on "target within `AttackDistance` + line-of-sight." It does **not** check the take-turns `Retreat` flag.
+- So `Component_Instruction_Combat_Flock_Take_Turns` only *moves* non-attackers out toward the combat-turn distance; any member still in range still swings. Against a stationary, surrounded player you therefore get **multiple simultaneous attackers** regardless.
+- `CombatTurnAttackWeight` is a **percent chance to attack per turn** (per its own parameter description), **not** a count of attackers — despite some field descriptions miscalling it a count.
+
+To truly serialize a swarm down to one attacker, gate the **attack decision itself** in a custom `Type: "Generic"` role (a `Variant`'s `Modify` cannot carry `Instructions` — see the [Variants gotcha](#variants)) on a shared signal. The cleanest signal is a [custom token sensor](#registering-a-custom-sensor) that is true for exactly one flock member at a time: gate the attack branch via `And[Player, <token>]`, and let non-holders fall through to a `MaintainDistance` hold branch.
+
+Practical combat-role lessons (all confirmed in-game):
+
+- **Gate the attack on actual bite/attack range, not just on "it's my turn."** Otherwise the turn-holder swings at air while still out of range and wastes its turn — add an inner short-range `Player` gate so it approaches first.
+- **Hold position through the swing before transitioning** (e.g. to a retreat). A [`Type: "Attack"` action](#the-attack-action) only *starts* the interaction chain; damage lands partway through it. Use an [`ActionsBlocking`](#actionlist-blocking-semantics-multi-tick-sequences) sequence like `[Attack, Timeout ~0.45s, <transition>]` to stay in range and facing until the hit lands — otherwise the NPC moves away mid-swing and whiffs.
+- **For one action per turn, prefer a per-NPC [`Flag`](#flags-setflag--flag)** (`SetFlag` / `Flag`) over relying on an attack-pause cooldown, especially when you also want to change behavior *after* the action.
 
 ---
 
@@ -1182,5 +1307,6 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **Symptom:** a role silently never registers (absent from the spawn list) after an edit → **any** load error drops the whole role, not just the offending field. The [`Variant`-with-`Instructions`](#variants) case is one instance; another common one is passing a number array to an alarm `DurationRange` (`Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`; see [Alarms](#alarms-setalarm--alarm)). Fix: check the server log for the load error and correct that field.
 - **`Reloading nonexistent role %s!`** (logged at `SEVERE` with an `[NPC|P]` prefix, every tick — from `RoleBuilderSystem`) → a saved-world entity references a role that failed to load **or was renamed**, and persists in the save spamming the log. Fix: remove/replace the stale entities, or restore the old role name.
 - **`Unknown JSON attribute '%s' found in %s: %s (JSON: %s)`** (WARN, non-fatal — from `BuilderBase`) → a custom/`$`-prefixed key other than the exact `$Comment` (e.g. `$Comment_Foo`); the second `%s` is the construct, e.g. `Role|Generic`. Only `$Comment` is whitelisted by the role parser, and you can't have two `$Comment`s at one object level (duplicate JSON key). Fix: consolidate prose into a single `$Comment`.
+- **Symptom:** a role with a `$Comment` inside a `Variant`'s `Modify` / `Parameters` block fails to load (FATAL) with `java.lang.IllegalStateException: Parameter $Comment does not exist or is private`, then vanishes from the spawn list (with the `Reloading nonexistent role` spam above). There, every key under `Modify` is treated as a **role parameter to set**, and `$Comment` isn't one. A `Generic` role's *top level* and its `Instructions` **do** accept `$Comment`. Fix: comment freely in `Generic` roles; keep `Variant`s comment-free and put the explanation in your docs.
 
 ---

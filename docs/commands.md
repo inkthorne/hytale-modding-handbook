@@ -72,6 +72,32 @@ ArgumentType<D> (abstract)
 ArgTypes (factory for built-in argument types)
 ```
 
+## Argument syntax (input format)
+
+How the parser reads the text **after** the command name. These rules come from
+the parser in `com.hypixel.hytale.server.core.command.system` and the errors it
+emits at runtime — they apply to every command, built-in or plugin:
+
+- **Required arguments are positional** — the bare value, in declared order:
+  `/npc spawn <role>`.
+- **Optional valued arguments are `--name=value`** (e.g. `--count=5`).
+- **Boolean flags are a bare `--name`** with no value (e.g. `--frozen`).
+- **Quote any value containing a space** with `"` or `'`.
+- **A bare comma is a list separator** (and `[ ]` delimit a list). A value that
+  itself contains commas must be **quoted** so it isn't split into a list —
+  e.g. `/npc debug set "DisplayState,DisplayFlock"`. Unquoted, the server
+  rejects it with *"you have specified a list of argument values for an argument
+  that does not accept a list."*
+
+Two common mistakes:
+
+- Passing an optional as a bare `name value` pair (no `--` / `=`) makes those
+  tokens count as **positional** arguments, giving *"the wrong number of
+  required argument was specified."*
+- **Parse errors are sent to the caller's chat, not the server log.** The log
+  only records the echo (`[CommandManager] <user> executed command: <text>`), so
+  when a command "errors," read the on-screen message — the log won't show why.
+
 ## AbstractPlayerCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
 
@@ -292,6 +318,56 @@ protected abstract void execute(
 );
 ```
 
+### Example: bulk entity operations
+
+A world command receives the `Store`, which is the entry point for iterating and
+mutating entities in bulk — for example a "remove every NPC of a given role"
+command. (The engine ships `/npc clean`, which removes *all* NPCs, but nothing
+that filters by role.)
+
+```java
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractWorldCommand;
+import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
+import com.hypixel.hytale.server.npc.entities.NPCEntity;
+import com.hypixel.hytale.component.RemoveReason;
+
+public class KillRoleCommand extends AbstractWorldCommand {
+    private final Argument<String, String> roleArg;
+
+    public KillRoleCommand() {
+        super("killrole", "Remove every NPC of the given role");
+        roleArg = withRequiredArg("role", "Role name", ArgTypes.STRING);
+        setPermissionGroups(new String[]{ "hytale:ServerEditor" });
+    }
+
+    @Override
+    protected void execute(CommandContext ctx, World world, Store<EntityStore> store) {
+        String target = ctx.get(roleArg);
+        store.forEachEntityParallel(NPCEntity.getComponentType(), (index, chunk, buffer) -> {
+            NPCEntity npc = (NPCEntity) chunk.getComponent(index, NPCEntity.getComponentType());
+            if (npc != null && target.equals(npc.getRoleName())) {
+                buffer.removeEntity(chunk.getReferenceTo(index), RemoveReason.REMOVE);
+            }
+        });
+    }
+}
+```
+
+Key points:
+
+- `store.forEachEntityParallel(componentType, consumer)` walks every entity that
+  has the given component, across archetype chunks in parallel. The consumer
+  (`com.hypixel.hytale.function.consumer.IntBiObjectConsumer`) receives
+  `(int index, ArchetypeChunk, CommandBuffer)`.
+- Inside it, read a component with `chunk.getComponent(index, type)` (it returns
+  a `ComponentAccessor` — cast to the concrete component, which implements that
+  interface), and get the entity's `Ref` with `chunk.getReferenceTo(index)`.
+- Queue structural edits on the `CommandBuffer`, which applies *after* the
+  iteration, so removing while iterating is safe:
+  `buffer.removeEntity(ref, RemoveReason.REMOVE)`. `RemoveReason`
+  (`com.hypixel.hytale.component`) is one of `REMOVE`, `UNLOAD`, or
+  `BUILDER_TOOLS_UNDO`.
+
 ---
 
 ## AbstractTargetPlayerCommand
@@ -336,6 +412,38 @@ public class KickCommand extends AbstractTargetPlayerCommand {
     }
 }
 ```
+
+---
+
+## Sub-commands (command collections)
+
+To group related sub-commands under one name — `/mytools killrole`,
+`/mytools count`, etc. — extend `AbstractCommandCollection` and register each child in the
+constructor with `addSubCommand(...)`. Children are ordinary commands (any
+`AbstractCommand` subclass), so a collection can even nest other collections.
+This is exactly how the engine builds its own `/npc ...` family.
+
+```java
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
+
+public class MyToolsCommand extends AbstractCommandCollection {
+    public MyToolsCommand() {
+        super("mytools", "Admin tools");
+        addSubCommand(new KillRoleCommand());   // -> /mytools killrole <role>
+        // addSubCommand(new CountCommand());   // -> /mytools count
+    }
+}
+```
+
+Register only the parent — its sub-commands come with it:
+
+```java
+getCommandRegistry().registerCommand(new MyToolsCommand());
+```
+
+`addSubCommand(AbstractCommand)` is public on `AbstractCommand`. Each sub-command
+needs a unique, non-empty name, and a given instance may only be added to **one**
+parent (see [Gotchas & Errors](#gotchas--errors)).
 
 ---
 

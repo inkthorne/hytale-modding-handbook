@@ -57,6 +57,23 @@ rm -rf ~/.cache/hytale-assets && unzip -q ~/.var/app/com.hypixel.HytaleLauncher/
 
 Then read assets directly from `~/.cache/hytale-assets/` (`Common/` holds blockymodel/blockyanim/UI formats). The cache lives outside the repo, so it is never committed. Re-run the command (~10s) if the install updates. **Do not** re-extract with `unzip -o` over an existing cache: `-o` only overwrites, so assets *removed or renamed* in the new build linger as stale files and silently mask dead/renamed asset references in the docs (this is why the command wipes first). Verify the cache mirrors the zip exactly: `find ~/.cache/hytale-assets -type f | wc -l` should equal `unzip -Z1 …/Assets.zip | grep -vc '/$'`.
 
+### Inspecting the server jar (cached)
+
+`HytaleServer.jar` is large, so exploring its API by launching `javap` per class is slow. `maintenance/scripts/build-jar-cache.sh` builds a greppable cache **once** (outside the repo, never committed — same convention as the assets cache):
+
+```bash
+./maintenance/scripts/build-jar-cache.sh           # signature index + decompiled source
+./maintenance/scripts/build-jar-cache.sh --no-src  # signature index only (fast)
+```
+
+It produces:
+- `~/.cache/hytale-jar/javap-index.txt` — `javap -p` signatures of **every** `com.hypixel.*` class, concatenated. Grep this instead of running `javap` per symbol: `grep -n 'registerCoreComponentType' ~/.cache/hytale-jar/javap-index.txt`.
+- `~/.cache/hytale-jar/src/` — decompiled `.java` for `com.hypixel.hytale.*`, for reading actual method bodies (e.g. *does* `BuilderSensorFlockLeader.readConfig` call `readCommonConfig`?). Grep/Read it like any source tree.
+
+The decompiler is resolved automatically: a `DECOMPILER_JAR` you point at, a `vineflower`/`cfr` on `PATH`, a previously-cached `~/.cache/hytale-jar-tools/cfr.jar`, or a one-time CFR download from Maven Central. If none is available the script still writes the signature index and skips `src/` with a note.
+
+Like the assets cache, the script **wipes the cache first** so classes removed/renamed in a new build don't linger and mask dead references — re-run it after a game update. (Direct `javap` against the jar still works for one-off lookups; the cache just makes broad sweeps cheap.)
+
 ## Verifying documentation
 
 The `docs/` were fact-checked against game **0.5.3** (Update 5 patch; build-16) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.3` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (0.5.3 is a further patch of Update 5: the `CommonAssetsIndex.hashes` index is set-identical in *content* to the 0.5.2/build-15 capture — only its internal line ordering changed — so format docs carry over unchanged; the full API surface re-passes `verify-docs.sh` against the 0.5.3 jar.) (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)

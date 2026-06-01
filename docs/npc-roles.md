@@ -1,6 +1,6 @@
 ---
 title: "NPC Roles"
-description: "Define Hytale NPC roles in JSON — abstract Template and concrete Variant roles, a Parameters/Compute system, attitude definitions between groups, and groups and flocks for spawning."
+description: "Define Hytale NPC roles in JSON — abstract Template and concrete Variant roles, a Parameters/Compute system, attitude definitions between groups, and groups and flocks for spawning, plus driving the engine flock and marked combat targets from Java at runtime."
 seo:
   type: TechArticle
 ---
@@ -452,7 +452,7 @@ A node's `Sensor` is an object with a `Type`. Sensors can be composed with `And`
 |-------------|-------------|
 | `State` | Matches a given AI state (`"State": "Idle"`) |
 | `Any` | Always matches (optionally `"Once": true`) |
-| `Target` | A valid target exists in range |
+| `Target` | A valid target exists in a [marked slot](#marked-targets-lockedtarget-and-the-target-sensor) within range (no line-of-sight required) |
 | `Damage` | Received damage (optionally `"Combat": true`) |
 | `Mob` | Other NPCs nearby (with `Filters`) |
 | `Leash` | Distance from home exceeds `Range` |
@@ -650,6 +650,36 @@ JSON params (from `BuilderActionAttack`):
 ```
 
 Vanilla reference: the `Flee.Attack` retaliation in `Template_Animal_Neutral.json`.
+
+### Marked targets (`LockedTarget`) and the `Target` sensor
+
+A role can be handed a combat target **directly** — including one it never sensed — by writing the target into a *marked-target slot* and reading that slot back with the `Target` sensor. This is the mechanism behind "one NPC aggros and the whole pack attacks you, even members that can't see you," but it's broadly useful any time you want to make an NPC attack a specific entity from code.
+
+**The slot.** Marked refs live on `MarkedEntitySupport` (`com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport`), reached via `NPCEntity.getRole().getMarkedEntitySupport()`. The default slot name is the constant `MarkedEntitySupport.DEFAULT_TARGET_SLOT`, whose value is `"LockedTarget"`.
+
+**Set it from Java:**
+
+```java
+Role role = npc.getRole();
+role.getMarkedEntitySupport().setMarkedEntity(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
+```
+
+`setMarkedEntity` has both `(String slot, Ref)` and `(int slot, Ref)` overloads; read a slot back with `getMarkedEntityRef(slot)`. There is also `flockSetTarget(slot, targetRef, store)`, which broadcasts the target across the marker's flock `EntityGroup` — convenient, but for *just-joined* members it is unreliable because the group is populated a tick late (see [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java)); setting it per-member is robust.
+
+**Set it from role JSON** — the `SetMarkedTarget` and `ReleaseTarget` actions (registered in `NPCPlugin`) are the JSON equivalents of set/clear:
+
+```json
+{ "Type": "SetMarkedTarget", "TargetSlot": "LockedTarget" }
+{ "Type": "ReleaseTarget",   "TargetSlot": "LockedTarget" }
+```
+
+**Read it back with the `Target` sensor** (`BuilderSensorTarget` → `SensorTarget`) rather than a fresh `Player`/`Mob` sense:
+
+```json
+{ "Type": "Target", "TargetSlot": "LockedTarget", "Range": 24 }
+```
+
+`SensorTarget` resolves the slot via `role.getMarkedEntitySupport().getMarkedEntityRef(slot)`, so it supplies the marked target's **position with no line-of-sight requirement** — a recruited NPC chases and attacks a target it never detected. `TargetSlot` defaults to `"LockedTarget"`; `Range` (default `Double.MAX_VALUE`) acts as a leash, so omit it for "any distance." Driving combat off the `Target` sensor (instead of re-sensing the player each tick) means "engaged" ≈ "has a `Target` within leash," and losing the target — the sensor stops matching — cleanly drives teardown.
 
 ### Alarms (`SetAlarm` / `Alarm`)
 
@@ -933,6 +963,76 @@ An optional `MaxGrowSize` caps how large a flock may grow over time:
 
 ---
 
+## Flocks at runtime (driving the engine flock from Java)
+
+The [Flocks](#flocks) configuration above is a **spawn-time** concept: membership is wired by `FlockMembershipSystems` at world-gen / spawn time, and NPCs placed by hand, via the entity menu, or via `/npc spawn` without `--flock` never auto-form a flock (see the [spawn-time note](#spawning-npcs-npc-spawn)). But a plugin can **build, grow, and tear down the same engine flock at runtime** — the basis for *emergent* packs, e.g. lone mobs that wander alone and rally into a pack when one of them aggros. Reusing the engine flock (rather than a hand-rolled grouping) gets you leader succession and cleanup for free, below.
+
+The APIs below are all static, plugin-callable methods under `com.hypixel.hytale.server.flock` (source: `com/hypixel/hytale/server/flock/`).
+
+### Creating a flock
+
+```java
+// FlockPlugin
+static Ref<EntityStore> createFlock(Store<EntityStore> store, Role role)                          // uses role.getFlockAllowedRoles()
+static Ref<EntityStore> createFlock(Store<EntityStore> store, @Nullable FlockAsset def, String[] allowedRoles)
+```
+
+`createFlock` is **synchronous**: it builds a holder with a `UUIDComponent`, an empty `EntityGroup`, and a `Flock(def, allowedRoles)`, then `store.addEntity(holder, AddReason.SPAWN)`. The returned flock entity has its `Flock` / `EntityGroup` / `UUIDComponent` immediately — it just has **no members yet**. A `null` `FlockAsset` means the default size cap (`PersistentFlockData.getMaxGrowSize()`, ≈ 8).
+
+### Recruiting members
+
+```java
+// FlockMembershipSystems
+static void    join(Ref<EntityStore> memberRef, Ref<EntityStore> flockRef, Store<EntityStore> store)
+static boolean canJoinFlock(Ref<EntityStore> memberRef, Ref<EntityStore> flockRef, Store<EntityStore> store)
+```
+
+`join` puts a `FlockMembership` (type `JOINING`) on the member. A **deferred** system — `FlockMembershipSystems.RefChange`, a `RefChangeSystem` — then adds the member to the flock's `EntityGroup`, promotes the first joiner to `LEADER` and the rest to `MEMBER`, and bumps `PersistentFlockData`. `canJoinFlock` returns `false` if the flock has no `PersistentFlockData`, if `EntityGroup.size() >= maxGrowSize`, or if the member's `NPCEntity.getRoleName()` isn't in the flock's allowed roles. Find candidates to recruit with a radius query — `Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` (see [interactions-combat.md](interactions-combat.md)).
+
+### Queries
+
+- `FlockPlugin.isFlockMember(ref, store)` — does this entity have a `FlockMembership`?
+- `FlockPlugin.getFlockReference(memberRef, accessor)` — the flock entity ref for a member.
+- `Flock.getFlockData()` → `PersistentFlockData.getMaxGrowSize()`; `EntityGroup.size()` / `isDissolved()` / `getLeaderRef()`; `FlockMembership.getMembershipType()` (`Type` ∈ `JOINING | MEMBER | LEADER | INTERIM_LEADER`).
+
+### Leaving and dissolving
+
+Remove a member's `FlockMembership` — `store.tryRemoveComponent(ref, FlockMembership.getComponentType())`, or the built-in `{ "Type": "LeaveFlock" }` action in role JSON. The same deferred `RefChange` system removes it from the group, **re-elects a leader if the leader left** (via `EntityGroup.testMembers`), and **deletes the flock entity once it drops below 2 members**.
+
+### Leader death is auto-handled
+
+On any flock member's death, `FlockDeathSystems.EntityDeath` removes its `FlockMembership` (unless `role.isCorpseStaysInFlock()`), which triggers leader re-election — `EntityGroup.testMembers(canBecomeLeader)`, gated on `Role.isCanLeadFlock()` — or dissolve. An `INTERIM_LEADER` state covers a leader being temporarily unavailable (e.g. its chunk is unloaded). **So reusing the engine flock gives you succession and cleanup for free** — a strong reason to prefer it over a custom grouping.
+
+Once a pack is formed, propagate the aggro target to every member (including ones that never sensed it) via [Marked targets](#marked-targets-lockedtarget-and-the-target-sensor); to serialize who actually swings, see [Serializing a flock swarm](#serializing-a-flock-swarm--native-take-turns-cant-hard-gate-it).
+
+### Gotcha — a brand-new flock reports 0 members for the rest of the tick
+
+Because `RefChange` is deferred, `createFlock` + `join` do **not** synchronously populate the flock's `EntityGroup`. Within the same tick:
+
+- `EntityGroup.size()` on a brand-new flock returns **0** even after you `join`ed members;
+- `canJoinFlock` (which checks `size() >= maxGrowSize`) sees 0 too.
+
+If you decide "is there already a flock for this target?" by member count, every freshly-created flock looks empty — so **every NPC that aggros on the same tick creates its own flock** and the pack overshoots. Fixes:
+
+- **Validate a flock by its `Flock` component, not member count:** `store.getComponent(flockRef, Flock.getComponentType()) != null && !entityGroup.isDissolved()`.
+- **Cap pack size with your own counter** (e.g. an `AtomicInteger` in your registry), since the engine's count lags a tick.
+- **Get-or-create the per-target flock atomically** (`ConcurrentHashMap.compute`) so simultaneous aggros converge on one flock.
+
+### Gotcha — `FlockPlugin.getFlock` takes a *member* ref, not the flock entity
+
+`FlockPlugin.getFlock(accessor, ref)` reads the **member's** `FlockMembership` to find its flock:
+
+```java
+// FlockPlugin.getFlock — abridged
+FlockMembership m = accessor.getComponent(reference, FlockMembership.getComponentType());
+if (m == null) return null;
+return accessor.getComponent(m.getFlockRef(), Flock.getComponentType());
+```
+
+A flock **entity** has `Flock` / `EntityGroup` / `UUIDComponent` but **no** `FlockMembership`, so `getFlock(store, flockEntityRef)` always returns `null`. To inspect a flock entity, read its `Flock` component directly. (Combined with the deferred-population gotcha above, this produced "one flock per mob" until both were fixed.) `getFlock` is also `@Deprecated` in the jar — prefer reading `Flock` / `getFlockReference` directly.
+
+---
+
 ## Spawn Beacons
 
 Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/NPC/Spawn/Beacons/`. A beacon is a plain object (no `Type` wrapper). NPC entries in the `NPCs` array reference roles by an `Id` field, not `Role`.
@@ -1041,7 +1141,7 @@ Main options (`NPCSpawnCommand`):
 
 > **Note: `--count` and `--flock` multiply.** The command runs the spawn loop `count` times, and each iteration spawns a whole flock of `--flock` members. So `--count=1 --flock=5` is one pack of 5, while `--count=5 --flock=5` is **25** NPCs (five packs of 5). (Confirmed in-game.)
 
-> **⚠️ Flock membership is wired only at spawn / world-gen time** by `com.hypixel.hytale.server.flock.FlockMembershipSystems`. NPCs placed by hand, via the entity menu, or via `/npc spawn` **without** `--flock` do **not** auto-form a flock — they have no `FlockMembership` component (`com.hypixel.hytale.server.flock.FlockMembership`, with `getFlockId()`). To exercise *any* flock behavior (beacons such as `Message_Attack`, take-turns, etc.) you **must** spawn with `--flock=N`.
+> **⚠️ Flock membership is wired only at spawn / world-gen time** by `com.hypixel.hytale.server.flock.FlockMembershipSystems`. NPCs placed by hand, via the entity menu, or via `/npc spawn` **without** `--flock` do **not** auto-form a flock — they have no `FlockMembership` component (`com.hypixel.hytale.server.flock.FlockMembership`, with `getFlockId()`). To exercise *any* flock behavior (beacons such as `Message_Attack`, take-turns, etc.) you **must** spawn with `--flock=N` — or build the flock yourself at runtime (see [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java)).
 
 > **Note:** Group filters can resolve the dynamic token `$self` ("any NPC sharing my role") against the spawned flock. `Server/NPC/Groups/Self.json` is exactly `{"IncludeRoles":["$self"]}` — the take-turns and flock filters reference it.
 
@@ -1308,5 +1408,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`Reloading nonexistent role %s!`** (logged at `SEVERE` with an `[NPC|P]` prefix, every tick — from `RoleBuilderSystem`) → a saved-world entity references a role that failed to load **or was renamed**, and persists in the save spamming the log. Fix: remove/replace the stale entities, or restore the old role name.
 - **`Unknown JSON attribute '%s' found in %s: %s (JSON: %s)`** (WARN, non-fatal — from `BuilderBase`) → a custom/`$`-prefixed key other than the exact `$Comment` (e.g. `$Comment_Foo`); the second `%s` is the construct, e.g. `Role|Generic`. Only `$Comment` is whitelisted by the role parser, and you can't have two `$Comment`s at one object level (duplicate JSON key). Fix: consolidate prose into a single `$Comment`.
 - **Symptom:** a role with a `$Comment` inside a `Variant`'s `Modify` / `Parameters` block fails to load (FATAL) with `java.lang.IllegalStateException: Parameter $Comment does not exist or is private`, then vanishes from the spawn list (with the `Reloading nonexistent role` spam above). There, every key under `Modify` is treated as a **role parameter to set**, and `$Comment` isn't one. A `Generic` role's *top level* and its `Instructions` **do** accept `$Comment`. Fix: comment freely in `Generic` roles; keep `Variant`s comment-free and put the explanation in your docs.
+- **Symptom (runtime flocks):** a brand-new flock reports `EntityGroup.size() == 0` for the rest of the tick after `createFlock` + `join`, so per-target dedup-by-count spawns one flock per aggro'd NPC. The member group is populated by a *deferred* system. Fix: validate by the `Flock` component, not member count; cap with your own counter. See [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java).
+- **Symptom (runtime flocks):** `FlockPlugin.getFlock(store, flockEntityRef)` always returns `null` on a flock entity. It expects a flock *member* ref (it reads the member's `FlockMembership`); a flock entity has no `FlockMembership`. Fix: read the entity's `Flock` component directly. See [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java).
 
 ---

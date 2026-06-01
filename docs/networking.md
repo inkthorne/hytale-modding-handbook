@@ -129,7 +129,9 @@ float yaw = offset.yaw;
 float pitch = offset.pitch;
 ```
 
-> **See also:** [Math API](math.md#rotation3f)
+> **See also:** [Math API](math.md#rotation3f). The `SetServerCamera` packet's
+> `ServerCameraSettings.rotation` is a `Direction` in **radians** (not the degrees used in JSON
+> assets) — see [Camera Control](camera.md#servercamerasettings).
 
 ---
 

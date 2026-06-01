@@ -36,6 +36,7 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [assets.md](assets.md) | Asset registry system for custom assets, asset stores, built-in asset access, and asset lifecycle events. |
 | [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |
+| [camera.md](camera.md) | Server-controlled camera: the SetServerCamera packet and ServerCameraSettings for top-down / side-scroller / custom views, the built-in /player camera commands, and the JSON Camera interaction. |
 | [prefabs.md](prefabs.md) | Prefab system for placing pre-defined block/entity selections including transformations, placement, and prefab events. |
 | [trigger-volumes.md](trigger-volumes.md) | Trigger Volume system (Update 5): authoring effect-asset JSON, the built-in effect/condition types, and extending it with custom TriggerEffect/TriggerCondition types from a plugin. |
 | [math.md](math.md) | JOML-based math library (org.joml Vector3d/3f/3i + Vector*Util companions), Rotation3f, Transform, Location, Box AABB, and utilities. |
@@ -76,7 +77,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Block Definitions](blocks.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)
+[Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)
 
 ### Guides & Overviews
 
@@ -90,7 +91,7 @@ JSON asset types used in Hytale's data-driven systems.
 [ChainingInteraction](interactions-combo.md#chaininginteraction), [FirstClickInteraction](interactions-combo.md#firstclickinteraction), [ChargingInteraction](interactions-combo.md#charginginteraction), [ChainFlagInteraction](interactions-combo.md#chainflaginteraction), [CancelChainInteraction](interactions-combo.md#cancelchaininteraction)
 
 **Interactions - Combat & Effects**
-[SimpleInteraction](interactions-combat.md#simpleinteraction), [Selector](interactions-combat.md#selector), [DamageEntity](interactions-combat.md#damageentity), [ApplyForce](interactions-combat.md#applyforce), [ApplyEffect](interactions-combat.md#applyeffect), [ClearEntityEffect](interactions-combat.md#clearentityeffect), [ChangeStat](interactions-combat.md#changestat), [InterruptInteraction](interactions-combat.md#interruptinteraction)
+[SimpleInteraction](interactions-combat.md#simpleinteraction), [Selector](interactions-combat.md#selector), [DamageEntity](interactions-combat.md#damageentity), [ApplyForce](interactions-combat.md#applyforce), [ApplyEffect](interactions-combat.md#applyeffect), [ClearEntityEffect](interactions-combat.md#clearentityeffect), [ChangeStat](interactions-combat.md#changestat), [InterruptInteraction](interactions-combat.md#interruptinteraction), [Camera](camera.md#the-camera-interaction-json)
 
 **Interactions - Control Flow**
 [Serial](interactions-flow.md#serial), [Parallel](interactions-flow.md#parallel), [Condition](interactions-flow.md#condition), [StatsCondition](interactions-flow.md#statscondition), [EffectCondition](interactions-flow.md#effectcondition), [BlockCondition](interactions-flow.md#blockcondition), [CooldownCondition](interactions-flow.md#cooldowncondition), [MovementCondition](interactions-flow.md#movementcondition), [PlacementCountCondition](interactions-flow.md#placementcountcondition), [Repeat](interactions-flow.md#repeat), [Replace](interactions-flow.md#replace)
@@ -174,6 +175,9 @@ JSON asset types used in Hytale's data-driven systems.
 **Networking**
 [NetworkSerializable](networking.md), [Direction](networking.md), [WaitForDataFrom](networking.md)
 
+**Camera**
+[SetServerCamera](camera.md#the-setservercamera-packet), [ServerCameraSettings](camera.md#servercamerasettings), [ClientCameraView](camera.md#clientcameraview), [CameraManager](camera.md#cameramanager), [CameraInteraction](camera.md#the-camera-interaction-json), [InteractionCameraSettings](camera.md#the-camera-property-keyframe-arrays)
+
 **Prefabs**
 [PrefabStore](prefabs.md), [BlockSelection](prefabs.md), [PrefabRotation](prefabs.md), [PrefabEntry](prefabs.md), [PrefabWeights](prefabs.md), [PrefabPasteEvent](prefabs.md), [PrefabPlaceEntityEvent](prefabs.md)
 
@@ -240,6 +244,7 @@ JSON asset types used in Hytale's data-driven systems.
 - audio.md - Sound events, ambience, and audio mixing
 - i18n.md - Localization events
 - singleplayer.md - Singleplayer events
+- camera.md - Server-controlled camera views (top-down / side-scroller / custom) and the Camera interaction
 
 **Networking** - Network communication
 - networking.md - Serialization, protocol types

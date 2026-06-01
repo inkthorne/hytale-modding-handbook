@@ -100,7 +100,7 @@ SimpleInteraction serves as:
 | `CancelOnItemChange` | boolean | `false` | Cancel if held item changes |
 | `Settings` | Map<GameMode, InteractionSettings> | - | Per-gamemode settings |
 | `Rules` | InteractionRules | - | Interaction rules |
-| `Camera` | InteractionCameraSettings | - | Camera settings during interaction |
+| `Camera` | InteractionCameraSettings | - | Camera keyframes (`FirstPerson`/`ThirdPerson`) played during the interaction — see [Camera Control](camera.md#the-camera-property-keyframe-arrays). Distinct from the [`Camera` interaction type](camera.md#the-camera-interaction-json). |
 
 ### SimpleInteraction-Specific Properties
 
@@ -125,7 +125,7 @@ The `Effects` object supports these properties:
 | `Particles` | array | Particles attached to model bones |
 | `FirstPersonParticles` | array | Particles for first-person view |
 | `Trails` | array | Weapon trail effects |
-| `CameraEffect` | string | Camera effect id (shake, zoom, etc.) |
+| `CameraEffect` | string | Camera effect id (shake, zoom, etc.) — references a `Server/Camera/CameraEffect/**` asset; see [Camera Control → Adjacent systems](camera.md#adjacent-camera-systems) |
 | `MovementEffects` | object | Movement modification effects |
 | `StartDelay` | float | Delay before effects begin |
 

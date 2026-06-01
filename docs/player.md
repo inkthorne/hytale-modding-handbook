@@ -21,6 +21,9 @@ Implemented across `com.hypixel.hytale.server.core` (messaging) and `com.hypixel
 - An ECS `ChangeGameModeEvent` for intercepting game-mode changes
 - A `HiddenPlayersManager` for per-player visibility (vanish/spectator systems)
 
+> **See also:** To put a player into a top-down / side-scroller / custom view (the per-player
+> camera state), see [Camera Control](camera.md) — and reset it on `PlayerDisconnectEvent`.
+
 ## Architecture
 ```
 Messaging

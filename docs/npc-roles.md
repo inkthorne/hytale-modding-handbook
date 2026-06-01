@@ -227,6 +227,8 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 | `WanderRadius` | Number | Random movement range from home |
 | `ClimbHeight` | Number | Maximum block height for climbing (fed into `MaxClimbHeight`) |
 | `JumpHeight` | Number | Vertical jump capability |
+| `ApplySeparation` | Boolean | Soft spacing so NPCs don't overlap — see [Separation & avoidance steering](#separation--avoidance-steering) |
+| `ApplyAvoidance` | Boolean | Predictive collision avoidance — see [Separation & avoidance steering](#separation--avoidance-steering) |
 
 ### Detection Properties
 
@@ -421,6 +423,81 @@ From `Template_Animal_Neutral`:
     ]
 }
 ```
+
+---
+
+## Separation & avoidance steering
+
+Two **independent** role-level steering forces keep NPCs from piling up. Both are off by default, both are toggled by their own boolean key, and both are applied per-tick by `com.hypixel.hytale.server.npc.systems.AvoidanceSystem`, which blends each into the NPC's body steering after the behaviour tick. **Neither is a flocking feature** — they act on solo, un-flocked NPCs and push against *any* nearby entity regardless of role or flock. This answers the common question *"why do my rats space out while my chickens walk through each other?"*: the rats' role sets `ApplySeparation: true`; the chickens' role omits it (it defaults `false`).
+
+| Force | Key (default) | What it does |
+| --- | --- | --- |
+| **Separation** | `ApplySeparation` (`false`) | Soft positional spacing — sums the offsets to neighbours within `SeparationDistance` and nudges the NPC away so bodies don't overlap. |
+| **Avoidance** | `ApplyAvoidance` (`false`) | Predictive collision avoidance — projects velocities and steers around an entity on a collision course (brake or sidestep). |
+
+> The getter for `ApplyAvoidance` is `Role.isAvoidingEntities()` (**not** `isApplyAvoidance`); `ApplySeparation`'s getter is `Role.isApplySeparation()`. Every key in this section is flagged **Experimental** in `BuilderRole`.
+
+### Neighbour scope (who gets pushed)
+
+The neighbour set for both forces comes from the NPC's own `com.hypixel.hytale.server.npc.role.support.PositionCache`, filtered by **distance only** — there is **no role filter and no flock filter**. Enabling `ApplySeparation` registers the separation radius against both the cache's NPC list (`requireEntityDistanceAvoidance`) *and* its player list (`requirePlayerDistanceAvoidance`), so an NPC separates from **nearby NPCs and players alike**. Players count when they are in **Adventure** mode (always) or in **Creative** with `allowNPCDetection` enabled; Spectator and ordinary Creative players are ignored. The NPC's current combat target is excluded — it sits in the role's `ignoredEntitiesForAvoidance` set (via `MarkedEntitySupport`) — so an NPC still closes on the thing it is attacking.
+
+### Separation keys
+
+`ApplySeparation` enables a soft spacing force toward a desired `SeparationDistance`. That distance can **tighten as the NPC nears its current target**, so a pack swarms a target without bouncing off each other:
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `ApplySeparation` | `false` | Apply the separation steering force. |
+| `SeparationDistance` | `3.0` | Desired spacing between this NPC and others. |
+| `SeparationWeight` | `1.0` | Blend factor for the summed-distance force. |
+| `SeparationMode` | `Legacy` | Calculation mode — `Legacy` or `Push` (`Role$SeparationMode`). |
+| `SeparationDistanceTarget` | `1.0` | Desired (tighter) spacing when close to the current target. |
+| `SeparationNearRadiusTarget` | `1.0` | At/under this distance to the target, use `SeparationDistanceTarget`. |
+| `SeparationFarRadiusTarget` | `5.0` | Past this distance to the target, use the normal `SeparationDistance`; between the two radii the engine lerps. |
+
+`SeparationMode` (`com.hypixel.hytale.server.npc.role.Role$SeparationMode` = `Legacy` | `Push`, default `Legacy`) selects the force model:
+
+- **`Legacy`** — sums normalized offset vectors from neighbours into one steering nudge scaled by `SeparationLegacySteeringStrength` (default `0.5`). The target-distance falloff (the `…Target` trio above) is a Legacy feature. Pushes even a resting NPC once neighbours are in range.
+- **`Push`** — a per-neighbour push with a distance-falloff exponent (`SeparationPushDistanceWeightDefault`, made sharper near a motion target via `SeparationPushDistanceWeightTarget` / `…Attacker`), steering strength `SeparationPushSteeringStrength` (default `0.8`), and small-speed scaling `SeparationPushSpeedScale`. It is target-aware through the active BodyMotion's desired target and `SeparationPushSafeDistanceMultiplier`. Common in vanilla combat/livestock roles. A **resting** NPC is *not* pushed in Push mode unless `SeparationOverrideAlwaysSeparate` is set.
+
+Push-mode-only tuning knobs (all Experimental, with sensible defaults): `SeparationPushSafeDistanceMultiplier` (`0.8`), `SeparationPushSteeringStrength` (`0.8`), `SeparationPushDistanceWeightDefault` (`1.0`), `SeparationPushDistanceWeightTarget` (`8.0`), `SeparationPushDistanceWeightAttacker` (`8.0`), `SeparationPushSpeedScale` (`0.5`). Three tri-state overrides apply to either mode: `SeparationOverrideOrientation` (turn the NPC to face its separation direction), `SeparationOverrideAlwaysSeparate` (separate even when the NPC would otherwise rest), and `SeparationOverrideNormalizeDistances`.
+
+### Avoidance keys
+
+`ApplyAvoidance` is the *other*, distinct force — predictive collision avoidance rather than positional spacing:
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `ApplyAvoidance` | `false` | Apply the avoidance steering force (getter `Role.isAvoidingEntities()`). |
+| `AvoidanceMode` | `Any` | Manoeuvre set — `Slowdown`, `Evade`, or `Any` (`Role$AvoidanceMode`). |
+| `EntityAvoidanceStrength` | `1.0` | Blend factor for the avoidance force. |
+
+`AvoidanceMode` (`com.hypixel.hytale.server.npc.role.Role$AvoidanceMode`): **`Slowdown`** brakes to let the obstacle pass, **`Evade`** steers around it, and **`Any`** (default) lets the engine pick. The probe distance and collision shape are tuned by the adjacent `CollisionDistance` / `CollisionRadius` / `CollisionForceFalloff` / `CollisionViewAngle` keys. (`AvoidanceFallCheck` is a deprecated no-op kept only for backwards compatibility — don't use it.)
+
+### Minimal example
+
+A role that spaces out from its neighbours needs only the toggle plus a distance; everything else defaults:
+
+```json
+{
+    "ApplySeparation": true,
+    "SeparationDistance": 3,
+    "SeparationMode": "Push"
+}
+```
+
+Two roles identical except for `ApplySeparation` behave exactly as the rats-vs-chickens question describes — the one with it set spaces out, the one without it overlaps. Vanilla isolates this in `Server/NPC/Roles/_Core/Tests_Development/Test_Separation_*.json`: `Test_Separation_Stationary.json` is the snippet above verbatim, and `Test_Separation_Maintain.json` / `…_Flee.json` / `…_Wander.json` exercise it under different motions. For a production example, `Template_Livestock.json` drives the distance through a parameter:
+
+```json
+"ApplySeparation": true,
+"SeparationDistance": { "Compute": "SeparationDistance" },
+"SeparationWeight": 1,
+"SeparationDistanceTarget": { "Compute": "SeparationDistance" },
+"SeparationNearRadiusTarget": 2,
+"SeparationFarRadiusTarget": 7
+```
+
+> **Not the same as flock separation.** The boids-style flock steering (`FlockWeightSeparation`, `FlockWeightAlignment`, `FlockWeightCohesion`, ranged by `FlockInfluenceRange` and gated by actual flock membership) is a **separate** force that acts **only among flock-mates** — see [Flocks](#flocks). `ApplySeparation` is flock-independent. So *"do only same-flock NPCs avoid each other?"* → **no** for `ApplySeparation`, **yes** for `FlockWeightSeparation`. The `/npc debug` flag `VisSeparation` visualizes the `ApplySeparation` force, **not** the flock force (`VisFlock` shows flock-member connections).
 
 ---
 
@@ -990,6 +1067,8 @@ An optional `MaxGrowSize` caps how large a flock may grow over time:
 }
 ```
 
+> **Flock *size* vs flock *steering* vs separation.** The files here only size a flock. Separately, a role can carry boids-style flock-steering weights (`FlockWeightSeparation` / `FlockWeightAlignment` / `FlockWeightCohesion`, ranged by `FlockInfluenceRange`) that act **only among flock-mates** — which is distinct from the flock-independent [`ApplySeparation`](#separation--avoidance-steering) spacing force. Don't conflate `FlockWeightSeparation` (flock-only) with `ApplySeparation` (any nearby entity).
+
 ---
 
 ## Flocks at runtime (driving the engine flock from Java)
@@ -1211,7 +1290,9 @@ Genuinely useful flags (all from `RoleDebugFlags`):
 | `DisplayTarget` | The current target. |
 | `VisMarkedTargets` | Marked targets, visualized. |
 | `VisSensorRanges` | Sensor detection ranges. |
-| `VisSeparation` | Flock separation steering. |
+| `VisAvoidance` | `ApplyAvoidance` collision-avoidance vectors (see [Separation & avoidance steering](#separation--avoidance-steering)). |
+| `VisSeparation` | `ApplySeparation` spacing vector — role separation, **not** flocking (see [Separation & avoidance steering](#separation--avoidance-steering)). |
+| `VisFlock` | Flock-member connections (the actual flock visualization). |
 | `TraceSensorFailures` | Why sensors are *not* matching. |
 | `Flock` | General flock-coordination tracing. |
 

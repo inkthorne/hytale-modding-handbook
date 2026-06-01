@@ -793,9 +793,38 @@ The matching builder extends `BuilderBodyMotionBase` (whose `category()` returns
 
 Param holders (`DoubleHolder`, `BooleanHolder`, `NumberArrayHolder`, …) live in `com.hypixel.hytale.server.npc.asset.builder.holder`. The `getDouble` / `getBoolean` / `requireDoubleRange` config DSL lives on `BuilderBase`. Validators (optional, may be `null`) come from `com.hypixel.hytale.server.npc.asset.builder.validators`: `DoubleSingleValidator.greater0()` / `.greaterEqual0()`, `DoubleRangeValidator.between(a, b)` / `.fromExclToIncl(a, b)`.
 
-### Facing: forward-moving motions set no yaw
+### Facing: orientation is emergent from the active motion
 
-Built-in forward-movers (`BodyMotionMoveAway`, `BodyMotionFindWithTarget`) set **no** rotation in `computeSteering` — the locomotion controller orients the NPC to its movement direction automatically. Only motions that want *decoupled* facing call `out.setYaw(...)` (e.g. `BodyMotionWanderBase` sets a wander heading; `MaintainDistance` faces its target while strafing). **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
+There is no single "which way does my NPC face?" setting — **body facing is resolved each tick by the motion controller** from the active `BodyMotion`'s steering (`MotionControllerBase.calculateYaw`). The precedence:
+
+1. If the motion set an **explicit yaw / direction hint** (`Steering.setYaw`, surfaced via `hasYawOrDirection()`), the NPC faces that.
+2. Otherwise the controller faces the NPC in its **movement direction** (`PhysicsMath.headingFromDirection` of the translation vector).
+
+So motions split two ways: **face the target** (set an explicit yaw — `MaintainDistance` ends `computeSteering` with `setYaw(targetYaw)`, `WanderInCircle`/`BodyMotionWanderBase` set the walk heading) vs **face travel** (set none — `MoveAway`, `FindWithTarget`, `Seek` fall through to the movement-direction default). **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
+
+**`HeadMotion` is a separate channel, but not purely cosmetic.** A head motion (`Watch`, `Aim`) writes the head steering, and the controller will *blend the body toward the head* — but only when the body motion left yaw **unset** (`if (!bodySteering.hasYaw())`) **and** the head exceeds the model's camera yaw range (default ±45°). So a head motion can drag the body around on a travel-facing motion, but it **cannot** override a motion that set its own yaw, and small head turns (within ±45°) never move the body. (This is why a melee NPC running `HeadMotion: Aim` over a yaw-setting motion still [whiffs](#melee-hits-are-directional-swept-arcs--npcs-can-miss) — the head turns, the body doesn't.)
+
+**Reusable technique — subclass a motion, override only the yaw.** Engine `BodyMotion`s and their builders are `public`/non-final with a `(builder, support)` constructor and a `public computeSteering`, so you can subclass one, defer to `super` for all its movement logic, and rewrite *just* the facing. This gives "this motion's movement, different facing" without reimplementing it:
+
+```java
+public class MyMaintainDistance extends BodyMotionMaintainDistance {   // distinct name — don't clash with the engine class
+    private final boolean faceMovementDirection;
+    public MyMaintainDistance(MyBuilderMaintainDistance b, BuilderSupport s) {
+        super(b, s); this.faceMovementDirection = b.isFaceMovementDirection(s);
+    }
+    @Override public boolean computeSteering(Ref<EntityStore> ref, Role role, InfoProvider info, double dt,
+                                             Steering steering, ComponentAccessor<EntityStore> acc) {
+        boolean active = super.computeSteering(ref, role, info, dt, steering, acc);   // run vanilla logic first
+        if (faceMovementDirection && steering.hasTranslation()) {                     // then overwrite the yaw it set
+            Vector3d t = steering.getTranslation();
+            steering.setYaw(PhysicsMath.normalizeTurnAngle(PhysicsMath.headingFromDirection(t.x(), t.z())));
+        }
+        return active;
+    }
+}
+```
+
+The builder mirror `extends BuilderBodyMotionMaintainDistance`; its `readConfig` calls `super.readConfig(data)` then reads the extra field — do **not** also call `readCommonConfig` (the framework already applies the common Enabled/Once config). Register it like any custom motion: `NPCPlugin.get().registerCoreComponentType("MyMaintainDistance", MyBuilderMaintainDistance::new)`. This is also a cleaner fix for the [melee-facing problem](#melee-hits-are-directional-swept-arcs--npcs-can-miss) than a `Seek` windup when you want a strafing motion to still face where it moves.
 
 ### Inline behavior with a Generic role
 
@@ -1239,7 +1268,7 @@ A role overrides any link by declaring the var under top-level **`InteractionVar
 }
 ```
 
-It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough (that turns the head, not the body). It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
+It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough: a head motion only blends the *body* when the active motion set no yaw and the head exceeds the camera yaw limit (see [Facing](#facing-orientation-is-emergent-from-the-active-motion)), so over a yaw-setting attack motion it turns the head only. It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
 
 So "why does my NPC sometimes not connect?" has a real mechanical answer: melee is a swept directional hitbox, not a homing hit. Two fixes:
 

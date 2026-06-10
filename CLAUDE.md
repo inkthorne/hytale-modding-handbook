@@ -76,7 +76,7 @@ Like the assets cache, the script **wipes the cache first** so classes removed/r
 
 ## Verifying documentation
 
-The `docs/` were fact-checked against game **0.5.3** (Update 5 patch; build-16) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.3` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (0.5.3 is a further patch of Update 5: the `CommonAssetsIndex.hashes` index is set-identical in *content* to the 0.5.2/build-15 capture — only its internal line ordering changed — so format docs carry over unchanged; the full API surface re-passes `verify-docs.sh` against the 0.5.3 jar.) (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)
+The `docs/` were fact-checked against game **0.5.4** (Update 5 patch; build-17) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.4` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (0.5.4 is a further patch of Update 5: the `CommonAssetsIndex.hashes` index is set-identical in *content* to the 0.5.2/build-15 capture — Common assets haven't changed since build-15 — so format docs carry over unchanged; the full API surface re-passes `verify-docs.sh` against the 0.5.4 jar, with all hard gates green.) (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)
 
 Run the regression checker after any game update (or before trusting/extending a doc):
 

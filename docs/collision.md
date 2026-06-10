@@ -7,7 +7,7 @@ seo:
 
 # Collision API
 
-**Doc type:** Java API · **Verified against 0.5.3**
+**Doc type:** Java API · **Verified against 0.5.4**
 
 This page covers block and character collision detection: the module, query results, the various collision-data types, configuration, and evaluators.
 

@@ -7,7 +7,7 @@ seo:
 
 # Player API
 
-**Doc type:** Java API · **Verified against 0.5.3**
+**Doc type:** Java API · **Verified against 0.5.4**
 
 This document covers player-related events and messaging APIs.
 

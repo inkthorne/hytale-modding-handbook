@@ -7,7 +7,7 @@ seo:
 
 # World API
 
-**Doc type:** Java API · **Verified against 0.5.3**
+**Doc type:** Java API · **Verified against 0.5.4**
 
 Covers the runtime `World` object, its chunks, per-player chunk tracking, gameplay configuration, and the world/chunk lifecycle events plugins can observe.
 

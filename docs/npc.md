@@ -7,7 +7,7 @@ seo:
 
 # NPC API
 
-**Doc type:** Java API · **Verified against 0.5.3**
+**Doc type:** Java API · **Verified against 0.5.4**
 
 This document covers NPC loading events and AI sensor systems.
 

@@ -10,11 +10,11 @@ game update to see exactly which assets changed before re-checking docs.
 
 | Field | Value |
 |-------|-------|
-| Build | `0.5.3` (Update 5 patch; `Implementation-Version` = `0.5.3`, from `install/release/package/sig/build-16/`) |
-| Captured | 2026-05-30 (build-16); prior baselines build-15 (0.5.2), build-14 (0.5.1) and build-13 (0.5.0) |
-| `Assets.zip` mtime | 2026-05-30 11:48 (build-16; was 2026-05-27 22:08 on build-15) |
-| `Assets.zip` size | 3,428,506,917 bytes (~3.4 GB; build-15 was 3,428,485,136 — Server-side delta only) |
-| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `de2366d85f4ffc97b475788992d1dc798d94f649e4e020a1372394ce5b318563` — Common assets content **unchanged** from build-15 (set-identical; only the index's internal line ordering changed, so the raw sha differs from build-15's `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79`) |
+| Build | `0.5.4` (Update 5 patch; `Implementation-Version` = `0.5.4`, from `install/release/package/sig/build-17/`) |
+| Captured | 2026-06-10 (build-17); prior baselines build-16 (0.5.3), build-15 (0.5.2), build-14 (0.5.1) and build-13 (0.5.0) |
+| `Assets.zip` mtime | 2026-06-10 00:43 (build-17; was 2026-05-30 11:48 on build-16) |
+| `Assets.zip` size | 3,428,514,410 bytes (~3.4 GB; build-16 was 3,428,506,917 — Server-side delta only) |
+| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79` — Common assets content **unchanged** since build-15 (set-identical); the line ordering reverted to build-15's exact layout, so the raw sha matches build-15 and differs from build-16's `de2366d85f4ffc97b475788992d1dc798d94f649e4e020a1372394ce5b318563` |
 
 `CommonAssetsIndex.hashes` is Hytale's own per-asset SHA-256 index (paths are
 relative to `Common/`), copied verbatim from the extracted assets. It is the
@@ -46,7 +46,7 @@ diff maintenance/baseline/CommonAssetsIndex.hashes ~/.cache/hytale-assets/Common
 > Empty output here = Common assets byte-identical despite the reordering (refresh
 > the baseline file anyway so the cheap raw `diff` goes clean next time).
 
-Also compare the build marker: if `install/.../sig/` now shows `build-15+`
-(or `Implementation-Version` advances past `0.5.2`), the game updated. Update the
+Also compare the build marker: if `install/.../sig/` now shows `build-17+`
+(or `Implementation-Version` advances past `0.5.4`), the game updated. Update the
 table above and refresh this snapshot once the docs have been re-verified against
 the new build.

@@ -7,7 +7,7 @@ seo:
 
 # Math / Vector API
 
-**Doc type:** Java API · **Verified against 0.5.3**
+**Doc type:** Java API · **Verified against 0.5.4**
 
 ## Overview
 

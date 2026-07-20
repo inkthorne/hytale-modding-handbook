@@ -118,3 +118,4 @@ It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): eve
 - **examples/ui/**: Custom UI pages and HUD management
 - **examples/inventory/**: Inventory and item-stack management
 - **examples/entity-count/**: ECS ticking system (`EntityTickingSystem`) that counts world entities each tick and pushes the totals to a live `CustomUIHud`
+- **examples/events/**: both event mechanisms side by side — global bus (`PlayerConnectEvent`/`PlayerDisconnectEvent`) and an ECS `EntityEventSystem` for `BreakBlockEvent` (query-filtered to players, chat via `getPlayerRef()`)

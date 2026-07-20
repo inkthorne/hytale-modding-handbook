@@ -357,6 +357,148 @@ To update a world safely:
 - **Match the destination folder name.** A world is keyed by its folder name — copy into the
   existing `worlds/<name>/`, don't create a second folder under a different name.
 
+## Programmatic persistence (plugin API)
+
+The directories above are read and written through a small pluggable Java layer. Per-world chunk
+and resource storage are **providers** selected in the world's runtime config (and by extension
+its `config.json` — `ChunkStorage` and `ResourceStorage` are recognized per-world keys), and
+plugins can persist their own keyed records under `universe/` with a **data store**.
+
+### Chunk storage providers
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.storage` (+ `.provider`)
+
+A world's `chunks/` data goes through the `IChunkStorageProvider` on its runtime `WorldConfig`
+(`world.getWorldConfig().getChunkStorageProvider()` / `setChunkStorageProvider(...)`). Providers
+are codec-registered by id; the ids `Universe` registers are `Hytale` (default), `IndexedStorage`,
+`RocksDb`, `Migration`, and `Empty`.
+
+```java
+// IChunkStorageProvider<Data>
+Data initialize(Store<ChunkStore> store)
+IChunkLoader getLoader(Data data, Store<ChunkStore> store)
+IChunkSaver getSaver(Data data, Store<ChunkStore> store)
+void close(Data data, Store<ChunkStore> store)
+void delete(Data data, Store<ChunkStore> store)
+<OtherData> Data migrateFrom(Store<ChunkStore> store, IChunkStorageProvider<OtherData> from)  // default: copy all chunks over
+boolean isSame(IChunkStorageProvider<?> other)                                                // default
+```
+
+| Provider | Id | Use |
+|----------|----|-----|
+| `EmptyChunkStorageProvider` (`INSTANCE`) | `Empty` | Loads nothing, saves nowhere — for worlds that must never touch disk (e.g. throwaway instances) |
+| `MigrationChunkStorageProvider` | `Migration` | Wraps old (`from[]`) and new (`to`) providers: reads fall back through the old formats, writes go to the new one |
+
+The loader/saver pair a provider hands out is the actual chunk I/O surface:
+
+```java
+// IChunkLoader (extends Closeable)
+CompletableFuture<Holder<ChunkStore>> loadHolder(int x, int z)
+LongList getIndexes()
+
+// IChunkSaver (extends Closeable)
+CompletableFuture<Void> saveHolder(int x, int z, Holder<ChunkStore> holder)
+CompletableFuture<Void> removeHolder(int x, int z)
+LongList getIndexes()
+void flush()
+void compact(long[] indexes)                               // default
+void pauseBackgroundSaving(ChunkSavingSystems.Data data)   // default
+void resumeBackgroundSaving()                              // default
+```
+
+### ChunkSavingSystems
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.storage.component`
+
+The ECS systems that drain dirty chunks (`markNeedsSaving()`, see [World API](world.md#worldchunk))
+to the saver. The plugin-facing pieces:
+
+```java
+static CompletableFuture<Void> saveChunksInWorld(Store<ChunkStore> store)   // flush every chunk that needs saving
+
+// ChunkSavingSystems.Data — per-world save-queue resource
+CompletableFuture<Void> waitForSavingChunks()
+void clearSaveQueue()
+```
+
+### Resource storage providers
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.storage.resources`
+
+The analog for a world's `resources/` directory. `IResourceStorageProvider.getResourceStorage(World)`
+returns the `IResourceStorage` backing the world's store resources; select the provider via the
+per-world `ResourceStorage` config key or `WorldConfig.setResourceStorageProvider(...)`. Registered
+ids: `Hytale` (default), `Disk`, `Empty` — `EmptyResourceStorageProvider` (`INSTANCE`, id `Empty`)
+is the no-persistence choice.
+
+### Data stores — plugin key/value persistence
+
+**Package:** `com.hypixel.hytale.server.core.universe.datastore`
+
+A `DataStore<T>` persists codec-typed records by string id. The disk implementation stores each
+record as a `.bson` file in a directory **under `universe/`** — this is how e.g. the objectives
+plugin keeps its state (`universe/objectives/`).
+
+```java
+// DataStoreProvider (codec-registered; id "Disk" → DiskDataStoreProvider)
+<T> DataStore<T> create(BuilderCodec<T> codec)
+
+// DiskDataStoreProvider
+DiskDataStoreProvider(String path)     // directory name, resolved under universe/
+
+// DataStore<T>
+T load(String id)
+void save(String id, T value)
+void remove(String id)
+List<String> list()
+Map<String, T> loadAll()
+void saveAll(Map<String, T> values)
+void removeAll()
+BuilderCodec<T> getCodec()
+```
+
+```java
+// Persist plugin records under universe/myplugin/
+DataStore<MyRecord> store = new DiskDataStoreProvider("myplugin").create(MyRecord.CODEC);
+store.save("some-id", record);
+MyRecord loaded = store.load("some-id");
+```
+
+### StorageManager
+
+**Package:** `com.hypixel.hytale.server.core.universe`
+
+The universe-level coordinator that serializes save/load operations per path and holds them while
+saving is locked (`Universe.lockSaving()` / `unlockSaving()`). Reached via `Universe.getStorageManager()`; mostly internal,
+but useful when a plugin's own I/O must cooperate with the universe save cycle:
+
+```java
+CompletableFuture<Void> doSave(Path path, Supplier<CompletableFuture<Void>> saveOp)
+<T> CompletableFuture<T> doLoad(Path path, Supplier<CompletableFuture<T>> loadOp)
+CompletableFuture<Void> pendingOperations()   // completes when all queued ops finish
+boolean hasQueuedSave(Path path)
+```
+
+### Chunk-format migrations
+
+**Package:** `com.hypixel.hytale.server.core.modules.migrations`
+
+`MigrationModule` is the built-in module that rewrites stored chunks between format versions at
+boot (it walks every stored chunk through the loader, applies registered migrations, and saves).
+
+```java
+static MigrationModule get()
+void register(String name, Function<Path, Migration> migrationCtor)
+void runMigrations()
+SystemType<ChunkStore, ChunkColumnMigrationSystem> getChunkColumnMigrationSystem()
+SystemType<ChunkStore, ChunkSectionMigrationSystem> getChunkSectionMigrationSystem()
+```
+
+`ChunkColumnMigrationSystem` and `ChunkSectionMigrationSystem` are abstract `HolderSystem<ChunkStore>`
+bases registered as system *types* on the chunk store — extend one to transform chunk-column or
+chunk-section holders as they load (this is the hook the version bumps in `BlockSection.VERSION`-style
+format changes run through).
+
 ## Gotchas & Errors
 
 - **Players still spawn at the crossroads** → the spawn world still has

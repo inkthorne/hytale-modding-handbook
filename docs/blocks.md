@@ -100,6 +100,10 @@ Java runtime
 | `BreakBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is broken (cancellable) |
 | `DamageBlockEvent` | `server.core.event.events.ecs` | ECS event fired during mining progress (cancellable) |
 | `UseBlockEvent` | `server.core.event.events.ecs` | ECS event for block use; `Pre` (cancellable) / `Post` |
+| `BlockBoundingBoxes` | `server.core.asset.type.blockhitbox` | Hitbox asset (`Server/Item/Block/Hitboxes`); see [BlockBoundingBoxes](#blockboundingboxes) |
+| `BlockTickManager` | `server.core.asset.type.blocktick` | Static holder for the block-tick provider; see [Block Ticking](#block-ticking) |
+| `BlockTypeModule` | `server.core.blocktype` | Core `JavaPlugin` module behind block types: registers the `Bench` codec variants and the block-physics component; `BlockTypeModule.get()` |
+| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`); deprecated for removal in 0.5.7 |
 
 ---
 
@@ -383,9 +387,12 @@ Blocks can have multiple states with different models, hitboxes, and animations.
           "HitboxType": "Door_Open_Out",
           "InteractionSoundEventId": "SFX_Door_Wooden_Open"
         },
-        "CloseDoor": {
-          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close.blockyanim",
-          "HitboxType": "Door",
+        "CloseDoorIn": {
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_In.blockyanim",
+          "InteractionSoundEventId": "SFX_Door_Wooden_Close"
+        },
+        "CloseDoorOut": {
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_Out.blockyanim",
           "InteractionSoundEventId": "SFX_Door_Wooden_Close"
         }
       }
@@ -687,33 +694,38 @@ Fluid blocks have special properties for flowing behavior and physics.
 
 ### Example: Water Source
 
+From `Server/Item/Block/Fluids/Water_Source.json`:
+
 ```json
 {
-  "TranslationProperties": {
-    "Name": "server.items.Water_Source.name"
-  },
-  "BlockType": {
-    "Material": "Empty",
-    "Opacity": "Transparent",
-    "MaxFluidLevel": 1,
-    "FluidFXId": "Water",
-    "Effect": ["Water"],
-    "Tags": {
-      "Fluid": ["Water"]
-    },
-    "Ticker": {
-      "CanDemote": true,
-      "SpreadFluid": true,
-      "Collisions": [
-        {
-          "FluidTag": "Lava",
-          "Result": "Rock_Obsidian"
-        }
-      ]
-    },
-    "Interactions": {
-      "Collision": "Fluid_Water_Collision"
+  "MaxFluidLevel": 1,
+  "Effect": ["Water"],
+  "Opacity": "Transparent",
+  "Textures": [
+    {
+      "Weight": 1,
+      "All": "BlockTextures/Fluid_Water.png"
     }
+  ],
+  "BlockParticleSetId": "Water",
+  "BlockSoundSetId": "Water",
+  "FluidFXId": "Water",
+  "Ticker": {
+    "CanDemote": false,
+    "SpreadFluid": "Water",
+    "Collisions": {
+      "Lava": {
+        "BlockToPlace": "Rock_Stone_Cobble",
+        "SoundEvent": "SFX_Flame_Break"
+      },
+      "Lava_Source": {
+        "BlockToPlace": "Rock_Magma_Cooled",
+        "SoundEvent": "SFX_Flame_Break"
+      }
+    }
+  },
+  "Tags": {
+    "Fluid": ["Water"]
   }
 }
 ```
@@ -748,39 +760,55 @@ Fluid blocks have special properties for flowing behavior and physics.
 
 ### Ticker Configuration
 
-Controls automatic fluid behavior:
+Controls automatic fluid behavior. Base properties come from `FluidTicker.BASE_CODEC`;
+the default ticker (`DefaultFluidTicker.CODEC`) adds spreading and collision rules:
 
 ```json
 {
   "Ticker": {
-    "CanDemote": true,
-    "SpreadFluid": true,
-    "SpreadDelay": 5,
-    "Collisions": [
-      {
-        "FluidTag": "Lava",
-        "Result": "Rock_Obsidian"
+    "CanDemote": false,
+    "FlowRate": 2.0,
+    "SpreadFluid": "Lava",
+    "Collisions": {
+      "Water": {
+        "BlockToPlace": "Rock_Stone_Cobble",
+        "SoundEvent": "SFX_Flame_Break"
+      },
+      "Water_Source": {
+        "BlockToPlace": "Rock_Stone",
+        "SoundEvent": "SFX_Flame_Break"
       }
-    ]
+    }
   }
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `CanDemote` | boolean | Fluid level can decrease |
-| `SpreadFluid` | boolean | Fluid spreads to neighbors |
-| `SpreadDelay` | int | Ticks between spread updates |
-| `Collisions` | array | Fluid-to-fluid transformation rules |
+| `FlowRate` | float | Tick frequency for this fluid type, in seconds |
+| `CanDemote` | boolean | If false, the fluid stays at its level |
+| `SupportedBy` | string | Fluid id that sustains this fluid (e.g. `Water` is supported by `Water_Source`) |
+| `SpreadFluid` | string | Fluid id placed when this fluid spreads (e.g. sources spread their flowing variant) |
+| `Collisions` | object | Map keyed by fluid id — what happens when this fluid tries to spread into that fluid |
+
+Each `Collisions` entry (`FluidCollisionConfig`):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `BlockToPlace` | string | The block to place when a collision occurs |
+| `SoundEvent` | string | Sound event played on collision |
+| `PlaceFluid` | boolean | Whether to still place the fluid on collision (default `false`) |
 
 ### Fluid Collision Transformations
 
-When fluids touch, they can transform into blocks:
+When fluids touch, they can transform into blocks (from the shipped `Collisions` maps):
 
-| Water + | Result |
-|---------|--------|
-| Lava (source) | Obsidian |
-| Lava (flowing) | Cobblestone |
+| Collision | Result |
+|-----------|--------|
+| Water spreading into Lava (flowing) | `Rock_Stone_Cobble` |
+| Water spreading into Lava_Source | `Rock_Magma_Cooled` |
+| Lava spreading into Water (flowing) | `Rock_Stone_Cobble` |
+| Lava spreading into Water_Source | `Rock_Stone` |
 
 ---
 
@@ -988,9 +1016,12 @@ Used for:
           "HitboxType": "Door_Open_In",
           "InteractionSoundEventId": "SFX_Door_Wooden_Open"
         },
-        "CloseDoor": {
-          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close.blockyanim",
-          "HitboxType": "Door",
+        "CloseDoorIn": {
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_In.blockyanim",
+          "InteractionSoundEventId": "SFX_Door_Wooden_Close"
+        },
+        "CloseDoorOut": {
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_Out.blockyanim",
           "InteractionSoundEventId": "SFX_Door_Wooden_Close"
         }
       }
@@ -1356,6 +1387,328 @@ event.setRotation(newRotation);
 
 ---
 
+### Gathering Drop Types
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config`
+
+These classes back the `Gathering` JSON object (see [Gathering Configuration](#gathering-configuration)). `BlockType.getGathering()` returns a `BlockGathering` whose codec maps each gathering mode to its own config class:
+
+| JSON key (under `Gathering`) | Class | Accessor on `BlockGathering` |
+|------------------------------|-------|------------------------------|
+| `Breaking` | `BlockBreakingDropType` | `getBreaking()` |
+| `Harvest` | `HarvestingDropType` | `getHarvest()` |
+| `Soft` | `SoftBlockDropType` | `getSoft()` |
+| `Physics` | `PhysicsDropType` | `getPhysics()` |
+
+`BlockGathering` also exposes `isHarvestable()`, `isSoft()`, `getToolData()` (the `Tools` array), and `shouldUseDefaultDropWhenPlaced()`.
+
+#### BlockBreakingDropType
+
+Decodes `Gathering.Breaking` — JSON keys `GatherType`, `Quality`, `ItemId`, `Quantity`, `DropList`:
+
+```java
+String getGatherType()   // Required tool category ("Rocks", "Woods", ...)
+int getQuality()         // Quality override on the produced item
+int getQuantity()        // Direct-drop quantity
+String getItemId()       // Item produced directly (alternative to a drop list)
+String getDropListId()   // Drop table reference (JSON "DropList")
+BlockBreakingDropType withoutDrops() // Copy that keeps the gather type but drops nothing
+```
+
+#### HarvestingDropType
+
+Decodes `Gathering.Harvest` — JSON keys `ItemId`, `DropList`:
+
+```java
+String getItemId()
+String getDropListId()
+HarvestingDropType withoutDrops()
+```
+
+#### SoftBlockDropType
+
+Decodes `Gathering.Soft` — JSON keys `ItemId`, `DropList`, `IsWeaponBreakable`:
+
+```java
+String getItemId()
+String getDropListId()
+boolean isWeaponBreakable()  // Block can also be broken by weapon hits
+SoftBlockDropType withoutDrops()
+```
+
+---
+
+### BlockSupportsRequiredForType
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config`
+
+Enum behind the `BlockType` JSON key `SupportsRequiredFor`. When a block declares support requirements (see [Support System](items-blocks.md#support-system)), this decides whether **any one** satisfied direction keeps the block alive or **all** declared directions must hold.
+
+```java
+public enum BlockSupportsRequiredForType {
+    Any,  // One satisfied support direction is enough
+    All   // Every declared support direction must be satisfied
+}
+```
+
+The default is `All`; no shipped block overrides it in JSON.
+
+---
+
+### BlockMountPoint
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config.mountpoints`
+
+One sit/sleep mount point on a block — the entries of the `Seats` and `Beds` arrays in `BlockType` JSON (`BlockType.getSeats()` / `BlockType.getBeds()` return the rotation-aware `RotatedMountPointsArray` wrapper). Per-entry JSON keys: `Offset` (relative to the block center at `.5,.5,.5`; forward on a chair is positive Z) and `Yaw` (degrees).
+
+```json
+{
+  "BlockType": {
+    "Seats": [
+      { "Offset": { "X": 0, "Y": 0, "Z": 0.12 }, "Yaw": 0 }
+    ]
+  }
+}
+```
+*(from `Furniture_Kweebec_Stool.json`)*
+
+```java
+static final BlockMountPoint[] EMPTY_ARRAY;
+
+Vector3dc getOffset()             // Offset from the block center
+float getYawOffSetDegrees()       // Yaw offset for the seated model, in degrees
+BlockMountPoint rotate(Rotation yaw, Rotation pitch, Rotation roll) // Rotated copy
+Vector3d computeWorldSpacePosition(Vector3i blockPos) // Absolute world position of the mount
+Rotation3f computeRotationEuler(int rotationIndex)    // Final rotation for a placed variant
+```
+
+---
+
+### FallingBlockSettings
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config.fallingblocks`
+
+Backs the `BlockType` JSON key `FallingBlockSettings` — blocks that detach and fall as entities when unsupported (sand-style). `BlockType.getFallingBlockSettings()` returns it.
+
+```json
+{
+  "BlockType": {
+    "FallingBlockSettings": {
+      "HitboxCollisionConfig": "HardCollision",
+      "Impact": { "Type": "Explode" }
+    }
+  }
+}
+```
+*(from `Server/Item/Items/_Debug/Debug_Falling_Explosive.json`)*
+
+```java
+static final FallingBlockSettings DEFAULT;
+
+FallingBlockImpact getImpact()          // What happens when the falling entity lands
+String getHitboxCollisionConfigId()     // JSON "HitboxCollisionConfig"
+```
+
+`FallingBlockImpact` is the abstract landing behavior; its codec dispatches on the `Impact.Type` key. The shipped falling-blocks plugin registers `"Place"` (default — the block is placed back), `"Break"`, and `"Explode"`:
+
+```java
+public abstract class FallingBlockImpact {
+    public abstract void apply(WorldChunk chunk, World world, BlockType blockType,
+                               Vector3d position, RotationTuple rotation,
+                               Store<EntityStore> store);
+}
+```
+
+A plugin can add its own impact by subclassing and calling `FallingBlockImpact.CODEC.register("MyImpact", MyImpact.class, MyImpact.CODEC)` in `setup()`.
+
+---
+
+### Bench Configuration
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config.bench`
+
+Backs the `BlockType` JSON key `Bench` — the inline bench definition carried by bench items (e.g. `Server/Item/Items/Bench/Bench_Weapon.json`). `BlockType.getBench()` returns it. `Bench.CODEC` dispatches on the `Type` key using the `BenchType` enum; `BlockTypeModule` registers the variants:
+
+| `Type` value | Class | Shipped example |
+|--------------|-------|-----------------|
+| `Crafting` | `CraftingBench` | `Bench_Weapon.json` |
+| `Processing` | `ProcessingBench` | `Bench_Furnace.json` |
+| `DiagramCrafting` | `DiagramCraftingBench` | `Bench_Armory.json` |
+| `StructuralCrafting` | `StructuralCraftingBench` | `Bench_Builders.json` |
+
+Base JSON keys (all bench types): `Id`, `DescriptiveLabel`, `TierLevels` (array), and the sound-event ids `LocalOpenSoundEventId`, `LocalCloseSoundEventId`, `CompletedSoundEventId`, `FailedSoundEventId`, `BenchUpgradeSoundEventId`, `BenchUpgradeCompletedSoundEventId`. Each `TierLevels` entry may set `UpgradeRequirement`, `CraftingTimeReductionModifier`, `ExtraInputSlot`, `ExtraOutputSlot`.
+
+```json
+{
+  "BlockType": {
+    "Bench": {
+      "Type": "Crafting",
+      "Id": "Weapon_Bench",
+      "TierLevels": [
+        {
+          "CraftingTimeReductionModifier": 0.0,
+          "UpgradeRequirement": {
+            "Material": [
+              { "ItemId": "Ingredient_Bar_Iron", "Quantity": 20 },
+              { "ItemId": "Ingredient_Leather_Light", "Quantity": 30 }
+            ],
+            "TimeSeconds": 3
+          }
+        }
+      ]
+    }
+  }
+}
+```
+*(abridged from `Bench_Weapon.json`)*
+
+#### Bench (base class)
+
+```java
+BenchType getType()
+String getId()
+String getDescriptiveLabel()
+BenchTierLevel getTierLevel(int tier)
+BenchUpgradeRequirement getUpgradeRequirement(int tier)
+RootInteraction getRootInteraction()   // The interaction that opens this bench type
+Bench toPacket()                       // protocol.Bench
+
+// Bind the opening interaction for a bench type (engine wiring)
+static void registerRootInteraction(BenchType type, RootInteraction interaction)
+```
+
+#### BenchUpgradeRequirement
+
+One tier-upgrade cost — JSON keys `Material` (item + quantity list) and `TimeSeconds`:
+
+```java
+MaterialQuantity[] getInput()   // JSON "Material"
+float getTimeSeconds()
+```
+
+#### DiagramCraftingBench
+
+`Type: "DiagramCrafting"`. Extends `CraftingBench` and adds no keys of its own — categories come from `CraftingBench`'s `Categories` array (`getCategories()` returning `BenchCategory[]`, each with `Id`, `Name`, `Icon`, `ItemCategories`).
+
+#### StructuralCraftingBench
+
+`Type: "StructuralCrafting"` — the Builders bench (block-set crafting). Own JSON keys: `Categories` (string array), `HeaderCategories`, `AlwaysShowInventoryHints`, `AllowBlockGroupCycling`.
+
+```java
+boolean isHeaderCategory(String category)
+int getCategoryIndex(String category)
+boolean shouldAllowBlockGroupCycling()
+boolean shouldAlwaysShowInventoryHints()
+```
+
+---
+
+### Farming Config Classes
+**Package:** `com.hypixel.hytale.server.core.asset.type.blocktype.config.farming`
+
+Two classes back the `Farming` JSON documented in [Farming & Soil](items-blocks.md#farming--soil).
+
+#### FarmingStageData
+
+Abstract base for the entries of `Farming.Stages.<set>[]`. `FarmingStageData.CODEC` dispatches on each stage's `Type` key; the shipped farming plugin registers `"BlockType"`, `"BlockState"`, `"Prefab"`, and `"Spread"`. Base JSON keys: `Duration` (`{ "Min", "Max" }` range) and `SoundEventId`.
+
+```java
+Rangef getDuration()
+String getSoundEventId()
+boolean implementsShouldStop()   // Whether this stage type uses shouldStop()
+boolean consumesRemainingTime()
+
+boolean shouldStop(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref1,
+                   Ref<ChunkStore> ref2, int x, int y, int z)
+boolean canApply(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref1,
+                 Ref<ChunkStore> ref2, int x, int y, int z)
+void apply(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref1,
+           Ref<ChunkStore> ref2, int x, int y, int z, FarmingStageData previous)
+void remove(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref1,
+            Ref<ChunkStore> ref2, int x, int y, int z)
+```
+
+A plugin adds a custom stage type by subclassing and registering against `FarmingStageData.CODEC`.
+
+#### GrowthModifierAsset
+
+Asset type for growth-rate modifiers — the ids listed in `Farming.ActiveGrowthModifiers`. Assets load from `Server/Farming/Modifiers/*.json` (shipped: `Fertilizer`, `Water`, `LightLevel`, `Darkness`); each declares a `Type` (`"Fertilizer"`, `"LightLevel"`, or `"Water"` — registered by the farming plugin), a `Modifier` multiplier, and type-specific keys (e.g. `LightLevel` adds `ArtificialLight` / `Sunlight` ranges).
+
+```json
+{ "Type": "Fertilizer", "Modifier": 2 }
+```
+*(from `Server/Farming/Modifiers/Fertilizer.json`)*
+
+```java
+static AssetStore<String, GrowthModifierAsset, ...> getAssetStore()
+static DefaultAssetMap<String, GrowthModifierAsset> getAssetMap()
+
+String getId()
+double getModifier()
+double getCurrentGrowthMultiplier(CommandBuffer<ChunkStore> buffer, Ref<ChunkStore> ref1,
+                                  Ref<ChunkStore> ref2, int x, int y, int z, boolean flag)
+```
+
+---
+
+### BlockBoundingBoxes
+**Package:** `com.hypixel.hytale.server.core.asset.type.blockhitbox`
+
+The asset class behind [Hitbox Definitions](#hitbox-definitions) — one asset per file under `Server/Item/Block/Hitboxes/`, decoding the `Boxes` array. A block references one by name via `HitboxType`; `BlockType.getHitboxTypeIndex()` is the index into this asset map.
+
+```java
+static final String DEFAULT = "Full";  // Default full-cube hitbox id
+static final int DEFAULT_ID = 0;
+static final BlockBoundingBoxes UNIT_BOX;
+
+static AssetStore<String, BlockBoundingBoxes, ...> getAssetStore()
+static IndexedLookupTableAssetMap<String, BlockBoundingBoxes> getAssetMap()
+static BlockBoundingBoxes getUnitBoxFor(String id) // Full-cube stand-in for a removed asset
+
+String getId()
+boolean protrudesUnitBox()  // Any box extends outside the 1x1x1 cell
+RotatedVariantBoxes get(Rotation yaw, Rotation pitch, Rotation roll)
+RotatedVariantBoxes get(int rotationIndex)
+Hitbox[] toPacket()
+```
+
+`BlockBoundingBoxes.RotatedVariantBoxes` is the box set for one placement rotation:
+
+```java
+Box getBoundingBox()     // Enclosing AABB
+Box[] getDetailBoxes()   // Individual boxes (multi-box hitboxes)
+boolean hasDetailBoxes()
+boolean containsPosition(double x, double y, double z)
+```
+
+---
+
+### FillerBlockUtil
+**Package:** `com.hypixel.hytale.server.core.util`
+
+When a block's hitbox protrudes its own cell (`BlockBoundingBoxes.protrudesUnitBox()`), the engine occupies the overlapped neighbor cells with invisible *filler blocks* so collision and placement stay consistent (large doors, oversized furniture). `FillerBlockUtil` is the static helper for that bookkeeping — mostly engine-driven, but useful when a plugin validates or clears multi-cell blocks.
+
+```java
+static final int NO_FILLER = 0;
+
+// Iterate / test the neighbor cells a rotated hitbox spills into
+static void forEachFillerBlock(RotatedVariantBoxes boxes, TriIntConsumer consumer)
+static boolean testFillerBlocks(RotatedVariantBoxes boxes, TriIntPredicate predicate)
+
+// Filler offsets are packed into one int
+static int pack(int x, int y, int z)
+static int unpackX(int packed)
+static int unpackY(int packed)
+static int unpackZ(int packed)
+
+// Engine-side add/remove of the filler blocks around an anchor block
+static void setFillerBlocksAt(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref,
+                              BlockSection section, int x, int y, int z,
+                              int anchorX, int anchorY, int anchorZ, ChangeReason reason)
+static void removeFillerBlocksAt(ComponentAccessor<ChunkStore> accessor, BlockSection section,
+                                 int x, int y, int z,
+                                 int anchorX, int anchorY, int anchorZ, ChangeReason reason)
+```
+
+`FillerBlockUtil.ChangeReason` enum: `NONE`, `NORMAL`, `BY_PHYSICS`. The higher-level entry point is `BlockTypeModule.breakOrSetFillerBlocks(...)`, which breaks or re-places a block's fillers from the asset maps.
+
+---
+
 ### World Block Access
 
 #### Via World and Chunks
@@ -1388,6 +1741,139 @@ WorldChunk getChunkIfNonTicking(long chunkKey)
 CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)
 CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey)
 ```
+
+---
+
+## Block Ticking
+
+**Packages:** `com.hypixel.hytale.server.core.asset.type.blocktick` and `...blocktick.config`
+
+The engine ticks blocks through two separate paths, both configured per block type in JSON and both extensible from a plugin:
+
+| Path | JSON key on `BlockType` | Java accessor | Runs |
+|------|--------------------------|---------------|------|
+| **Scheduled ticking** | `TickProcedure` | `BlockType.getTickProcedure()` | Every chunk tick, for blocks flagged as *ticking* in their chunk section |
+| **Random ticking** | `RandomTickProcedure` | `BlockType.getRandomTickProcedure()` | For a few randomly sampled blocks per chunk section per tick |
+
+Scheduled ticking is driven by the shipped block-tick plugin (`com.hypixel.hytale.builtin.blocktick.BlockTickPlugin`), random ticking by the random-tick plugin (`com.hypixel.hytale.builtin.randomtick.RandomTickPlugin`). Grass spreading is a random tick; both procedure kinds decode polymorphically on a `Type` key.
+
+### IBlockTickProvider & BlockTickManager
+
+`IBlockTickProvider` answers "what runs when this block id gets a scheduled tick":
+
+```java
+public interface IBlockTickProvider {
+    static final IBlockTickProvider NONE;       // No-op provider
+    TickProcedure getTickProcedure(int blockId); // null = this block does not tick
+}
+```
+
+`BlockTickManager` is the static holder the chunk-tick system reads the provider from:
+
+```java
+static void setBlockTickProvider(IBlockTickProvider provider)
+static IBlockTickProvider getBlockTickProvider()
+static boolean hasBlockTickProvider()
+```
+
+The shipped provider is `BlockTickPlugin` itself: its `getTickProcedure(int)` simply returns `BlockType.getAssetMap().getAsset(blockId).getTickProcedure()`, i.e. the block's own `TickProcedure` JSON. A plugin that wants to route scheduled ticks differently (per-world logic, procedures not stored on the asset, …) can install its own provider with `BlockTickManager.setBlockTickProvider(...)` — note there is exactly one global provider, so replacing it takes over scheduled ticking entirely.
+
+### BlockTickStrategy
+
+Every scheduled tick — and every fluid tick (see [Fluids](fluids.md)) — returns a `BlockTickStrategy` telling the chunk what to do with the block's ticking flag:
+
+```java
+public enum BlockTickStrategy {
+    CONTINUE,                     // Keep ticking this block next tick
+    IGNORED,                      // Nothing to do; drop it from the ticking set
+    SLEEP,                        // Stop ticking until something re-wakes the block
+    WAIT_FOR_ADJACENT_CHUNK_LOAD  // Park it; retried when neighboring chunks load
+}
+```
+
+A slept/ignored block is re-woken by flagging it again — `BlockChunk.setTicking(x, y, z, true)`, or `BlockChunk.setNeighbourBlocksTicking(x, y, z)` to wake the 3×3×3 neighborhood (this is how block changes re-trigger dormant neighbors, e.g. fluids). `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's systems once the adjacent chunk is available.
+
+### TickProcedure (scheduled ticks)
+
+```java
+public abstract class TickProcedure {
+    public static final CodecMapCodec<TickProcedure> CODEC;  // dispatches on "Type"
+
+    public abstract BlockTickStrategy onTick(World world, WorldChunk chunk,
+                                             int x, int y, int z, int blockId);
+}
+```
+
+The block-tick plugin registers two growth-style types, `"BasicChance"` (keys `NextId`, `Chance`, `ChanceMin`, `NextTicking`) and `"SplitChance"`. No shipped block asset sets `TickProcedure` in JSON in this build — plant growth ships through the farming system instead — but the codec key is live, and custom types registered here work the same way as random-tick types (below).
+
+### RandomTickProcedure (random ticks)
+
+```java
+public interface RandomTickProcedure {
+    static final CodecMapCodec<RandomTickProcedure> CODEC;   // dispatches on "Type"
+
+    void onRandomTick(Store<ChunkStore> store, CommandBuffer<ChunkStore> buffer,
+                      BlockSection section, int x, int y, int z,
+                      int blockId, BlockType blockType);
+}
+```
+
+Each tick the random-tick system samples a few block positions per chunk section (defaults: 1 per stable section, 3 per recently-changed section) and invokes the sampled block's procedure if it has one. Coordinates passed to `onRandomTick` are world block coordinates.
+
+The random-tick plugin registers `"ChangeIntoBlock"` (key `TargetBlock`) and `"SpreadTo"`. Grass is the shipped example — `Soil_Grass.json`:
+
+```json
+{
+  "BlockType": {
+    "RandomTickProcedure": {
+      "Type": "SpreadTo",
+      "AllowedTag": "Spreadable=Grass",
+      "SpreadDirections": [
+        { "X": -1, "Z": 0 }, { "X": 1, "Z": 0 },
+        { "X": 0, "Z": -1 }, { "X": 0, "Z": 1 }
+      ],
+      "MaxY": 1,
+      "MinY": -1,
+      "RevertBlock": "Soil_Dirt"
+    }
+  }
+}
+```
+*(abridged — the real file lists all eight horizontal directions)*
+
+### Hooking custom block ticking
+
+Registering a custom procedure type is the supported way for a plugin to tick its own blocks:
+
+```java
+public class MeltProcedure implements RandomTickProcedure {
+    public static final BuilderCodec<MeltProcedure> CODEC =
+        BuilderCodec.builder(MeltProcedure.class, MeltProcedure::new)
+            .addField(new KeyedCodec<>("MeltInto", Codec.STRING),
+                      (p, v) -> p.meltInto = v, p -> p.meltInto)
+            .build();
+
+    private String meltInto = "Empty";
+
+    @Override
+    public void onRandomTick(Store<ChunkStore> store, CommandBuffer<ChunkStore> buffer,
+                             BlockSection section, int x, int y, int z,
+                             int blockId, BlockType blockType) {
+        // e.g. replace this block with `meltInto` when its biome is warm
+    }
+}
+
+// In your plugin's setup():
+RandomTickProcedure.CODEC.register("Melt", MeltProcedure.class, MeltProcedure.CODEC);
+```
+
+Then reference it from the block's JSON:
+
+```json
+{ "BlockType": { "RandomTickProcedure": { "Type": "Melt", "MeltInto": "Water_Source" } } }
+```
+
+The same pattern applies to scheduled ticks: extend `TickProcedure`, register via `TickProcedure.CODEC.register(...)`, set the block's `TickProcedure` key, and return a [`BlockTickStrategy`](#blocktickstrategy) from `onTick` (`CONTINUE` to keep ticking, `SLEEP`/`IGNORED` when done). Registration names are global to the codec, so pick a distinctive `Type` string. The shipped `BlockTickPlugin` / `RandomTickPlugin` must be enabled (they are by default) — they own the systems that actually walk ticking blocks and call your procedure.
 
 ---
 
@@ -1554,7 +2040,7 @@ public class UseBlockPreSystem extends EntityEventSystem<EntityStore, UseBlockEv
         if (player != null) {
             // Prevent using certain block types
             // event.setCancelled(true);
-            player.sendMessage(Message.raw("You used a block!"));
+            player.getPlayerRef().sendMessage(Message.raw("You used a block!"));
         }
     }
 
@@ -1584,7 +2070,7 @@ public class BlockBreakSystem extends EntityEventSystem<EntityStore, BreakBlockE
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
             Vector3i pos = event.getTargetBlock();
-            player.sendMessage(Message.raw("You broke a block at " + pos.x + ", " + pos.y + ", " + pos.z));
+            player.getPlayerRef().sendMessage(Message.raw("You broke a block at " + pos.x + ", " + pos.y + ", " + pos.z));
         }
     }
 
@@ -1618,7 +2104,7 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
             event.setCancelled(true);
             Player player = chunk.getComponent(index, Player.getComponentType());
             if (player != null) {
-                player.sendMessage(Message.raw("Cannot place blocks above y=100"));
+                player.getPlayerRef().sendMessage(Message.raw("Cannot place blocks above y=100"));
             }
         }
     }

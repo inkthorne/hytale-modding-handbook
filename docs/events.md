@@ -9,7 +9,7 @@ seo:
 
 **Doc type:** Java API · **Verified against 0.5.7**
 
-This document covers the core event system. For specific event classes, see the relevant domain documentation:
+This document covers the core event system. A compiling end-to-end demo of both mechanisms (global bus + ECS event system) lives in `examples/events/`. For specific event classes, see the relevant domain documentation:
 
 - **Player events** → [player.md](player.md) (includes ChangeGameModeEvent, CraftRecipeEvent)
 - **Block events** → [blocks.md](blocks.md)
@@ -375,12 +375,13 @@ protected void setup() {
 
     // Keyed event: use registerGlobal() to catch ALL interactions
     getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        event.getPlayer().sendMessage(Message.raw("You interacted!"));
+        // Player (the entity component) has no sendMessage — go through its PlayerRef
+        event.getPlayer().getPlayerRef().sendMessage(Message.raw("You interacted!"));
     });
 
     // Keyed event: filter to specific key
     getEventRegistry().register(PlayerInteractEvent.class, "specific_interaction_id", event -> {
-        event.getPlayer().sendMessage(Message.raw("Specific interaction!"));
+        event.getPlayer().getPlayerRef().sendMessage(Message.raw("Specific interaction!"));
     });
 }
 ```
@@ -420,7 +421,8 @@ public class PlaceBlockEventSystem extends EntityEventSystem<EntityStore, PlaceB
         // Get player component using chunk and index
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
-            player.sendMessage(Message.raw("You placed a block!"));
+            // Player itself has no sendMessage — chat goes through its PlayerRef
+            player.getPlayerRef().sendMessage(Message.raw("You placed a block!"));
         }
     }
 

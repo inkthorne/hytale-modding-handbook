@@ -19,16 +19,18 @@ Defined as JSON interaction assets (server classes under `com.hypixel.hytale.ser
 - Entity lifecycle: `SpawnPrefab`, `RemoveEntity`, `LaunchProjectile`
 - Player communication: `SendMessage` and UI page opening (`OpenCustomUI`)
 - Inventory/equipment changes: `EquipItem`, `ModifyInventory`
-- World blocks: `BreakBlock`, `PlaceBlock`
+- World blocks: `BreakBlock`, `PlaceBlock`, `PlaceFluid`
+- Interactive blocks and explosions: `Door`, `OpenContainer`, `Explode`
 - Entity state and physics: `ChangeState`, `LaunchPad`, `Wielding`
+- Java utilities behind block interactions: `BlockHarvestUtils`, `PlacedByInteractionComponent`
 
 ## Architecture
 ```
 Entity & World
 ├── Entity lifecycle
-│   ├── SpawnPrefab (PrefabId at Self / Target / HitLocation)
+│   ├── SpawnPrefab (PrefabPath at Entity / Block origin)
 │   ├── RemoveEntity
-│   └── LaunchProjectile (ProjectileId + Speed)
+│   └── LaunchProjectile (ProjectileId)
 ├── Player I/O
 │   ├── SendMessage (chat)
 │   └── UI (OpenCustomUI)
@@ -37,7 +39,10 @@ Entity & World
 │   └── ModifyInventory
 ├── Blocks
 │   ├── BreakBlock
-│   └── PlaceBlock
+│   ├── PlaceBlock
+│   ├── PlaceFluid
+│   ├── Door / OpenContainer (server-side block interactions)
+│   └── Explode (ExplosionConfig)
 └── Entity state & physics
     ├── ChangeState (state-machine transition)
     ├── LaunchPad
@@ -57,6 +62,12 @@ Entity & World
 | `ModifyInventoryInteraction` | `config/server/ModifyInventoryInteraction` | Adjusts inventory contents |
 | `BreakBlockInteraction` | `config/client/BreakBlockInteraction` | Breaks a targeted block |
 | `PlaceBlockInteraction` | `config/client/PlaceBlockInteraction` | Places a block |
+| `PlaceFluidInteraction` | `config/client/PlaceFluidInteraction` | Places a fluid at the targeted block |
+| `DoorInteraction` | `config/server/DoorInteraction` | Opens/closes doors and gates (incl. double doors) |
+| `OpenContainerInteraction` | `config/server/OpenContainerInteraction` | Opens a container block's inventory window |
+| `ExplodeInteraction` | `config/client/ExplodeInteraction` | Explosion with block and entity damage |
+| `BlockHarvestUtils` | `server.core.modules.interaction` | Java helpers: block damage, breaking, drops |
+| `PlacedByInteractionComponent` | `server.core.modules.interaction.components` | Chunk-store component recording who placed a block |
 | `ChangeStateInteraction` | `config/client/ChangeStateInteraction` | Changes an entity's state-machine state |
 | `LaunchPadInteraction` | `config/server/LaunchPadInteraction` | Launch-pad physics |
 | `WieldingInteraction` | `config/client/WieldingInteraction` | Blocking and guarding mechanics |
@@ -72,9 +83,14 @@ Entity & World
 | [UI Interactions](#ui-interactions) | Open custom UI pages (OpenCustomUI) |
 | [Inventory Interactions](#inventory-interactions) | Manage inventory and equipment |
 | [Block Interactions](#block-interactions) | Break or place blocks |
+| [PlaceFluid](#placefluid) | Place a fluid into the world |
+| [Door](#door) | Open/close doors and gates |
+| [OpenContainer](#opencontainer) | Open a container block's window |
+| [Explode](#explode) | Explosion with block and entity damage |
 | [ChangeState](#changestate) | Change entity state machine state |
 | [LaunchPadInteraction](#launchpadinteraction) | Launch pad physics |
 | [WieldingInteraction](#wieldinginteraction) | Blocking and guarding mechanics |
+| [Java Block Utilities](#java-block-utilities) | BlockHarvestUtils, PlacedByInteractionComponent |
 
 ---
 
@@ -82,17 +98,18 @@ Entity & World
 
 **Package:** `config/server/SpawnPrefabInteraction`
 
-Spawns entities at specified locations.
+Spawns a prefab at the current location.
 
 ### Structure
 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "Skeleton_Fighter_Random_Weapon",
-  "Position": "Target",
-  "Count": 1,
-  "Offset": [0, 0, 0]
+  "PrefabPath": "Goblin_Thief_Chest.prefab.json",
+  "Offset": { "X": 0, "Y": 0, "Z": 0 },
+  "RotationYaw": "OneEighty",
+  "OriginSource": "Entity",
+  "Force": true
 }
 ```
 
@@ -100,22 +117,24 @@ Spawns entities at specified locations.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `PrefabId` | string | Entity prefab ID to spawn |
-| `Position` | string | `Self`, `Target`, or `HitLocation` |
-| `Count` | int | Number of entities to spawn |
-| `Offset` | [x, y, z] | Position offset from spawn point |
-| `SpawnVelocity` | [x, y, z] | Initial velocity for spawned entity |
-| `InheritVelocity` | boolean | Inherit spawner's velocity |
+| `PrefabPath` | string | Prefab file to paste (e.g. `Goblin_Thief_Chest.prefab.json`) |
+| `Offset` | object | `{X, Y, Z}` integer offset from the origin |
+| `RotationYaw` | string | `None`, `Ninety`, `OneEighty`, or `TwoSeventy` |
+| `OriginSource` | string | `Entity` (position of the interacting entity) or `Block` (position of the targeted block) |
+| `Force` | boolean | Paste even where placement would otherwise be rejected |
 
-### Example: Summon Minions on Ability
+### Example: Goblin Thief dropping its loot chest
+
+From `Server/Item/Interactions/NPCs/Intelligent/Goblin_Thief/Goblin_Thief_Chest.json`:
 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "Skeleton_Fighter_Random_Weapon",
-  "Position": "Self",
-  "Count": 3,
-  "Offset": [0, 0, 2]
+  "PrefabPath": "Goblin_Thief_Chest.prefab.json",
+  "Offset": { "X": 0, "Y": 0, "Z": 0 },
+  "RotationYaw": "OneEighty",
+  "OriginSource": "Entity",
+  "Force": true
 }
 ```
 
@@ -169,10 +188,7 @@ Fires projectiles from an entity.
 ```json
 {
   "Type": "LaunchProjectile",
-  "ProjectileId": "Arrow_FullCharge",
-  "Speed": 50,
-  "SpawnOffset": [0, 1.5, 0.5],
-  "AimType": "Forward"
+  "ProjectileId": "Arrow_FullCharge"
 }
 ```
 
@@ -180,13 +196,13 @@ Fires projectiles from an entity.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `ProjectileId` | string | Projectile prefab ID |
-| `Speed` | float | Initial projectile speed |
-| `SpawnOffset` | [x, y, z] | Offset from entity position |
-| `AimType` | string | `Forward`, `AtTarget`, `AtCursor` |
-| `Spread` | float | Random spread angle (degrees) |
-| `Count` | int | Number of projectiles |
-| `Gravity` | float | Gravity multiplier |
+| `ProjectileId` | string | Projectile config ID |
+
+`ProjectileId` is the interaction's only own property — speed, gravity, spawn offset,
+and spread all live on the referenced projectile config, not on the interaction.
+Charged bows fire stronger shots by launching a different projectile per charge level
+(`Arrow_NoCharge` / `Arrow_HalfCharge` / `Arrow_FullCharge`), and the interaction can
+still carry inherited properties such as `RunTime` and `Effects`.
 
 See [projectiles.md](projectiles.md) for more projectile details.
 
@@ -333,29 +349,174 @@ Adjusts the quantity of the currently held item. Used to consume items on use (e
 
 **Package:** `config/client/BreakBlockInteraction`
 
-Breaks a block at the target location.
+Attempts to break the target block.
 
 ```json
 {
   "Type": "BreakBlock",
-  "Target": "TargetBlock",
-  "DropItems": true
+  "Tool": "Scraper",
+  "MatchTool": true
 }
 ```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Harvest` | boolean | Trigger as a harvest gather instead of a break gather |
+| `Tool` | string | Tool to break as |
+| `MatchTool` | boolean | Require a match to `Tool` to work |
 
 ### PlaceBlock
 
 **Package:** `config/client/PlaceBlockInteraction`
 
-Places a block at the target location.
+Places the current or given block.
 
 ```json
 {
   "Type": "PlaceBlock",
-  "Target": "TargetBlock",
-  "BlockId": "Rock_Dawnstone"
+  "BlockTypeToPlace": "Tree_Sap_Glob",
+  "RemoveItemInHand": true
 }
 ```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `BlockTypeToPlace` | string | Overrides the placed block type of the held item with the provided block type |
+| `RemoveItemInHand` | boolean | Remove the item in the instigating entity's hand |
+| `AllowDragPlacement` | boolean | Use drag placement when click is held |
+
+### PlaceFluid
+
+**Package:** `config/client/PlaceFluidInteraction`
+
+Places a fluid at the targeted block. Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction) (but its codec builds on `SimpleInteraction.CODEC`, so it does not expose `UseLatestTarget`).
+
+```json
+{
+  "Type": "PlaceFluid",
+  "FluidToPlace": "Water",
+  "RemoveItemInHand": true
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `FluidToPlace` | string | Fluid asset key to place (validated against loaded fluids; see [fluids.md](fluids.md)) |
+| `RemoveItemInHand` | boolean | Default `true`. Consume the held item when placing (only applies for Adventure-mode players, and only when the held stack's quantity is exactly 1) |
+
+Behavior (from the decompiled source):
+
+- If the fluid's ticker cannot occupy solid blocks and the target block is solid, the fluid is placed one block out, on the face the client hit.
+- The fluid is set at its **maximum fluid level** and the block is marked ticking so the fluid starts flowing.
+- An unknown `FluidToPlace` key logs `Unknown fluid: %s` and resolves to the unknown fluid.
+
+Java accessors: `getFluidKey()`; `getWaitForDataFrom()` returns `WaitForDataFrom.Client`; `needsRemoteSync()` returns `true`.
+
+---
+
+## Door
+
+**Package:** `config/server/DoorInteraction`
+
+Opens/closes a door block (codec doc: "Opens/Closes a door"). Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction). Wired to door blocks via `"Interactions": { "Use": "Door" }` in the block's item definition; the door's states themselves are block-state JSON (see [blocks.md](blocks.md)).
+
+```json
+{
+  "Type": "Door",
+  "Horizontal": false
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Horizontal` | boolean | Codec doc: "Whether the door is horizontal (e.g. gates) or vertical (e.g. regular doors)." |
+
+Behavior (from the decompiled source):
+
+- **Open direction depends on where you stand:** a vertical door opens *away* from the interacting entity — `OPENED_OUT` if the entity is in front of the door, otherwise `OPENED_IN`. Opening/closing drives the block interaction states `OpenDoorIn` / `OpenDoorOut` / `CloseDoorIn` / `CloseDoorOut`, and a blocked door checks the `DoorBlocked` state.
+- **Double doors:** the paired door (if present) is activated in the mirrored state at the same time.
+- Soft blocks inside the door's swept hitbox are broken when the door moves.
+- If the door cannot move, the interaction ends in `InteractionState.Failed` (so a `Failed` branch in the chain can react).
+
+Java API:
+
+```java
+boolean getIsHorizontal()
+
+// Find the door (and its double-door pairing info) at a position
+static DoorInteraction.DoorInfo getDoorAtPosition(ChunkStore chunkStore,
+        int x, int y, int z, Rotation rotation)
+```
+
+---
+
+## OpenContainer
+
+**Package:** `config/server/OpenContainerInteraction`
+
+Opens the item container of the targeted block (codec doc: "Opens the container of the block currently being interacted with."). Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction) and adds no properties of its own:
+
+```json
+{
+  "Type": "OpenContainer"
+}
+```
+
+Behavior (from the decompiled source):
+
+- Looks up the block's `ItemContainerBlock` component and opens a `ContainerBlockWindow` for the player (Bench page). Multiple players can have the same container open — windows are tracked per player UUID.
+- The **first** opened window sets the block's `OpenWindow` interaction state (public constant `OPEN_WINDOW`); when the **last** window closes, the `CloseWindow` state (`CLOSE_WINDOW`) is applied. The state's interaction sound plays at the block center.
+- If the targeted block has no container component, the player receives the `server.interactions.invalidBlockState` translation message and nothing opens.
+
+See [Inventory API](inventory.md) for the container/window classes themselves.
+
+---
+
+## Explode
+
+**Package:** `config/client/ExplodeInteraction`
+
+Performs an explosion (codec doc: "Performs an explosion using the provided config."). Extends `SimpleInstantInteraction`, so it fires immediately. This is the recommended way to get real AOE from a projectile impact (see the gotchas in [projectiles.md](projectiles.md) and [interactions-combat.md](interactions-combat.md)).
+
+```json
+{
+  "Type": "Explode",
+  "Config": {
+    "DamageEntities": true,
+    "DamageBlocks": true,
+    "BlockDamageRadius": 3,
+    "BlockDropChance": 0.5,
+    "EntityDamageRadius": 5,
+    "EntityDamage": 40
+  }
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Config` | object | Required `ExplosionConfig` (codec doc: "The explosion config associated with this projectile.") |
+
+`Config` sub-properties (descriptions are the codec documentation strings):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `DamageEntities` | boolean | "Determines whether the explosion should damage entities." |
+| `DamageBlocks` | boolean | "Determines whether the explosion should damage blocks." |
+| `BlockDamageRadius` | int | "The radius in which blocks should be damaged by the explosion." |
+| `BlockDamageFalloff` | float | "The falloff applied to the block damage." |
+| `BlockDropChance` | float | "The chance in which a block drops its loot after breaking." |
+| `EntityDamageRadius` | float | "The radius in which entities should be damaged by the explosion." |
+| `EntityDamage` | float | "The amount of damage to be applied to entities within range." |
+| `EntityDamageFalloff` | float | "The falloff applied to the entity damage." |
+| `Knockback` | object | "Determines the knockback effect applied to damaged entities." |
+| `ItemTool` | object | "The item tool to reference when applying damage to blocks." |
+| `Particles` | array | "The particles to spawn when the explosion is triggered." |
+| `SoundEventId` | string | "The sound event played to surrounding players when the explosion is triggered." (must be a mono sound event) |
+
+Behavior (from the decompiled source):
+
+- **Explosion origin**, in priority order: the `HIT_LOCATION` meta value if present; else the targeted block's center (for collision-triggered interaction types); else the executing entity's position.
+- If the executing entity is a projectile, damage is attributed as a projectile source (shooter = owning entity); otherwise the environment source `"explosion"` is used (public constant `DAMAGE_SOURCE_EXPLOSION`).
 
 ---
 
@@ -398,20 +559,31 @@ This creates a toggle: when in `default` state, transition to `Off`; when in `Of
 
 ### Integration with Block State Definitions
 
-ChangeState works with the block's state machine defined in its BlockType configuration:
+ChangeState works with the block's state machine defined in its BlockType configuration.
+For example, fence blocks override their `Supporting` faces per state (from
+`Server/Item/Items/Build/Build_Grey/Build_Grey_Fence.json`):
 
 ```json
 {
   "State": {
     "Definitions": {
-      "On": { "CanProvideSupport": { "Up": true } },
-      "Off": { "CanProvideSupport": { "Up": false } }
+      "Corner": {
+        "CustomModel": "...",
+        "HitboxType": "...",
+        "Supporting": {
+          "Down": [{ "FaceType": "Fence_Corner" }],
+          "Up": [{ "FaceType": "Fence_Corner" }]
+        }
+      }
     }
   }
 }
 ```
 
-Each state in `Definitions` can override block properties like collision, light emission, and support behavior. The `Changes` map references these state names.
+Each state in `Definitions` can override block properties like collision, light emission,
+and support behavior — the real support keys are `Support` (required-support conditions,
+per face), `Supporting` (faces this block offers to others), `SupportsRequiredFor`,
+`MaxSupportDistance`, and `SupportDropType`. The `Changes` map references these state names.
 
 ### Examples
 
@@ -517,13 +689,47 @@ Example assets using ChangeState:
 
 **Package:** `config/server/LaunchPadInteraction`
 
-Specialized launch pad physics for bouncing entities.
+Applies the launchpad forces. The interaction itself has **no own codec fields** — it is
+just `{ "Type": "LaunchPad" }`, wired to the block's `CollisionEnter` interaction slot.
+The launch velocity comes from the block entity's `LaunchPad` component
+(`world/meta/state/LaunchPad`), whose per-placement values are edited in-game via the
+pad's settings UI:
 
 ```json
 {
-  "Type": "LaunchPad",
-  "LaunchVelocity": [0, 20, 0],
-  "PreserveHorizontal": true
+  "Type": "LaunchPad"
+}
+```
+
+`LaunchPad` component keys:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `VelocityX` | double | The X velocity of the launch pad |
+| `VelocityY` | double | The Y velocity of the launch pad |
+| `VelocityZ` | double | The Z velocity of the launch pad |
+| `PlayersOnly` | boolean | Determines whether only players can use this launch pad |
+
+On collision the velocity is applied with `ChangeVelocityType.Set` (replacing the
+entity's velocity, not adding to it). From
+`Server/Item/Items/Electrum/Portal/Launchpad.json`:
+
+```json
+{
+  "BlockType": {
+    "BlockEntity": {
+      "Components": {
+        "LaunchPad": {}
+      }
+    },
+    "Interactions": {
+      "CollisionEnter": {
+        "Interactions": [
+          { "Type": "LaunchPad" }
+        ]
+      }
+    }
+  }
 }
 ```
 
@@ -999,6 +1205,85 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 
 ---
 
+## Java Block Utilities
+
+Server-side helpers behind the block interactions on this page. Java API, not JSON.
+
+### BlockHarvestUtils
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction`
+
+Static utilities implementing block damage, breaking, pickup, and drops. Used by `BreakBlock`/`DestroyBlock` interactions, doors (soft-block clearing), explosions, and the block-physics plugins — and useful from your own plugin when you want block breaking that respects tools, durability, and drop lists.
+
+```java
+// Tool/spec resolution and durability
+static ItemToolSpec getSpecPowerDamageBlock(Item item, BlockType blockType, ItemTool tool)
+static double calculateDurabilityUse(Item item, BlockType blockType)
+
+// Damage a block (returns true when handled); the long overload can require a matching tool
+static boolean performBlockDamage(Vector3i targetBlock, ItemStack itemStack, ItemTool tool,
+        float damageScale, int setBlockSettings, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static boolean performBlockDamage(Ref<EntityStore> ref, Vector3i targetBlock, ItemStack itemStack,
+        ItemTool tool, String toolId, boolean matchTool, float damageScale, int setBlockSettings,
+        Ref<ChunkStore> chunkReference, ComponentAccessor<EntityStore> entityStore,
+        ComponentAccessor<ChunkStore> chunkStore)
+
+// Break a block outright (with drops); the World overload lets you override drop item/list/quantity
+static void performBlockBreak(Ref<EntityStore> ref, ItemStack heldItemStack, Vector3i targetBlock,
+        Ref<ChunkStore> chunkReference, ComponentAccessor<EntityStore> entityStore,
+        ComponentAccessor<ChunkStore> chunkStore)
+static void performBlockBreak(Ref<EntityStore> ref, ItemStack heldItemStack, Vector3i targetBlock,
+        int setBlockSettings, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static void performBlockBreak(World world, Vector3i blockPosition, BlockType targetBlockType,
+        ItemStack heldItemStack, int dropQuantity, String dropItemId, String dropListId,
+        int setBlockSettings, Ref<EntityStore> ref, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+
+// "Natural" removal (physics-driven, e.g. support lost), replacing with a filler block id
+static void naturallyRemoveBlockByPhysics(Vector3i blockPosition, BlockType blockType, int filler,
+        int setBlockSettings, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static void naturallyRemoveBlock(Vector3i blockPosition, BlockType blockType, int filler,
+        int quantity, String itemId, String dropListId, int setBlockSettings,
+        Ref<ChunkStore> chunkReference, ComponentAccessor<EntityStore> entityStore,
+        ComponentAccessor<ChunkStore> chunkStore)
+
+// Blocks picked up directly into the inventory instead of breaking
+static boolean shouldPickupByInteraction(BlockType blockType)
+static void performPickupByInteraction(Ref<EntityStore> ref, Vector3i targetBlock,
+        BlockType blockType, int filler, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+
+// Compute the drop stacks for a block (drop-list aware)
+static List<ItemStack> getDrops(BlockType blockType, int quantity, String itemId, String dropListId)
+```
+
+See [drops.md](drops.md) for how drop lists are defined.
+
+### PlacedByInteractionComponent
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.components`
+
+Chunk-store component (serialized id `PlacedByInteraction`, registered by `InteractionModule`) that records **which player placed a block**. It is attached to the block's chunk-store entry by the block-placement path when a player places a block, and can be read by systems that care about ownership — e.g. the builtin teleporter creates a warp for the placing player when a teleporter block gains this component.
+
+```java
+public static final BuilderCodec<PlacedByInteractionComponent> CODEC;
+
+static ComponentType<ChunkStore, PlacedByInteractionComponent> getComponentType()
+
+PlacedByInteractionComponent()
+PlacedByInteractionComponent(UUID whoPlacedUuid)
+
+UUID getWhoPlacedUuid()
+Component<ChunkStore> clone()
+```
+
+The component type is also reachable via `InteractionModule.get().getPlacedByComponentType()` (see [interactions.md](interactions.md#interactionmodule)).
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 server (verified against `HytaleServer.jar`).
@@ -1007,4 +1292,4 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`No projectile config typeName provided`** → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
 - **`has no valid ProjectileConfig:`** → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
 - **Symptom:** a `ChangeState` does nothing → the current state isn't a key in the `Changes` map, so no transition matches. Fix: include the entity/block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
-- **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabId` doesn't resolve to a loaded prefab. Fix: use a prefab ID that exists in the loaded asset set (filename without extension).
+- **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabPath` doesn't resolve to a stored prefab. Fix: use the prefab's file name as registered in the prefab store (e.g. `Goblin_Thief_Chest.prefab.json`).

@@ -7,7 +7,7 @@ seo:
 
 # Effects & Stats Reference
 
-**Doc type:** JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.7**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.7**
 
 This document covers the JSON asset structure for status effects and entity stats.
 
@@ -134,11 +134,17 @@ For basic stat changes with optional percentage-based values:
 ```json
 {
   "StatModifiers": {
-    "HorizontalSpeed": 0.3
+    "Mana": 25
   },
-  "ValueType": "Percent"
+  "Duration": 2,
+  "OverlapBehavior": "Extend"
 }
 ```
+
+> **Note:** movement speed is not a `StatModifiers` stat. Slows and speed boosts use
+> the `HorizontalSpeedMultiplier` key under [ApplicationEffects](#applicationeffects) —
+> e.g. `Server/Entity/Effects/Status/Slow.json` sets
+> `"ApplicationEffects": { "HorizontalSpeedMultiplier": 0.5 }`.
 
 #### RawStatModifiers
 
@@ -776,6 +782,77 @@ This oxygen stat:
 - Regenerates quickly (25/0.5s) when alive and not suffocating
 - Refills instantly for players in Creative mode
 - Drains 3/0.5s while suffocating
+
+---
+
+## Stat Modifiers from Java (Modifier & StaticModifier)
+
+**Package:** `com.hypixel.hytale.server.core.modules.entitystats.modifier`
+
+The JSON `RawStatModifiers` above compile down to **`Modifier`** objects attached to an entity's stat map — and plugins can attach their own directly. A modifier adjusts a stat's **MIN or MAX bound** (not its current value; use `EntityStatMap` value methods for that — see [Entity Stats](entities.md#entity-stats-entitystatmap)).
+
+### Modifier (abstract)
+
+| Member | Description |
+|--------|-------------|
+| `getTarget()` | `Modifier.ModifierTarget` — `MIN` or `MAX` |
+| `apply(float)` | Computes the adjusted bound from the input value |
+
+### StaticModifier
+
+The concrete implementation used by armor, effects, deployables, and NPC balancing:
+
+```java
+new StaticModifier(Modifier.ModifierTarget target,        // MIN or MAX
+                   StaticModifier.CalculationType type,   // ADDITIVE or MULTIPLICATIVE
+                   float amount)
+```
+
+| Member | Description |
+|--------|-------------|
+| `getCalculationType()` | `ADDITIVE` (bound + amount) or `MULTIPLICATIVE` (bound × amount) |
+| `getAmount()` | The operand |
+| `apply(float)` | `ADDITIVE`: `value + amount`; `MULTIPLICATIVE`: `value * amount` |
+
+`CalculationType.createKey(String)` builds a calculation-scoped modifier key from a base name — the engine uses it (e.g. armor registers under `createKey("Armor")`) so that an additive and a multiplicative modifier from the same source don't overwrite each other.
+
+### Attaching modifiers to an entity
+
+Modifiers live on the entity's `EntityStatMap`, keyed by **(stat index, string key)** — putting with an existing key replaces that modifier, so pick a unique, plugin-prefixed key you can remove later:
+
+```java
+EntityStatMap stats = store.getComponent(ref, EntityStatMap.getComponentType());
+int healthIndex = DefaultEntityStatTypes.getHealth();
+
+// +50 max health while the blessing lasts
+StaticModifier bonus = new StaticModifier(
+        Modifier.ModifierTarget.MAX,
+        StaticModifier.CalculationType.ADDITIVE,
+        50.0f);
+stats.putModifier(healthIndex, "MyPlugin_Blessing", bonus);
+
+stats.getModifier(healthIndex, "MyPlugin_Blessing");     // read it back
+stats.removeModifier(healthIndex, "MyPlugin_Blessing");  // remove when the buff ends
+```
+
+Raising `MAX` does not raise the *current* value — follow up with `stats.addStatValue(...)` or `maximizeStatValue(...)` if the buff should also heal. For modifiers driven by equipment/effect recalculation, see `StatModifiersManager` in [entities.md](entities.md#statmodifiersmanager).
+
+### EntityStatsModule
+
+**Package:** `com.hypixel.hytale.server.core.modules.entitystats`
+
+The core plugin that owns the stat system. Two things matter to plugin authors:
+
+| Member | Description |
+|--------|-------------|
+| `static EntityStatsModule.get()` | Module singleton |
+| `static get(Entity)` | The `EntityStatMap` for a legacy `Entity` object |
+| `static resolveEntityStats(String[])` | Stat **names → indices** (bulk) |
+| `static resolveEntityStats(Map<String, T>)` | Re-key a name-keyed map by stat index |
+| `static resolveEntityStats(Object2FloatMap<String>)` | Same for float maps |
+| `getEntityStatMapComponentType()` | The `ComponentType` behind `EntityStatMap.getComponentType()` |
+
+The `resolveEntityStats` helpers are the supported way to turn stat *names* from your own config files (`"Health"`, `"Stamina"`, custom stats from `Server/Entity/Stats/`) into the runtime indices that `EntityStatMap` and modifiers use — same resolution the engine applies to the JSON assets on this page. For the common built-ins, `DefaultEntityStatTypes` getters are the shortcut.
 
 ---
 

@@ -56,6 +56,25 @@ ComponentRegistry (per ECS type: EntityStore / ChunkStore)
 | `ComponentRegistry<ECS_TYPE>` | `component` | Registers components, resources, systems, and event types |
 | `Query<ECS_TYPE>` | `component.query` | Filters entities by component composition |
 | `EntityTickingSystem<ECS_TYPE>` | `component.system.tick` | Base class for per-tick entity processing |
+| `DelayedEntitySystem<ECS_TYPE>` | `component.system.tick` | Per-entity processing on a fixed interval instead of every tick |
+| `RunWhenPausedSystem<ECS_TYPE>` | `component.system.tick` | Marker interface — the system also ticks while the world is paused |
+| `RefSystem<ECS_TYPE>` | `component.system` | Lifecycle callbacks with a live `Ref` when matching entities are added/removed |
+| `HolderSystem<ECS_TYPE>` | `component.system` | Lifecycle callbacks with the entity's `Holder` data on add/remove |
+| `StoreSystem<ECS_TYPE>` | `component.system` | Callbacks when the system itself is added to / removed from a store |
+| `DelayedSystem<ECS_TYPE>` | `component.system` | Store-wide ticking on a fixed interval instead of every tick |
+| `WorldEventSystem<ECS_TYPE, EventType>` | `component.system` | Handles world-level ECS events (no target entity) |
+| `Dependency<ECS_TYPE>` | `component.dependency` | Base class for system ordering constraints |
+| `SystemDependency<ECS_TYPE, T>` | `component.dependency` | Order a system before/after another system class |
+| `SystemGroupDependency<ECS_TYPE>` | `component.dependency` | Order a system before/after a `SystemGroup` |
+| `RootDependency<ECS_TYPE>` | `component.dependency` | Pin a system toward the very start/end of the system order |
+| `Order` / `OrderPriority` | `component.dependency` | `BEFORE`/`AFTER` direction plus tie-break priority for dependencies |
+| `SystemType<ECS_TYPE, T>` | `component` | Type descriptor for a registered system class (like `ComponentType` for systems) |
+| `DisableProcessingAssert` | `component` | Marker interface — opts a system out of the store's processing assertion |
+| `SpatialSystem<ECS_TYPE>` | `component.spatial` | Ticking system that maintains a spatial index of matching entities |
+| `SpatialResource<T, ECS_TYPE>` | `component.spatial` | World resource holding a spatial index (`SpatialData` + `SpatialStructure`) |
+| `SpatialStructure<T>` / `KDTree<T>` | `component.spatial` | Position queries — closest / radius / cylinder / box / distance-ordered |
+| `SpatialData<T>` | `component.spatial` | Flat position + payload buffer a spatial structure is rebuilt from |
+| `UnknownComponents<ECS_TYPE>` | `component.data.unknown` | Preserves serialized data of unregistered component types across save/load |
 | `EntityStore` | `server.core.universe.world.storage` | ECS type parameter for entity components |
 | `ChunkStore` | `server.core.universe.world.storage` | ECS type parameter for chunk components |
 | `TransformComponent` | `server.core.modules.entity.component` | Stores entity position and rotation |
@@ -1009,6 +1028,285 @@ protected void setup() {
     getEntityStoreRegistry().registerSystem(new MyTickingSystem());
 }
 ```
+
+---
+
+## Choosing a System Base Class
+
+`EntityTickingSystem` is one of several abstract system bases in `com.hypixel.hytale.component.system`. All of them are registered the same way (`registry.registerSystem(new MySystem())`); pick by what should trigger your code:
+
+| You want to... | Extend | Override |
+|----------------|--------|----------|
+| Process matching entities every tick | `EntityTickingSystem<ECS_TYPE>` | `tick(...)`, `getQuery()` |
+| Process matching entities on a fixed interval | `DelayedEntitySystem<ECS_TYPE>` | `tick(...)`, `getQuery()` (interval via constructor) |
+| Run store-wide logic on a fixed interval | `DelayedSystem<ECS_TYPE>` | `delayedTick(...)` (interval via constructor) |
+| React when matching entities spawn/despawn (live entity) | `RefSystem<ECS_TYPE>` | `onEntityAdded(...)`, `onEntityRemove(...)`, `getQuery()` |
+| Inspect/adjust entity data as it enters/leaves the store | `HolderSystem<ECS_TYPE>` | `onEntityAdd(...)`, `onEntityRemoved(...)`, `getQuery()` |
+| Set up / tear down per-world state with the system | `StoreSystem<ECS_TYPE>` | `onSystemAddedToStore(...)`, `onSystemRemovedFromStore(...)` |
+| Handle an ECS event targeted at an entity | `EntityEventSystem<ECS_TYPE, Event>` | see [Events API](events.md#ecs-events-entityeventsystem) |
+| Handle a world-level ECS event | `WorldEventSystem<ECS_TYPE, Event>` | `handle(store, buffer, event)` |
+
+### RefSystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system`
+
+Lifecycle callbacks fired when an entity matching `getQuery()` is added to or removed from the store. You get a live `Ref` plus a `CommandBuffer`, so you can read components and queue follow-up mutations safely.
+
+```java
+public abstract void onEntityAdded(Ref<ECS_TYPE> ref, AddReason reason,
+                                   Store<ECS_TYPE> store, CommandBuffer<ECS_TYPE> buffer)
+public abstract void onEntityRemove(Ref<ECS_TYPE> ref, RemoveReason reason,
+                                    Store<ECS_TYPE> store, CommandBuffer<ECS_TYPE> buffer)
+public abstract Query<ECS_TYPE> getQuery()   // from QuerySystem
+```
+
+This is the standard "player joined the world" hook: a `RefSystem<EntityStore>` with `getQuery()` returning `Player.getComponentType()` gets `onEntityAdded` for every player entity. Check `AddReason` (`SPAWN` vs `LOAD`) / `RemoveReason` (`REMOVE` vs `UNLOAD`) to distinguish fresh spawns from persistence loads.
+
+> **Note the asymmetric names:** `onEntityAdded` (past tense) but `onEntityRemove` (present) — `RefSystem` fires *after* the entity is in the store and *before* it leaves. The `HolderSystem` pair is mirrored: `onEntityAdd` / `onEntityRemoved`.
+
+### HolderSystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system`
+
+Like `RefSystem`, but the callbacks receive the entity's `Holder` (blueprint) instead of a live `Ref` — `onEntityAdd` runs *before* the entity is inserted (you can still add/adjust components on the holder), and `onEntityRemoved` runs *after* removal with the removed entity's data.
+
+```java
+public abstract void onEntityAdd(Holder<ECS_TYPE> holder, AddReason reason, Store<ECS_TYPE> store)
+public abstract void onEntityRemoved(Holder<ECS_TYPE> holder, RemoveReason reason, Store<ECS_TYPE> store)
+public abstract Query<ECS_TYPE> getQuery()   // from QuerySystem
+```
+
+Reach for `HolderSystem` to guarantee an entity enters the store fully equipped (the engine uses it to ensure components exist on matching entities before any other system sees them). For a given entity, `HolderSystem.onEntityAdd` fires before `RefSystem.onEntityAdded`; on removal, `RefSystem.onEntityRemove` fires before `HolderSystem.onEntityRemoved`.
+
+### StoreSystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system`
+
+Callbacks tied to the *system's* lifecycle, not any entity's — fired when the system is attached to / detached from a `Store` (e.g. on registration, per world).
+
+```java
+public abstract void onSystemAddedToStore(Store<ECS_TYPE> store)
+public abstract void onSystemRemovedFromStore(Store<ECS_TYPE> store)
+```
+
+Use it to initialize or clean up per-world state (seed a `Resource`, hook external services). It has no query and never iterates entities.
+
+### DelayedSystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system`
+
+A `TickingSystem` that only does work every `intervalSec` seconds instead of every tick. It accumulates delta time in an internal per-store resource and calls `delayedTick` once the interval elapses.
+
+```java
+public DelayedSystem(float intervalSec)
+public float getIntervalSec()
+public abstract void delayedTick(float dt, int systemIndex, Store<ECS_TYPE> store)
+```
+
+Use for periodic store-wide jobs (cleanup sweeps, notifications) that would be wasteful every tick. The `dt` passed to `delayedTick` is the **full accumulated time** since the last delayed tick (≥ `intervalSec`), not the per-tick delta — scale any rate-based math by it.
+
+### DelayedEntitySystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system.tick`
+
+`EntityTickingSystem` with the same interval gating as `DelayedSystem`: you implement the usual per-entity `tick(dt, index, chunk, store, buffer)` and `getQuery()`, but entities are only processed once per interval.
+
+```java
+public DelayedEntitySystem(float intervalSec)
+public float getIntervalSec()
+// then override EntityTickingSystem.tick(...) and getQuery() as usual
+```
+
+The interval is tracked store-wide (one hidden resource), so all matching entities are processed together in the same burst tick, each receiving the accumulated `dt`. The engine uses this for things like periodic sleep-state packets.
+
+### WorldEventSystem<ECS_TYPE, EventType>
+**Package:** `com.hypixel.hytale.component.system`
+
+Handles world-level ECS events — events invoked on the store itself (`store.invoke(event)` / `buffer.invoke(event)`) rather than on a target entity. The counterpart of `EntityEventSystem` for events with no entity.
+
+```java
+protected WorldEventSystem(Class<EventType> eventType)
+public abstract void handle(Store<ECS_TYPE> store, CommandBuffer<ECS_TYPE> buffer, EventType event)
+```
+
+The event class must be registered via `registerWorldEventType` (see [ComponentRegistry](#componentregistryecs_type)) and extend `EcsEvent`. Note the `handle` signature has no `index`/`ArchetypeChunk`/`Ref` — there is no target entity; use the `CommandBuffer` for any entity mutations.
+
+### RunWhenPausedSystem<ECS_TYPE>
+**Package:** `com.hypixel.hytale.component.system.tick`
+
+Marker interface (no methods) extending `TickableSystem`. When a world is paused, the store's normal tick is replaced by a paused tick that runs **only** systems implementing this interface — everything else is skipped.
+
+```java
+public interface RunWhenPausedSystem<ECS_TYPE> extends TickableSystem<ECS_TYPE> { }
+```
+
+Implement it alongside a ticking base class if your system must keep running while the world is paused (the engine's chunk-saving and chunk-unloading systems do this). Ordinary gameplay systems should *not* implement it.
+
+### DisableProcessingAssert
+**Package:** `com.hypixel.hytale.component`
+
+Marker interface (no methods). While a system implementing it is executing, the store suppresses its "is processing" assertion, permitting direct store operations that are normally asserted against during system execution.
+
+```java
+public interface DisableProcessingAssert { }
+```
+
+This is an escape hatch used by a handful of engine systems (e.g. block physics). For plugin code, prefer routing mutations through the `CommandBuffer` — it stays iteration-safe without disabling the guardrail.
+
+---
+
+## System Ordering (Dependencies)
+
+**Package:** `com.hypixel.hytale.component.dependency`
+
+Registered systems run in an order computed from declared dependencies. Override `getDependencies()` (a default method on `ISystem`) to constrain where your system runs relative to others:
+
+```java
+import com.hypixel.hytale.component.dependency.Dependency;
+import com.hypixel.hytale.component.dependency.Order;
+import com.hypixel.hytale.component.dependency.SystemDependency;
+
+public class MyFollowUpSystem extends EntityTickingSystem<EntityStore> {
+    private static final Set<Dependency<EntityStore>> DEPENDENCIES =
+        Set.of(new SystemDependency<>(Order.AFTER, SomeOtherSystem.class));
+
+    @Override
+    public Set<Dependency<EntityStore>> getDependencies() {
+        return DEPENDENCIES;
+    }
+
+    // ... tick(...) and getQuery() as usual
+}
+```
+
+### Dependency Types
+
+`Dependency<ECS_TYPE>` is the abstract base — every dependency carries an `Order` (direction) and a priority (`getOrder()` / `getPriority()`). Three concrete forms cover plugin needs:
+
+```java
+// Run before/after another system class
+SystemDependency(Order order, Class<T> systemClass)
+SystemDependency(Order order, Class<T> systemClass, OrderPriority priority)
+
+// Run before/after a SystemGroup (created via registry.registerSystemGroup())
+SystemGroupDependency(Order order, SystemGroup<ECS_TYPE> group)
+SystemGroupDependency(Order order, SystemGroup<ECS_TYPE> group, OrderPriority priority)
+
+// Pin toward the absolute start/end of the system order
+static <ECS_TYPE> RootDependency<ECS_TYPE> RootDependency.first()
+static <ECS_TYPE> RootDependency<ECS_TYPE> RootDependency.last()
+// Ready-made singleton sets for getDependencies():
+static <ECS_TYPE> Set<Dependency<ECS_TYPE>> RootDependency.firstSet()
+static <ECS_TYPE> Set<Dependency<ECS_TYPE>> RootDependency.lastSet()
+```
+
+### Order and OrderPriority
+
+```java
+public enum Order { BEFORE, AFTER }
+
+public enum OrderPriority { CLOSEST, CLOSE, NORMAL, FURTHER, FURTHEST }
+```
+
+`Order` is the direction of the constraint; `OrderPriority` breaks ties when multiple systems declare the same relative order — `CLOSEST` sorts nearest to the anchor system, `FURTHEST` farthest. Constructors also accept a raw `int` priority; `OrderPriority.getValue()` exposes the underlying value.
+
+> ⚠️ A `SystemDependency` on a system class that was never registered fails at sort time with
+> `System dependency isn't registered:` (see [Gotchas](#gotchas--errors)) — register the anchor
+> system before the dependent one.
+
+### SystemType<ECS_TYPE, T>
+**Package:** `com.hypixel.hytale.component`
+
+Type descriptor for a registered system class — the system-side analogue of `ComponentType`. Obtained from `ComponentRegistry.registerSystemType(Class)`; key members are `getTypeClass()`, `isType(ISystem)`, `getIndex()`, and `getRegistry()`. The engine uses it to schedule whole categories of systems (ticking, run-when-paused), and `SystemTypeDependency` orders a system relative to *every* system of a type. Most plugins never need it directly — `SystemDependency` on a concrete class covers the common case.
+
+---
+
+## Spatial Queries (component.spatial)
+
+**Package:** `com.hypixel.hytale.component.spatial`
+
+The spatial package maintains per-world positional indexes so systems can answer "what's near this point?" without scanning every entity. The engine registers spatial systems for players, NPCs, items, and more; each one keeps a `SpatialResource` up to date every tick.
+
+### SpatialSystem<ECS_TYPE>
+
+Abstract `TickingSystem` that rebuilds a spatial index each tick from every entity matching `getQuery()`, using `getPosition` to extract each entity's position.
+
+```java
+public SpatialSystem(ResourceType<ECS_TYPE, SpatialResource<Ref<ECS_TYPE>, ECS_TYPE>> resourceType)
+public abstract Vector3d getPosition(ArchetypeChunk<ECS_TYPE> chunk, int index)
+public abstract Query<ECS_TYPE> getQuery()   // from QuerySystem
+```
+
+To publish your own index: register a `SpatialResource` as a resource, then register a `SpatialSystem` subclass pointing at its `ResourceType`. Consumers query through the resource, never the system.
+
+### SpatialResource<T, ECS_TYPE>
+
+The world-level `Resource` holding the index: a `SpatialData` buffer of positions plus the queryable `SpatialStructure`.
+
+```java
+public SpatialResource(SpatialStructure<T> spatialStructure)
+public SpatialData<Ref<ECS_TYPE>> getSpatialData()
+public SpatialStructure<T> getSpatialStructure()
+public static <ECS_TYPE> List<Ref<ECS_TYPE>> getThreadLocalReferenceList()
+```
+
+`getThreadLocalReferenceList()` returns a reusable scratch list for query results (cleared on every call) — handy as the `results` argument to the `collect*` methods, but don't hold onto it across calls.
+
+### SpatialStructure<T> / KDTree<T>
+
+`SpatialStructure` is the query interface; `KDTree` is the standard implementation (its constructor takes a `Predicate<T>` filter applied to every collected result).
+
+```java
+int size()
+void rebuild(SpatialData<T> data)
+
+T closest(Vector3d position)                                     // nearest single entry
+void collect(Vector3d center, double radius, List<T> results)    // sphere
+void collectCylinder(Vector3d center, double radius, double height, List<T> results)
+void collectBox(Vector3d min, Vector3d max, List<T> results)     // axis-aligned corners
+void ordered(Vector3d center, double radius, List<T> results)    // sorted nearest-first
+void ordered3DAxis(Vector3d center, double x, double y, double z, List<T> results)
+```
+
+Verified parameter semantics: `collectCylinder`'s `height` is the **total** height (halved internally around `center`), and `collectBox` takes **min/max corner** vectors, not center + extents. The `collect*` methods append to the list you pass without clearing it first.
+
+```java
+// Typical consumer: query an engine-maintained index
+SpatialResource<Ref<EntityStore>, EntityStore> spatial = store.getResource(spatialResourceType);
+List<Ref<EntityStore>> nearby = SpatialResource.getThreadLocalReferenceList();
+spatial.getSpatialStructure().collect(position, 16.0, nearby);
+```
+
+> **Staleness:** the index is rebuilt by its owning `SpatialSystem` once per tick, so query results
+> reflect positions as of the last rebuild — up to one tick old. Re-check live positions via
+> `TransformComponent` if exactness matters.
+
+### SpatialData<T>
+
+The flat position + payload buffer a structure is rebuilt from — parallel arrays of `Vector3d` and data entries. Mostly internal plumbing; you only touch it when feeding a structure manually.
+
+```java
+int size()
+void add(Vector3d position, T data)        // add, marks for sorting
+void append(Vector3d position, T data)
+void sort()
+void sortMorton()                          // Morton-code (Z-order) sort
+void clear()
+Vector3d getVector(int index)
+T getData(int index)
+```
+
+---
+
+## UnknownComponents<ECS_TYPE>
+
+**Package:** `com.hypixel.hytale.component.data.unknown`
+
+Component that preserves the serialized data (raw BSON, keyed by component name) of component types the server couldn't resolve at load time — e.g. components written by a plugin that is no longer installed. Instead of dropping the data, deserialization parks it here so it round-trips through future saves.
+
+```java
+public static final String ID = "Unknown";
+public boolean contains(String componentName)
+public <T extends Component<ECS_TYPE>> T removeComponent(String componentName, Codec<T> codec)
+public Map<String, BsonDocument> getUnknownComponents()
+```
+
+Plugin-facing use is niche but real: after re-installing a plugin (or renaming a component), you can recover previously "orphaned" data by pulling it out with `removeComponent(name, codec)` and re-attaching the deserialized component. Mostly, its existence explains why data from uninstalled plugins survives — deleting it requires explicitly clearing this component.
 
 ---
 

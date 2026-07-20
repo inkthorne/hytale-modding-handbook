@@ -58,6 +58,11 @@ Interaction System
 | `InteractionSettings` | `protocol` | Per-`GameMode` settings for a nested interaction |
 | `RootInteractionSettings` | `protocol` | Per-`GameMode` settings + cooldown for a root interaction |
 | `InteractionType` | `protocol` | Enum of interaction trigger types (PRIMARY, SECONDARY, ...) |
+| `SimpleBlockInteraction` | `server.core.modules.interaction.interaction.config.client` | Abstract base for block-targeting interactions (client-supplied target block) |
+| `InteractionModule` | `server.core.modules.interaction` | Core plugin that registers interaction assets, components, and all built-in `Type` strings |
+| `InteractionValidation` | `server.core.modules.interaction.interaction.util` | Static server-side range checks for player block/entity interactions |
+| `OriginSource` | `server.core.modules.interaction.interaction.config` | Enum: position interactions relative to the entity or the targeted block |
+| `RelativeRotationMode` | `server.core.modules.interaction.interaction.config` | Enum: how much of a reference rotation (none/yaw/full) to apply |
 
 ## Quick Navigation
 
@@ -111,6 +116,10 @@ Interaction System
 - [UI Interactions](interactions-world.md#ui-interactions) - Open UI pages (OpenPage, OpenCustomUI)
 - [Inventory Interactions](interactions-world.md#inventory-interactions) - Manage inventory and equipment
 - [Block Interactions](interactions-world.md#block-interactions) - Break or place blocks
+- [PlaceFluid](interactions-world.md#placefluid) - Place a fluid into the world
+- [Door](interactions-world.md#door) - Open/close doors and gates (incl. double doors)
+- [OpenContainer](interactions-world.md#opencontainer) - Open a container block's inventory window
+- [Explode](interactions-world.md#explode) - Explosion with block and entity damage
 - [ChangeState](interactions-world.md#changestate) - Change entity state machine state
 - [LaunchPadInteraction](interactions-world.md#launchpadinteraction) - Launch pad physics
 - [WieldingInteraction](interactions-world.md#wieldinginteraction) - Blocking and guarding mechanics
@@ -327,6 +336,45 @@ Namespace your `Type` ids (interaction/asset ids resolve globally and case-sensi
 - `getCommandBuffer()` → a `CommandBuffer<EntityStore>` that also serves as the `ComponentAccessor`
   for queries like `Selector.selectNearbyEntities(...)` and `EffectControllerComponent.addEffect(...)`.
 
+### SimpleBlockInteraction
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client`
+
+Abstract base class for interactions that act on a targeted block (`BreakBlock`, `PlaceBlock`, `PlaceFluid`, `UseBlock`, `Door`, `OpenContainer`, and many builtin interactions extend it). It resolves the target block position from the client and hands it to the subclass.
+
+**Extends:** `SimpleInteraction`
+
+#### Key Methods
+
+```java
+// Block targets come from the client
+WaitForDataFrom getWaitForDataFrom()   // returns WaitForDataFrom.Client
+boolean needsRemoteSync()
+
+// Subclasses implement these two — server-side effect and client-side prediction
+protected abstract void interactWithBlock(World world, CommandBuffer<EntityStore> commandBuffer,
+        InteractionType type, InteractionContext context, ItemStack itemInHand,
+        Vector3i targetBlock, CooldownHandler cooldownHandler)
+protected abstract void simulateInteractWithBlock(InteractionType type, InteractionContext context,
+        ItemStack itemInHand, World world, Vector3i targetBlock)
+```
+
+#### Codec
+
+```java
+public static final BuilderCodec<SimpleBlockInteraction> CODEC;
+```
+
+JSON property added on top of `SimpleInteraction`:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `UseLatestTarget` | boolean | Use the client's latest target block position for this interaction (codec doc: "Determines whether to use the clients latest target block position for this interaction.") |
+
+`UseLatestTarget` is inherited by subclasses whose codec builds on `SimpleBlockInteraction.CODEC` (e.g. `Door`, `OpenContainer`); a few subclasses (e.g. `PlaceFluid`) build directly on `SimpleInteraction.CODEC` and don't expose it.
+
+To write your own block-targeting interaction type, extend `SimpleBlockInteraction`, implement the two abstract methods, and register a `Type` string as described in [Registering a Custom Interaction Type (Java)](#registering-a-custom-interaction-type-java).
+
 ### InteractionType Enum
 
 **Package:** `com.hypixel.hytale.protocol`
@@ -334,6 +382,99 @@ Namespace your `Type` ids (interaction/asset ids resolve globally and case-sensi
 Enum representing the type of interaction trigger.
 
 See [Player Documentation](player.md) for full details.
+
+### OriginSource Enum
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config`
+
+Selects the origin an interaction's position math is based on. Used as the `OriginSource` JSON property of [SpawnPrefab](interactions-world.md#spawnprefab) (and builtin interactions like `SpawnDeployableAtLocation` and the instance-teleport interactions).
+
+| Value | Meaning (codec doc) |
+|-------|---------------------|
+| `ENTITY` | "The origin will be based on the position of the entity performing the interaction." |
+| `BLOCK` | "The origin will be based on the position of the targeted block." |
+
+```java
+public static final EnumCodec<OriginSource> CODEC;
+```
+
+With `BLOCK`, offsets and yaw are additionally rotated by the targeted block's rotation; if there is no target block the interaction is skipped.
+
+### RelativeRotationMode Enum
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config`
+
+Controls how much of a reference rotation is applied to an interaction-supplied offset or spawned object. Used by the builtin `SpawnDeployableAtLocation` interaction (`OffsetRotationMode` / `DeployableRotationMode` JSON properties, both defaulting to `NONE`).
+
+| Value | Meaning (codec doc) |
+|-------|---------------------|
+| `NONE` | "The reference rotation will not be applied. Values are treated as absolute." |
+| `YAW` | "Only the yaw (Y-axis) component of the reference rotation will be applied." |
+| `FULL` | "The full reference rotation (pitch, yaw, and roll) will be applied." |
+
+```java
+public static final EnumCodec<RelativeRotationMode> CODEC;
+```
+
+### InteractionModule
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction`
+
+The core plugin (`extends JavaPlugin`) that owns the interaction system. Its `setup()` registers the `Interaction` and `RootInteraction` asset stores (`Server/Item/Interactions`, `Server/Item/RootInteractions`), every built-in `Type` string listed across these pages (`"Simple"`, `"PlaceBlock"`, `"Door"`, `"Explode"`, ...), and the interaction-related components. Your own `Type` strings go through the same registry — see [Registering a Custom Interaction Type (Java)](#registering-a-custom-interaction-type-java).
+
+#### Key Methods
+
+```java
+// Singleton accessor
+static InteractionModule get()
+
+// Entry point for mouse-driven interactions (called by the packet handler)
+void doMouseInteraction(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        MouseInteraction packet, Player player, PlayerRef playerRef)
+
+// Registered component/resource types
+ComponentType<EntityStore, InteractionManager> getInteractionManagerComponent()
+ComponentType<EntityStore, Interactions> getInteractionsComponentType()
+ComponentType<EntityStore, ChainingInteraction.Data> getChainingDataComponent()
+ComponentType<ChunkStore, PlacedByInteractionComponent> getPlacedByComponentType()
+ResourceType<ChunkStore, BlockCounter> getBlockCounterResourceType()
+ComponentType<ChunkStore, TrackedPlacement> getTrackedPlacementComponentType()
+```
+
+#### Static Fields
+
+```java
+static final PluginManifest MANIFEST;
+static final EnumCodec<InteractionType> INTERACTION_TYPE_CODEC;
+static final SetCodec<InteractionType, EnumSet<InteractionType>> INTERACTION_TYPE_SET_CODEC;
+```
+
+For `PlacedByInteractionComponent` (the chunk-store component behind `getPlacedByComponentType()`), see [interactions-world.md](interactions-world.md#placedbyinteractioncomponent).
+
+### InteractionValidation
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.util`
+
+Static server-side range checks run before a player's block/entity interactions are accepted.
+
+```java
+static boolean canPlayerInteractWithEntity(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        ItemStack heldItem, Ref<EntityStore> targetRef)
+
+static boolean canPlayerInteractWithBlock(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        ItemStack heldItem, int blockX, int blockY, int blockZ)
+static boolean canPlayerInteractWithBlock(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        ItemStack heldItem, Vector3i pos)
+static boolean canPlayerInteractWithBlock(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        ItemStack heldItem, BlockPosition pos)
+```
+
+How the allowed distance is computed (from the decompiled source):
+
+- Base distance comes from the held item's `InteractionConfiguration.getUseDistance(gameMode)` (default config if no item is held).
+- In **Creative**, the client's `creativeInteractionDistance` setting is honored, clamped to `0–128` blocks (default `10` if no settings component), and the larger of the two distances wins.
+- A `+2.0` buffer is added before squaring, and distance is measured from the player's **eye height** to the target (block center for blocks).
+- A `ref` without a `Player` component always passes (`true`); a player missing a `TransformComponent` always fails.
 
 ### Usage Examples
 

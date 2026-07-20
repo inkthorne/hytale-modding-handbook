@@ -314,6 +314,37 @@ Observed environment names include `Env_Zone1_Plains`, `Env_Zone1_Shores`, `Env_
 using `Delimiters` each carrying an `Environment` and a `Range`. Used where the
 environment should vary within the biome (e.g. `Volcanic1/Volcanic1_Jungle.json`).
 
+### Weather forecasts (WeatherForecast)
+
+The environment names above resolve to `Environment` assets under `Server/Environments/`.
+Besides water tint and spawn density, each environment schedules its weather through a
+`WeatherForecasts` map: one key per in-game hour (`"0"`–`"23"`, all hours required), each
+holding a weighted list of forecasts:
+
+```json
+"WeatherForecasts": {
+  "0": [ { "WeatherId": "Default_Flat", "Weight": 1 } ],
+  "1": [ { "WeatherId": "Default_Flat", "Weight": 1 } ]
+}
+```
+
+Each entry decodes to
+`com.hypixel.hytale.server.core.asset.type.environment.config.WeatherForecast`:
+`WeatherId` (required, must name an existing Weather asset) and `Weight` (the relative
+pick weight among that hour's entries). Java side:
+
+```java
+WeatherForecast(String weatherId, double weight)
+String getWeatherId()
+int getWeatherIndex()        // resolved Weather asset index (transient)
+double getWeight()           // from IWeightedElement
+```
+
+The owning `Environment` exposes the schedule as
+`getWeatherForecast(int hour)` (0–23; out-of-range throws) and
+`getWeatherForecasts()`; an environment with no forecasts falls back to a default
+single-entry map.
+
 ---
 
 ## TintProvider

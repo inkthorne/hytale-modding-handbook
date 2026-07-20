@@ -5,10 +5,11 @@
 # a game update.
 #
 # Usage:
-#   maintenance/scripts/verify-docs.sh [--no-build] [--fields]
+#   maintenance/scripts/verify-docs.sh [--no-build] [--no-fields]
 #
 #   --no-build   Skip compiling the example projects (faster).
-#   --fields     Enable the (noisy, advisory) per-format field-existence check.
+#   --no-fields  Skip the JSON field-existence check (advisory; calibrated
+#                via maintenance/scripts/fields-skiplist.txt).
 #
 # Env overrides:
 #   HYTALE_JAR      Path to HytaleServer.jar
@@ -23,11 +24,12 @@ cd "$(dirname "$0")/../.." || exit 2
 REPO="$(pwd)"
 
 NO_BUILD=0
-DO_FIELDS=0
+DO_FIELDS=1
 for arg in "$@"; do
   case "$arg" in
-    --no-build) NO_BUILD=1 ;;
-    --fields)   DO_FIELDS=1 ;;
+    --no-build)  NO_BUILD=1 ;;
+    --fields)    DO_FIELDS=1 ;;  # legacy no-op (now the default)
+    --no-fields) DO_FIELDS=0 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
@@ -155,11 +157,32 @@ if [ -d "$ASSETS" ]; then
 import re, glob, os, sys
 assets=sys.argv[1]
 pat=re.compile(r'\b((?:Common|Server|Cosmetics)/[\w/\-]+\.(?:blockymodel|blockyanim|png|ogg|ui))')
+# Deliberate "your-file-here" placeholder names used in how-to prose (a real
+# path here would mislead readers into thinking the file ships with the game):
+PLACEHOLDERS = {
+    "Common/UI/Custom/MyCustomPage.ui", "Common/UI/Custom/MyPage.ui",
+    "Common/UI/Custom/MyUI.ui", "Common/UI/Custom/Pages/MyPage.ui",
+    "Common/UI/Custom/Pages/Settings.ui",
+}
+def exists(p):
+    # Candidate 1: literal path under the assets root.
+    cands=[p]
+    # Candidate 2: .ui TexturePath form — inside a .ui file, "Common/X.png"
+    # resolves relative to Common/UI/Custom/ (the game's own Common.ui uses
+    # e.g. "Common/Buttons/Primary.png" for UI/Custom/Common/Buttons/...).
+    if p.startswith("Common/"):
+        cands.append("Common/UI/Custom/"+p)
+    # Each candidate may ship only as its @2x hi-dpi variant on disk.
+    for c in list(cands):
+        root,ext=os.path.splitext(c)
+        cands.append(root+"@2x"+ext)
+    return any(os.path.exists(os.path.join(assets,c)) for c in cands)
 missing=set(); seen=0
 for f in glob.glob("docs/*.md"):
     for p in pat.findall(open(f).read()):
         seen+=1
-        if not os.path.exists(os.path.join(assets,p)): missing.add(p)
+        if p in PLACEHOLDERS: continue
+        if not exists(p): missing.add(p)
 print(f"SEEN {seen}")
 for p in sorted(missing): print(f"MISS {p}")
 PY
@@ -487,15 +510,26 @@ PY
 
 # =====================================================================
 if [ "$DO_FIELDS" -eq 1 ]; then
-section "[ADVISORY] Documented JSON fields appear in real assets"
+section "[ADVISORY] Documented JSON fields appear in real assets or codecs"
 if [ -d "$ASSETS" ]; then
-  python3 - "$ASSETS" <<'PY'
+  OUT="$(python3 - "$ASSETS" "${HYTALE_JAR_CACHE:-$HOME/.cache/hytale-jar}/src" <<'FIELDSPY'
 import re, glob, os, sys, subprocess
-assets=sys.argv[1]
+assets=sys.argv[1]; jarsrc=sys.argv[2]
 # asset dir comes from each doc's "**Assets:** `dir`" tag (single source of truth)
 key_re = re.compile(r'"([A-Za-z][A-Za-z0-9_]+)"\s*:')
 adir_re = re.compile(r'\*\*Assets:\*\*\s*`([^`]+)`')
-checked=0
+# Calibration skip-list: "doc.md:Key" entries for keys that are deliberately
+# user-defined/illustrative in that doc's examples. '#' comments allowed.
+skip=set()
+sl="maintenance/scripts/fields-skiplist.txt"
+if os.path.exists(sl):
+    for line in open(sl):
+        line=line.split("#",1)[0].strip()
+        if line: skip.add(line)
+def found_in(needle, d):
+    return os.path.isdir(d) and subprocess.run(
+        ["grep","-rl",needle,d],capture_output=True).returncode==0
+checked=0; flagged=0
 for p in sorted(glob.glob("docs/*.md")):
     txt=open(p).read()
     m=adir_re.search(txt)
@@ -507,16 +541,33 @@ for p in sorted(glob.glob("docs/*.md")):
         keys.update(key_re.findall(b))
     if not keys: continue
     d=os.path.join(assets,adir); checked+=1
-    suspect=[k for k in sorted(keys)
-             if subprocess.run(["grep","-rl",f'"{k}"',d],capture_output=True).returncode!=0]
     doc=os.path.basename(p)
+    suspect=[]
+    for k in sorted(keys):
+        if f"{doc}:{k}" in skip: continue
+        needle=f'"{k}"'
+        # Resolution ladder: the doc's declared dir -> anywhere in the game
+        # assets -> the decompiled jar (codec accepts the key even if no
+        # shipped asset uses it) -> flagged.
+        if found_in(needle, d): continue
+        if found_in(needle, assets): continue
+        if found_in(needle, jarsrc): continue
+        suspect.append(k)
     if suspect:
-        print(f"  {doc}: {len(suspect)} documented key(s) absent from {adir} (review — may be example/user-defined):")
-        print("      "+", ".join(suspect))
-    else:
-        print(f"  {doc}: all documented keys present in {adir}")
-print(f"  ({checked} docs field-checked via their **Assets:** tag)")
-PY
+        flagged+=len(suspect)
+        print(f"SUSPECT {doc}: "+", ".join(suspect))
+print(f"CHECKED {checked}")
+print(f"FLAGGED {flagged}")
+FIELDSPY
+)"
+  N="$(echo "$OUT" | sed -n 's/^FLAGGED //p')"
+  C="$(echo "$OUT" | sed -n 's/^CHECKED //p')"
+  if [ "${N:-0}" -eq 0 ]; then
+    pass "all documented JSON keys trace to assets or codecs ($C docs checked)"
+  else
+    warn "$N documented key(s) found in neither assets nor jar codecs (fabricated or renamed?):"
+    echo "$OUT" | grep '^SUSPECT' | sed 's/^SUSPECT/      /'
+  fi
 else
   warn "skipped (no extracted assets)"
 fi

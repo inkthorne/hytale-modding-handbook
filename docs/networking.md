@@ -31,6 +31,16 @@ Protocol types (com.hypixel.hytale.protocol)
 | `NetworkSerializable<Packet>` | `server.core.io` | Interface for types serializable to network packets (`toPacket()`) |
 | `Direction` | `protocol` | Protocol class for a 3D rotation (yaw, pitch, roll) |
 | `WaitForDataFrom` | `protocol` | Enum selecting which side data is awaited from |
+| `NetworkSerializer<Type, Packet>` | `server.core.io` | Interface for external converters that turn a server type into its protocol packet |
+| `IPacketHandler` | `server.core.io.handlers` | Registration surface handed to sub-handlers (`registerHandler`, `getPlayerRef`) |
+| `SubPacketHandler` | `server.core.io.handlers` | **The plugin hook** — a bundle of per-packet-ID handlers attached to each connection |
+| `IWorldPacketHandler<T>` | `server.core.io.handlers` | Functional helper that runs a packet handler on the world thread |
+| `GenericPacketHandler` | `server.core.io.handlers` | Abstract packet-ID → handler dispatch table (engine base class) |
+| `ServerManager` | `server.core.io` | Core network module: listeners, binding, sub-packet-handler registration |
+| `ProtocolVersion` | `server.core.io` | Wrapper around the protocol CRC negotiated at connect |
+| `PlayerAuthentication` | `server.core.auth` | Authenticated identity of a connection (UUID, username, skin, referral data) |
+| `AssetPacketGenerator` | `server.core.asset.packet` | Generates the init/update/remove packets that sync an asset store to clients |
+| `ClientFeatureRegistration` | `server.core.registry` | Registration handle for a `ClientFeature` enabled by a plugin |
 
 ## Class Hierarchy
 ```
@@ -194,6 +204,308 @@ This enum is commonly used with:
 - ByteBuf is from Netty (io.netty.buffer.ByteBuf)
 - Serialization follows a consistent pattern across all protocol types
 - Direction is distinct from `Vector3f` - it represents rotation, not position/velocity
+
+---
+
+## Packet Handler Hierarchy
+
+**Package:** `com.hypixel.hytale.server.core.io.handlers` (base class in `com.hypixel.hytale.server.core.io`)
+
+How the server dispatches incoming protocol packets. Every connection has exactly one active
+`PacketHandler` (the channel handler — the same class whose `write` / `writeNoCache` you reach via
+[`PlayerRef.getPacketHandler()`](entities.md#playerref)); during login the server swaps handlers as
+the connection advances, ending at the in-game `GamePacketHandler`. Plugins never subclass these —
+the supported hook is [`SubPacketHandler`](#subpackethandler), registered through
+[`ServerManager`](#servermanager).
+
+```
+PacketHandler (abstract, server.core.io)   per-connection channel handler — write(), writeNoCache(), disconnect()
+├── InitialPacketHandler                   first handler: validates Connect (protocol CRC, build), picks auth flow
+├── login.HandshakeHandler                 (internal) identity-token handshake base
+│   └── login.AuthenticationPacketHandler  (internal) token verification + max-player check
+└── GenericPacketHandler (abstract)        packet-ID → Consumer dispatch table
+    └── game.GamePacketHandler             the in-game handler; implements IPacketHandler
+
+IPacketHandler   (interface)   registration surface handed to sub-handlers
+SubPacketHandler (interface)   ← the plugin hook: bundle of per-packet-ID handlers
+IWorldPacketHandler<T>         functional helper: handle a packet on the world thread
+```
+
+Login chain (authenticated mode): `InitialPacketHandler` → `AuthenticationPacketHandler` →
+password/setup handlers (internal) → `GamePacketHandler`. Only the pieces below are plugin-facing.
+
+### IPacketHandler
+
+The registration surface a `SubPacketHandler` receives. Implemented by `GamePacketHandler`.
+
+```java
+void registerHandler(int packetId, Consumer<ToServerPacket> handler)  // handle one packet ID
+void registerNoOpHandlers(int... packetIds)  // swallow packet IDs silently
+PlayerRef getPlayerRef()                     // the connected player
+String getIdentifier()                       // debug identifier used in logs
+```
+
+Packet IDs come from the protocol classes (`Packet.getId()`).
+
+### SubPacketHandler
+
+**The plugin hook for handling client→server packets.** One method:
+
+```java
+void registerHandlers()  // register your per-packet-ID handlers
+```
+
+Register a factory once in your plugin's setup; the server constructs one instance per connecting
+player, passing that connection's `IPacketHandler`:
+
+```java
+// In your plugin's setup():
+ServerManager.get().registerSubPacketHandlers(MyPacketHandler::new);
+
+public class MyPacketHandler implements SubPacketHandler {
+    private final IPacketHandler packetHandler;
+
+    public MyPacketHandler(IPacketHandler packetHandler) {
+        this.packetHandler = packetHandler;
+    }
+
+    @Override
+    public void registerHandlers() {
+        // 294 = DismountNPC (see the protocol packet classes for IDs)
+        this.packetHandler.registerHandler(294,
+            packet -> this.handle((DismountNPC) packet));
+    }
+
+    private void handle(DismountNPC packet) {
+        PlayerRef playerRef = this.packetHandler.getPlayerRef();
+        // Handlers run on the network thread — resolve the player's Ref
+        // and world.execute(...) before touching ECS state.
+    }
+}
+```
+
+This is exactly how the engine's own optional handlers attach (`MountGamePacketHandler`,
+`BuilderToolsPacketHandler`, `TriggerVolumeToolPacketHandler`, the asset-editor and voice
+handlers). Sub-handler registration runs **after** the vanilla handlers, and `registerHandler` is
+last-write-wins per packet ID — so a sub-handler can also override a built-in handler.
+
+### IWorldPacketHandler
+
+Functional interface that lifts a raw packet handler onto the world thread — it resolves the
+`PlayerRef`, schedules onto the player's `World`, and hands you the ECS context:
+
+```java
+void handle(T packet, PlayerRef playerRef, Ref<EntityStore> ref,
+            World world, Store<EntityStore> store)
+
+// Registration helpers (wrap IPacketHandler.registerHandler):
+static <T extends Packet> void registerHandler(
+    IPacketHandler packetHandler, int packetId, IWorldPacketHandler<T> handler)
+static <T extends Packet> void registerHandler(
+    IPacketHandler packetHandler, int packetId, IWorldPacketHandler<T> handler,
+    Predicate<PlayerRef> filter)   // gate, e.g. a permission check
+```
+
+```java
+// From the engine's trigger-volumes tool handler:
+IWorldPacketHandler.registerHandler(this.packetHandler, 480,
+    this::handleCreate, TriggerVolumeToolPacketHandler::hasPermission);
+```
+
+Prefer this over a raw `registerHandler` whenever the handler touches world or entity state.
+
+### GenericPacketHandler
+
+Abstract engine base for table-driven dispatch — `GamePacketHandler` is the concrete in-game
+subclass. Plugins don't extend it, but its methods are what `IPacketHandler` registration lands on:
+
+```java
+GenericPacketHandler(ChannelConnection channel, ProtocolVersion protocolVersion)
+
+void registerSubPacketHandler(SubPacketHandler subPacketHandler)
+void registerHandler(int packetId, Consumer<ToServerPacket> handler)
+void registerNoOpHandlers(int... packetIds)
+final void accept(ToServerPacket packet)  // dispatch on packet.getId()
+static Consumer<ToServerPacket>[] newHandlerArray(int size)
+```
+
+Dispatch is an array indexed by packet ID. A packet with **no** registered handler throws
+`RuntimeException("No handler is registered for ...")`, and a handler that throws is rethrown as
+`RuntimeException("Could not handle packet ...")` — so an unregistered or crashing handler kills
+the connection, not just the packet.
+
+### Login pipeline (engine plumbing)
+
+Internal handlers that run before a connection reaches `GamePacketHandler`. Listed for
+orientation only — there is no plugin surface here.
+
+| Class | Role |
+|-------|------|
+| `InitialPacketHandler` | First handler on a fresh connection. Validates the `Connect` packet — protocol CRC, client build number, referral-data size (max 4096 bytes) — then starts the authenticated flow (`AuthenticationPacketHandler`) or the insecure flow, per the server's auth mode. |
+| `login.AuthenticationPacketHandler` | Authenticated mode: verifies the client's identity token, enforces the max-player cap, then swaps in the next handler (password check, then setup) which ends at `GamePacketHandler`. |
+
+---
+
+## ServerManager
+
+**Package:** `com.hypixel.hytale.server.core.io`
+
+Core `JavaPlugin` module that owns the network transport and listeners. Singleton via
+`ServerManager.get()`.
+
+### Methods
+
+```java
+static ServerManager get()
+
+// Plugin surface — register once at setup; one SubPacketHandler instance
+// is created per connecting player (see SubPacketHandler above)
+void registerSubPacketHandlers(Function<IPacketHandler, SubPacketHandler> supplier)
+
+// Listeners / binding
+CompletableFuture<Boolean> bind(InetSocketAddress address)
+boolean unbind(ServerListener listener)
+void unbindAllListeners()
+List<ServerListener> getListeners()
+void waitForBindComplete()
+
+// Address helpers
+InetSocketAddress getLocalOrPublicAddress() throws SocketException
+InetSocketAddress getNonLoopbackAddress() throws SocketException
+InetSocketAddress getPublicAddress() throws SocketException
+
+// Engine plumbing — called by GamePacketHandler's constructor
+void populateSubPacketHandlers(GamePacketHandler packetHandler)
+```
+
+For plugin authors the interesting method is `registerSubPacketHandlers` — everything else is
+server bootstrap (binding QUIC listeners at boot, unbinding at shutdown).
+
+---
+
+## ProtocolVersion
+
+**Package:** `com.hypixel.hytale.server.core.io`
+
+Thin wrapper around the protocol CRC the client sends in its `Connect` packet. Created by
+`InitialPacketHandler` after the CRC check passes and threaded through every subsequent handler
+constructor.
+
+```java
+ProtocolVersion(int crc)
+int getCrc()
+// plus equals / hashCode / toString
+```
+
+Client and server protocols must match exactly — a mismatched CRC is rejected at connect with a
+client-outdated or server-outdated error before this object is ever constructed.
+
+---
+
+## PlayerAuthentication
+
+**Package:** `com.hypixel.hytale.server.core.auth`
+
+The authenticated identity of a connection, produced by the login pipeline and carried into
+`GamePacketHandler` — this is where the player's UUID, username, and skin come from.
+
+```java
+PlayerAuthentication()
+PlayerAuthentication(UUID uuid, String username)
+
+UUID getUuid()                       void setUuid(UUID uuid)
+String getUsername()                 void setUsername(String username)
+PlayerSkin getSkin()                 void setSkin(PlayerSkin skin)
+byte[] getReferralData()             void setReferralData(byte[] data)
+HostAddress getReferralSource()      void setReferralSource(HostAddress source)
+
+static final int MAX_REFERRAL_DATA_SIZE  // 4096
+```
+
+Referral data is an opaque byte payload (≤ 4096 bytes) the client presents when another server
+referred it here (server transfer), together with the referring server's `HostAddress`.
+
+---
+
+## NetworkSerializer
+
+**Package:** `com.hypixel.hytale.server.core.io`
+
+Counterpart to [NetworkSerializable](#networkserializable): where `NetworkSerializable` lets a type
+convert *itself*, `NetworkSerializer<Type, Packet>` is an **external converter** given the value to
+convert.
+
+```java
+Packet toPacket(Type value)
+```
+
+Used where the packet form is built from a different object than the one being serialized — e.g.
+adventure-mode objective tasks implement `NetworkSerializer<Objective, ObjectiveTask>` to build
+their protocol representation from the owning objective.
+
+---
+
+## Asset Packet Generators
+
+**Package:** `com.hypixel.hytale.server.core.asset.packet`
+
+How server-side asset stores are synced to clients: each asset type's store owns an
+`AssetPacketGenerator` that builds the `ToClientPacket`s for the initial full sync and for
+later updates/removals (asset-editor live edits, pack reloads).
+
+### AssetPacketGenerator
+
+```java
+abstract class AssetPacketGenerator<K, T extends JsonAssetWithMap<K, M>,
+                                    M extends AssetMap<K, T>>
+
+abstract ToClientPacket generateInitPacket(M assetMap, Map<K, T> assets)
+abstract ToClientPacket generateUpdatePacket(M assetMap, Map<K, T> assets, AssetUpdateQuery query)
+abstract ToClientPacket generateRemovePacket(M assetMap, Set<K> keys, AssetUpdateQuery query)
+```
+
+### SimpleAssetPacketGenerator
+
+Convenience subclass for generators that don't care about the `AssetUpdateQuery` — it implements
+the query variants by delegating to two simpler hooks:
+
+```java
+abstract ToClientPacket generateInitPacket(M assetMap, Map<K, T> assets)
+protected abstract ToClientPacket generateUpdatePacket(M assetMap, Map<K, T> assets)
+protected abstract ToClientPacket generateRemovePacket(M assetMap, Set<K> keys)
+```
+
+A `DefaultAssetPacketGenerator` variant further pins the map type to `DefaultAssetMap`. The engine
+ships one generator per client-synced asset type (`BlockTypePacketGenerator`,
+`EnvironmentPacketGenerator`, `AmbienceFXPacketGenerator`, ...). A generator is wired to a store
+with `HytaleAssetStore.Builder.setPacketGenerator(...)` — see
+[Creating Custom Asset Types](assets.md#creating-custom-asset-types).
+
+---
+
+## ClientFeatureRegistration
+
+**Package:** `com.hypixel.hytale.server.core.registry`
+
+Registration handle returned when a plugin enables a client-side feature. You normally interact
+with the registry, not this object:
+
+```java
+// From your plugin (see PluginBase in Plugin Lifecycle):
+getClientFeatureRegistry().register(ClientFeature.CrouchSlide);  // returns ClientFeatureRegistration
+getClientFeatureRegistry().registerClientTag("Allows=Movement");
+```
+
+```java
+ClientFeatureRegistration(ClientFeature feature)
+ClientFeatureRegistration(ClientFeature feature, BooleanSupplier precondition, Runnable shutdown)
+ClientFeature getFeature()
+```
+
+Like other `Registration` objects, it is auto-unregistered on plugin shutdown. For the
+`ClientFeature` enum values and per-world feature toggles, see
+[ClientFeature](world.md#clientfeature); for `getClientFeatureRegistry()`, see
+[PluginBase](plugin-lifecycle.md#pluginbase).
 
 ---
 

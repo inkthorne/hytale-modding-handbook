@@ -405,8 +405,7 @@ in any asset file and they are not part of the format:
 Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab/prop loader (verified against `HytaleServer.jar`).
 
 - **`Prefabs are empty! Key: Prefab`** → a `Prefab` prop resolved to no prefab paths. Fix: give the prop a non-empty `WeightedPrefabPaths[]` (see [Prefab](#prefab)).
-- **`prefab pool contains empty list`** → a prefab pool/group entry holds an empty list. Fix: ensure every pool contains at least one path.
-- **`prefab pool contains list with null element`** → a prefab pool list has a null/missing path entry. Fix: remove the null and provide a valid resource path.
+- **`prefab pool contains list with null element`** → a prefab pool list has a null/missing path entry. Fix: remove the null and provide a valid resource path. (Through build-17 an empty pool threw a sibling `prefab pool contains empty list` message; 0.5.7 removed that exact string — an empty pool still fails, but not with that text.)
 - **`Prefab nesting limit exceeded!`** → a prefab references other prefabs that nest too deeply (a cycle, or excessive depth). Fix: flatten the prefab references / break the cycle.
 - **Symptom:** you added a `PrefabContainer`, `PrefabPopulator`, `UniquePrefabContainer`, `RotationMode`, `FitHeightmap`, or a weighted top-level `PrefabList` and it is ignored → none of those exist in the format. Fix: use biome `Props[]` entries plus `Assignments/` graphs (see [What does NOT exist](#what-does-not-exist)).
 

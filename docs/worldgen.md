@@ -280,6 +280,189 @@ folder rather than reading a whole file top to bottom.
 
 ---
 
+## Java World Generator API
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.worldgen` (+ `.provider`)
+
+Everything above is JSON consumed by the shipped `HytaleGenerator` plugin. Underneath it
+the server defines a small Java abstraction that a plugin can implement to ship its own
+generator: an `IWorldGenProvider` (the config/codec side, selected by the `WorldGen`
+block in a world's `config.json` — see [Universe & Saves](universe-saves.md)) produces an
+`IWorldGen` (the runtime side, called per chunk).
+
+### IWorldGen
+
+The runtime generator interface. One instance serves a world; `generate` is called once
+per chunk column (32×32 blocks).
+
+```java
+CompletableFuture<GeneratedChunk> generate(int seed, long index, int x, int z,
+                                           LongPredicate stillNeeded)
+WorldGenTimingsCollector getTimings()          // @Nullable — may return null
+Transform[] getSpawnPoints(int seed)           // @Deprecated
+ISpawnProvider getDefaultSpawnProvider(int seed)  // default method
+void shutdown()                                // default method, no-op
+```
+
+- `index` is the packed chunk index; `x`/`z` are chunk coordinates. `stillNeeded` (may be
+  `null`) lets a slow generator skip chunks nobody is waiting on anymore.
+- The default `getDefaultSpawnProvider(int)` wraps `getSpawnPoints(int)` in a
+  `FitToHeightMapSpawnProvider`.
+- The world's active generator hangs off the chunk store:
+  `world.getChunkStore()` → `ChunkStore.getGenerator()` / `setGenerator(IWorldGen)` /
+  `shutdownGenerator()`.
+
+### IWorldGenProvider
+
+The config-side factory, decoded from the `WorldGen` block of a world's `config.json`.
+
+```java
+// com.hypixel.hytale.server.core.universe.world.worldgen.provider.IWorldGenProvider
+static final BuilderCodecMapCodec<IWorldGenProvider> CODEC;   // keyed by "Type"
+IWorldGen getGenerator() throws WorldGenLoadException
+```
+
+Registered `Type` values (build 0.5.7):
+
+| `Type` | Provider class | Registered by |
+|--------|----------------|---------------|
+| `Flat` | `FlatWorldGenProvider` | core (`Universe`) |
+| `Void` | `VoidWorldGenProvider` | core (`Universe`) |
+| `Dummy` | `DummyWorldGenProvider` (internal no-op) | core (`Universe`) |
+| `HytaleGenerator` | the node-graph generator documented on this page | `HytaleGenerator` plugin |
+| `Hytale` | `HytaleWorldGenProvider` (fixed named generator) | `WorldGenPlugin` |
+
+A plugin registers its own provider type on the shared codec, the same way the built-ins
+do:
+
+```java
+IWorldGenProvider.CODEC.register("MyGen", MyProvider.class, MyProvider.CODEC);
+```
+
+After that, `"WorldGen": { "Type": "MyGen", ... }` in a world's `config.json` decodes to
+your provider; at runtime it is reachable via
+`world.getWorldConfig().getWorldGenProvider()` (and swappable with
+`setWorldGenProvider(...)` on the same universe-level `WorldConfig`).
+
+### FlatWorldGenProvider (`Type: "Flat"`)
+
+Generates a flat world from a list of layers. Codec fields: `Tint` (a color, default
+`DEFAULT_TINT`) and `Layers` (required array). Each `Layer` carries:
+
+| JSON key | Field | Meaning |
+|----------|-------|---------|
+| `From` | `int from` | Bottom Y of the layer (inclusive; clamped to ≥ 0) |
+| `To` | `int to` | Top Y of the layer (clamped to ≤ 320) |
+| `BlockType` | `String blockType` | Block asset id to fill with |
+| `Environment` | `String environment` | Environment asset id for the layer |
+
+```json
+"WorldGen": {
+  "Type": "Flat",
+  "Layers": [ { "From": 0, "To": 3, "BlockType": "Rock_Stone" } ]
+}
+```
+
+`getGenerator()` throws `WorldGenLoadException` if a layer has `To` ≤ `From`
+(`Failed to load 'Flat' WorldGen config, 'To' must be greater than 'From':`) or an
+unknown `BlockType`/`Environment` id (`Unknown key!`).
+
+### VoidWorldGenProvider (`Type: "Void"`)
+
+Generates empty chunks, optionally applying a `Tint` (color) and an `Environment`
+(environment asset id, validated — unknown ids throw `WorldGenLoadException` with
+`Unknown key!`) to every generated column.
+
+### GeneratedChunk and its buffers
+
+`generate(...)` resolves to a `GeneratedChunk`, a bundle of three write-buffers that the
+server converts into a live chunk:
+
+```java
+GeneratedChunk(GeneratedBlockChunk, GeneratedBlockStateChunk, GeneratedEntityChunk,
+               Holder<ChunkStore>[] sections)
+GeneratedBlockChunk getBlockChunk()
+GeneratedBlockStateChunk getBlockStateChunk()
+GeneratedEntityChunk getEntityChunk()
+static Holder<ChunkStore>[] makeSections()
+```
+
+**`GeneratedBlockChunk`** — the block/tint/environment buffer for one column:
+
+```java
+GeneratedBlockChunk(long index, int x, int z)
+void setBlock(int x, int y, int z, int blockId, int rotation, int filler)
+int getBlock(int x, int y, int z)
+int getRotationIndex(int x, int y, int z)
+void setTint(int x, int z, int tint)               // per-column tint index
+int getTint(int x, int z)
+void setEnvironment(int x, int y, int z, int environment)
+void setEnvironmentColumn(int x, int z, int environment)
+int getEnvironment(int x, int y, int z)
+int getHeight(int x, int z)
+BlockChunk toBlockChunk(Holder<ChunkStore>[] sectionHolders)
+```
+
+**`GeneratedBlockStateChunk`** — attached block-state entities (chests, signs, …),
+keyed by position:
+
+```java
+Holder<ChunkStore> getState(int x, int y, int z)
+void setState(int x, int y, int z, Holder<ChunkStore> state)   // state may be null
+BlockComponentChunk toBlockComponentChunk()
+```
+
+**`GeneratedEntityChunk`** — entities to spawn with the chunk (e.g. from prefabs):
+
+```java
+void addEntities(Vector3i offset, PrefabRotation rotation,
+                 Holder<EntityStore>[] entityHolders, int objectId, int prefabInstanceId)
+void forEachEntity(Consumer<GeneratedEntityChunk.EntityWrapperEntry> consumer)
+List<GeneratedEntityChunk.EntityWrapperEntry> getEntities()
+EntityChunk toEntityChunk()
+```
+
+### WorldGenTimingsCollector
+
+Optional per-generator timing metrics, returned by `IWorldGen.getTimings()` (nullable).
+A generator reports phase durations in nanoseconds; the collector exposes rolling
+averages in seconds:
+
+```java
+WorldGenTimingsCollector(ThreadPoolExecutor threadPoolExecutor)
+double reportChunk(long nanos)             // also: reportZoneBiomeResult, reportPrepare,
+                                           // reportBlocksGeneration, reportCaveGeneration,
+                                           // reportPrefabGeneration
+double getChunkTime()                      // avg seconds/chunk
+long getChunkCounter()
+int getQueueLength()                       // from the executor
+int getGeneratingCount()
+```
+
+### WorldGenLoadException
+
+Checked exception thrown by `IWorldGenProvider.getGenerator()` when a generator cannot
+be built (bad config, unknown asset ids):
+
+```java
+WorldGenLoadException(String message)
+WorldGenLoadException(String message, Throwable cause)
+String getTraceMessage()
+```
+
+### WorldGenChunksClearedEvent
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.events`
+
+Fired (keyed by world name) by the `/worldgen reload` command's *clear* path after all
+saved chunks of a world have been deleted and before the loaded ones are regenerated —
+the signal that any plugin state tied to old worldgen output (markers, cached positions)
+is now stale. Extends `WorldEvent`; the only accessor is the inherited `getWorld()`. Not
+cancellable. The shipped trigger-volumes plugin listens to it to drop volumes created by
+worldgen.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 world-generator loader (verified against `HytaleServer.jar`).

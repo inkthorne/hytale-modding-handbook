@@ -555,6 +555,22 @@ ResourceSlotTransaction removeResourceFromSlot(short slotIndex, ResourceQuantity
 ResourceTransaction removeResource(ResourceQuantity resource)
 ```
 
+### Removing by Tag
+```java
+TagTransaction removeTag(int tagIndex, int quantity)
+TagTransaction removeTag(int tagIndex, int quantity, boolean allOrNothing, boolean exactAmount, boolean filter)
+TagSlotTransaction removeTagFromSlot(short slot, int tagIndex, int quantity)
+```
+Removes items matching an interned item-tag index (the same index space as `MaterialQuantity.tagIndex`).
+Returns a [TagTransaction](#tagtransaction).
+
+### Replacing Items
+```java
+ListTransaction<ItemStackSlotTransaction> replaceAll(SlotReplacementFunction replacer)
+```
+Runs a [SlotReplacementFunction](#slotreplacementfunction) over every slot, replacing each stack with the
+function's return value.
+
 ### Moving Items
 ```java
 MoveTransaction<ItemStackTransaction> moveItemStackFromSlot(short slotIndex, ItemContainer destination)
@@ -676,6 +692,41 @@ CombinedItemContainer clone()
 
 ---
 
+## DelegateItemContainer
+**Package:** `com.hypixel.hytale.server.core.inventory.container`
+
+`DelegateItemContainer<T extends ItemContainer>` wraps an existing container and forwards all storage to it,
+while keeping its **own** global filter and per-slot filters. Use it to expose someone else's container
+(e.g. a player inventory section) with extra restrictions layered on top, without copying items — changes
+made through the delegate are visible in the wrapped container and vice versa.
+
+```java
+// Constructor
+DelegateItemContainer(T delegate)
+
+// Access
+T getDelegate()
+short getCapacity()
+boolean isEmpty()
+ClearTransaction clear()
+DelegateItemContainer<T> clone()
+
+// Filters apply to the wrapper only, not the wrapped container
+void setGlobalFilter(FilterType filterType)
+void setSlotFilter(FilterActionType actionType, short slotIndex, SlotFilter filter)
+
+// Change events registered on the wrapper listen to the wrapped container's slots
+EventRegistration registerChangeEvent(short slotIndex, Consumer<ItemContainerChangeEvent> handler)
+```
+
+```java
+// Read-only view of a chest container for a UI
+DelegateItemContainer<ItemContainer> view = new DelegateItemContainer<>(chestContainer);
+view.setGlobalFilter(FilterType.ALLOW_OUTPUT_ONLY);   // items can leave, nothing can be put in
+```
+
+---
+
 ## SortType
 **Package:** `com.hypixel.hytale.server.core.inventory.container`
 
@@ -759,6 +810,59 @@ hotbar.setSlotFilter(FilterActionType.ADD, (short) 1, (action, container, slot, 
 
 ---
 
+## ResourceFilter
+**Package:** `com.hypixel.hytale.server.core.inventory.container.filter`
+
+A ready-made slot filter that accepts only items providing a given resource type. Implements
+`ItemSlotFilter` (a `SlotFilter` refinement whose test receives the slot's resolved `Item` instead of the
+raw action/stack tuple), so it can be passed anywhere a `SlotFilter` is expected.
+
+### Methods
+```java
+// Constructor
+ResourceFilter(ResourceQuantity resource)
+
+boolean test(Item item)              // true if the item provides the resource
+ResourceQuantity getResource()       // the resource this filter matches
+```
+
+### Usage Example
+```java
+// Only allow wood-trunk resources into slot 0 (e.g. a fuel/input slot)
+ResourceQuantity woodTrunk = new ResourceQuantity("Wood_Trunk", 1);
+container.setSlotFilter(FilterActionType.ADD, (short) 0, new ResourceFilter(woodTrunk));
+```
+
+---
+
+## SlotReplacementFunction
+**Package:** `com.hypixel.hytale.server.core.inventory.container`
+
+Functional interface used with `ItemContainer.replaceAll()` to transform every slot of a container in one
+pass.
+
+### Methods
+```java
+// Return the stack that should occupy the slot (return the input unchanged to leave it alone,
+// or ItemStack.EMPTY to clear the slot)
+ItemStack replace(short slot, ItemStack itemStack)
+```
+
+### Usage Example
+```java
+// Strip a metadata-marked flag from every stack in the container
+container.replaceAll((slot, existing) -> {
+    AdventureMetadata meta = existing.getFromMetadataOrNull(AdventureMetadata.KEYED_CODEC);
+    if (meta == null || !meta.isCursed()) {
+        return existing;                       // untouched
+    }
+    meta.setCursed(false);
+    return existing.withMetadata(AdventureMetadata.KEYED_CODEC, meta);
+});
+```
+
+---
+
 ## MaterialQuantity
 **Package:** `com.hypixel.hytale.server.core.inventory`
 
@@ -800,6 +904,47 @@ String getResourceId()
 int getQuantity()
 ResourceQuantity clone(int newQuantity)
 ItemResourceType getResourceType(Item item)
+```
+
+---
+
+## InternalContainerUtilMaterial
+**Package:** `com.hypixel.hytale.server.core.inventory.container`
+
+Static helpers behind the material-removal operations. Most members are internal, but the public `test*`
+methods are useful for **dry-run checks** — "could this container satisfy N of material X?" — without
+mutating anything (this is how crafting checks recipe inputs).
+
+### Static Methods
+```java
+// Returns the quantity that could NOT be satisfied (0 = container covers the full amount)
+static int testRemoveMaterialFromItems(ItemContainer container, MaterialQuantity material,
+                                       int testQuantityRemaining, boolean filter)
+static int testRemoveMaterialFromSlot(ItemContainer container, short slot, MaterialQuantity material,
+                                      int testQuantityRemaining, boolean filter)
+
+// Same check, but reports which slots would be drained
+static TestRemoveItemSlotResult getTestRemoveMaterialFromItems(ItemContainer container,
+                                       MaterialQuantity material, int testQuantityRemaining, boolean filter)
+```
+
+The `MaterialQuantity` decides the matching mode: by `itemId`, by `resourceTypeId`, or by `tagIndex`.
+`filter` controls whether slot filters are honored during the test.
+
+---
+
+## TestRemoveItemSlotResult
+**Package:** `com.hypixel.hytale.server.core.inventory.container`
+
+Result of a slot-reporting dry-run removal check (see
+[InternalContainerUtilMaterial](#internalcontainerutilmaterial)).
+
+### Methods
+```java
+TestRemoveItemSlotResult(int testQuantityRemaining)   // constructor (starts with nothing picked)
+
+boolean hasResult()          // true if at least one slot would be drawn from
+Set<Short> getPickedSlots()  // the slots the removal would draw from
 ```
 
 ---
@@ -926,6 +1071,21 @@ static <T> ListTransaction<T> getEmptyTransaction(boolean success)
 
 ### MoveTransaction<T extends Transaction>
 Wraps source and destination transactions for move operations.
+
+### TagTransaction
+**Package:** `com.hypixel.hytale.server.core.inventory.transaction`
+
+Returned by `ItemContainer.removeTag()` (see [Removing by Tag](#removing-by-tag)). Extends
+`ListTransaction<TagSlotTransaction>`, so `succeeded()`, `getList()`, and `size()` are available too.
+
+```java
+ActionType getAction()      // operation type (REMOVE for removeTag)
+int getTagIndex()           // the tag index that was matched
+int getRemainder()          // quantity that could not be removed (0 = fully satisfied)
+boolean isAllOrNothing()
+boolean isExactAmount()
+boolean isFilter()          // whether slot filters were honored
+```
 
 ---
 
@@ -1241,7 +1401,7 @@ public class CraftingSystem extends EntityEventSystem<EntityStore, CraftRecipeEv
         if (player != null) {
             var recipe = event.getCraftedRecipe();
             int quantity = event.getQuantity();
-            player.sendMessage(Message.raw("Crafting " + quantity + " items..."));
+            player.getPlayerRef().sendMessage(Message.raw("Crafting " + quantity + " items..."));
 
             // Optionally cancel the craft
             // event.setCancelled(true);
@@ -1425,7 +1585,7 @@ public class SlotSwitchSystem extends EntityEventSystem<EntityStore, InventorySe
                        InventorySetActiveSlotEvent event) {
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
-            player.sendMessage(Message.raw(
+            player.getPlayerRef().sendMessage(Message.raw(
                 "Switched from slot " + event.getPreviousSlot() + " to " + event.getNewSlot()
             ));
         }
@@ -1446,6 +1606,103 @@ protected void setup() {
     getEntityStoreRegistry().registerSystem(new SlotSwitchSystem());
 }
 ```
+
+---
+
+## Dropped-Item Entity Components
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.item`
+
+Items on the ground are ECS entities carrying `ItemComponent`. The player pickup scan collects any item
+entity within its pickup radius — unless components on the entity say otherwise. The components below are
+the ones a gameplay plugin actually toggles.
+
+### PreventPickup
+
+Flag component: while present on an item entity, **no player can pick it up**. The vanilla pickup scan
+excludes any entity that has it (the same scan also skips entities with `PickupItemComponent`, an
+`Interactable`, or a prop component). Serialized with the entity under the id `PreventPickup`, so the flag
+survives saves.
+
+The class is a singleton flag — there is nothing to configure:
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `INSTANCE` | `PreventPickup` | The shared instance to add |
+| `getComponentType()` (static) | `ComponentType<EntityStore, PreventPickup>` | Component type handle |
+| `CODEC` | `BuilderCodec<PreventPickup>` | Persistence codec |
+
+**Spawning a decorative, non-collectible item entity:**
+
+```java
+import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
+import com.hypixel.hytale.server.core.modules.entity.item.PreventPickup;
+
+Holder<EntityStore> holder = store.getRegistry().newHolder();
+holder.addComponent(ItemComponent.getComponentType(), new ItemComponent(new ItemStack("Weapon_Sword_Iron")));
+holder.addComponent(TransformComponent.getComponentType(), new TransformComponent(position, rotation));
+holder.addComponent(PreventPickup.getComponentType(), PreventPickup.INSTANCE);
+store.addEntity(holder, AddReason.SPAWN);
+```
+
+**Toggling on a live item entity:**
+
+```java
+// Freeze: nobody can collect it
+store.addComponent(itemRef, PreventPickup.getComponentType(), PreventPickup.INSTANCE);
+
+// Release: normal pickup resumes
+if (store.getArchetype(itemRef).contains(PreventPickup.getComponentType())) {
+    store.removeComponent(itemRef, PreventPickup.getComponentType());
+}
+```
+
+### PickupItemComponent
+
+Drives the short "item flies to the collector" animation. When a player collects a drop, the real item
+entity is removed immediately (the stack is already in the inventory) and a **visual-only copy** is spawned
+with a `PickupItemComponent` pointing at the collector; a ticking system moves it toward the target's head
+each tick and deletes it on arrival (or if the target becomes invalid). The travel time defaults to
+`PICKUP_TRAVEL_TIME_DEFAULT` (0.15 s).
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `PICKUP_TRAVEL_TIME_DEFAULT` | `float` | Default flight time in seconds (`0.15f`) |
+| `getComponentType()` (static) | `ComponentType<EntityStore, PickupItemComponent>` | Component type handle |
+| `PickupItemComponent(Ref<EntityStore>, Vector3d)` | ctor | Fly from a start position to the target entity (default time) |
+| `PickupItemComponent(Ref<EntityStore>, Vector3d, float)` | ctor | Same, with a custom travel time |
+| `getTargetRef()` | `Ref<EntityStore>` | The collecting entity |
+| `getStartPosition()` | `Vector3d` | Where the flight started |
+| `getLifeTime()` / `getOriginalLifeTime()` | `float` | Remaining / total flight time |
+| `setInitialLifeTime(float)` | `void` | Reset the flight duration |
+| `decreaseLifetime(float)` | `void` | Advance the flight (called by the ticking system) |
+| `hasFinished()` / `setFinished(boolean)` | `boolean` / `void` | Arrival flag — a finished entity is removed next tick |
+
+You rarely construct one by hand: `ItemComponent.generatePickedUpItem(...)` builds the whole visual entity
+(item + transform + `PickupItemComponent`, plus merge/physics opt-outs) — useful when a plugin grants items
+directly but still wants the vanilla pickup flourish:
+
+```java
+import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
+
+Holder<EntityStore> fx = ItemComponent.generatePickedUpItem(itemStack, itemPosition, commandBuffer, playerRef);
+commandBuffer.addEntity(fx, AddReason.SPAWN);
+```
+
+### ItemPrePhysicsSystem
+
+Ticking system (registered by the core entity module) that runs before physics for every dropped-item
+entity: if the item is inside a solid block it nudges it out toward the nearest free spot, then applies
+gravity toward its resting state. Not something plugins normally instantiate — but its static helpers are
+reusable for custom item-like entities:
+
+```java
+static void moveOutOfBlock(WorldChunk chunk, Vector3d position, Velocity velocity, Box boundingBox)
+static void applyGravity(float dt, Box boundingBox, PhysicsValues physicsValues,
+                         Vector3d position, Velocity velocity)
+```
+
+> **See also:** [DropItemEvent](#dropitemevent), [InteractivelyPickupItemEvent](#interactivelypickupitemevent)
 
 ---
 

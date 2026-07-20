@@ -292,6 +292,10 @@ Inside a gathering mode:
 `Benches`, `SoftWoods`, `Unbreakable`, and ore tiers (`OreIron`, `OreGold`, `OreCopper`,
 `OreSilver`, `OreThorium`, `OreCobalt`, `OreAdamantite`, `OreMithril`).
 
+> Java side: `Breaking` / `Harvest` / `Soft` decode into `BlockBreakingDropType` /
+> `HarvestingDropType` / `SoftBlockDropType` — see
+> [Gathering Drop Types](blocks.md#gathering-drop-types).
+
 `DropList` can be an inline object (used by chests to drop their item form):
 
 ```json
@@ -432,6 +436,10 @@ arrays of accepted support entries (any one entry satisfies that direction).
 **`FaceType` values:** `Full`, `Branch`, `Rock_Beam`, `Wood_Beam`, `Shelf`, `Window`,
 `Wall`, `Wall_Corner`, `Fence`, `Fence_Corner`, `Rail`, `Bushes`, `BushBase`, `Platform`,
 `Rope`, `Vines`, `Barrel`.
+
+A sibling `BlockType` key, `SupportsRequiredFor` (`"Any"` or `"All"`, default `All`),
+controls whether one satisfied direction is enough or every declared direction must
+hold — see [BlockSupportsRequiredForType](blocks.md#blocksupportsrequiredfortype).
 
 ---
 
@@ -779,6 +787,11 @@ modifiers that affect growth. Each stage entry has a `Type` (`BlockType` or `Pre
 Stage entry fields: `Type` (`BlockType`/`Prefab`), `Block` or `Prefabs[]`,
 `Duration { Min, Max }`, optional `ReplaceMaskTags`, `SoundEventId`.
 
+> Java side: stage entries decode into `FarmingStageData` subtypes (registered `Type`
+> values: `BlockType`, `BlockState`, `Prefab`, `Spread`), and each id in
+> `ActiveGrowthModifiers` names a `GrowthModifierAsset` under `Server/Farming/Modifiers/`
+> — see [Farming Config Classes](blocks.md#farming-config-classes).
+
 ---
 
 ## Basic Blocks
@@ -1087,8 +1100,12 @@ Processing benches combine the `Open_Processing_Bench` use with `BenchBlock` /
 }
 ```
 
-Bench recipes and categories are defined in the recipe/bench assets, not inside
-`BlockType` (there is no inline `Bench` config block).
+Recipes themselves live on the crafted items (`Recipe.BenchRequirement`), but the bench
+definition — tier levels, upgrade costs, categories — is carried inline by the bench
+item's `BlockType.Bench` object (e.g. `Bench_Weapon.json` defines `Type`, `Id`, and
+`TierLevels` there). See [Bench Configuration](blocks.md#bench-configuration) for the
+`Type` variants (`Crafting`, `Processing`, `DiagramCrafting`, `StructuralCrafting`) and
+the tier/upgrade keys.
 
 ---
 

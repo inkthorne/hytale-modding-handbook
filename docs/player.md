@@ -229,6 +229,7 @@ Events related to player connections, interactions, and input.
 | `DrainPlayerFromWorldEvent` | Player removed from a world | No |
 | `PlayerSetupConnectEvent` | Player setup phase connect | No |
 | `PlayerSetupDisconnectEvent` | Player setup phase disconnect | No |
+| `RemovedPlayerFromWorldEvent` | Player entity removed from a world; leave-message control | Yes (String, world name) |
 | `ChangeGameModeEvent` | Player game mode changes (ECS, cancellable) | No |
 
 **Note:** `PlayerMouseButtonEvent` is client-side only and does not fire on the server.
@@ -370,7 +371,7 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
 protected void setup() {
     getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
         if (event.getActionType() == InteractionType.Primary) {
-            event.getPlayer().sendMessage(Message.raw("You attacked!"));
+            event.getPlayer().getPlayerRef().sendMessage(Message.raw("You attacked!"));
         }
     });
 }
@@ -382,7 +383,7 @@ protected void setup() {
 getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
     var item = event.getItemInHand();
     if (item != null) {
-        event.getPlayer().sendMessage(
+        event.getPlayer().getPlayerRef().sendMessage(
             Message.raw("Interacted while holding: " + item.getItemType().getName())
         );
     }
@@ -396,7 +397,7 @@ getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
     // Prevent all secondary (right-click) actions
     if (event.getActionType() == InteractionType.Secondary) {
         event.setCancelled(true);
-        event.getPlayer().sendMessage(Message.raw("Secondary actions disabled!"));
+        event.getPlayer().getPlayerRef().sendMessage(Message.raw("Secondary actions disabled!"));
     }
 });
 ```
@@ -418,7 +419,7 @@ protected void setup() {
     getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
         if (combatActions.contains(event.getActionType())) {
             // Handle combat-related interactions
-            event.getPlayer().sendMessage(Message.raw("Combat action: " + event.getActionType()));
+            event.getPlayer().getPlayerRef().sendMessage(Message.raw("Combat action: " + event.getActionType()));
         }
     });
 }
@@ -431,7 +432,7 @@ getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
     if (event.getActionType() == InteractionType.ProjectileHit) {
         var targetEntity = event.getTargetEntity();
         if (targetEntity != null) {
-            event.getPlayer().sendMessage(
+            event.getPlayer().getPlayerRef().sendMessage(
                 Message.raw("Your projectile hit an entity!")
             );
         }
@@ -457,7 +458,7 @@ protected void setup() {
 
     // Keyed event: use registerGlobal() to catch ALL interactions
     getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        event.getPlayer().sendMessage(Message.raw("You interacted!"));
+        event.getPlayer().getPlayerRef().sendMessage(Message.raw("You interacted!"));
     });
 }
 ```
@@ -513,7 +514,7 @@ public class GameModeChangeSystem extends EntityEventSystem<EntityStore, ChangeG
                        ChangeGameModeEvent event) {
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
-            player.sendMessage(Message.raw("Switching to " + event.getGameMode() + " mode"));
+            player.getPlayerRef().sendMessage(Message.raw("Switching to " + event.getGameMode() + " mode"));
 
             // Optionally prevent the mode change
             // event.setCancelled(true);
@@ -540,6 +541,39 @@ protected void setup() {
 ```
 
 > **See also:** [ECS Event Handling](components.md#event-type-registration)
+
+---
+
+## RemovedPlayerFromWorldEvent
+
+**Package:** `com.hypixel.hytale.server.core.event.events.player`
+
+Fired when a player entity has been removed from a world (world switch, disconnect, or drain). It is a **keyed event** — the key is the **world name** — so you can listen per-world or globally. The player arrives as a detached `Holder<EntityStore>`: the entity is already out of the store, so read components from the holder rather than expecting a live `Ref`.
+
+Its headline feature is **leave-message control**:
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getHolder()` | `Holder<EntityStore>` | The removed player entity (detached holder) |
+| `getWorld()` | `World` | The world the player was removed from |
+| `getLeaveMessage()` | `Message` | The pending leave broadcast (may be null) |
+| `setLeaveMessage(Message)` | `void` | Replace the leave broadcast |
+| `shouldBroadcastLeaveMessage()` | `boolean` | False once suppressed (or when no message is set) |
+| `setBroadcastLeaveMessage(boolean)` | `void` | Suppress (or re-enable) the broadcast |
+
+```java
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.event.events.player.RemovedPlayerFromWorldEvent;
+
+// Keyed by world name: registerGlobal catches removals from every world
+getEventRegistry().registerGlobal(RemovedPlayerFromWorldEvent.class, event -> {
+    if (event.getWorld().getName().equals("lobby")) {
+        event.setBroadcastLeaveMessage(false);   // silent leaves in the lobby
+    } else {
+        event.setLeaveMessage(Message.raw("A hero departs..."));
+    }
+});
+```
 
 ---
 
@@ -599,6 +633,287 @@ Model model = cosmetics.createModel(skin);
 
 > [!WARNING]
 > Publicly exposed, but no first-party content plugin in build-12 references these classes (only `CosmeticsModule` itself, 8×, from the server bootstrap). Signatures above are verified against `HytaleServer.jar`; the end-to-end "apply this skin to a live player entity" flow is not demonstrated by any inspectable plugin and is intentionally not invented here.
+
+---
+
+## PlayerSkinComponent
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.player`
+
+The ECS component that holds a player entity's **wire-format skin** (`com.hypixel.hytale.protocol.PlayerSkin`) — the thing the entity tracker actually streams to nearby clients. This is the missing link for the [Cosmetics](#cosmetics-player-skins--emotes) classes above: read it to inspect what a player currently looks like.
+
+```java
+PlayerSkinComponent skin = store.getComponent(ref, PlayerSkinComponent.getComponentType());
+PlayerSkin current = skin.getPlayerSkin();   // protocol PlayerSkin (wire form)
+skin.setNetworkOutdated();                   // force a re-send to viewers next tick
+```
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | `ComponentType<EntityStore, PlayerSkinComponent>` for store access |
+| `new PlayerSkinComponent(protocol.PlayerSkin)` | Wrap a skin in a component |
+| `getPlayerSkin()` | The current `protocol.PlayerSkin` |
+| `setNetworkOutdated()` | Mark dirty so viewers get a skin update |
+| `consumeNetworkOutdated()` | Engine-side dirty-flag read (tracker uses this) |
+
+There is no setter for the skin itself — to change it, `putComponent` a new `PlayerSkinComponent` (the built-in `/model` command does exactly this).
+
+---
+
+## PlayerCreativeSettings
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.player`
+
+An immutable record of the client's **creative-mode preferences**, sent by the client and stored on the player inside the `PlayerSettings` component (`PlayerSettings.creativeSettings()`). Useful for respecting the player's own builder-tool choices in build-mode plugins.
+
+| Accessor | Type | Meaning |
+|----------|------|---------|
+| `allowNPCDetection()` | `boolean` | NPCs may notice/target this creative player |
+| `respondToHit()` | `boolean` | Creative player still reacts to being hit |
+| `placeMode()` | `String` | Block place mode (client default: `"default"`) |
+| `creativeInteractionDistance()` | `int` | Extended reach distance in creative |
+| `showBuilderToolsNotifications()` | `boolean` | Show builder-tools toast messages |
+| `noPhysics()` | `boolean` | Free-flight without collision |
+
+```java
+PlayerSettings settings = store.getComponent(ref, PlayerSettings.getComponentType());
+PlayerCreativeSettings creative = settings.creativeSettings();
+if (creative.noPhysics()) { /* skip collision checks for this builder */ }
+```
+
+These are **client-owned** values (re-sent whenever the player changes settings) — treat them as read-only input, not server state to mutate.
+
+---
+
+## Movement Settings (MovementManager & MovementConfig)
+
+**Package:** `com.hypixel.hytale.server.core.entity.entities.player.movement`
+
+Player movement tuning is split across two classes:
+
+- **`MovementConfig`** — a JSON **asset** (jump forces, base/climb/fly speeds, air control, auto-jump, slide and roll parameters). Loaded into an indexed asset map; `"BuiltinDefault"` (`MovementConfig.DEFAULT_ID`) is the stock config, also exposed as `MovementConfig.DEFAULT_MOVEMENT`.
+- **`MovementManager`** — the per-player **ECS component** holding the active `MovementSettings` (protocol object) plus the defaults to fall back to. Because player movement is client-authoritative, a change only takes effect when the manager sends the settings packet to the client.
+
+### MovementConfig (asset)
+
+```java
+MovementConfig config = MovementConfig.getAssetMap().getAsset("BuiltinDefault");
+float jump = config.getJumpForce();
+MovementSettings packet = config.toPacket();   // protocol form for MovementManager
+```
+
+Every tuning field has a getter — a sampling: `getBaseSpeed()`, `getAcceleration()`, `getJumpForce()`, `getSwimJumpForce()`, `getClimbSpeed()`, `getHorizontalFlySpeed()`, `getVerticalFlySpeed()`, `getForwardSprintSpeedMultiplier()`, `getAirSpeedMultiplier()`, `getMinSlideEntrySpeed()`, `getRollTimeToComplete()`, `getFallDamagePartialMitigationPercent()`. (The full list mirrors the asset's JSON fields — see the auto-generated API reference linked at the bottom of this page.)
+
+### MovementManager (component)
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `getSettings()` | The live `MovementSettings` currently applied |
+| `getDefaultSettings()` | The player's baseline settings |
+| `setDefaultSettings(MovementSettings, PhysicsValues, GameMode)` | Replace the baseline |
+| `applyDefaultSettings()` | Copy defaults → live settings |
+| `update(PacketHandler)` | **Push the live settings to the client** |
+| `refreshDefaultSettings(Ref, ComponentAccessor)` | Recompute defaults from the player's current state |
+| `resetDefaultsAndUpdate(Ref, ComponentAccessor)` | Reset to engine defaults *and* sync the client |
+
+### Changing a player's movement at runtime
+
+This is the exact pattern the built-in mounts plugin uses (apply on mount, reset on dismount):
+
+```java
+MovementConfig movementConfig = MovementConfig.getAssetMap().getAsset("MyPlugin_Slowed");
+PhysicsValues physics = store.getComponent(ref, PhysicsValues.getComponentType());
+Player player = store.getComponent(ref, Player.getComponentType());
+
+MovementManager movement = store.getComponent(ref, MovementManager.getComponentType());
+movement.setDefaultSettings(movementConfig.toPacket(), physics, player.getGameMode());
+movement.applyDefaultSettings();
+movement.update(playerRef.getPacketHandler());   // nothing changes client-side without this
+
+// ...later, restore stock movement:
+movement.resetDefaultsAndUpdate(ref, store);
+```
+
+> **Temporary speed changes** (potions, stuns) are better done with status effects (`StatModifiers` on `HorizontalSpeed`, or `HorizontalSpeedMultiplier`) — see [Effects & Stats](effects-stats.md). `MovementManager` is for wholesale movement-profile swaps.
+
+---
+
+## PlayerInput
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.player`
+
+The ECS component where the client's movement packets land before the engine applies them. Each network update is queued as a `PlayerInput.InputUpdate`; the engine's input-processing tick system drains the queue every tick and applies each update to the player's transform/velocity/movement-state components. Plugins that need to intercept or synthesize player motion (the mounts plugin is the canonical example) work with this queue.
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `queue(InputUpdate)` | Append an update to the queue |
+| `getMovementUpdateQueue()` | `List<InputUpdate>` — the live queue (inspect, rewrite, or `clear()`) |
+| `getMountId()` / `setMountId(int)` | Network ID of the entity the input is steering (mounts) |
+
+### InputUpdate implementations
+
+All are nested in `PlayerInput` and implement `InputUpdate` (`apply(CommandBuffer, ArchetypeChunk, int)` + `clone()`):
+
+| Class | Payload | Meaning |
+|-------|---------|---------|
+| `AbsoluteMovement` | x, y, z (`double`) | Move to an absolute position |
+| `RelativeMovement` | x, y, z (`double`) | Move by a delta |
+| `WishMovement` | x, y, z (`double`) | Directional movement intent |
+| `SetBody` | `direction()` (`Direction`) | Body facing |
+| `SetHead` | `direction()` (`Direction`) | Head facing |
+| `SetMovementStates` | `movementStates()` (`MovementStates`) | Sprint/crouch/fly/... flag set |
+| `SetRiderMovementStates` | `movementStates()` (`MovementStates`) | Same, for the mounted rider |
+| `SetClientVelocity` | `getVelocity()` (`Vector3d`) | Client-reported velocity |
+
+> **New in 0.5.7:** every `InputUpdate` implementation now supports `clone()` (the interface requires it), so a queued update can be deep-copied before you mutate or re-route it — `PlayerInput.clone()` itself relies on this to deep-copy the whole queue when the component is cloned.
+
+```java
+// Inspect queued inputs (e.g., in a ticking system that runs before input processing)
+PlayerInput input = chunk.getComponent(index, PlayerInput.getComponentType());
+for (PlayerInput.InputUpdate update : input.getMovementUpdateQueue()) {
+    if (update instanceof PlayerInput.SetMovementStates states
+            && states.movementStates().sprinting) {
+        // player is asking to sprint this tick
+    }
+}
+```
+
+For the *applied* result of these inputs (the entity's current sprint/crouch/glide flags), read [`MovementStatesComponent`](entities.md#movementstatescomponent).
+
+---
+
+## Persistent Player Data (PlayerConfigData)
+
+**Package:** `com.hypixel.hytale.server.core.entity.entities.player.data`
+
+`PlayerConfigData` is the player's **saved profile** — the codec-backed object persisted to the player's config file. Get it from the full `Player` component: `player.getPlayerConfigData()`. Built-in plugins use it for known recipes, discovered zones, reputation, and active objectives; your plugin can read the same state.
+
+### PlayerConfigData
+
+| Member | Description |
+|--------|-------------|
+| `getWorld()` / `setWorld(String)` | Name of the world the player saves into |
+| `getKnownRecipes()` / `setKnownRecipes(Set<String>)` | Learned crafting recipes |
+| `getDiscoveredZones()` / `setDiscoveredZones(Set<String>)` | Map-discovered zone ids |
+| `getDiscoveredInstances()` / `setDiscoveredInstances(Set<UUID>)` | Discovered instance UUIDs |
+| `getReputationData()` / `setReputationData(Object2IntMap<String>)` | Faction reputation scores |
+| `getActiveObjectiveUUIDs()` / `setActiveObjectiveUUIDs(Set<UUID>)` | In-progress objectives |
+| `getPerWorldData()` / `getPerWorldData(String)` | Per-world state (creates on demand for the keyed overload) |
+| `lastSavedPosition` / `lastSavedRotation` | Public final fields — last persisted transform |
+| `markChanged()` | Flag the profile dirty so it gets saved |
+| `consumeHasChanged()` | Engine-side dirty-flag read |
+
+> After mutating anything here, call `markChanged()` — persistence is flush-on-dirty, and the collection getters hand you unmodifiable views in some paths (built-ins mutate via the setters or the returned live maps, then mark changed).
+
+### PlayerWorldData
+
+Per-world slice of the profile, from `getPerWorldData(worldName)`:
+
+| Member | Description |
+|--------|-------------|
+| `getLastPosition()` / `setLastPosition(Transform)` | Where the player last was in this world |
+| `getLastMovementStates()` | Saved movement states (`SavedMovementStates`) |
+| `setLastMovementStates(MovementStates, boolean)` | Update them from live states |
+| `isFirstSpawn()` / `setFirstSpawn(boolean)` | First-ever spawn in this world |
+| `getRespawnPoints()` / `setRespawnPoints(PlayerRespawnPointData[])` | Bound respawn points |
+| `getDeathPositions()` | Recent death locations (engine keeps the last 5) |
+| `addLastDeath(String, Transform, int)` / `removeLastDeath(String)` | Death-position bookkeeping |
+| `getUserMapMarkers()` / `getUserMapMarker(String)` / `setUserMapMarkers(...)` | The player's custom map markers |
+
+### PlayerRespawnPointData
+
+One bound respawn point (a bed/waystone-style anchor): `getBlockPosition()` (`Vector3i` of the anchor block), `getRespawnPosition()` (`Vector3d` where the player actually appears), `getName()` / `setName(String)`. Constructed as `new PlayerRespawnPointData(blockPos, respawnPos, name)`. These are what `Player.getRespawnPosition(...)` resolves against.
+
+---
+
+## Container Windows
+
+**Package:** `com.hypixel.hytale.server.core.entity.entities.player.windows`
+
+Windows are the overlay UIs opened through the [`WindowManager`](ui.md) / `PageManager`. Beyond the base classes covered in the [UI docs](ui-api.md), three types matter for chest- and bench-style plugins:
+
+### ContainerBlockWindow
+
+A window backed by an `ItemContainer` that lives on a **block** (chest, treasure pot). Extends `BlockWindow` (which ties the window to block coordinates and auto-closes when the player walks away or the block changes) and implements `ItemContainerWindow`.
+
+```java
+// Open a chest-style window on the container block at pos (built-in treasure-chest flow)
+ContainerBlockWindow window = new ContainerBlockWindow(
+        pos.x, pos.y, pos.z, rotationIndex, blockType, itemContainer);
+
+player.getPageManager().setPageWithWindows(ref, store, Page.Bench, true, window);
+
+window.registerCloseEvent(event -> {
+    // e.g. flip the block back to its closed visual state
+});
+```
+
+| Method | Description |
+|--------|-------------|
+| `getItemContainer()` | The backing `ItemContainer` |
+| `getData()` | The window's JSON payload sent to the client |
+| `handleAction(Ref, Store, WindowAction)` | Server-side handling of client window actions |
+
+`registerCloseEvent(Consumer<Window.WindowCloseEvent>)` is inherited from `Window` — use it for cleanup, as above.
+
+### MaterialContainerWindow & MaterialExtraResourcesSection
+
+`MaterialContainerWindow` is the interface implemented by **crafting-style windows** (the built-in bench and hand-crafting windows) that show an "extra resources" strip — the materials pulled from nearby containers:
+
+```java
+MaterialExtraResourcesSection getExtraResourcesSection();
+void invalidateExtraResources();   // force a refresh of the strip
+boolean isValid();
+```
+
+`MaterialExtraResourcesSection` is that strip's state: `setExtraMaterials(ItemQuantity[])`, `getItemContainer()` / `setItemContainer(ItemContainer)`, `isValid()` / `setValid(boolean)`, and `toPacket()` (protocol `ExtraResources`). You'll only touch these when building a custom crafting window; for normal crafting flows see [Crafting](items-crafting.md).
+
+---
+
+## Choice Pages
+
+**Package:** `com.hypixel.hytale.server.core.entity.entities.player.pages.choices`
+
+A small framework for **menu pages** — a full-screen list of buttons where each button has requirements (shown-but-locked when unmet) and interactions (what happens on click). The built-in **shop** (`ShopPage`/`ShopElement`), **objective**, and **reputation** systems are all built on it. Use it when you want a data-driven dialog/menu without hand-writing a whole `CustomUIPage`.
+
+| Class | Role |
+|-------|------|
+| `ChoiceBasePage` | Abstract page (extends `InteractiveCustomUIPage`); renders elements, dispatches clicks |
+| `ChoiceElement` | One entry: display/description keys + its interactions and requirements |
+| `ChoiceInteraction` | Abstract action run when the element is clicked |
+| `ChoiceRequirement` | Abstract gate deciding whether the element can be used |
+
+All four are codec-backed (`CODEC` / `BASE_CODEC`), so element lists can come straight from JSON assets — that's how shop inventories are defined.
+
+### Subclassing
+
+```java
+public class MyMenuPage extends ChoiceBasePage {
+    public MyMenuPage(PlayerRef playerRef, ChoiceElement[] elements) {
+        super(playerRef, elements, "Pages/ShopPage.ui");   // .ui layout to render into
+    }
+}
+
+public class BroadcastInteraction extends ChoiceInteraction {
+    @Override
+    public void run(Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef playerRef) {
+        playerRef.sendMessage(Message.raw("You chose wisely."));
+    }
+}
+
+public class AlwaysAllowed extends ChoiceRequirement {
+    @Override
+    public boolean canFulfillRequirement(Store<EntityStore> store, Ref<EntityStore> ref, PlayerRef playerRef) {
+        return true;
+    }
+}
+```
+
+- `ChoiceElement` subclasses implement `addButton(UICommandBuilder, UIEventBuilder, String, PlayerRef)` to render themselves; `canFulfillRequirements(store, ref, playerRef)` AND-combines the element's requirements.
+- `ChoiceBasePage.handleDataEvent(...)` receives a `ChoicePageEventData` whose `getIndex()` is the clicked element's index, checks requirements, then runs every `ChoiceInteraction` on that element — you get that flow for free by subclassing.
+- Open it like any custom page: `player.getPageManager().openCustomPage(ref, store, new MyMenuPage(playerRef, elements))` — see [PageManager](ui-api.md#pagemanager).
 
 ---
 

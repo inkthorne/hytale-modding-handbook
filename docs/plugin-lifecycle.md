@@ -56,6 +56,10 @@ JavaPlugin (your entry point)
 | `PrepareUniverseEvent` | `server.core.event.events` | Fired during universe preparation, before worlds load |
 | `PluginEvent` | `server.core.plugin.event` | Base class for plugin lifecycle events (keyed by plugin class) |
 | `PluginSetupEvent` | `server.core.plugin.event` | Fired when a plugin's setup has completed |
+| `PluginManager` | `server.core.plugin` | The loader itself: enumerate/inspect loaded plugins (`PluginManager.get()`) |
+| `ModConfig` | `server.core.config` | Per-mod entry in the server `config.json` `Mods` block (enabled + required version) |
+| `SchemaGenerator` | `server.core.schema` | Registers/generates JSON schemas for configs and assets (`--generate-*-schema` flags) |
+| `DebugUtils` | `server.core.modules.debug` | Draw debug shapes (spheres, lines, arrows, …) into a world for all clients |
 
 ## Class Hierarchy
 ```
@@ -384,6 +388,151 @@ Dependencies use `group:name` as keys with semver ranges as values:
   { "Name": "Contributor" }
 ]
 ```
+
+---
+
+## PluginManager
+
+**Package:** `com.hypixel.hytale.server.core.plugin`
+
+The loader that discovers, loads, and tracks every plugin/mod. Obtain it with `PluginManager.get()`. Use it to *inspect* the plugin landscape — soft-depending on another mod, listing what's installed, checking a version:
+
+| Member | Return Type | Description |
+|--------|-------------|-------------|
+| `PluginManager.get()` | `PluginManager` | Static singleton |
+| `getPlugins()` | `List<PluginBase>` | All currently loaded plugins |
+| `getPlugin(PluginIdentifier)` | `PluginBase` | A loaded plugin by id (`null` if not loaded) |
+| `hasPlugin(PluginIdentifier, SemverRange)` | `boolean` | Whether a plugin is loaded at a matching version |
+| `getAvailablePlugins()` | `Map<PluginIdentifier, PluginManifest>` | Everything found on disk/classpath, loaded or not |
+| `getState()` | `PluginState` | The loader's own lifecycle state |
+| `load(PluginIdentifier)` / `unload(PluginIdentifier)` / `reload(PluginIdentifier)` | `boolean` | Runtime (un/re)load of a plugin — the machinery behind the mod-management commands; use sparingly |
+| `PluginManager.MODS_PATH` | `static final Path` | The server's `mods/` directory |
+
+```java
+import com.hypixel.hytale.server.core.plugin.PluginManager;
+import com.hypixel.hytale.common.plugin.PluginIdentifier;
+
+// Soft dependency: only wire the integration if the other mod is present
+PluginBase other = PluginManager.get()
+    .getPlugin(new PluginIdentifier("SomeGroup", "SomeMod"));
+if (other != null && other.isEnabled()) {
+    // integrate
+}
+```
+
+> For a **hard** dependency, prefer declaring it in `manifest.json` ([Dependencies Format](#dependencies-format)) — the loader then guarantees ordering, which a manual `getPlugin` check does not.
+
+---
+
+## ModConfig
+
+**Package:** `com.hypixel.hytale.server.core.config`
+
+One entry of the server `config.json`'s `Mods` block (`Map<PluginIdentifier, ModConfig>` on `HytaleServerConfig`) — the server-operator side switch for a mod, as opposed to the mod's own [`withConfig` data](#configuration):
+
+```json
+"Mods": {
+  "SomeGroup:SomeMod": { "Enabled": false }
+}
+```
+
+```java
+public class ModConfig {
+    public static final BuilderCodec<ModConfig> CODEC;
+    public Boolean getEnabled();                  // null = not specified (defaults to enabled)
+    public void setEnabled(Boolean enabled);
+    public SemverRange getRequiredVersion();      // optional version pin
+    public void setRequiredVersion(SemverRange range);
+}
+```
+
+Read via `HytaleServer.get().getConfig().getModConfig()`. A plugin whose entry is disabled is skipped at boot — this is what the in-game mods page toggles.
+
+---
+
+## SchemaGenerator
+
+**Package:** `com.hypixel.hytale.server.core.schema`
+
+Static registry + generator for the JSON schemas that power editor validation/autocomplete of configs and assets. The server CLI flags `--generate-asset-schema <dir>` and `--generate-config-schema <dir>` make the server boot, generate, and exit — emitting one schema file per registration plus a VS Code `settings.json` mapping file patterns to schemas.
+
+| Member | Return Type | Description |
+|--------|-------------|-------------|
+| `registerConfig(String name, BuilderCodec<?> codec, String virtualPath, List<String> fileMatchPatterns)` | `void` | *(static)* Register a config codec to be emitted as a schema |
+| `registerAssetSchema(String fileName, Function<SchemaContext, Schema> factory, List<String> fileMatchPatterns, String extension)` | `void` | *(static)* Register a custom (non-asset-store) schema factory |
+| `generateAssetSchemas()` | `Map<String, Schema>` | *(static)* Build the schema map for every registered asset store |
+| `generate(Path assetSchemaDir, Path configSchemaDir)` | `void` | *(static)* Full generation pass (either path may be `null`) |
+| `writeSchemas(Map<String, Schema>, Path)` | `void` | *(static)* Write a schema map to a directory |
+| `toFileName(String)` | `String` | *(static)* Sanitize a registration name into a schema file name |
+
+Asset stores registered through your [`AssetRegistry`](assets.md#assetregistry) are picked up automatically; `registerConfig` is the hook for making your *plugin config* schema-checkable too:
+
+```java
+import com.hypixel.hytale.server.core.schema.SchemaGenerator;
+
+SchemaGenerator.registerConfig("MyPluginConfig", MyConfig.CODEC,
+    "mods/MyPlugin", List.of("MyPlugin/config.json"));
+```
+
+---
+
+## DebugUtils
+
+**Package:** `com.hypixel.hytale.server.core.modules.debug`
+
+Static helpers that draw **debug shapes** into a world, rendered by every client in it — invaluable for visualizing hitboxes, paths, radii, and forces while developing. All methods are static and take the target `World` first; colors are `org.joml.Vector3f` RGB (constants provided: `COLOR_RED`, `COLOR_LIME`, `COLOR_BLUE`, `COLOR_YELLOW`, `COLOR_CYAN`, `COLOR_MAGENTA`, `COLOR_WHITE`, `COLOR_BLACK`, and more, plus `INDEXED_COLORS` / `INDEXED_COLOR_NAMES`).
+
+```java
+// primitives (selection — see the jar for every overload)
+public static void addSphere(World world, Vector3d pos, Vector3f color, double scale, float time);
+public static void addCube(World world, Vector3d pos, Vector3f color, double scale, float time);
+public static void addCylinder(World world, Vector3d pos, Vector3f color, double scale, float time);
+public static void addCone(World world, Vector3d pos, Vector3f color, double scale, float time);
+public static void addLine(World world, Vector3d start, Vector3d end, Vector3f color, double thickness, float time, int flags);
+public static void addArrow(World world, Vector3d position, Vector3d direction, Vector3f color, float opacity, float time, int flags);
+public static void addDisc(World world, Vector3d center, double radius, Vector3f color, float time, int flags);
+public static void addFrustum(World world, Matrix4d matrix, Matrix4d frustumProjection, Vector3f color, float time, int flags);
+
+// generic entry point + helpers
+public static void add(World world, DebugShape shape, Matrix4d matrix, Vector3f color, float time, int flags);
+public static Matrix4d makeMatrix(Vector3d position, double scale);
+public static void clear(World world);   // remove all debug shapes
+
+// flags
+public static final int FLAG_NONE;
+public static final int FLAG_FADE;          // fade out over the duration
+public static final int FLAG_NO_WIREFRAME;
+public static final int FLAG_NO_SOLID;
+public static final float DEFAULT_OPACITY;  // 0.8f
+```
+
+```java
+import com.hypixel.hytale.server.core.modules.debug.DebugUtils;
+
+// Show a marker sphere for 10 seconds
+DebugUtils.addSphere(world, new Vector3d(x, y, z), DebugUtils.COLOR_CYAN, 5.0, 10f);
+```
+
+`time` is in **seconds**; use `clear(world)` to wipe all shapes early. Shapes are broadcast to every player in the world (a `DisplayDebug` packet per player).
+
+---
+
+## IMetaStoreImpl
+
+**Package:** `com.hypixel.hytale.server.core.meta`
+
+The serialization face of a meta store. Game objects that carry metadata implement `IMetaStore<K>`, whose default methods (`getMetaObject` / `putMetaObject` / `removeMetaObject` / `hasMetaObject`) are the API plugins actually use — see [Interaction Context → MetaKey and the Meta Store](interactions-context.md#metakey-and-the-meta-store). `IMetaStoreImpl<K>` (returned by `IMetaStore.getMetaStore()`) is the backing implementation contract those defaults delegate to:
+
+```java
+public interface IMetaStoreImpl<K> extends IMetaStore<K> {
+    IMetaRegistry<K> getRegistry();
+    void decode(BsonDocument document, ExtraInfo extraInfo);   // load persisted entries
+    BsonDocument encode(ExtraInfo extraInfo);                  // persist entries
+    void forEachUnknownEntry(BiConsumer<String, BsonValue> consumer); // entries with no registered key
+}
+```
+
+You will rarely implement it — treat it as the persistence SPI behind `IMetaStore`, useful mainly for understanding how meta entries survive saves (registered `PersistentMetaKey`s encode; unknown entries are preserved and exposed via `forEachUnknownEntry`).
 
 ---
 

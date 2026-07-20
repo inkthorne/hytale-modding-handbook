@@ -49,6 +49,19 @@ PrefabStore  (load / save / locate)
 | `PrefabWeights` | `server.core.prefab` | Weighted random selection over prefabs |
 | `PrefabPasteEvent` | `server.core.prefab.event` | Fired when a prefab is pasted into the world |
 | `PrefabPlaceEntityEvent` | `server.core.prefab.event` | Fired when a prefab places an entity |
+| `PrefabLoadException` / `PrefabSaveException` | `server.core.prefab` | Unchecked exceptions from prefab load/save, each with a `Type` enum |
+| `PrefabCopyableComponent` | `server.core.prefab` | Marker component: entity gets captured when a prefab is saved |
+| `SelectionManager` / `SelectionProvider` | `server.core.prefab.selection` | Global hook to the builder-tools selection (clipboard) provider |
+| `RotateBlockMode` | `server.core.prefab.selection.standard` | Which blocks get their per-block rotation updated during a rotate |
+| `FeedbackConsumer` | `server.core.prefab.selection.standard` | Progress-feedback callback for selection operations |
+| `BlockFilter` | `server.core.prefab.selection.mask` | One positional filter inside a `BlockMask` |
+| `PrefabLoader` | `server.core.prefab.selection.buffer` | Resolves dotted prefab names to `.prefab.json` paths |
+| `PrefabBufferUtil` | `server.core.prefab.selection.buffer` | Loads, caches, and binary-converts prefab files |
+| `PrefabBufferCall` | `server.core.prefab.selection.buffer` | Iteration context: `Random` + `PrefabRotation` |
+| `IPrefabBuffer` / `PrefabBuffer` | `server.core.prefab.selection.buffer.impl` | Packed prefab block data and its read view |
+| `PrefabUtil` | `server.core.util` | Static paste / remove / can-place for `IPrefabBuffer` prefabs |
+| `PrefabSpawnerBlock` | `server.core.modules.prefabspawner` | Chunk-store component behind Prefab Spawner blocks |
+| `PrefabListAsset` | `server.core.asset.type.buildertool.config` | Java asset type behind `Server/PrefabList/*.json` |
 
 ## Quick Navigation
 
@@ -57,6 +70,7 @@ PrefabStore  (load / save / locate)
 | [Categories Reference](prefabs-categories.md) | `prefabs-categories.md` | Trees, Rocks, NPCs, Dungeons (2,455+ files) |
 | [File Format](#prefab-file-format) | Below | JSON schema, blocks, fluids, entities |
 | [Java API](#prefabstore) | Below | PrefabStore, BlockSelection, Events |
+| [Buffer Pipeline](#the-prefab-buffer-pipeline) | Below | PrefabLoader, PrefabBufferUtil, IPrefabBuffer, PrefabUtil |
 
 ---
 
@@ -67,6 +81,11 @@ BlockSelection                 (prefab data: blocks, fluids, entities)
 PrefabEntry                    (prefab file metadata)
 PrefabRotation                 (rotation enum)
 PrefabWeights                  (weighted random selection)
+SelectionManager               (global SelectionProvider hook)
+PrefabLoader                   (prefab name → file path)
+PrefabBufferUtil               (file → cached PrefabBuffer)
+PrefabBuffer / IPrefabBuffer   (packed block data + read view)
+PrefabUtil                     (paste / remove / can-place)
 ```
 
 ---
@@ -447,6 +466,416 @@ String selected = weights.get(prefabNames, name -> name, random);
 // Load and place selected prefab
 BlockSelection prefab = PrefabStore.get().getServerPrefab("trees/" + selected);
 prefab.place(commandSender, world);
+```
+
+---
+
+## Prefab Exceptions
+**Package:** `com.hypixel.hytale.server.core.prefab`
+
+`PrefabStore` load/save failures surface as two unchecked exceptions, each carrying a `Type` enum that describes the failure category.
+
+### PrefabLoadException
+```java
+PrefabLoadException(PrefabLoadException.Type type)
+PrefabLoadException(PrefabLoadException.Type type, String message)
+PrefabLoadException(PrefabLoadException.Type type, String message, Throwable cause)
+PrefabLoadException(PrefabLoadException.Type type, Throwable cause)
+
+PrefabLoadException.Type getType()   // ERROR or NOT_FOUND
+```
+
+`Type.NOT_FOUND` means the name/path did not resolve to a stored prefab — this is the exception behind the `Could not locate prefab: ` message in [Gotchas & Errors](#gotchas--errors). `Type.ERROR` wraps I/O and parse failures.
+
+### PrefabSaveException
+```java
+PrefabSaveException(PrefabSaveException.Type type)
+PrefabSaveException(PrefabSaveException.Type type, String message)
+PrefabSaveException(PrefabSaveException.Type type, String message, Throwable cause)
+PrefabSaveException(PrefabSaveException.Type type, Throwable cause)
+
+PrefabSaveException.Type getType()   // ERROR or ALREADY_EXISTS
+```
+
+`Type.ALREADY_EXISTS` is thrown by the `PrefabStore` save methods when the target file already exists and overwrite was not requested; `Type.ERROR` wraps everything else.
+
+---
+
+## PrefabCopyableComponent
+**Package:** `com.hypixel.hytale.server.core.prefab`
+
+Stateless marker component on `EntityStore` entities. Entities carrying it are the ones collected into a prefab when a world region is saved (the prefab editor's saver iterates only copyable entities in the selection). Because it holds no data, it is a singleton.
+
+```java
+static final PrefabCopyableComponent INSTANCE
+static final BuilderCodec<PrefabCopyableComponent> CODEC
+static ComponentType<EntityStore, PrefabCopyableComponent> getComponentType()
+static PrefabCopyableComponent get()      // returns INSTANCE
+Component<EntityStore> clone()            // returns INSTANCE (stateless)
+```
+
+Attach it to make an entity part of prefab captures:
+
+```java
+holder.putComponent(PrefabCopyableComponent.getComponentType(), PrefabCopyableComponent.get());
+```
+
+---
+
+## SelectionManager & SelectionProvider
+**Package:** `com.hypixel.hytale.server.core.prefab.selection`
+
+Static bridge between core prefab code and whichever plugin owns "the player's current selection". In practice the built-in builder-tools plugin registers itself as the provider, so this is how other code reads a player's clipboard selection without a hard dependency on that plugin.
+
+```java
+// SelectionManager — static holder
+static void setSelectionProvider(SelectionProvider provider)
+static SelectionProvider getSelectionProvider()      // null until a provider registers
+
+// SelectionProvider — the single abstract method
+<T extends Throwable> void computeSelectionCopy(
+    Ref<EntityStore> ref, Player player,
+    ThrowableConsumer<BlockSelection, T> consumer,
+    ComponentAccessor<EntityStore> accessor)
+```
+
+```java
+SelectionProvider provider = SelectionManager.getSelectionProvider();
+if (provider != null) {
+    provider.computeSelectionCopy(ref, player, selection -> {
+        // selection is a BlockSelection copy of the player's current selection
+    }, accessor);
+}
+```
+
+---
+
+## RotateBlockMode
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.standard`
+
+Enum controlling which blocks get their per-block rotation value updated when a selection or clipboard is rotated (used by the builder-tools rotate and randomize-clipboard actions).
+
+```java
+public enum RotateBlockMode {
+    ALL,              // rotate every block's rotation value
+    NON_UNIFORM,      // "NonUniform"
+    NON_FULL_BLOCKS,  // "NonFullBlocks"
+    NOTHING           // "Nothing" — move blocks, keep rotation values untouched
+}
+
+static RotateBlockMode fromString(String value)
+```
+
+`fromString()` accepts the client-facing spellings `"NonUniform"`, `"NonFullBlocks"`, `"Nothing"`; anything else — including `null` — falls back to `ALL`.
+
+---
+
+## FeedbackConsumer
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.standard`
+
+Functional callback for reporting the outcome of selection operations back to a `CommandSender`. `FeedbackConsumer.DEFAULT` is a no-op — pass it when you don't want feedback.
+
+```java
+static final FeedbackConsumer DEFAULT   // no-op
+void accept(String, int, int, CommandSender, ComponentAccessor<EntityStore>)
+```
+
+---
+
+## BlockFilter
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.mask`
+
+One positional filter inside a `BlockMask` (the mask type accepted by `BlockSelection.place(...)` and the builder-tools edit operations). A filter tests a position against a `|`-separated block list, optionally at a relative position (above / below / adjacent / cardinal / diagonal), and can be inverted.
+
+### Filter string syntax
+
+Parsed by `BlockFilter.parse(String)`. The leading prefix picks the `BlockFilter.FilterType`; `!` inverts any filter:
+
+| Prefix | FilterType | Tests |
+|--------|------------|-------|
+| *(none)* | `TargetBlock` | the block at the position itself |
+| `!` | *(any)* | invert prefix, combines with the others |
+| `>` | `AboveBlock` | the block above |
+| `<` | `BelowBlock` | the block below |
+| `~` | `AdjacentBlock` | adjacent position |
+| `^` | `NeighborBlock` | neighboring position |
+| `+n` / `+e` / `+s` / `+w` | `NorthBlock` / `EastBlock` / `SouthBlock` / `WestBlock` | the cardinal neighbor |
+| `%xy` / `%xz` / `%zy` | `DiagonalXy` / `DiagonalXz` / `DiagonalZy` | diagonal in that plane |
+| `#` | `Selection` | position is inside the current selection (no block list) |
+
+### Key members
+```java
+BlockFilter(BlockFilter.FilterType type, String[] blocks, boolean inverted)
+static BlockFilter parse(String filter)
+static BlockFilter.ParsedFilterParts parseComponents(String filter)  // split without resolving
+static IntSet parseBlocks(String[] blocks)
+static BlockFilter.BlocksAndFluids parseBlocksAndFluids(String[] blocks)
+
+void resolve()                 // map block names → runtime block/fluid ids
+boolean hasInvalidBlocks()     // true if any name failed to resolve
+
+BlockFilter.FilterType getBlockFilterType()
+String[] getBlocks()
+boolean isInverted()
+
+// the actual test (min/max are the selection bounds, used by the Selection type)
+boolean isExcluded(ChunkAccessor accessor, int x, int y, int z, Vector3i min, Vector3i max, int blockId)
+boolean isExcluded(ChunkAccessor accessor, int x, int y, int z, Vector3i min, Vector3i max, int blockId, int fluidId)
+
+static final String BLOCK_SEPARATOR = "|"
+static final Codec<BlockFilter> CODEC
+```
+
+`FilterType` itself exposes `getPrefix()`, `hasBlocks()` (the `Selection` type takes no block list), and `parse(String, int)`.
+
+---
+
+## The Prefab Buffer Pipeline
+
+Alongside `BlockSelection` (the editable, builder-tools-facing payload) the server has a second, packed prefab representation used by world generation, the prefab spawner, and anything that stamps prefabs at scale. It flows through four classes:
+
+```
+name ("Trees.Oak.Oak_Large_01" or "Trees.Oak.*")
+│
+│  PrefabLoader.resolvePrefabs      (dotted name → .prefab.json path(s))
+▼
+path
+│
+│  PrefabBufferUtil.getCached       (load + weak-ref cache; .lpf binary fast path)
+▼
+PrefabBuffer ── newAccess() ──▶ IPrefabBuffer   (read view)
+│
+│  PrefabUtil.paste / remove / canPlacePrefab
+▼
+World
+```
+
+### PrefabLoader
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.buffer`
+
+Resolves dot-separated prefab names to files under a root folder. A name ending in `.*` resolves a whole folder recursively.
+
+```java
+PrefabLoader(Path rootFolder)
+Path getRootFolder()
+
+void resolvePrefabs(String prefabName, Consumer<Path> pathConsumer) throws IOException
+static void resolvePrefabs(Path rootFolder, String prefabName, Consumer<Path> pathConsumer) throws IOException
+static void resolvePrefabFolder(Path rootFolder, String prefabName, Consumer<Path> pathConsumer) throws IOException
+static String resolveRelativeJsonPath(String, Path, Path)
+```
+
+`.` is the path separator: `"Trees.Oak.Oak_Large_01"` resolves to `Trees/Oak/Oak_Large_01.prefab.json` under the root. The `.*` folder form walks the directory tree and emits every prefab file it finds (with the `.prefab.json` / `.lpf` suffix stripped — `PrefabBufferUtil` re-resolves the extension). A name that escapes the root folder throws `IllegalArgumentException` with the literal `Invalid prefab name: ` message from [Gotchas & Errors](#gotchas--errors).
+
+### PrefabBufferUtil
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.buffer`
+
+Loads prefab files into `PrefabBuffer`s, with a weak-reference cache and a binary fast path: a JSON prefab is converted once to a binary `.lpf` file (written under the prefab cache directory for immutable asset packs, next to the JSON otherwise) and re-read from that on subsequent loads.
+
+```java
+static IPrefabBuffer getCached(Path path)      // main entry point: cache hit or loadBuffer()
+static PrefabBuffer loadBuffer(Path path)      // .lpf if present, else JSON (+ conversion)
+
+static PrefabBuffer readFromFile(Path path)    // raw binary read
+static CompletableFuture<PrefabBuffer> readFromFileAsync(Path path)
+static CompletableFuture<Void> writeToFileAsync(PrefabBuffer prefab, Path path)
+static PrefabBuffer loadFromLPF(Path path, Path realPath)
+static PrefabBuffer loadFromJson(AssetPack pack, Path path, Path cachedLpfPath, Path jsonPath) throws IOException
+
+static final Path CACHE_PATH                   // prefab cache dir (default .cache/prefabs)
+static final String LPF_FILE_SUFFIX      = ".lpf"
+static final String JSON_FILE_SUFFIX     = ".prefab.json"
+static final String JSON_LPF_FILE_SUFFIX = ".prefab.json.lpf"
+static final Pattern FILE_SUFFIX_PATTERN
+```
+
+`getCached()` is what the rest of the server calls. The cache holds buffers behind `WeakReference`s, so prefabs that nothing is using can be garbage-collected and transparently reloaded later. `loadBuffer()` accepts a path with or without the prefab suffix and probes `.lpf`, `.prefab.json.lpf`, then `.prefab.json` siblings.
+
+### PrefabBuffer & IPrefabBuffer
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.buffer.impl`
+
+`PrefabBuffer` is the immutable packed payload — block columns stored in off-heap memory plus an array of child-prefab references. `IPrefabBuffer` is the read interface everything consumes; get one with `newAccess()`.
+
+```java
+// PrefabBuffer
+static PrefabBuffer.Builder newBuilder()
+int getAnchorX() / getAnchorY() / getAnchorZ()
+PrefabBuffer.PrefabBufferAccessor newAccess()   // implements IPrefabBuffer
+static final float DEFAULT_CHANCE = 1.0f
+```
+
+```java
+// IPrefabBuffer — bounds & metadata
+int getAnchorX() / getAnchorY() / getAnchorZ()
+int getMinX() / getMinY() / getMinZ()
+int getMaxX() / getMaxY() / getMaxZ()
+int getMinX(PrefabRotation) / getMinZ(PrefabRotation)   // rotation-aware bounds
+int getMaxX(PrefabRotation) / getMaxZ(PrefabRotation)
+int getMinYAt(PrefabRotation, int x, int z)
+int getMaxYAt(PrefabRotation, int x, int z)
+int getColumnCount()
+int getMaximumExtend()
+PrefabBuffer.ChildPrefab[] getChildPrefabs()
+
+// direct block access (prefab-local coordinates)
+int getBlockId(int x, int y, int z)
+int getFiller(int x, int y, int z)
+int getRotationIndex(int x, int y, int z)
+
+// iteration — T is a context object threaded through the callbacks
+<T extends PrefabBufferCall> void forEach(IPrefabBuffer.ColumnPredicate<T>,
+    IPrefabBuffer.BlockConsumer<T>, IPrefabBuffer.EntityConsumer<T>,
+    IPrefabBuffer.ChildConsumer<T>, T call)
+<T> void forEachEntity(IPrefabBuffer.EntityConsumer<T>, T context)
+<T> void forEachRaw(IPrefabBuffer.ColumnPredicate<T>, IPrefabBuffer.RawBlockConsumer<T>,
+    IPrefabBuffer.FluidConsumer<T>, IPrefabBuffer.EntityConsumer<T>, T context)
+<T> boolean forEachRaw(IPrefabBuffer.ColumnPredicate<T>, IPrefabBuffer.RawBlockPredicate<T>,
+    IPrefabBuffer.FluidPredicate<T>, IPrefabBuffer.EntityPredicate<T>, T context)
+<T extends PrefabBufferCall> boolean compare(IPrefabBuffer.BlockComparingPredicate<T>, T call)
+
+static final IPrefabBuffer.ColumnPredicate<?> ALL_COLUMNS
+static <T> IPrefabBuffer.ColumnPredicate<T> iterateAllColumns()
+```
+
+The consumer/predicate types are nested functional interfaces of `IPrefabBuffer`. `forEach` applies the call's `PrefabRotation` to coordinates as it iterates; the `forEachRaw` variants walk the stored data unrotated, and the predicate overload short-circuits on the first `false`. `compare` walks blocks against a predicate and is how `PrefabUtil.prefabMatchesAtPosition` and `PrefabUtil.canPlacePrefab` are implemented.
+
+Buffers can also be built in code:
+
+```java
+// PrefabBuffer.Builder
+void setAnchor(Vector3i anchor)
+PrefabBufferBlockEntry newBlockEntry(int y)
+void addColumn(int x, int z, PrefabBufferBlockEntry[] entries, Holder<EntityStore>[] entities)
+void addChildPrefab(int x, int y, int z, String path, boolean fitHeightmap,
+    boolean inheritSeed, boolean inheritHeightCondition,
+    PrefabWeights weights, PrefabRotation rotation)
+PrefabBuffer build()
+```
+
+**Child prefabs** (`PrefabBuffer.ChildPrefab`) are nested prefab references baked into a parent buffer — the packed form of [Prefab Spawner blocks](#prefabspawnerblock). Accessors: `getX()` / `getY()` / `getZ()`, `getPath()`, `isFitHeightmap()`, `isInheritSeed()`, `isInheritHeightCondition()`, `getWeights()`, `getRotation()`.
+
+### PrefabBufferCall
+**Package:** `com.hypixel.hytale.server.core.prefab.selection.buffer`
+
+The context object threaded through `forEach` / `compare` passes, carrying the RNG and the rotation the callbacks should apply. Both fields are public.
+
+```java
+public Random random;
+public PrefabRotation rotation;
+
+PrefabBufferCall()
+PrefabBufferCall(Random random, PrefabRotation rotation)
+```
+
+### PrefabUtil
+**Package:** `com.hypixel.hytale.server.core.util`
+
+Static stamping operations that apply an `IPrefabBuffer` to a `World` — the programmatic paste path. Pasting fires the same `PrefabPasteEvent` / `PrefabPlaceEntityEvent` documented in [Prefab Events](#prefab-events).
+
+```java
+// test before placing
+static boolean prefabMatchesAtPosition(IPrefabBuffer buffer, World world,
+    Vector3i position, Rotation yaw, Random random)
+static boolean canPlacePrefab(IPrefabBuffer buffer, World world, Vector3i position,
+    Rotation yaw, IntSet mask, Random random, boolean ignoreOrigin)
+
+// paste
+static void paste(IPrefabBuffer buffer, World world, Vector3i position, Rotation yaw,
+    boolean force, Random random, ComponentAccessor<EntityStore> accessor)
+static void paste(IPrefabBuffer buffer, World world, Vector3i position, Rotation yaw,
+    boolean force, Random random, int setBlockSettings,
+    ComponentAccessor<EntityStore> accessor)
+static void paste(IPrefabBuffer buffer, World world, Vector3i position, Rotation yaw,
+    boolean force, Random random, int setBlockSettings, boolean technicalPaste,
+    boolean pasteAnchorAsBlock, boolean loadEntities,
+    ComponentAccessor<EntityStore> accessor)
+
+// remove a pasted prefab's blocks again
+static void remove(IPrefabBuffer buffer, World world, Vector3i position,
+    boolean force, Random random, int setBlockSettings)
+static void remove(IPrefabBuffer buffer, World world, Vector3i position,
+    boolean force, Random random, int setBlockSettings, double brokenParticlesRate)
+static void remove(IPrefabBuffer buffer, World world, Vector3i position, Rotation rotation,
+    boolean force, Random random, int setBlockSettings, double brokenParticlesRate)
+
+static int getNextPrefabId()   // source of the internal id seen in PrefabPasteEvent.getPrefabId()
+```
+
+Rotation here is the block-config `Rotation` enum (`None`, `Ninety`, `OneEighty`, `TwoSeventy`); it is converted internally via `PrefabRotation.fromRotation()`.
+
+### Buffer pipeline example
+
+```java
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.Rotation;
+import com.hypixel.hytale.server.core.prefab.PrefabStore;
+import com.hypixel.hytale.server.core.prefab.selection.buffer.PrefabBufferUtil;
+import com.hypixel.hytale.server.core.prefab.selection.buffer.PrefabLoader;
+import com.hypixel.hytale.server.core.prefab.selection.buffer.impl.IPrefabBuffer;
+import com.hypixel.hytale.server.core.util.PrefabUtil;
+
+// Resolve every oak-tree prefab under the world-gen prefab root and stamp one
+PrefabLoader loader = new PrefabLoader(PrefabStore.get().getWorldGenPrefabsPath());
+try {
+    loader.resolvePrefabs("Trees.Oak.*", path -> {
+        IPrefabBuffer buffer = PrefabBufferUtil.getCached(path);
+        if (PrefabUtil.canPlacePrefab(buffer, world, pos, Rotation.None, null, random, false)) {
+            PrefabUtil.paste(buffer, world, pos, Rotation.None, false, random, accessor);
+        }
+    });
+} catch (IOException e) {
+    // root folder missing / unreadable
+}
+```
+
+---
+
+## PrefabSpawnerBlock
+**Package:** `com.hypixel.hytale.server.core.modules.prefabspawner`
+
+Chunk-store component holding the configuration of a Prefab Spawner block — the world-building block that stamps another prefab when its host prefab is placed. The core `PrefabSpawnerModule` registers it under the id `"PrefabSpawner"`, and the in-game settings page edits the same fields. When a region containing a spawner block is saved into a prefab buffer, the spawner's settings are baked into a `PrefabBuffer.ChildPrefab` entry instead of a block (see [the buffer pipeline](#the-prefab-buffer-pipeline)).
+
+```java
+static ComponentType<ChunkStore, PrefabSpawnerBlock> getComponentType()
+
+PrefabSpawnerBlock()
+PrefabSpawnerBlock(String prefabPath, boolean fitHeightmap, boolean inheritSeed,
+                   boolean inheritHeightCondition, PrefabWeights prefabWeights)
+
+String getPrefabPath()               / void setPrefabPath(String)
+boolean isFitHeightmap()             / void setFitHeightmap(boolean)
+boolean isInheritSeed()              / void setInheritSeed(boolean)
+boolean isInheritHeightCondition()   / void setInheritHeightCondition(boolean)
+PrefabWeights getPrefabWeights()     / void setPrefabWeights(PrefabWeights)
+
+static final BuilderCodec<PrefabSpawnerBlock> CODEC
+```
+
+A spawner with no prefab path logs a warning and is skipped when the containing prefab is packed.
+
+---
+
+## PrefabListAsset
+**Package:** `com.hypixel.hytale.server.core.asset.type.buildertool.config`
+
+The Java asset type behind `Server/PrefabList/*.json` files (format documented in [PrefabList Files](#prefablist-files)). Each asset expands its references into a flat list of prefab file paths.
+
+```java
+static AssetStore<String, PrefabListAsset, DefaultAssetMap<String, PrefabListAsset>> getAssetStore()
+static DefaultAssetMap<String, PrefabListAsset> getAssetMap()
+
+String getId()
+Path[] getPrefabPaths()                              // expanded list of prefab files
+PrefabListAsset.PrefabReference[] getPrefabReferences()
+Path getRandomPrefab()                               // random pick from the expanded paths
+
+static final AssetBuilderCodec<String, PrefabListAsset> CODEC
+```
+
+`PrefabListAsset.PrefabReference` mirrors one entry of the JSON `Prefabs` array — public fields `rootDirectory`, `unprocessedPrefabPath`, `recursive`, `prefabPaths`, plus `processPrefabPath()` which expands the reference into concrete paths. The `PrefabListAsset.PrefabRootDirectory` enum has **three** values — `Server`, `Asset`, and `Worldgen` (each exposing `getPrefabPath()` for its root) — one more than the two shown in the JSON table below.
+
+```java
+PrefabListAsset list = PrefabListAsset.getAssetMap().getAsset("MyMod_Trees");
+Path prefab = list.getRandomPrefab();
 ```
 
 ---
@@ -901,15 +1330,18 @@ The `Droplist` property references files in `Server/Drops/`. When the container 
 
 ### Interaction System Integration
 
-The `SpawnPrefab` interaction can spawn entity prefabs during combat or ability execution:
+The `SpawnPrefab` interaction can paste a prefab into the world during an interaction
+chain — e.g. the Goblin Thief dropping its loot chest
+(`Server/Item/Interactions/NPCs/Intelligent/Goblin_Thief/Goblin_Thief_Chest.json`):
 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabId": "Skeleton_Fighter_Random_Weapon",
-  "Position": "Self",
-  "Count": 3,
-  "Offset": [0, 0, 2]
+  "PrefabPath": "Goblin_Thief_Chest.prefab.json",
+  "Offset": { "X": 0, "Y": 0, "Z": 0 },
+  "RotationYaw": "OneEighty",
+  "OriginSource": "Entity",
+  "Force": true
 }
 ```
 
@@ -979,7 +1411,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`Could not locate prefab: `** → a prefab path/name handed to `PrefabStore` does not resolve to a stored prefab. Fix: use the exact string path the prefab is registered under (case-sensitive), not the internal integer id from `getPrefabId()`.
 - **`Invalid prefab name: `** / **`Invalid prefab path: `** → an empty or malformed prefab name/path was supplied. Fix: pass a non-empty, well-formed name/path.
 - **`PrefabList asset not found: `** → a referenced `PrefabList` asset id does not exist. Fix: confirm the `Server/PrefabList/*.json` file exists and the id matches exactly.
-- **`prefab pool contains empty list`** / **`prefab pool contains list with null element`** → a weighted prefab pool was built with an empty entry list or a null member. Fix: ensure every pool entry is populated and non-null.
+- **`prefab pool contains list with null element`** → a weighted prefab pool was built with a null member. Fix: ensure every pool entry is populated and non-null. (An `empty list` sibling message existed through build-17 but was removed by 0.5.7 — an empty pool no longer throws that exact string.)
 - **`Cannot have a negative y level for pasting prefabs`** → a paste/placement was requested at a negative Y. Fix: place prefabs at a non-negative Y level.
 
 ---

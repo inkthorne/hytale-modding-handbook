@@ -643,17 +643,18 @@ The `Effects` object configures visual and audio feedback during the charging ph
 | `ClearSoundEventOnFinish` | boolean | Stop sound when charge completes/releases |
 | `Particles` | array | Particle effects during charging |
 
-**Particles array entry:**
+**Particles array entry** (a `ModelParticle`: `SystemId` names the particle system,
+`TargetEntityPart`/`TargetNodeName` pick the model node to attach to, and
+`PositionOffset`/`RotationOffset`/`Scale` adjust placement):
 
 ```json
 {
   "Particles": [
     {
-      "ParticleSystemId": "particles/charge_buildup",
-      "NodeId": "weapon_tip",
-      "Position": [0, 0, 0],
-      "Rotation": [0, 0, 0],
-      "Scale": [1, 1, 1]
+      "SystemId": "Watering_Can",
+      "TargetEntityPart": "PrimaryItem",
+      "TargetNodeName": "Can",
+      "PositionOffset": { "X": 0, "Y": 0, "Z": 0 }
     }
   ]
 }
@@ -677,8 +678,8 @@ The `Effects` object configures visual and audio feedback during the charging ph
     "ClearSoundEventOnFinish": true,
     "Particles": [
       {
-        "ParticleSystemId": "particles/bow_tension",
-        "NodeId": "string_center"
+        "SystemId": "particles/bow_tension",
+        "TargetNodeName": "string_center"
       }
     ]
   },
@@ -693,14 +694,14 @@ The `Effects` object configures visual and audio feedback during the charging ph
       "Type": "Serial",
       "Interactions": [
         { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "LaunchProjectile", "ProjectileId": "arrow", "Speed": 30 }
+        { "Type": "LaunchProjectile", "ProjectileId": "Arrow_HalfCharge" }
       ]
     },
     "1.2": {
       "Type": "Serial",
       "Interactions": [
         { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "LaunchProjectile", "ProjectileId": "arrow", "Speed": 60 }
+        { "Type": "LaunchProjectile", "ProjectileId": "Arrow_FullCharge" }
       ]
     }
   }
@@ -721,9 +722,9 @@ The `Effects` object configures visual and audio feedback during the charging ph
     "ClearAnimationOnFinish": true,
     "Particles": [
       {
-        "ParticleSystemId": "particles/weapon_glow",
-        "NodeId": "blade_edge",
-        "Scale": [1.5, 1.5, 1.5]
+        "SystemId": "particles/weapon_glow",
+        "TargetNodeName": "blade_edge",
+        "Scale": 1.5
       }
     ]
   },
@@ -797,7 +798,7 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "Effects": {
     "ItemAnimationId": "staff_channel",
     "Particles": [
-      { "ParticleSystemId": "particles/magic_gather", "NodeId": "staff_orb" }
+      { "SystemId": "particles/magic_gather", "TargetNodeName": "staff_orb" }
     ]
   },
   "Next": {

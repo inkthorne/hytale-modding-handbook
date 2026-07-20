@@ -51,6 +51,13 @@ CommandRegistry
 | `CommandOwner` | `server.core.command.system` | Interface for command owners (typically plugins) |
 | `ArgumentType<D>` | `server.core.command.system.arguments.types` | Abstract base for argument types |
 | `ArgTypes` | `server.core.command.system.arguments.types` | Factory of built-in argument types |
+| `CommandBase` | `server.core.command.system.basecommands` | Simplest sync base; no player or world context required |
+| `AbstractAsyncPlayerCommand` | `server.core.command.system.basecommands` | Async variant of the player command base (returns a future) |
+| `AbstractTargetPlayersCommand` | `server.core.command.system.basecommands` | Base for commands targeting self, `--player=X`, or `--all=true` |
+| `AbstractOptionalArg` | `server.core.command.system.arguments.system` | Base of optional/default/flag args; aliases, per-arg permissions, dependencies |
+| `EnumArgumentType` | `server.core.command.system.arguments.types` | Argument type for any enum — what `ArgTypes.forEnum` returns |
+| `AssetArgumentType` | `server.core.command.system.arguments.types` | Argument type for any string-keyed JSON asset class |
+| `GeneralCommandException` | `server.core.command.system.exceptions` | Throw with a `Message` to abort a command and message the sender |
 
 ## Class Hierarchy
 ```
@@ -297,6 +304,62 @@ CompletableFuture<Void> runAsync(CommandContext ctx, Runnable task, Executor exe
 
 ---
 
+## AbstractAsyncPlayerCommand
+**Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
+
+Async variant of the player command base: the same five parameters as
+`AbstractPlayerCommand.execute`, but you return a `CompletableFuture<Void>` so
+the command can chain further async work (asset loads, cross-world teleports).
+The engine's prefab-editor commands (`/prefabedit load`, `/prefabedit save`, …)
+are built on it.
+
+### Constructors
+```java
+AbstractAsyncPlayerCommand(String name, String description)
+AbstractAsyncPlayerCommand(String name, String description, boolean requiresConfirmation)
+AbstractAsyncPlayerCommand(String name)  // no description
+```
+
+### Abstract Method to Implement
+```java
+protected abstract CompletableFuture<Void> executeAsync(
+    CommandContext context,
+    Store<EntityStore> store,
+    Ref<EntityStore> ref,
+    PlayerRef playerRef,
+    World world
+);
+```
+
+The framework resolves the sender to a player ref (console gets the
+*"playerOrArg"* error, a player outside a world gets *"playerNotInWorld"*),
+schedules your `executeAsync` **on the world thread** (the `World` is the
+executor), and then waits on the future you return — so the future completes
+the command, not the method returning.
+
+---
+
+## CommandBase
+**Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
+
+The simplest base class: sender-agnostic and synchronous. There is no player,
+world, or store parameter — just the `CommandContext` — so it works identically
+from the console and from a player. Reach for it when the command only reads
+its arguments and sends messages, or talks to services that don't need a world
+thread. The engine uses it for `/warp list`, `/warp reload`, and most server
+debug/stats commands.
+
+```java
+CommandBase(String name, String description)
+CommandBase(String name, String description, boolean requiresConfirmation)
+CommandBase(String name)  // no description
+
+// Implement this — runs synchronously
+protected abstract void executeSync(CommandContext context);
+```
+
+---
+
 ## AbstractWorldCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
 
@@ -412,6 +475,43 @@ public class KickCommand extends AbstractTargetPlayerCommand {
     }
 }
 ```
+
+---
+
+## AbstractTargetPlayersCommand
+**Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
+
+Base for commands that act on a *set* of players. Target selection is built in:
+
+- **No args** → targets the sender (console without `--player` gets the
+  *"playerOrArg"* error).
+- **`--player=<name>`** → targets that player; the sender must additionally
+  hold the auto-derived node `<permission>.other`.
+- **`--all=true`** → targets every player in the sender's world; requires
+  `<permission>.all`.
+- Passing both `--player` and `--all` is rejected with a target-conflict error.
+
+The engine's `/audio music clear` and `/audio music force` use this base.
+
+### Constructors
+```java
+AbstractTargetPlayersCommand(String name, String description)
+AbstractTargetPlayersCommand(String name, String description, boolean requiresConfirmation)
+AbstractTargetPlayersCommand(String name)  // no description
+```
+
+### Abstract Method to Implement
+```java
+protected abstract void execute(
+    CommandContext commandContext,
+    World world,
+    Store<EntityStore> store,
+    List<Ref<EntityStore>> targets   // resolved target player refs
+);
+```
+
+> **Gotcha:** `all` is declared as an optional **boolean** argument, not a flag
+> — a bare `--all` is rejected by the parser; it must be `--all=true`.
 
 ---
 
@@ -694,6 +794,226 @@ public class DifficultyCommand extends AbstractPlayerCommand {
 ```
 
 > **See also:** [Math/Vector API](math.md#core-types)
+
+## Relative argument value types
+**Package:** `com.hypixel.hytale.server.core.command.system.arguments.types`
+
+The relative `ArgTypes` constants don't hand you a plain number — they parse
+into small value objects that you **resolve against a base** (usually the
+sender's position) inside `execute`. Which constant produces which class:
+
+| Argument type constant | Parses to | Resolve with |
+|------------------------|-----------|--------------|
+| `ArgTypes.RELATIVE_INTEGER` | `RelativeInteger` | `resolve(int base)` |
+| `ArgTypes.RELATIVE_FLOAT` | `RelativeFloat` | `resolve(float base)` |
+| `ArgTypes.RELATIVE_INT_RANGE` | `RelativeIntegerRange` | `getNumberInRange(int base)` |
+| `ArgTypes.RELATIVE_VECTOR3I` | `RelativeVector3i` | `resolve(Vector3i base)` |
+| `ArgTypes.RELATIVE_DOUBLE_COORD` | `Coord` | `resolveXZ` / `resolveYAtWorldCoords` |
+| `ArgTypes.RELATIVE_INT_COORD` | `IntCoord` | integer analog of `Coord` |
+| `ArgTypes.RELATIVE_POSITION` | `RelativeDoublePosition` | see [Relative Position Resolution](#relative-position-resolution) |
+| `ArgTypes.RELATIVE_BLOCK_POSITION` | `RelativeIntPosition` | `getBlockPosition(...)` |
+| `ArgTypes.RELATIVE_CHUNK_POSITION` | `RelativeChunkPosition` | chunk analog |
+| `RelativeDirection.ARGUMENT_TYPE` | `RelativeDirection` | `toDirectionVector` / `toAxis` |
+
+### Coord
+One coordinate of a position, with its parse-time modifiers preserved:
+
+```java
+static Coord parse(String str)
+double getValue()
+boolean isRelative()   // "~" prefix
+boolean isChunk()      // "c" prefix
+boolean isHeight()     // "_" prefix (Y only)
+double resolveXZ(double base)
+double resolveYAtWorldCoords(double base, World world, double x, double z)
+    throws GeneralCommandException
+```
+
+Prefixes accepted by `parse` (verified in source): `~N` is an offset from the
+base, `cN` is a chunk coordinate (multiplied by 32 blocks on resolve), and `_N`
+is terrain-relative — `resolveYAtWorldCoords` returns the terrain surface
+height + 1 + N, and throws [`GeneralCommandException`](#generalcommandexception)
+if the chunk at (x, z) isn't loaded.
+
+### RelativeInteger & RelativeFloat
+The values behind `ArgTypes.RELATIVE_INTEGER` / `ArgTypes.RELATIVE_FLOAT`
+(`5` absolute, `~5` relative):
+
+```java
+RelativeInteger(int value, boolean isRelative)
+int getRawValue()       // the number as typed (offset if relative)
+boolean isRelative()
+int resolve(int base)   // value + base when relative, else value
+```
+
+`RelativeFloat` is identical with `float`. Both also expose a static
+`parse(String, ParseResult)` and a `CODEC`, so they can double as fields in
+codec-backed asset configs.
+
+### RelativeIntegerRange
+Behind `ArgTypes.RELATIVE_INT_RANGE` — a min/max pair of `RelativeInteger`s:
+
+```java
+RelativeIntegerRange(RelativeInteger min, RelativeInteger max)
+RelativeIntegerRange(int min, int max)
+int getNumberInRange(int base)
+```
+
+> **Gotcha:** `getNumberInRange` is not a clamp — it resolves both ends against
+> `base` and returns a **uniformly random** value in `[min, max]` (inclusive);
+> only when min and max are equal does it return that value directly.
+
+### RelativeVector3i
+Behind `ArgTypes.RELATIVE_VECTOR3I` — three `RelativeInteger`s, each
+independently absolute or `~`-relative:
+
+```java
+static final RelativeVector3i ZERO
+RelativeVector3i(RelativeInteger x, RelativeInteger y, RelativeInteger z)
+Vector3i resolve(int x, int y, int z)
+Vector3i resolve(Vector3i base)
+boolean isRelativeX() / isRelativeY() / isRelativeZ()
+```
+
+### RelativeIntPosition
+Behind `ArgTypes.RELATIVE_BLOCK_POSITION` — the integer/block analog of
+`RelativeDoublePosition`:
+
+```java
+Vector3i getBlockPosition(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
+Vector3i getBlockPosition(CommandContext context, ComponentAccessor<EntityStore> accessor)
+Vector3i getBlockPosition(Vector3d base, ChunkStore chunkStore)
+boolean isRelative()
+```
+
+The `Ref` overload resolves `~` coordinates against that entity's
+`TransformComponent` position (the `CommandContext` overload uses the sender),
+so you can pass the sender's ref for "relative to me" or any entity's ref for
+"relative to it".
+
+### RelativeDirection
+An enum argument for player-relative directions: `FORWARD`, `BACKWARD`, `LEFT`,
+`RIGHT`, `UP`, `DOWN`. Its argument type lives **on the enum itself**
+(`RelativeDirection.ARGUMENT_TYPE`), not in `ArgTypes`:
+
+```java
+static final SingleArgumentType<RelativeDirection> ARGUMENT_TYPE
+static Vector3i toDirectionVector(RelativeDirection direction, HeadRotation headRotation)
+static Axis toAxis(RelativeDirection direction, HeadRotation headRotation)
+```
+
+Resolution needs the player's `HeadRotation` component — `FORWARD` is the
+horizontal direction the player is facing. This is how the builder-tools
+`/move` and `/stack` commands take their direction argument:
+
+```java
+private final RequiredArg<RelativeDirection> directionArg =
+    withRequiredArg("direction", "Direction to move", RelativeDirection.ARGUMENT_TYPE);
+
+// in execute():
+HeadRotation head = store.getComponent(ref, HeadRotation.getComponentType());
+Vector3i dir = RelativeDirection.toDirectionVector(ctx.get(directionArg), head);
+```
+
+---
+
+## EnumArgumentType
+**Package:** `com.hypixel.hytale.server.core.command.system.arguments.types`
+
+The class behind `ArgTypes.forEnum(name, enumClass)` (the factory method simply
+constructs one) — you can also instantiate it directly, e.g. as a
+`static final` field shared across commands, which is the engine's own pattern:
+
+```java
+EnumArgumentType(String name, Class<E> enumClass)   // E extends Enum<E>
+E parse(String input, ParseResult result)
+void suggest(CommandSender sender, String input, int cursor, SuggestionResult result)
+```
+
+Matching is **case-insensitive** against the enum constant names; on a miss the
+parse fails with a "no such value" error plus fuzzy *did-you-mean* suggestions,
+and tab completion offers the constant names.
+
+## AssetArgumentType
+**Package:** `com.hypixel.hytale.server.core.command.system.arguments.types`
+
+Argument type for any **string-keyed JSON asset** class — the way to accept a
+custom asset as a command argument when `ArgTypes` has no ready-made constant
+for it:
+
+```java
+// DataType extends JsonAssetWithMap<String, M>
+AssetArgumentType(String name, Class<DataType> type, String argumentUsage)
+```
+
+`parse` looks the input up in the asset class's `AssetMap` and fails with a
+*"not found"* error plus fuzzy suggestions; tab completion suggests the
+registered asset keys. Engine usage, e.g. the `/fluid` command:
+
+```java
+private static final SingleArgumentType<Fluid> FLUID_ARG =
+    new AssetArgumentType("Fluid", Fluid.class, "The fluid asset id");
+```
+
+---
+
+## AbstractOptionalArg
+**Package:** `com.hypixel.hytale.server.core.command.system.arguments.system`
+
+Shared base of `OptionalArg`, `DefaultArg`, and `FlagArg` — i.e. the objects
+`withOptionalArg` / `withDefaultArg` / `withFlagArg` return. It carries the
+fluent modifiers you can chain onto an optional argument when declaring it in
+the constructor:
+
+```java
+Arg addAliases(String... aliases)        // extra --names for the same arg
+Arg setPermission(String permission)     // sender needs this node to use the arg
+Arg requiredIf(AbstractOptionalArg<?,?> other, AbstractOptionalArg<?,?>... more)
+Arg requiredIfAbsent(AbstractOptionalArg<?,?> other, AbstractOptionalArg<?,?>... more)
+Arg availableOnlyIfAll(AbstractOptionalArg<?,?> other, AbstractOptionalArg<?,?>... more)
+Arg availableOnlyIfAllAbsent(AbstractOptionalArg<?,?> other, AbstractOptionalArg<?,?>... more)
+boolean hasPermission(CommandSender sender)
+```
+
+This is the mechanism for per-argument permission gating and for declaring
+dependent or mutually-exclusive optionals (`--foo` only valid together with
+`--bar`, `--a` required when `--b` is absent, …) — the dependency sets are
+verified at parse time, before your `execute` runs.
+
+## GeneralCommandException
+**Package:** `com.hypixel.hytale.server.core.command.system.exceptions`
+
+```java
+GeneralCommandException(Message message)
+void sendTranslatedMessage(CommandSender sender)
+String getMessageText()
+```
+
+Throw it from inside a command to abort with a user-facing error. It extends
+`CommandException` (a `RuntimeException`, so no `throws` declaration needed);
+the command manager catches `CommandException` during execution and sends the
+message to the **sender's chat** instead of logging a stack trace — consistent
+with the parse-error behavior described in
+[Argument syntax](#argument-syntax-input-format). Any *other* exception type is
+logged at SEVERE and reported to the sender as a generic command error.
+
+## EntityRemoveCommand
+**Package:** `com.hypixel.hytale.server.core.command.commands.world.entity`
+
+The built-in `/entity remove` (an `AbstractWorldCommand` subcommand of the
+`/entity` collection): removes the entity given by `--entity=<id>` or, when
+omitted, the entity the sender is looking at; the `--others` flag instead
+removes every entity *except* the target and players. Useful to plugins mainly
+for its public static helper:
+
+```java
+static void removeEntity(Ref<EntityStore> playerRef, Ref<EntityStore> entityRef,
+                         ComponentAccessor<EntityStore> accessor)
+```
+
+which refuses to remove an entity the given player can't currently see (entity
+tracker visibility check, with a chat message) and otherwise removes it with
+`RemoveReason.REMOVE`.
 
 ## Gotchas & Errors
 

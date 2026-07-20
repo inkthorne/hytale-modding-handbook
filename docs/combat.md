@@ -665,9 +665,10 @@ An array of stat modifications applied to the attacker on successful hit:
   "EntityStatsOnHit": [
     { "EntityStatId": "SignatureEnergy", "Amount": 1 }
   ],
-  "DamageParameters": {
-    "DamageAmount": 10,
-    "DamageCauseId": "Physical"
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 10
+    }
   }
 }
 ```
@@ -690,18 +691,19 @@ Each entry in the `EntityStatsOnHit` array has:
 
 ### Example: Sword Granting Signature Energy
 
-From `Common_Melee_Damage.json`:
+From `Common_Melee_Damage.json` (abridged):
 
 ```json
 {
-  "Type": "DamageEntity",
+  "Parent": "DamageEntityParent",
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 6
+    }
+  },
   "EntityStatsOnHit": [
     { "EntityStatId": "SignatureEnergy", "Amount": 1 }
-  ],
-  "DamageParameters": {
-    "DamageAmount": 5,
-    "DamageCauseId": "Physical"
-  }
+  ]
 }
 ```
 
@@ -725,7 +727,7 @@ The `DamageModifiers` property in `AngledWielding` controls damage reduction per
   "AngleDistance": 90,
   "DamageModifiers": {
     "Physical": 0,
-    "Magical": 0.5,
+    "Projectile": 0.5,
     "Fire": 1
   }
 }
@@ -883,8 +885,8 @@ A block with a maximum duration that still ends early if the player releases the
   "Type": "Wielding",
   "RunTime": 0.5,
   "FailOnDamage": false,
-  "allowIndefiniteHold": false,
-  "cancelOnOtherClick": true,
+  "AllowIndefiniteHold": false,
+  "CancelOnOtherClick": true,
   "AngledWielding": {
     "Angle": 0,
     "AngleDistance": 90,
@@ -900,12 +902,12 @@ A block with a maximum duration that still ends early if the player releases the
 |----------|-------|--------|
 | `RunTime` | `0.5` | Block lasts up to 0.5 seconds (ends early if input released) |
 | `FailOnDamage` | `false` | Block continues even after being hit |
-| `allowIndefiniteHold` | `false` | Block cannot exceed `RunTime` even if input is held |
-| `cancelOnOtherClick` | `true` | Block cancels if player clicks another input |
+| `AllowIndefiniteHold` | `false` | Block cannot exceed `RunTime` even if input is held |
+| `CancelOnOtherClick` | `true` | Block cancels if player clicks another input |
 
 > **Limitation:** This configuration still requires holding the input to maintain the block. Releasing the button ends the block early. A true "click-once-to-block" mechanic (where the block persists for the full duration regardless of input) would require custom Java code.
 
-> **Inherited Properties:** These properties (`RunTime`, `FailOnDamage`, `allowIndefiniteHold`, `cancelOnOtherClick`) are inherited from `ChargingInteraction`, which `WieldingInteraction` extends. See [WieldingInteraction](interactions-world.md#wieldinginteraction) for the full property list.
+> **Inherited Properties:** These properties (`RunTime`, `FailOnDamage`, `AllowIndefiniteHold`, `CancelOnOtherClick`) are inherited from `ChargingInteraction`, which `WieldingInteraction` extends. See [WieldingInteraction](interactions-world.md#wieldinginteraction) for the full property list.
 
 > **In-Game Verification:** When testing blocking mechanics, use the debug stick items found in `Server/Item/Interactions/_Debug/` as reference implementations. The `Debug_Stick_Parry.json` demonstrates timed blocking with counter-attacks.
 
@@ -948,18 +950,25 @@ Knockback is configured in damage interaction JSON files using the `Knockback` p
 
 #### Basic Knockback
 
+From `Server/Item/Interactions/Weapons/Weapon_Damage.json` — `Knockback` sits inside
+`DamageEffects`:
+
 ```json
 {
   "Type": "DamageEntity",
-  "DamageParameters": {
-    "DamageAmount": 10,
-    "DamageCauseId": "Physical"
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 5
+    }
   },
-  "Knockback": {
-    "Force": 0.5,
-    "RelativeX": -5,
-    "RelativeZ": -5,
-    "VelocityY": 5
+  "DamageEffects": {
+    "Knockback": {
+      "Force": 0.5,
+      "RelativeX": -5,
+      "RelativeZ": -5,
+      "VelocityY": 5
+    },
+    "WorldSoundEventId": "SFX_Unarmed_Impact"
   }
 }
 ```
@@ -1036,7 +1045,7 @@ buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback)
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 combat subsystem (verified against `HytaleServer.jar`).
 
-- **`Invalid DamageCause`** → a `DamageCauseId` (in `DamageParameters`) names a cause that isn't a registered `DamageCause` asset. Fix: use a valid id such as `Physical`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
+- **`Invalid DamageCause`** → a key in `DamageCalculator.BaseDamage` (or a `DamageModifiers` map) names a cause that isn't a registered `DamageCause` asset. Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
 - **`Missing default DamageCause assets`** → the default `DamageCause` assets failed to load. Fix: an asset-pack/install problem, not a plugin bug; verify the game install and `Assets.zip`.
 - **`Invalid EntityStatOnHit in EntityStatsOnHit`** → an entry in a damage interaction's `EntityStatsOnHit` array is malformed. Fix: each entry needs a valid `EntityStatId` (e.g. `SignatureEnergy`, `Stamina`, `Health`, `Mana`) and a numeric `Amount`.
 - **Symptom:** a `DamageEventSystem` throws or matches nothing because `getQuery()` returned `null` → unlike `KillFeedEvent` handlers, a damage system needs a real query. Fix: return `DamageDataComponent.getComponentType()` from `getQuery()`.

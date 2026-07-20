@@ -793,6 +793,314 @@ See [events.md](events.md) for general `EntityEventSystem` usage patterns.
 
 ---
 
+## Nameplate
+
+**Package:** `com.hypixel.hytale.server.core.entity.nameplate`
+
+A network-synced, codec-persisted component that renders a **plain-text floating label** over an entity. This is the lightweight alternative to `DisplayNameComponent` (which carries a full `Message`): built-in plugins use `Nameplate` for warp markers, parkour checkpoint numbers, path waypoints, and objective markers.
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `new Nameplate(String)` | Create with initial text |
+| `getText()` / `setText(String)` | The label; `setText` no-ops on equal text, otherwise marks the entity for a network update |
+| `consumeNetworkOutdated()` | Engine-side dirty-flag read |
+
+```java
+// Label an entity (built-in warp/checkpoint pattern)
+store.addComponent(ref, Nameplate.getComponentType(), new Nameplate("Checkpoint 3"));
+
+// Update in place — change is pushed to clients automatically
+Nameplate plate = store.getComponent(ref, Nameplate.getComponentType());
+plate.setText("Checkpoint 3 — CLEARED");
+```
+
+Unlike `DisplayNameComponent`, `Nameplate` **is** persisted (it has a `CODEC` with a `Text` field), so labels survive save/reload without a `Persistent*` twin.
+
+---
+
+## DespawnComponent
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity`
+
+Attach to any entity to give it a **despawn deadline**: the engine's despawn system removes the entity once world time passes the stored `Instant`. Dropped item entities use this for their lifetime; it's the standard way to make temporary props, markers, or summons clean themselves up.
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `new DespawnComponent(Instant)` | Despawn at an absolute instant |
+| `static despawnInSeconds(TimeResource, int \| float)` | Build one relative to *now* |
+| `static despawnInMilliseconds(TimeResource, long)` | Millisecond variant |
+| `getDespawn()` / `setDespawn(Instant)` | The deadline |
+| `setDespawnTo(Instant, float)` | Deadline = given instant + seconds |
+| `static trySetDespawn(CommandBuffer, TimeResource, Ref, DespawnComponent, Float)` | Upsert helper (see below) |
+
+```java
+TimeResource time = store.getResource(TimeResource.getResourceType());
+
+// Give a spawned prop a 30-second lifetime
+store.addComponent(ref, DespawnComponent.getComponentType(),
+        DespawnComponent.despawnInSeconds(time, 30));
+```
+
+`trySetDespawn(buffer, time, ref, existingComponent, newLifetimeSeconds)` handles all three cases in one call: extends the deadline if the component exists, adds a fresh component if it doesn't, and **removes** the component (cancels despawn) when you pass `null` as the lifetime.
+
+> [!NOTE]
+> The engine's despawn system skips entities that have the `Interactable` marker component (its query is `DespawnComponent AND NOT Interactable`). If your "temporary" entity is also interactable, the timer will silently never fire — remove `Interactable` first or handle removal yourself.
+
+---
+
+## MovementStatesComponent
+
+**Package:** `com.hypixel.hytale.server.core.entity.movement`
+
+Holds an entity's current `MovementStates` (protocol object) — the flag set describing what the entity is *doing*: `idle`, `walking`, `running`, `sprinting`, `crouching`, `jumping`, `falling`, `fallingFar`, `climbing`, `swimming`, `inFluid`, `onGround`, `flying`, `gliding`, `sliding`, `rolling`, `mantling`, `mounting`, `sitting`, `sleeping` (public boolean fields on `MovementStates`). For players these flags are set from client input; systems across the engine read them (bounding-box sizing, stamina drain conditions, animation selection).
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `getMovementStates()` / `setMovementStates(MovementStates)` | The authoritative state flags |
+| `getSentMovementStates()` / `setSentMovementStates(MovementStates)` | Last flag set broadcast to viewers (engine bookkeeping) |
+
+```java
+MovementStatesComponent states = store.getComponent(ref, MovementStatesComponent.getComponentType());
+if (states != null && states.getMovementStates().sprinting) {
+    // entity is sprinting right now
+}
+```
+
+Treat it as **read-mostly** for players: the client re-asserts states every movement update (via [`PlayerInput`](player.md#playerinput)), so a server-side write to a player's flags is quickly overwritten. To *restrict* player movement, use a status effect (`MovementEffects.DisableAll`) instead — see [Effects & Stats](effects-stats.md#applying-effects-from-java).
+
+---
+
+## Teleport Bookkeeping (PendingTeleport & TeleportRecord)
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.teleport`
+
+Server-initiated teleports are asynchronous for players: the server adds a `Teleport` component (position + rotation — see the built-in teleport flow in [world.md](world.md)); the engine then queues it on **`PendingTeleport`**, sends the packet, and waits for the client to echo the teleport id back before accepting further movement from that position. **`TeleportRecord`** remembers the last completed teleport.
+
+### PendingTeleport
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `queueTeleport(Teleport)` | Queue a teleport; returns its id (engine calls this for you) |
+| `validate(int, Position)` | Match a client ack: `Result.OK`, `INVALID_ID`, or `INVALID_POSITION` |
+| `isEmpty()` | No teleports in flight |
+| `getPosition()` | Position of the most recently queued teleport |
+| `MAX_OFFSET` | `0.001` — tolerance used when validating the client's echoed position |
+
+Plugins normally never touch `PendingTeleport` — add a `Teleport` component and let the engine drive. Its main plugin use is a **guard**: `isEmpty() == false` means a teleport is still in flight, so position-based logic (anti-cheat distance checks, region triggers) should hold off.
+
+### TeleportRecord
+
+| Method | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `getLastTeleport()` / `setLastTeleport(Entry)` | The last completed teleport |
+| `hasElapsedSinceLastTeleport(Duration)` | True if that long has passed (or no teleport yet) |
+| `hasElapsedSinceLastTeleport(long, Duration)` | Same, against a supplied `System.nanoTime()` |
+
+`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every completed teleport (`ensureAndGetComponent` + `setLastTeleport`), so it's reliable to read:
+
+```java
+// Teleport cooldown: 5s since the player last teleported
+TeleportRecord record = store.getComponent(ref, TeleportRecord.getComponentType());
+boolean ready = record == null || record.hasElapsedSinceLastTeleport(Duration.ofSeconds(5));
+```
+
+---
+
+## Entity Tracker (EntityTrackerSystems)
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.tracker`
+
+The tracker decides **which entities each player can see** and streams component updates to those viewers. The pipeline itself (visibility collection, LOD culling, packet batching) is internal ticking systems, but two of its components and a couple of static helpers are useful to plugins:
+
+- **`EntityTrackerSystems.EntityViewer`** — lives on each *player*; holds the view radius (`viewRadiusBlocks`), the set of currently `visible` entity refs, and per-viewer counters (`lodExcludedCount`, `hiddenCount`). Reading `visible` answers "what can this player currently see" without doing your own range scan.
+- **`EntityTrackerSystems.Visible`** — lives on each *tracked entity*; its `visibleTo` map is the reverse index ("which viewers can see this entity").
+
+```java
+var viewer = store.getComponent(playerRef.getReference(),
+        EntityTrackerSystems.EntityViewer.getComponentType());
+int seen = viewer.visible.size();
+```
+
+Static helpers on `EntityTrackerSystems`:
+
+| Method | Description |
+|--------|-------------|
+| `despawnAll(Ref, Store)` | Force-despawn the entity from every viewer that can currently see it |
+| `clear(Ref, Store)` / `clear(Holder)` | Drop the entity's tracker state (`Visible` maps) |
+
+Per-player *hiding* is done through `HiddenPlayersManager` (see [Player API](player.md#hiddenplayersmanager)) — the tracker's `HideFromPlayer` stage consults it. The LOD distance culling ratio is exposed as `EntityTrackerSystems.LODCull.ENTITY_LOD_RATIO` (default `3.5E-5`), a global knob rather than a per-entity setting.
+
+---
+
+## FromPrefabInstance
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.component`
+
+A tiny persisted component tagging an entity as **spawned from a prefab instance**: `new FromPrefabInstance(int)`, `getPrefabInstanceId()`, `static getComponentType()`. Query it to find (or skip) prefab-placed entities, or read the id to group entities by the prefab instance that created them. See [Prefabs](prefabs.md) for the prefab system itself.
+
+---
+
+## EntityRegistration
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity`
+
+The **registration handle** returned when a plugin registers a legacy `Entity` subclass with the entity module (`EntityModule.get().registerEntity(id, clazz, constructor, codec)`). It extends the generic `Registration` base, so the two members you use are inherited:
+
+```java
+EntityRegistration reg = EntityModule.get()
+        .registerEntity("myplugin:crystal", CrystalEntity.class, CrystalEntity::new, CrystalEntity.CODEC);
+
+reg.getEntityClass();   // Class<? extends Entity>
+reg.isRegistered();     // still active?
+reg.unregister();       // remove the entity type (done automatically when the plugin disables)
+```
+
+Most new content should be **component-based entities via prefabs** rather than `Entity` subclasses — this exists for the legacy class-based path (the `Entity` → `LivingEntity` tree at the top of this page).
+
+---
+
+## AnimationUtils
+
+**Package:** `com.hypixel.hytale.server.core.entity`
+
+Static helpers to **play or stop an animation on an entity** for all its viewers, addressed by animation slot. The slots (`com.hypixel.hytale.protocol.AnimationSlot`) are layers: `Movement`, `Status`, `Action`, `Face`, `Emote`.
+
+```java
+// Overloads (all take the target Ref first and a ComponentAccessor last):
+AnimationUtils.playAnimation(ref, slot, animationId, accessor);
+AnimationUtils.playAnimation(ref, slot, animationId, sendToSelf, accessor);
+AnimationUtils.playAnimation(ref, slot, itemAnimationsId, animationId, accessor);
+AnimationUtils.playAnimation(ref, slot, itemAnimationsId, animationId, sendToSelf, accessor);
+AnimationUtils.playAnimation(ref, slot, itemPlayerAnimations, animationId, accessor);
+AnimationUtils.stopAnimation(ref, slot, accessor);
+AnimationUtils.stopAnimation(ref, slot, sendToSelf, accessor);
+```
+
+- `animationId` is the animation name; the `itemAnimationsId` / `ItemPlayerAnimations` overloads scope it to an item's animation set (see [Items](items.md)).
+- `sendToSelf` (default `false`) controls whether a *player* target also sees their own animation — pass `true` for emote-style animations the player should see in third person.
+- Passing a `null` `animationId` on the base overload stops the slot, so `stopAnimation(ref, slot, accessor)` is the readable form of that.
+- For the `Movement`/`Status`/`Face` slots the animation must exist in the entity model's animation set — a missing id logs a warning and sends nothing (`Action` and `Emote` skip that check).
+
+```java
+// Play an emote on an NPC for everyone nearby
+AnimationUtils.playAnimation(ref, AnimationSlot.Emote, "Wave", accessor);
+// ...and stop it early
+AnimationUtils.stopAnimation(ref, AnimationSlot.Emote, accessor);
+```
+
+---
+
+## ItemUtils
+
+**Package:** `com.hypixel.hytale.server.core.entity`
+
+Static helpers for **item entities and durability**, usable from any system or command with a `ComponentAccessor`:
+
+| Method | Description |
+|--------|-------------|
+| `dropItem(Ref, ItemStack, ComponentAccessor)` | Spawn a dropped-item entity at the entity's position; returns the new item entity's `Ref` |
+| `throwItem(Ref, ItemStack, float, ComponentAccessor)` | Drop with forward impulse (throw strength) |
+| `throwItem(Ref, ComponentAccessor, ItemStack, Vector3d, float)` | Throw in an explicit direction |
+| `interactivelyPickupItem(Ref, ItemStack, Vector3d, ComponentAccessor)` | Run the pickup flow (fires the pickup interaction/event chain) |
+| `canDecreaseItemStackDurability(Ref, ComponentAccessor)` | False when durability loss shouldn't apply (e.g. creative) |
+| `canApplyItemStackPenalties(Ref, ComponentAccessor)` | Whether break penalties apply to this entity |
+| `updateItemStackDurability(Ref, ItemStack, ItemContainer, int, double, ComponentAccessor)` | Add/subtract durability on a stack in a container slot; returns an `ItemStackSlotTransaction` |
+| `decreaseItemStackDurability(Ref, ItemStack, int, int, ComponentAccessor)` | Convenience decrement |
+
+```java
+// Make an NPC drop a quest item on death
+ItemUtils.dropItem(npcRef, questItemStack, store);
+```
+
+`Player.updateItemStackDurability(...)` (above) routes through the same logic — use `ItemUtils` when the holder might not be a player.
+
+---
+
+## TargetUtil
+
+**Package:** `com.hypixel.hytale.server.core.util`
+
+Static **raycasting and area-query** helpers — the standard way commands and interactions answer "what is this entity looking at" and "who is nearby". All overloads take a `ComponentAccessor<EntityStore>` last.
+
+### Look-target raycasts (from an entity's eye ray)
+
+```java
+Vector3i getTargetBlock(ref, maxDistance, accessor)               // solid block hit, or null
+Vector3i getTargetBlock(ref, blockPredicate, maxDistance, accessor)
+Vector3i getTargetBlockOrigin(ref, maxDistance, accessor)         // the empty block *in front of* the hit face
+Vector3i getTargetBlockOrigin(ref, blockPredicate, maxDistance, accessor)
+Vector3d getTargetLocation(ref, maxDistance, accessor)            // exact point the ray stops
+Vector3d getTargetLocation(ref, blockPredicate, maxDistance, accessor)
+Ref<EntityStore> getTargetEntity(ref, accessor)                   // entity under the crosshair
+Ref<EntityStore> getTargetEntity(ref, maxDistance, accessor)
+Transform getLook(ref, accessor)                                  // eye position + look rotation
+```
+
+The predicate overloads take a `java.util.function.IntPredicate` over block ids, letting you ray through non-solid blocks of your choosing. `getTargetBlock` returns the hit block; `getTargetBlockOrigin` returns the adjacent empty cell — the one you'd *place* into.
+
+### Area queries
+
+```java
+List<Ref<EntityStore>> getAllEntitiesInSphere(center, radius, accessor)
+List<Ref<EntityStore>> getAllEntitiesInCylinder(center, radius, height, accessor)
+List<Ref<EntityStore>> getAllEntitiesInBox(min, max, accessor)
+```
+
+```java
+// AOE: damage everything within 5 blocks of the explosion
+for (Ref<EntityStore> target : TargetUtil.getAllEntitiesInSphere(center, 5.0, store)) {
+    EntityStatMap stats = store.getComponent(target, EntityStatMap.getComponentType());
+    if (stats != null) {
+        stats.subtractStatValue(DefaultEntityStatTypes.getHealth(), 10.0f);
+    }
+}
+```
+
+World-space raycast variants that don't need an entity (`getTargetBlock(World, BiIntPredicate, x, y, z, dx, dy, dz, maxDistance)` and friends) also exist for custom ray origins.
+
+---
+
+## Hitbox Collision (HitboxCollision & HitboxCollisionConfig)
+
+**Package:** `com.hypixel.hytale.server.core.modules.entity.hitboxcollision`
+
+Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** (built-ins: `"HardCollision"`, `"SoftCollision"`) with a `CollisionType` and a `getSoftOffsetRatio()`; `HitboxCollision` is the network-synced **component** referencing one config by id.
+
+### HitboxCollisionConfig (asset)
+
+| Member | Description |
+|--------|-------------|
+| `static getAssetMap()` / `getAssetStore()` | Asset lookup (id ⇄ index) |
+| `getId()` | Asset id string |
+| `getCollisionType()` | Protocol `CollisionType` |
+| `getSoftOffsetRatio()` | Push-apart softness factor |
+| `NO_HITBOX` | `-1` — index meaning "no collision config" |
+
+### HitboxCollision (component)
+
+| Member | Description |
+|--------|-------------|
+| `static getComponentType()` | Component type for store access |
+| `new HitboxCollision(HitboxCollisionConfig)` | Create referencing a config |
+| `getHitboxCollisionConfigId()` | The referenced config's id (null if none) |
+| `getHitboxCollisionConfigIndex()` | Resolved asset index (`-1` if none) |
+| `setHitboxCollisionConfig(HitboxCollisionConfig)` | Swap configs (marks network-dirty) |
+| `isMigrated()` | True if this component was loaded from pre-0.5.7 data |
+
+```java
+HitboxCollisionConfig soft = HitboxCollisionConfig.getAssetMap().getAsset("SoftCollision");
+store.addComponent(ref, HitboxCollision.getComponentType(), new HitboxCollision(soft));
+```
+
+> **Changed in 0.5.7:** the persisted reference migrated from a raw config **index int** (`HitboxCollisionConfigIndex`) to a config **id string** (`HitboxCollisionConfigId`) — codec version 0 → 1. Old saves are migrated on load (legacy index `0` → `"HardCollision"`, `1` → `"SoftCollision"`); `isMigrated()` reports that this happened, and an unknown id logs a warning and clears the reference (index becomes `-1`). Use the id-based accessors in new code — the index is a per-boot lookup value, not a stable identifier.
+
+---
+
 ## Gotchas & Errors
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 entity subsystem (verified against `HytaleServer.jar`).

@@ -260,7 +260,7 @@ Background: (Color: #1a1a2e(0.95));  // Object format with alpha
 
 Simple texture path:
 ```
-Background: "Common/UI/Shared/Panel.png";
+Background: "Common/ContainerPanelPatch.png";
 ```
 
 ### Object Format

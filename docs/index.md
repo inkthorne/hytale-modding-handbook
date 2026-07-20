@@ -5,6 +5,8 @@ nav_order: 0
 
 # Hytale Modding Handbook
 
+**Doc type:** Index
+
 A server-plugin & asset API reference with the **descriptions, gotchas, and
 working examples**.
 

@@ -212,7 +212,7 @@ Button #CloseBtn {
         Default: (Background: (Color: #333333));
         Hovered: (Background: (Color: #444444));
     );
-    Icon: "Common/UI/Icons/Close.png";
+    Icon: "Common/ContainerCloseButton.png";
 }
 ```
 
@@ -549,7 +549,7 @@ Image/sprite display.
 ```
 Sprite #Logo {
     Anchor: (Width: 128, Height: 128);
-    Texture: "Common/UI/Images/Logo.png";
+    Texture: "Common/ContainerHeader.png";
 }
 ```
 

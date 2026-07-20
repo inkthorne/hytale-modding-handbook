@@ -50,6 +50,11 @@ AssetRegistry (plugin entry: getAssetRegistry())
 | `Model` | `server.core.asset.type.model.config` | 3D model configuration for entities, items, projectiles |
 | `AssetPackRegisterEvent` | `server.core.asset` | Fired when an asset pack is registered |
 | `LoadAssetEvent` | `server.core.asset` | Fired during the asset loading phase (priority-based) |
+| `CommonAssetModule` | `server.core.asset.common` | Module managing binary common assets (`Common/…`) and streaming them to clients |
+| `CommonAssetRegistry` | `server.core.asset.common` | Static name/hash lookup of registered common assets |
+| `FileCommonAsset` | `server.core.asset.common.asset` | A common asset backed by a file on disk (lazy blob read) |
+| `WordList` | `server.core.asset.type.wordlist` | Word-list asset; picks random translation keys (e.g. warp names) |
+| `ColorParseUtil` | `server.core.asset.util` | Parse/format `#RRGGBB` / `rgb(...)` / `rgba(...)` color strings |
 
 ## AssetRegistry
 **Package:** `com.hypixel.hytale.server.core.plugin.registry`
@@ -508,18 +513,18 @@ public void castSpell(Player player, String spellName) {
     SpellDefinition spell = SpellStore.getInstance().get(spellName);
 
     if (spell == null) {
-        player.sendMessage("Unknown spell: " + spellName);
+        player.getPlayerRef().sendMessage(Message.raw("Unknown spell: " + spellName));
         return;
     }
 
     if (player.getMana() < spell.getManaCost()) {
-        player.sendMessage("Not enough mana! Need " + spell.getManaCost());
+        player.getPlayerRef().sendMessage(Message.raw("Not enough mana! Need " + spell.getManaCost()));
         return;
     }
 
     // Cast the spell
     player.consumeMana(spell.getManaCost());
-    player.sendMessage("Casting " + spell.getName() + "!");
+    player.getPlayerRef().sendMessage(Message.raw("Casting " + spell.getName()) + "!");
 
     // Apply cooldown
     player.applyCooldown("spell:" + spellName, spell.getCooldown());
@@ -647,6 +652,127 @@ Item sword = Item.getAssetMap().getAsset("sword");
 ```
 
 `getAsset(key)` returns `null` if the key is absent. A pack-scoped overload `getAsset(String assetPack, K key)` is also available.
+
+---
+
+## Common Assets (Java API)
+
+**Package:** `com.hypixel.hytale.server.core.asset.common`
+
+*Common assets* are the **binary** files under a pack's `Common/` tree (textures, models, sounds, `.ui` files, …) — as opposed to the JSON assets above. Each is a `CommonAsset` identified by its **name** (path relative to `Common/`, e.g. `UI/Custom/MyHud.ui`) and a **SHA-256 hash** (64-char hex, `CommonAsset.HASH_LENGTH`); the server sends them to clients by hash. Packs' `Common/` trees are indexed automatically at load, so most plugins never touch this API — reach for it to look up, hot-add, or re-send a binary asset at runtime.
+
+### CommonAssetModule
+
+The `JavaPlugin` module that owns common-asset loading, file monitoring, and client streaming. Obtain it with `CommonAssetModule.get()`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `get()` | `CommonAssetModule` | Static module singleton |
+| `addCommonAsset(String pack, T asset)` | `void` | Register (or hot-reload) a `CommonAsset` under a pack name; broadcasts the change to connected clients and shows a reload notification |
+| `addCommonAsset(String pack, T asset, boolean log)` | `void` | Same, optionally without the log line |
+| `getRequiredAssets()` | `Asset[]` | Packet forms of every registered asset (what a joining client is told about) |
+| `sendAssetsToPlayer(PacketHandler, Asset[], boolean forceRebuild)` | `void` | Stream specific assets (by hash) to one client; `null` array = all assets |
+| `sendAsset(CommonAsset, boolean forceRebuild)` | `void` | Broadcast one asset to all clients |
+| `sendAssets(List<CommonAsset>, boolean forceRebuild)` | `void` | Broadcast several assets |
+
+### CommonAssetRegistry
+
+Static lookup of everything `CommonAssetModule` has registered. All methods are `static`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getByName(String name)` | `CommonAsset` | The active asset for a `Common/`-relative name (`null` if absent) |
+| `getByHash(String hash)` | `CommonAsset` | Look up by SHA-256 hex hash |
+| `hasCommonAsset(String name)` | `boolean` | Whether a name is registered |
+| `hasCommonAsset(AssetPack pack, String name)` | `boolean` | Whether a specific pack supplies the name |
+| `getCommonAssetsStartingWith(String pack, String prefix)` | `List<CommonAsset>` | Prefix scan (e.g. everything under `UI/Custom/`) |
+| `getDuplicateAssetCount()` | `int` | How many names are supplied by more than one pack |
+| `getDuplicatedAssets()` | `Map<String, List<PackAsset>>` | The colliding entries (`PackAsset` = pack name + asset) |
+
+When two packs supply the same name, the **last registration wins** as the active asset — the same last-load-wins rule as [JSON asset overrides](#overriding-base-game-assets).
+
+### FileCommonAsset
+
+**Package:** `com.hypixel.hytale.server.core.asset.common.asset`
+
+The standard `CommonAsset` implementation: backed by a file on disk, whose bytes are read lazily (and asynchronously) when a client actually needs the blob.
+
+```java
+public class FileCommonAsset extends CommonAsset {
+    public FileCommonAsset(Path file, String name, byte[] bytes);              // hash computed from bytes
+    public FileCommonAsset(Path file, String name, String hash, byte[] bytes); // known hash (bytes may be null)
+    public Path getFile();
+}
+```
+
+```java
+import com.hypixel.hytale.server.core.asset.common.CommonAssetModule;
+import com.hypixel.hytale.server.core.asset.common.asset.FileCommonAsset;
+
+// Hot-add a binary asset at runtime and push it to connected clients
+byte[] bytes = Files.readAllBytes(path);
+CommonAssetModule.get().addCommonAsset("MyPack",
+    new FileCommonAsset(path, "UI/Custom/MyHud.ui", bytes));
+```
+
+The inherited `CommonAsset` surface: `getName()`, `getHash()`, `getBlob()` (a `CompletableFuture<byte[]>`), `toPacket()`, and the static `CommonAsset.hash(byte[])` (SHA-256 hex, same as [`HashUtil.sha256`](codecs.md#hashutil)).
+
+---
+
+## WordList
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.wordlist`
+
+A small JSON asset type holding an array of **translation keys** (resolved through the `wordlists` translation file), used to pick random display names — e.g. a teleporter's `WarpNameWordList` picks default warp names. It is a `JsonAssetWithMap<String, DefaultAssetMap<…>>` like other JSON assets.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getAssetMap()` | `DefaultAssetMap<String, WordList>` | Static asset map |
+| `getWordList(String id)` | `WordList` | Static shortcut; returns an empty word list for an unknown id |
+| `getId()` | `String` | Asset id |
+| `pickTranslationKey(Random, Set<String> usedTranslated, String language)` | `String` | Random key whose *translated* text (lower-cased, in `language`) is not in the used set; `null` if exhausted |
+| `pickDefaultLanguage(Random, Set<String> usedTranslated)` | `String` | Convenience: picks against `en-US` and returns the translated text itself |
+
+---
+
+## Asset Utility Classes
+
+### ColorParseUtil
+
+**Package:** `com.hypixel.hytale.server.core.asset.util`
+
+Static parsing/formatting between color strings and the protocol `Color` / `ColorAlpha` types. This is what backs [`ProtocolCodecs.COLOR`](codecs.md#protocolcodecs) and the color fields you see across JSON assets. The most useful members:
+
+```java
+// parse (null on failure)
+public static Color parseColor(String value);           // "#RGB", "#RRGGBB", "rgb(R,G,B)"
+public static ColorAlpha parseColorAlpha(String value);  // adds "#RRGGBBAA" / "rgba(R,G,B,A)"
+public static Color hexStringToColor(String hex);
+public static Color rgbStringToColor(String rgb);
+public static int hexStringToRGBInt(String hex);
+public static int hexAlphaStringToRGBAInt(String hex);
+
+// format
+public static String colorToHexString(Color color);           // "#RRGGBB"
+public static String colorToHexAlphaString(ColorAlpha color); // "#RRGGBBAA"
+public static int colorToARGBInt(Color color);
+
+// pre-compiled patterns
+public static final Pattern HEX_COLOR_PATTERN;
+public static final Pattern HEX_ALPHA_COLOR_PATTERN;
+public static final Pattern RGB_COLOR_PATTERN;
+public static final Pattern RGBA_COLOR_PATTERN;
+```
+
+The `read*` variants (`readColor(RawJsonReader)`, `readColorAlpha(...)`, …) are the same conversions for use inside a codec's `decodeJson`.
+
+### TempAssetIdUtil
+
+**Package:** `com.hypixel.hytale.server.core.util`
+
+> **Deprecated (`forRemoval = true`)** — a temporary holder of well-known asset id constants; don't build new code on it.
+
+String constants for a handful of hard-wired ids (`SOIL_GRASS`, `SOUND_EVENT_ITEM_BREAK`, `SOUND_EVENT_PLAYER_PICKUP_ITEM`, `PARTICLE_SPLASH`, `DEFAULT_PLAYER_MODEL_NAME`, …) plus `getSoundEventIndex(String)`, which resolves a sound-event id to its index but **falls back to `0` with a warning** for unknown ids — prefer the explicit resolve-and-guard pattern in [Audio → Resolving a sound-event index](audio.md#resolving-a-sound-event-index).
 
 ---
 

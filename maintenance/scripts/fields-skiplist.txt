@@ -1,0 +1,17 @@
+# Calibration skip-list for the JSON field-existence check in verify-docs.sh.
+# Format: doc.md:Key — keys that are deliberately user-defined/illustrative in
+# that doc's examples (state names, flag names, plugin-authored keys), audited
+# 2026-07-19 against the 0.5.7 assets + decompiled jar. Every entry here was
+# individually confirmed to be presented as an authored example, not a game key.
+
+blocks.md:IntervalSeconds        # codec field of the handbook's own item-respawner tutorial plugin
+blocks.md:ItemRespawner          # the tutorial's custom block-entity component name
+interactions-combo.md:Block_Counter   # authored Flags-map name in the combo design example
+interactions-combo.md:Counter         # authored Flags-map name
+interactions-combo.md:Counter_Ready   # authored Flags-map name
+interactions-combo.md:Dodge_Cancel    # authored Flags-map name
+interactions-combo.md:Perfect_Parry   # authored Flags-map name
+interactions-flow.md:CustomAbilityCharge  # doc presents it as an optional custom stat the entity may lack
+interactions-world.md:Erupting   # author-chosen state name in the geyser ChangeState example
+interactions.md:MyField          # explicit placeholder in the register-your-own-Type recipe
+blocks.md:MeltInto                # user-defined key in the custom RandomTickProcedure plugin recipe

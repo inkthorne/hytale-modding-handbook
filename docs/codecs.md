@@ -43,6 +43,15 @@ ExtraInfo                       per-encode/decode context (validation, version, 
 | `AssetCodecMapCodec<K, T>` | `codec` | Polymorphic dispatch keyed by asset |
 | `MapKeyMapCodec<V>` | `codec` | Map-key-based dispatch codec |
 | `CodecMapRegistry<T, C>` | `server.core.plugin.registry` | Registers custom types (id → class + codec) |
+| `ProtocolCodecs` | `server.core.codec` | Pre-built codec constants for protocol types (colors, ranges, game mode, …) |
+| `ColorCodec` | `server.core.codec.protocol` | `Codec<Color>` reading `#RGB` / `#RRGGBB` / `rgb(R,G,B)` strings |
+| `WeightedMapCodec<T>` | `server.core.codec` | Codec for an `IWeightedMap<T>` of weighted elements |
+| `PairCodec` | `server.core.codec` | Holder for codec-backed pair types (`IntegerPair`, `IntegerStringPair`) |
+| `LayerEntryCodec` | `server.core.codec` | Codec-backed depth→material layer entry (scripted-brush layers) |
+| `BsonUtil` | `server.core.util` | Static BSON read/write helpers (bytes, files, JSON translation) |
+| `HashUtil` | `server.core.util` | `sha256(byte[])` → hex string |
+| `FileUtil` | `server.core.util.io` | Filesystem helpers (atomic writes, zip extraction, directory copy/delete) |
+| `MemorySegmentUtil` | `server.core.util.io` | `java.lang.foreign` helpers (endian layouts, UTF strings, packed numbers) |
 
 ---
 
@@ -490,6 +499,178 @@ public static <K, T extends JsonAsset<K>> AssetBuilderCodec.Builder<K, T> builde
 You then chain `.append(...).add()` for each field exactly as with `BuilderCodec`.
 
 > **See also:** [Assets API - Creating Custom Asset Types](assets.md#creating-custom-asset-types) for the complete guide.
+
+---
+
+## Server-Side Codec Helpers
+
+**Package:** `com.hypixel.hytale.server.core.codec`
+
+Ready-made codecs for common server/protocol value types, so you don't hand-roll them in a `BuilderCodec` field.
+
+### ProtocolCodecs
+
+`com.hypixel.hytale.server.core.codec.ProtocolCodecs` is a `final` holder class whose `public static final` constants are pre-built codecs for `com.hypixel.hytale.protocol` types. Use them directly as the codec in a `KeyedCodec`:
+
+```java
+public static final ColorCodec COLOR;                              // Codec<Color>
+public static final ArrayCodec<Color> COLOR_ARRAY;
+public static final ColorAlphaCodec COLOR_AlPHA;                   // sic — note the lowercase 'l'
+public static final BuilderCodec<ColorLight> COLOR_LIGHT;
+public static final BuilderCodec<Direction> DIRECTION;
+public static final EnumCodec<GameMode> GAMEMODE;
+public static final BuilderCodec<Size> SIZE;
+public static final BuilderCodec<Range> RANGE;                     // int Min/Max
+public static final BuilderCodec<Rangeb> RANGEB;                   // byte Min/Max
+public static final BuilderCodec<Rangef> RANGEF;                   // float Min/Max
+public static final BuilderCodec<RangeVector2f> RANGE_VECTOR2F;
+public static final BuilderCodec<RangeVector3f> RANGE_VECTOR3F;
+public static final BuilderCodec<InitialVelocity> INITIAL_VELOCITY;
+public static final BuilderCodec<UVMotion> UV_MOTION;
+public static final BuilderCodec<ItemAnimation> ITEM_ANIMATION_CODEC;
+public static final EnumCodec<EasingType> EASING_TYPE_CODEC;
+public static final EnumCodec<ChangeStatBehaviour> CHANGE_STAT_BEHAVIOUR_CODEC;
+public static final EnumCodec<AccumulationMode> ACCUMULATION_MODE_CODEC;
+public static final EnumCodec<ChangeVelocityType> CHANGE_VELOCITY_TYPE_CODEC;
+public static final BuilderCodec<RailPoint> RAIL_POINT_CODEC;
+public static final BuilderCodec<RailConfig> RAIL_CONFIG_CODEC;
+```
+
+> The alpha-color constant really is spelled **`COLOR_AlPHA`** (lowercase `l`) in the jar — `ProtocolCodecs.COLOR_ALPHA` does not compile.
+
+### ColorCodec
+
+**Package:** `com.hypixel.hytale.server.core.codec.protocol`
+
+A `Codec<com.hypixel.hytale.protocol.Color>`. Encodes to a `#RRGGBB` hex string; decodes `#RGB`, `#RRGGBB`, or `rgb(R,G,B)` strings (via [`ColorParseUtil`](assets.md#colorparseutil)). An unparseable string throws a `CodecException`: `Invalid color format, expected: #RGB, #RRGGBB or rgb(R,G,B)`. Normally reached through `ProtocolCodecs.COLOR` rather than `new ColorCodec()`.
+
+### WeightedMapCodec<T>
+
+A `Codec<IWeightedMap<T>>` (`com.hypixel.hytale.common.map.IWeightedMap`) for `T extends IWeightedElement` — the JSON form is an array of weighted-element documents. Used by asset families like drop containers and spawn markers.
+
+```java
+public class WeightedMapCodec<T extends IWeightedElement>
+        implements Codec<IWeightedMap<T>>, WrappedCodec<T> {
+    public WeightedMapCodec(Codec<T> codec, T[] emptyKeys);
+    public Codec<T> getChildCodec();
+}
+```
+
+### PairCodec
+
+A holder class for codec-backed pair types; the nested classes are what you use. Both serialize as `{"Left": …, "Right": …}` (both keys required) and convert to/from a fastutil `Pair`:
+
+```java
+public class PairCodec.IntegerPair {
+    public static final BuilderCodec<PairCodec.IntegerPair> CODEC;
+    public IntegerPair(Integer left, Integer right);
+    public Pair<Integer, Integer> toPair();
+    public static IntegerPair fromPair(Pair<Integer, Integer> pair);
+    public Integer getLeft();
+    public Integer getRight();
+}
+
+public class PairCodec.IntegerStringPair {
+    public static final BuilderCodec<PairCodec.IntegerStringPair> CODEC;
+    public IntegerStringPair(Integer left, String right);
+    public Pair<Integer, String> toPair();
+    public static IntegerStringPair fromPair(Pair<Integer, String> pair);
+    public Integer getLeft();
+    public String getRight();
+}
+```
+
+### LayerEntryCodec
+
+A codec-backed *depth → material* layer entry, used by the scripted-brush `Layer` / `HeightmapLayer` operations (an array under a `Layers` key). Despite the JSON key names, `Left` is the layer **depth** (int, required) and `Right` is the **material id** (string, required); `UseToolArg` and `Skip` are optional booleans.
+
+```java
+public class LayerEntryCodec {
+    public static final BuilderCodec<LayerEntryCodec> CODEC;
+    public LayerEntryCodec(Integer depth, String material, boolean useToolArg);
+    public Integer getDepth();       // JSON key "Left"
+    public String getMaterial();     // JSON key "Right"
+    public boolean isUseToolArg();
+    public boolean isSkip();
+}
+```
+
+---
+
+## Serialization & I/O Utilities
+
+Static helper classes in `com.hypixel.hytale.server.core.util` that pair naturally with codec work.
+
+### BsonUtil
+
+**Package:** `com.hypixel.hytale.server.core.util`
+
+Static helpers for moving `BsonDocument`s between bytes, files, and JSON. The file operations return `CompletableFuture`s (async I/O); `writeSync` is the blocking codec-to-file shortcut.
+
+```java
+// bytes / buffers
+public static byte[] writeToBytes(BsonDocument doc);
+public static BsonDocument readFromBytes(byte[] bytes);
+public static BsonDocument readFromBuffer(ByteBuffer buffer);
+public static BsonDocument readFromBinaryStream(ByteBuffer buffer);
+public static void writeToBinaryStream(DataOutputStream out, BsonDocument doc) throws IOException;
+
+// files (async)
+public static CompletableFuture<Void> writeDocument(Path path, BsonDocument doc);
+public static CompletableFuture<Void> writeDocument(Path path, BsonDocument doc, boolean backup);
+public static CompletableFuture<BsonDocument> readDocument(Path path);
+public static CompletableFuture<BsonDocument> readDocument(Path path, boolean backup);
+public static BsonDocument readDocumentNow(Path path);              // blocking
+public static CompletableFuture<BsonDocument> readDocumentBak(Path path);
+
+// JSON bridges
+public static BsonValue translateJsonToBson(com.google.gson.JsonElement json);
+public static com.google.gson.JsonElement translateBsonToJson(BsonDocument doc);
+public static String toJson(BsonDocument doc);
+
+// encode a value with its codec and write it, synchronously
+public static <T> void writeSync(Path path, Codec<T> codec, T value, HytaleLogger logger) throws IOException;
+```
+
+### HashUtil
+
+One method: `HashUtil.sha256(byte[])` returns the SHA-256 digest as a lowercase hex `String`. This is the same hash used for common-asset identity (see [Assets API → Common Assets](assets.md#common-assets-java-api)).
+
+### FileUtil
+
+**Package:** `com.hypixel.hytale.server.core.util.io`
+
+Filesystem helpers used throughout asset and save handling. `writeStringAtomic` writes to a temp file then `atomicMove`s it into place, so readers never observe a half-written file.
+
+```java
+public static final Pattern INVALID_FILENAME_CHARACTERS;
+
+public static void copyDirectory(Path from, Path to) throws IOException;
+public static void moveDirectoryContents(Path from, Path to, CopyOption... options) throws IOException;
+public static void deleteDirectory(Path dir) throws IOException;    // recursive
+public static void extractZip(Path zip, Path target) throws IOException;
+public static void extractZip(InputStream zip, Path target) throws IOException;
+public static void writeStringAtomic(Path path, String content) throws IOException;  // backup = true
+public static void writeStringAtomic(Path path, String content, boolean backup) throws IOException; // backup: keep old file as .bak
+public static void atomicMove(Path from, Path to) throws IOException;
+```
+
+### MemorySegmentUtil
+
+**Package:** `com.hypixel.hytale.server.core.util.io`
+
+Helpers for `java.lang.foreign.MemorySegment` I/O (Java FFM API): explicit-endian `ValueLayout` constants (`SHORT_BE`/`SHORT_LE`, `INT_BE`/`INT_LE`, `LONG_BE`/`LONG_LE`, `FLOAT_BE`/`FLOAT_LE`), length-prefixed UTF-8 strings, and variable-width packed integers.
+
+```java
+public static final int MAX_UNSIGNED_SHORT_VALUE = 65535;
+
+public static int utf8Size(String value);                      // encoded size incl. length prefix
+public static int utf8Size(MemorySegment segment, long offset); // size of the string at offset
+public static int writeUTF(MemorySegment segment, long offset, String value);
+public static String readUTF(MemorySegment segment, long offset);
+public static void writeNumber(MemorySegment segment, int offset, int bytes, int value); // bytes = 1, 2, or 4
+public static int readNumber(MemorySegment segment, int offset, int bytes);
+```
 
 ---
 

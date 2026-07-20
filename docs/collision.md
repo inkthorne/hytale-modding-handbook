@@ -62,6 +62,8 @@ CollisionModule  (findCollisions, findIntersections, validatePosition)
 | `CollisionModuleConfig` | `modules.collision` | Module-wide collision configuration |
 | `CollisionDataArray<T>` | `modules.collision` | Generic container for collision data elements |
 | `CollisionResultComponent` | `modules.entity.component` | Entity component wrapping a CollisionResult |
+| `WorldUtil` | `modules.collision` | Static block-material and fluid queries at world positions |
+| `SimplePhysicsProvider` | `modules.physics` | Simple physics integrator for block entities and legacy projectiles; consumes block collisions |
 
 ## Class Hierarchy
 ```
@@ -86,6 +88,10 @@ CollisionFilter<D, T> (filtering interface)
 CollisionMaterial (material constants)
 CollisionModuleConfig (module configuration)
 CollisionDataArray<T> (generic data container)
+WorldUtil (static material/fluid position queries)
+
+SimplePhysicsProvider (modules.physics)
+  implements IBlockCollisionConsumer
 ```
 
 ## CollisionModule
@@ -626,6 +632,50 @@ void sort(Comparator<? super T> comparator)
 
 ---
 
+## WorldUtil
+**Package:** `com.hypixel.hytale.server.core.modules.collision`
+
+Final class of static helpers for querying block material and fluid state at world positions. Used by the physics/fluid paths; handy whenever you need "is this position solid / fluid / empty" without running a full collision query.
+
+### Material Classification
+```java
+// Classify a block + fluid-id pair (fluidId 0 = no fluid)
+static boolean isFluidOnlyBlock(BlockType blockType, int fluidId)  // Empty material AND fluid present
+static boolean isSolidOnlyBlock(BlockType blockType, int fluidId)  // Solid material AND no fluid
+static boolean isEmptyOnlyBlock(BlockType blockType, int fluidId)  // Empty material AND no fluid
+```
+
+### Fluid Queries
+```java
+// Fluid id at a block position (0 if none / out of range / chunk not loaded)
+static int getFluidIdAtPosition(ComponentAccessor<ChunkStore> chunkStore,
+        ChunkColumn column, int x, int y, int z)
+
+// BlockMaterial ordinal + fluid id packed into one long (MathUtil.packLong);
+// a fluid whose surface is below the queried y counts as no fluid
+static long getPackedMaterialAndFluidAtPosition(Ref<ChunkStore> chunkRef,
+        ComponentAccessor<ChunkStore> chunkStore, double x, double y, double z)
+
+// Scan a column for fluid / the water surface level
+static int findFluidBlock(ComponentAccessor<ChunkStore> chunkStore, ChunkColumn column,
+        BlockChunk blocks, int x, int y, int z, boolean flag)
+static int getWaterLevel(ComponentAccessor<ChunkStore> chunkStore, ChunkColumn column,
+        BlockChunk blocks, int x, int y, int z)
+```
+
+### Empty-Space Scans
+```java
+// Scan down/up from (x, y, z) for the farthest empty block within a limit
+static int findFarthestEmptySpaceBelow(ComponentAccessor<ChunkStore> chunkStore,
+        ChunkColumn column, BlockChunk blocks, int x, int y, int z, int limit)
+static int findFarthestEmptySpaceAbove(ComponentAccessor<ChunkStore> chunkStore,
+        ChunkColumn column, BlockChunk blocks, int x, int y, int z, int limit)
+```
+
+> **Note:** Positions with `y < 0` or `y >= 320` read as empty with no fluid.
+
+---
+
 ## CollisionResultComponent
 **Package:** `com.hypixel.hytale.server.core.modules.entity.component`
 
@@ -670,6 +720,108 @@ if (collisionComp != null) {
     // Access collision result for custom processing
     CollisionResult result = collisionComp.getCollisionResult();
 }
+```
+
+---
+
+## SimplePhysicsProvider
+**Package:** `com.hypixel.hytale.server.core.modules.physics`
+
+**Implements:** `IBlockCollisionConsumer`
+
+Self-contained physics integrator for simple ballistic bodies: gravity, drag/terminal velocity, bounces, fluid buoyancy and swimming damping, move-out-of-solid resolution, and a rest state. It consumes block collisions from the collision system (hence `IBlockCollisionConsumer`). Used by block entities (e.g. falling blocks) and legacy projectiles; the modern projectile path uses `StandardPhysicsProvider` (see [projectiles.md](projectiles.md#standardphysicsprovider)).
+
+### Getting an Instance
+```java
+// Block entities create/own one
+BlockEntity blockEntity = ...;
+SimplePhysicsProvider physics = blockEntity.initPhysics(boundingBox);
+physics = blockEntity.getSimplePhysicsProvider();
+
+// Legacy projectiles expose theirs
+SimplePhysicsProvider projectilePhysics = projectileComponent.getSimplePhysicsProvider();
+```
+
+### Constructors
+```java
+SimplePhysicsProvider()
+SimplePhysicsProvider(
+    BiConsumer<Vector3d, ComponentAccessor<EntityStore>> bounceConsumer,
+    QuadConsumer<Ref<EntityStore>, Vector3d, Ref<EntityStore>,
+                 ComponentAccessor<EntityStore>> impactConsumer)
+```
+The optional consumers are callbacks fired on bounces and on impacts.
+
+### Ticking
+```java
+// Advance the body one step: integrates velocity, resolves block/character
+// collisions, applies fluid forces, and updates the transform
+Ref<EntityStore> tick(double deltaTime, Velocity velocity, World world,
+        TransformComponent transform, Ref<EntityStore> ref,
+        ComponentAccessor<EntityStore> accessor)
+```
+
+### Configuration
+```java
+void setGravity(double gravity, BoundingBox boundingBox)
+void setBounciness(double bounciness)
+void setTerminalVelocities(double terminalVelocity, double density, BoundingBox boundingBox)
+void setTerminalVelocities(double terminalVelocity1, double density1,
+        double terminalVelocity2, double density2, BoundingBox boundingBox)
+SimplePhysicsProvider setImpactSlowdown(double slowdown)   // builder-style, returns this
+void setSticksVertically(boolean sticks)
+void setComputeYaw(boolean compute)
+void setComputePitch(boolean compute)
+void setProvideCharacterCollisions(boolean provide)
+void setMoveOutOfSolid(boolean move)
+void setMoveOutOfSolid(double speed)
+void setCreatorId(UUID creatorUuid)
+
+// Configure everything from a projectile asset config
+void initialize(Projectile projectileConfig, BoundingBox boundingBox)
+```
+
+### State and Velocity
+```java
+boolean isOnGround()
+boolean isSwimming()
+boolean isImpacted()
+void setImpacted(boolean impacted)
+boolean isResting()
+void setResting(boolean resting)
+boolean isComputeYaw()
+boolean isComputePitch()
+boolean isProvidingCharacterCollisions()
+
+Vector3d getVelocity()
+void setVelocity(Vector3d velocity)
+void addVelocity(float x, float y, float z)
+
+// Reflect a vector off a surface normal (used for bounces)
+static void computeReflectedVector(Vector3d velocity, Vector3d normal, Vector3d result)
+```
+
+### IBlockCollisionConsumer Callbacks
+Called by the collision sweep; you normally don't invoke these yourself:
+```java
+IBlockCollisionConsumer.Result onCollision(int x, int y, int z, Vector3d movement,
+        BlockContactData contact, BlockData block, Box box)
+IBlockCollisionConsumer.Result probeCollisionDamage(int x, int y, int z, Vector3d movement,
+        BlockContactData contact, BlockData block)
+void onCollisionDamage(int x, int y, int z, Vector3d movement,
+        BlockContactData contact, BlockData block)
+IBlockCollisionConsumer.Result onCollisionSliceFinished()
+void onCollisionFinished()
+```
+
+### Nested Enums
+```java
+// How the body's rotation follows its motion — set from a projectile's
+// "RotationMode" JSON key (Projectile.getRotationMode(), default Velocity)
+enum SimplePhysicsProvider.ROTATION_MODE { None, Velocity, VelocityDamped }
+
+// Integrator lifecycle state
+enum SimplePhysicsProvider.STATE { Active, Resting, Inactive }
 ```
 
 ---

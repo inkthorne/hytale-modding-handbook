@@ -1029,7 +1029,7 @@ Only allow ability in Creative mode:
   "RequiredGameMode": "Creative",
   "Next": {
     "Type": "SpawnPrefab",
-    "PrefabId": "debug_entity"
+    "PrefabPath": "Example_Portal1.prefab.json"
   },
   "Failed": {
     "Type": "SendMessage",

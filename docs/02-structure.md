@@ -7,7 +7,7 @@ seo:
 
 # Pack vs Plugin Directory Structure
 
-**Doc type:** Guide
+**Doc type:** Guide + Java API
 
 This guide explains the difference between asset packs and plugins, and how to organize your files for each.
 

@@ -164,6 +164,16 @@ Sound file paths are rooted at `Common/Sounds/`. Real top-level prefixes include
 `Sounds/CreativePlay`, and `Sounds/Crafting`. There is no `SFX/` segment in any
 sound file path.
 
+**Java side:** each layer decodes into a
+`com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEventLayer`
+(`SoundEventLayer.CODEC`; a `NetworkSerializable<protocol.SoundEventLayer>` with `toPacket()`).
+Read-only getters mirror the JSON: `getFiles()`, `getVolume()` (resolved linear volume, not the
+raw dB), `getStartDelay()`, `isLooping()`, `getProbability()`, `getProbabilityRerollDelay()`,
+`getRandomSettings()`, `getRoundRobinHistorySize()`, plus `getHighestNumberOfChannels()`
+(computed from the referenced `.ogg` files). The nested `SoundEventLayer.RandomSettings`
+exposes `getMinVolume()` / `getMaxVolume()` / `getMinPitch()` / `getMaxPitch()` /
+`getMaxStartOffset()` and a `RandomSettings.DEFAULT` instance.
+
 ### RandomSettings
 
 Add variation to prevent repetitive sounds:
@@ -489,7 +499,14 @@ usually pair the `Music` block with `AudioCategory: "AudioCat_Music"` and a `Pri
 | Property | Type | Description |
 |----------|------|-------------|
 | `Tracks` | array | List of `.ogg` file path strings |
-| `Volume` | float | Optional volume in dB |
+| `Volume` | float | Optional volume in dB (−100 to 10) |
+
+**Java side:** the block decodes into a
+`com.hypixel.hytale.server.core.asset.type.ambiencefx.config.AmbienceFXMusic`
+(`AmbienceFXMusic.CODEC`; both fields inherit through `Parent`). `getTracks()` returns the
+track paths, `getDecibels()` the raw dB value, and `getVolume()` the converted linear gain.
+There is also a `AmbienceFXMusic(String[] tracks, float decibels)` constructor for building
+one programmatically.
 
 ### Complete Example
 
@@ -636,6 +653,39 @@ The Trigger Volume [`SetMusic` effect](trigger-volumes.md#built-in-effect-types)
 plugin can build one in Java via the `*MusicContainer` config classes
 (`com.hypixel.hytale.server.core.asset.type.musiccontainer.config`) — each has a `getChildIds()` and a `CODEC`. The
 legacy migration path is `RandomMusicContainer.fromLegacy(...)`.
+
+---
+
+## AudioState Transitions
+
+**Location:** `Server/Audio/AudioStates/` · **Package:** `com.hypixel.hytale.server.core.asset.type.audiostate.config`
+
+`AudioState` assets define the named state axes (e.g. `AudioState_CaveRegion` with values
+`Shallow` / `Volcanic` / `Deep`) that a [Segment container's](#segment-layered) `StateBindings`
+react to. An audio state's `Transitions` array declares per-edge fade behaviour; each edge
+decodes into a **`StateTransitionConfig`** (`StateTransitionConfig.CODEC`):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `From` | string | State value name this edge transitions from; `"*"` for wildcard |
+| `To` | string | State value name this edge transitions to; `"*"` for wildcard |
+| `DurationMs` | float | Transition duration in milliseconds (≥ 0) |
+| `Curve` | `FadeCurve` | Fade curve for the transition |
+| `SyncTo` | `SyncPoint` | Musical sync point to align the transition to |
+
+```java
+public class StateTransitionConfig {
+    public static final String WILDCARD = "*";
+    public static final int WILDCARD_INDEX = -1;
+    public static final BuilderCodec<StateTransitionConfig> CODEC;
+    public StateTransition toPacket();   // protocol form, with names resolved to indices
+}
+```
+
+The value name `*` is reserved for wildcard matching (an `AudioState` value literally named `*`
+fails validation with `AudioState value name '*' is reserved for wildcard matching in transitions`).
+When no edge matches a from/to pair, the asset's `DefaultTransition` (also a
+`StateTransitionConfig`) applies; if that is omitted too, the switch is immediate (0 ms).
 
 ---
 
@@ -895,6 +945,40 @@ if (idx != Integer.MIN_VALUE && idx != SoundEvent.EMPTY_ID) {
 [`PlaySound` effect](trigger-volumes.md#built-in-effect-types) and a JSON `WorldSoundEventId`
 ultimately resolve to.
 
+### Validating sound-event references in custom codecs
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.soundevent.validator`
+
+When a custom asset/config field holds a sound-event **id string**, attach a validator so a bad
+reference fails at load time instead of silently playing nothing. Beyond the generic existence
+check (`SoundEvent.VALIDATOR_CACHE.getValidator()`), `SoundEventValidators` provides constants
+that also check the *shape* of the referenced sound event:
+
+```java
+public class SoundEventValidators {
+    public static final SoundEventValidators.LoopValidator LOOPING;     // must have a looping layer
+    public static final SoundEventValidators.LoopValidator ONESHOT;     // must have no looping layer
+    public static final SoundEventValidators.ChannelValidator MONO;     // highest channel count must be 1 (mono)
+    public static final SoundEventValidators.ChannelValidator STEREO;   // highest channel count must be 2 (stereo)
+
+    public static final ValidatorCache<String> MONO_VALIDATOR_CACHE;
+    public static final ValidatorCache<String> STEREO_VALIDATOR_CACHE;
+    public static final ValidatorCache<String> ONESHOT_VALIDATOR_CACHE;
+}
+```
+
+Use the `*_VALIDATOR_CACHE.getValidator()` form in a `BuilderCodec` field, the same way
+[`SleepSoundsConfig`](#sleep-sounds) attaches `SoundEvent.VALIDATOR_CACHE`:
+
+```java
+.append(new KeyedCodec<>("AlarmSound", Codec.STRING), MyCfg::setAlarm, MyCfg::getAlarm)
+.addValidator(SoundEventValidators.ONESHOT_VALIDATOR_CACHE.getValidator())
+.add()
+```
+
+The `has a looping layer and is not a oneshot sound` load error in
+[Gotchas](#gotchas--errors) is the `ONESHOT` validator firing.
+
 ---
 
 ## Integration with Other Systems
@@ -943,18 +1027,36 @@ See [interactions.md](interactions.md) for full interaction documentation.
 
 ### NPC Audio
 
-NPCs reference sound events in their animation definitions. Animation events can trigger sounds at specific keyframes:
+Model assets reference sound events in their animation definitions. Each entry in an
+animation set's `Animations` array (`ModelAsset.Animation`) supports two sound hooks:
+`SoundEventId` — a sound event played with the animation — and `FootstepIntervals` —
+an array of percentages (0–100) of the animation duration at which footsteps occur,
+used for timing footstep sound effects on movement animations. From
+`Server/Models/Human/Player.json`:
 
 ```json
 {
-  "AnimationId": "Attack",
-  "Events": [
-    {
-      "Time": 0.2,
-      "Type": "Sound",
-      "SoundEventId": "SFX_Zombie_Attack_Bite"
+  "AnimationSets": {
+    "Run": {
+      "Animations": [
+        {
+          "Animation": "Characters/Animations/Default/Run.blockyanim",
+          "Speed": 0.9,
+          "FootstepIntervals": [25, 75]
+        }
+      ]
+    },
+    "SafetyRoll": {
+      "Animations": [
+        {
+          "Animation": "Characters/Animations/Roll/Roll.blockyanim",
+          "BlendingDuration": 0.1,
+          "Looping": false,
+          "SoundEventId": "SFX_Player_Roll"
+        }
+      ]
     }
-  ]
+  }
 }
 ```
 
@@ -971,6 +1073,29 @@ Weapons define their audio category for mixing control:
 
 The category hierarchy allows adjusting all sword sounds together (via `AudioCat_Sword`)
 while still inheriting from the parent `AudioCat_Weapons` category.
+
+### Sleep Sounds
+
+The bed/sleep system's audio hooks live in the gameplay `WorldConfig`: its `SleepConfig` has a
+`Sounds` object that decodes into
+`com.hypixel.hytale.server.core.asset.type.gameplay.sleep.SleepSoundsConfig`
+(`SleepSoundsConfig.CODEC`). Every reference is a sound-event id (validated against the
+sound-event store):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Success` | string | Played when sleep succeeds (time skips) |
+| `Fail` | string | Played when the sleep attempt fails |
+| `Notification` | string | "Someone wants to sleep" notification sound |
+| `NotificationLoop` | string | Looping variant of the notification |
+| `NotificationCooldownSeconds` | int | Cooldown between notification plays |
+| `NotificationLoopEnabled` | boolean | Whether the looping notification is used |
+
+Java getters pair each id with a resolved index for the play path: `getSuccess()` /
+`getSuccessIndex()`, `getFail()` / `getFailIndex()`, `getNotification()` / `getNotificationIndex()`,
+`getNotificationLoop()` / `getNotificationLoopIndex()`, plus `getNotificationCooldownSeconds()`,
+`getNotificationLoopCooldownMs()`, and `isNotificationLoopEnabled()`. Reached from
+`WorldConfig` via `getSleepConfig().getSounds()`.
 
 ---
 

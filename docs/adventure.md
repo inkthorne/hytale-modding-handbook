@@ -19,6 +19,8 @@ Implemented across `com.hypixel.hytale.builtin` (instances, adventure objectives
 - A keyed `TreasureChestOpeningEvent` fired when a player opens a treasure chest
 - `InstanceDiscoveryConfig` for controlling how discoveries are displayed
 - `WorldMapTracker` for querying and mutating per-player map/zone discovery state
+- Portal-world configuration assets (`PortalType`, `PortalDescription`, `PillTag`, `PortalSpawnConfig`)
+- The `PortalKey` item property and per-stack `AdventureMetadata` (cursed items)
 
 ## Architecture
 ```
@@ -37,6 +39,17 @@ Objectives
 
 Player map state
 └── WorldMapTracker (discover/undiscover zones, teleport/view-radius rules)
+
+Portal worlds (com.hypixel.hytale.server.core.asset.type.portalworld)
+└── PortalType (Server/PortalTypes/*.json)
+      ├── PortalDescription ("Description": name, flavor text, theme color)
+      │     └── PillTag[] ("DescriptionTags": cosmetic UI tags)
+      ├── PortalSpawnConfig ("Spawn": return-portal rules)
+      └── cursed item ids ("CursedItems")
+
+Portal items (com.hypixel.hytale.server.core.asset.type.item.config)
+├── PortalKey (item "PortalKey" property → portal type + time limit)
+└── metadata.AdventureMetadata (per-stack "Adventure" metadata: Cursed flag)
 ```
 
 ## Key Classes
@@ -51,6 +64,12 @@ Player map state
 | `InstanceDiscoveryConfig` | `builtin.instances.config` | Configuration for instance-discovery display |
 | `WorldMapTracker` | `server.core.universe.world` | Tracks and mutates per-player map discovery state |
 | `WorldMapTracker.ZoneDiscoveryInfo` | `server.core.universe.world` | Record of zone-discovery details |
+| `PortalType` | `server.core.asset.type.portalworld` | JSON asset for one portal destination (`Server/PortalTypes/*.json`) |
+| `PortalDescription` | `server.core.asset.type.portalworld` | Display metadata for a portal (name, flavor text, theme color, tags) |
+| `PillTag` | `server.core.asset.type.portalworld` | Cosmetic UI tag pill shown on a portal description |
+| `PortalSpawnConfig` | `server.core.asset.type.portalworld` | Return-portal and spawn-override settings for a portal world |
+| `PortalKey` | `server.core.asset.type.item.config` | Item config block that turns an item into a portal key |
+| `AdventureMetadata` | `server.core.asset.type.item.config.metadata` | Per-`ItemStack` adventure metadata (the cursed flag) |
 
 ## Adventure Events
 
@@ -196,7 +215,7 @@ public class ZoneDiscoverySystem extends EntityEventSystem<EntityStore, Discover
         Player player = chunk.getComponent(index, Player.getComponentType());
         if (player != null) {
             var discoveryInfo = event.getDiscoveryInfo();
-            player.sendMessage(Message.raw("Zone discovered!"));
+            player.getPlayerRef().sendMessage(Message.raw("Zone discovered!"));
 
             // Optionally suppress the discovery display
             // event.setCancelled(true);
@@ -254,7 +273,7 @@ protected void setup() {
 
         Player player = store.getComponent(playerRef, Player.getComponentType());
         if (player != null) {
-            player.sendMessage(Message.raw("You opened a treasure chest!"));
+            player.getPlayerRef().sendMessage(Message.raw("You opened a treasure chest!"));
         }
 
         System.out.println("Chest " + event.getChestUUID() +
@@ -410,6 +429,240 @@ tracker.setViewRadiusOverride(500);  // Set custom view radius
 
 ---
 
+## Portal Worlds
+
+Portal destinations are JSON assets under `Server/PortalTypes/`, backed by the classes in
+`com.hypixel.hytale.server.core.asset.type.portalworld`. A portal key **item** references a portal type
+through its `PortalKey` property; while inside a portal world, item ids listed in the portal type's
+`CursedItems` become cursed via per-stack [AdventureMetadata](#adventuremetadata).
+
+---
+
+## PortalType
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
+
+JSON asset describing one portal destination. Loaded from `Server/PortalTypes/*.json`; the asset id is the
+filename without `.json` (0.5.7 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taiga`, `Windsurf_Valley`).
+
+**JSON fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `InstanceId` | string | Instance world the portal opens (e.g. `"Portals/Portals_Jungles"`, under `Server/Instances/`) |
+| `Description` | object | Display metadata — see [PortalDescription](#portaldescription) |
+| `GameplayConfig` | string | Gameplay config id for the portal world (defaults to `"Portal"`, i.e. `Server/GameplayConfigs/Portal.json`) |
+| `VoidInvasionEnabled` | boolean | Whether the void invasion is enabled for this portal |
+| `CursedItems` | string[] | Item ids that are cursed inside this portal world |
+| `Spawn` | object | Return-portal spawn settings — see [PortalSpawnConfig](#portalspawnconfig) |
+
+**Example** (`Server/PortalTypes/Jungles.json`):
+
+```json
+{
+  "InstanceId": "Portals/Portals_Jungles",
+  "Description": {
+    "DisplayName": "server.portals.jungles",
+    "FlavorText": "server.portals.jungles.description",
+    "ThemeColor": "#23970cec",
+    "SplashImage": "DefaultArtwork.png"
+  }
+}
+```
+
+**Methods**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getAssetMap()` (static) | `DefaultAssetMap<String, PortalType>` | All loaded portal types |
+| `getAssetStore()` (static) | `AssetStore<String, PortalType, ...>` | The backing asset store |
+| `getId()` | `String` | Asset id (filename) |
+| `getInstanceId()` | `String` | Instance world id the portal opens |
+| `getDisplayName()` | `Message` | Localized display name (from the description) |
+| `getDescription()` | `PortalDescription` | Display metadata |
+| `getGameplayConfigId()` | `String` | Gameplay config id |
+| `getGameplayConfig()` | `GameplayConfig` | Resolved gameplay config asset |
+| `isVoidInvasionEnabled()` | `boolean` | Whether the void invasion runs in this portal world |
+| `getCursedItems()` | `Set<String>` | Item ids cursed inside this portal world |
+| `getSpawn()` | `PortalSpawnConfig` | Return-portal spawn settings |
+
+```java
+import com.hypixel.hytale.server.core.asset.type.portalworld.PortalType;
+
+PortalType portalType = PortalType.getAssetMap().getAsset("Jungles");
+if (portalType != null) {
+    System.out.println("Opens instance: " + portalType.getInstanceId());
+}
+```
+
+---
+
+## PortalDescription
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
+
+Display metadata for a portal — everything the portal-selection UI shows. Declared as the `Description`
+object of a [PortalType](#portaltype).
+
+**JSON fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `DisplayName` | string | Translation key for the portal name |
+| `FlavorText` | string | Translation key for the flavor text |
+| `ThemeColor` | string | Color associated with the portal (hex) |
+| `DescriptionTags` | array | Cosmetic UI tag pills — see [PillTag](#pilltag) |
+| `Objectives` | string[] | Translation keys for the portal's objectives |
+| `Tips` | string[] | Translation keys for wisdom/tips shown for this portal |
+| `SplashImage` | string | Splash artwork filename |
+
+**Methods**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getDisplayNameKey()` | `String` | Translation key for the name |
+| `getDisplayName()` | `Message` | Localized display name |
+| `getFlavorTextKey()` | `String` | Translation key for the flavor text |
+| `getFlavorText()` | `Message` | Localized flavor text |
+| `getThemeColor()` | `Color` | Theme color |
+| `getPillTags()` | `List<PillTag>` | Cosmetic UI tags (`DescriptionTags`) |
+| `getObjectivesKeys()` | `String[]` | Objective translation keys |
+| `getWisdomKeys()` | `String[]` | Tip translation keys (`Tips`) |
+| `getSplashImageFilename()` | `String` | Splash artwork filename |
+
+---
+
+## PillTag
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
+
+One cosmetic tag "pill" on a portal description (a label plus a color). Purely visual.
+
+**JSON fields:** `TranslationKey` (string), `Color` (hex string).
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getTranslationKey()` | `String` | Translation key of the label |
+| `getMessage()` | `Message` | Localized label |
+| `getColor()` | `Color` | Pill color |
+
+---
+
+## PortalSpawnConfig
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
+
+Controls how players arrive in a portal world and how they get back. Declared as the `Spawn` object of a
+[PortalType](#portaltype).
+
+**JSON fields**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `SpawnReturnPortal` | boolean | Whether a return portal is spawned in the portal world |
+| `SpawnProviderOverride` | object | Overrides the world's spawn provider for arriving players |
+| `ReturnBlock` | string | Block id used for the return portal block |
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `isSpawningReturnPortal()` | `boolean` | Whether a return portal is spawned |
+| `getSpawnProviderOverride()` | `ISpawnProvider` | Spawn-provider override (nullable) |
+| `getReturnBlockOverrideId()` | `String` | Return-portal block id (nullable) |
+| `getReturnBlockOverride()` | `BlockType` | Resolved return-portal block type |
+
+---
+
+## PortalKey
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.item.config`
+
+Item config block that turns an item into a **portal key**. Declared on an item definition via the
+`PortalKey` property and read back with `Item.getPortalKey()` (null for items that aren't portal keys).
+The portal device UI requires a key whose portal type matches before it summons a portal.
+
+**JSON fields** (inside an item definition, e.g. `Server/Item/Items/Portal/PortalKey_Jungles.json`):
+
+```json
+{
+  "PortalKey": {
+    "PortalType": "Jungles",
+    "TimeLimitSeconds": 720
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `PortalType` | string | Id of the [PortalType](#portaltype) this key opens |
+| `TimeLimitSeconds` | int | Time limit for the portal visit, in seconds |
+
+**Methods**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getPortalTypeId()` | `String` | Portal type asset id |
+| `getTimeLimitSeconds()` | `int` | Visit time limit in seconds |
+
+```java
+import com.hypixel.hytale.server.core.asset.type.item.config.Item;
+import com.hypixel.hytale.server.core.asset.type.item.config.PortalKey;
+
+Item item = heldStack.getItem();
+PortalKey key = item.getPortalKey();
+if (key != null) {
+    System.out.println("Opens portal " + key.getPortalTypeId()
+        + " for " + key.getTimeLimitSeconds() + "s");
+}
+```
+
+---
+
+## AdventureMetadata
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.item.config.metadata`
+
+Per-`ItemStack` adventure metadata, stored in the stack's metadata document under the key `"Adventure"`
+(`AdventureMetadata.KEY`). In 0.5.7 it carries a single flag: whether the stack is **cursed** (BSON field
+`Cursed`). Portal gameplay curses stacks whose item id appears in the active portal type's
+`getCursedItems()` set; cursed stacks are uncursed or deleted when the portal visit ends.
+
+**Constants**
+
+| Constant | Type | Description |
+|----------|------|-------------|
+| `KEY` | `String` | Metadata key: `"Adventure"` |
+| `CODEC` | `BuilderCodec<AdventureMetadata>` | Codec for the metadata payload |
+| `KEYED_CODEC` | `KeyedCodec<AdventureMetadata>` | `KEY` + `CODEC` in one handle |
+
+**Methods**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `isCursed()` | `boolean` | Whether the stack is cursed |
+| `setCursed(boolean)` | `void` | Set the cursed flag |
+
+### Usage Example
+
+Read and write it through the `ItemStack` metadata accessors:
+
+```java
+import com.hypixel.hytale.server.core.asset.type.item.config.metadata.AdventureMetadata;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+
+// Check whether a stack is cursed
+AdventureMetadata meta = stack.getFromMetadataOrNull(AdventureMetadata.KEYED_CODEC);
+boolean cursed = meta != null && meta.isCursed();
+
+// Curse a stack (ItemStack is immutable — withMetadata returns a new stack)
+AdventureMetadata cursedMeta = new AdventureMetadata();
+cursedMeta.setCursed(true);
+ItemStack cursedStack = stack.withMetadata(AdventureMetadata.KEYED_CODEC, cursedMeta);
+```
+
+> **See also:** [ItemStack → Metadata Access](inventory.md#metadata-access)
+
+---
+
 ## Complete Adventure System Example
 
 ```java
@@ -445,7 +698,7 @@ public class AdventurePlugin extends JavaPlugin {
 
         Player player = store.getComponent(playerRef, Player.getComponentType());
         if (player != null) {
-            player.sendMessage(
+            player.getPlayerRef().sendMessage(
                 Message.raw("Treasure found!")
                     .bold(true)
                     .color("#FFD700")

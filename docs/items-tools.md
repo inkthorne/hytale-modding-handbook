@@ -823,7 +823,7 @@ Tool_RepairKit_Basic, Tool_RepairKit_Advanced, Tool_RepairKit_Master
 
 ## Capture Crate
 
-**Location:** `Server/Item/Items/Tool/CaptureCrate/`
+**Location:** `Server/Item/Items/Tool/Capture_Crate/`
 
 Utility item for capturing and transporting animals.
 
@@ -843,22 +843,25 @@ Utility item for capturing and transporting animals.
 |------|------------------|-------------|
 | `Primary` | Root_Tool_CaptureCrate_Use | Capture animal |
 
-Uses `UseCaptureCrate` interaction:
+Uses `UseCaptureCrate` interaction (from `Tool_Capture_Crate.json`):
 
 ```json
 {
   "Type": "UseCaptureCrate",
-  "Range": 3.0,
-  "AcceptedNpcGroups": ["Livestock", "Pets", "SmallAnimals"],
-  "CapturedItem": "Tool_CaptureCrate_Filled"
+  "AcceptedNpcGroups": ["Capture_Crate"],
+  "FullIcon": "Icons/ItemsGenerated/Tool_Capture_Crate_Full.png"
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `AcceptedNpcGroups` | array | NPC groups that can be captured |
-| `CapturedItem` | string | Item created with captured entity |
-| `Range` | float | Maximum capture distance |
+| `FullIcon` | string | Icon shown on the crate item once it holds a captured NPC |
+
+There is no separate "filled crate" item id: on capture, the NPC is stored on the crate
+item itself as `CapturedEntity` metadata (`CapturedNPCMetadata`, with `IconPath`,
+`NpcNameKey`, and `FullItemIcon` fields), and capture range comes from the interaction
+chain's targeting, not a `Range` property on this interaction.
 
 ### Tags
 
@@ -873,7 +876,7 @@ Uses `UseCaptureCrate` interaction:
 
 ### All Capture Crate Variants
 
-Tool_CaptureCrate, Tool_CaptureCrate_Filled
+Tool_Capture_Crate (the "full" state is the same item carrying `CapturedEntity` metadata)
 
 ---
 
@@ -1023,6 +1026,95 @@ A separate top-level `DurabilityLossOnHit` (a common item property) provides the
 | Hoe | ISS_Tool_Hoe |
 | Hammer | ISS_Tool_Hammer |
 | Shears | ISS_Tool_Shears |
+
+---
+
+## Builder Tool Args
+
+Separate from gathering tools, **builder tool** items (the editor tools under
+`Server/Item/Items/EditorTool/*.json`) are configured through a `BuilderTool` property whose `Args` array
+declares the tool's adjustable parameters — the fields shown in the builder-tools UI. Which items appear in
+the creative Tools menu is a separate asset (see
+[Builder Tool Item References](items.md#builder-tool-item-references)).
+
+```json
+{
+  "BuilderTool": {
+    "Id": "Paint",
+    "IsBrush": true,
+    "Args": [
+      {
+        "Type": "Block",
+        "Id": "builtin_Material",
+        "Default": "Rock_Stone",
+        "AllowPattern": true
+      },
+      {
+        "Type": "Int",
+        "Id": "builtin_Width",
+        "Default": 5,
+        "Min": 1,
+        "Max": 100
+      },
+      {
+        "Type": "Option",
+        "Id": "builtin_Shape",
+        "Default": "Sphere",
+        "Options": ["Cube", "Sphere", "Cylinder", "Cone"]
+      }
+    ]
+  }
+}
+```
+
+(Excerpt from `EditorTool_Paint.json`.)
+
+### Arg Types
+
+Every arg entry carries `Type` (the discriminator), `Id`, an optional `Default`, and optional
+`Required` (defaults to `true`). Each `Type` value maps to a class in
+`com.hypixel.hytale.server.core.asset.type.buildertool.config.args`:
+
+| JSON `Type` | Class | Value type | Extra JSON fields |
+|-------------|-------|------------|-------------------|
+| `Bool` | `BoolArg` | `Boolean` | — |
+| `String` | `StringArg` | `String` | — |
+| `Int` | `IntArg` | `Integer` | `Min`, `Max` |
+| `Float` | `FloatArg` | `Float` | `Min`, `Max` |
+| `Block` | `BlockArg` | `BlockPattern` | `AllowPattern` (accept weighted block patterns, not just one block) |
+| `Mask` | `MaskArg` | `BlockMask` | — |
+| `Option` | `OptionArg` | `String` | `Options` (allowed values) |
+| `BrushShape` | `BrushShapeArg` | `BrushShape` | — |
+| `BrushOrigin` | `BrushOriginArg` | `BrushOrigin` | — |
+
+### ToolArg (Base Class)
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.buildertool.config.args`
+
+`ToolArg<T>` is the abstract base all arg types extend.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getId()` | `String` | The arg's `Id` |
+| `getValue()` | `T` | Current/default value |
+| `isRequired()` | `boolean` | Whether the arg must be set (`Required`, default true) |
+| `fromString(String)` | `T` | Parse a value from its string form (throws `ToolArgException` on bad input) |
+| `getCodec()` | `Codec<T>` | Codec for the value type |
+| `toPacket()` | `BuilderToolArg` | Network form sent to the client UI |
+
+Typed subclasses add small extras: `IntArg.getMin()` / `IntArg.getMax()` and
+`FloatArg.getMin()` / `FloatArg.getMax()` expose the range bounds.
+
+### ToolArgException
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.buildertool.config.args`
+
+Checked exception thrown by `fromString(String)` when a value can't be parsed (bad number, out-of-range,
+unknown block, …). Carries a player-facing localized message:
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getTranslationMessage()` | `Message` | Localized error message for display |
 
 ---
 

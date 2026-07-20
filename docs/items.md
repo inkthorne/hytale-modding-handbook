@@ -7,7 +7,7 @@ seo:
 
 # Item Definitions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.7**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.7**
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
@@ -93,6 +93,7 @@ All items support these core properties:
 | `Utility` | object | Utility-slot flag (`Compatible` or `Usable` boolean) |
 | `MaxDurability` | int | Maximum durability points |
 | `DurabilityLossOnHit` | float | Durability lost per use |
+| `PortalKey` | object | Makes the item a portal key (`PortalType` + `TimeLimitSeconds`, see [Adventure API](adventure.md#portalkey)) |
 
 ### TranslationProperties
 
@@ -688,6 +689,81 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
   }
 }
 ```
+
+---
+
+## Fieldcraft Categories
+
+Fieldcraft categories are the tabs of the pocket ("fieldcraft") crafting window — the bench-free crafting a
+player always has. Each category is a JSON asset under `Server/Item/Category/Fieldcraft/*.json` (asset id =
+filename; 0.5.7 ships only `Tools`):
+
+```json
+{
+  "Name": "server.benchCategories.workbench.tools",
+  "Icon": "Icons/CraftingCategories/Fieldcraft/Tool_Pickaxe_Crude.png",
+  "Order": 0
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Name` | string | Translation key for the category label |
+| `Icon` | string | Icon path shown on the category tab |
+| `Order` | int | Sort order among fieldcraft categories |
+
+Recipes appear here when their bench requirement is the fieldcraft requirement (`"Fieldcraft"` — exposed in
+code as `CraftingRecipe.FIELDCRAFT_REQUIREMENT`). See [Crafting](items-crafting.md) for recipe configuration.
+
+**Server-side class:** `com.hypixel.hytale.server.core.asset.type.item.config.FieldcraftCategory` — the
+categories are sent to the client as item-category packets.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getAssetMap()` (static) | `DefaultAssetMap<String, FieldcraftCategory>` | All loaded fieldcraft categories |
+| `getId()` | `String` | Asset id (filename) |
+| `getName()` | `String` | Translation key for the label |
+| `getIcon()` | `String` | Icon path |
+| `toPacket()` | `ItemCategory` | Network form sent to the client |
+
+---
+
+## Builder Tool Item References
+
+`Server/Item/PlayerToolsMenuConfig/*.json` assets list which items are **builder tools** — the editor tools
+(paint, sculpt, selection, …) that populate a creative player's Tools inventory section. 0.5.7 ships one
+file, `PlayerToolsMenuDropdownFilter.json`:
+
+```json
+{
+  "BuilderToolItems": [
+    "EditorTool_Paint",
+    "EditorTool_Sculpt",
+    "EditorTool_Selection",
+    "EditorTool_Paste",
+    "EditorTool_Line",
+    "EditorTool_Layers"
+  ]
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `BuilderToolItems` | string[] | Item ids to place in the Tools section (each must be a real item definition) |
+
+On entity setup the builder-tools system clears the player's Tools container and re-adds one stack per
+listed item, so adding an id here is how a custom editor tool shows up in the tools menu. The builder-tool
+behavior itself comes from the item's `BuilderTool` property (see
+[Builder Tool Args](items-tools.md#builder-tool-args)).
+
+**Server-side class:** `com.hypixel.hytale.server.core.asset.type.item.config.BuilderToolItemReferenceAsset`
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getAssetMap()` (static) | `DefaultAssetMap<String, BuilderToolItemReferenceAsset>` | All loaded reference assets |
+| `getAssetStore()` (static) | `AssetStore<String, BuilderToolItemReferenceAsset, ...>` | The backing asset store |
+| `getId()` | `String` | Asset id (filename) |
+| `getItems()` | `String[]` | The `BuilderToolItems` item ids |
 
 ---
 

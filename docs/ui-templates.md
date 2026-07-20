@@ -245,7 +245,7 @@ Define reusable values for consistency across your UI.
 **Background Objects:**
 ```
 @PanelBackground = (Color: #1a1a2e(0.95));
-@ButtonBackground = (TexturePath: "Common/UI/Shared/Button.png", Border: 10);
+@ButtonBackground = (TexturePath: "Common/Buttons/Primary.png", Border: 10);
 ```
 
 **Complete State Styles:**

@@ -7,7 +7,7 @@ seo:
 
 # Drop System
 
-**Doc type:** JSON asset format · **Assets:** `Server/Drops` · **Verified against 0.5.7**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Drops` · **Verified against 0.5.7**
 
 Drop files define loot tables for blocks, NPCs, containers, and world prefabs. They use a hierarchical container system that supports guaranteed drops, weighted random selection, and modular composition through references.
 
@@ -39,7 +39,8 @@ Drop File  { "Container": ... }
 ```
 
 ## Key Classes
-These are JSON asset constructs (container/field schemas), not Java classes.
+These are JSON asset constructs (container/field schemas), not Java classes. For the server-side classes
+they load into — and how to roll a droplist from a plugin — see [Java API](#java-api).
 
 | Construct | Location | Description |
 |-----------|----------|-------------|
@@ -883,36 +884,56 @@ See [NPC Roles](npc-roles.md#key-properties) for details.
 
 ### Farming Crops
 
-Crop blocks define harvest drops in their `BlockType.Farming.HarvestDrops` property:
+Crop drops are regular drop files under `Server/Drops/Crop/<Crop>/` — one per growth
+stage plus a `*_StageFinal_Harvest` file for the harvest yield (e.g.
+`Drops_Plant_Crop_Wheat_StageFinal_Harvest.json`). The crop block's per-stage state
+definitions reference them via `Gathering` `DropList`:
 
 ```json
 {
   "BlockType": {
-    "Farming": {
-      "HarvestDrops": [
-        { "ItemId": "Plant_Crop_Carrot", "Quantity": [1, 3] },
-        { "ItemId": "Plant_Crop_Carrot_Seed", "Quantity": [0, 2], "Chance": 0.5 }
-      ]
+    "State": {
+      "Definitions": {
+        "StageFinal": {
+          "Gathering": {
+            "Harvest": { "DropList": "Drops_Plant_Crop_Wheat_StageFinal_Harvest" },
+            "Soft": { "DropList": "Drops_Plant_Crop_Wheat_StageFinal" }
+          }
+        }
+      }
     }
   }
 }
 ```
 
-Note: `HarvestDrops` uses a simplified inline format rather than referencing drop files.
+The `BlockType.Farming` block (`FarmingData`) only drives growth — `Stages`,
+`StartingStageSet`, `StageSetAfterHarvest` — it holds no drop data; drops always
+come from the referenced drop files.
 
 See [Block Items - Farming & Soil](items-blocks.md#farming--soil) for details.
 
 ### Prefab Containers
 
-Prefab-placed chests reference drop files for their loot tables:
+Prefab-placed chests bind loot in the prefab's block list: a `blocks[]` entry names
+the container block and attaches an `ItemContainerBlock` component whose `Droplist`
+names the drop file. From `Server/Prefabs/Goblin_Thief_Chest.prefab.json`:
 
 ```json
 {
-  "Type": "Prefab",
-  "Containers": [
+  "blocks": [
     {
-      "BlockId": "Furniture_Ancient_Chest_Small",
-      "DroplistId": "Zone1_Trork_Tier1"
+      "x": 0, "y": 0, "z": 0,
+      "name": "Furniture_Goblin_Chest_Small",
+      "components": {
+        "Components": {
+          "ItemContainerBlock": {
+            "Droplist": "Drop_Goblin_Thief",
+            "ItemContainer": { "Capacity": 18, "Items": {} },
+            "Capacity": 20
+          }
+        }
+      },
+      "rotation": 1
     }
   ]
 }
@@ -1140,6 +1161,84 @@ Prefab encounter loot files combine encounter-specific rolls with a shared zone 
 ```
 
 The referenced `Zone3_Encounters_Tier3.json` is itself a normal drop file (with its own `Container` root), letting many faction tables reuse one shared loot pool.
+
+---
+
+## Java API
+
+Every drop file loads into server-side classes at startup: the file becomes an `ItemDropList` asset whose
+root is an `ItemDropContainer` tree mirroring the JSON `Container` structure. Plugins can look droplists up
+and roll them programmatically.
+
+### ItemDropList
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.item.config`
+
+The asset class for one drop file. Registered with asset path `Drops`, so the asset id is the **flat
+filename** documented above (e.g. `Zone1_Encounters_Tier1`), regardless of subdirectory.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getAssetMap()` (static) | `DefaultAssetMap<String, ItemDropList>` | All loaded droplists |
+| `getAssetStore()` (static) | `AssetStore<String, ItemDropList, ...>` | The backing asset store |
+| `getId()` | `String` | Droplist id (flat filename) |
+| `getContainer()` | `ItemDropContainer` | Root of the container tree (null for an empty `{}` file) |
+
+### ItemDropContainer
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.item.config.container`
+
+Abstract base class of the container tree. Each JSON `Type` value maps to a subclass in the same package:
+
+| JSON `Type` | Class |
+|-------------|-------|
+| `Multiple` | `MultipleItemDropContainer` |
+| `Choice` | `ChoiceItemDropContainer` |
+| `Single` | `SingleItemDropContainer` |
+| `Empty` | `EmptyItemDropContainer` |
+| `Droplist` | `DroplistItemDropContainer` |
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getWeight()` | `double` | The container's `Weight` value |
+| `populateDrops(List<ItemDrop>, DoubleSupplier, String)` | `void` | Roll the tree once, appending the resulting drops; the `DoubleSupplier` provides randomness and the `String` names the root droplist (guards `Droplist` references against self-recursion) |
+| `getAllDrops(List<ItemDrop>)` | `List<ItemDrop>` | Collect every drop the tree can possibly produce (no randomness) |
+
+Each rolled entry is an `ItemDrop` (same package as `ItemDropList`): `getItemId()`, `getQuantityMin()`,
+`getQuantityMax()`, `getRandomQuantity(Random)`, `getMetadata()`.
+
+### Rolling a Droplist from a Plugin
+
+The simplest entry point is `ItemModule.getRandomItemDrops(String)`, which resolves the droplist, rolls it,
+and converts the result to item stacks:
+
+```java
+import com.hypixel.hytale.server.core.modules.item.ItemModule;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+
+List<ItemStack> drops = ItemModule.get().getRandomItemDrops("Zone1_Encounters_Tier1");
+```
+
+For lower-level control, walk the tree yourself:
+
+```java
+import com.hypixel.hytale.server.core.asset.type.item.config.ItemDrop;
+import com.hypixel.hytale.server.core.asset.type.item.config.ItemDropList;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
+ItemDropList dropList = ItemDropList.getAssetMap().getAsset("Zone1_Encounters_Tier1");
+if (dropList != null && dropList.getContainer() != null) {
+    ThreadLocalRandom random = ThreadLocalRandom.current();
+    List<ItemDrop> rolled = new ArrayList<>();
+    dropList.getContainer().populateDrops(rolled, random::nextDouble, dropList.getId());
+    for (ItemDrop drop : rolled) {
+        int quantity = drop.getRandomQuantity(random);
+        // build ItemStacks, spawn item entities, etc.
+    }
+}
+```
 
 ---
 

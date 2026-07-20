@@ -63,6 +63,7 @@ com.hypixel.hytale.math
 ├── vector
 │   ├── Vector3dUtil / Vector3iUtil / Vector2dUtil   constants + helpers for the JOML types
 │   ├── Vector3fUtil / Vector4dUtil / Matrix*        (companions; see Matrix4dUtil under math.matrix)
+│   ├── VectorBoxUtil / VectorSphereUtil              filter position collections by box / sphere volume
 │   ├── Rotation3f / Rotation3fc                      rotation (pitch/yaw/roll); read-only view interface
 │   ├── Transform                                     position (Vector3d) + rotation (Rotation3f)
 │   └── Location                                      world + position + rotation
@@ -70,6 +71,10 @@ com.hypixel.hytale.math
 ├── shape.Box                                         axis-aligned bounding box (AABB)
 ├── raycast.RaycastAABB                               ray-vs-AABB intersection
 ├── util.MathUtil                                     static scalar math utilities
+├── util.FastRandom / HashUtil / TrigMathUtil         fast seedable RNG · coordinate hashing · table trig
+├── iterator.LineIterator / SpiralIterator            block-line walk · outward chunk spiral
+├── random.RandomExtra                                convenience sampling (ThreadLocalRandom)
+├── codec.Vector3iArrayCodec / IntRangeArrayCodec     [x, y, z] / [min, max] array codecs
 ├── Axis                                              X / Y / Z enum
 └── Range                                             numeric range
 
@@ -741,6 +746,78 @@ Vector3i pos = BlockUtil.unpack(key);
 
 ---
 
+## Line & Spiral Iteration
+
+**Package:** `com.hypixel.hytale.math.iterator`
+
+Two iterators for walking positions in a pattern — a straight block line in 3D, and an outward chunk spiral. Like the [block shape utilities](#block-shape-iteration), they generate coordinates only (no world dependency); pair them with [world block access](blocks.md#world-block-access) or your chunk-loading calls to act on the results.
+
+### LineIterator
+
+A 3D Bresenham line walk: visits every integer block position from `(x1, y1, z1)` to `(x2, y2, z2)`, both endpoints inclusive. Implements `java.util.Iterator<Vector3i>`; each `next()` returns a **freshly allocated** `Vector3i`, so it's safe to keep the positions you're handed.
+
+```java
+LineIterator line = new LineIterator(x1, y1, z1, x2, y2, z2);
+while (line.hasNext()) {
+    Vector3i pos = line.next();
+    // place / inspect the block at pos
+}
+```
+
+Reach for it when you need the blocks *between* two points — beam effects, drawing block lines, coarse line-of-sight sampling over block positions. (For precise ray-vs-box math use [RaycastAABB](#raycastaabb) instead.)
+
+### SpiralIterator
+
+Walks **chunk coordinates** in an outward square spiral around a center chunk — the "process the nearest chunks first" pattern (view-distance scans, pregeneration, searching outward for a target chunk).
+
+`next()` returns the chunk position packed into a `long` (the same packed chunk index `ChunkUtil` uses — unpack with `ChunkUtil.xOfChunkIndex(packed)` / `ChunkUtil.zOfChunkIndex(packed)`).
+
+```java
+SpiralIterator spiral = new SpiralIterator(centerChunkX, centerChunkZ, 8);  // out to ring 8 → (2*8+1)² chunks
+while (spiral.hasNext()) {
+    long packed = spiral.next();
+    int cx = ChunkUtil.xOfChunkIndex(packed);
+    int cz = ChunkUtil.zOfChunkIndex(packed);
+    // visit chunk (cx, cz) — nearest rings first
+}
+```
+
+- The 4-arg form `new SpiralIterator(chunkX, chunkZ, radiusFrom, radiusTo)` skips everything within ring `radiusFrom` (resume an outward scan without re-walking the middle).
+- The no-arg constructor plus `init(chunkX, chunkZ, radiusTo)` / `reset()` let one instance be reused; calling `next()` before `init` throws `IllegalStateException` (`isSetup()` to check).
+- Progress: `getIndex()` / `getMaxIndex()` (spiral cell counter) and `getCurrentRadius()` / `getCompletedRadius()` (ring counter). Radii are validated — `radiusTo` must be > 0, > `radiusFrom`, and ≤ `SpiralIterator.MAX_RADIUS`.
+
+---
+
+## VectorBoxUtil & VectorSphereUtil
+
+**Package:** `com.hypixel.hytale.math.vector`
+
+Volume-membership helpers over **collections of positions**: each `forEachVector` overload walks an `Iterable` (or fastutil `Int2ObjectMap`) and invokes your callback only for elements whose `Vector3d` position lies inside a box or sphere around an origin point. This is the cheap "who's near this point" sweep — a linear filter over a list you already have, no spatial index required.
+
+Both classes share one API shape:
+
+```java
+// Iterable<Vector3d> filtered directly
+VectorSphereUtil.forEachVector(positions, cx, cy, cz, radius, pos -> {
+    // pos is within `radius` of (cx, cy, cz)
+});
+
+// Arbitrary objects + a position extractor (Function<T, Vector3d>)
+VectorBoxUtil.forEachVector(trackedEntities, positionFn, cx, cy, cz, halfExtent, entity -> {
+    // entity's position is inside the box
+});
+
+// One-off membership checks
+boolean inSphere = VectorSphereUtil.isInside(cx, cy, cz, radius, pos);
+boolean inBox    = VectorBoxUtil.isInside(cx, cy, cz, halfExtent, pos);
+```
+
+- **Box** (`VectorBoxUtil`): the size arguments are **apothems** (half-extents) around the origin — one uniform value, three per-axis values, or six signed min/max offsets for an asymmetric box.
+- **Sphere** (`VectorSphereUtil`): one radius, or three per-axis radii (an axis-aligned ellipsoid).
+- Further overloads take a `BiConsumer` / `TriConsumer` (or `IntObjectConsumer` / `IntBiObjectConsumer` / `IntTriObjectConsumer` for the `Int2ObjectMap` forms) that thread one or two caller-supplied context objects into the callback — the same no-lambda-capture pattern as [block shape iteration](#block-shape-iteration).
+
+---
+
 ## MathUtil
 
 **Package:** `com.hypixel.hytale.math.util`
@@ -861,6 +938,55 @@ long packed = MathUtil.packLong(left, right);
 
 ---
 
+## FastRandom & RandomExtra
+
+**Packages:** `com.hypixel.hytale.math.util` (`FastRandom`) · `com.hypixel.hytale.math.random` (`RandomExtra`)
+
+### FastRandom
+
+A drop-in `java.util.Random` subclass running the same 48-bit LCG **without the thread-safety machinery** — the same numbers for the same seed as `java.util.Random`, with less overhead. Use it wherever an API wants a `java.util.Random` and you need a fast, **deterministic, seedable** stream on a single thread (reproducible generation, replayable rolls).
+
+```java
+Random random = new FastRandom(seed);   // deterministic per seed
+Random random = new FastRandom();       // randomly seeded
+random.setSeed(seed);                   // restart the stream
+int roll = random.nextInt(6);           // inherited java.util.Random methods work as usual
+```
+
+> [!WARNING]
+> Two exceptions to "drop-in": it is **not thread-safe** (unsynchronized state — keep one instance per thread), and `FastRandom.nextGaussian()` **throws `UnsupportedOperationException`**.
+
+### RandomExtra
+
+Static convenience sampling on top of `ThreadLocalRandom` — thread-safe but **not seedable** (use `FastRandom` when you need determinism). Reach for it to cut the usual random-value boilerplate:
+
+```java
+double d = RandomExtra.randomRange(0.5, 2.0);   // also float / long overloads
+int i    = RandomExtra.randomRange(1, 6);       // int range: BOTH ends inclusive
+int j    = RandomExtra.randomRange(bound);      // 0 (inclusive) .. bound (exclusive)
+double e = RandomExtra.randomRange(minMax);     // double[] / float[] / int[] as {min, max}
+boolean flip = RandomExtra.randomBoolean();
+Duration wait = RandomExtra.randomDuration(minDuration, maxDuration);
+double c = RandomExtra.randomBinomial();        // difference of two rolls: (-1, 1), biased toward 0
+
+// Collections
+T pick = RandomExtra.randomElement(list);                          // uniform pick from a List
+T drop = RandomExtra.randomWeightedElement(items, weightFn);       // ToDoubleFunction<T> weights
+T drop2 = RandomExtra.randomIntWeightedElement(items, intWeightFn);
+int idx = RandomExtra.pickWeightedIndex(weights);                  // double[] of weights
+RandomExtra.reservoirSample(source, filter, sampleCount, results); // uniform sample of a filtered List
+
+// Vectors
+RandomExtra.jitter(vec, maxRange);   // adds a random 0..maxRange to each component, in place
+```
+
+Weighted variants also accept a `Predicate` filter (`randomWeightedElementFiltered`) or a precomputed total weight so the summing pass can be skipped; they return `null` for an empty/zero-weight collection.
+
+> [!NOTE]
+> `jitter` offsets each component by `[0, maxRange)` — the jitter is **not centered** on the input position (it only ever shifts toward +X/+Y/+Z), and it mutates the vector in place.
+
+---
+
 ## RaycastAABB
 
 **Package:** `com.hypixel.hytale.math.raycast`
@@ -903,6 +1029,20 @@ float max = range.getMax();
 ```
 
 Also available: `FloatRange`, `IntRange` in `com.hypixel.hytale.math.range`
+
+---
+
+## Minor Utilities & Codecs
+
+Smaller helpers you'll mostly meet in passing:
+
+| Class | Package | What it is |
+|-------|---------|------------|
+| `HashUtil` | `math.util` | Stateless coordinate hashing: `hash(...)` / `rehash(...)` mix 1–4 `long`s into a hash; `random(...)` maps them to a deterministic `double` in `[0, 1)` and `randomInt(l1, l2, l3, bound)` to an `int`. Same inputs → same value, so it gives position/seed-keyed "randomness" with no RNG object at all. `hashUuid(uuid)` folds a `UUID` to a `long`. |
+| `TrigMathUtil` | `math.util` | Lookup-table float trig: `sin` / `cos` (with `float` and `double` overloads), `atan2`, `atan`, `asin`, plus float constants `PI`, `PI_HALF`, `PI_QUARTER`, `PI2`, `PI4`, `radToDeg`, `degToRad`. Faster but lower-precision than `java.lang.Math`. |
+| `IntRangeArrayCodec` | `math.codec` | `Codec<IntRange>` that (de)serializes an `IntRange` as a two-element `[min, max]` array (both inclusive) — for codec schemas that want the compact array form. |
+| `Vector3iArrayCodec` | `math.codec` | `Codec<Vector3i>` for the `[x, y, z]` array form. **Deprecated** — prefer `Vector3iUtil.CODEC` in new code. |
+| `PositionUtil` | `server.core.util` | Bridges math types ↔ network packet types (`com.hypixel.hytale.protocol`): `toPositionPacket` / `toVector3d`, `toDirectionPacket` / `toRotation`, `toTransformPacket` / `toTransform`, plus `assign(...)` / `equals(...)` overloads for updating and comparing packet structs without reallocating. |
 
 ---
 

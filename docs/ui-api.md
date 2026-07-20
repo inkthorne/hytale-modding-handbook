@@ -40,6 +40,8 @@ Player
 
 Positioning: Anchor, Area, Value<T>
 File browser: FileBrowserConfig ──▶ ServerFileBrowser
+Pack browser: AssetPackSaveBrowserConfig ──▶ AssetPackSaveBrowser (0.5.7+)
+Toasts: NotificationUtil (static senders)
 ```
 
 ## Key Classes
@@ -58,8 +60,13 @@ File browser: FileBrowserConfig ──▶ ServerFileBrowser
 | `HudManager` | `server.core.entity.entities.player.hud` | Controls HUD visibility and custom HUD |
 | `CustomUIHud` | `server.core.entity.entities.player.hud` | Abstract base for custom HUD overlays |
 | `HotbarManager` | `server.core.entity.entities.player` | Manages player hotbar configurations |
+| `AnchorActionModule` | `server.core.modules.anchoraction` | Routes `{"action": ...}` UI anchor events to string-keyed handlers — `get()`, then `register(String, AnchorActionHandler)` / `register(String, AnchorActionModule.WorldThreadAnchorActionHandler)` / `unregister(String)`; `tryHandle(PlayerRef, String)` dispatches |
 | `FileBrowserConfig` | `server.core.ui.browser` | Configuration for the file browser UI |
 | `ServerFileBrowser` | `server.core.ui.browser` | Server-side file browser implementation |
+| `AssetPackSaveBrowser` | `server.core.ui.browser` | Embeddable pick-or-create-asset-pack widget (0.5.7+) |
+| `AssetPackSaveBrowserConfig` | `server.core.ui.browser` | Element-id config record for the pack browser |
+| `AssetPackSaveBrowserEventData` | `server.core.ui.browser` | Codec-backed event payload for the pack browser |
+| `NotificationUtil` | `server.core.util` | Static toast-notification sender (per player, world, or universe) |
 
 ---
 
@@ -78,6 +85,8 @@ File browser: FileBrowserConfig ──▶ ServerFileBrowser
 | [CustomUIHud](#customuihud) | Custom HUD overlays |
 | [HotbarManager](#hotbarmanager) | Hotbar configuration |
 | [File Browser](#file-browser-system) | Server file browser UI |
+| [Asset Pack Save Browser](#asset-pack-save-browser) | Embeddable save-to-asset-pack picker |
+| [NotificationUtil](#notificationutil--toast-notifications) | Toast notifications |
 | [WindowCloseEvent](#windowcloseevent) | Window close handling |
 
 **Related:** [UI Overview](ui.md) | [Elements](ui-elements.md) | [Styling](ui-styling.md) | [Templates](ui-templates.md)
@@ -1482,6 +1491,175 @@ browser.buildUI(cmd, events);
 
 ---
 
+## Asset Pack Save Browser
+
+**Package:** `com.hypixel.hytale.server.core.ui.browser` · **New in 0.5.7**
+
+An embeddable "save into which asset pack?" widget: a searchable pack list (filtered to writable, on-disk packs) plus a create-new-pack form that writes a fresh pack skeleton (with `manifest.json`) into a mods directory. The engine embeds it in the trigger-volume inspector's save-preset flow (`TriggerVolumeInspectorPage`) and the builder-tools prefab pages (`PrefabSavePage`, `PrefabEditorSaveSettingsPage`, `PrefabEditorLoadSettingsPage`) — any [`InteractiveCustomUIPage`](#customuipage) can embed it the same way.
+
+Unlike [`ServerFileBrowser`](#serverfilebrowser), it does **not** append its own page markup: your page's `.ui` file must contain the browser panels (`#PackBrowserPage`, `#CreatePackPage`, and the list/search elements named by the config — see `Common/UI/Custom/Pages/PrefabSavePage.ui` for the reference markup). The browser fills the list, toggles panel visibility, and validates the create form.
+
+### AssetPackSaveBrowserConfig
+
+```java
+public record AssetPackSaveBrowserConfig(String listElementId, String searchInputId) {
+    public static AssetPackSaveBrowserConfig defaults();  // ("#PackList", "#SearchInput")
+}
+```
+
+### AssetPackSaveBrowser
+
+```java
+// Construction
+AssetPackSaveBrowser(AssetPackSaveBrowserConfig config)
+
+// Build into your page (call from build(...))
+void buildUI(UICommandBuilder cmd, UIEventBuilder evt)          // search input + pack list
+void buildPackList(UICommandBuilder cmd, UIEventBuilder evt)    // just the list rows
+void buildEventBindings(UIEventBuilder evt, String browseButtonSelector) // wire all browser buttons
+
+// Event handling (call from handleDataEvent(...))
+AssetPackSaveBrowser.ActionResult handleAction(String actionName,
+    AssetPackSaveBrowserEventData data, String selectedPackLabelSelector)
+boolean handleEvent(AssetPackSaveBrowserEventData data)         // search/select/filter only
+
+// Selection
+AssetPack getSelectedPack()
+boolean hasSelectedPack()
+String getSelectedPackDisplayName()
+void setSelectedPackKey(String key)     // ignored for immutable / not-on-disk packs
+
+// Create-pack form
+AssetPackSaveBrowser.CreatePackResult createPack(AssetPackSaveBrowserEventData data)
+boolean checkDuplicatePack(String group, String name)
+void buildCreateFormValidation(UICommandBuilder cmd, String createName, String createGroup)
+```
+
+`handleAction` is the one entry point you need: pass it every incoming action name. It returns `null` when the action isn't one of the browser's — fall through to your own handling — and otherwise an `ActionResult` record:
+
+```java
+public record ActionResult(UICommandBuilder commandBuilder,   // send via sendUpdate(...)
+                           UIEventBuilder eventBuilder,       // may be null
+                           String errorKey,                   // translation key, or null
+                           boolean packConfirmed) {}          // true on ConfirmPackBrowser with a selection
+```
+
+The action names it consumes are exposed as constants: `ACTION_OPEN_PACK_BROWSER` (`"OpenPackBrowser"`), `ACTION_CONFIRM_PACK_BROWSER`, `ACTION_CANCEL_PACK_BROWSER`, `ACTION_OPEN_CREATE_PACK`, `ACTION_CREATE_PACK`, `ACTION_CANCEL_CREATE_PACK`, `ACTION_PACK_SEARCH`, `ACTION_PACK_SELECT`. `buildEventBindings(evt, "#MySaveButton")` binds your "browse" button to `OpenPackBrowser` and wires every `#PackBrowserPage` / `#CreatePackPage` control.
+
+`CreatePackResult` is `record CreatePackResult(boolean success, String errorKey)`; on success the new pack is registered and pre-selected. `AssetPackSaveBrowser.ModsDirectory` (`record ModsDirectory(String langKey, String filterLangKey, Path path)`) models the create-form's target-directory choices.
+
+### AssetPackSaveBrowserEventData
+
+The codec-backed payload carrying the browser's form values. Embed one in your page's data class and forward the same keys in your page-data `CODEC` (the field constants are the wire keys):
+
+```java
+public class AssetPackSaveBrowserEventData {
+    public static final BuilderCodec<AssetPackSaveBrowserEventData> CODEC;
+    public String pack;             // KEY_PACK              = "Pack"
+    public String search;           // KEY_SEARCH            = "@PackSearch"
+    public String createName;       // KEY_CREATE_NAME       = "@CreateName"
+    public String createGroup;      // KEY_CREATE_GROUP      = "@CreateGroup"
+    public String createDescription;// KEY_CREATE_DESCRIPTION= "@CreateDescription"
+    public String createVersion;    // KEY_CREATE_VERSION    = "@CreateVersion"
+    public String createWebsite;    // KEY_CREATE_WEBSITE    = "@CreateWebsite"
+    public String createAuthorName; // KEY_CREATE_AUTHOR_NAME= "@CreateAuthorName"
+    public String validateCreate;   // KEY_VALIDATE_CREATE   = "ValidateCreate"
+    public String createTargetDir;  // KEY_CREATE_TARGET_DIR = "@CreateTargetDir"
+    public String directoryFilter;  // KEY_DIRECTORY_FILTER  = "@DirectoryFilter"
+    // plus a getter for each field (getPack(), getSearch(), ...)
+}
+```
+
+### Embedding pattern
+
+This mirrors `TriggerVolumeInspectorPage` (the 0.5.7 trigger-volume preset-save flow):
+
+```java
+public class MyEditorPage extends InteractiveCustomUIPage<MyEditorPage.PageData> {
+    private final AssetPackSaveBrowser packBrowser =
+        new AssetPackSaveBrowser(AssetPackSaveBrowserConfig.defaults());
+
+    @Override
+    public void build(Ref<EntityStore> ref, UICommandBuilder cmd,
+                      UIEventBuilder evt, Store<EntityStore> store) {
+        cmd.append("Pages/MyEditorPage.ui");   // must contain #PackBrowserPage / #CreatePackPage
+        packBrowser.buildEventBindings(evt, "#ChoosePackButton");
+        packBrowser.buildUI(cmd, evt);
+    }
+
+    @Override
+    public void handleDataEvent(Ref<EntityStore> ref, Store<EntityStore> store, PageData data) {
+        // Give the browser first refusal on every event
+        AssetPackSaveBrowser.ActionResult result = packBrowser.handleAction(
+            data.action != null ? data.action.name() : null,
+            data.packBrowserData, "#SelectedPackLabel");
+        if (result != null) {
+            if (result.errorKey() != null) {
+                playerRef.sendMessage(Message.translation(result.errorKey()));
+            }
+            sendUpdate(result.commandBuilder(), result.eventBuilder(), false);
+            if (result.packConfirmed()) {
+                AssetPack target = packBrowser.getSelectedPack();
+                // write your asset into target's directory
+            }
+            return;
+        }
+        // ... your own actions
+    }
+}
+```
+
+---
+
+## NotificationUtil — toast notifications
+
+**Package:** `com.hypixel.hytale.server.core.util`
+
+Static senders for the client's **toast notifications** (the pop-ups used for crafting errors, objective completions, asset reloads, …). Every method is static; overloads compose a primary `Message` (or plain `String`), an optional secondary `Message`, an optional icon **or** item, and a `NotificationStyle`.
+
+`NotificationStyle` (`com.hypixel.hytale.protocol.packets.interface_.NotificationStyle`): `Default`, `Danger`, `Warning`, `Success`.
+
+| Method | Audience |
+|--------|----------|
+| `sendNotification(PacketHandler, ...)` | One player |
+| `sendNotificationToWorld(Message, Message, String, ItemWithAllMetadata, NotificationStyle, Store<EntityStore>)` | Every player in the store's world |
+| `sendNotificationToUniverse(...)` | Every player on the server (scheduled onto each world's thread) |
+
+The main per-player overloads (the universe forms mirror them, minus the `PacketHandler`):
+
+```java
+public static void sendNotification(PacketHandler ph, String message);
+public static void sendNotification(PacketHandler ph, String message, NotificationStyle style);
+public static void sendNotification(PacketHandler ph, Message message);
+public static void sendNotification(PacketHandler ph, Message message, NotificationStyle style);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, NotificationStyle style);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, String icon);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, String icon, NotificationStyle style);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item);
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item, NotificationStyle style);
+```
+
+`icon` is a `Common/`-relative texture path (the engine uses e.g. `Icons/AssetNotifications/IconCheckmark.png`); passing an `ItemWithAllMetadata` (`itemStack.toPacket()`) shows the item's icon instead.
+
+```java
+import com.hypixel.hytale.server.core.util.NotificationUtil;
+import com.hypixel.hytale.protocol.packets.interface_.NotificationStyle;
+
+// One player, styled — this is how crafting reports a missing ingredient
+NotificationUtil.sendNotification(playerRef.getPacketHandler(),
+    Message.translation("my_plugin.quest.complete"),
+    NotificationStyle.Success);
+
+// Everyone on the server
+NotificationUtil.sendNotificationToUniverse("Server restarting in 5 minutes",
+    NotificationStyle.Warning);
+```
+
+Unlike most UI operations, `sendNotificationToUniverse` is safe to call from any thread — it hops onto each world's thread internally (`world.execute`). The per-player and per-world forms write directly and follow the usual [threading rules](#obtaining-ecs-context-for-ui-operations).
+
+---
+
 ## WindowCloseEvent
 **Class:** `com.hypixel.hytale.server.core.entity.entities.player.windows.Window.WindowCloseEvent`
 
@@ -1596,7 +1774,7 @@ Backtick-quoted error strings below are literal messages thrown by the UI system
 - **Symptom:** a second `addCustomHud()` call makes your first custom HUD disappear → both HUDs were constructed with the **same key**, and `HudManager` keys its `Map<String, CustomUIHud>` so a duplicate key replaces the previous HUD. Fix: give each HUD a distinct key (multiple keyed HUDs can coexist), and remove one with `removeCustomHud(playerRef, key)` (see [Multiple HUDs](#multiple-huds)).
 - **Symptom:** a `CustomUIHud` ignores `addEventBinding`/click handling → `CustomUIHud.build()` receives only `UICommandBuilder`, never `UIEventBuilder`; HUDs cannot handle events. Fix: use a [`CustomUIPage`](#customuipage) for interactive UI (see [Event Handling](#event-handling)).
 - **Symptom:** a `CustomUIHud` appears but the player gets a mouse cursor and can no longer mouse-look → any hit-testable element (a `Group` with a `Background`, `Label`s, etc.) grabs the pointer. A HUD has no event handling, so it should never be a hit-test target. Fix: set **`HitTestVisible: false`** on the root element *and its children* in the `.ui` (the engine's own `Common/UI/Custom/Pages/EntitySpawnPage.ui` does this).
-- **`failed to apply customui hud commands`** (client then disconnects) → you passed a `Message` to `UICommandBuilder.set(selector, value)` in a **HUD** (`build()`/`update()`). The `set(String, Message)` overload is fine for *pages* but not for the HUD layer. Fix: resolve text to a plain `String` before `set(...)`; for a translation key, resolve it server-side ([i18n](i18n.md#resolving-a-key-to-text-server-side)) — you can't defer localization to the client in a HUD label.
+- **Symptom:** the client logs `failed to apply customui hud commands` and then disconnects (a **client-side** message — it is not in the server jar) → you passed a `Message` to `UICommandBuilder.set(selector, value)` in a **HUD** (`build()`/`update()`). The `set(String, Message)` overload is fine for *pages* but not for the HUD layer. Fix: resolve text to a plain `String` before `set(...)`; for a translation key, resolve it server-side ([i18n](i18n.md#resolving-a-key-to-text-server-side)) — you can't defer localization to the client in a HUD label.
 - **Symptom:** `IllegalStateException: Assert not in thread!` (`ForkJoinPool.commonPool-worker-N`) when attaching a HUD or reading the store → you ran `addCustomHud(...)`/store access off the world thread, typically from a global event consumer. Fix: attach from an ECS system tick, a command, or `world.execute(Runnable)` (see [Obtaining ECS Context](#obtaining-ecs-context-for-ui-operations)).
 - **Symptom:** a UUID-keyed HUD doesn't reappear after a player reconnects → the stored HUD is bound to the player's old `PlayerRef`. Fix: prune on `PlayerDisconnectEvent`, or rebuild when the stored HUD's `getPlayerRef()` differs from the current one (see [Managing HUD State Across Players](#managing-hud-state-across-players)).
 

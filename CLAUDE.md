@@ -78,7 +78,14 @@ Like the assets cache, the script **wipes the cache first** so classes removed/r
 
 The `docs/` were fact-checked against game **0.5.7** (Update 5 patch; build-20) — `HytaleServer.jar`'s `Implementation-Version` is `0.5.7` (API docs via `javap` on the jar; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them. (0.5.7 was the first Update-5 patch with real Common-asset drift: 36 assets changed content vs build-17 — door blockyanims, a few decorative-set models/textures, localization files, and `TriggerVolumeInspectorPage.ui` — none added or removed; both changed formats still match the format docs. The API delta was likewise small — a `HitboxCollision`/`Repulsion` config index→id migration, `computeSpawnTransform` going async, the trigger-volume inspector's asset-pack browser, and `ItemStack.cleanCopy()` — and only `cleanCopy()` touched the documented surface (now in `docs/inventory.md`); the full API surface re-passes `verify-docs.sh` against the 0.5.7 jar with all hard gates green.) (Update 5 migrated the math library to JOML — vectors are now `org.joml.*` with Hytale `Vector*Util` companions and `Rotation3f`; see `docs/math.md`.)
 
-Run the regression checker after any game update (or before trusting/extending a doc):
+**After a game update, start with the one-command wrapper** — it does the whole mechanical half of an update pass (snapshots the previous javap index for a jar→docs new-API diff, rebuilds both caches wipe-first, reports asset drift vs the baseline and per-class API drift, greps docs/examples for mentions of everything that changed, then runs the checker) and ends by printing the judgment checklist it deliberately does *not* automate (re-verifying flagged docs, documenting new API, stamp bumps, baseline refresh, commit):
+
+```bash
+./maintenance/scripts/update-build.sh              # full run; reports land in ~/.cache/hytale-update-report
+./maintenance/scripts/update-build.sh --skip-caches   # reuse existing caches (re-triage after the first pass)
+```
+
+Run the regression checker alone after doc edits (or before trusting/extending a doc):
 
 ```bash
 ./maintenance/scripts/verify-docs.sh          # full run (hard gates + advisories)

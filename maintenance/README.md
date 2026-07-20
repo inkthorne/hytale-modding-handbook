@@ -6,9 +6,13 @@ plugin development, you can ignore this directory.
 
 ## Contents
 
-- **[scripts/](./scripts/)** — `verify-docs.sh`, the regression checker that
-  validates `docs/` and `examples/` against the installed Hytale build (run it
-  after a game update). See [CLAUDE.md](../CLAUDE.md#verifying-documentation).
+- **[scripts/](./scripts/)** — `update-build.sh`, the one-command mechanical
+  half of a game-update pass (snapshots the old API index, rebuilds both caches,
+  reports asset + API drift with triage greps, runs the checker, prints the
+  remaining judgment checklist); `verify-docs.sh`, the regression checker that
+  validates `docs/` and `examples/` against the installed Hytale build; and
+  `build-jar-cache.sh`, which builds the greppable jar cache. See
+  [CLAUDE.md](../CLAUDE.md#verifying-documentation).
 - **[baseline/](./baseline/)** — a snapshot of the game build the docs were
   fact-checked against, used to detect which assets changed after an update. See
   [baseline/README.md](./baseline/README.md).

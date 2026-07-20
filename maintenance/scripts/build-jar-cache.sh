@@ -4,7 +4,7 @@
 # so API exploration is a `grep`, not dozens of per-class `javap` JVM launches.
 #
 # Produces (outside the repo, never committed — mirrors the assets cache):
-#   ~/.cache/hytale-jar/javap-index.txt   signatures of every com.hypixel.* class
+#   ~/.cache/hytale-jar/javap-index.txt   signatures + constant values of every com.hypixel.* class
 #   ~/.cache/hytale-jar/src/              decompiled .java for com.hypixel.hytale.*
 #
 # The decompiler tool itself is cached separately (it survives a cache wipe):
@@ -77,7 +77,7 @@ note "classes to index: $COUNT"
 # interleave lines into the index.
 split -l 400 "$WORK/classes.txt" "$WORK/batch."
 ls "$WORK"/batch.* | xargs -P "$(nproc 2>/dev/null || echo 4)" -I{} \
-  sh -c 'javap -p -cp "$1" $(cat "$2") > "$2.sig" 2>/dev/null' _ "$JAR" {}
+  sh -c 'javap -p -constants -cp "$1" $(cat "$2") > "$2.sig" 2>/dev/null' _ "$JAR" {}
 cat "$WORK"/batch.*.sig > "$INDEX"
 INDEXED="$(grep -cE '^(Compiled from|(public |final |abstract |private |protected |static |sealed |non-sealed )*(class|interface|enum|record) )' "$INDEX" 2>/dev/null || echo '?')"
 note "index written: $INDEX ($(du -h "$INDEX" | cut -f1), ~$INDEXED type decls)"

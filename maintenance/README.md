@@ -10,8 +10,10 @@ plugin development, you can ignore this directory.
   half of a game-update pass (snapshots the old API index, rebuilds both caches,
   reports asset + API drift with triage greps, runs the checker, prints the
   remaining judgment checklist); `verify-docs.sh`, the regression checker that
-  validates `docs/` and `examples/` against the installed Hytale build; and
-  `build-jar-cache.sh`, which builds the greppable jar cache. See
+  validates `docs/` and `examples/` against the installed Hytale build;
+  `build-jar-cache.sh`, which builds the greppable jar cache; and
+  `hash-server-assets.sh`, which generates the `Server/`+`Cosmetics/` hash
+  index (Hytale ships one for `Common/` only). See
   [CLAUDE.md](../CLAUDE.md#verifying-documentation).
 - **[baseline/](./baseline/)** — a snapshot of the game build the docs were
   fact-checked against, used to detect which assets changed after an update. See

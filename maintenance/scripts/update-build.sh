@@ -130,6 +130,33 @@ else
   warn "baseline or extracted index missing — asset drift skipped"
 fi
 
+section "Server/Cosmetics asset drift vs baseline (generated index)"
+if [ -f "$REPO/maintenance/baseline/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; then
+  "$REPO/maintenance/scripts/hash-server-assets.sh" "$ASSETS" > "$REPORT/ServerAssetsIndex.hashes"
+  diff "$REPO/maintenance/baseline/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
+    > "$REPORT/server-drift.diff"
+  grep '^<' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-old-paths.txt"
+  grep '^>' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-new-paths.txt"
+  comm -12 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-modified.txt"
+  comm -23 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-removed.txt"
+  comm -13 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-added.txt"
+  N_MOD=$(wc -l < "$REPORT/server-modified.txt")
+  N_DEL=$(wc -l < "$REPORT/server-removed.txt")
+  N_ADD=$(wc -l < "$REPORT/server-added.txt")
+  if [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+    info "no Server/Cosmetics drift — content identical to the baseline"
+  else
+    warn "$N_MOD modified, $N_ADD added, $N_DEL removed (server-{modified,added,removed}.txt)"
+    head -40 "$REPORT/server-modified.txt" | sed 's/^/        M /'
+    head -40 "$REPORT/server-added.txt"    | sed 's/^/        A /'
+    head -40 "$REPORT/server-removed.txt"  | sed 's/^/        D /'
+    TOTAL=$((N_MOD + N_ADD + N_DEL))
+    [ "$TOTAL" -gt 120 ] && info "(lists truncated at 40 lines each — full lists in the report dir)"
+  fi
+else
+  warn "ServerAssetsIndex baseline or extracted Server/ missing — Server drift skipped"
+fi
+
 # ---- 5. API drift old→new ----
 section "API drift (javap index old → new)"
 if [ -f "$REPORT/javap-index-old.txt" ] && [ -f "$JAR_CACHE/javap-index.txt" ]; then
@@ -171,13 +198,13 @@ fi
 # ---- 6. triage greps: what do the docs/examples say about the changed things ----
 section "Triage: docs/examples referencing the drift"
 TOUCHED=0
-if [ -s "$REPORT/assets-modified.txt" ] || [ -s "$REPORT/assets-removed.txt" ]; then
-  while IFS= read -r p; do
-    base="$(basename "$p")"
-    hits="$(grep -rl -F "$base" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
-    [ -n "$hits" ] && { printf '        asset %s → %s\n' "$p" "$hits"; TOUCHED=1; }
-  done < <(cat "$REPORT/assets-modified.txt" "$REPORT/assets-removed.txt")
-fi
+while IFS= read -r p; do
+  [ -n "$p" ] || continue
+  base="$(basename "$p")"
+  hits="$(grep -rl -F "$base" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
+  [ -n "$hits" ] && { printf '        asset %s → %s\n' "$p" "$hits"; TOUCHED=1; }
+done < <(cat "$REPORT/assets-modified.txt" "$REPORT/assets-removed.txt" \
+             "$REPORT/server-modified.txt" "$REPORT/server-removed.txt" 2>/dev/null)
 if [ -s "$REPORT/api-changed-classes.txt" ]; then
   while IFS= read -r cls; do
     simple="${cls##*.}"; simple="${simple##*$}"
@@ -202,8 +229,9 @@ cat <<EOF
   3. Bump the doc stamps once everything is re-verified:
        sed -i 's/${OLD_VER:-<old>}/${NEW_VER:-<new>}/g' docs/*.md
      …then rewrite the verification paragraph in CLAUDE.md by hand.
-  4. Refresh the baseline (only after the docs are re-verified):
+  4. Refresh both baselines (only after the docs are re-verified):
        cp $ASSETS/CommonAssetsIndex.hashes maintenance/baseline/
+       maintenance/scripts/hash-server-assets.sh > maintenance/baseline/ServerAssetsIndex.hashes
      …and update maintenance/baseline/README.md's table (build, date,
      Assets.zip mtime/size, entry count, sha256).
   5. Re-run maintenance/scripts/verify-docs.sh — hard gates green, drift 0.

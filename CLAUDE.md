@@ -67,7 +67,7 @@ Then read assets directly from `~/.cache/hytale-assets/` (`Common/` holds blocky
 ```
 
 It produces:
-- `~/.cache/hytale-jar/javap-index.txt` — `javap -p` signatures of **every** `com.hypixel.*` class, concatenated. Grep this instead of running `javap` per symbol: `grep -n 'registerCoreComponentType' ~/.cache/hytale-jar/javap-index.txt`.
+- `~/.cache/hytale-jar/javap-index.txt` — `javap -p -constants` signatures of **every** `com.hypixel.*` class, concatenated (compile-time constant fields include their `= value`, so a changed documented constant shows up in the update diff). Grep this instead of running `javap` per symbol: `grep -n 'registerCoreComponentType' ~/.cache/hytale-jar/javap-index.txt`.
 - `~/.cache/hytale-jar/src/` — decompiled `.java` for `com.hypixel.hytale.*`, for reading actual method bodies (e.g. *does* `BuilderSensorFlockLeader.readConfig` call `readCommonConfig`?). Grep/Read it like any source tree.
 
 The decompiler is resolved automatically: a `DECOMPILER_JAR` you point at, a `vineflower`/`cfr` on `PATH`, a previously-cached `~/.cache/hytale-jar-tools/cfr.jar`, or a one-time CFR download from Maven Central. If none is available the script still writes the signature index and skips `src/` with a note.
@@ -92,7 +92,7 @@ Run the regression checker alone after doc edits (or before trusting/extending a
 ./maintenance/scripts/verify-docs.sh --no-build   # skip example compilation (faster)
 ```
 
-It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all intra-doc anchor links resolve; and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs `maintenance/baseline/CommonAssetsIndex.hashes`** (which Common assets changed since the baseline build — re-verify docs referencing those). See `maintenance/baseline/README.md` for the drift workflow; refresh the baseline after re-verifying against a new build.
+It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all intra-doc anchor links resolve; and all example projects compile. **Advisory/INFO**: referenced asset paths exist, and **asset drift vs the two baselines** — `maintenance/baseline/CommonAssetsIndex.hashes` (Hytale's own Common index) and `maintenance/baseline/ServerAssetsIndex.hashes` (our generated index of `Server/`+`Cosmetics/`, where the JSON data configs live — regenerate via `maintenance/scripts/hash-server-assets.sh`); changed assets mean re-verifying the docs that reference them. See `maintenance/baseline/README.md` for the drift workflow; refresh both baselines after re-verifying against a new build.
 
 ## Architecture
 

@@ -7,7 +7,7 @@ seo:
 
 # InteractionContext
 
-**Doc type:** Java API · **Verified against 0.5.4**
+**Doc type:** Java API · **Verified against 0.5.7**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) and [Operation System](interactions-operations.md) first.
 >

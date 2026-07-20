@@ -7,7 +7,7 @@ seo:
 
 # Fluids API
 
-**Doc type:** Java API · **Verified against 0.5.4**
+**Doc type:** Java API · **Verified against 0.5.7**
 
 Covers the `Fluid` asset type (water, lava, etc.) and how fluid data is surfaced through collision queries.
 

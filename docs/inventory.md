@@ -7,7 +7,7 @@ seo:
 
 # Inventory API
 
-**Doc type:** Java API · **Verified against 0.5.4**
+**Doc type:** Java API · **Verified against 0.5.7**
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 
@@ -334,6 +334,9 @@ ItemStack withMetadata(BsonDocument metadata)
 <T> ItemStack withMetadata(KeyedCodec<T> codec, T value)
 <T> ItemStack withMetadata(String key, Codec<T> codec, T value)
 ItemStack withMetadata(String key, BsonValue value)
+
+// Copying (new in 0.5.7)
+ItemStack cleanCopy()   // copy of id/quantity/durability/metadata; resets the OverrideDroppedItemAnimation flag
 ```
 
 ### Metadata Access

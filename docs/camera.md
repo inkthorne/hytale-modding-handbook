@@ -7,7 +7,7 @@ seo:
 
 # Camera Control
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.5.4**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.5.7**
 
 The server can take control of a player's camera — pulling it back into a zoomed-out
 **top-down** or **side-scroller** view, repositioning it, locking its orientation, and
@@ -314,7 +314,7 @@ A `Camera`-type interaction inside an item's `Interactions` chain can switch the
 first- and third-person **perspective**. It **cannot** zoom or reposition — that is the
 [packet path](#the-setservercamera-packet) only.
 
-Real shipped example — `Server/Item/Items/_Debug/Test_Camera_Item.json` (the only asset in 0.5.4
+Real shipped example — `Server/Item/Items/_Debug/Test_Camera_Item.json` (the only asset in 0.5.7
 that uses this interaction type, and it only exercises `ForcePerspective`):
 
 ```json
@@ -368,7 +368,7 @@ Each keyframe (`InteractionCamera`):
 | `Rotation` | `Direction` | `[0,0,0]` | **In degrees** — the codec multiplies each component by π/180 on load (yaw/pitch/roll). Non-null |
 
 > **No shipped asset uses these `FirstPerson`/`ThirdPerson` keyframe arrays on an interaction**
-> in 0.5.4 (the `"Camera"` blocks you'll find in `Server/Models/**` are a *different*, model-camera
+> in 0.5.7 (the `"Camera"` blocks you'll find in `Server/Models/**` are a *different*, model-camera
 > schema with `PositionOffset` / `Yaw` / `Pitch`). The schema above is verified from the codec, but
 > has no in-game example to copy.
 

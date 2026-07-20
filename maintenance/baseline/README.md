@@ -10,11 +10,11 @@ game update to see exactly which assets changed before re-checking docs.
 
 | Field | Value |
 |-------|-------|
-| Build | `0.5.4` (Update 5 patch; `Implementation-Version` = `0.5.4`, from `install/release/package/sig/build-17/`) |
-| Captured | 2026-06-10 (build-17); prior baselines build-16 (0.5.3), build-15 (0.5.2), build-14 (0.5.1) and build-13 (0.5.0) |
-| `Assets.zip` mtime | 2026-06-10 00:43 (build-17; was 2026-05-30 11:48 on build-16) |
-| `Assets.zip` size | 3,428,514,410 bytes (~3.4 GB; build-16 was 3,428,506,917 — Server-side delta only) |
-| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79` — Common assets content **unchanged** since build-15 (set-identical); the line ordering reverted to build-15's exact layout, so the raw sha matches build-15 and differs from build-16's `de2366d85f4ffc97b475788992d1dc798d94f649e4e020a1372394ce5b318563` |
+| Build | `0.5.7` (Update 5 patch; `Implementation-Version` = `0.5.7`, from `install/release/package/sig/build-20/`) |
+| Captured | 2026-07-19 (build-20); prior baselines build-17 (0.5.4), build-16 (0.5.3), build-15 (0.5.2), build-14 (0.5.1) and build-13 (0.5.0) |
+| `Assets.zip` mtime | 2026-07-19 18:17 (build-20; was 2026-06-10 00:43 on build-17) |
+| `Assets.zip` size | 3,428,472,949 bytes (~3.4 GB; build-17 was 3,428,514,410) |
+| `CommonAssetsIndex.hashes` | 24,914 entries; sha256 `0626935000b2399ba35ccf53d92dabb42f0857682a2abcc4f234f16af050c94d` — first real Common drift since build-15: **36 assets changed content** vs build-17 (door blockyanims, decorative-set models/textures, localization files, `UI/Custom/Pages/TriggerVolume/TriggerVolumeInspectorPage.ui`), none added or removed; docs re-verified against the changed files 2026-07-19 (build-17 sha was `fd7f4c907dd2d370ad38a056404d0f6cedeeff94e38b7f47169c3fa0fa275a79`) |
 
 `CommonAssetsIndex.hashes` is Hytale's own per-asset SHA-256 index (paths are
 relative to `Common/`), copied verbatim from the extracted assets. It is the

@@ -7,7 +7,7 @@ seo:
 
 # Block Model Format (.blockymodel)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.5.4**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.5.7**
 
 This document describes the `.blockymodel` file format used for defining 3D geometry in Hytale.
 

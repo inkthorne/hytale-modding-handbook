@@ -85,6 +85,8 @@ The `docs/` were fact-checked against game **0.5.7** (Update 5 patch; build-20) 
 ./maintenance/scripts/update-build.sh --skip-caches   # reuse existing caches (re-triage after the first pass)
 ```
 
+(Updates are detected automatically: `maintenance/scripts/check-for-update.sh` compares the installed jar version to the docs stamp — a weekly systemd user timer on the maintainer's machine runs it and raises a desktop notification plus `~/.cache/hytale-update-pending` when they diverge.)
+
 Run the regression checker alone after doc edits (or before trusting/extending a doc):
 
 ```bash

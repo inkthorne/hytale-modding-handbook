@@ -599,6 +599,35 @@ protected void setup() {
 ```
 
 ## Usage Example
+
+A minimal plugin registering one command (see [Commands](commands.md) for the command API):
+
+```java
+package com.example.myplugin;
+
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.command.system.CommandContext;
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+
+public class MyCommand extends AbstractPlayerCommand {
+
+    public MyCommand() {
+        super("mycommand", "Says hello");
+    }
+
+    @Override
+    protected void execute(CommandContext ctx, Store<EntityStore> store,
+                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
+        playerRef.sendMessage(Message.raw("Hello from MyPlugin!"));
+    }
+}
+```
+
 ```java
 package com.example.myplugin;
 

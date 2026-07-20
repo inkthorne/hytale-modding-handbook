@@ -16,7 +16,7 @@ The assets system loads, registers, and looks up data-driven game content (items
 Implemented in `com.hypixel.hytale.server.core.asset` (with the registry in `...plugin.registry` and the map types in `com.hypixel.hytale.assetstore`) and provides:
 - A central asset store (`HytaleAssetStore`) and per-type `AssetMap` lookups
 - A plugin-facing `AssetRegistry` for registering custom asset stores during `setup()`
-- JSON-backed asset definitions via `JsonAsset<K>` and `BuilderCodec`
+- JSON-backed asset definitions via `JsonAssetWithMap<K, M>` and `AssetBuilderCodec`
 - Built-in asset type configs (item, blocktype, model, particle, gameplay)
 - Prefab storage (`PrefabStore`) for entity prefabs
 - Asset lifecycle events (pack register/unregister, load, file monitoring)
@@ -29,7 +29,7 @@ AssetRegistry (plugin entry: getAssetRegistry())
 │       └── AssetMap<K, T>
 │           ├── DefaultAssetMap (recommended)
 │           └── IndexedLookupTableAssetMap (indexed lookups)
-├── JsonAsset<K> (BuilderCodec-serialized definitions)
+├── JsonAssetWithMap<K, M> (AssetBuilderCodec-serialized definitions)
 ├── Built-in asset types (item / blocktype / model / particle / gameplay)
 ├── PrefabStore (entity prefabs)
 └── Asset Events (AssetPackRegister/Unregister, LoadAsset, monitor events)
@@ -45,7 +45,10 @@ AssetRegistry (plugin entry: getAssetRegistry())
 | `AssetMap<K, T>` | `assetstore` | Lookup map for loaded assets (`getAsset(key)`) |
 | `DefaultAssetMap<K, T>` | `assetstore.map` | Standard HashMap-backed map (recommended) |
 | `IndexedLookupTableAssetMap<K, T>` | `assetstore.map` | Array-backed map for integer-indexed lookups |
-| `JsonAsset<K>` | `assetstore` | Interface for JSON-loaded assets; exposes `getId()` |
+| `JsonAsset<K>` | `assetstore` | Base interface for JSON-loaded assets; exposes `getId()` |
+| `JsonAssetWithMap<K, M>` | `assetstore.map` | `JsonAsset` subinterface tying an asset type to its `AssetMap` — store-loaded assets implement this |
+| `AssetBuilderCodec<K, T>` | `assetstore.codec` | `BuilderCodec` subclass for assets — binds the id and loader bookkeeping on top of the payload fields |
+| `AssetRegistry` (static) | `assetstore` | Static store lookup (`getAssetStore(Class)`); a *different class* from the plugin-facing registry above, same name |
 | `PrefabStore` | `server.core.prefab` | Stores and manages entity prefabs |
 | `Model` | `server.core.asset.type.model.config` | 3D model configuration for entities, items, projectiles |
 | `AssetPackRegisterEvent` | `server.core.asset` | Fired when an asset pack is registered |
@@ -243,22 +246,26 @@ String idleAnim = model.getFirstBoundAnimationId("idle", "default");
 
 Assets in Hytale typically follow a JSON-based pattern with codec serialization. For a complete implementation guide, see [Creating Custom Asset Types](#creating-custom-asset-types).
 
-A `JsonAsset<K>` exposes its key via `getId()`. The codec is a `BuilderCodec` built with the
-`BuilderCodec.builder(...)` factory: it needs a no-arg constructor (the blank-instance supplier)
-and a setter/getter pair for each field. See [Codecs API - BuilderCodec](codecs.md#buildercodec--codecs-for-objects).
+An asset that lives in an asset store implements `JsonAssetWithMap<K, M>` — a `JsonAsset<K>`
+subinterface that names the `AssetMap` type storing it — and exposes its key via `getId()`. Its
+codec is an **`AssetBuilderCodec<K, T>`**: a `BuilderCodec` subclass whose `builder(...)` factory
+additionally binds the asset id and a slot for the loader's `AssetExtraInfo.Data` bookkeeping.
+Payload fields are then appended exactly like any other `BuilderCodec` — `.append(...).add()`
+per field, plus a no-arg constructor for the blank instance
+(see [Codecs API - BuilderCodec](codecs.md#buildercodec--codecs-for-objects)):
 
 ```java
-public class MyAsset implements JsonAsset<String> {
-    private String id;
+public class MyAsset implements JsonAssetWithMap<String, DefaultAssetMap<String, MyAsset>> {
+    private String id;                 // set by the loader (filename without extension)
+    private AssetExtraInfo.Data data;  // loader bookkeeping — the codec needs somewhere to put it
     private String name;
     private int value;
 
-    // Codec for serialization — built field-by-field with BuilderCodec
-    public static final BuilderCodec<MyAsset> CODEC =
-        BuilderCodec.builder(MyAsset.class, MyAsset::new)
-            .append(new KeyedCodec<>("Id", Codec.STRING),
-                    MyAsset::setId, MyAsset::getId)
-            .add()
+    public static final AssetBuilderCodec<String, MyAsset> CODEC =
+        AssetBuilderCodec.builder(MyAsset.class, MyAsset::new,
+                Codec.STRING,                        // key codec
+                (a, id) -> a.id = id, a -> a.id,     // id setter / getter
+                (a, d) -> a.data = d, a -> a.data)   // AssetExtraInfo.Data setter / getter
             .append(new KeyedCodec<>("Name", Codec.STRING),
                     MyAsset::setName, MyAsset::getName)
             .add()
@@ -276,7 +283,6 @@ public class MyAsset implements JsonAsset<String> {
         return id;
     }
 
-    public void setId(String id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public int getValue() { return value; }
@@ -284,19 +290,34 @@ public class MyAsset implements JsonAsset<String> {
 }
 ```
 
+The seven-argument `builder(...)` signature is genuinely clunky: you must hand it an id
+setter/getter pair and an `AssetExtraInfo.Data` setter/getter pair even though your own code never
+touches either field — only the loader does, during decode. Every built-in asset class
+(`TriggerEffectAsset`, `ReputationRank`, …) carries these same two fields; copy the shape.
+
 ---
 
 ## Asset Store Pattern
 
-Create a custom asset store:
+You do **not** subclass `AssetStore` — its only public constructor takes a `Builder`, and no
+built-in plugin defines a store subclass. Instead, build a `HytaleAssetStore`
+(`com.hypixel.hytale.server.core.asset.HytaleAssetStore`) with its static builder and register it
+during `setup()`:
 
 ```java
-public class MyAssetStore extends AssetStore<String, MyAsset, DefaultAssetMap<String, MyAsset>> {
-    public MyAssetStore() {
-        super(MyAsset.class, DefaultAssetMap.class, MyAsset.CODEC);
-    }
-}
+getAssetRegistry().register(
+    HytaleAssetStore.builder(MyAsset.class, new DefaultAssetMap<>())
+        .setPath("MyAssets")             // loads Server/MyAssets/*.json
+        .setCodec(MyAsset.CODEC)         // the AssetBuilderCodec
+        .setKeyFunction(MyAsset::getId)
+        .build());
 ```
+
+The two-argument `builder(Class<T>, M)` overload is for `String`-keyed assets (the normal case); a
+three-argument overload `builder(Class<K>, Class<T>, M)` exists for other key types. Beyond the
+required `setPath` / `setCodec` / `setKeyFunction`, the builder offers `setExtension(String)`,
+`loadsAfter(Class...)` / `loadsBefore(Class...)` (load-order dependencies between asset types),
+`preLoadAssets(List<T>)` (code-defined assets), and `unmodifiable()`.
 
 > **Note:** Most plugins should use `DefaultAssetMap` rather than creating a custom AssetMap implementation. See the complete guide below.
 
@@ -382,24 +403,39 @@ Here's a full implementation of a custom "Spell" asset system:
 
 **1. Define the Asset Class**
 
+The class implements `JsonAssetWithMap<String, DefaultAssetMap<String, SpellDefinition>>` and
+declares an `AssetBuilderCodec`. It also caches its own store lookup in a static `getAssetMap()`
+helper — the exact shape the built-in `WordList` asset uses — so callers have one obvious
+retrieval point:
+
 ```java
 package com.example.spells;
 
+import com.hypixel.hytale.assetstore.AssetExtraInfo;
+import com.hypixel.hytale.assetstore.AssetRegistry;
+import com.hypixel.hytale.assetstore.AssetStore;
+import com.hypixel.hytale.assetstore.codec.AssetBuilderCodec;
+import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
+import com.hypixel.hytale.assetstore.map.JsonAssetWithMap;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
-import com.hypixel.hytale.codec.builder.BuilderCodec;
-import com.hypixel.hytale.assetstore.JsonAsset;
 
-public class SpellDefinition implements JsonAsset<String> {
-    private String id;
+public class SpellDefinition
+        implements JsonAssetWithMap<String, DefaultAssetMap<String, SpellDefinition>> {
+
+    private String id;                 // set by the loader (filename without extension)
+    private AssetExtraInfo.Data data;  // loader bookkeeping — required by the codec
     private String name;
     private int manaCost;
     private float cooldown;
     // Field initializers supply the defaults; a missing "Effect" key keeps "none"
     private String effect = "none";
 
-    public static final BuilderCodec<SpellDefinition> CODEC =
-        BuilderCodec.builder(SpellDefinition.class, SpellDefinition::new)
+    public static final AssetBuilderCodec<String, SpellDefinition> CODEC =
+        AssetBuilderCodec.builder(SpellDefinition.class, SpellDefinition::new,
+                Codec.STRING,                                     // key codec
+                (a, id) -> a.id = id, a -> a.id,                  // id setter / getter
+                (a, d) -> a.data = d, a -> a.data)                // AssetExtraInfo.Data setter / getter
             .append(new KeyedCodec<>("Name", Codec.STRING),
                     SpellDefinition::setName, SpellDefinition::getName)
             .add()
@@ -414,14 +450,24 @@ public class SpellDefinition implements JsonAsset<String> {
             .add()
             .build();
 
+    // Cached store handle — resolved lazily because the store only exists
+    // once the owning plugin's setup() has registered it (see step 3).
+    private static AssetStore<String, SpellDefinition, DefaultAssetMap<String, SpellDefinition>> store;
+
+    public static DefaultAssetMap<String, SpellDefinition> getAssetMap() {
+        if (store == null) {
+            store = AssetRegistry.getAssetStore(SpellDefinition.class);
+        }
+        return store.getAssetMap();
+    }
+
     // BuilderCodec needs a no-arg constructor for the blank instance
     public SpellDefinition() {
     }
 
-    // JsonAsset requires getId(); the loader sets it from the filename
+    // JsonAsset requires getId(); the loader sets the id from the filename
     @Override
     public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -434,36 +480,12 @@ public class SpellDefinition implements JsonAsset<String> {
 }
 ```
 
-**2. Define the Asset Store**
+> **Naming gotcha:** the `AssetRegistry` imported here for retrieval is the **static**
+> `com.hypixel.hytale.assetstore.AssetRegistry`. It is a *different class* from the plugin-facing
+> `com.hypixel.hytale.server.core.plugin.registry.AssetRegistry` you get from `getAssetRegistry()`
+> in step 3. They share a name and nothing else — mixing up the imports is an easy mistake.
 
-```java
-package com.example.spells;
-
-import com.hypixel.hytale.assetstore.AssetStore;
-import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
-
-public class SpellStore extends AssetStore<String, SpellDefinition, DefaultAssetMap<String, SpellDefinition>> {
-
-    // Singleton for easy access
-    private static SpellStore instance;
-
-    public SpellStore() {
-        super(SpellDefinition.class, DefaultAssetMap.class, SpellDefinition.CODEC);
-        instance = this;
-    }
-
-    public static SpellStore getInstance() {
-        return instance;
-    }
-
-    // AssetStore provides:
-    // - get(String key) - retrieve by key
-    // - getAssetMap() - access underlying map
-    // - contains(String key) - check existence
-}
-```
-
-**3. Create JSON Asset Files**
+**2. Create JSON Asset Files**
 
 `src/main/resources/Server/Spells/Fireball.json`:
 ```json
@@ -485,51 +507,64 @@ public class SpellStore extends AssetStore<String, SpellDefinition, DefaultAsset
 }
 ```
 
-**4. Register in Plugin Setup**
+**3. Register in Plugin Setup**
+
+There is no store subclass to write — build a `HytaleAssetStore` with its builder and hand it to
+the plugin's asset registry:
 
 ```java
 package com.example.spells;
 
+import com.hypixel.hytale.assetstore.map.DefaultAssetMap;
+import com.hypixel.hytale.server.core.asset.HytaleAssetStore;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 
 public class SpellsPlugin extends JavaPlugin {
 
+    public SpellsPlugin(JavaPluginInit init) {
+        super(init);
+    }
+
     @Override
     protected void setup() {
-        // Create and register the asset store
-        SpellStore spellStore = new SpellStore();
-        getAssetRegistry().register(spellStore);
-
-        // Assets are automatically loaded from Server/Spells/*.json
+        // Build and register the asset store.
+        // Assets are then loaded from Server/Spells/*.json automatically.
+        getAssetRegistry().register(
+            HytaleAssetStore.builder(SpellDefinition.class, new DefaultAssetMap<>())
+                .setPath("Spells")
+                .setCodec(SpellDefinition.CODEC)
+                .setKeyFunction(SpellDefinition::getId)
+                .build());
     }
 }
 ```
 
-**5. Access Assets at Runtime**
+**4. Access Assets at Runtime**
+
+Retrieval goes through the store's `AssetMap`. With the `getAssetMap()` helper from step 1:
 
 ```java
-// In a command or event handler
-public void castSpell(Player player, String spellName) {
-    SpellDefinition spell = SpellStore.getInstance().get(spellName);
+// In a command or event handler; spellName came from user input,
+// playerRef is the PlayerRef of the caster (see the Commands docs)
+SpellDefinition spell = SpellDefinition.getAssetMap().getAsset(spellName);
 
-    if (spell == null) {
-        player.getPlayerRef().sendMessage(Message.raw("Unknown spell: " + spellName));
-        return;
-    }
-
-    if (player.getMana() < spell.getManaCost()) {
-        player.getPlayerRef().sendMessage(Message.raw("Not enough mana! Need " + spell.getManaCost()));
-        return;
-    }
-
-    // Cast the spell
-    player.consumeMana(spell.getManaCost());
-    player.getPlayerRef().sendMessage(Message.raw("Casting " + spell.getName()) + "!");
-
-    // Apply cooldown
-    player.applyCooldown("spell:" + spellName, spell.getCooldown());
+if (spell == null) {
+    playerRef.sendMessage(Message.raw("Unknown spell: " + spellName));
+    return;
 }
+
+// A SpellDefinition is plain data — mana pools, cooldown tracking, and the
+// actual effect are your plugin's job; the asset only supplies the numbers.
+playerRef.sendMessage(Message.raw("Casting " + spell.getName()
+        + " (" + spell.getManaCost() + " mana, "
+        + spell.getCooldown() + "s cooldown)"));
 ```
+
+Without the helper, the raw lookup is
+`AssetRegistry.getAssetStore(SpellDefinition.class).getAssetMap().getAsset(key)` (the static
+`assetstore.AssetRegistry`). Either way, the lookup only works after the registering plugin's
+`setup()` has run — the registry is one global class-keyed map, not scoped per plugin.
 
 ### Adding Polymorphic Types
 
@@ -604,19 +639,26 @@ JSON with type dispatch:
 ```java
 @Override
 protected void setup() {
-    // Register your asset store
-    MyAssetStore assetStore = new MyAssetStore();
-    getAssetRegistry().register(assetStore);
+    // Build and register the store for your asset type
+    getAssetRegistry().register(
+        HytaleAssetStore.builder(MyAsset.class, new DefaultAssetMap<>())
+            .setPath("MyAssets")
+            .setCodec(MyAsset.CODEC)
+            .setKeyFunction(MyAsset::getId)
+            .build());
 }
 ```
 
 ### Access Registered Assets
 ```java
-// Get asset by key
-MyAsset asset = assetStore.get("my_asset_id");
+// Look up the registered store — static com.hypixel.hytale.assetstore.AssetRegistry
+AssetStore<String, MyAsset, DefaultAssetMap<String, MyAsset>> store =
+    AssetRegistry.getAssetStore(MyAsset.class);
 
-// Check if asset exists
-if (assetStore.contains("my_asset_id")) {
+// Get an asset by key — null if absent
+MyAsset asset = store.getAssetMap().getAsset("my_asset_id");
+
+if (asset != null) {
     // Use asset
 }
 ```

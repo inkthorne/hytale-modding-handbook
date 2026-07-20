@@ -574,6 +574,39 @@ fi
 fi
 
 # =====================================================================
+section "[HARD] Complete doc snippets compile against the jar"
+# A ```java block starting with `package ` is a complete compilation unit and
+# must compile (same-doc same-package blocks co-compile). Fragments are exempt.
+# See maintenance/scripts/check-snippets.py for the contract and rationale.
+if [ -f "$JAR" ] && command -v javac >/dev/null 2>&1; then
+  OUT="$(python3 maintenance/scripts/check-snippets.py "$JAR")"
+  RC=$?
+  N="$(echo "$OUT" | sed -n 's/^CHECKED //p')"
+  if [ "$RC" -eq 0 ]; then
+    pass "all $N complete snippet(s) compile"
+  else
+    fail "snippet compilation failed:"
+    echo "$OUT" | grep -v '^CHECKED' | sed 's/^/    /'
+  fi
+else
+  warn "skipped (no jar or no javac)"
+fi
+
+# =====================================================================
+section "[ADVISORY] llms.txt is current"
+# docs/llms.txt is generated from page frontmatter (see generate-llms-txt.sh);
+# regenerate + commit it whenever pages or descriptions change.
+if [ -f docs/llms.txt ]; then
+  if ./maintenance/scripts/generate-llms-txt.sh | cmp -s - docs/llms.txt; then
+    pass "docs/llms.txt matches a fresh regeneration"
+  else
+    warn "docs/llms.txt is stale — regenerate: ./maintenance/scripts/generate-llms-txt.sh > docs/llms.txt"
+  fi
+else
+  warn "docs/llms.txt missing — generate: ./maintenance/scripts/generate-llms-txt.sh > docs/llms.txt"
+fi
+
+# =====================================================================
 if [ "$NO_BUILD" -eq 0 ]; then
 section "[HARD] Example projects compile against the jar"
 if [ -f "$JAR" ]; then

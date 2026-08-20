@@ -7,7 +7,7 @@ seo:
 
 # Networking API
 
-**Doc type:** Java API · **Verified against 0.5.7**
+**Doc type:** Java API · **Verified against 0.5.9**
 
 ## Overview
 

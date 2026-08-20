@@ -7,7 +7,7 @@ seo:
 
 # Adventure API
 
-**Doc type:** Java API · **Verified against 0.5.7**
+**Doc type:** Java API · **Verified against 0.5.9**
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 
@@ -443,7 +443,7 @@ through its `PortalKey` property; while inside a portal world, item ids listed i
 **Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
 
 JSON asset describing one portal destination. Loaded from `Server/PortalTypes/*.json`; the asset id is the
-filename without `.json` (0.5.7 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taiga`, `Windsurf_Valley`).
+filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taiga`, `Windsurf_Valley`).
 
 **JSON fields**
 
@@ -622,7 +622,7 @@ if (key != null) {
 **Package:** `com.hypixel.hytale.server.core.asset.type.item.config.metadata`
 
 Per-`ItemStack` adventure metadata, stored in the stack's metadata document under the key `"Adventure"`
-(`AdventureMetadata.KEY`). In 0.5.7 it carries a single flag: whether the stack is **cursed** (BSON field
+(`AdventureMetadata.KEY`). In 0.5.9 it carries a single flag: whether the stack is **cursed** (BSON field
 `Cursed`). Portal gameplay curses stacks whose item id appears in the active portal type's
 `getCursedItems()` set; cursed stacks are uncursed or deleted when the portal visit ends.
 

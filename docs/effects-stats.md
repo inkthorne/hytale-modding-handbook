@@ -7,7 +7,7 @@ seo:
 
 # Effects & Stats Reference
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.7**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.5.9**
 
 This document covers the JSON asset structure for status effects and entity stats.
 

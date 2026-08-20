@@ -7,7 +7,7 @@ seo:
 
 # Tool Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.7**
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.9**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 

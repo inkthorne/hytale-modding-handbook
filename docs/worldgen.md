@@ -7,7 +7,7 @@ seo:
 
 # World Generation
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.7**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.9**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as
@@ -322,7 +322,7 @@ static final BuilderCodecMapCodec<IWorldGenProvider> CODEC;   // keyed by "Type"
 IWorldGen getGenerator() throws WorldGenLoadException
 ```
 
-Registered `Type` values (build 0.5.7):
+Registered `Type` values (build 0.5.9):
 
 | `Type` | Provider class | Registered by |
 |--------|----------------|---------------|

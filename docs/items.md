@@ -7,7 +7,7 @@ seo:
 
 # Item Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.7**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.5.9**
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
@@ -696,7 +696,7 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
 
 Fieldcraft categories are the tabs of the pocket ("fieldcraft") crafting window — the bench-free crafting a
 player always has. Each category is a JSON asset under `Server/Item/Category/Fieldcraft/*.json` (asset id =
-filename; 0.5.7 ships only `Tools`):
+filename; 0.5.9 ships only `Tools`):
 
 ```json
 {
@@ -731,7 +731,7 @@ categories are sent to the client as item-category packets.
 ## Builder Tool Item References
 
 `Server/Item/PlayerToolsMenuConfig/*.json` assets list which items are **builder tools** — the editor tools
-(paint, sculpt, selection, …) that populate a creative player's Tools inventory section. 0.5.7 ships one
+(paint, sculpt, selection, …) that populate a creative player's Tools inventory section. 0.5.9 ships one
 file, `PlayerToolsMenuDropdownFilter.json`:
 
 ```json

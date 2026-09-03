@@ -621,7 +621,7 @@ block IDs (a `*` prefix references another block's state definitions):
 
 | Key | Description |
 |-----|-------------|
-| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 (backed by a new `Server/Item/ConnectedBlockRuleSets/` asset store) but no shipped block uses it |
+| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 but no shipped block uses it — see [Patterned Connected Block Rule Sets](blocks.md#patterned-connected-block-rule-sets) |
 | `Regular` / shape keys | Per-shape `{ "State": "<state name>" }` mappings |
 | `MaterialName` | Material/group name (Roof) |
 | `Topper` | Top-piece state (Roof) |

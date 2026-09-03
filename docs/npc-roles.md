@@ -64,7 +64,7 @@ The NPC system is organized into several directories:
 | `Server/NPC/Attitude/` | Relationship definitions between NPC groups |
 | `Server/NPC/Groups/` | NPC group collections for spawning |
 | `Server/NPC/Flocks/` | Flock size configurations |
-| `Server/NPC/Spawn/` | Spawn configuration — `Beacons/` (ambient spawning), `Markers/` (worldgen / prefab spawn markers), `World/`, `Suppression/`, `CompanionBlockSpawners/` |
+| `Server/NPC/Spawn/` | Spawn configuration — `Beacons/` (ambient spawning), `Markers/` (worldgen / prefab spawn markers), `World/`, `Suppression/`, `CompanionBlockSpawners/` ([companion block spawners](#companion-block-spawners)) |
 | `Server/NPC/Balancing/` | Combat Action Evaluator (CAE) files |
 | `Server/NPC/DecisionMaking/` | AI decision conditions |
 
@@ -912,6 +912,8 @@ NPCPlugin.get().registerCoreComponentType("Orbit", BuilderBodyMotionOrbit::new);
 No manifest `Dependencies` entry is needed — the NPC plugin is core and always loads first (and a wrong `group:name` would only *break* your load).
 
 > **⚠️ 0.6.3 signature break: `Role` → `ExecutionSupport` throughout.** Every core-component callback that used to take a `Role` now takes a `com.hypixel.hytale.server.npc.instructions.ExecutionSupport` — `Sensor.matches`, `Action.execute` / `canExecute` / `activate` / `deactivate`, `Motion.computeSteering` / `activate` / `deactivate` / `preComputeSteering`, and `Instruction`'s whole lifecycle (`loaded`/`spawned`/`unloaded`/`removed`/`teleported`/`registerWithSupport`). `ExecutionSupport` is a pooled per-tick handle that caches the NPC's support components: `getRole()`, `getNpcEntity()`, `getStateSupport()`, `getMarkedEntitySupport()`, `getPositionCache()`, `getCombatSupport()`, `getFlagsComponent()`, `getWorldSupport()`, `getEntitySupport()`, `getMotionContextSupport()`, `getDisplayNameSupport()`, `getPlayerTaskSupport()`, `getDebugSupport()`. Outside a callback you can mint one with `Role.acquireExecutionSupport(ref, accessor)`. **A 0.5.9 plugin that overrode any of these will silently fail to override after recompiling — the base method is still there with a different parameter type.**
+>
+> **Fix: put `@Override` on every core-component callback before you recompile against 0.6.3.** The failure is silent only because the inherited method has a body: `SensorBase.matches` and `ActionBase.canExecute` / `execute` / `activate` / `deactivate` are **concrete** on the base class, and `Motion.preComputeSteering` / `activate` / `deactivate` are interface `default`s — so an old-signature method compiles cleanly as an unrelated overload and simply never runs. With `@Override` present, javac rejects it and points straight at the changed parameter type. (`Motion.computeSteering` is the one abstract callback, and `MotionBase` supplies no body for it, so a stale body-motion fails to compile either way.)
 
 ### The custom-`BodyMotion` contract
 
@@ -1333,6 +1335,155 @@ Server/NPC/Spawn/Beacons/
 
 ---
 
+## Companion Block Spawners
+
+A spawn beacon spawns NPCs from the *environment*. A **companion block spawner** spawns one
+from a *player-built structure*: place a designated block, surround it with the blocks a
+recipe asks for, and an NPC moves in and stays as long as the setup survives. New in 0.6.3
+(`com.hypixel.hytale.builtin.companionblockspawner`).
+
+The codec's own description is the clearest statement of the contract:
+
+> *"A configuration that spawns a companion NPC when a spawner block and all of its required
+> surrounding blocks are present within a radius. Requirement blocks are claimed exclusively
+> (two spawners can't share one). While the setup holds, the referenced spawn marker keeps the
+> companion alive (re-spawning it on death); breaking the setup despawns it."*
+
+### The recipe asset
+
+**Location:** `Server/NPC/Spawn/CompanionBlockSpawners/<Id>.json`
+(`CompanionBlockSpawnerRecipe`, loaded after `SpawnMarker`, `BlockSet`, `BlockType` and `Item`)
+
+**`Server/NPC/Spawn/CompanionBlockSpawners/Debug_Companion_Spawner.json`** — one of the two
+shipped examples, verbatim:
+
+```json
+{
+  "SpawnerBlockTypeKey": "Debug_Companion_Block_Spawner",
+  "Radius": 6.0,
+  "RequiredBlocks": [
+    {
+      "MatchBy": "Tag",
+      "Value": "Bed",
+      "Count": 1
+    }
+  ],
+  "SpawnMarker": "Debug_Companion_Kweebec"
+}
+```
+
+`Debug_Companion_Spawner_Explicit.json` is the same recipe with
+`"MatchBy": "BlockId", "Value": "Debug_Companion_Block_Spawner_Requirement"` — the two files
+exist to exercise both match modes.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `SpawnerBlockTypeKey` | string | **Required, validated.** Block type key of the block that hosts the companion |
+| `Radius` | number | **> 0.** Search radius in blocks for the required blocks (default `1.0`) |
+| `RequiredBlocks` | array | **Required, non-empty.** The requirement blocks and their counts |
+| `SpawnMarker` | string | **Required, validated.** Id of a `Server/NPC/Spawn/Markers/` asset defining the companion |
+
+Each `RequiredBlocks` entry — *"A required block - how it is matched (MatchBy) and the value
+to match (Value) - plus the minimum count of it within the recipe radius."*
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `MatchBy` | enum | **Required.** `BlockId` (exact block type key) or `Tag` (block tag) |
+| `Value` | string | The block key, or a tag such as `"Bed"` / `"Family=Crude"` |
+| `Count` | integer | **> 0.** Minimum matching blocks within `Radius` (default `1`) |
+
+The four top-level keys are inheritable, so a family of recipes can share a `Parent` template
+the way items do (see [items.md](items.md#inheritance-system)).
+
+The referenced marker is an ordinary spawn-marker asset —
+`Server/NPC/Spawn/Markers/Debug_Companion_Kweebec.json` is just:
+
+```json
+{
+  "NPCs": [
+    { "Name": "Temple_Kweebec_Static", "Weight": 1, "RealtimeRespawnTime": 30 }
+  ],
+  "RealtimeRespawn": true,
+  "DeactivationDistance": 48
+}
+```
+
+### How it resolves
+
+1. **Index.** On start (and whenever recipes, or block types, load or unload)
+   `CompanionBlockSpawnerRecipeCompendium` rebuilds: it validates every recipe, expands each
+   `Tag` entry to the concrete block keys carrying that tag, and drops any recipe whose spawner
+   block, required block or spawn marker does not resolve — logging the reason at `SEVERE`.
+2. **Component injection.** The plugin then *injects* a `CompanionBlockSpawnerBlock`
+   chunk-store component into the `BlockType` of every participating key — the spawner blocks
+   **and** the ingredient blocks. **You do not add anything to the block JSON**; naming a block
+   in a recipe is what makes it a block entity.
+3. **Evaluation.** `CompanionBlockSpawnerSystems.AddOrRemove` reacts to those block entities
+   appearing and disappearing, and `ReconcileTick` re-checks each active spawner roughly every
+   30 s (jittered ±25 %). Candidates are found through a KD-tree
+   (`CompanionBlockSpawnerSpatialSystem`) keyed on block position.
+4. **Claiming.** When every `RequiredBlocks` entry is satisfied, the matching blocks are
+   claimed by writing the spawner's position into their `ClaimedByBlock` field. Blocks already
+   claimed by another spawner are invisible to this one — that is the "claimed exclusively"
+   rule.
+5. **Marker placement.** `CompanionBlockSpawnerSupport.createMarker` picks a weighted
+   configuration from the marker, resolves its NPC role, and searches outward for a spawnable
+   tile — rings 1–4 around the spawner, preferring 2 blocks below through the spawner's own
+   level before trying 1 block above. It then creates a `SpawnMarkerEntity` carrying a
+   `CompanionSpawnerMarkerReference` back to the spawner block, and the normal spawn-marker
+   machinery takes over from there.
+6. **Teardown.** Breaking the spawner (or enough of the requirement blocks) clears every claim,
+   removes the marker, and removes the companions the marker spawned. A `MarkerHeartbeat`
+   entity system sweeps up orphaned markers whose origin block is gone or now points at a
+   different marker.
+
+### Java surface
+
+```java
+// com.hypixel.hytale.builtin.companionblockspawner
+static CompanionBlockSpawnerPlugin CompanionBlockSpawnerPlugin.get()
+
+// config.CompanionBlockSpawnerRecipe
+static DefaultAssetMap<String, CompanionBlockSpawnerRecipe> getAssetMap()
+String getId()
+String getSpawnerBlockTypeKey()
+double getRadius()
+CompanionBlockSpawnerRecipe.RequiredBlock[] getRequiredBlocks()
+String getSpawnMarker()
+
+// CompanionBlockSpawnerBlock  (Component<ChunkStore>, on the spawner and ingredient blocks)
+static ComponentType<ChunkStore, CompanionBlockSpawnerBlock> getComponentType()
+PersistentRef getMarkerRef()
+boolean hasMarker()
+Vector3i getClaimedByBlock()
+
+// CompanionSpawnerMarkerReference  (Component<EntityStore>, on the marker entity)
+static ComponentType<EntityStore, CompanionSpawnerMarkerReference> getComponentType()
+Vector3i getSpawnerPosition()
+```
+
+`CompanionBlockSpawnerRecipeCompendium` exposes `getEntryKeySets(recipe)`, `getMaxRadius()`
+and `isEmpty()` publicly; the compendium instance itself is package-private, so read recipes
+through `CompanionBlockSpawnerRecipe.getAssetMap()`.
+
+> **Gotchas**
+> - **The spawner block needs no JSON changes.** `Server/Item/Items/_Debug/Debug_Companion_Block_Spawner.json`
+>   is a plain crate — no `BlockEntity`, no flags. The recipe naming it is the whole opt-in.
+> - **A recipe with an unresolvable reference is dropped silently from the player's view.**
+>   It is logged at `SEVERE` and simply never spawns anything; check the server log rather than
+>   assuming the mechanic is broken.
+> - **Ingredient blocks are consumed exclusively.** Two spawners cannot share one bed. A second
+>   spawner in range of the same requirement blocks will never activate until the first one is
+>   broken.
+> - **World config still gates the spawn.** If the world has `SpawningNPC` or
+>   `SpawnMarkersEnabled` off, the marker is created but no companion appears; the module logs
+>   this explicitly at `FINE`.
+> - **The marker needs a free tile within 4 blocks.** If `SpawningContext` finds nowhere
+>   spawnable in rings 1–4 (and within −2/+1 blocks of the spawner's height), no marker is
+>   created and the spawner stays inactive.
+
+---
+
 ## Testing roles in-game
 
 The `com.hypixel.hytale.server.npc.commands` package provides console commands for spawning, removing, and debugging NPCs while iterating on a role. (For the broader command system see [commands.md](commands.md).)
@@ -1642,6 +1793,7 @@ The first three groups come from `Condition.CODEC` in `server.npc.decisionmaker`
 | Intelligent | `Server/NPC/Roles/Intelligent/` |
 | Attitudes | `Server/NPC/Attitude/Roles/` |
 | Spawn Beacons | `Server/NPC/Spawn/Beacons/` |
+| Companion Block Spawners | `Server/NPC/Spawn/CompanionBlockSpawners/` |
 | Combat Balance | `Server/NPC/Balancing/` |
 | Groups | `Server/NPC/Groups/` |
 | Flocks | `Server/NPC/Flocks/` |
@@ -1657,6 +1809,7 @@ The first three groups come from `Condition.CODEC` in `server.npc.decisionmaker`
 | Group Files | 72 | NPC role collections |
 | Flock Files | 8 | Flock size configurations |
 | Spawn Beacons | 85 | Spawn configurations |
+| Companion Block Spawner Recipes | 2 | Both are `Debug_*` examples |
 | CAE Files | 28 | Combat balancing |
 
 ---

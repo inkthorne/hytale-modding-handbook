@@ -84,7 +84,7 @@ _Covers both a Java API and a JSON asset format for the same topic._
 ### Java API + Save / config file format
 _Covers both a Java API and an on-disk save/config file format._
 
-[Universe & Saves](universe-saves.md)
+[Universes & Save Format](universe-saves.md)
 
 ### Guides & Overviews
 

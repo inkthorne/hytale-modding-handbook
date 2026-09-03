@@ -1029,8 +1029,6 @@ The named keys are nested under a `SoundEvents` object, alongside a top-level
 
 ## Playing Sounds from Java
 
-**Doc type:** Java API
-
 The JSON formats above *define* sounds; to actually **play** one from plugin code, call
 `com.hypixel.hytale.server.core.universe.world.SoundUtil` (every method is `static`). The wire
 packets (`PlaySoundEvent2D` / `PlaySoundEvent3D` / `PlaySoundEventLocalPlayer` /

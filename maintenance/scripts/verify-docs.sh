@@ -252,8 +252,9 @@ section "[ADVISORY] Doc-type tags are present and consistent"
 # incidental base-class mention in a JSON/DSL doc is normal and not flagged).
 OUT="$(python3 - <<'PY'
 import re, glob, os
-untagged=[]; mismatch=[]; counts={}
+untagged=[]; mismatch=[]; counts={}; multi=[]
 type_re=re.compile(r'\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)')
+tag_line_re=re.compile(r'^\*\*Doc type:\*\*', re.M)
 cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
 # Calibration skip-list: pages that legitimately cite backing codec classes
 # from a non-Java tag. See maintenance/scripts/doctype-skiplist.txt.
@@ -270,6 +271,12 @@ for p in sorted(glob.glob("docs/*.md")):
     m=type_re.search(txt)
     if not m:
         untagged.append(bn); continue
+    # The page-level tag is whichever comes first, so a second marker further down
+    # would silently become the page's type if the first were ever moved or dropped.
+    # Count only line-anchored markers: an inline `**Doc type:**` in prose (01-index
+    # describes the convention) is a mention, not a tag.
+    n_tags=len(tag_line_re.findall(txt))
+    if n_tags > 1: multi.append((bn,n_tags))
     typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
     classes=set(cls_re.findall(txt))
     if "Java API" in typ or len(classes) < 2: continue
@@ -284,6 +291,7 @@ for stale in sorted(skip - used): print(f"STALESKIP {stale}")
 print(f"DENOM {scanned} {candidates} {len(used)}")
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
+for bn,n in multi: print(f"MULTITAG {bn} carries {n} **Doc type:** lines; only the first is read")
 for bn,typ,n in mismatch: print(f"MISMATCH {bn} [{typ}] references {n} distinct com.hypixel.* classes")
 PY
 )"
@@ -294,6 +302,7 @@ SCANNED="$(echo "$OUT" | awk '/^DENOM/{print $2}')"
 DEN="$(echo "$OUT" | awk '/^DENOM/{print $3}')"
 SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $4}')"
 SS="$(echo "$OUT" | grep -c '^STALESKIP' || true)"
+MT="$(echo "$OUT" | grep -c '^MULTITAG' || true)"
 [ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
 EXAMINED=$(( ${DEN:-0} - ${SKIPPED:-0} ))
 if [ "$MM" -eq 0 ]; then
@@ -302,6 +311,7 @@ else
   warn "$MM of ${DEN:-0} candidate doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
   echo "$OUT" | grep '^MISMATCH' | sed 's/^MISMATCH/      /'
 fi
+[ "$MT" -eq 0 ] || { warn "$MT doc(s) carry more than one **Doc type:** line (only the first is read):"; echo "$OUT" | grep '^MULTITAG' | sed 's/^MULTITAG/      /'; }
 [ "$SS" -eq 0 ] || { warn "$SS stale doctype-skiplist entr(ies) — page renamed, retagged, or no longer a candidate:"; echo "$OUT" | grep '^STALESKIP' | sed 's/^STALESKIP/      /'; }
 
 # =====================================================================

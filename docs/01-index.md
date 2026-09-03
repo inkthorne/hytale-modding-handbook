@@ -113,6 +113,12 @@ JSON asset types used in Hytale's data-driven systems.
 **Audio**
 [SoundEvents](audio.md#soundevents), [AudioCategories](audio.md#audiocategories), [AmbienceFX](audio.md#ambiencefx), [EQ](audio.md#eq-equalizer), [Reverb](audio.md#reverb), [ItemSounds](audio.md#itemsounds), [SoundSets](audio.md#soundsets)
 
+**Blocks - Connected Blocks**
+[Connected block templates](blocks.md#connected-block-templates), [Patterned rule sets](blocks.md#patterned-connected-block-rule-sets), [Pattern entries](blocks.md#pattern-entries), [Rules](blocks.md#rules), [Shapes](blocks.md#shapes)
+
+**NPCs - Spawning**
+[Spawn Beacons](npc-roles.md#spawn-beacons), [Companion Block Spawners](npc-roles.md#companion-block-spawners), [The recipe asset](npc-roles.md#the-recipe-asset)
+
 **World Events**
 [WorldEventAsset](world-events.md#serverworldeventeventidjson--worldeventasset), [StageAsset](world-events.md#serverworldeventstageidjson--stageasset), [Conditions](world-events.md#conditions), [Spawners](world-events.md#spawners-locationconditioncontent), [Actions](world-events.md#actions), [Context keys](world-events.md#context-keys)
 
@@ -213,6 +219,21 @@ JSON asset types used in Hytale's data-driven systems.
 **Adventure**
 [DiscoverInstanceEvent](adventure.md), [DiscoverZoneEvent](adventure.md), [TreasureChestOpeningEvent](adventure.md), [InstanceDiscoveryConfig](adventure.md), [WorldMapTracker](adventure.md), [ZoneDiscoveryInfo](adventure.md)
 
+**Game Flags**
+[GameFlagsResource](world.md#game-flags), [GameFlagsPlugin](world.md#game-flags), [SetGameFlagInteraction](world.md#game-flags), [GameFlagConditionInteraction](world.md#game-flags)
+
+**Spectator**
+[Spectating](player.md#spectator-mode), [SpectatorSystems](player.md#spectator-mode), [SpectatingHud](player.md#spectator-mode), [SpectateControlInteraction](player.md#spectator-mode), [GameModeTypeState](player.md#spectator-mode)
+
+**Universe Resources**
+[UniverseResources](universe-saves.md#universe-resources), [UniverseResourceType](universe-saves.md#universe-resources), [IUniverseResourceStorage](universe-saves.md#universe-resources), [IUniverseResourceStorageProvider](universe-saves.md#universe-resources), [DiskUniverseResourceStorageProvider](universe-saves.md#universe-resources), [HardcoreState](universe-saves.md#universe-resources)
+
+**Connected Blocks & Block Animation**
+[PatternedConnectedBlockRuleSet](blocks.md#patterned-connected-block-rule-sets), [PatternedConnectedBlockRuleSetAsset](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockPatternConfig](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockFaceTags](blocks.md#patterned-connected-block-rule-sets), [BlockAnimationModule](blocks.md#per-block-animation-speed), [BlockAnimationSection](blocks.md#per-block-animation-speed)
+
+**Companion Block Spawners**
+[CompanionBlockSpawnerPlugin](npc-roles.md#companion-block-spawners), [CompanionBlockSpawnerBlock](npc-roles.md#companion-block-spawners), [CompanionBlockSpawnerRecipe](npc-roles.md#companion-block-spawners), [CompanionSpawnerMarkerReference](npc-roles.md#companion-block-spawners)
+
 **World Events**
 [WorldEventsPlugin](world-events.md), [WorldEventAsset](world-events.md), [StageAsset](world-events.md), [WorldEvent](world-events.md), [WorldEventManager](world-events.md), [WorldEventStorage](world-events.md), [GlobalWorldEventManager](world-events.md), [WorldEventRecord](world-events.md), [WorldEventsConfig](world-events.md), [EventCondition](world-events.md), [EventAction](world-events.md), [ContextKey](world-events.md), [ContextMap](world-events.md), [EventEndEcsEvent](world-events.md), [WorldEventSignal](world-events.md), [TrackedEntityComponent](world-events.md), [TrackedBlockComponent](world-events.md), [ConditionManager](world-events.md)
 
@@ -235,9 +256,9 @@ JSON asset types used in Hytale's data-driven systems.
 - plugin-lifecycle.md - Plugin entry point, setup, and server lifecycle events
 - commands.md - Slash commands
 - entities.md - Players, entities, stats, velocity, and entity events
-- player.md - Player events and messaging
-- world.md - World access, world events, and chunk events
-- universe-saves.md - Save/universe format, dedicated-server config, and binding worlds to structures
+- player.md - Player events, messaging, and spectator mode
+- world.md - World access, world events, chunk events, and game flags (universe-scoped persistent state)
+- universe-saves.md - Save/universe format, universe resources, dedicated-server config, and binding worlds to structures
 - events.md - Core event system patterns
 - components.md - ECS system
 
@@ -246,7 +267,7 @@ JSON asset types used in Hytale's data-driven systems.
 - inventory.md - Items, inventory, and crafting
 - tasks.md - Async scheduling
 - ui.md - Player UI
-- blocks.md - Block manipulation and block events
+- blocks.md - Block manipulation, block events, connected-block rule sets, and per-block animation speed
 - blockyanim-format.md - Block animation file format
 - assets.md - Asset registry, models, and asset events
 - interactions.md - Interaction system (attacks, abilities)
@@ -269,7 +290,7 @@ JSON asset types used in Hytale's data-driven systems.
 **Combat & NPCs** - Combat and AI systems
 - combat.md - Damage system, damage events, kill feed
 - npc.md - NPC loading, AI sensors
-- npc-roles.md - NPC role definitions, behaviors, spawning
+- npc-roles.md - NPC role definitions, behaviors, spawn beacons and companion block spawners
 - encounters.md - Multi-NPC encounters: boss bars, encounter music, role changes, world-event signals
 - drops.md - Loot tables for NPCs, blocks, containers
 

@@ -60,11 +60,11 @@ The NPC system is organized into several directories:
 
 | Directory | Description |
 |-----------|-------------|
-| `Server/NPC/Roles/` | 952 NPC role definitions (templates and variants) |
+| `Server/NPC/Roles/` | 1,000 NPC role definitions (templates and variants) |
 | `Server/NPC/Attitude/` | Relationship definitions between NPC groups |
 | `Server/NPC/Groups/` | NPC group collections for spawning |
 | `Server/NPC/Flocks/` | Flock size configurations |
-| `Server/NPC/Spawn/` | Spawn beacon configurations |
+| `Server/NPC/Spawn/` | Spawn configuration — `Beacons/` (ambient spawning), `Markers/` (worldgen / prefab spawn markers), `World/`, `Suppression/`, `CompanionBlockSpawners/` |
 | `Server/NPC/Balancing/` | Combat Action Evaluator (CAE) files |
 | `Server/NPC/DecisionMaking/` | AI decision conditions |
 
@@ -72,14 +72,15 @@ The NPC system is organized into several directories:
 
 ## Role Types
 
-A role's top-level `Type` is one of four values registered by the role `BuilderFactory`:
+A role's top-level `Type` is one of three values registered by the role `BuilderFactory`:
 
 | `Type` | Spawnable | Description |
 |--------|-----------|-------------|
 | `Abstract` | No | Template/base; concrete roles inherit from it via `Reference` |
 | `Variant` | Yes | Concrete role referencing a template, overriding via `Modify` |
 | `Generic` | Yes | Concrete, **self-contained** role that defines its behavior inline (the type the engine's own `Test_*` roles use) |
-| `Role` | Yes | Concrete role (base concrete type) |
+
+Those three are the **only** top-level role types — `NPCPlugin` registers exactly `Generic` → `BuilderRole`, `Abstract` → `BuilderRoleAbstract`, `Variant` → `BuilderRoleVariant`. `"Type": "Role"` is **not** a role type: it is the role-change *action* (`BuilderActionRole`, see [Actions](#actions)), which is why it turns up inside `Actions` arrays in files like `Template_Animal_Neutral.json`.
 
 Most shipped content is the `Abstract` template + `Variant` pair documented below. Reach for **`Generic`** when you want a standalone role that defines its own inline `Instructions` rather than inheriting them — see [the Variant `Modify` gotcha](#variants) for why inline behavior must use `Generic`, not `Variant`.
 
@@ -95,13 +96,16 @@ Templates define common behaviors and properties that concrete NPCs inherit from
 | `Template_Livestock` | Farm livestock base |
 | `Template_Predator` | Base predator behavior with hunting AI |
 | `Template_Intelligent` | Intelligent humanoid base |
-| `Template_Spirit` | Spirit/ethereal base |
+| `Template_Spirit` | Spirit/ethereal base — **moved to `_Core/Templates/Deprecated/` as of 0.6.3** (alongside `Template_Eye` and `Template_Scarak_Seeker`) |
 | `Template_Birds_Passive` | Flying passive bird behavior |
 | `Template_Swimming_Passive` | Passive swimming creature base |
 | `Template_Swimming_Aggressive` | Aggressive swimming creature base |
 | `Template_Edible_Critter` | Small edible critter base |
 | `Template_Beasts_Passive_Critter` | Passive beast critter base |
 | `Template_Summoned_Ally` | Summoned allied NPC base |
+| `Template_Beasts_Passive_Cactee` | Passive cactus-creature base |
+| `Template_Flying_Aggressive` | Aggressive flier base (the `Fly` motion-controller exemplar) |
+| `Template_Temple` | Temple/structure guard base |
 
 Faction-specific templates live alongside their faction roles rather than in the shared `_Core/Templates/` folder. For example, Goblin templates are in `Roles/Intelligent/Aggressive/Goblin/Templates/` (`Template_Goblin`, `Template_Goblin_Scrapper`, `Template_Goblin_Ogre`, `Template_Goblin_Lobber`, and others). Trork, Kweebec, Feran, and Scarak templates follow the same convention under their own faction directories.
 
@@ -165,6 +169,18 @@ A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field;
 }
 ```
 
+**Reserved keys inside `Modify`.** Every key under `Modify` is treated as *a role parameter to set* — **except** five reserved names that `BuilderModifier` handles structurally. They are the only `_`-prefixed keys the block accepts:
+
+| Key | Purpose |
+|-----|---------|
+| `_CombatConfig` | The CAE asset for this role (the top-level, non-`Modify` spelling of the same field is `CombatConfig`). |
+| `_InteractionVars` | Interaction-var overrides (top-level spelling: `InteractionVars`) — see [Melee attacks without a CAE](#melee-attacks-without-a-cae). |
+| `_ExportStates` | Maps a referenced component's states onto this role's states. Must be a JSON array; illegal inside `_ForwardedModifiers`. |
+| `_InterfaceParameters` | Parameters passed to the referenced construct's interface. |
+| `_ForwardedModifiers` | Modifiers forwarded down to nested references. |
+
+Anything else — including `$Comment` — is looked up as a parameter and throws `Parameter <name> does not exist or is private` if there is none (see [Gotchas](#gotchas--errors)).
+
 > **Gotcha: a `Variant`'s `Modify` cannot hold `Instructions`.** Every value in a `Modify` block runs through the NPC **expression** system, which rejects a structural `Instructions` array. Shipping a `Variant` that overrides `Instructions` fails to load with `Illegal JSON value for expression: [{"Sensor":...}]`, and the role then silently never registers (it's absent from the spawn list). To give an NPC custom inline behavior, author a **`Type: "Generic"`** role with top-level `Instructions` instead — see [Inline behavior with a Generic role](#inline-behavior-with-a-generic-role).
 
 ---
@@ -208,6 +224,8 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 
 ## Key Properties
 
+> **Engine keys vs template parameters.** Only some of the names below are read directly by the role builder. `BuilderRole` reads 81 keys (`Appearance`, `MaxHealth`, `DropList`, `NameTranslationKey`, `MotionControllerList`, `Instructions`, `InteractionVars`, `CombatConfig`, `IsMemory`, `MemoriesCategory`, `Invulnerable`, `Armor`, `HotbarItems`, the whole `Separation*`/`Avoidance*`/`Collision*`/`Flock*` families, …) and `SupportConfigBuilder` reads a further ten (`StartState`, `DefaultSubState`, `AttitudeGroup`, `ItemAttitudeGroup`, `DefaultPlayerAttitude`, `DefaultNPCAttitude`, `BusyStates`, `DisableDamageFlock`, `DisableDamageGroups`, `Debug`). Everything else in the tables below — `Scale`, `MaxSpeed`, `WanderRadius`, `ClimbHeight`, `ViewRange`, `ViewSector`, `HearingRange`, `AbsoluteDetectionRange`, `Attack`, `AttackDistance`, `DayTimePeriod`, `FlockArray`, `IsTameable`, … — is a **template `Parameters` entry** that the template's own `Compute` expressions feed into a real key or component. That is why a `Variant` can set them from `Modify` even though no builder declares them, and why a `Generic` role that invents its own must declare them in `Parameters` first.
+
 ### Basic Properties
 
 | Property | Type | Description |
@@ -226,7 +244,7 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 | `MaxSpeed` | Number | Maximum movement speed (parameter; fed into `MaxWalkSpeed`) |
 | `WanderRadius` | Number | Random movement range from home |
 | `ClimbHeight` | Number | Maximum block height for climbing (fed into `MaxClimbHeight`) |
-| `JumpHeight` | Number | Vertical jump capability |
+| `JumpHeight` | Number | Vertical jump capability (a `Walk` motion-controller key, not a role key) |
 | `ApplySeparation` | Boolean | Soft spacing so NPCs don't overlap — see [Separation & avoidance steering](#separation--avoidance-steering) |
 | `ApplyAvoidance` | Boolean | Predictive collision avoidance — see [Separation & avoidance steering](#separation--avoidance-steering) |
 
@@ -247,7 +265,7 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 | `DefaultPlayerAttitude` | String | Default stance toward players (`Hostile`, `Ignore`, `Neutral`) |
 | `Attack` | String | Attack interaction reference |
 | `AttackDistance` | Number | Melee attack range |
-| `_CombatConfig` | String | CAE file name for intelligent combat (e.g. `CAE_Goblin_Scrapper`) |
+| `CombatConfig` / `_CombatConfig` | String | CAE file name for intelligent combat (e.g. `CAE_Goblin_Scrapper`). `CombatConfig` at a role's top level; `_CombatConfig` inside a `Variant`'s `Modify` |
 
 ### Behavior Properties
 
@@ -284,7 +302,7 @@ Attitudes define relationships between NPC groups. Found in `Server/NPC/Attitude
 
 Each file is a single object with a `Groups` key. Under `Groups`, each attitude value maps to an array of group names. Groups not listed use a default (typically `Ignore`).
 
-**Example: `Attitude/Roles/Predators.json`**
+**Example: `Attitude/Roles/Prey.json`** — prey treat predators as threats (which is what drives their detection/flee branches) and ignore each other:
 
 ```json
 {
@@ -295,7 +313,7 @@ Each file is a single object with a `Groups` key. Under `Groups`, each attitude 
 }
 ```
 
-**Example: `Attitude/Roles/Prey.json`**
+**Example: `Attitude/Roles/Predators.json`** — predators are merely `Neutral` toward prey (hunting is driven by the role's own instructions, not by a `Hostile` attitude):
 
 ```json
 {
@@ -305,6 +323,8 @@ Each file is a single object with a `Groups` key. Under `Groups`, each attitude 
     }
 }
 ```
+
+The lookup is source-indexed: `AttitudeMap.getAttitude` reads the **acting** NPC's `AttitudeGroup` to pick the file, then looks the **target's** role up inside it. So `Prey.json` says how a *prey* NPC feels about others.
 
 ---
 
@@ -349,6 +369,7 @@ NPCs are organized into a hierarchical category structure:
 | `Outlander/` | Human outlaws |
 | `Scarak/` | Insectoid faction |
 | `Trork/` | Pig-like warriors |
+| `Hedera.json` | Standalone aggressive plant-creature role |
 
 **Neutral Factions:**
 
@@ -357,6 +378,9 @@ NPCs are organized into a hierarchical category structure:
 | `Feran/` | Beast-folk traders |
 | `Kweebec/` | Small forest dwellers |
 | `Tuluk/` | Nomadic traders |
+| `Bramblekin*.json` | Standalone neutral bramble folk |
+
+There is also an `Intelligent/Passive/` directory alongside `Aggressive/` and `Neutral/`.
 
 ### Other Categories
 
@@ -372,18 +396,19 @@ NPCs are organized into a hierarchical category structure:
 
 ## Motion Controllers
 
-Motion controllers define how NPCs move through the world. They are listed in `MotionControllerList`. Two controller types appear in real role files:
+Motion controllers define how NPCs move through the world. They are listed in `MotionControllerList`. Three controller types appear in real role files (counts are `MotionControllerList` entries across `Server/NPC/Roles/`):
 
 | Controller | Usage | Description |
 |------------|-------|-------------|
-| `Walk` | common | Ground-based movement |
-| `Fly` | rare | Aerial movement |
+| `Walk` | 357 | Ground-based movement (`MotionControllerWalk`) |
+| `Fly` | 19 | Aerial movement (`MotionControllerFly`) |
+| `Dive` | 5 | Swimming/diving movement (`MotionControllerDive`) — *"Provide diving abilities for NPC"* |
 
 Many controller fields accept `{ "Compute": "..." }` so they can read template parameters.
 
 ### Walk Configuration Example
 
-From `Template_Animal_Neutral`:
+From `Template_Animal_Neutral` (abridged — the shipped block also carries `DescentAnimationType`, `DescentSteepness`, `DescentBlending` and `JumpDescentSteepness`):
 
 ```json
 {
@@ -435,11 +460,11 @@ Two **independent** role-level steering forces keep NPCs from piling up. Both ar
 | **Separation** | `ApplySeparation` (`false`) | Soft positional spacing — sums the offsets to neighbours within `SeparationDistance` and nudges the NPC away so bodies don't overlap. |
 | **Avoidance** | `ApplyAvoidance` (`false`) | Predictive collision avoidance — projects velocities and steers around an entity on a collision course (brake or sidestep). |
 
-> The getter for `ApplyAvoidance` is `Role.isAvoidingEntities()` (**not** `isApplyAvoidance`); `ApplySeparation`'s getter is `Role.isApplySeparation()`. Every key in this section is flagged **Experimental** in `BuilderRole`.
+> The getter for `ApplyAvoidance` is `Role.isAvoidingEntities()` (**not** `isApplyAvoidance`); `ApplySeparation`'s getter is `Role.isApplySeparation()`. Every `Separation*` / `Avoidance*` key in this section is flagged **Experimental** in `BuilderRole` (the neighbouring `Collision*` keys are a mix of `Stable` and `Experimental`).
 
 ### Neighbour scope (who gets pushed)
 
-The neighbour set for both forces comes from the NPC's own `com.hypixel.hytale.server.npc.role.support.PositionCache`, filtered by **distance only** — there is **no role filter and no flock filter**. Enabling `ApplySeparation` registers the separation radius against both the cache's NPC list (`requireEntityDistanceAvoidance`) *and* its player list (`requirePlayerDistanceAvoidance`), so an NPC separates from **nearby NPCs and players alike**. Players count when they are in **Adventure** mode (always) or in **Creative** with `allowNPCDetection` enabled; Spectator and ordinary Creative players are ignored. The NPC's current combat target is excluded — it sits in the role's `ignoredEntitiesForAvoidance` set (via `MarkedEntitySupport`) — so an NPC still closes on the thing it is attacking.
+The neighbour set for both forces comes from the NPC's own `com.hypixel.hytale.server.npc.role.support.PositionCache`, filtered by **distance only** — there is **no role filter and no flock filter**. Enabling `ApplySeparation` registers the separation radius against both the cache's NPC list (`requireEntityDistanceAvoidance`) *and* its player list (`requirePlayerDistanceAvoidance`), so an NPC separates from **nearby NPCs and players alike**. Whether a player counts is decided by `EntityDetectionUtil.isDetectableByNPCs`: anything carrying `Intangible` is skipped, a **spectating** player is skipped, and a **Creative** player counts only when their creative settings have `allowNPCDetection` enabled — every other player counts. The NPC's current combat target is excluded — it sits in the role's `ignoredEntitiesForAvoidance` set (via `MarkedEntitySupport`) — so an NPC still closes on the thing it is attacking.
 
 ### Separation keys
 
@@ -552,22 +577,33 @@ Each entry in `Actions` is an object whose `Type` is the action. Common action t
 | `SetAlarm` / `TimerStart` | Schedule alarms and timers (see [Alarms](#alarms-setalarm--alarm)) |
 | `SetFlag` | Write a per-NPC boolean (see [Flags](#flags-setflag--flag)) |
 | `OverrideAttitude` | Temporarily change attitude toward a target |
+| `Role` | **Change the NPC's role** (`BuilderActionRole`): `Role` (required, must resolve), `ChangeAppearance` (`true`), `State`, `DetachFromSpawning` (`false`). This is the only meaning of `"Type": "Role"` — see [Role Types](#role-types). |
 | `Nothing` | No-op |
+
+**Encounter actions live on their own page.** The encounter-manager plugin registers a further set of NPC actions — `SignalWorldEvent`, `SetEncounterBossBar`, `ClearEncounterBossBar`, `StartEncounterMusic`, `StopEncounterMusic`, `SetEncounterAudioState`, `ChangeTargetRole`, `SetTargetNPCInvulnerable` and the `EncounterMembers` sensor collector — plus the `TriggerSpawners` action (`server.npc.corecomponents.world.ActionTriggerSpawners`, new in 0.6.3). They are usable in any role's `Actions` array, but are documented in **[encounters.md](encounters.md)** rather than duplicated here.
 
 ### BodyMotion
 
-A node's `BodyMotion` is an object with a `Type`. NPC locomotion is a **steering-force** system: each motion is a concrete Java class (under `com.hypixel.hytale.server.npc.corecomponents.movement`, plus `combat`) whose `Type` is the class name with the `BodyMotion` prefix stripped. The full built-in set:
+A node's `BodyMotion` is an object with a `Type`. NPC locomotion is a **steering-force** system: each motion is a concrete Java class (mostly under `com.hypixel.hytale.server.npc.corecomponents.movement`, with a few in `combat`, `utility`, `timer` and `debug`). The full built-in set:
 
-| Motion Type | Description |
-|-------------|-------------|
-| `Wander` / `WanderInCircle` / `WanderInRect` | Random movement (in place / circle / rectangle) |
-| `Find` / `FindWithTarget` | Path to a found point / toward the sensor's target |
-| `MaintainDistance` | Keep a desired distance from target (strafes intermittently) |
-| `MoveAway` | Flee away from target |
-| `Land` / `TakeOff` / `Leave` | Flight transitions and despawn-departure |
-| `Teleport` | Teleport to target position |
-| `MatchLook` | Orient to match a look direction |
-| `Charge` / `AimCharge` | Combat charge attacks (`corecomponents.combat`) |
+> **The JSON `Type` is the *registered* name, which for two motions differs from the class name.** `"Type": "Seek"` builds `BodyMotionFind` and `"Type": "Flee"` builds `BodyMotionMoveAway` — `"Find"`, `"FindWithTarget"` and `"MoveAway"` are **not** valid `Type` values and appear in no shipped role.
+
+| Motion Type | Class | Description |
+|-------------|-------|-------------|
+| `Wander` / `WanderInCircle` / `WanderInRect` | `BodyMotionWander*` | Random movement (in place / circle / rectangle) |
+| `Seek` | `BodyMotionFind` | Path toward the sensor's target |
+| `Flee` | `BodyMotionMoveAway` | Path away from the sensor's target |
+| `MaintainDistance` | `BodyMotionMaintainDistance` | Keep a desired distance from target (strafes intermittently) |
+| `Land` / `TakeOff` / `Leave` | `BodyMotionLand` / `…TakeOff` / `…Leave` | Flight transitions and despawn-departure |
+| `Teleport` | `BodyMotionTeleport` | Teleport to target position |
+| `MatchLook` | `BodyMotionMatchLook` | Orient to match a look direction |
+| `Charge` / `AimCharge` | `corecomponents.combat.BodyMotionCharge` / `…AimCharge` | Combat charge attacks |
+| `Flock` | `BodyMotionFlock` | Boids steering among flock-mates |
+| `Nothing` | `corecomponents.utility.BodyMotionNothing` | Explicit no-op (hold still) |
+| `Sequence` / `Timer` | `corecomponents.utility.BodyMotionSequence` / `corecomponents.timer.BodyMotionTimer` | Compose or time-slice child motions |
+| `TestProbe` | `corecomponents.debug.BodyMotionTestProbe` | Debug movement probe |
+
+`HeadMotion` slots take their own set: `Aim`, `Watch`, `Observe`, `Rotate`, `Sequence`, `Timer`, `Nothing`.
 
 There is **no built-in "orbit a target" motion** — `MaintainDistance` only strafes in duration/frequency bursts. A continuously circling motion has to be written as a custom `BodyMotion` (see [Registering custom core components (Java)](#registering-custom-core-components-java)).
 
@@ -615,6 +651,47 @@ Real instruction nodes carry the action via `Type` (there is no separate `Action
 
 Within a single instruction node, the `Sensor` and the `BodyMotion` share an `InfoProvider`. `SensorEntityBase` owns an `EntityPositionProvider` and exposes `getSensorInfo()`; when the sensor matches a target, the node's motion reads the matched entity/position back through `info.getPositionProvider()`. So a **target-relative motion must be paired with a target-producing sensor** — e.g. `"Sensor": { "Type": "Player", "Range": N, "LockOnTarget": true }`. `"Type": "Any"` is the catch-all (no target), making it a good fallback node. Sensor classes live in `com.hypixel.hytale.server.npc.corecomponents.entity` (`SensorPlayer`, `SensorTarget`, `SensorEntity`, `SensorSelf`, `SensorBeacon`, …).
 
+### Entity-sensor slots: `Filters`, `Prioritiser`, `Collector`
+
+The two **scanning** entity sensors — `"Type": "Player"` (`SensorPlayer`) and `"Type": "Mob"` (`SensorEntity`), the only two whose builders extend `BuilderSensorEntityBase` — share its full key set: `Range`, `MinRange`, `LockOnTarget`, `Rebind`, `MultiTarget`, `LockedTargetSlot`, `AutoUnlockTarget`, `OnlyLockedTarget`, `IgnoredTargetSlot`, `UseProjectedDistance`, plus three nested slots:
+
+| Key | Holds | Effect |
+|-----|-------|--------|
+| `Filters` | array of `EntityFilter` objects | Every candidate must pass all filters (`Attitude`, `LineOfSight`, `ViewSector`, `NPCGroup`, `Stat`, `IsDead`, …). |
+| `Prioritiser` | one `ISensorEntityPrioritiser` | Picks *which* match wins when several qualify. |
+| `Collector` | one `ISensorEntityCollector` | Receives **every** entity the sensor examined, matching or not, and can act on the whole set. |
+
+`Filters` alone is more widely available: `Target` and `Self` extend `SensorWithEntityFilters` and read `Filters` but **not** `Prioritiser` / `Collector`; `Beacon`, `Count` and `Kill` extend plain `SensorBase` and read none of the three.
+
+`Prioritiser` has one built-in implementation, `"Type": "Attitude"` (`SensorEntityPrioritiserAttitude`, *"Prioritises return entities by attitude"*), whose required key is `AttitudesByPriority` — an ordered, duplicate-free array of [attitude values](#attitude-values):
+
+```json
+"Sensor": {
+    "Type": "Mob",
+    "Range": 20,
+    "Prioritiser": { "Type": "Attitude", "AttitudesByPriority": [ "Hostile", "Neutral" ] }
+}
+```
+
+**The `Collector` slot** (`com.hypixel.hytale.server.npc.corecomponents.ISensorEntityCollector`) is the multi-target escape hatch. Under `Server/NPC/` exactly 17 sensor nodes declare one — all `Mob` (15) or `Player` (2), all of them `CombatTargets`; the two `EncounterMembers` uses live in `Server/EncounterManager/`. Its interface is `init` → `collectMatching` / `collectNonMatching` per candidate → `cleanup`, plus `terminateOnFirstMatch()`. That last method is the important one: the built-in `ISensorEntityCollector.DEFAULT` returns `true`, so **a sensor with no collector stops scanning at its first match**; a collector that returns `false` makes the sensor walk every candidate in range, which is how a single sensor feeds a whole group.
+
+```json
+"Sensor": {
+    "Type": "Player",
+    "Range": 30,
+    "Collector": { "Type": "EncounterMembers" }
+}
+```
+
+Two collectors ship:
+
+| `Type` | Class | Purpose |
+|--------|-------|---------|
+| `CombatTargets` | `builtin.npccombatactionevaluator.corecomponents.CombatTargetCollector` | *"processes matched friendly and hostile targets and adds them to the NPC's short-term combat memory"* — the feed behind the [CAE](#combat-action-evaluator-cae)'s `KnownTargetCount` / target memory. Attached to the shared detection components (`Component_Sensor_Standard_Detection`, `…_Sight*`, `…_Sound*`, `…_Scent_By_Attitude`), so every role referencing those inherits it. |
+| `EncounterMembers` | `builtin.encountermanager.npc.EncounterMemberCollector` | Collects the matches into an encounter's member set — see [encounters.md](encounters.md). |
+
+A collector is a first-class registered category (`NPCPlugin` registers a `BuilderFactory` for `ISensorEntityCollector` keyed on `Type`), so a plugin can add its own: the builder extends `BuilderBase<ISensorEntityCollector>` and its `category()` returns `ISensorEntityCollector.class` — register it with the same [`registerCoreComponentType`](#registering-custom-core-components-java) call used for sensors and motions.
+
 ### Randomized instructions (Type: Random)
 
 A node with `"Type": "Random"` (class `InstructionRandomized`) picks **one** of its child `Instructions` by weight and runs it. The surprising default: the pick is **permanent** — it only re-rolls on a state change or an explicit reset. Add `ExecuteFor` to make it a timer-driven switch (the headline use case is alternating a `BodyMotion` on a timer).
@@ -629,7 +706,7 @@ Fields read by `BuilderInstructionRandomized` (defaults from the bytecode):
 | `ResetOnStateChange` | bool | `true` | Re-roll when the NPC's AI state changes. |
 | `Sensor` | object | always matches | Gates the **whole** Random node; omit ⇒ always matches (general node behavior). |
 | `Name` | string | — | Lets a `ResetInstructions` action target this node to force a re-roll. |
-| `Enabled` / `Continue` / `Tag` | — | — | Standard node flags (see the intro above). |
+| `Enabled` / `Continue` / `Tag` / `TreeMode` | — | — | Standard node flags (see the intro above). `TreeMode` (`false`) makes the node and its children behave like a traditional behaviour tree — *"will continue if all child instructions fail"* — and is mutually constrained with `Continue`. |
 
 `Weight` is **not** a field of the Random node itself — it is read from each **direct child** (`Instruction.getWeight()`) to build the weighted map. Equal or absent weights ⇒ uniform.
 
@@ -641,7 +718,7 @@ if (timeout <= 0 || current == null) {
     current  = weightedMap.get(random())                  // re-roll a branch by Weight
     timeout  = randomRange(ExecuteFor[0], ExecuteFor[1])  // new random window
 }
-if (current.matches(self, role, dt, store))               // ← re-checked EVERY tick
+if (current.matches(self, exec, dt, store))               // ← re-checked EVERY tick (exec = ExecutionSupport)
     current.execute()
 ```
 
@@ -711,14 +788,17 @@ JSON params (from `BuilderActionAttack`):
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `Attack` | string | Attack interaction id (e.g. `Root_NPC_Attack_Melee`). Defaults to the role's top-level `Attack` field if omitted. |
+| `Attack` | string | Attack interaction id (e.g. `Root_NPC_Attack_Melee`). Roles normally pass the role's own field through with `{ "Compute": "Attack" }`. |
 | `AttackType` | enum | `Primary` (default) / `Secondary` / `Ability1` / `Ability2` / `Ability3` (`ActionAttack$AttackType`). |
-| `AttackPauseRange` | `[min, max]` | Pause **between** attacks — a throttle, in seconds. **Number array, not strings.** |
-| `AimingTimeRange` | `[min, max]` | How long to aim before striking, in seconds. Number array. |
-| `ChargeFor` / `ChargeDistance` | number | Charge-attack windup / distance. |
+| `AttackPauseRange` | `[min, max]` | Pause **between** attacks — a throttle, in seconds; default `[0, 0]`. **Number array, not strings.** |
+| `AimingTimeRange` | `[min, max]` | How long to aim before striking, in seconds; default `[0, 0]`. Number array. |
+| `ChargeFor` / `ChargeDistance` | number | Charge-attack windup / distance (both default `0`; `ChargeFor` doubles as how long to block for). |
 | `MeleeConeAngle` | number | Cone half-angle the target must be within. |
-| `CheckLineOfSight` / `AvoidFriendlyFire` / `DamageFriendlies` / `SkipAiming` / `BallisticMode` | bool | Targeting/aiming toggles. |
+| `LineOfSight` / `AvoidFriendlyFire` / `DamageFriendlies` / `SkipAiming` | bool | Targeting/aiming toggles. The line-of-sight key is **`LineOfSight`** — there is no `CheckLineOfSight` key. |
+| `BallisticMode` | enum | `Short` (default) / `Long` / `Alternate` / `Random` (`ActionAttack$BallisticMode`) — trajectory choice for ballistic attacks. It is an **enum, not a bool**. |
 | `InteractionVars` | object | Per-action var overrides for the fired interaction. |
+
+> **The interaction must be tagged as an NPC attack.** `ActionAttack.execute` rejects any resolved interaction whose root is not in `RootInteraction`'s `Attack` tag set, logging *"using interaction … that is not tagged as an 'Attack' usable by NPCs"* and doing nothing. `Root_NPC_Attack_Melee` earns it with `"Tags": { "Attack": [ "Melee" ] }`. If `Attack` is omitted **and** no `Attack` parameter is supplied by the paired sensor, the action falls back to the root interaction the NPC's held item provides for `AttackType` — not to the role's top-level field.
 
 **Behavior (from `ActionAttack.execute`):** the action is effectively **one-shot per completion**. While aiming or not yet on target it returns "not done" — keeping a [blocking action list](#actionlist-blocking-semantics-multi-tick-sequences) parked on it — and once on target it triggers the attack interaction **once** and returns done. `AttackPauseRange` throttles the gap *between* attacks; it is **not** a blocking wait baked into a single call (so `[0, 0]` is fine when re-entry is gated externally).
 
@@ -732,23 +812,29 @@ Vanilla reference: the `Flee.Attack` retaliation in `Template_Animal_Neutral.jso
 
 A role can be handed a combat target **directly** — including one it never sensed — by writing the target into a *marked-target slot* and reading that slot back with the `Target` sensor. This is the mechanism behind "one NPC aggros and the whole pack attacks you, even members that can't see you," but it's broadly useful any time you want to make an NPC attack a specific entity from code.
 
-**The slot.** Marked refs live on `MarkedEntitySupport` (`com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport`), reached via `NPCEntity.getRole().getMarkedEntitySupport()`. The default slot name is the constant `MarkedEntitySupport.DEFAULT_TARGET_SLOT`, whose value is `"LockedTarget"`.
+**The slot.** Marked refs live on `MarkedEntitySupport` (`com.hypixel.hytale.server.npc.role.support.MarkedEntitySupport`). **As of 0.6.3 this is an ECS component, not a field on `Role`** — `Role.getMarkedEntitySupport()` no longer exists. Reach it with the static accessor `MarkedEntitySupport.get(ref, accessor)` (or `accessor.getComponent(ref, MarkedEntitySupport.getComponentType())`); inside a sensor/action/motion you already hold an `ExecutionSupport`, which caches it as `ExecutionSupport.getMarkedEntitySupport()`. The default slot name is the constant `MarkedEntitySupport.DEFAULT_TARGET_SLOT`, whose value is `"LockedTarget"`.
 
 **Set it from Java:**
 
 ```java
-Role role = npc.getRole();
-role.getMarkedEntitySupport().setMarkedEntity(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
+// component-based (0.6.3); `store` is any ComponentAccessor<EntityStore>
+MarkedEntitySupport marked = MarkedEntitySupport.get(npcRef, store);
+marked.setMarkedEntity(MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
+
+// or the one-liner on Role, which does exactly the above
+npc.getRole().setMarkedTarget(npcRef, store, MarkedEntitySupport.DEFAULT_TARGET_SLOT, targetRef);
 ```
 
-`setMarkedEntity` has both `(String slot, Ref)` and `(int slot, Ref)` overloads; read a slot back with `getMarkedEntityRef(slot)`. There is also `flockSetTarget(slot, targetRef, store)`, which broadcasts the target across the marker's flock `EntityGroup` — convenient, but for *just-joined* members it is unreliable because the group is populated a tick late (see [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java)); setting it per-member is robust.
+`setMarkedEntity` has `(String slot, Ref)` and `(int slot, Ref)` overloads, plus 0.6.3's `(slot, Ref, boolean rebind, ComponentAccessor)` forms — passing `rebind = true` records the target's UUID so the slot survives a short reload or a role change (`isRebindSlot` / `resolveRebinds`). Read a slot back with `getMarkedEntityRef(slot)`. There is also `flockSetTarget(selfRef, slot, targetRef, store)` — note the **leading self-ref added in 0.6.3** — which broadcasts the target across the marker's flock `EntityGroup`; convenient, but for *just-joined* members it is unreliable because the group is populated a tick late (see [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java)), so setting it per-member is robust.
 
 **Set it from role JSON** — the `SetMarkedTarget` and `ReleaseTarget` actions (registered in `NPCPlugin`) are the JSON equivalents of set/clear:
 
 ```json
-{ "Type": "SetMarkedTarget", "TargetSlot": "LockedTarget" }
+{ "Type": "SetMarkedTarget", "TargetSlot": "LockedTarget", "Rebind": false }
 { "Type": "ReleaseTarget",   "TargetSlot": "LockedTarget" }
 ```
+
+Both default `TargetSlot` to `"LockedTarget"`. `SetMarkedTarget`'s `Rebind` (default `false`) is the JSON face of the UUID rebinding above.
 
 **Read it back with the `Target` sensor** (`BuilderSensorTarget` → `SensorTarget`) rather than a fresh `Player`/`Mob` sense:
 
@@ -756,7 +842,7 @@ role.getMarkedEntitySupport().setMarkedEntity(MarkedEntitySupport.DEFAULT_TARGET
 { "Type": "Target", "TargetSlot": "LockedTarget", "Range": 24 }
 ```
 
-`SensorTarget` resolves the slot via `role.getMarkedEntitySupport().getMarkedEntityRef(slot)`, so it supplies the marked target's **position with no line-of-sight requirement** — a recruited NPC chases and attacks a target it never detected. `TargetSlot` defaults to `"LockedTarget"`; `Range` (default `Double.MAX_VALUE`) acts as a leash, so omit it for "any distance." Driving combat off the `Target` sensor (instead of re-sensing the player each tick) means "engaged" ≈ "has a `Target` within leash," and losing the target — the sensor stops matching — cleanly drives teardown.
+`SensorTarget` resolves the slot through the NPC's `MarkedEntitySupport` component (`getMarkedEntityRef(slot)`), so it supplies the marked target's **position with no line-of-sight requirement** — a recruited NPC chases and attacks a target it never detected. `TargetSlot` defaults to `"LockedTarget"`; `Range` (default `Double.MAX_VALUE`) acts as a leash, so omit it for "any distance." Two more keys: `AutoUnlockTarget` (default `false`) clears the slot when the match fails, and `Filters` takes the usual [entity-filter array](#entity-sensor-slots-filters-prioritiser-collector). Driving combat off the `Target` sensor (instead of re-sensing the player each tick) means "engaged" ≈ "has a `Target` within leash," and losing the target — the sensor stops matching — cleanly drives teardown.
 
 ### Alarms (`SetAlarm` / `Alarm`)
 
@@ -765,7 +851,7 @@ Alarms are named per-NPC timers. `SetAlarm` arms one; the `Alarm` sensor reads i
 - **`SetAlarm` action** (`…corecomponents.timer.ActionSetAlarm`): `{ "Type": "SetAlarm", "Name": "<alarm>", "DurationRange": [ "<ISO8601>", "<ISO8601>" ] }`. Re-arms unconditionally to *now + minDuration + random within range*.
 - **`Alarm` sensor** (`…corecomponents.timer.SensorAlarm`): `{ "Type": "Alarm", "Name": "<alarm>", "State": "Unset"|"Set"|"Passed", "Clear": false }`. States (enum `SensorAlarm$State`): **`Unset`** = never armed; **`Set`** = armed but not yet elapsed; **`Passed`** = armed and elapsed. Optional `"Clear": true` unsets the alarm when it matches a passed state.
 
-> **⚠️ Gotcha: `DurationRange` is an array of ISO-8601 duration *strings*, not numbers.** e.g. `["PT8S","PT14S"]` (seconds) or the vanilla produce alarm's `["PT18H","PT48H"]`; `["P0D","P0D"]` unsets. The builder's holder type is `TemporalAmount[]` — passing numbers (`[8, 14]`) fails to load with `Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`, and the **entire role then silently drops from the spawn list** (see [Gotchas](#gotchas--errors)). This is specific to alarm durations: number arrays *are* correct for `Timeout.Delay`, `AttackPauseRange`, `AimingTimeRange`, `ExecuteFor`, and `TimerStart` ranges.
+> **⚠️ Gotcha: `DurationRange` is an array of ISO-8601 duration *strings*, not numbers.** e.g. `["PT8S","PT14S"]` (seconds), or the vanilla livestock produce alarm's `["PT6H","PT36H"]` (`ProduceTimeout` in `Template_Animal_Neutral` / `Template_Livestock`, raised to `["PT36H","PT48H"]` by `Chicken.json` and friends); `["P0D","P0D"]` unsets. The builder's holder type is `TemporalAmount[]` — passing numbers (`[8, 14]`) fails to load with `Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`, and the **entire role then silently drops from the spawn list** (see [Gotchas](#gotchas--errors)). This is specific to alarm durations: number arrays *are* correct for `Timeout.Delay`, `AttackPauseRange`, `AimingTimeRange`, `ExecuteFor`, and `TimerStart` ranges.
 
 **Spawn-init idiom** — run an action exactly once when an NPC spawns, by matching only the initial `Unset` state (mirrors `Template_Animal_Neutral`'s `Produce_Ready` alarm):
 
@@ -793,6 +879,7 @@ When an instruction node sets **`"ActionsBlocking": true`** (`com.hypixel.hytale
 
 - The action list becomes a **stateful sequence that spans ticks**: it keeps an `actionIndex`, executes `actions[actionIndex]`, and **advances only when an action returns `true`** (done). An action returning `false` parks the list on it. The list reports itself done only when the last action completes.
 - **Non-blocking** (`ActionsBlocking` absent/false): it fires **all** actions every tick — no index, no advancement.
+- The sibling flag **`ActionsAtomic`** (default `false`) is the all-or-nothing variant: *"only execute actions if all actions can be executed."*
 
 So a blocking `[PlayAnimation, Timeout 0.6, Attack, PlayAnimation, SetFlag]` runs **in order across ticks**: the `Timeout` parks the list while it counts, the [`Attack`](#the-attack-action) parks it while aiming then strikes once, and the trailing cleanup/flag-clear actions run exactly once at the end. This is the standard shape for composing windup → attack → cleanup.
 
@@ -808,9 +895,12 @@ The core NPC plugin is itself a `JavaPlugin` with a static accessor and a regist
 // com.hypixel.hytale.server.npc.NPCPlugin
 public static NPCPlugin get();
 public <T> NPCPlugin registerCoreComponentType(String typeName, Supplier<Builder<T>> builder);
-// Category constants route a builder to the right factory:
-//   FACTORY_CLASS_ROLE / _BODY_MOTION / _HEAD_MOTION / _ACTION / _SENSOR /
-//   _INSTRUCTION / _TRANSIENT_PATH / _ACTION_LIST
+// Category constants naming the factories (all `public static final String` as of 0.6.3):
+//   FACTORY_CLASS_ROLE        = "Role"        FACTORY_CLASS_BODY_MOTION = "BodyMotion"
+//   FACTORY_CLASS_HEAD_MOTION = "HeadMotion"  FACTORY_CLASS_ACTION      = "Action"
+//   FACTORY_CLASS_SENSOR      = "Sensor"      FACTORY_CLASS_INSTRUCTION = "Instruction"
+//   FACTORY_CLASS_TRANSIENT_PATH = "Path"     FACTORY_CLASS_ACTION_LIST = "ActionList"
+//   ROLE_ASSETS_PATH          = "Server/NPC/Roles"
 ```
 
 A builder's `category()` decides which slot its `Type` is usable in — `BuilderBodyMotionBase.category()` returns `BodyMotion.class`, so registering a `BuilderBodyMotionX` makes `"Type": "X"` valid in any `BodyMotion` slot. **Sensors and actions register exactly the same way** — only the builder base class (and thus its `category()`) differs. Register in your plugin's `setup()`:
@@ -821,6 +911,8 @@ NPCPlugin.get().registerCoreComponentType("Orbit", BuilderBodyMotionOrbit::new);
 
 No manifest `Dependencies` entry is needed — the NPC plugin is core and always loads first (and a wrong `group:name` would only *break* your load).
 
+> **⚠️ 0.6.3 signature break: `Role` → `ExecutionSupport` throughout.** Every core-component callback that used to take a `Role` now takes a `com.hypixel.hytale.server.npc.instructions.ExecutionSupport` — `Sensor.matches`, `Action.execute` / `canExecute` / `activate` / `deactivate`, `Motion.computeSteering` / `activate` / `deactivate` / `preComputeSteering`, and `Instruction`'s whole lifecycle (`loaded`/`spawned`/`unloaded`/`removed`/`teleported`/`registerWithSupport`). `ExecutionSupport` is a pooled per-tick handle that caches the NPC's support components: `getRole()`, `getNpcEntity()`, `getStateSupport()`, `getMarkedEntitySupport()`, `getPositionCache()`, `getCombatSupport()`, `getFlagsComponent()`, `getWorldSupport()`, `getEntitySupport()`, `getMotionContextSupport()`, `getDisplayNameSupport()`, `getPlayerTaskSupport()`, `getDebugSupport()`. Outside a callback you can mint one with `Role.acquireExecutionSupport(ref, accessor)`. **A 0.5.9 plugin that overrode any of these will silently fail to override after recompiling — the base method is still there with a different parameter type.**
+
 ### The custom-`BodyMotion` contract
 
 Locomotion is a **steering-force** system: a motion writes a *desired-movement vector* into a `Steering`, and the engine integrates that with pathing, collision avoidance, and the motion controller. **Do not drive an AI NPC by writing the `Velocity` component each tick** — that fights the locomotion layer. (`Velocity` is for knockback/impulses; see the [Velocity API](entities.md#velocity-api). Continuous AI movement belongs in a `BodyMotion`.)
@@ -830,7 +922,7 @@ Locomotion is a **steering-force** system: a motion writes a *desired-movement v
 public BodyMotionX(BuilderBodyMotionX builder, BuilderSupport support) { super(builder); /* read getters */ }
 
 // return false = motion inactive this tick (no target / nothing to do)
-public boolean computeSteering(Ref<EntityStore> self, Role role, InfoProvider info, double dt,
+public boolean computeSteering(Ref<EntityStore> self, ExecutionSupport exec, InfoProvider info, double dt,
                                Steering out, ComponentAccessor<EntityStore> acc) {
     // Self position:
     TransformComponent tf = acc.getComponent(self, TransformComponent.getComponentType());
@@ -877,7 +969,7 @@ There is no single "which way does my NPC face?" setting — **body facing is re
 1. If the motion set an **explicit yaw / direction hint** (`Steering.setYaw`, surfaced via `hasYawOrDirection()`), the NPC faces that.
 2. Otherwise the controller faces the NPC in its **movement direction** (`PhysicsMath.headingFromDirection` of the translation vector).
 
-So motions split two ways: **face the target** (set an explicit yaw — `MaintainDistance` ends `computeSteering` with `setYaw(targetYaw)`, `WanderInCircle`/`BodyMotionWanderBase` set the walk heading) vs **face travel** (set none — `MoveAway`, `FindWithTarget`, `Seek` fall through to the movement-direction default). **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
+So motions split two ways: **face the target** (set an explicit yaw — `MaintainDistance` ends `computeSteering` with `setYaw(targetYaw)`, `WanderInCircle`/`BodyMotionWanderBase` set the walk heading) vs **face travel** (set none — `Flee` (`BodyMotionMoveAway`) and the base pathing motions fall through to the movement-direction default). `Seek` (`BodyMotionFind`) is the hybrid: while it is actually pathing it sets no yaw, but when its path is throttled or deferred it calls `lookAtTarget`, which sets both yaw and pitch onto the target. **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
 
 **`HeadMotion` is a separate channel, but not purely cosmetic.** A head motion (`Watch`, `Aim`) writes the head steering, and the controller will *blend the body toward the head* — but only when the body motion left yaw **unset** (`if (!bodySteering.hasYaw())`) **and** the head exceeds the model's camera yaw range (default ±45°). So a head motion can drag the body around on a travel-facing motion, but it **cannot** override a motion that set its own yaw, and small head turns (within ±45°) never move the body. (This is why a melee NPC running `HeadMotion: Aim` over a yaw-setting motion still [whiffs](#melee-hits-are-directional-swept-arcs--npcs-can-miss) — the head turns, the body doesn't.)
 
@@ -889,9 +981,9 @@ public class MyMaintainDistance extends BodyMotionMaintainDistance {   // distin
     public MyMaintainDistance(MyBuilderMaintainDistance b, BuilderSupport s) {
         super(b, s); this.faceMovementDirection = b.isFaceMovementDirection(s);
     }
-    @Override public boolean computeSteering(Ref<EntityStore> ref, Role role, InfoProvider info, double dt,
+    @Override public boolean computeSteering(Ref<EntityStore> ref, ExecutionSupport exec, InfoProvider info, double dt,
                                              Steering steering, ComponentAccessor<EntityStore> acc) {
-        boolean active = super.computeSteering(ref, role, info, dt, steering, acc);   // run vanilla logic first
+        boolean active = super.computeSteering(ref, exec, info, dt, steering, acc);   // run vanilla logic first
         if (faceMovementDirection && steering.hasTranslation()) {                     // then overwrite the yaw it set
             Vector3d t = steering.getTranslation();
             steering.setYaw(PhysicsMath.normalizeTurnAngle(PhysicsMath.headingFromDirection(t.x(), t.z())));
@@ -931,13 +1023,13 @@ Sensors register through the same `registerCoreComponentType` call as body motio
 
 ```java
 // com.hypixel.hytale.server.npc.corecomponents.SensorBase
-public boolean matches(Ref<EntityStore> self, Role role, double dt, Store<EntityStore> store) {
+public boolean matches(Ref<EntityStore> self, ExecutionSupport exec, double dt, Store<EntityStore> store) {
     // true only for the one flock member that currently holds the attack token
     return holdsAttackToken(self, store);
 }
 ```
 
-`SensorBase` also exposes `getSensorInfo()`, which supplies the target the paired `BodyMotion`/`Action` acts on (see [Sensor → BodyMotion target hand-off](#sensor--bodymotion-target-hand-off)). A **pure gate** sensor — one that only decides yes/no and provides no target of its own — may return `null` from `getSensorInfo()`; pair it with a target-producing sensor (`Player`, `Target`) via `And` so the node still acquires a target:
+You must also implement **`getSensorInfo()`**, which supplies the target the paired `BodyMotion`/`Action` acts on (see [Sensor → BodyMotion target hand-off](#sensor--bodymotion-target-hand-off)). Note that it is declared abstract on the `Sensor` *interface* and is **not** implemented by `SensorBase`, so leaving it out will not compile. A **pure gate** sensor — one that only decides yes/no and provides no target of its own — returns `null` from it, exactly as the built-in `SensorAny` does; pair such a sensor with a target-producing sensor (`Player`, `Target`) via `And` so the node still acquires a target:
 
 ```json
 { "Type": "And", "Sensors": [
@@ -946,9 +1038,11 @@ public boolean matches(Ref<EntityStore> self, Role role, double dt, Store<Entity
 ] }
 ```
 
+> **Order matters in `And`.** Its own long description is *"Evaluate all sensors and execute action only when all sensor signal true. **Target is provided by first sensor.**"* — so the target-producing sensor must come **first**; a pure gate listed first would hand the node a `null` target.
+
 The builder extends `BuilderSensorBase` (`com.hypixel.hytale.server.npc.corecomponents.builders.BuilderSensorBase`) and overrides `readConfig(JsonElement)`, `build(BuilderSupport)`, and the description methods. `category()` is inherited from `BuilderSensorBase` and already returns the `Sensor` slot, so you do not override it.
 
-> **⚠️ FATAL TRAP — do NOT call `readCommonConfig(element)` from your `readConfig`.** The framework already applies the common `Enabled` / `Once` sensor config itself; calling `readCommonConfig` again **double-registers** those attributes and the role fails to load with terse errors like `FAIL: <role>.json: Once` and `FAIL: ... Enabled`, followed by `Reloading nonexistent role ...` spam. The engine's own flock-leader sensor builder, `BuilderSensorFlockLeader` (note: under `com.hypixel.hytale.server.flock.corecomponents.builders`, **not** `server.npc`), does **not** call it — its `readConfig` simply returns `this`. Yours should too: read only your own keys, then `return this`.
+> **⚠️ FATAL TRAP — do NOT call `readCommonConfig(element)` from your `readConfig`.** The framework already applies the common `Enabled` / `Once` sensor config itself; calling `readCommonConfig` again **double-registers** those attributes and the role fails to load with terse errors like `FAIL: <role>.json: Once` and `FAIL: ... Enabled`, followed by `Reloading nonexistent role ...` spam. The engine's own flock-leader sensor builder, `BuilderSensorFlockLeader` (note: under `com.hypixel.hytale.server.flock.corecomponents.builders`, **not** `server.npc`), does **not** call it — its whole `readConfig` declares its requirements (`provideFeature` / `requireInstructionType`) and returns `this`. Yours should do the same: read only your own keys, then `return this`.
 
 Register it in `setup()` exactly like a body motion — the builder's `category()` routes it to the Sensor slot:
 
@@ -962,7 +1056,9 @@ NPCPlugin.get().registerCoreComponentType("MyMod_FlockAttackToken", BuilderMyTok
 
 ## Components
 
-Reusable behavior components allow shared logic across NPCs. They are referenced by short name with `Reference`, optionally adjusted with `Modify` (whose fields commonly use `{ "Compute": ... }`). Component files use the prefixes `Component_Sensor_*`, `Component_Instruction_*`, and `Component_ActionList_*`.
+Reusable behavior components allow shared logic across NPCs. They are referenced by short name with `Reference`, optionally adjusted with `Modify` (whose fields commonly use `{ "Compute": ... }`). Component files live under `Server/NPC/Roles/_Core/Components/` (`Sensors/`, `Steps/`, `ActionLists/`, `Flock/`, `Paths/`, `Selectors/`) and use the prefixes `Component_Sensor_*`, `Component_Instruction_*`, and `Component_ActionList_*`.
+
+A component file declares which slot it fits with a top-level **`"Class"`** (`Sensor`, `Instruction`, or `ActionList`), an optional `"Type": "Component"`, a `Parameters` block, and a `Content` body. Callers override those parameters through `Modify`. Two parameter names are conventions rather than values: **`_ImportStates`** (declared by the component, listing the state names it expects) and **`_ExportStates`** (supplied by the caller in `Modify`, mapping the component's states onto the role's own).
 
 ### Sensor Components
 
@@ -1016,7 +1112,9 @@ State transitions can reference shared action lists:
 
 ## Groups
 
-Groups define named collections of NPC roles, referenced elsewhere (attitudes, flock filters, spawn filters). Found in `Server/NPC/Groups/`. The file name is the group name. Group files have no `Type` field; they directly contain an `IncludeRoles` array. Role names may use trailing-wildcard patterns (`Fox*`). An `ExcludeRoles` array is supported but rarely used.
+Groups define named collections of NPC roles, referenced elsewhere (attitudes, flock filters, spawn filters). Found in `Server/NPC/Groups/`. The file name is the group name. Group files have no `Type` field; they directly contain an `IncludeRoles` array. Role names may use trailing-wildcard patterns (`Fox*`).
+
+The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and **`IncludeGroups` / `ExcludeGroups`**, which compose one group out of others. In practice 64 of the 72 shipped files use only `IncludeRoles`, and just one uses `ExcludeRoles`.
 
 ### Group Definition
 
@@ -1040,7 +1138,16 @@ Plain role names (without a wildcard) match a single role, while a name ending i
 
 ## Flocks
 
-Flocks configure how many NPCs spawn together. Found in `Server/NPC/Flocks/`. Real flock files use `"Type": "Weighted"`, a `MinSize`, and a flat `SizeWeights` array. Each weight corresponds to a size starting at `MinSize`: the first weight is for `MinSize`, the second for `MinSize + 1`, and so on. Weights are relative.
+Flocks configure how many NPCs spawn together. Found in `Server/NPC/Flocks/`. There are **two** asset types, and the two shared keys `MaxGrowSize` (default `8` — the cap a flock may grow to *after* spawning) and `BlockedRoles` apply to both:
+
+| `Type` | Class | Sizing keys |
+|--------|-------|-------------|
+| `Weighted` | `WeightedSizeFlockAsset` | `MinSize` + a flat `SizeWeights` array |
+| *(omitted — the default)* | `RangeSizeFlockAsset` | `Size` `[min, max]` |
+
+Seven of the eight shipped files use `"Type": "Weighted"`; `Pack_Small.json` is the lone default-type file and is just `{ "Size": [ 2, 3 ] }`.
+
+For the weighted form, each weight corresponds to a size starting at `MinSize`: the first weight is for `MinSize`, the second for `MinSize + 1`, and so on. Weights are relative.
 
 ### Weighted Sizes
 
@@ -1054,7 +1161,7 @@ Flocks configure how many NPCs spawn together. Found in `Server/NPC/Flocks/`. Re
 }
 ```
 
-An optional `MaxGrowSize` caps how large a flock may grow over time:
+`MaxGrowSize` caps how large a flock may grow over time. It defaults to `8`, so the one shipped file that spells it out is merely restating the default:
 
 **Example: `Flocks/Parent_And_Young_75_25.json`**
 
@@ -1085,7 +1192,9 @@ static Ref<EntityStore> createFlock(Store<EntityStore> store, Role role)        
 static Ref<EntityStore> createFlock(Store<EntityStore> store, @Nullable FlockAsset def, String[] allowedRoles)
 ```
 
-`createFlock` is **synchronous**: it builds a holder with a `UUIDComponent`, an empty `EntityGroup`, and a `Flock(def, allowedRoles)`, then `store.addEntity(holder, AddReason.SPAWN)`. The returned flock entity has its `Flock` / `EntityGroup` / `UUIDComponent` immediately — it just has **no members yet**. A `null` `FlockAsset` means the default size cap (`PersistentFlockData.getMaxGrowSize()`, ≈ 8).
+`createFlock` is **synchronous**: it builds a holder with a `UUIDComponent`, an empty `EntityGroup`, and a `Flock(def, allowedRoles)`, then `store.addEntity(holder, AddReason.SPAWN)`. The returned flock entity has its `Flock` / `EntityGroup` / `UUIDComponent` immediately — it just has **no members yet**. (The `Flock` component owns the `PersistentFlockData`; the flock entity does **not** carry it as a separate component.)
+
+> **⚠️ A `null` `FlockAsset` means *no* size cap, not the asset default of 8.** `PersistentFlockData` initialises `maxGrowSize` to `Integer.MAX_VALUE` and only overwrites it when a `FlockAsset` is supplied — the `8` default lives on `FlockAsset`, not on `PersistentFlockData`. So the `createFlock(store, role)` / `createFlock(store, null, roles)` paths grow without bound as far as `canJoinFlock` is concerned; cap them yourself, or pass a real `FlockAsset`.
 
 ### Recruiting members
 
@@ -1159,13 +1268,17 @@ Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/
 | `NPCSpawnState` | String | State the NPC starts in when spawned |
 | `SpawnRadius` | Number | Spawn area radius |
 | `BeaconRadius` | Number | Beacon activation radius |
-| `NPCs` | Array | NPC spawn entries (`Id`, `Weight`, optional `SpawnBlockSet`) |
+| `NPCs` | Array | NPC spawn entries — per entry `Id`, `Weight`, and optional `SpawnBlockSet`, `Flock`, `MovementModes`, `SpawnFluidTag`, `EnableSafeSpawning` (`RoleSpawnParameters`) |
 | `LightRanges` | Object | Light level requirements (`Light: [min, max]`) |
 | `Weight` | Number | Per-entry spawn weight |
+| `TargetDistanceFromPlayer` | Number | Preferred distance from the player to place the spawn |
+| `NPCIdleDespawnTime` | Number | Seconds an idle spawned NPC survives before despawning |
+| `BeaconVacantDespawnGameTime` | String | ISO-8601 game-time duration a vacant beacon keeps its NPCs (e.g. `PT15M`) |
+| `TargetSlot` | String | Marked-target slot to pre-fill on the spawned NPC (see [Marked targets](#marked-targets-lockedtarget-and-the-target-sensor)) |
 
 ### Beacon Example
 
-**Example: `Spawn/Beacons/Zone1/Zone1_Cave_Tier1/Zone1_Cave_Volcanic_T1_Goblin.json`**
+**Example: `Spawn/Beacons/Zone1/Zone1_Cave_Tier1/Zone1_Cave_Volcanic_T1_Goblin.json`** (abridged — the shipped file also sets `NPCIdleDespawnTime`, `BeaconVacantDespawnGameTime` and `TargetDistanceFromPlayer`)
 
 ```json
 {
@@ -1203,7 +1316,7 @@ A minimal beacon can also start an NPC in a chosen state:
 
 ### Zone-Based Organization
 
-Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories:
+Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories and a handful of loose beacons (`Edible_*`, `Goblin_Duke_Phase_*`) at the top level:
 
 ```
 Server/NPC/Spawn/Beacons/
@@ -1234,20 +1347,23 @@ Main options (`NPCSpawnCommand`):
 
 | Option | Meaning |
 | --- | --- |
-| `--count` | How many times to run the spawn loop (int, default `0`). |
-| `--flock` | Flock size (int) **or** a flock-asset id. Spawns a whole flock per loop iteration. |
-| `--radius` | Scatter radius for the spawned group. |
-| `--speed` | Movement-speed override. |
-| `--scale` | Body scale. |
+| `--count` | How many times to run the spawn loop (int > 0, **default `1`**). |
+| `--flock` | Flock size (int) **or** a flock-asset id (default `1`). Spawns a whole flock per loop iteration. |
+| `--radius` | Scatter radius for the spawned group (double > 0, default `8`). |
+| `--speed` | Initial-velocity override along the player's look direction. |
+| `--scale` | Body scale (clamped to the model's min/max unless `--bypassScaleLimits`). |
 | `--position` | Explicit spawn position. |
 | `--posOffset` | Offset from the resolved position. |
 | `--headRotation` / `--bodyRotation` | Initial head / body yaw. |
+| `--flags` | Comma-separated [`RoleDebugFlags`](#debug-overlay-npc-debug) to stamp on the spawned NPCs. |
 | `--frozen` | Spawn frozen (no AI ticking). |
 | `--spawnOnGround` | Snap to the ground. |
-| `--randomModel` | Pick a random model variant. |
+| `--randomModel` | Pick a random cosmetic skin/model. |
 | `--randomRotation` | Randomize facing. |
+| `--facingRotation` | Face the spawning player. |
+| `--nonrandom` | Use a fixed RNG seed, for reproducible spawns. |
 | `--bypassScaleLimits` | Allow scales outside the normal clamp. |
-| `--test` | Test-spawn mode. |
+| `--test` | Test-spawn mode (only honoured when `--count` is 1). |
 
 > **Note: `--count` and `--flock` multiply.** The command runs the spawn loop `count` times, and each iteration spawns a whole flock of `--flock` members. So `--count=1 --flock=5` is one pack of 5, while `--count=5 --flock=5` is **25** NPCs (five packs of 5). (Confirmed in-game.)
 
@@ -1309,7 +1425,7 @@ To give a creature the lightweight melee:
 
 - Set a role field **`"Attack": "<RootInteraction>"`** (e.g. `Root_NPC_Attack_Melee`) — also settable inline on the `Attack` action.
 - Run a **[`Type: "Attack"` action](#the-attack-action)** inside the role's `Instructions` (typically inside an [`ActionsBlocking`](#actionlist-blocking-semantics-multi-tick-sequences) windup sequence) to perform the swing.
-- Customize damage / animation / hit-geometry purely by overriding **named interaction vars** under the role's top-level **`InteractionVars`** (next subsection) — no CAE.
+- Customize damage / animation / hit-geometry purely by overriding **named interaction vars** under the role's **`InteractionVars`** — spelled **`_InteractionVars`** inside a `Variant`'s `Modify` (next subsection) — no CAE.
 
 Neutral animals ship with this machinery **off by default**: `Template_Animal_Neutral` exposes `Attack` (default `""`) and `AttackWhenStartled` (default `false`) and has a dormant "startled" retaliation in its `Flee` state. Set `AttackWhenStartled: true` plus an `Attack` interaction to enable it. The cleanest "give a creature a bite" exemplar is `Server/NPC/Roles/Undead/Chicken_Undead.json` (a `Template_Predator` variant that sets `"Attack": "Root_NPC_Attack_Melee"` and overrides the start anim + damage). The instruction pattern itself lives in `Template_Predator.json`: a target-in-`AttackDistance` + line-of-sight gate, `HeadMotion: Aim`, `ActionsBlocking`, then `Timeout (pre-delay) → Attack → Timeout (post-delay)`.
 
@@ -1324,10 +1440,14 @@ Neutral animals ship with this machinery **off by default**: `Template_Animal_Ne
 | `Interactions/NPCs/NPC_Attack_Selector_Left` (`HitEntity`) | `Melee_Damage` | `NPC_Attack_Melee_Damage` | **damage + DamageEffects** |
 | `Interactions/NPCs/NPC_Attack_Melee_Damage` | — (`Parent: DamageEntityParent`) | — | base: `DamageCalculator` (Physical 5) + `DamageEffects` (knockback, `WorldSoundEventId`, `WorldParticles`) |
 
-A role overrides any link by declaring the var under top-level **`InteractionVars`**. The selector's `HitEntity` does `{"Type":"Replace","Var":"Melee_Damage","DefaultValue":{…}}`, so a role-level `Melee_Damage` wins (vanilla `Chicken_Undead` notes in its override: *"When NPC overrides the InteractionVars, this info in Template not applicable anymore"*). Example — lighten the bite to 2 physical, keep the default start/selector:
+A role overrides any link by declaring the var in its interaction-vars block. The selector's `HitEntity` does `{"Type":"Replace","Var":"Melee_Damage","DefaultValue":{…}}`, so a role-level `Melee_Damage` wins (vanilla `Chicken_Undead` notes in its override: *"When NPC overrides the InteractionVars, this info in Template not applicable anymore"*).
+
+> **⚠️ The key name differs by role type.** `BuilderRole` reads **`InteractionVars`** at a role's top level — that is what the templates use (`Template_Animal_Neutral`, `Template_Predator`, `Template_Livestock`, `Template_Intelligent`, …), and it is what a `Generic` role uses. Inside a **`Variant`'s `Modify`** the same block is spelled **`_InteractionVars`** with the leading underscore, the same convention as `_CombatConfig`; every shipped variant that customises its bite (`Cow.json`, `Chicken_Undead.json`, ~94 files) uses `_InteractionVars`. Using the wrong one for the role type silently does nothing, or drops the role.
+
+Example — lighten the bite to 2 physical, keep the default start/selector (shown as a `Variant` would write it):
 
 ```json
-"InteractionVars": {
+"_InteractionVars": {
   "Melee_Damage": {
     "Interactions": [
       { "Parent": "NPC_Attack_Melee_Damage",
@@ -1386,8 +1506,8 @@ A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evalua
 
 - `RunConditions`: conditions that gate whether the evaluator runs at all.
 - `MinRunUtility` / `MinActionUtility`: utility thresholds.
-- `AvailableActions`: an object keyed by action name. Each action has a `Type` (commonly `Ability`), a `Target`, an `Ability` reference, an `AttackDistanceRange`, optional `InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
-- `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` and an `Actions` list of available action names.
+- `AvailableActions`: an object keyed by action name. Each action has a `Type` (commonly `Ability`), a `Target`, an `Ability` reference, an `AttackDistanceRange`, a `PostExecuteDistanceRange` (the distance to hold *after* the action), optional `Description`/`InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
+- `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` (`Attacks`, `MaxRange`, `Timeout`, `CooldownRange`, optional `Randomise` and `InteractionVars`) and an `Actions` list of available action names.
 
 ```json
 {
@@ -1450,16 +1570,42 @@ A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evalua
 
 ### Response Curves
 
-Conditions evaluate an input through a `Curve` object whose `ResponseCurve` selects the shape:
+A condition maps its raw input to a 0–1 utility through a `Curve`. **The `Curve` field has two different shapes depending on the condition's base class** — getting this wrong is the usual cause of a CAE failing to load:
 
-| Response Curve | Description |
-|----------------|-------------|
-| `Linear` | Direct proportion across `XRange` |
-| `InverseExponential` | Exponential falloff |
-| `SimpleLogistic` | Ascending S-curve |
-| `SimpleDescendingLogistic` | Descending S-curve |
+| Base class | Conditions | `Curve` shape |
+|---|---|---|
+| `ScaledCurveCondition` | `TimeSinceLastUsed`, `TargetDistance`, `NearbyCount`, `TimeOfDay`, `OwnStatAbsolute`, `TargetStatAbsolute`, `RecentSustainedDamage`, `TotalSustainedDamage`, `KnownTargetCount` | an **object** — the input is un-normalised, so the curve carries the scaling. |
+| `CurveCondition` | `OwnStatPercent`, `TargetStatPercent` | a **plain string** naming a response-curve asset — the input is already 0–1. |
+| `SimpleCondition` / `Condition` | `HasTarget`, `IsInState`, `LineOfSight`, `TargetMovementState`, `SelfHasEffect`, `TargetHasEffect`, `Randomiser` | no `Curve` at all. |
 
-A few test files instead use a bare `"Curve": "ReverseLinear"` string, or a `"Type": "Switch"` curve with a `SwitchPoint` for step-function behavior.
+```json
+"Conditions": [
+    { "Type": "TargetDistance",  "Curve": { "ResponseCurve": "SimpleLogistic", "XRange": [ 0, 15 ] } },
+    { "Type": "OwnStatPercent",  "Stat": "Health", "Curve": "ReverseLinear" }
+]
+```
+
+The object form is a `ScaledResponseCurve`, whose own `Type` selects between two implementations (the default may be omitted):
+
+| `Type` | Class | Keys |
+|--------|-------|------|
+| *(omitted)* / `Default` | `ScaledXResponseCurve` | `ResponseCurve` (asset id) + `XRange` `[min, max]` — rescales x into the named curve. |
+| `Switch` | `ScaledSwitchResponseCurve` | `SwitchPoint`, `InitialState` (y before it), `FinalState` (y at/after it) — a step function. Used by 22 shipped CAEs, not just tests. |
+
+`ResponseCurve` values are **assets** under `Server/ResponseCurves/`, so the set is extensible. Each asset picks one of three families — `Exponential` (`Slope`, `Exponent`, `HorizontalShift`, `VerticalShift`), `Logistic` (`Ceiling`, `RateOfChange`, `HorizontalShift`, `VerticalShift`) or `SineWave` (`Amplitude`, `Frequency`, `HorizontalShift`, `VerticalShift`). Those that ship:
+
+| Response Curve | Family | Shape |
+|----------------|--------|-------|
+| `Linear` | Exponential | `y = x` (slope 1, exponent 1) |
+| `ReverseLinear` | Exponential | `y = 1 − x` (slope −1, x-shift 1) |
+| `Quadratic` / `TestExponential` | Exponential | `y = x²` — slow start, fast finish |
+| `InverseExponential` | Exponential | exponent `0.28` — a *root* curve: rises fast, then flattens (**not** a falloff) |
+| `ConstantMidpoint` | Exponential | slope `0`, y-shift `0.5` — constant `0.5` |
+| `SimpleLogistic` / `TestLogistic` | Logistic | ascending S-curve centred at `0.5` |
+| `SimpleDescendingLogistic` | Logistic | descending S-curve centred at `0.5` |
+| `LateRise` | Logistic | stays near 0, rises sharply at `0.8` |
+| `LateFalloff` | Logistic | stays near 1, drops sharply at `0.8` |
+| `SimpleParabola` | SineWave | half sine over the range — peaks mid-range, 0 at both ends |
 
 ### Condition Types
 
@@ -1471,9 +1617,17 @@ Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. C
 | `TargetDistance` | Distance to the current target |
 | `Randomiser` | Random value between `MinValue` and `MaxValue` |
 | `OwnStatPercent` / `OwnStatAbsolute` | NPC's own stat as a percentage / absolute value |
-| `TargetStatPercent` | Target's stat as a percentage |
-| `RecentSustainedDamage` | Damage taken recently |
-| `NearbyCount` / `KnownTargetCount` | Counts of nearby/known entities |
+| `TargetStatPercent` / `TargetStatAbsolute` | Target's stat as a percentage / absolute value |
+| `RecentSustainedDamage` / `TotalSustainedDamage` | Damage taken recently / in total |
+| `NearbyCount` / `KnownTargetCount` | Counts of nearby / remembered entities |
+| `HasTarget` | Whether a target exists at all |
+| `IsInState` | Whether the NPC is in a given state |
+| `LineOfSight` | Whether the target is in line of sight |
+| `TimeOfDay` | Current world time |
+| `TargetMovementState` | Target's movement state |
+| `SelfHasEffect` / `TargetHasEffect` | Entity-effect presence on self / target |
+
+The first three groups come from `Condition.CODEC` in `server.npc.decisionmaker`; `RecentSustainedDamage`, `TotalSustainedDamage` and `KnownTargetCount` are registered by `NPCCombatActionEvaluatorPlugin` and therefore only exist where the CAE plugin is loaded.
 
 ---
 
@@ -1496,19 +1650,20 @@ Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. C
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Total Roles | 952 | NPC role definitions (templates + variants) |
-| Templates (`Template_*`) | 51 | Abstract base templates (13 in `_Core/Templates/`) |
+| Total Roles | 1,000 | NPC role definitions (`Server/NPC/Roles/**.json`) |
+| — by `Type` | 467 `Variant` · 320 `Generic` · 55 `Abstract` | the rest are components, templates-by-reference and test fixtures |
+| Templates (`Template_*`) | 51 | Abstract base templates (13 in `_Core/Templates/`, 3 more in its `Deprecated/`) |
 | Attitude Files | 26 | Relationship definitions (`Attitude/Roles/`) |
-| Group Files | 70 | NPC role collections |
+| Group Files | 72 | NPC role collections |
 | Flock Files | 8 | Flock size configurations |
-| Spawn Beacons | 75 | Spawn configurations |
+| Spawn Beacons | 85 | Spawn configurations |
 | CAE Files | 28 | Combat balancing |
 
 ---
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 NPC role/spawn loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the NPC role/spawn loader (each re-verified against `HytaleServer.jar` for 0.6.3).
 
 - **`Unable to spawn entity with invalid role index`** → a spawn beacon `NPCs` entry references a role `Id` that does not resolve to a loaded role. Fix: the `Id` must match an existing variant's name exactly (case-sensitive), e.g. `Goblin_Scrapper`.
 - **`attempted to spawn invalid NPC role`** → a spawn marker named a role that failed to load or doesn't exist. Fix: confirm the referenced role file is present under `Server/NPC/Roles/` and validated.
@@ -1519,7 +1674,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **Symptom:** a role silently never registers (absent from the spawn list) after an edit → **any** load error drops the whole role, not just the offending field. The [`Variant`-with-`Instructions`](#variants) case is one instance; another common one is passing a number array to an alarm `DurationRange` (`Expression type mismatch. Got NUMBER_ARRAY but expected STRING_ARRAY`; see [Alarms](#alarms-setalarm--alarm)). Fix: check the server log for the load error and correct that field.
 - **`Reloading nonexistent role %s!`** (logged at `SEVERE` with an `[NPC|P]` prefix, every tick — from `RoleBuilderSystem`) → a saved-world entity references a role that failed to load **or was renamed**, and persists in the save spamming the log. Fix: remove/replace the stale entities, or restore the old role name.
 - **`Unknown JSON attribute '%s' found in %s: %s (JSON: %s)`** (WARN, non-fatal — from `BuilderBase`) → a custom/`$`-prefixed key other than the exact `$Comment` (e.g. `$Comment_Foo`); the second `%s` is the construct, e.g. `Role|Generic`. Only `$Comment` is whitelisted by the role parser, and you can't have two `$Comment`s at one object level (duplicate JSON key). Fix: consolidate prose into a single `$Comment`.
-- **Symptom:** a role with a `$Comment` inside a `Variant`'s `Modify` / `Parameters` block fails to load (FATAL) with `java.lang.IllegalStateException: Parameter $Comment does not exist or is private`, then vanishes from the spawn list (with the `Reloading nonexistent role` spam above). There, every key under `Modify` is treated as a **role parameter to set**, and `$Comment` isn't one. A `Generic` role's *top level* and its `Instructions` **do** accept `$Comment`. Fix: comment freely in `Generic` roles; keep `Variant`s comment-free and put the explanation in your docs.
+- **Symptom:** a role with a `$Comment` **directly under** a `Variant`'s `Modify` / `Parameters` block fails to load (FATAL) with `java.lang.IllegalStateException: Parameter $Comment does not exist or is private`, then vanishes from the spawn list (with the `Reloading nonexistent role` spam above). There, every key at that level of `Modify` is treated as a **role parameter to set**, and `$Comment` isn't one. A `Generic` role's *top level* and its `Instructions` **do** accept `$Comment`, and so do nested structural values inside a `Modify` (shipped variants such as `Chicken_Undead.json` carry `$Comment`s inside their `_InteractionVars` interactions). Fix: comment freely in `Generic` roles and inside a `Modify`'s nested structures; keep the `Modify`/`Parameters` level itself comment-free.
 - **Symptom (runtime flocks):** a brand-new flock reports `EntityGroup.size() == 0` for the rest of the tick after `createFlock` + `join`, so per-target dedup-by-count spawns one flock per aggro'd NPC. The member group is populated by a *deferred* system. Fix: validate by the `Flock` component, not member count; cap with your own counter. See [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java).
 - **Symptom (runtime flocks):** `FlockPlugin.getFlock(store, flockEntityRef)` always returns `null` on a flock entity. It expects a flock *member* ref (it reads the member's `FlockMembership`); a flock entity has no `FlockMembership`. Fix: read the entity's `Flock` component directly. See [Flocks at runtime](#flocks-at-runtime-driving-the-engine-flock-from-java).
 

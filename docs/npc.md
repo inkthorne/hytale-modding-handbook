@@ -175,8 +175,16 @@ Abstract base class for sensor events. Extends `SensorBase`.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `matches(Ref, ExecutionSupport, double, Store)` | `boolean` | Check if sensor matches given criteria (the second parameter was `Role` before 0.6.3 — it is now `com.hypixel.hytale.server.npc.instructions.ExecutionSupport`) |
-| `getSensorInfo()` | `InfoProvider` | Get sensor information provider |
+| `matches(Ref, ExecutionSupport, double, Store)` | `boolean` | Check if sensor matches given criteria |
+| `getSensorInfo()` | `InfoProvider` | Get sensor information provider (`com.hypixel.hytale.server.npc.sensorinfo.InfoProvider`) |
+
+> **⚠️ `matches`'s second parameter is `ExecutionSupport` as of 0.6.3, not `Role`.** The same break
+> applies to `SensorBase.matches`, `Sensor.matches` and every other core-component callback
+> (actions, motions, instructions). Because the base method still exists with a different parameter
+> type, a 0.5.9 override recompiles cleanly and then silently never runs. The full migration —
+> which callbacks changed, what `ExecutionSupport` gives you, and how to mint one outside a
+> callback — is in
+> [NPC Roles → Registering custom core components](npc-roles.md#registering-custom-core-components-java).
 
 ### SensorEntityEvent
 

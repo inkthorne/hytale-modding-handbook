@@ -90,27 +90,40 @@ The main ECS event fired when an entity takes damage.
 ### Methods
 
 ```java
-// Get who/what caused the damage
+// Who/what caused the damage
 Damage.Source getSource()
+void setSource(Damage.Source)
 
-// Get damage amount
+// Damage amount — getAmount() is the live, modifiable value; getInitialAmount() is a final field
+// seeded from the same constructor argument, so it survives every setAmount() a system applies
 float getAmount()
+void setAmount(float)
 float getInitialAmount()
 
-// Get damage cause
+// Damage cause
 DamageCause getCause()
 int getDamageCauseIndex()
+void setDamageCauseIndex(int)
 
-// Cancellable
+// The death message this damage would produce (used by DeathComponent / the kill feed)
+Message getDeathMessage(Ref<EntityStore>, ComponentAccessor<EntityStore>)
+
+// Cancellable (final methods on CancellableEcsEvent)
 boolean isCancelled()
 void setCancelled(boolean)
 ```
+
+`Damage` also implements `IMetaStore<Damage>`, so per-hit extras ride along as `MetaKey`s rather than
+fields: `Damage.HIT_LOCATION` (`Vector4d`), `HIT_ANGLE`, `IMPACT_PARTICLES`, `IMPACT_SOUND_EFFECT`,
+`PLAYER_IMPACT_SOUND_EFFECT`, `CAMERA_EFFECT`, `DEATH_ICON`, `BLOCKED`, `STAMINA_DRAIN_MULTIPLIER`,
+`CAN_BE_PREDICTED` and `KNOCKBACK_COMPONENT`. `DeathSystems.KillFeed`, for instance, reads
+`deathInfo.getIfPresentMetaObject(Damage.DEATH_ICON)` to seed `KillFeedEvent.Display.getIcon()`.
 
 ### Important Notes
 
 1. **Event fires on VICTIM**: The Damage event is invoked on the entity receiving damage, not the attacker
 2. **Getting the attacker**: Use `Damage.EntitySource.getRef()` to get the attacker's entity reference
-3. **getQuery() required**: Must return a valid query (not null). Use `DamageDataComponent.getComponentType()`
+3. **getQuery() required**: Must return a valid query — **never `null`**, which NPEs at registration. Use `DamageDataComponent.getComponentType()` (or `Archetype.empty()` to match every entity)
 4. **Extend DamageEventSystem**: Use the provided base class, not raw `EntityEventSystem<EntityStore, Damage>`
 
 ---
@@ -119,7 +132,9 @@ void setCancelled(boolean)
 
 ### Damage.Source (Interface)
 
-Base interface for all damage sources.
+Base interface for all damage sources. Its one member is a default
+`getDeathMessage(Damage, Ref<EntityStore>, ComponentAccessor<EntityStore>)`, which each subtype
+overrides to phrase the kill; `Damage.NULL_SOURCE` is the no-attacker instance.
 
 ### Damage.EntitySource
 
@@ -139,6 +154,10 @@ Source when damage comes from another entity (player or mob).
 ### Damage.EnvironmentSource
 
 Source for environmental damage (fall damage, drowning, lava, etc.).
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getType()` | `String` | The free-form environment tag the source was constructed with (`new Damage.EnvironmentSource(String)`). The engine's explosion source, for example, is `ExplodeInteraction.DAMAGE_SOURCE_EXPLOSION` = `new Damage.EnvironmentSource("explosion")`. It is **not** the `DamageCause` id — read the cause from `event.getCause()` |
 
 ### Damage.ProjectileSource
 
@@ -163,7 +182,8 @@ Asset type representing the cause/type of damage. Returned by `Damage.getCause()
 
 ### Predefined Constants (all `@Deprecated`)
 
-> **⚠️ All eight `DamageCause.*` static fields are `@Deprecated` as of `0.5.0`.** `DamageCause`
+> **⚠️ All eight `DamageCause.*` static fields carry `@Deprecated` + `@Nullable`** (a bare
+> `@Deprecated`; the 0.6.3 jar records no `since` element on it). `DamageCause`
 > is now an asset-store-backed type — the causes live as JSON assets under `Server/Entity/Damage/`,
 > and the static convenience fields are deprecated in favor of looking the cause up by id. See
 > [Obtaining a cause](#obtaining-a-cause-non-deprecated) below for the current API.
@@ -417,12 +437,17 @@ public class KillFeedDisplaySystem extends EntityEventSystem<EntityStore, KillFe
 
     @Override
     public Query<EntityStore> getQuery() {
-        return null;
+        // Match every entity — this is the query the engine's own DeathSystems.KillFeed uses.
+        return Archetype.empty();
     }
 }
 ```
 
-> **Note:** Unlike `DamageEventSystem`, `KillFeedEvent` handlers can return `null` from `getQuery()` to handle all entities.
+> **Never return `null` from `getQuery()`.** `QuerySystem.getQuery()` is annotated `@Nullable`, but
+> `ComponentRegistry.registerSystem(...)` calls `query.validateRegistry(this)` with no null check, so a
+> null query **throws an NPE at registration**, and the dispatch paths that *do* null-check treat a
+> null query as "skip this system" — never as "match everything". The match-everything query is
+> `Archetype.empty()` (`com.hypixel.hytale.component.Archetype`).
 
 ### Registration
 
@@ -436,10 +461,19 @@ protected void setup() {
 
 ### Kill Feed Event Flow
 
-When an entity is killed, the events fire in this order:
-1. `KillFeedEvent.KillerMessage` - Allows customizing/cancelling the killer's notification
-2. `KillFeedEvent.DecedentMessage` - Allows customizing/cancelling the victim's death message
-3. `KillFeedEvent.Display` - Allows customizing/cancelling the kill feed UI broadcast
+`DeathSystems.KillFeed` (an `OnDeathSystem` with an `Archetype.empty()` query) drives the sequence
+when an entity is killed:
+
+1. `KillFeedEvent.KillerMessage` — invoked **on the killer**, and **only** when the killing `Damage`
+   has a `Damage.EntitySource` whose ref is still valid. Cancelling it aborts the whole sequence.
+2. `KillFeedEvent.DecedentMessage` — invoked **on the victim**. Cancelling it aborts the sequence.
+3. `KillFeedEvent.Display` — invoked **on the victim**, then broadcast as a `KillFeedMessage` packet
+   to `getBroadcastTargets()` (initialised to every `PlayerRef` in the world).
+
+> **Gotcha:** if the killer message *and* the decedent message both end up `null`, the engine returns
+> before step 3 — so a `Display` handler never runs for a kill nobody has a message for. Note also
+> that a `KillerMessage` system's query is matched against the **killer**, which is why
+> `Player.getComponentType()` there means "only player killers".
 
 ---
 
@@ -527,26 +561,41 @@ manually — see [world.md → Controlling Respawn Location](world.md#controllin
 ### The death screen *is* the respawn trigger
 
 A natural instinct is to replace Hytale's death screen with a custom page (custom respawn UI, a
-death-cam, a "you died" overlay with your own button). **In build-12 this is not cleanly moddable**,
+death-cam, a "you died" overlay with your own button). **As of 0.6.3 this is not cleanly moddable**,
 because the engine's death screen and the respawn action are the same object.
 
 The flow, for a player whose `DeathComponent` was just added:
 
-- `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`) runs. As of 0.6.3 it first settles the
-  **hardcore / game-mode-on-death** bookkeeping: `HytaleServerConfig.Defaults` gained
-  `HardcoreMode` (`None` / `PerPlayer` / `Global`), `HardcoreLives` and `GameModeTypeOnDeath`
-  (`DeathConfig` has a per-world `GameModeTypeOnDeath` that overrides the server default); lives are
-  burned per player in the `PlayerLives` component
-  (`com.hypixel.hytale.server.core.modules.entity.component.PlayerLives`) or, for `Global`, in the
-  `HardcoreState` universe resource. Then, **if `DeathComponent.isShowDeathMenu()` is true**, it opens
-  the death screen via `player.getPageManager().openCustomPage(ref, store, page)`, where `page` comes
-  from one of `RespawnPage`'s static factories (the constructor is private since 0.6.3):
+- `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`, query `Player` **and** `TransformComponent`)
+  runs. As of 0.6.3 it first settles the **game-mode-on-death / hardcore** bookkeeping:
+  - It reads `World.getGameModeTypeOnDeath()` — the world's `DeathConfig.GameModeTypeOnDeath`,
+    falling back to the server-wide `HytaleServerConfig.Defaults.GameModeTypeOnDeath`. **If that does
+    not name a real `GameModeType` asset, none of the hardcore logic runs** and the ordinary respawn
+    screen opens (a `null` is silent; a non-null unknown id logs
+    `GameModeTypeOnDeath %s is not a known GameModeType`).
+  - Otherwise a life is burned. `HytaleServerConfig.Defaults` also gained `HardcoreMode`
+    (`None` / `PerPlayer` / `Global`) and `HardcoreLives`. `PerPlayer` decrements the `PlayerLives`
+    component (`com.hypixel.hytale.server.core.modules.entity.component.PlayerLives`); `Global`
+    decrements the shared pool held in the `HardcoreState` universe resource (see
+    [universe-saves.md → Universe resources](universe-saves.md#universe-resources)). Two shortcuts
+    matter: `HardcoreMode: None` reports **zero lives left immediately** (so *every* death takes the
+    permadeath branch below), and a player whose effective `GameMode` is not `Adventure` reports
+    `-1` and never permadies.
+  - **Lives left ≠ 0** → the ordinary respawn screen, carrying the remaining count.
+    **Lives left == 0** → `GameModeTypes.enterOnDeath(ref, store, gameModeTypeId)` removes the
+    `DeathComponent` and moves the player into that game-mode type (the id the server writes for
+    hardcore saves is `HardcoreSpectator`; see
+    [player.md → Spectator Mode](player.md#spectator-mode)).
+- Then, **if `DeathComponent.isShowDeathMenu()` is true**, it opens the death screen via
+  `player.getPageManager().openCustomPage(ref, store, page)`, where `page` comes from one of
+  `RespawnPage`'s static factories (the constructor is private as of 0.6.3):
   - `RespawnPage.forRespawn(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, livesRemaining)`
-    — the normal screen (a non-zero `livesRemaining` adds a "lives remaining" note), or
+    — the normal screen (a `livesRemaining` greater than 0 adds a "lives remaining" note), or
   - `RespawnPage.forPermadeath(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, permadeathMessage)`
-    — when the personal/pooled life count hits zero and a valid `GameModeTypeOnDeath` exists, the
-    player is moved into that game-mode type (`GameModeTypes.enterOnDeath`) and shown a permadeath
-    variant whose only exit **closes the page without respawning**.
+    — used **only** when the entered `GameModeType` defines a `DeathScreenMessage` (or a global
+    hardcore game-over is active). It hides the Respawn button and shows a Spectate button whose only
+    action **closes the page without respawning**. If the game-mode type defines no such message,
+    **no screen opens at all** — the player simply wakes up inside the new game-mode type.
 - **`RespawnPage` *is* the respawn trigger.** Both exit paths of the normal (`forRespawn`) page call
   `DeathComponent.respawn(...)`:
   - the **Respawn button** (`handleDataEvent`, action `"Confirm"`), and
@@ -559,9 +608,11 @@ own death/respawn page.
 
 **Can you suppress it instead?** `showDeathMenu` is the off-switch, but it is impractical to reach:
 
-- It **defaults `true`** (hard-coded in the `DeathComponent` constructor).
-- It is **not configurable** — `DeathConfig` has no field for it, and jar-wide **only `DeathComponent`
-  itself** calls `setShowDeathMenu`.
+- It **defaults `true`** (a field initializer on `DeathComponent`).
+- It is **not configurable from an asset** — `DeathConfig` has no field for it, and jar-wide **only
+  `DeathComponent` itself** calls `setShowDeathMenu`. (`DeathComponent.CODEC` does carry a
+  `ShowDeathMenu` key, but that codec only serialises an already-dead entity's component into the
+  save; there is no authoring surface that creates the component with it set.)
 - You would have to set it `false` **before `PlayerDeathScreen` runs**. By default engine systems
   run before plugin-registered ones, so by the time your `OnDeathSystem` fires `RespawnPage` is
   already open. There *is* an ordering API, though: `ISystem.getDependencies()` returns a
@@ -808,15 +859,39 @@ This configuration:
 
 ### Guard Break
 
-When stamina is depleted during a block, the `Failed` interactions trigger:
+When stamina is depleted during a block, the `Failed` interaction triggers. `Failed` is a
+`ChargingInteraction` key whose value is a **single interaction** (an id, or an inline definition —
+it is an `Interaction.CHILD_ASSET_CODEC`), not a list. The shipped guards use one of two shapes:
 
 ```json
+// Server/Item/Interactions/Weapons/Stick/Block/Stick_Block_Damage.json — play a shatter effect
 "Failed": {
-  "Interactions": [
-    { "Type": "Stagger" }
-  ]
+  "Type": "Simple",
+  "Effects": {
+    "Particles": [
+      { "SystemId": "Shield_Shatter" }
+    ]
+  }
 }
 ```
+
+```json
+// Server/Item/Interactions/Weapons/Common/Guarding/Common_Guard_Wield.json — defer to an
+// interaction var so each weapon can supply its own guard-break
+"Failed": {
+  "Type": "Replace",
+  "Var": "Guard_Break",
+  "DefaultOk": true,
+  "DefaultValue": { "Interactions": [ { "Type": "Simple", "Effects": { } } ] }
+}
+```
+
+> **There is no `Stagger` interaction type.** The valid `Type` values are exactly the ids
+> `InteractionModule` registers on `Interaction.CODEC` (`Simple`, `Replace`, `Parallel`, `Serial`,
+> `ApplyForce`, `ChangeStat`, `ResetCooldown`, `DamageEntity`, `Wielding`, …). An **unrecognised
+> `Type` value fails silently**: `ACodecMapCodec` falls back to the first-registered codec —
+> `Simple` — so a typo'd type quietly becomes a do-nothing `Simple` interaction with no warning.
+> (An unrecognised *key*, by contrast, does log: `Unused key(s) in '<id>' file <path>: <key>`.)
 
 ### Timed Blocking and Parry Mechanics
 
@@ -905,7 +980,6 @@ A block with a maximum duration that still ends early if the player releases the
   "Type": "Wielding",
   "RunTime": 0.5,
   "FailOnDamage": false,
-  "AllowIndefiniteHold": false,
   "CancelOnOtherClick": true,
   "AngledWielding": {
     "Angle": 0,
@@ -922,12 +996,17 @@ A block with a maximum duration that still ends early if the player releases the
 |----------|-------|--------|
 | `RunTime` | `0.5` | Block lasts up to 0.5 seconds (ends early if input released) |
 | `FailOnDamage` | `false` | Block continues even after being hit |
-| `AllowIndefiniteHold` | `false` | Block cannot exceed `RunTime` even if input is held |
-| `CancelOnOtherClick` | `true` | Block cancels if player clicks another input |
+| `CancelOnOtherClick` | `true` | Block cancels if player clicks another input (defaults to `true`) |
+
+> **`AllowIndefiniteHold` is not a `Wielding` key.** It is registered on `ChargingInteraction.CODEC`
+> — the concrete `"Type": "Charging"` codec — not on the `ABSTRACT_CODEC` that `WieldingInteraction`
+> builds on, so writing it into a `Wielding` block does nothing but earn an `Unused key(s)` warning.
+> `WieldingInteraction`'s own `afterDecode` unconditionally sets `allowIndefiniteHold = true`. (It
+> gates the *charge-value* forks, not `RunTime`, so it would not have bounded a block anyway.)
 
 > **Limitation:** This configuration still requires holding the input to maintain the block. Releasing the button ends the block early. A true "click-once-to-block" mechanic (where the block persists for the full duration regardless of input) would require custom Java code.
 
-> **Inherited Properties:** These properties (`RunTime`, `FailOnDamage`, `AllowIndefiniteHold`, `CancelOnOtherClick`) are inherited from `ChargingInteraction`, which `WieldingInteraction` extends. See [WieldingInteraction](interactions-world.md#wieldinginteraction) for the full property list.
+> **Inherited Properties:** `FailOnDamage` and `CancelOnOtherClick` come from `ChargingInteraction`'s abstract codec, which `WieldingInteraction` extends; `RunTime` comes from the `Interaction` base codec, so every interaction type accepts it. See [WieldingInteraction](interactions-world.md#wieldinginteraction) for the full property list.
 
 > **In-Game Verification:** When testing blocking mechanics, use the debug stick items found in `Server/Item/Interactions/_Debug/` as reference implementations. The `Debug_Stick_Parry.json` demonstrates timed blocking with counter-attacks.
 
@@ -1068,9 +1147,9 @@ buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback)
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 combat subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages the 0.6.3 combat subsystem produces (verified against `HytaleServer.jar`). Two of them are assembled at runtime from a class name, so they will not be found by grepping the jar for the whole sentence.
 
-- **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entity.damage.DamageCause doesn't exist!`** (logged under `Failed to validate asset!`; this replaced the pre-0.6.3 `Invalid DamageCause` wording) → a key in `DamageCalculator.BaseDamage` names a cause that isn't a `DamageCause` asset — the map keys go through `DamageCause.VALIDATOR_CACHE`'s key validator (`AssetStore.validate`). Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
+- **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entity.damage.DamageCause doesn't exist!`** (logged under `Failed to validate asset!`; this replaced the pre-0.6.3 `Invalid DamageCause` wording, which no longer appears anywhere in the jar) → a key in `DamageCalculator.BaseDamage` — or in a `DamageModifiers` / `KnockbackModifiers` map on `Wielding` or `AngledWielding` — names a cause that isn't a `DamageCause` asset. All four maps run their keys through `DamageCause.VALIDATOR_CACHE.getMapKeyValidator()`, which lands in `AssetStore.validate`. Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
 - **`Missing default DamageCause assets`** → the default `DamageCause` assets failed to load. Fix: an asset-pack/install problem, not a plugin bug; verify the game install and `Assets.zip`.
 - **`Can't be null!`** on `EntityStatId`, or **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType doesn't exist!`** (these replaced the pre-0.6.3 `Invalid EntityStatOnHit in EntityStatsOnHit` wording) → an entry in a damage interaction's `EntityStatsOnHit` array is missing its `EntityStatId` or names a stat with no `Server/Entity/Stats/` asset. A related **`Array can't be empty!`** means `MultipliersPerEntitiesHit` was set to `[]`. Fix: each entry needs a valid `EntityStatId` (e.g. `SignatureEnergy`, `Stamina`, `Health`, `Mana`) and a numeric `Amount`; omit `MultipliersPerEntitiesHit` to keep the default.
 - **Symptom:** a `DamageEventSystem` throws or matches nothing because `getQuery()` returned `null` → unlike `KillFeedEvent` handlers, a damage system needs a real query. Fix: return `DamageDataComponent.getComponentType()` from `getQuery()`.

@@ -206,7 +206,7 @@ boolean isWaitingForClientReady()
 static ComponentType<EntityStore, Player> getComponentType()
 ```
 
-> **Deprecations:** as of build-12, `getPlayerConnection()`
+> **Deprecations:** still true in 0.6.3 — `getPlayerConnection()`
 > and `getPlayerRef()` are marked `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
 > `PacketHandler` from a `PlayerRef` via [`PlayerRef.getPacketHandler()`](#playerref) instead of
 > `getPlayerConnection()`. `getPlayerRef()` still works with no 1:1 replacement — prefer carrying
@@ -401,8 +401,8 @@ These hold no per-entity state — presence alone is the signal. They expose a s
 | `NPCMarkerComponent` | Tags the entity as an NPC — **deprecated, see note** | `NPCMarkerComponent.get()` |
 | `PropComponent` | Tags the entity as a static prop | `PropComponent.get()` |
 
-> **Deprecated (build-12):** `NPCMarkerComponent` is
-> `@Deprecated(forRemoval = true)`. The engine still attaches it to every NPC, so
+> **Deprecated (still `@Deprecated(forRemoval = true)` in 0.6.3):** `NPCMarkerComponent` is
+> on the way out. The engine still attaches it to every NPC, so
 > it works today, but it is slated for removal. To identify or count NPCs, query
 > the `NPCEntity` component instead — `store.getEntityCountFor(NPCEntity.getComponentType())`
 > (`com.hypixel.hytale.server.npc.entities.NPCEntity`, not deprecated). The
@@ -745,11 +745,11 @@ Events related to entity lifecycle. For inventory-related events (`InventoryChan
 
 **Package:** `com.hypixel.hytale.server.core.event.events.entity`
 
-Base class for entity-related events.
+Base class for entity-related events. Declared as `EntityEvent<EntityType extends Entity, KeyType> implements IEvent<KeyType>`, so subclasses pin both the entity type and the routing key type (`EntityRemoveEvent` pins them to `Entity` and `String`).
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getEntity()` | `Entity` | The entity this event relates to |
+| `getEntity()` | `EntityType` | The entity this event relates to |
 
 ---
 
@@ -1000,7 +1000,14 @@ A tiny persisted component tagging an entity as **spawned from a prefab instance
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity`
 
-The **registration handle** returned when a plugin registers a legacy `Entity` subclass with the entity module (`EntityModule.get().registerEntity(id, clazz, constructor, codec)`). It extends the generic `Registration` base, so the two members you use are inherited:
+The **registration handle** returned when a plugin registers a legacy `Entity` subclass with the entity module. The registrar's exact signature is
+
+```java
+<T extends Entity> EntityRegistration registerEntity(
+        String id, Class<T> clazz, Function<World, T> constructor, DirectDecodeCodec<T> codec)
+```
+
+so the constructor reference must take a `World`. `EntityRegistration` extends the generic `Registration` base, so two of the three members you use are inherited:
 
 ```java
 EntityRegistration reg = EntityModule.get()
@@ -1035,7 +1042,7 @@ AnimationUtils.stopAnimation(ref, slot, sendToSelf, accessor);
 - `animationId` is the animation name; the `itemAnimationsId` / `ItemPlayerAnimations` overloads scope it to an item's animation set (see [Items](items.md)).
 - `sendToSelf` (default `false`) controls whether a *player* target also sees their own animation — pass `true` for emote-style animations the player should see in third person.
 - Passing a `null` `animationId` on the base overload stops the slot, so `stopAnimation(ref, slot, accessor)` is the readable form of that.
-- For every slot except `Action` and `Emote` (i.e. `Movement`/`Status`/`Face`/`ServerAction`) the animation must exist in the entity model's animation set — a missing id logs a warning (rate-limited to once a minute) and sends nothing.
+- For every slot except `Action` and `Emote` (i.e. `Movement`/`Status`/`Face`/`ServerAction`) the animation must exist in the entity model's animation set — a missing id logs `Missing animation '%s' for Model '%s'` (rate-limited to once a minute) and sends nothing. The check is skipped entirely when the target has no `ModelComponent`.
 
 ```java
 // Play an emote on an NPC for everyone nearby
@@ -1121,7 +1128,13 @@ World-space raycast variants that don't need an entity (`getTargetBlock(World, B
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.hitboxcollision`
 
-Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/` (built-ins: `"HardCollision"` = `{"CollisionType": "Hard"}`, `"SoftCollision"` = `{"CollisionType": "Soft", "SoftCollisionOffsetRatio": 1.25}`); `HitboxCollision` is the network-synced **component** referencing one config by id.
+Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/`; `HitboxCollision` is the network-synced **component** referencing one config by id. The three shipped configs (0.6.3) are:
+
+| Asset id | Contents |
+|----------|----------|
+| `HardCollision` | `{"CollisionType": "Hard"}` |
+| `SoftCollision` | `{"CollisionType": "Soft", "SoftCollisionOffsetRatio": 1.25}` |
+| `RotatedCollision` | `{"CollisionType": "Hard", "RotateHitbox": true}` (0.6.3+) |
 
 ### HitboxCollisionConfig (asset)
 
@@ -1132,7 +1145,7 @@ Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` i
 | `getCollisionType()` | `CollisionType` | Protocol `CollisionType`: `Hard` or `Soft` |
 | `getSoftOffsetRatio()` | `SoftCollisionOffsetRatio` | How much of the client's move offset applies when passing through a `Soft` hitbox |
 | `getRotateHitbox()` | `RotateHitbox` | 0.6.3+ — rotate the hitbox with the body orientation (Hard collision) |
-| `getAllowEntityAnchoring()` | `AllowEntityAnchoring` | 0.6.3+ — let entities standing on this one anchor to it (ride along; Hard collision) |
+| `getAllowEntityAnchoring()` | `AllowEntityAnchoring` | 0.6.3+ — let entities standing on this one anchor to it (ride along; Hard collision). **Defaults to `true`** |
 | *(packet-only)* | `RotateAnchoredEntities` | 0.6.3+ — also rotate anchored entities with the body; no public getter, sent via `toPacket()` |
 | `NO_HITBOX` | — | `-1` — index meaning "no collision config" |
 
@@ -1148,7 +1161,9 @@ Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` i
 | `isMigrated()` | True if this component was loaded from pre-0.5.7 data |
 
 ```java
-HitboxCollisionConfig soft = HitboxCollisionConfig.getAssetMap().getAsset("SoftCollision");
+// The map is an IndexedLookupTableAssetMap: there is no getAsset(String) — go id -> index -> asset.
+var map = HitboxCollisionConfig.getAssetMap();
+HitboxCollisionConfig soft = map.getAsset(map.getIndex("SoftCollision"));
 store.addComponent(ref, HitboxCollision.getComponentType(), new HitboxCollision(soft));
 ```
 
@@ -1158,9 +1173,9 @@ store.addComponent(ref, HitboxCollision.getComponentType(), new HitboxCollision(
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 entity subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages the 0.6.3 entity subsystem produces (verified against `HytaleServer.jar`).
 
-- **`No EntityStatType found for index`** → an `EntityStatMap` call was given a stat index that no registered stat type maps to (e.g. a hardcoded/stale integer). Fix: obtain indices from `DefaultEntityStatTypes` (`getHealth()`, `getStamina()`, ...) rather than literals.
+- **`No EntityStatType found for index: <n>`** (a `WARNING` log from `EntityStatMap`, not an exception) → an `EntityStatMap` call was given a stat index that no registered stat type maps to (e.g. a hardcoded/stale integer). Fix: obtain indices from `DefaultEntityStatTypes` (`getHealth()`, `getStamina()`, ...) rather than literals.
 - **Symptom:** server-side `velocity.addVelocity(...)`/`velocity.set(...)` appear to do nothing on players → players are client-authoritative for movement, so direct velocity writes are not synchronized. Fix: use `velocity.addInstruction(impulse, config, ChangeVelocityType.Add)`, which queues a client-synced change (see [Player vs NPC Velocity](#important-player-vs-npc-velocity)). (`addVelocity` was named `addForce` before Update 5.)
 - **Symptom:** `store.getComponent(ref, Player.getComponentType())` returns `null` for a command sender → the entity isn't a full `Player` (or you used the wrong ref). Fix: for messaging/identity use the `PlayerRef` you were handed; only fetch the `Player` component when you need permissions/inventory/UI, and null-check it.
 - **Symptom:** a `LivingEntityUseBlockEvent` handler never fires for a specific block → the event is keyed by block-type string, so `register(LivingEntityUseBlockEvent.class, "Bench_Builders", ...)` only matches that exact key. Fix: use `registerGlobal(...)` to catch all block uses, or pass the precise block-type key.

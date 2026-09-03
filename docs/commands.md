@@ -43,6 +43,7 @@ CommandRegistry
 | `AbstractAsyncCommand` | `server.core.command.system.basecommands` | Async command base; all player commands inherit from it |
 | `AbstractPlayerCommand` | `server.core.command.system.basecommands` | Most common base for player-executed commands |
 | `AbstractWorldCommand` | `server.core.command.system.basecommands` | Base for commands operating on a world context |
+| `AbstractAsyncWorldCommand` | `server.core.command.system.basecommands` | Async variant of the world command base (returns a future) |
 | `AbstractTargetPlayerCommand` | `server.core.command.system.basecommands` | Base for commands targeting another player |
 | `CommandContext` | `server.core.command.system` | Execution context with parsed args and sender access |
 | `CommandRegistry` | `server.core.command.system` | Registers commands with the server |
@@ -54,7 +55,10 @@ CommandRegistry
 | `CommandBase` | `server.core.command.system.basecommands` | Simplest sync base; no player or world context required |
 | `AbstractAsyncPlayerCommand` | `server.core.command.system.basecommands` | Async variant of the player command base (returns a future) |
 | `AbstractTargetPlayersCommand` | `server.core.command.system.basecommands` | Base for commands targeting self, `--player=X`, or `--all=true` |
+| `Argument<Arg, D>` | `server.core.command.system.arguments.system` | Base of every argument object; validators and per-arg suggestion overrides |
 | `AbstractOptionalArg` | `server.core.command.system.arguments.system` | Base of optional/default/flag args; aliases, per-arg permissions, dependencies |
+| `SuggestionResult` | `server.core.command.system.suggestion` | The sink a custom `suggest(...)` fills with completions |
+| `SuggestionUtil` | `server.core.command.system.suggestion` | `suggestFiltered(...)` — prefix/substring/fuzzy ranking of candidate strings |
 | `EnumArgumentType` | `server.core.command.system.arguments.types` | Argument type for any enum — what `ArgTypes.forEnum` returns |
 | `AssetArgumentType` | `server.core.command.system.arguments.types` | Argument type for any string-keyed JSON asset class |
 | `GeneralCommandException` | `server.core.command.system.exceptions` | Throw with a `Message` to abort a command and message the sender |
@@ -64,10 +68,15 @@ CommandRegistry
 ## Class Hierarchy
 ```
 AbstractCommand
+  ├── CommandBase                      (sync, sender-agnostic)
   └── AbstractAsyncCommand
-        ├── AbstractPlayerCommand  (use this for player commands)
+        ├── AbstractPlayerCommand      (use this for player commands)
+        ├── AbstractAsyncPlayerCommand
         ├── AbstractWorldCommand
-        └── AbstractTargetPlayerCommand
+        ├── AbstractAsyncWorldCommand
+        ├── AbstractTargetPlayerCommand
+        ├── AbstractTargetPlayersCommand
+        └── AbstractCommandCollection  (parent of sub-commands)
 
 CommandSender (interface)
   ├── PlayerRef (player sender — the entity `Player` does NOT implement it)
@@ -99,6 +108,8 @@ emits at runtime — they apply to every command, built-in or plugin:
   e.g. `/npc debug set "DisplayState,DisplayFlock"`. Unquoted, the server
   rejects it with *"you have specified a list of argument values for an argument
   that does not accept a list."*
+- **A list holds at most 10 items** — an eleventh fails with *"You cannot specify
+  more than 10 list items in a list."*
 
 Two common mistakes:
 
@@ -118,8 +129,16 @@ Most common base class for player-executed commands.
 ```java
 AbstractPlayerCommand(String name, String description)
 AbstractPlayerCommand(String name, String description, boolean requiresConfirmation)
-AbstractPlayerCommand(String name)  // no description
+AbstractPlayerCommand(String description)  // usage variant — see below
 ```
+
+> **Gotcha:** the single-`String` constructor takes the **description**, not the name
+> (`AbstractCommand(String description)` forwards to `this(null, description)`). It leaves
+> the command nameless — `isVariant()` becomes `true` — which is only valid for a command
+> passed to `addUsageVariant(...)` on a named parent. Registering a nameless command
+> directly fails with `Registered commands must define a name`. The engine uses it exactly
+> this way: `SpawnOtherCommand` calls `super("server.commands.spawn.other.desc")` and is
+> attached with `addUsageVariant`.
 
 The third-argument boolean on every base-class constructor is `requiresConfirmation`
 (`AbstractCommand(String, String, boolean)`): when `true` the parser refuses to run
@@ -256,9 +275,10 @@ void addSubCommand(AbstractCommand cmd)         // Add subcommand
 void addUsageVariant(AbstractCommand cmd)       // Add usage variant
 
 // Command Info
-String getName()                                // Get command name
+String getName()                                // Get command name (null on a usage variant)
 String getDescription()                         // Get description
 String getFullyQualifiedName()                  // Get full command path (e.g., "parent subcommand")
+int countParents()                              // Depth below the top-level command
 Message getUsageString(CommandSender sender)    // Get usage help
 Message getUsageShort(CommandSender sender, boolean showAliases)  // Get short usage
 
@@ -277,7 +297,7 @@ protected String generatePermissionNode()       // This command's own segment of
 protected void setUnavailableInSingleplayer(boolean unavailable)  // Mark multiplayer-only
 void setAllowsExtraArguments(boolean allows)    // Allow trailing arguments
 void setOwner(CommandOwner owner)               // Set owning plugin
-void completeRegistration()                     // Called by the registry once; overridable hook (call super first)
+void completeRegistration() throws GeneralCommandException  // Called by the registry once; overridable hook (call super first)
 
 // Introspection (0.6.3+ additions marked)
 Map<String, AbstractCommand> getSubCommands()
@@ -285,10 +305,18 @@ AbstractCommand getSubCommand(String name)                  // (0.6.3+) null if 
 Map<String, AbstractOptionalArg<?, ?>> getOptionalArguments()
 AbstractOptionalArg<?, ?> getOptionalArgument(String name)  // (0.6.3+) null if none
 List<RequiredArg<?>> getRequiredArguments()
+Set<String> getAliases()
+Collection<AbstractCommand> getVariantCommands()
+boolean isVariant()                             // true when the command has no name (usage variant)
 boolean hasBeenRegistered()
 
-// Matching
-MatchResult matches(String input, String alias, int depth)  // Check if input matches command
+// Matching — scores this command against a search term for the in-game
+// command-list UI (CommandListPage). It searches, in descending priority:
+// name, aliases, optional/required arg names and aliases, then the localized
+// description and arg descriptions, then recurses into sub-commands and
+// usage variants. `language` is the searcher's locale, used to translate the
+// description keys; `termDepth` is the index of the term being matched.
+MatchResult matches(String language, String search, int termDepth)
 ```
 
 > **`registerExtendedPermission` timing:** it returns `null` whenever the command's own
@@ -320,7 +348,7 @@ So **every command auto-generates a permission node by default**, and `hasPermis
 |--------|-----|-------------|
 | **Open the command** | Call `requireNoPermission()` in the constructor (leaves the node `null` and flags the command open → everyone passes; replaces the `canGeneratePermission()` override removed by 0.6.3) | Examples / commands meant for all players |
 | **Explicit node** | Call `requirePermission("ui.menu")` in the constructor, then grant that node | Real permission-gated commands |
-| **Become op** | Run `/op` in-game; it adds you to the `hytale:Admin` group, which carries the `*` wildcard, satisfying every node | Testing/admin |
+| **Become op** | Run `/op self` in-game; it adds you to the `hytale:Admin` group, which carries the `*` wildcard, satisfying every node | Testing/admin |
 
 ```java
 public MenuCommand() {
@@ -332,7 +360,7 @@ public MenuCommand() {
 ```
 
 Notes:
-- `/op` (self) is itself gated: it works in local/singleplayer, but a dedicated server requires the `--allow-op` launch arg or your UUID in `permissions.json`.
+- Self-op is the sub-command `/op self` (bare `/op` is a command collection and only prints usage); `/op add <player>` / `/op remove <player>` do the same for someone else. `/op self` is itself gated: in singleplayer only the save owner may use it, and on a standalone server it refuses unless the `--allow-op` launch arg is set — otherwise it tells you to add your UUID to `permissions.json` while the server is off. It also refuses outright when a plugin has replaced the permission provider (`PermissionsModule.areProvidersTampered()`).
 - The example plugins all call `requireNoPermission()` so they run without op.
 - `canGeneratePermission()` (the 0.5.x override-to-`false` opt-out) was **removed by 0.6.3**; an `@Override` of it now fails to compile ("method does not override or implement a method from a supertype").
 
@@ -364,7 +392,7 @@ are built on it.
 ```java
 AbstractAsyncPlayerCommand(String name, String description)
 AbstractAsyncPlayerCommand(String name, String description, boolean requiresConfirmation)
-AbstractAsyncPlayerCommand(String name)  // no description
+AbstractAsyncPlayerCommand(String description)  // nameless usage variant
 ```
 
 ### Abstract Method to Implement
@@ -399,7 +427,7 @@ debug/stats commands.
 ```java
 CommandBase(String name, String description)
 CommandBase(String name, String description, boolean requiresConfirmation)
-CommandBase(String name)  // no description
+CommandBase(String description)  // nameless usage variant
 
 // Implement this — runs synchronously
 protected abstract void executeSync(CommandContext context);
@@ -414,7 +442,7 @@ Base class for commands that operate on a world context.
 
 ### Constructors
 ```java
-AbstractWorldCommand(String name)
+AbstractWorldCommand(String description)  // nameless usage variant
 AbstractWorldCommand(String name, String description)
 AbstractWorldCommand(String name, String description, boolean requiresConfirmation)
 ```
@@ -427,6 +455,16 @@ protected abstract void execute(
     Store<EntityStore> store
 );
 ```
+
+The base declares an optional `--world=<name>` argument (`ArgTypes.WORLD`) for you, and
+resolves the world in this order: the explicit `--world` value; otherwise the sender's own
+world, if the sender is a player; otherwise the universe's only world, if there is exactly
+one. If none of those apply — the console on a multi-world server with no `--world` — the
+argument type throws and the sender is told *"Sender must be a player or provide the --world
+option!"*.
+
+Your `execute` then runs **on that world's thread** (the `World` is the executor), so the
+`Store` it hands you is safe to read and mutate directly.
 
 ### Example: bulk entity operations
 
@@ -482,6 +520,31 @@ Key points:
 
 ---
 
+## AbstractAsyncWorldCommand
+**Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
+
+The async counterpart of `AbstractWorldCommand`: it declares and resolves the same optional
+`--world=<name>` argument, but you return a `CompletableFuture<Void>` and get no `Store`
+parameter. Use it when the command's own work is asynchronous (chunk loads, world-generation
+reloads); the engine's `/worldgen reload` and the world-event `/worldevent …` sub-commands are
+built on it.
+
+> **Gotcha:** unlike `AbstractWorldCommand`, this base does **not** hop to the world thread —
+> it calls your `executeAsync` directly on the caller's thread once the world resolves. Marshal
+> onto the world yourself (`world.execute(...)`, or `runAsync(context, task, world)`) before
+> touching the world's `Store`.
+
+```java
+AbstractAsyncWorldCommand(String name, String description)
+AbstractAsyncWorldCommand(String name, String description, boolean requiresConfirmation)
+AbstractAsyncWorldCommand(String description)  // nameless usage variant
+
+// Implement this
+protected abstract CompletableFuture<Void> executeAsync(CommandContext context, World world);
+```
+
+---
+
 ## AbstractTargetPlayerCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
 
@@ -489,7 +552,7 @@ Base class for commands that target another player (e.g., admin commands).
 
 ### Constructors
 ```java
-AbstractTargetPlayerCommand(String name)
+AbstractTargetPlayerCommand(String description)  // nameless usage variant
 AbstractTargetPlayerCommand(String name, String description)
 AbstractTargetPlayerCommand(String name, String description, boolean requiresConfirmation)
 ```
@@ -553,7 +616,7 @@ The engine's `/audio music clear` and `/audio music force` use this base.
 ```java
 AbstractTargetPlayersCommand(String name, String description)
 AbstractTargetPlayersCommand(String name, String description, boolean requiresConfirmation)
-AbstractTargetPlayersCommand(String name)  // no description
+AbstractTargetPlayersCommand(String description)  // nameless usage variant
 ```
 
 ### Abstract Method to Implement
@@ -772,6 +835,26 @@ ArgTypes.AUTH_STORE_PROVIDER_KEY                // auth-store provider id
 All are `SingleArgumentType<String>` with tab completion over the registered provider ids;
 they back the `/world create …` and storage/auth admin commands.
 
+### Other built-in types
+
+Less commonly needed, but present on `ArgTypes`:
+
+```java
+ArgTypes.INTERACTION_ASSET       // Interaction asset
+ArgTypes.ROOT_INTERACTION_ASSET  // RootInteraction asset
+ArgTypes.AMBIENCE_FX_ASSET       // AmbienceFX asset
+ArgTypes.MUSIC_CONTAINER_ASSET   // MusicContainer asset
+ArgTypes.AUDIO_STATE_ASSET       // AudioState asset
+ArgTypes.HITBOX_COLLISION_CONFIG // HitboxCollisionConfig asset
+ArgTypes.REPULSION_CONFIG        // RepulsionConfig asset
+ArgTypes.GAME_PROFILE_LOOKUP     // resolved PublicGameProfile (blocking lookup)
+ArgTypes.GAME_PROFILE_LOOKUP_ASYNC // CompletableFuture<PublicGameProfile>
+ArgTypes.INT_RANGE               // Pair<Integer, Integer> — two tokens, e.g. "-2 8"
+ArgTypes.INTEGER_COMPARISON_OPERATOR // ArgTypes.IntegerComparisonOperator enum
+ArgTypes.INTEGER_OPERATION       // ArgTypes.IntegerOperation enum
+ArgTypes.LAYER_ENTRY_TYPE        // Pair<Integer, String> (block layer entry)
+```
+
 ### Enum Helper
 ```java
 // Create argument type for any enum
@@ -803,6 +886,7 @@ public class TeleportCommand extends AbstractPlayerCommand {
 `withOptionalArg` / `withDefaultArg` / `withFlagArg` return `OptionalArg<D>` / `DefaultArg<D>` /
 `FlagArg`. Declare fields with those concrete types — the shared base is
 `Argument<Arg extends Argument<Arg, D>, D>`, so `Argument<String, String>` is not a valid type.
+See [Argument](#argumentarg-d) for the modifiers every argument object carries.
 
 ### Relative Position Resolution
 
@@ -939,6 +1023,10 @@ int getNumberInRange(int base)
 > `base` and returns a **uniformly random** value in `[min, max]` (inclusive);
 > only when min and max are equal does it return that value directly.
 
+> **Gotcha:** the two ends are parsed as two separate tokens (`~1 ~5`, `-2 8`) and
+> must agree on relativity — mixing `~1 5` is rejected with *"Your range must have
+> both min and max as relative, or both as not relative."*
+
 ### RelativeVector3i
 Behind `ArgTypes.RELATIVE_VECTOR3I` — three `RelativeInteger`s, each
 independently absolute or `~`-relative:
@@ -1033,6 +1121,68 @@ private static final SingleArgumentType<Fluid> FLUID_ARG =
 
 ---
 
+## Argument<Arg, D>
+**Package:** `com.hypixel.hytale.server.core.command.system.arguments.system`
+
+The base of every argument object — `RequiredArg`, `OptionalArg`, `DefaultArg`, `FlagArg`.
+Its two fluent setters return the argument itself, so they chain onto the `with…Arg(...)`
+call in the constructor:
+
+```java
+Arg addValidator(Validator<D> validator)   // com.hypixel.hytale.codec.validation.Validator
+Arg suggest(SuggestionProvider provider)   // override tab completion for this one argument
+D get(CommandContext context)              // same value as ctx.get(arg)
+D getProcessed(CommandContext context)
+boolean provided(CommandContext context)
+List<String> getSuggestions(CommandSender sender, String[] input)
+String getName()
+String getDescription()
+ArgumentType<D> getArgumentType()
+AbstractCommand getCommandRegisteredTo()
+```
+
+`addValidator` takes the same `Validator` type the codec system uses, so the validators you
+already write for asset configs work on command arguments too; `Argument.validate(...)` runs
+them during parsing, before `execute`. `suggest(...)` is the per-argument alternative to
+subclassing `ArgumentType` when you only need custom completion in one place — like the other
+declaration-time setters it must be called before registration, or it throws
+`Cannot add a SuggestionProvider after command has already completed registration`.
+
+The `SuggestionProvider` you pass (and `ArgumentType.suggest(...)`, if you subclass instead)
+receives a `SuggestionResult` (`server.core.command.system.suggestion`) to fill:
+
+```java
+SuggestionResult()                            // unbounded
+SuggestionResult(int maxSuggestions)          // (0.6.3+) capped
+SuggestionResult suggest(String suggestion)   // chainable; also (Object) and (Function<D,String>, D)
+SuggestionResult suggestContinuation(String)  // same, but flagged as an unfinished value
+List<String> getSuggestions()
+List<Boolean> getContinuations()
+void markTruncated()                          // (0.6.3+)
+boolean isTruncated()                         // (0.6.3+)
+boolean isFull()                              // (0.6.3+) true once maxSuggestions is reached
+```
+
+Once the cap is reached, further `suggest` calls are dropped and the result silently flags
+itself truncated — check `isFull()` before an expensive loop rather than after. Entries added
+with `suggestContinuation` are reported to the client in a parallel "continuations" array,
+marking them as values the player is still mid-way through typing; the engine uses it for the
+block-pattern / weighted-block argument types, offering `<what you typed>,` and
+`<what you typed>%` so the pattern can be extended.
+
+For the common "narrow a collection of strings against what the player has typed" case,
+`SuggestionUtil.suggestFiltered(Iterable<String>, String textAlreadyEntered, SuggestionResult)`
+(and its `UnaryOperator<String>` decorating overload) does it for you — and it is more than a
+prefix filter: it emits case-insensitive prefix matches first, then substring matches, then
+fuzzy matches, each ranked, stopping cleanly at the result's cap.
+
+There are also `ArgWrapper` overloads of `withRequiredArg` / `withOptionalArg` /
+`withDefaultArg` — e.g. `withRequiredArg(String, String, ArgWrapper<W, D>)` — which return
+the wrapper's own `WrappedArg` subtype instead of a plain `Argument`. That is how
+`ArgTypes.ENTITY_ID` (an `ArgWrapper<EntityWrappedArg, UUID>`) hands you an
+`EntityWrappedArg` whose `get(store, context)` resolves the id to a live `Ref<EntityStore>`,
+as the built-in `/entity remove` does.
+
 ## AbstractOptionalArg
 **Package:** `com.hypixel.hytale.server.core.command.system.arguments.system`
 
@@ -1093,7 +1243,7 @@ tracker visibility check, with a chat message) and otherwise removes it with
 
 ## Gotchas & Errors
 
-Error strings below are the literal messages thrown by the 0.6.3 command system (verified against `HytaleServer.jar`).
+Error strings below are the literal messages thrown by the command system (verified against `HytaleServer.jar`).
 
 - **`Registered commands must define a name`** → you constructed a command with a null/empty name. Fix: pass a non-empty name to `super("name", ...)`.
 - **`Cannot create a Required Argument with 0 parameters.`** → a custom `ArgumentType` reports zero input tokens. Fix: make `getNumberOfParameters()` return ≥ 1.

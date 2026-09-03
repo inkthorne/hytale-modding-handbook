@@ -48,6 +48,8 @@ Complete reference for finding the right documentation file. For a beginner-frie
 | [npc-roles.md](npc-roles.md) | NPC role asset definitions including templates, variants, behaviors, attitudes, and spawning configurations. |
 | [drops.md](drops.md) | Drop/loot table system for blocks, NPCs, containers, and prefabs with weighted selection and modular composition. |
 | [adventure.md](adventure.md) | Adventure gameplay features including instance discovery, zone discovery, treasure chest opening, and world map tracking. |
+| [world-events.md](world-events.md) | Scripted world-event timelines (0.6.3+) — stage/fork assets under `Server/WorldEvent`, their conditions, actions and context keys, and the Java API for starting and observing them. |
+| [encounters.md](encounters.md) | Encounter Manager (0.6.3+) — multi-NPC encounters scripted as `Server/EncounterManager` JSON with encounter-scoped boss-bar, music, role-change and world-event-signal components. |
 | [asset-editor.md](asset-editor.md) | Asset editor events for button activation, asset creation, client disconnects, and autocomplete/dataset requests. |
 | [i18n.md](i18n.md) | Localization system with GenerateDefaultLanguageEvent for registering plugin translations during server startup. |
 | [singleplayer.md](singleplayer.md) | Singleplayer-specific functionality with SingleplayerRequestAccessEvent for handling local server access requests. |
@@ -77,7 +79,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)
+[Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)
 
 ### Guides & Overviews
 
@@ -110,6 +112,12 @@ JSON asset types used in Hytale's data-driven systems.
 
 **Audio**
 [SoundEvents](audio.md#soundevents), [AudioCategories](audio.md#audiocategories), [AmbienceFX](audio.md#ambiencefx), [EQ](audio.md#eq-equalizer), [Reverb](audio.md#reverb), [ItemSounds](audio.md#itemsounds), [SoundSets](audio.md#soundsets)
+
+**World Events**
+[WorldEventAsset](world-events.md#serverworldeventeventidjson--worldeventasset), [StageAsset](world-events.md#serverworldeventstageidjson--stageasset), [Conditions](world-events.md#conditions), [Spawners](world-events.md#spawners-locationconditioncontent), [Actions](world-events.md#actions), [Context keys](world-events.md#context-keys)
+
+**Encounters**
+[EncounterManager asset](encounters.md#asset-format--serverencountermanageridjson), [Variants & macros](encounters.md#variants-and-macros), [Encounter core components](encounters.md#encounter-specific-core-components), [EncounterMembers collector](encounters.md#tracking-the-audience-the-encountermembers-collector)
 
 **World Generation - Zones & Biomes**
 [Zone](worldgen-zones.md#top-level-structure), [Biome Assignment](worldgen-zones.md#biome-assignment-noiserange), [Density](worldgen-zones.md#density), [SpawnPositions](worldgen-zones.md#spawnpositions), [Biome](worldgen-biomes.md#top-level-structure), [Terrain](worldgen-biomes.md#terrain), [MaterialProvider](worldgen-biomes.md#materialprovider)
@@ -205,6 +213,12 @@ JSON asset types used in Hytale's data-driven systems.
 **Adventure**
 [DiscoverInstanceEvent](adventure.md), [DiscoverZoneEvent](adventure.md), [TreasureChestOpeningEvent](adventure.md), [InstanceDiscoveryConfig](adventure.md), [WorldMapTracker](adventure.md), [ZoneDiscoveryInfo](adventure.md)
 
+**World Events**
+[WorldEventsPlugin](world-events.md), [WorldEventAsset](world-events.md), [StageAsset](world-events.md), [WorldEvent](world-events.md), [WorldEventManager](world-events.md), [WorldEventStorage](world-events.md), [GlobalWorldEventManager](world-events.md), [WorldEventRecord](world-events.md), [WorldEventsConfig](world-events.md), [EventCondition](world-events.md), [EventAction](world-events.md), [ContextKey](world-events.md), [ContextMap](world-events.md), [EventEndEcsEvent](world-events.md), [WorldEventSignal](world-events.md), [TrackedEntityComponent](world-events.md), [TrackedBlockComponent](world-events.md), [ConditionManager](world-events.md)
+
+**Encounters**
+[EncounterManagerPlugin](encounters.md), [EncounterManager](encounters.md), [EncounterMembers](encounters.md), [EncounterAudioState](encounters.md), [EncounterBossBarState](encounters.md), [EncounterMemberCollector](encounters.md), [EncounterManagerSystems](encounters.md), [EncounterMemberSystems](encounters.md), [EncounterCommand](encounters.md)
+
 **Asset Editor**
 [EditorClientEvent](asset-editor.md), [AssetEditorActivateButtonEvent](asset-editor.md), [AssetEditorAssetCreatedEvent](asset-editor.md), [AssetEditorClientDisconnectEvent](asset-editor.md), [AssetEditorSelectAssetEvent](asset-editor.md), [AssetEditorFetchAutoCompleteDataEvent](asset-editor.md), [AssetEditorRequestDataSetEvent](asset-editor.md)
 
@@ -256,10 +270,12 @@ JSON asset types used in Hytale's data-driven systems.
 - combat.md - Damage system, damage events, kill feed
 - npc.md - NPC loading, AI sensors
 - npc-roles.md - NPC role definitions, behaviors, spawning
+- encounters.md - Multi-NPC encounters: boss bars, encounter music, role changes, world-event signals
 - drops.md - Loot tables for NPCs, blocks, containers
 
 **Adventure** - Adventure gameplay features
 - adventure.md - Instance discovery, treasure chests
+- world-events.md - Scripted world-event timelines: stages, forks, conditions, actions and context keys
 
 **Data** - Serialization
 - codecs.md - Data encoding/decoding

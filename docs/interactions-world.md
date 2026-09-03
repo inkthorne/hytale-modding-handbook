@@ -185,6 +185,12 @@ From `Weapons/Bow/Prototype/CombatBow/Bow_Combat_Projectile_Damage_End.json` (ru
 
 Fires projectiles from an entity.
 
+> **Deprecated as of 0.6.3.** The class carries `@Deprecated(forRemoval = true)`; the JSON type is still
+> registered and shipped assets still use it, but new content should use the `Projectile` interaction
+> (`{ "Type": "Projectile", "Config": "<id>" }`, registered by `ProjectileModule`), which takes a
+> **projectile-config asset id** rather than a `Projectile` asset id and reads its launch rotation from
+> the config's `SpawnRotationOffset`. See [projectiles.md](projectiles.md).
+
 ### Structure
 
 ```json
@@ -235,7 +241,7 @@ Sends chat messages to players.
 |----------|------|-------------|
 | `Message` | string | Literal text to display |
 | `Key` | string | Localization key to display (alternative to `Message`) |
-| `Target` | string | 0.6.3+. Codec doc: "The set of players that receive the message." `Owner` (default — the chain's owning entity), `World` (every player in the executor's world) or `Universe` (every player on the server) |
+| `Target` | string | 0.6.3+. Codec doc: "The set of players that receive the message." `Owner` (default — "Send the message to the entity that ran the interaction."), `World` ("…every player of the world the interaction runs in.") or `Universe` ("…every player of every live world.") |
 
 With `Owner`, if the owning entity has no `PlayerRef` (e.g. an NPC chain) the message is written to the server log at INFO instead.
 
@@ -275,7 +281,17 @@ Opens a custom UI page registered via Java. Unlike `OpenPage`, this interaction 
 | `Memories` / `MemoriesUnlocked` | - | Memories/journal pages |
 | `PrefabSpawner`, `BlockSpawner`, `LaunchPad`, `ConfigInstanceBlock` | - | Block-entity settings pages (registered via `registerBlockEntityCustomPage`) |
 
-Other page ids used by shipped assets: `Teleporter`, `PortalDevice`, `Arcanebench`, `Workbench`.
+Two more are registered by builtin plugins and used by shipped assets: `Teleporter`
+(`TeleporterPlugin`) and `PortalDevice` (`PortalsPlugin`). Where each id comes from: `ItemRepair` and
+`LaunchPad` from `InteractionModule` itself, `Shop` from `ShopPlugin`, `Memories`/`MemoriesUnlocked`
+from `MemoriesPlugin`, `BlockSpawner` from `BlockSpawnerPlugin`, `PrefabSpawner` from
+`BuilderToolsPlugin`, `ConfigInstanceBlock` from `InstancesPlugin`.
+
+> **Gotcha — `Workbench` and `Arcanebench` are not page ids.** They look like UI pages but are
+> **bench ids** consumed by `Recipe.BenchRequirement`; no shipped `OpenCustomUI` uses them. The only
+> `Page.Id` values that appear in shipped assets are `ItemRepair`, `Teleporter`, `PortalDevice`,
+> `Memories`, `MemoriesUnlocked`, `LaunchPad`, `BlockSpawner`, `PrefabSpawner` and
+> `ConfigInstanceBlock` (`Shop` is registered but unused by the shipped item assets).
 
 #### Example: Item Repair Interaction
 
@@ -408,7 +424,7 @@ Places the current or given block.
 
 **Package:** `config/client/PlaceFluidInteraction`
 
-Places a fluid at the targeted block. Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction) (but its codec builds on `SimpleInteraction.CODEC`, so it does not expose `UseLatestTarget`).
+Places a fluid at the targeted block. Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction); as of 0.6.3 its codec builds on `SimpleBlockInteraction.CODEC`, so it **does** accept the inherited `UseLatestTarget` key.
 
 ```json
 {
@@ -421,13 +437,15 @@ Places a fluid at the targeted block. Extends [SimpleBlockInteraction](interacti
 | Property | Type | Description |
 |----------|------|-------------|
 | `FluidToPlace` | string | Fluid asset key to place (validated against loaded fluids; see [fluids.md](fluids.md)) |
-| `RemoveItemInHand` | boolean | Default `true`. Consume the held item when placing (only applies for Adventure-mode players, and only when the held stack's quantity is exactly 1) |
+| `RemoveItemInHand` | boolean | Default `true`. Consume the held item when placing — see the consumption rule under *Behavior* below |
 
 Behavior (from the decompiled source):
 
+- In a world whose gameplay `WorldConfig` disallows block placement the interaction does nothing and ends in `InteractionState.Failed`.
 - If the fluid's ticker cannot occupy solid blocks and the target block is solid, the fluid is placed one block out, on the face the client hit.
 - The fluid is set at its **maximum fluid level** and the block is marked ticking so the fluid starts flowing.
 - An unknown `FluidToPlace` key logs `Unknown fluid: %s` and resolves to the unknown fluid.
+- The held item is consumed only when the instigator is **not** a player (no `PlayerRef`) or is a player in **Adventure** mode, *and* the held stack's quantity is exactly 1, *and* `RemoveItemInHand` is true.
 
 Java accessors: `getFluidKey()`; `getWaitForDataFrom()` returns `WaitForDataFrom.Client`; `needsRemoteSync()` returns `true`.
 
@@ -772,7 +790,7 @@ entity's velocity, not adding to it). From
 
 **Package:** `config/client/WieldingInteraction`
 
-**Class hierarchy:** `WieldingInteraction` → `ChargingInteraction` → `SimpleInteraction` → `Interaction`
+**Class hierarchy:** `WieldingInteraction` → `ChargingInteraction` → `Interaction` (`ChargingInteraction` extends `Interaction` directly — it is *not* a `SimpleInteraction`)
 
 Enables blocking and guarding mechanics for shields and weapons. When active, the player holds a defensive stance that reduces or negates incoming damage based on attack angle. The interaction inherits from ChargingInteraction, providing hold-duration behavior, movement speed reduction, and animation support. Wielding integrates with stamina systems—blocking consumes stamina proportional to damage blocked, and stamina depletion triggers guard break effects.
 
@@ -782,14 +800,15 @@ Enables blocking and guarding mechanics for shields and weapons. When active, th
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Wielding"` |
 | `AngledWielding` | object | - | Directional blocking configuration with damage/knockback modifiers |
-| `DamageModifiers` | object | - | Direct damage reduction (alternative to AngledWielding for simpler configs) |
-| `StaminaCost` | object | - | Stamina consumption per damage blocked |
-| `BlockedEffects` | object | - | Visual/audio effects when block succeeds |
-| `BlockedInteractions` | object | - | Interactions triggered on successful block |
-| `Forks` | object | - | Branching interactions while blocking (e.g., shield bash) |
-| `Failed` | object | - | Interactions triggered on guard break (stamina depleted) |
+| `DamageModifiers` | object | - | Direct damage reduction, keyed by `DamageCause` id (alternative to AngledWielding for simpler configs) |
+| `KnockbackModifiers` | object | - | Direct knockback reduction, keyed by `DamageCause` id — the top-level twin of `DamageModifiers` |
+| `StaminaCost` | object | - | Stamina consumption per damage blocked (codec doc: "Configuration to define how stamina loss is computed.") |
+| `BlockedEffects` | object | - | Visual/audio effects when block succeeds (a `DamageEffects`) |
+| `BlockedInteractions` | object | - | Interactions triggered on successful block (a root-interaction reference or inline chain) |
+| `Forks` | object | - | Branching interactions while blocking (e.g., shield bash) — from `ChargingInteraction` |
+| `Failed` | object | - | Interactions triggered on guard break (stamina depleted) — from `ChargingInteraction` |
 | `Next` | Interaction | - | Interaction to run when guard ends normally |
-| `Effects` | object | - | Animation/sound for guard start (inherited from ChargingInteraction) |
+| `Effects` | object | - | Animation/sound for guard start (from the `Interaction` base) |
 
 **Inherited from ChargingInteraction:**
 
@@ -862,9 +881,9 @@ Controls directional blocking based on attack angle, with separate modifiers for
 | NPC Skeleton Knight | Physical: 0.2, Projectile: 0.2 | - | 80% damage reduction |
 | NPC Outlander Brute | Physical: 0, Projectile: 0 | - | Full block |
 
-### DamageModifiers (Top-Level)
+### DamageModifiers / KnockbackModifiers (Top-Level)
 
-For simpler configurations (commonly used by NPCs), damage modifiers can be specified at the top level instead of inside AngledWielding:
+For simpler configurations (commonly used by NPCs), damage — and knockback — modifiers can be specified at the top level instead of inside AngledWielding:
 
 ```json
 {
@@ -876,7 +895,11 @@ For simpler configurations (commonly used by NPCs), damage modifiers can be spec
 }
 ```
 
-This format blocks from all angles with uniform damage reduction.
+This format blocks from all angles with uniform damage reduction. `KnockbackModifiers` is the matching
+top-level key and takes the same shape; no shipped asset uses it at the top level (every shipped guard
+puts its knockback modifiers inside `AngledWielding`). Both maps are keyed by
+[`DamageCause`](combat.md) asset id and validated against the loaded damage causes, so a typo'd key
+fails asset validation rather than being silently ignored.
 
 ### Forks (Guard Branching)
 
@@ -899,7 +922,7 @@ The `Forks` system allows branching to different interactions while blocking is 
 }
 ```
 
-`Forks` is a map of [`InteractionType`](interactions.md#interactiontype-enum) → interaction (codec doc: "A collection of interactions to fork into when the input associated with the interaction type is used."). Because `CancelOnOtherClick` defaults to `true`, a fork only gets a chance to fire if the guard sets it to `false`.
+`Forks` is a map of [`InteractionType`](interactions.md#interactiontype-enum) → interaction (codec doc: "A collection of interactions to fork into when the input associated with the interaction type is used."). Forking does not cancel the guard, but the `CancelOnOtherClick` check still runs — so with its default `true` the guard is torn down by the same click that fired the fork, which is why every shipped guard sets it to `false`.
 
 | Fork Key | Trigger | Common Use |
 |----------|---------|------------|
@@ -912,7 +935,7 @@ The shipped guards (above, from `Weapon_Sword_Secondary_Guard_Wield.json`) wrap 
 
 ### Effects (Guard Start)
 
-Inherited from ChargingInteraction, the `Effects` object configures the animation and sound when entering guard stance:
+Inherited from the `Interaction` base (via ChargingInteraction), the `Effects` object configures the animation and sound when entering guard stance:
 
 ```json
 "Effects": {
@@ -946,7 +969,7 @@ Stamina consumption when blocking damage:
 | `CostType` | string | `Damage` — `Value` is how much blocked damage one stamina point is worth; `MaxHealthPercentage` (the default) — `Value` is the fraction of max health one stamina point is worth (codec doc: "for 4% of max health, the value expected here is 0.04"; default `0.04`) |
 | `Value` | float | Per `CostType` above; must be ≥ 0 |
 
-**Real values:** Every shipped weapon guard uses `"CostType": "Damage", "Value": 7`.
+**Real values:** Every shipped `*_Secondary_Guard_Wield.json` (and `Common_Guard_Wield.json`) uses `"CostType": "Damage", "Value": 7`. The older `*_Block_Damage.json` interactions vary — Spear 2, Sword/Shield 10, Stick/Mace 15.
 
 ### BlockedEffects
 
@@ -1065,7 +1088,7 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 
 ### Complete Examples
 
-**Full Sword Guard Configuration** (`Weapons/Sword/Attacks/Secondary/Guard/Weapon_Sword_Secondary_Guard_Wield.json`, verbatim):
+**Full Sword Guard Configuration** (`Weapons/Sword/Attacks/Secondary/Guard/Weapon_Sword_Secondary_Guard_Wield.json`, verbatim apart from a `"$Comment"` key dropped from `Next`):
 
 ```json
 {
@@ -1212,15 +1235,15 @@ Note what the real file does *not* do: no `BlockedInteractions` (signature-energ
 
 ### Technical Notes
 
-- **Inheritance** - WieldingInteraction inherits all properties from ChargingInteraction, including progress display, `Forks`/`Failed` and the `Next` map system. Its constructor flips `AllowIndefiniteHold` to `true`, so a guard with no `RunTime` holds until released.
+- **Inheritance** - WieldingInteraction inherits all properties from ChargingInteraction, including progress display, `Forks`/`Failed` and the `Next` map system. Its codec's `afterDecode` hook forces `AllowIndefiniteHold` to `true` (regardless of what the JSON says), so a guard with no `RunTime` holds until released; the same hook copies the decoded `Next` to the `RunTime` index when `RunTime > 0`, which is what makes `Next` fire when the guard times out as well as when it is released.
 
-- **`ApplyForce` acts on the user** - it has no `Entity` property (codec doc: "A collection of forces to apply to the user"), so a "knock the attacker back" riposte cannot be expressed with it; `ApplyEffect` does take `Entity: "Target"`.
+- **`ApplyForce` acts on the user** - it has no `Entity` property (codec doc for `Forces`: "A collection of forces to apply to the user.\nReplaces `Direction`, `AdjustVertical` and `Force` if used."), so a "knock the attacker back" riposte cannot be expressed with it; `ApplyEffect` and `ChangeStat` do take `Entity: "Target"`.
 
 - **Stamina Integration** - When `StaminaCost` is configured with `CostType: "Damage"`, each point of damage blocked consumes `Value` stamina. When stamina reaches zero, the `Failed` branch triggers.
 
 - **Directional Blocking** - The `Angle` and `AngleDistance` create a blocking arc. Attacks from within this arc apply `DamageModifiers`; attacks from outside bypass the block entirely.
 
-- **Forks Execution** - When a Fork triggers (e.g., Primary click during guard), the Wielding interaction ends and the forked interaction executes. The guard does not resume automatically.
+- **Forks Execution** - A fork does **not** by itself end the guard. Codec doc: "This does not cancel the current interaction when triggered but the `CancelOnOtherClick` check will still run and may cancel the interaction. The existing forks will continue to run even if this interaction ends." So a shield bash fired from `Forks.Primary` runs *alongside* the guard, and the guard only drops if `CancelOnOtherClick` is left at its default `true` — which is exactly why every shipped weapon guard sets `"CancelOnOtherClick": false`.
 
 - **Guard Break Recovery** - The `Failed` interactions should include a state change (stagger/stun) that prevents immediate re-blocking, creating a vulnerability window.
 
@@ -1310,10 +1333,13 @@ static void queueOnBreakImpactInteraction(Ref<EntityStore> ref, BlockType blockT
         int blockId, CommandBuffer<EntityStore> commandBuffer)
 ```
 
-Removed by 0.6.3 with no direct replacement: `getSpecPowerDamageBlock(Item, BlockType, ItemTool)` and
-`calculateDurabilityUse(Item, BlockType)` — tool/spec resolution and durability now happen inside
-`performBlockDamage` (see `ItemTool.getBreakShape()` / `getBreakShapeDurabilityMode()` for the new
-multi-block "break shape" durability rules).
+**Made private by 0.6.3** (still present, but no longer callable from a plugin):
+`getSpecPowerDamageBlock(Item, BlockType, ItemTool)` and `calculateDurabilityUse(Item, BlockType)`.
+Tool/spec resolution and durability now happen inside `performBlockDamage`, via a private
+`ItemDamageContext` — see `ItemTool.getBreakShape()` / `ItemTool.getBreakShapeDurabilityMode()` for the
+new multi-block "break shape" durability rules, and the `applyDurabilityPerBlock` flag on the
+multi-block `performBlockDamage` overload. `removeBlock` also changed shape (it now takes a
+`BlockSection`) and remains private.
 
 See [drops.md](drops.md) for how drop lists are defined.
 
@@ -1343,10 +1369,10 @@ The component type is also reachable via `InteractionModule.get().getPlacedByCom
 
 Backtick-quoted error strings below are literal messages from the server (verified against `HytaleServer.jar`).
 
-- **`Unknown fluid: <key>`** (`PlaceFluidInteraction`) → `FluidToPlace` names a fluid that isn't loaded; the interaction falls back to the unknown fluid. Fix: use a key from the fluid asset store (see [fluids.md](fluids.md)).
+- **`Unknown fluid: %s`** (`PlaceFluidInteraction`; `%s` is the offending `FluidToPlace` key) → `FluidToPlace` names a fluid that isn't loaded; the interaction falls back to the unknown fluid. Fix: use a key from the fluid asset store (see [fluids.md](fluids.md)).
 - **`server.interactions.invalidBlockState`** (translation message sent to the player by `OpenContainerInteraction`) → the targeted block has no `ItemContainerBlock` component. Fix: only wire `OpenContainer` to container blocks.
 - **`No projectile config typeName provided`** (`ProjectileComponent`) → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
 - **`has no valid ProjectileConfig:`** (`ProjectileInteraction`) → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
-- **Symptom:** a `ChangeState` does nothing → the current state isn't a key in the `Changes` map, so no transition matches (the codec does not validate the map — a self-mapping like `"Off": "Off"` loads fine and is simply a no-op). Fix: include the entity/block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
-- **Symptom:** a `ChangeState` with `RequireBlockPlacement` never fires → it is treated as block placement and is skipped in worlds where placement is disallowed. Fix: drop the flag unless the state change really stands in for placing a block.
+- **Symptom:** a `ChangeState` does nothing and its chain takes the `Failed` branch → the current state isn't a key in the `Changes` map, so no transition matches; the interaction sets `InteractionState.Failed` rather than passing silently. The codec does not validate the map, so a bogus or self-mapping entry loads fine. The same `Failed` result also covers a target state that has no block variant, a target block id that doesn't resolve, and a resulting state with no interaction sound event. Fix: include the block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
+- **Symptom:** a `ChangeState` with `RequireBlockPlacement` never fires → it is treated as block placement, so in worlds whose `WorldConfig` disallows placement it ends immediately in `InteractionState.Failed`. Fix: drop the flag unless the state change really stands in for placing a block.
 - **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabPath` doesn't resolve to a stored prefab. Fix: use the prefab's file name as registered in the prefab store (e.g. `Goblin_Thief_Chest.prefab.json`).

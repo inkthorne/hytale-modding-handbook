@@ -91,7 +91,9 @@ Executes multiple interactions sequentially, one after another. Each interaction
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Serial"` |
-| `Interactions` | array | Required | List of interactions to execute in order |
+| `Interactions` | array | Required | Codec doc: "A list of interactions to run. They will be executed in the order specified sequentially." Validated non-null with non-null elements; unlike [Parallel](#parallel) there is no minimum length |
+
+`SerialInteraction` extends `Interaction` directly, so it has **no `Next`/`Failed` of its own** (those keys live on `SimpleInteraction`). It is also never ticked: `compile()` inlines each child into the chain's operation stream, so a `Serial` is a purely structural wrapper.
 
 ### Interactions Array Format
 
@@ -179,7 +181,7 @@ Serial Complete
 - Interactions with `RunTime` will block until that duration completes
 - Instant interactions (like stat changes) complete immediately
 - Nested Serial blocks execute their full sequence before continuing
-- If any interaction fails, subsequent interactions may still execute (no short-circuit)
+- **A failed step short-circuits the rest.** `InteractionChain.updateServerState()` maps any entry state other than `NotFinished`/`Finished` onto a chain state of `Failed`, and the manager tears the chain down as soon as its state leaves `NotFinished`. So a step that ends in `InteractionState.Failed` stops the Serial — unless that step declares its own `Failed` branch, which jumps the chain to that branch's label instead of failing.
 
 ### Deep Nesting Patterns
 
@@ -479,7 +481,7 @@ A charged ability that fires multiple projectiles in sequence:
 | **Timing** | Total time = sum of all interactions | Total time = longest interaction |
 | **Dependencies** | Each step can depend on previous | No ordering guarantees |
 | **Use case** | Multi-step abilities, state changes | Multiple simultaneous effects |
-| **Failure handling** | Subsequent steps still execute | All started regardless of failures |
+| **Failure handling** | A failed step fails the chain and stops the rest (unless it has its own `Failed` branch) | Forks are independent; a failed fork does not stop the others |
 
 **When to use Serial:**
 - Stat changes that must happen before damage
@@ -566,7 +568,9 @@ Executes multiple interactions concurrently. Unlike [Serial](#serial) which wait
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Parallel"` |
-| `Interactions` | array | Required | List of interactions to execute concurrently (validated to contain at least **two** entries) |
+| `Interactions` | array | Required | Codec doc: "The collection of interaction roots to run in parallel via forks." Validated non-null and to contain at least **two** entries |
+
+Each entry is a **root** interaction (`RootInteraction.CHILD_ASSET_CODEC`), not a plain child interaction — an inline object is turned into an anonymous root. Like [Serial](#serial), `ParallelInteraction` extends `Interaction` directly and so has **no `Next`/`Failed` of its own**.
 
 ### Interactions Array Format
 
@@ -947,7 +951,7 @@ Parallel execution has specific error handling behavior:
 | **Dependencies** | Each step can depend on previous | No ordering guarantees |
 | **Context** | Shared context throughout | First shares, rest get duplicates |
 | **Use case** | Multi-step abilities, state changes | Multiple simultaneous effects |
-| **Failure handling** | Subsequent steps still execute | All started regardless of failures |
+| **Failure handling** | A failed step fails the chain and stops the rest (unless it has its own `Failed` branch) | Forks are independent; a failed fork does not stop the others |
 
 **When to use Parallel:**
 - Applying multiple status effects at once
@@ -984,7 +988,7 @@ The base Condition interaction provides branching based on game mode and entity 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Condition"` |
-| `RequiredGameMode` | string | `null` | Game mode that must be active (`Adventure` or `Creative` — the `GameMode` enum has no other members) |
+| `RequiredGameMode` | string | `null` | Game mode that must be active (`Adventure` or `Creative` — the `GameMode` enum has no other members). Only checked when the entity actually has a `Player` component: an NPC or block chain passes this check unconditionally |
 | `Jumping` | boolean | `null` | If set, entity must be/not be jumping |
 | `Swimming` | boolean | `null` | If set, entity must be/not be swimming |
 | `Crouching` | boolean | `null` | If set, entity must be/not be crouching |
@@ -1000,6 +1004,7 @@ Unlike most condition interactions that use `Then`/`Else`, the base Condition us
 - **Next**: Executed when ALL specified conditions are met
 - **Failed**: Executed when ANY specified condition is not met
 - Unset properties (`null`) are not checked - only explicitly set conditions are evaluated
+- The checks read the **owning** entity of the chain (`InteractionContext.getOwningEntity()`), not the executor, and every check is evaluated before the verdict is applied (there is no early exit — the outcome is the same either way)
 
 ### Execution Flow
 
@@ -1178,7 +1183,7 @@ Branch based on whether an entity's stats meet a set of thresholds. Each entry i
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"StatsCondition"` |
-| `Costs` | object | Required | Map of stat name to threshold amount; passes when every listed stat is ≥ its amount (nothing is deducted) |
+| `Costs` | object | Required | Map of stat name to threshold amount; passes when every listed stat is ≥ its amount (nothing is deducted). Keys are validated against the loaded `EntityStatType` assets, so a typo fails asset validation at load |
 | `LessThan` | boolean | `false` | Invert the comparison: pass when every listed stat is **below** its amount |
 | `ValueType` | string | `"Absolute"` | How to interpret the amounts (`Absolute` or `Percent`) |
 | `Lenient` | boolean | `false` | Allow overdraw: a stat below its amount still passes as long as it is above zero and the stat's minimum is negative |
@@ -1190,7 +1195,9 @@ Branch based on whether an entity's stats meet a set of thresholds. Each entry i
 | ValueType | Description |
 |-----------|-------------|
 | `Absolute` | Cost amounts are raw stat values |
-| `Percent` | Cost amounts are a percentage of the stat's maximum (0-100) |
+| `Percent` | Cost amounts are a percentage of the stat's maximum on a 0-100 scale (the code compares against `stat.asPercentage() * 100`) |
+
+The stats are read from the **executing** entity (`InteractionContext.getEntity()`), unlike [Condition](#condition), which reads the chain's owning entity.
 
 ### Lenient Mode
 
@@ -1350,6 +1357,11 @@ EffectCondition Evaluation
             └─► ANY effect present? → Failed
 ```
 
+> **Gotcha — a missing target passes.** If the resolved `Entity` reference is invalid, or the entity
+> has no `EffectControllerComponent`, `firstRun` returns without touching the state, so the
+> interaction **succeeds** and `Next` runs. An `EffectCondition` is therefore not a reliable
+> "this entity exists and is affected" guard; only its `None` sense is safe by default.
+
 ### Examples
 
 **Single Effect Check:**
@@ -1399,7 +1411,7 @@ Combo system requiring multiple debuffs:
 }
 ```
 
-**Immunity Check (None, from Stamina_Broken_Check.json):**
+**Immunity Check (None, from `Interactions/Stamina_Broken_Check.json`, verbatim):**
 
 Prevent applying an effect while its immunity effect is active:
 
@@ -1524,12 +1536,12 @@ Each `BlockMatcher` in the array nests block identity in a `Block` object, with 
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `Block` | object | Required | Block matcher: `{ "Id": ..., "State": ... }` |
-| `Block.Id` | string | `null` | Exact block ID to match |
-| `Block.State` | string | `null` | Block state name to match (e.g. `"default"`) |
-| `Block.Tag` | string | `null` | Block tag to match (any block type carrying the tag) |
-| `Face` | string | `"None"` | Which face of the target block the player must have hit for the matcher to apply |
-| `StaticFace` | boolean | `false` | If true, `Face` is an absolute world face; if false, it is rotated by the player's yaw/pitch |
+| `Block` | object | Required | Codec doc: "Match against block values" — `{ "Id": ..., "State": ..., "Tag": ... }` |
+| `Block.Id` | string | `null` | Block ID to match. **Compared against the block's *item* id** (`blockType.getItem().getId()`), so a state variant such as the blue lantern still matches its base id `Furniture_Human_Ruins_Lantern`. Validated against the loaded `BlockType` assets |
+| `Block.State` | string | `null` | Block state name to match; a block with no state reads as `"default"` |
+| `Block.Tag` | string | `null` | Block tag to match (any block type carrying the tag in its `Data.Tags`) |
+| `Face` | string | `"None"` | Which face of the target block the player must have hit for the matcher to apply. `None` skips the face test |
+| `StaticFace` | boolean | `false` | Codec doc: "Whether the face matching is unaffected by the block rotation or not." |
 
 ### Face Reference
 
@@ -1545,12 +1557,21 @@ Each `BlockMatcher` in the array nests block identity in a `Block` object, with 
 
 | StaticFace | Behavior |
 |------------|----------|
-| `false` | `Face` is rotated by the player's yaw and pitch before comparing (so `Up` means "the face on top from the player's view") |
-| `true` | `Face` is compared as an absolute world face |
+| `false` (default) | `Face` is rotated by the **target block's own** yaw and pitch (`BlockSection.getRotation(...)`) before being compared with the clicked face — so `Up` means "the face that is 'up' in the block's local frame". It is **not** the player's rotation |
+| `true` | `Face` is compared as an absolute world face, ignoring the block's rotation |
+
+> **Gotcha (0.6.3) — a non-default Creative place mode makes every matcher fail.** After a matcher
+> succeeds, `BlockConditionInteraction` re-checks the executor: if it is a player in Creative whose
+> `PlayerSettings.creativeSettings().placeMode()` is anything other than `Default`, the match is
+> discarded and the interaction ends `Failed`. `PlaceMode` (`Default`, `Replace`, `Retype`,
+> `Extrude`, `SurfaceDraw`, `FastPlace`) is new in 0.6.3 and is what the `PlaceModeSelect` /
+> `DragPlaceBlock` / `ExtrudePlaceBlock` / `SurfaceDrawPlaceBlock` interactions switch between, so a
+> block whose `Use` chain starts with a `BlockCondition` silently stops responding while a builder
+> has one of those modes selected.
 
 ### Examples
 
-**Specific Block ID Check (from Lantern_Yellow.json):**
+**Specific Block ID Check (from `Interactions/Block/Lantern/Lantern_Yellow.json`):**
 
 Only act when the target block is a specific lantern, then change its state (`Changes` abbreviated — the asset maps every colour state to `Yellow`):
 
@@ -1641,7 +1662,7 @@ Branch based on whether a cooldown has completed. Checks if the specified cooldo
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"CooldownCondition"` |
-| `Id` | string | Required | Cooldown identifier to check |
+| `Id` | string | Required | Codec doc: "The ID of the cooldown to check for in this condition." Validated non-null |
 | `Next` | interaction | `null` | Interaction when cooldown is ready |
 | `Failed` | interaction | `null` | Interaction when cooldown is active |
 
@@ -1669,9 +1690,11 @@ CooldownCondition checks if the specified cooldown timer has expired:
 
 Cooldowns are typically started using [TriggerCooldown](#triggercooldown) and can be reset using [ResetCooldown](#resetcooldown).
 
+For a **non-player** entity that has a client state (a predicted chain), the condition does not evaluate the cooldown at all — it copies the client's state instead. Only entities with a `Player` component actually consult the server-side `CooldownHandler`.
+
 ### Examples
 
-**NPC Poison Attack (from the Spider role, `Bite_Damage`; simplified):**
+**NPC Poison Attack (from `Server/NPC/Roles/Creature/Vermin/Spider.json`, `_InteractionVars.Bite_Damage`; simplified):**
 
 Check if the poison cooldown has elapsed before applying the poison effect (the real asset applies `Poison_T1` to the `Target` via an `EffectCondition` that skips targets with `Antidote`):
 
@@ -1707,7 +1730,7 @@ Check if the poison cooldown has elapsed before applying the poison effect (the 
 }
 ```
 
-**Boss Poison Bite (from the Snapdragon role, `Melee_Damage`; simplified):**
+**Boss Poison Bite (from `Server/NPC/Roles/Creature/Mythic/Snapdragon.json`, `_InteractionVars.Melee_Damage`; simplified):**
 
 Same shape with a shorter cooldown and a stronger poison tier:
 
@@ -1798,12 +1821,14 @@ The `Cooldown` property uses the InteractionCooldown configuration object:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `Id` | string | `null` | Cooldown identifier (used to check with CooldownCondition) |
-| `Cooldown` | float | Required | Duration in seconds |
-| `ClickBypass` | boolean | `false` | If true, clicking bypasses the cooldown |
-| `Charges` | float[] | `null` | Array of charge times for charged abilities |
-| `SkipCooldownReset` | boolean | `false` | If true, prevents cooldown from being reset when triggered again |
-| `InterruptRecharge` | boolean | `false` | If true, interrupting the ability also interrupts cooldown recharge |
+| `Id` | string | `null` | Codec doc: "The Id for the cooldown. Cooldowns can be used on different interactions but share a cooldown." |
+| `Cooldown` | float | `0` | "The time in seconds this cooldown should last for." Validated ≥ 0 |
+| `Charges` | float[] | `null` | "The charge times available for this interaction." Each entry validated ≥ 0 |
+| `SkipCooldownReset` | boolean | `false` | "Determines whether resetting cooldown should be skipped." |
+| `InterruptRecharge` | boolean | `false` | "Determines whether recharge is interrupted by use." |
+| `ClickBypass` | boolean | `false` | "Whether this cooldown can be bypassed by clicking." |
+
+The same object is built by `RootInteraction.COOLDOWN_CODEC`, which is why it appears verbatim under a root interaction's `Cooldown` and under `Settings.<GameMode>.Cooldown` as well as inside `TriggerCooldown` / `ResetCooldown`.
 
 ### Examples
 
@@ -1819,7 +1844,7 @@ The `Cooldown` property uses the InteractionCooldown configuration object:
 }
 ```
 
-**NPC Attack Cooldown (from Spider.json):**
+**NPC Attack Cooldown (from `Server/NPC/Roles/Creature/Vermin/Spider.json`):**
 
 ```json
 {
@@ -1831,7 +1856,7 @@ The `Cooldown` property uses the InteractionCooldown configuration object:
 }
 ```
 
-**Cooldown with Click Bypass (from RootInteractions/Tools/Watering_Can_Use.json):**
+**Cooldown with Click Bypass (from `RootInteractions/Tools/Watering_Can_Use.json`):**
 
 The same `InteractionCooldown` object is used by root interactions' `Cooldown` (top-level or per game mode under `Settings`); `ClickBypass` lets a fresh click skip the remaining wait:
 
@@ -1947,7 +1972,7 @@ A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-
 }
 ```
 
-**Reset Anonymous Cooldown (from Bomb_Throw.json):**
+**Reset Anonymous Cooldown (from `Interactions/Weapons/Bomb/Bomb_Throw.json`):**
 
 ```json
 {
@@ -2025,11 +2050,19 @@ Branch based on player movement input direction. Provides eight directional bran
 | `ForwardRight` | interaction | `null` | Interaction when moving forward-right diagonal |
 | `BackLeft` | interaction | `null` | Interaction when moving backward-left diagonal |
 | `BackRight` | interaction | `null` | Interaction when moving backward-right diagonal |
-| `Failed` | interaction | `null` | Interaction when no movement or no matching direction |
+| `Failed` | interaction | `null` | From `SimpleInteraction`, but here it is the **`MovementDirection.None` branch** — it runs when the player is not moving, not when something failed |
+
+> **Gotcha — an undefined direction runs nothing, not `Failed`.** `compile()` emits one label per
+> `MovementDirection` (plus label 0 for `None` ← `Failed`) and `tick0` jumps straight to the label for
+> the reported direction, always with state `Finished`. A direction key you left out compiles to an
+> empty body followed by a jump to the end, so moving that way silently does nothing. `Failed` only
+> covers standing still. During client-side simulation the direction is forced to `None`, so the
+> `Failed` branch is what the client predicts.
 
 ### Direction Detection
 
-Directions are based on player input relative to camera facing:
+Directions come from the client-reported `MovementDirection` on the interaction's client state
+(`WaitForDataFrom.Client`), one of nine values — `None` plus the eight below:
 
 ```
         Forward
@@ -2045,10 +2078,10 @@ Left  ←       →  Right
 
 ### Execution Behavior
 
-1. Reads current movement input direction
-2. Matches to closest of 8 cardinal/diagonal directions
-3. Executes corresponding branch interaction
-4. If no movement input or no branch defined for direction, executes `Failed`
+1. Reads the client-reported `MovementDirection`
+2. Jumps to that direction's compiled label (state is always set to `Finished`)
+3. Executes that branch's interaction, then jumps to the end of the `MovementCondition`
+4. `MovementDirection.None` (standing still) takes the `Failed` label; a direction with no key defined executes an empty branch
 
 ### Examples
 
@@ -2102,7 +2135,7 @@ Left  ←       →  Right
 
 **Simple Four-Direction Dodge:**
 
-Only handle cardinal directions, default others to Failed:
+Only handle cardinal directions. Note the diagonals are **not** routed to `Failed` — leaving them out means a diagonal dodge does nothing at all; `Failed` fires only when the player is standing still:
 
 ```json
 {
@@ -2249,9 +2282,9 @@ Blocks that should be counted need the `TrackedPlacement` component among their 
 }
 ```
 
-**2. Instance must have BlockCounter resource:**
+**2. Instance must have the BlockCounter resource:**
 
-The instance resource (e.g., `BlockCounter.json`) tracks placement counts:
+`BlockCounter` is a chunk-store resource registered by `InteractionModule` under the id `BlockCounter`; each instance seeds it from `Server/Instances/<Instance>/resources/BlockCounter.json`, which ships empty and fills up at runtime:
 
 ```json
 {
@@ -2259,11 +2292,13 @@ The instance resource (e.g., `BlockCounter.json`) tracks placement counts:
 }
 ```
 
+`TrackedPlacement.OnAddRemove` does the bookkeeping: on block-entity spawn it calls `BlockCounter.trackBlock(blockType.getId())` and stashes that name on the component; on removal it calls `untrackBlock`. The key counted is therefore the **`BlockType` id** — which is what `PlacementCountCondition.Block` must name.
+
 ### Examples
 
-**Teleporter Placement Limit (Real - from Teleporter_Try_Place.json):**
+**Teleporter Placement Limit (verbatim, from `Interactions/Block/Teleporter/Teleporter_Try_Place.json`):**
 
-Only allow placing a teleporter if the player has fewer than 2:
+Only allow placing a teleporter while the world holds fewer than 2 (the count is per world, not per player):
 
 ```json
 {
@@ -2281,9 +2316,9 @@ Only allow placing a teleporter if the player has fewer than 2:
 }
 ```
 
-**Combined with MemoriesCondition for Tier-Based Limits (from Teleporter_Place.json, abbreviated):**
+**Combined with MemoriesCondition for Tier-Based Limits (verbatim, from `Interactions/Block/Teleporter/Teleporter_Place.json`):**
 
-`MemoriesCondition` (`builtin.adventure.memories.interactions.MemoriesConditionInteraction`) branches on the world's *memories level*: `Next` is a map from level (integer, as a string key) to interaction, and `Failed` runs when the current level has no entry. Each branch inherits `Teleporter_Try_Place` via `Parent` and overrides only `Value`, so higher levels allow more teleporters:
+`MemoriesCondition` (`com.hypixel.hytale.builtin.adventure.memories.interactions.MemoriesConditionInteraction`) branches on the world's *memories level*: `Next` is a map from level (integer, as a string key) to interaction, and `Failed` runs when the current level has no entry. (The codec documents `Next` as "The interaction to run if the player's memories level matches the key", but the implementation reads `MemoriesPlugin.getMemoriesLevel(world.getGameplayConfig())` — it is a **world** level, shared by everyone in the world, not per player.) Each branch inherits `Teleporter_Try_Place` via `Parent` and overrides only `Value`, so higher levels allow more teleporters:
 
 ```json
 {
@@ -2362,13 +2397,27 @@ Loop execution of interactions with timing control and optional interruption.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Repeat` | int | Number of repetitions (default `1`); must be ≥ 1, or `-1` for indefinite looping until interrupted (`0` fails validation) |
-| `RunTime` | float | Duration of each iteration in seconds |
-| `ForkInteractions` | object | Contains `Interactions` array to execute each iteration |
-| `Next` | interaction | Interaction to execute after all repetitions complete |
-| `HorizontalSpeedMultiplier` | float | Movement speed modifier during repeat (e.g., `0.6` for 60% speed) |
-| `Rules` | object | Contains `InterruptedBy` array for early termination |
-| `Failed` | interaction | Handler when repeat cannot continue or is interrupted |
+| `Repeat` | int | Codec doc: "The number of times to repeat. -1 is considered as infinite, be careful when using this value." Default `1`; validated as ≥ 1 **or** exactly `-1`, so `0` fails validation |
+| `ForkInteractions` | object | Codec doc: "The interactions to run in the forks created by this interaction." A **root** interaction reference or inline root; validated non-null |
+| `Next` | interaction | From `SimpleInteraction`. Runs after the last iteration finishes successfully |
+| `Failed` | interaction | From `SimpleInteraction`. Runs when a forked chain **fails** — remaining repetitions are abandoned |
+| `HorizontalSpeedMultiplier` | float | From the `Interaction` base. Movement speed modifier while the repeat runs (e.g. `0.6` for 60% speed) |
+| `Rules` | object | From the `Interaction` base. Contains `InterruptedBy` for early termination |
+| `RunTime` | float | From the `Interaction` base — but see the gotcha below; it does **not** pace the iterations |
+
+Codec doc for the interaction itself: "Forks from the current interaction into one or more chains that
+run the specified interactions. When run this will create a new chain that will run the interactions
+specified in `ForkInteractions`. This will then wait until that chain completes. If the chain completes
+successfully it will then check the `Repeat` field to see if it needs to run again, if not then the
+interactions `Next` are run otherwise this repeats with the next fork. If the chain fails then any
+repeating is ignored and the interactions `Failed` are run instead."
+
+> **Gotcha — `RunTime` on a `Repeat` is inert.** `Interaction.tick` applies the base `RunTime` gate
+> first and then calls `tick0`, and `RepeatInteraction.tick0` unconditionally reassigns the
+> interaction state from the forked chain's state on every tick. Iteration pacing therefore comes
+> entirely from how long each forked chain takes, not from `RunTime`. Some shipped assets still carry
+> it (e.g. `Weapons/Daggers/Deprecated/Attacks/Stab_Flurry/Daggers_Stab_Flurry_8.json` sets
+> `"RunTime": 0.138` with `"Repeat": 4`) — put the delay in the forked chain instead.
 
 ### Examples
 
@@ -2456,8 +2505,8 @@ Variable substitution for creating reusable interaction templates. Looks up a va
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Var` | string | Variable name to look up from context |
-| `DefaultValue` | object | Fallback interaction(s) if variable isn't set |
+| `Var` | string | Variable name to look up in the chain's `InteractionVars`. **Required** (validated non-null) |
+| `DefaultValue` | object | Fallback root interaction if the variable isn't set — an id string *or* an inline `{ "Interactions": [...] }` root |
 | `DefaultOk` | boolean | If `true`, silently uses default when variable missing. If `false`, logs SEVERE error then uses default. |
 
 ### DefaultOk Behavior
@@ -2469,6 +2518,8 @@ Variable substitution for creating reusable interaction templates. Looks up a va
 | either | No | Uses the variable's value |
 
 If the variable is missing **and** there is no `DefaultValue`, the interaction ends in the `Failed` state.
+
+The SEVERE line is `Missing replacement interactions for interaction: %s for var %s on item %s` (interaction id, variable name, held item) and is emitted only on the authoritative run, never during client simulation.
 
 ### Example: Reusable Consumable Template
 
@@ -2523,3 +2574,7 @@ The `Selector` interaction type defines hitbox shapes (`Horizontal`, `AOECircle`
 - **Symptom:** the same effect (e.g. damage) only applies once when run under `Parallel`, not per-branch → `Parallel` branches execute against duplicated contexts, so changes to the shared context are not additive. Fix: use `Serial` for effects that must stack (see the Parallel notes around [duplicated context](#parallel)).
 - **Symptom:** branches after a `Parallel` run before all forks finish → there is no built-in join/sync point for parallel forks. Fix: wrap in a `Simple` interaction with a `RunTime` long enough to cover the branches, or restructure with `Serial`.
 - **Symptom:** a `Condition` / `StatsCondition` interaction does nothing → no branch matched the current game-mode/stat/state and there was no fallthrough target. Fix: provide a default/`Next` branch so the interaction has somewhere to go when no condition matches.
+- **Symptom:** a `MovementCondition` diagonal does nothing, and `Failed` never fires for it → `Failed` is the `MovementDirection.None` (standing-still) branch, not a catch-all; an omitted direction key compiles to an empty branch. Fix: define every direction you care about explicitly (see [MovementCondition](#movementcondition)).
+- **Symptom:** an `EffectCondition` takes `Next` even though the target entity is gone → an invalid target ref, or a target with no `EffectControllerComponent`, leaves the state untouched, which reads as success. Fix: gate on something that actually fails (e.g. a `Selector` that produced the target) before the `EffectCondition`.
+- **Symptom (0.6.3):** a block's `Use` chain that starts with a `BlockCondition` stops working in Creative → the interaction force-fails whenever the player's creative `PlaceMode` is not `Default`. Fix: switch the place mode back to `Default` (see [StaticFace Behavior](#staticface-behavior)).
+- **Symptom:** a `Repeat` ignores its `RunTime` → `RepeatInteraction.tick0` overwrites the state every tick, so the base `RunTime` gate never applies. Fix: put the per-iteration delay inside `ForkInteractions` (see [Repeat](#repeat)).

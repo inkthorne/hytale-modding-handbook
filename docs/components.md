@@ -691,7 +691,7 @@ static final ComponentRegistry<ChunkStore> REGISTRY  // Component registry for c
 Store<ChunkStore> getStore()                     // Get the chunk store
 World getWorld()                                 // Get the world
 
-// Chunk access (chunk = column, section = 16³ cell; x/y/z here are SECTION coordinates)
+// Chunk access (chunk = column, section = 32³ cell — ChunkUtil.SIZE is 32; x/y/z here are SECTION coordinates)
 Ref<ChunkStore> getChunkReference(long index)    // Get chunk (column) ref by packed index
 Ref<ChunkStore> getChunkSectionReference(int x, int y, int z)          // Section by section coords
 Ref<ChunkStore> getChunkSectionReferenceAtBlock(int x, int y, int z)   // Section containing a BLOCK position
@@ -1396,7 +1396,7 @@ Plugin-facing use is niche but real: after re-installing a plugin (or renaming a
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 component system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the component system (verified against `HytaleServer.jar`).
 
 - **`Entity already contains component type:`** → you added a component to an entity that already has one of that type. Fix: use `putComponent`/`replaceComponent` to overwrite, or `ensureAndGetComponent` to add-or-get.
 - **`ComponentType is already in Archetype!`** → an archetype build added the same `ComponentType` twice. Fix: add each component type to a `Holder`/`Archetype` only once.

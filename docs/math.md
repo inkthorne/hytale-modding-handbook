@@ -178,7 +178,7 @@ vec.floor();   // round each component down (in place)
 vec.ceil();    // round each component up
 vec.absolute();
 
-Vector3i blockPos = Vector3dUtil.toVector3i(vec);   // truncates to block coords
+Vector3i blockPos = Vector3dUtil.toVector3i(vec);   // FLOORS each component (MathUtil.floor), so -0.5 → -1
 Vector3f floatVec = new Vector3f(vec);              // JOML cross-construction
 ```
 
@@ -222,9 +222,9 @@ Vector3d dir = Vector3dUtil.setYawPitch(yaw, pitch, new Vector3d());
 String str = Vector3dUtil.formatShortString(vec);
 
 // Conversion / near-zero handling
-Vector3i blockPos = Vector3dUtil.toVector3i(vec);
-Vector3dUtil.clipToZero(vec, epsilon);        // set components < epsilon to 0 (in place)
-boolean nearZero = Vector3dUtil.closeToZero(vec, epsilon);
+Vector3i blockPos = Vector3dUtil.toVector3i(vec);   // floors each component (correct for block coords)
+Vector3dUtil.clipToZero(vec, epsilon);        // any component with |v| <= epsilon becomes 0 (in place)
+boolean nearZero = Vector3dUtil.closeToZero(vec, epsilon);   // every component within +/- epsilon of 0
 Vector3dUtil.sanitizeNonFinite(vec);          // 0.6.3+: NaN/Infinite components → 0 (in place)
 
 // 0.6.3+: quadratic Bézier point at t in [0, 1], written into dest
@@ -555,7 +555,7 @@ if (distSq < radius * radius) {
 
 ```java
 Vector3d entityPos = tc.getPosition();
-Vector3i blockPos = Vector3dUtil.toVector3i(entityPos);   // truncates to block coordinates
+Vector3i blockPos = Vector3dUtil.toVector3i(entityPos);   // floors each component — correct on both sides of 0
 ```
 
 ### Look At Target
@@ -742,7 +742,43 @@ Each call is a zero-allocation visitor: it invokes a `TriIntObjPredicate<T>` onc
 boolean test(int x, int y, int z, T context);   // return true to continue, false to stop early
 ```
 
-`forEachBlock` overloads return `boolean` (whether iteration ran to completion). The leading three `int`s are always the **center** block coordinates `(x, y, z)` — corroborated by `BlockSphereUtil.forEachBlockExact(int, int, int, double radius, T, …)` — and the remaining `int`s are the shape's dimensions (radius, height, …). Most shapes provide several overloads adding dimensions or `boolean` flags (e.g. hollow/filled).
+Every overload has the same shape:
+
+```
+forEachBlock(originX, originY, originZ, <dimensions…>, [thickness], [flags…], context, callback)
+```
+
+- The leading three `int`s are the **origin**. Every shape is centred on it in X/Z, but the **vertical
+  anchoring differs per shape** — see the table. (The one overload that takes no origin is
+  `BlockCubeUtil.forEachBlock(Vector3i pointOne, Vector3i pointTwo, …)`, which takes two opposite
+  corners in either order and normalises them internally.)
+- The **dimension** `int`s that follow differ per shape (table below) and must be `> 0`: every
+  utility except `BlockCubeUtil` throws `IllegalArgumentException` on a zero or negative
+  radius/height. `BlockCubeUtil` is the exception — it validates nothing, so a bad extent degenerates
+  silently rather than throwing.
+- An optional `thickness` `int` turns the shape into a shell of that many blocks; `thickness < 1`
+  falls through to the solid form.
+- Trailing `boolean`s are, in order: `capped` (`cappedTop`/`cappedBottom` on `BlockCubeUtil`) — close
+  the shell's ends; `hollow` (`BlockCubeUtil` only) — emit the **interior** instead of the shell;
+  `evenXZ` / `evenY` (spelled `evenH` on the height-based shapes) — shrink the positive side by one so
+  the span is an even number of blocks.
+- Return type is `boolean` (`true` = iteration ran to completion) on `BlockCubeUtil`,
+  `BlockCylinderUtil`, `BlockDomeUtil`, `BlockInvertedDomeUtil`, `BlockTorusUtil`, `BlockDiamondUtil`
+  and the three-radius `BlockSphereUtil` overloads; `void` on `BlockConeUtil`, `BlockPyramidUtil` and
+  `BlockSphereUtil`'s single-`radius` / `forEachBlockExact` overloads.
+
+| Class | Dimensions after the origin | Vertical extent relative to `originY` |
+|-------|-----------------------------|----------------------------------------|
+| `BlockSphereUtil` | `radius`, or `radiusX, radiusY, radiusZ`, or `forEachBlockExact(…, double radius, …)` | centred: `-radiusY … +radiusY` |
+| `BlockDiamondUtil` | `radiusX, radiusY, radiusZ` | centred: `-radiusY … +radiusY` |
+| `BlockTorusUtil` | `outerRadius, minorRadius` | centred: `-minorRadius … +minorRadius` |
+| `BlockCubeUtil` | `radiusX, height, radiusZ` | centred: `±height / 2` |
+| `BlockCylinderUtil` / `BlockConeUtil` / `BlockPyramidUtil` | `radiusX, height, radiusZ` (**height** in the middle slot, not `radiusY`) | origin is the **base**: `0 … height - 1`, growing up |
+| `BlockDomeUtil` | `radiusX, radiusY, radiusZ` | origin is the base: `0 … radiusY`, growing up |
+| `BlockInvertedDomeUtil` | `radiusX, radiusY, radiusZ` | origin is the top: `0 … -radiusY`, growing **down** |
+
+`BlockConeUtil.forEachBlockInverted` / `BlockPyramidUtil.forEachBlockInverted` keep the same upward
+`0 … height - 1` band and only flip which end tapers.
 
 ```java
 // Enumerate every block position inside a radius-5 sphere centered at (cx, cy, cz).
@@ -755,8 +791,9 @@ BlockSphereUtil.forEachBlock(cx, cy, cz, 5, count, (x, y, z, ctr) -> {
 });
 ```
 
-> [!QUESTION]
-> Member signatures are verified against `HytaleServer.jar`, and the first three `int`s are the center. The exact **order and meaning of the remaining dimension parameters per overload** (e.g. which `int` is base-radius vs. height on a cone, or what the trailing `boolean` toggles) are not labelled in the bytecode and not exercised by any inspectable example — confirm the specific overload against the jar/usage before relying on it.
+> **Gotcha:** `BlockCubeUtil`'s `hollow` flag reads backwards from its name. With `thickness >= 1`
+> and `hollow == false` you get the **shell**; `hollow == true` emits the **interior** the shell
+> encloses. Pass `thickness = 0` when you just want every block in the volume.
 
 ### BlockUtil — coordinate packing
 

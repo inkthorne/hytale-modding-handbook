@@ -97,13 +97,16 @@ Base class providing all plugin functionality.
 ### Lifecycle Methods
 Override these to hook into plugin lifecycle:
 ```java
-protected void setup();                       // Register commands, events, etc.
-protected void setup0();                      // Internal setup (called by framework)
-protected void start();                       // Called after setup
-protected void start0();                      // Internal start (called by framework)
-public CompletableFuture<Void> preLoad();     // Async pre-loading
-protected void shutdown();                    // Clean up resources
-protected void shutdown0(boolean graceful);   // Internal shutdown
+protected void setup();                             // Register commands, events, etc.
+protected void start();                             // Called after setup
+public CompletableFuture<Void> preLoad();           // Async pre-loading
+protected void shutdown();                          // Clean up resources
+
+// Called by the framework; declared final, so these are NOT overridable — they
+// drive the PluginState transitions and then call the hooks above.
+protected final void setup0();
+protected final void start0();
+protected final void shutdown0(boolean graceful);
 ```
 
 ### Registries (from PluginBase)
@@ -850,7 +853,7 @@ public class MyPlugin extends JavaPlugin {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 plugin loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the plugin loader (verified against `HytaleServer.jar`).
 
 - **`Failed to find main class!`** → the `Main` field in `manifest.json` doesn't point at a class on the plugin's classpath. Fix: set `Main` to the fully qualified name of your `JavaPlugin` subclass (see [manifest.json](#manifestjson)).
 - **`Requires default constructor!`** → the main class lacks the constructor the loader needs. Fix: declare `public YourPlugin(JavaPluginInit init) { super(init); }` (see [Required Constructor](#required-constructor)).

@@ -621,11 +621,17 @@ if [ -f "$JAR" ] && command -v javac >/dev/null 2>&1; then
   OUT="$(python3 maintenance/scripts/check-snippets.py "$JAR")"
   RC=$?
   N="$(echo "$OUT" | sed -n 's/^CHECKED //p')"
+  NB="$(echo "$OUT" | sed -n 's/^BLOCKS //p')"
+  DC="$(echo "$OUT" | awk '/^DOCS/{print $2}')"
+  DJ="$(echo "$OUT" | awk '/^DOCS/{print $3}')"
+  FRAG=$(( ${NB:-0} - ${N:-0} ))
   if [ "$RC" -eq 0 ]; then
-    pass "all $N complete snippet(s) compile"
+    # Report the denominator: this gate is opt-in (a fragment cannot compile), so
+    # "all N compile" alone reads as corpus coverage when it is a small subset.
+    pass "all $N complete snippet(s) compile — $N of ${NB:-?} java block(s), in $DC of $DJ doc(s) carrying java; $FRAG fragment(s) exempt by design"
   else
     fail "snippet compilation failed:"
-    echo "$OUT" | grep -v '^CHECKED' | sed 's/^/    /'
+    echo "$OUT" | grep -vE '^(CHECKED|BLOCKS|DOCS)' | sed 's/^/    /'
   fi
 else
   warn "skipped (no jar or no javac)"

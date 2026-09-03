@@ -26,15 +26,28 @@ if len(sys.argv) != 2:
 JAR = sys.argv[1]
 
 BLOCK = re.compile(r'^```java\n(package [^\n]+\n.*?)^```$', re.M | re.S)
+# Every ```java fence, package-led or not — the denominator. This gate is opt-in
+# by design (a fragment cannot compile), but without the total, "all N compile"
+# reads as corpus coverage when it is a small opt-in subset.
+ANY_JAVA = re.compile(r'^```java\n.*?^```$', re.M | re.S)
 CLS = re.compile(r'^(?:public\s+)?(?:final\s+|abstract\s+)*(?:class|interface|enum|record)\s+(\w+)', re.M)
 PKG = re.compile(r'^package\s+([\w.]+)\s*;')
 
 failures = 0
 checked = 0
+total_blocks = 0
+docs_with_java = set()
+docs_compiled = set()
 # group snippets per (doc, package) so multi-class walkthroughs co-compile
 groups = {}
 for doc in sorted(glob.glob("docs/*.md")):
     text = open(doc).read()
+    n_any = len(ANY_JAVA.findall(text))
+    total_blocks += n_any
+    if n_any:
+        docs_with_java.add(doc)
+    if BLOCK.search(text):
+        docs_compiled.add(doc)
     for m in BLOCK.finditer(text):
         src = m.group(1)
         line = text[:m.start()].count("\n") + 2  # first line of the snippet
@@ -71,4 +84,6 @@ for (doc, pkg), snippets in sorted(groups.items()):
         shutil.rmtree(work, ignore_errors=True)
 
 print(f"CHECKED {checked}")
+print(f"BLOCKS {total_blocks}")
+print(f"DOCS {len(docs_compiled)} {len(docs_with_java)}")
 sys.exit(1 if failures else 0)

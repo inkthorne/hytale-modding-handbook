@@ -54,19 +54,35 @@ Hytale separates block visual assets from game logic:
 
 Blocks are organized into categories for the Creative Library:
 
-| Category | Examples (shipped usage in 0.6.3) |
+| Category | Examples (block items using it in 0.6.3) |
 |----------|----------|
 | `Blocks.Wood` | Planks, logs, bark (315 items) |
-| `Blocks.Plants` | Flowers, crops, leaves (217) |
-| `Blocks.Rocks` | Stone, sandstone, marble (190) |
-| `Blocks.Deco` | Furniture, containers, doors, lighting (173) |
+| `Blocks.Rocks` | Stone, sandstone, marble (189) |
+| `Blocks.Plants` | Flowers, crops, leaves (189) |
+| `Blocks.Deco` | Rubble, scatter, decorative odds and ends (172) |
 | `Blocks.Soils` | Dirt, grass, sand, gravel (138) |
 | `Blocks.Cloth` | Wool, fabric blocks (119) |
 | `Blocks.Metal` | Metal blocks (100) |
-| `Blocks.Ores` | Ore blocks (76) |
+| `Blocks.Ores` | Ore blocks (66) |
 | `Blocks.Portals` / `Blocks.Fluids` | Portal blocks (18) / fluid blocks (9) |
 
-(There are no `Blocks.Furniture` / `Blocks.Containers` / `Blocks.Lighting` categories — those blocks live under `Blocks.Deco`.)
+Furniture is **not** under `Blocks.*` — it has its own top-level namespace, and so do the
+builder-tool blocks:
+
+| Category | Examples (block items using it in 0.6.3) |
+|----------|----------|
+| `Furniture.Containers` | Chests, barrels, crates (89) |
+| `Furniture.Doors` | Doors, gates, trapdoors (83) |
+| `Furniture.Furniture` | Chairs, tables, stools (68) |
+| `Furniture.Lighting` | Lamps, braziers, torches (52) |
+| `Furniture.Shelves` / `Furniture.Signs` | Shelves (41) / signs (33) |
+| `Furniture.Benches` / `Furniture.Beds` | Crafting benches (22) / beds (15) |
+| `Tool.TechnicalBlocks` | Barrier and other technical blocks (74) |
+| `Tool.BrushFilters` / `Tool.PrefabEditing` / `Tool.Machinima` | Builder-tool blocks (13 / 8 / 1) |
+
+There is no `Blocks.Furniture`, `Blocks.Containers`, `Blocks.Doors` or `Blocks.Lighting` — use the
+`Furniture.*` names above. (One shipped block carries a singular `Blocks.Soil`; that is a typo in
+the asset, not a real category.)
 
 ---
 
@@ -109,7 +125,7 @@ Java runtime
 | `BlockBoundingBoxes` | `server.core.asset.type.blockhitbox` | Hitbox asset (`Server/Item/Block/Hitboxes`); see [BlockBoundingBoxes](#blockboundingboxes) |
 | `BlockTickManager` | `server.core.asset.type.blocktick` | Static holder for the block-tick provider; see [Block Ticking](#block-ticking) |
 | `BlockTypeModule` | `server.core.blocktype` | Core `JavaPlugin` module behind block types: registers the `Bench` codec variants and the block-physics component; `BlockTypeModule.get()` |
-| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`); deprecated for removal in 0.5.7 |
+| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`, singleton `BlockSetModule.getInstance()`); still carries `@Deprecated(forRemoval = true)` as of 0.6.3 |
 
 ---
 
@@ -204,17 +220,13 @@ Textures support per-face assignment and weighted random variants:
 ```json
 {
   "Textures": [
-    {
-      "Weight": 3,
-      "All": "BlockTextures/Rock_Stone.png"
-    },
-    {
-      "Weight": 1,
-      "All": "BlockTextures/Rock_Stone_Moss.png"
-    }
+    { "Weight": 2, "All": "BlockTextures/Rock_Stone.png" },
+    { "Weight": 1, "All": "BlockTextures/Rock_Stone_2.png" },
+    { "Weight": 1, "All": "BlockTextures/Rock_Stone_3.png" }
   ]
 }
 ```
+*(from `Rock_Stone.json` — the base texture is picked twice as often as either variant)*
 
 **Per-face textures:**
 
@@ -223,13 +235,20 @@ Textures support per-face assignment and weighted random variants:
   "Textures": [
     {
       "Weight": 1,
-      "Up": "BlockTextures/Grass_Top.png",
-      "Down": "BlockTextures/Dirt.png",
-      "Sides": "BlockTextures/Grass_Side.png"
+      "Up": "BlockTextures/Soil_Grass_GS.png",
+      "Down": "BlockTextures/Soil_Dirt.png",
+      "Sides": "BlockTextures/Soil_Grass_Side.png"
+    },
+    {
+      "Weight": 1,
+      "Up": "BlockTextures/Soil_Grass_GS_02.png",
+      "Down": "BlockTextures/Soil_Dirt.png",
+      "Sides": "BlockTextures/Soil_Grass_Side.png"
     }
   ]
 }
 ```
+*(from `Soil_Grass.json` — per-face and weighted variants combine freely)*
 
 | Face Property | Description |
 |---------------|-------------|
@@ -256,7 +275,7 @@ Blocks can emit colored light:
 }
 ```
 
-`Light` decodes through `ProtocolCodecs.COLOR_LIGHT`: `Color` is a hex string (`"#RGB"` or `"#RRGGBB"`) and `Radius` an int; there is no `Intensity` key. Shipped fluids and lamps set only `Color` (e.g. `"Light": { "Color": "#765" }`).
+`Light` decodes through `ProtocolCodecs.COLOR_LIGHT` (`com.hypixel.hytale.server.core.codec`) into a `ColorLight`: `Color` is a hex string (`"#RGB"` or `"#RRGGBB"`) and `Radius` a **byte** (so `0–127`); there is no `Intensity` key. Shipped fluids and lamps set only `Color` (e.g. `"Light": { "Color": "#765" }`).
 
 ### Collision Properties
 
@@ -298,7 +317,27 @@ Defines what tool breaks the block and what it drops:
 }
 ```
 
-`Breaking` either names a direct drop (`ItemId` + optional `Quantity` / `Quality`) or references a drop table by id — `"DropList": "Iron_Stack"` (a **string**, resolved against [drop tables](drops.md); `Deco_Iron_Stack.json` does this). `DropList` is not an inline array.
+`Breaking` either names a direct drop (`ItemId` + optional `Quantity` / `Quality`) or goes through a
+drop table via `DropList`. `DropList` is a `ContainedAssetCodec`, so it accepts **either** the id of a
+shipped [drop table](drops.md) — `"DropList": "Iron_Stack"`, as `Deco_Iron_Stack.json` does — **or** an
+inline `ItemDropList` object, whose single key is `Container`:
+
+```json
+"Gathering": {
+  "Breaking": {
+    "GatherType": "Woods",
+    "DropList": {
+      "Container": {
+        "Type": "Single",
+        "Item": { "ItemId": "Furniture_Kweebec_Chest_Small", "QuantityMin": 2, "QuantityMax": 2 }
+      }
+    }
+  }
+}
+```
+*(from `Furniture_Kweebec_Chest_Large.json`)*
+
+What `DropList` is **not** is a bare array of item entries — `[{ "ItemId": …, "Quantity": … }]` fails to decode.
 
 `GatherType` values used by shipped blocks (0.6.3): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Benches`, `OreCopper` / `OreIron` / `OreSilver` / `OreGold` / `OreCobalt` / `OreThorium` / `OreMithril` / `OreAdamantite`, `Unbreakable`, `SoftWoods`. The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
 
@@ -351,8 +390,6 @@ Blocks can have multiple states with different models, hitboxes, and animations.
 ```json
 {
   "State": {
-    "Id": "container",
-    "Capacity": 36,
     "Definitions": {
       "OpenWindow": {
         "InteractionSoundEventId": "SFX_Chest_Wooden_Open",
@@ -366,22 +403,43 @@ Blocks can have multiple states with different models, hitboxes, and animations.
   }
 }
 ```
+*(from `Furniture_Kweebec_Chest_Large.json`)*
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Id` | string | State machine identifier |
-| `Capacity` | int | Container slot count (for containers) |
-| `Definitions` | object | Map of state names to configurations |
+| `Definitions` | object | Map of state name → per-state `BlockType` override |
+
+`Definitions` is the **only** key `StateData.CODEC` accepts — there is no `Id` and no `Capacity` on
+`State`. A container's slot count lives on its block-entity component instead:
+`"BlockEntity": { "Components": { "ItemContainerBlock": { "Capacity": 36 } } }` (see
+[Block Items](items-blocks.md)). All 935 shipped blocks with a `State` use only `Definitions`.
+
+State names are not free-form either: the engine looks up specific names (`OpenDoorIn`,
+`CloseWindow`, `Corner_Right`, `Topper`, `On`/`Off`, `Stage1`…) depending on which system drives the
+block — the door interaction, the container window, a `Roof`/`Stair` connected rule set, farming
+stages. Copy the set a shipped block of the same kind uses.
 
 ### State Definition Properties
 
+Each entry is a **partial `BlockType`**: any [`BlockType` key](#blocktype-properties) may appear and
+overrides the base block for that state. The keys shipped blocks actually use, most common first:
+
 | Property | Type | Description |
 |----------|------|-------------|
-| `CustomModel` | string | Model for this state |
-| `CustomModelAnimation` | string | Animation to play |
-| `HitboxType` | string | Collision shape for this state |
-| `InteractionSoundEventId` | string | Sound when entering state |
-| `FlipType` | string | Model transformation |
+| `HitboxType` | string | Collision shape for this state (2,248 uses) |
+| `CustomModel` | string | Model for this state (2,016) |
+| `FlipType` | string | `ORTHOGONAL` or `SYMMETRIC` — the two `BlockFlipType` values (1,744) |
+| `Supporting` | object | Faces this state offers as support (1,696) |
+| `Gathering` | object | Per-state drops (597) |
+| `CustomModelAnimation` | string | Animation played on entering the state (333) |
+| `InteractionSoundEventId` | string | Sound when entering the state (331) |
+| `InteractionHitboxType` | string | Separate interaction hitbox (240) |
+| `InteractionHint` | string | Localization key for the interact prompt (180) |
+| `SoundOcclusionOpacity` | float | How much this state muffles sound through it (75) |
+
+plus `CustomModelTexture`, `Textures`, `Material`, `DrawType`, `Light`, `BlockSoundSetId`,
+`BlockParticleSetId`, `ParticleColor`, `Opacity`, `Interactions`, `Flags`, and the rest of the
+`BlockType` vocabulary.
 
 ### Example: Door with Multiple States
 
@@ -389,66 +447,97 @@ Blocks can have multiple states with different models, hitboxes, and animations.
 {
   "BlockType": {
     "DrawType": "Model",
-    "CustomModel": "Blocks/Doors/Door_Wood.blockymodel",
+    "CustomModel": "Blocks/Decorative_Sets/Desert/Door.blockymodel",
     "HitboxType": "Door",
     "VariantRotation": "NESW",
+    "IsDoor": true,
     "State": {
-      "Id": "door",
       "Definitions": {
         "OpenDoorIn": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Open_In.blockyanim",
           "HitboxType": "Door_Open_In",
-          "InteractionSoundEventId": "SFX_Door_Wooden_Open"
+          "InteractionHitboxType": "Door_Open_In_Interaction",
+          "InteractionSoundEventId": "SFX_Door_Desert_Open",
+          "InteractionHint": "server.interactionHints.closeDoor",
+          "SoundOcclusionOpacity": 0.0
         },
         "OpenDoorOut": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Open_Out.blockyanim",
           "HitboxType": "Door_Open_Out",
-          "InteractionSoundEventId": "SFX_Door_Wooden_Open"
+          "InteractionHitboxType": "Door_Open_Out_Interaction",
+          "InteractionSoundEventId": "SFX_Door_Desert_Open",
+          "InteractionHint": "server.interactionHints.closeDoor",
+          "SoundOcclusionOpacity": 0.0
         },
         "CloseDoorIn": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_In.blockyanim",
-          "InteractionSoundEventId": "SFX_Door_Wooden_Close"
+          "InteractionSoundEventId": "SFX_Door_Desert_Close"
         },
         "CloseDoorOut": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_Out.blockyanim",
-          "InteractionSoundEventId": "SFX_Door_Wooden_Close"
-        }
+          "InteractionSoundEventId": "SFX_Door_Desert_Close"
+        },
+        "DoorBlocked": {}
       }
     },
     "Interactions": {
-      "Use": "Door_Toggle"
+      "Use": "Door"
+    },
+    "ConnectedBlockRuleSet": {
+      "Type": "CustomTemplate",
+      "TemplateShapeAssetId": "DoorConnectedBlockTemplate",
+      "TemplateShapeBlockPatterns": { "Default": "Furniture_Desert_Door" }
     }
   }
 }
 ```
+*(from `Furniture_Desert_Door.json`. The `Use` interaction is the shipped `Door` interaction — there
+is no `Door_Toggle`. `DoorBlocked` is an empty state the engine selects when the swing is obstructed.)*
 
 ### Roof/Corner State Example
 
-Blocks with connected states use shape-based state selection:
+Blocks with connected states use shape-based state selection; the `Roof` rule set picks the state by
+shape name and the `State.Definitions` supply the per-shape model and hitbox:
 
 ```json
 {
-  "State": {
-    "Id": "roof",
-    "Definitions": {
-      "Corner_Right": {
-        "CustomModel": "Blocks/Roof/Roof_Corner_Right.blockymodel",
-        "HitboxType": "Roof_Corner",
-        "FlipType": "MirrorX"
-      },
-      "Corner_Left": {
-        "CustomModel": "Blocks/Roof/Roof_Corner_Left.blockymodel",
-        "HitboxType": "Roof_Corner"
-      },
-      "Inverted_Corner_Right": {
-        "CustomModel": "Blocks/Roof/Roof_Inverted_Corner.blockymodel",
-        "HitboxType": "Roof_Inverted",
-        "FlipType": "MirrorX"
+  "BlockType": {
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Structures/Roofs/Dev_Roof_Steep.blockymodel",
+    "HitboxType": "Stairs_Steep",
+    "ConnectedBlockRuleSet": {
+      "Type": "Roof",
+      "MaterialName": "Roof_Steep",
+      "Regular": {
+        "Straight": { "State": "default" },
+        "Corner_Right": { "State": "Corner_Right" },
+        "Corner_Left": { "State": "Corner_Left" },
+        "Inverted_Corner_Right": { "State": "Inverted_Corner_Right" },
+        "Inverted_Corner_Left": { "State": "Inverted_Corner_Left" }
+      }
+    },
+    "State": {
+      "Definitions": {
+        "Corner_Right": {
+          "CustomModel": "Blocks/Structures/Roofs/Dev_Roof_Steep_Corner_Right.blockymodel",
+          "HitboxType": "Stairs_Corner_Steep_Right",
+          "FlipType": "Orthogonal",
+          "Supporting": { "Down": [ {} ] }
+        },
+        "Inverted_Corner_Right": {
+          "CustomModel": "Blocks/Structures/Roofs/Dev_Roof_Steep_Corner_Inverted_Right.blockymodel",
+          "HitboxType": "Roof_Corner_Steep_Inverted_Right",
+          "FlipType": "Orthogonal",
+          "Supporting": { "Down": [ {} ] }
+        }
       }
     }
   }
 }
 ```
+*(abridged from `Build_White_Roof_Steep.json` — the real file also defines `Corner_Left` and
+`Inverted_Corner_Left`. `FlipType` values are `Orthogonal` / `Symmetric`, parsed case-insensitively
+against the `BlockFlipType` enum's `ORTHOGONAL` / `SYMMETRIC`; there is no `MirrorX`.)*
 
 ---
 
@@ -520,28 +609,43 @@ Templates define shape patterns and the tags neighbors match on:
         "East": ["FenceConnection"],
         "West": ["FenceConnection"]
       },
+      "PatternsToMatchAnyOf": []
+    },
+    "Corner": {
+      "FaceTags": {
+        "West": ["FenceConnection"],
+        "South": ["FenceConnection"]
+      },
       "PatternsToMatchAnyOf": [
         {
           "Type": "Custom",
-          "AllowedPatternTransformations": {
-            "IsCardinallyRotatable": true
-          },
+          "AllowedPatternTransformations": { "IsCardinallyRotatable": true },
           "RulesToMatch": [
-            {
-              "Position": { "X": -1, "Y": 0, "Z": 0 },
+            { "Position": { "X": -1, "Y": 0, "Z": 0 },
               "IncludeOrExclude": "Include",
-              "FaceTags": { "East": ["FenceConnection"] }
-            }
+              "FaceTags": { "East": ["FenceConnection"] } },
+            { "Position": { "X": 0, "Y": 0, "Z": 1 },
+              "IncludeOrExclude": "Include",
+              "FaceTags": { "North": ["FenceConnection"] } },
+            { "Position": { "X": 1, "Y": 0, "Z": 0 },
+              "IncludeOrExclude": "Exclude",
+              "FaceTags": { "West": ["FenceConnection"] } },
+            { "Position": { "X": 0, "Y": 0, "Z": -1 },
+              "IncludeOrExclude": "Exclude",
+              "FaceTags": { "South": ["FenceConnection"] } }
           ]
         }
       ]
     },
-    "Corner": { },
+    "Gate": { },
     "T_Junction": { },
     "Cross_Junction": { }
   }
 }
 ```
+*(abridged from `WallConnectedBlockTemplate.json`. `DefaultShape` is what wins when nothing matches,
+so `Straight` needs no pattern of its own; `Corner` matches "connected west and south, not east and
+not north" and `IsCardinallyRotatable` supplies the other three orientations.)*
 
 The template asset has exactly four top-level keys (`CustomConnectedBlockTemplateAsset.CODEC`):
 
@@ -848,20 +952,23 @@ Coordinates are in block units (0-1 range per block).
 
 ### Common Hitbox Types
 
+244 hitbox assets ship. A representative slice:
+
 | Hitbox | Description |
 |--------|-------------|
-| `Block_Full` | Full cube (default) |
-| `Block_Half` | Half-height slab |
-| `Block_Quarter` | Quarter-height |
-| `Block_Flat` | Carpet/rug height |
-| `Door` | Closed door collision |
-| `Door_Open_In` | Door swung inward |
-| `Door_Open_Out` | Door swung outward |
-| `Chest_Small` | Small chest |
-| `Chest_Large` | Large chest |
-| `Fence` | Fence post |
-| `Wall` | Wall segment |
-| `Stairs` | Stair step collision |
+| `Full` | Full cube. The engine default (`BlockBoundingBoxes.DEFAULT`, id `0`) — it has no `.json` file; a block that omits `HitboxType` gets it |
+| `Block_Half` / `Block_Quarter` / `Block_Flat` | Slab, quarter-height, carpet/rug height (also `Block_One_Eighth`, `Block_Three_Eighth`, `Block_Five_Eighth`, `Block_Seven_Eighth`, `Block_Three_Quarter`, `Block_Five_Quarter`) |
+| `Block_Vertical_Half`, `Block_Vertical_Quarter`, … | The same slice thicknesses on a vertical axis |
+| `Door` | Closed door collision (`Door_Medium`, `Door_Large`, `Door_Kweebec`, … for the other sizes) |
+| `Door_Open_In` / `Door_Open_Out` | Door swung inward / outward, each with a `_Interaction` companion used as `InteractionHitboxType` |
+| `Chest_Small` / `Chest_Large` | Chest closed (`Chest_Small_Open` / `Chest_Large_Open` while open) |
+| `Fence` / `Fence_Thin` / `Fence_Thick` / `Fence_Corner` / `Fence_Gate` | Fence posts, corners and gates |
+| `Stairs` | Stair step collision (`Stairs_Steep`, `Stairs_Shallow`, `Stairs_Flat`, `Stairs_Thin`, and `Stairs_Corner_*` / `Stairs_Inverted_Corner_*`) |
+| `Roof_Corner_Steep_Inverted_Left`, `Roof_Corner_Shallow_Right`, … | Roof corner pieces |
+| `Chair` / `Furniture_Stool` | Seating |
+
+(There is no `Block_Full` or `Wall` hitbox asset — a full cube is `Full`, and walls/fences use the
+`Fence*` set.)
 
 ### Complex Hitbox Example
 
@@ -890,7 +997,17 @@ Sound sets define audio events for block interactions.
 
 **Location:** `Server/Item/Block/Sounds/<Name>.json`
 
+`BlockSoundSet.CODEC` declares two keys, plus the `Parent` inheritance every asset codec supports:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `SoundEvents` | object | Map of `BlockSoundEvent` → sound-event id. **The events do not sit at the top level.** |
+| `MoveInRepeatRange` | `FloatRange` | Retrigger interval for the repeating `MoveIn` sound (no shipped set uses it) |
+| `Parent` | string | Inherit another sound set and override selected events (19 of the 57 shipped sets do this) |
+
 ### Sound Event Types
+
+The `SoundEvents` keys are the `BlockSoundEvent` enum — nine values, all of them:
 
 | Event | Description |
 |-------|-------------|
@@ -899,25 +1016,26 @@ Sound sets define audio events for block interactions.
 | `Hit` | Block being damaged |
 | `Break` | Block destroyed |
 | `Build` | Block placed |
-
-### Fluid-Specific Events
-
-| Event | Description |
-|-------|-------------|
-| `MoveIn` | Entity enters fluid |
-| `MoveOut` | Entity exits fluid |
+| `Harvest` | Block harvested rather than broken |
+| `Clone` | Block picked/cloned (creative) |
+| `MoveIn` | Entity enters the block (fluids) |
+| `MoveOut` | Entity exits the block (fluids) |
 
 ### Example Sound Set
 
 ```json
 {
-  "Walk": "SFX_Footsteps_Stone",
-  "Land": "SFX_Land_Stone",
-  "Hit": "SFX_Block_Stone_Hit",
-  "Break": "SFX_Block_Stone_Break",
-  "Build": "SFX_Block_Stone_Place"
+  "SoundEvents": {
+    "Walk": "SFX_Stone_Walk",
+    "Land": "SFX_Stone_Land",
+    "Hit": "SFX_Stone_Hit",
+    "Break": "SFX_Stone_Break",
+    "Build": "SFX_Default_Build",
+    "Harvest": "SFX_Stone_Harvest"
+  }
 }
 ```
+*(`Server/Item/Block/Sounds/Stone.json`, verbatim)*
 
 ### Using Sound Sets
 
@@ -952,16 +1070,46 @@ Particle sets define visual effects for block interactions.
 
 **Location:** `Server/Item/Block/Particles/<Name>.json`
 
+A particle set nests its events under `Particles`, and may also set defaults for how those particles
+are emitted (`BlockParticleSet.CODEC`):
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Particles` | object | Map of `BlockParticleEvent` → particle-system id. **The events do not sit at the top level.** |
+| `Color` / `Scale` / `PositionOffset` / `RotationOffset` | — | Emission defaults applied to the set's particles |
+
 ### Particle Event Types
+
+The `Particles` keys are the `BlockParticleEvent` enum — ten values, all of them:
 
 | Event | Description |
 |-------|-------------|
-| `Sprint` | Running on block |
+| `Walk` | Walking on the block |
+| `Run` | Running on the block |
+| `Sprint` | Sprinting on the block |
 | `Hit` | Block being damaged |
 | `Break` | Block destroyed |
+| `Build` | Block placed |
 | `SoftLand` | Light landing |
 | `HardLand` | Heavy landing |
 | `Physics` | Physics interactions |
+| `MoveOut` | Entity exits the block |
+
+### Example Particle Set
+
+```json
+{
+  "Particles": {
+    "Hit": "Block_Hit_Stone",
+    "Break": "Block_Break_Stone",
+    "Sprint": "Block_Sprint_Stone",
+    "SoftLand": "Block_Land_Soft_Stone",
+    "HardLand": "Block_Land_Hard_Stone",
+    "Build": "Block_Build_Generic_Dust"
+  }
+}
+```
+*(`Server/Item/Block/Particles/Stone.json`, verbatim)*
 
 ### Using Particle Sets
 
@@ -976,16 +1124,14 @@ Reference in BlockType with optional color:
 }
 ```
 
-### Common Particle Set IDs
+### Particle Set IDs
 
-| ID | Effect Type |
-|----|-------------|
-| `Stone` | Stone chips |
-| `Wood` | Wood splinters |
-| `Dust` | Soft material dust |
-| `Water` | Water splashes |
-| `Leaf` | Leaf fragments |
-| `Sand` | Sand grains |
+All 30 shipped sets: `Clay`, `Crystal`, `Dirt`, `Dust`, `Flower`, `Glass`, `GlassEmpty`,
+`GlassEmptySmall`, `GlassMagic`, `GlassPoison`, `GlassSmall`, `Grass`, `Grass_Earth`, `Ice`, `Lava`,
+`Leaves`, `Leaves_Branches`, `Leaves_Fir`, `Leaves_Fir_Snow`, `Leaves_Round`, `Leaves_Sharp`,
+`Metal`, `Mud`, `Ore`, `Sand`, `Snow`, `Stone`, `Tar`, `Water`, `Wood`.
+
+(The leaf sets are named `Leaves*` — there is no `Leaf`.)
 
 ---
 
@@ -1128,11 +1274,18 @@ Blocks can respond to player interactions via JSON configuration.
 
 ### Interaction Slots
 
-| Slot | Trigger | Description |
-|------|---------|-------------|
-| `Primary` | Left click | Breaking/attacking |
-| `Use` | Right click | Using/opening |
-| `Collision` | Entity touch | Physics response |
+`BlockType.Interactions` is a map keyed by [`InteractionType`](interactions.md#interactiontype-enum);
+a value is either a nested-interaction id or an inline interaction object. The keys shipped blocks
+use, with their usage counts in 0.6.3:
+
+| Slot | Trigger | Uses | Description |
+|------|---------|------|-------------|
+| `Use` | Interact (F) | 205 | Opening, seating, toggling |
+| `CollisionEnter` | Entity enters the block | 20 | Damage/effect on stepping in |
+| `Collision` | Entity overlapping the block | 19 | Continuous physics response |
+| `Primary` | Left click | 16 | Gate or replace the break |
+| `OnBreak` | Block broken | 1 | 0.6.3+ — fired by `BlockHarvestUtils.fireOnBreakInteraction` |
+| `OnBreakImpact` | Break impact resolved | 1 | 0.6.3+ — queued by `BlockHarvestUtils.queueOnBreakImpactInteraction` |
 
 ### Example: Interactive Block
 
@@ -1140,22 +1293,36 @@ Blocks can respond to player interactions via JSON configuration.
 {
   "BlockType": {
     "Interactions": {
-      "Primary": "Break_Container",
+      "Primary": "Break_Treasure_Container",
       "Use": "Open_Container"
     }
   }
 }
 ```
 
+(`Break_Treasure_Container` and `Open_Container` are shipped interaction ids under
+`Server/Item/Interactions/`; the other shipped `Primary` value is `Check_Can_Break_Respawn`, used by
+beds. There is no `Break_Container`.)
+
 ### BlockEntity Components
 
 Some blocks have associated entity components:
 
+These are `ChunkStore` components nested under `BlockType.BlockEntity.Components`, keyed by their
+registered name. The names shipped blocks actually use, with counts:
+
 | Component | Usage |
 |-----------|-------|
-| `RespawnBlock` | Bed spawn point |
-| `Container` | Storage blocks |
-| `CraftingBench` | Crafting stations |
+| `FarmingBlock` (70) | Crops and growth stages |
+| `ItemContainerBlock` (47) | Storage blocks — carries the `Capacity` |
+| `BenchBlock` (16) / `ProcessingBenchBlock` (4) | Crafting and processing stations |
+| `RespawnBlock` (15) | Bed spawn point |
+| `MusicEmitterBlock` (4) / `MusicPlayerBlock` (1) | Ambient music sources |
+| `SpawnMarkerBlock` (2) / `BlockSpawner` (2) / `Coop` (1) | Entity spawners |
+| `LaunchPad`, `Teleporter`, `Portal`, `TilledSoil`, `TrackedPlacement`, `InstanceConfig`, `BlockMapMarker`, `PrefabSpawner`, `TreasureChest` | One shipped block each |
+
+(There is no `Container` or `CraftingBench` component key — those are `ItemContainerBlock` and
+`BenchBlock`.)
 
 See [Items - Blocks](items-blocks.md) for detailed BlockEntity documentation, and [Custom Block-Entity Components](#custom-block-entity-components) below for a verified end-to-end recipe (define your own component, tick it, spawn entities from it, and persist its state).
 
@@ -1167,34 +1334,41 @@ Block type lists categorize blocks for world generation and game systems.
 
 **Location:** `Server/BlockTypeList/<Category>.json`
 
+The asset class is `BlockTypeListAsset`; a block points at one with `BlockType.BlockListAssetId`.
+
 ### Available Lists
+
+All 13 shipped lists:
 
 | List | Description |
 |------|-------------|
-| `Soils.json` | Dirt, grass variants (13 types) |
-| `Rock.json` | Stone types (16 types) |
+| `Soils.json` | Dirt, grass and leaf-litter variants (16 blocks) |
+| `Rock.json` | Stone types (16) |
 | `Gravel.json` | Gravel blocks |
 | `Ores.json` | Ore blocks |
-| `TreeWood.json` | Wood block types |
-| `TreeLeaves.json` | Leaf block types |
-| `PlantsAndTrees.json` | Plants and trees (80+ types) |
+| `TreeWood.json` / `TreeLeaves.json` / `TreeWoodAndLeaves.json` | Wood, leaves, and the two combined |
+| `PlantsAndTrees.json` | Plants and trees (620) |
 | `AllScatter.json` | All scatter blocks |
 | `PlantScatter.json` | Plant scatter blocks |
 | `Snow.json` | Snow blocks |
+| `Fluids.json` | Fluid blocks |
 | `Empty.json` | Empty/air blocks |
 
 ### List Structure
 
+The single key is `Blocks` — an array of block type keys:
+
 ```json
 {
-  "Types": [
-    "Rock_Stone",
-    "Rock_Granite",
-    "Rock_Marble",
-    "Rock_Sandstone"
+  "Blocks": [
+    "Soil_Leaves",
+    "Soil_Sand",
+    "Soil_Dirt",
+    "Soil_Grass"
   ]
 }
 ```
+*(abridged from `Soils.json`. There is no `Types` key.)*
 
 ---
 
@@ -1230,15 +1404,22 @@ Used for:
 {
   "BlockType": {
     "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/Chair_Wood.blockymodel",
+    "Opacity": "Transparent",
+    "CustomModel": "Blocks/Decorative_Sets/Human_Ruins/Chair.blockymodel",
     "CustomModelTexture": [
-      { "Texture": "BlockTextures/Wood_Oak.png" }
+      { "Texture": "Blocks/Decorative_Sets/Human_Ruins/Chair_Texture.png", "Weight": 1 }
     ],
-    "CustomModelScale": 1.0,
-    "HitboxType": "Chair"
+    "HitboxType": "Chair",
+    "VariantRotation": "NESW",
+    "Support": { "Down": [ { "FaceType": "Full" } ] },
+    "Seats": [ { "Offset": { "X": 0, "Y": 0.01, "Z": 0.15 }, "Yaw": 0 } ],
+    "Interactions": { "Use": "Block_Seat" }
   }
 }
 ```
+*(abridged from `Furniture_Human_Ruins_Chair.json`. A `Model` block sets `Opacity: "Transparent"`;
+`CustomModelTexture` paths are model-relative textures under `Common/`, not `BlockTextures/` cube
+textures.)*
 
 ---
 
@@ -1313,9 +1494,15 @@ stored state. A section rejects more than 32,768 entries on load (one per block 
 /blockanimspeed <speed> <phase>
 ```
 
-Sets the override on the block the caller is looking at (max 10 blocks). Permission group
-`hytale:WorldEditor`. It reports `"…but this block has no model animation"` when
-`canBlockAnimate` is `false`, and still applies the value.
+Sets the override on the block the caller is looking at (max 10 blocks, via
+`TargetUtil.getTargetBlock`). Permission group `hytale:WorldEditor`.
+
+> The command is stricter than the API: when `canBlockAnimate` is `false` it sends
+> `server.commands.blockAnimationSpeed.notAnimated` and **returns without applying anything**.
+> The shipped en-US string for that key reads *"Set the speed at {position}, but this block has no
+> model animation"*, which suggests it did apply — it did not. Calling
+> `setBlockAnimationSpeed(...)` directly does store the override on a non-animating block (it never
+> consults `canBlockAnimate`); only the command refuses.
 
 > **Gotchas**
 > - **World thread only.** All of these resolve the chunk section on the calling thread and
@@ -1377,17 +1564,18 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
   "TranslationProperties": {
     "Name": "server.items.My_Furniture.name"
   },
-  "Categories": ["Blocks.Furniture"],
+  "Categories": ["Furniture.Furniture"],
   "MaxStack": 5,
   "BlockType": {
     "DrawType": "Model",
+    "Opacity": "Transparent",
     "CustomModel": "Blocks/Furniture/My_Furniture.blockymodel",
     "CustomModelTexture": [
-      { "Texture": "BlockTextures/Wood_Oak.png" }
+      { "Texture": "Blocks/Furniture/My_Furniture_Texture.png", "Weight": 1 }
     ],
-    "HitboxType": "Furniture_Medium",
+    "HitboxType": "Chair",
     "VariantRotation": "NESW",
-    "Support": "Down",
+    "Support": { "Down": [ { "FaceType": "Full" } ] },
     "BlockSoundSetId": "Wood",
     "BlockParticleSetId": "Wood",
     "Gathering": {
@@ -1406,18 +1594,24 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
   "TranslationProperties": {
     "Name": "server.items.My_Door.name"
   },
-  "Categories": ["Blocks.Doors"],
+  "Categories": ["Furniture.Doors"],
   "BlockType": {
     "DrawType": "Model",
+    "Opacity": "Transparent",
     "CustomModel": "Blocks/Doors/My_Door.blockymodel",
     "HitboxType": "Door",
     "VariantRotation": "NESW",
+    "IsDoor": true,
     "State": {
-      "Id": "door",
       "Definitions": {
         "OpenDoorIn": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Open_In.blockyanim",
           "HitboxType": "Door_Open_In",
+          "InteractionSoundEventId": "SFX_Door_Wooden_Open"
+        },
+        "OpenDoorOut": {
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Open_Out.blockyanim",
+          "HitboxType": "Door_Open_Out",
           "InteractionSoundEventId": "SFX_Door_Wooden_Open"
         },
         "CloseDoorIn": {
@@ -1427,11 +1621,12 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
         "CloseDoorOut": {
           "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_Out.blockyanim",
           "InteractionSoundEventId": "SFX_Door_Wooden_Close"
-        }
+        },
+        "DoorBlocked": {}
       }
     },
     "Interactions": {
-      "Use": "Door_Toggle"
+      "Use": "Door"
     },
     "BlockSoundSetId": "Wood",
     "BlockParticleSetId": "Wood"
@@ -1446,16 +1641,16 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
   "TranslationProperties": {
     "Name": "server.items.My_Chest.name"
   },
-  "Categories": ["Blocks.Containers"],
+  "Categories": ["Furniture.Containers"],
   "BlockType": {
     "DrawType": "Model",
+    "Opacity": "Transparent",
     "CustomModel": "Blocks/Containers/My_Chest.blockymodel",
     "HitboxType": "Chest_Small",
     "VariantRotation": "NESW",
-    "Support": "Down",
+    "Support": { "Down": [ { "FaceType": "Full" } ] },
+    "Supporting": { "Up": [ { "FaceType": "Full" } ] },
     "State": {
-      "Id": "container",
-      "Capacity": 27,
       "Definitions": {
         "OpenWindow": {
           "InteractionSoundEventId": "SFX_Chest_Wooden_Open",
@@ -1467,22 +1662,33 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
         }
       }
     },
+    "BlockEntity": {
+      "Components": {
+        "ItemContainerBlock": { "Capacity": 27 }
+      }
+    },
     "Interactions": {
-      "Primary": "Break_Container",
       "Use": "Open_Container"
     },
+    "InteractionHint": "server.interactionHints.openDoor",
     "BlockSoundSetId": "Wood",
     "Gathering": {
       "Breaking": {
         "GatherType": "Woods",
-        "DropList": [
-          { "ItemId": "My_Chest", "Quantity": 1 }
-        ]
+        "DropList": {
+          "Container": {
+            "Type": "Single",
+            "Item": { "ItemId": "My_Chest", "QuantityMin": 1, "QuantityMax": 1 }
+          }
+        }
       }
     }
   }
 }
 ```
+*(Modelled on `Furniture_Kweebec_Chest_Large.json`. The slot count is on the `ItemContainerBlock`
+block-entity component, not on `State`, and `DropList` is a drop-table id or an inline
+`{ "Container": … }` object — never an array.)*
 
 ### Block with Inheritance
 
@@ -1497,10 +1703,14 @@ Sets the override on the block the caller is looking at (max 10 blocks). Permiss
     "Textures": [
       { "Weight": 1, "All": "BlockTextures/Rock_Stone_Mossy.png" }
     ],
-    "ParticleColor": "#507850"
+    "ParticleColor": "#667142"
   }
 }
 ```
+
+*(Illustrative: 2,159 shipped item files use `Parent`, but the real `Rock_Stone_Mossy.json` is
+standalone — it repeats the whole `BlockType`. `Parent` inheritance is an [item](items.md) feature and
+merges the parent's `BlockType` key-by-key, so a child only restates what it changes.)*
 
 ---
 
@@ -1564,6 +1774,7 @@ BlockTypeTextures[] getTextures() // Block textures
 String getCustomModel()           // Custom model path (if any)
 float getCustomModelScale()       // Custom model scale
 String getCustomModelAnimation()  // Custom model animation
+float getCustomModelAnimationSpeed() // 0.6.3+: playback multiplier for that animation
 CustomModelTexture[] getCustomModelTexture()
 ```
 
@@ -1685,7 +1896,7 @@ static final Rotation[] NORMAL; // Normal rotations subset
 int getDegrees()                 // Get rotation in degrees (0, 90, 180, 270)
 double getRadians()              // Get rotation in radians
 Axis getAxisOfAlignment()        // Get alignment axis
-Vector3i getAxisDirection()      // Get axis direction vector
+Vector3ic getAxisDirection()     // Get axis direction vector (read-only view)
 
 // Rotation operations
 Rotation flip()                  // Flip rotation
@@ -1708,14 +1919,22 @@ Vector3f rotateYaw(Vector3f v, Vector3f out)
 Vector3i rotatePitch(Vector3i v, Vector3i out)
 Vector3f rotatePitch(Vector3f v, Vector3f out)
 
-// Static rotation methods
+// Static rotation methods (there is no static two-argument `add` — use the instance `add`)
 static Rotation ofDegrees(int degrees)           // Get from degrees
 static Rotation closestOfDegrees(float degrees)  // Closest to degrees
-static Rotation add(Rotation a, Rotation b)      // Add two rotations
-static Vector3i rotate(Vector3i v, Rotation yaw, Rotation pitch)
-static Vector3i rotate(Vector3i v, Rotation yaw, Rotation pitch, Rotation roll)
-static Vector3f rotate(Vector3f v, Rotation yaw, Rotation pitch, Rotation roll)
-static Vector3d rotate(Vector3d v, Rotation yaw, Rotation pitch, Rotation roll)
+static Vector3i rotate(Vector3ic v, Rotation yaw, Rotation pitch)
+static Vector3i rotate(Vector3ic v, Rotation yaw, Rotation pitch, Rotation roll)
+static Vector3f rotate(Vector3fc v, Rotation yaw, Rotation pitch, Rotation roll)
+static Vector3d rotate(Vector3dc v, Rotation yaw, Rotation pitch, Rotation roll)
+
+// In-place variants (mutate the argument)
+static void applyRotationTo(Vector3i v, Rotation yaw, Rotation pitch, Rotation roll)
+static void applyRotationTo(Vector3f v, Rotation yaw, Rotation pitch, Rotation roll)
+static void applyRotationTo(Vector3d v, Rotation yaw, Rotation pitch, Rotation roll)
+static void applyRotationTo(Rotation3f r, Rotation yaw, Rotation pitch, Rotation roll)
+static void undoRotationTo(Vector3i v, Rotation yaw, Rotation pitch, Rotation roll)  // and Vector3f / Vector3d
+
+Rotation toInverse()             // The rotation that undoes this one
 ```
 
 ---
@@ -1802,7 +2021,7 @@ These classes back the `Gathering` JSON object (see [Gathering Configuration](#g
 | `Soft` | `SoftBlockDropType` | `getSoft()` |
 | `Physics` | `PhysicsDropType` | `getPhysics()` |
 
-`BlockGathering` also exposes `isHarvestable()`, `isSoft()`, `getToolData()` (the `Tools` array), and `shouldUseDefaultDropWhenPlaced()`.
+`BlockGathering` also exposes `isHarvestable()`, `isSoft()`, `getToolData()` (the `Tools` JSON key, decoded to a `Map<String, BlockGathering.BlockToolData>` keyed by gather type), and `shouldUseDefaultDropWhenPlaced()` (JSON `UseDefaultDropWhenPlaced`).
 
 #### BlockBreakingDropType
 
@@ -1912,9 +2131,15 @@ String getHitboxCollisionConfigId()     // JSON "HitboxCollisionConfig"
 
 ```java
 public abstract class FallingBlockImpact {
-    public abstract void apply(WorldChunk chunk, World world, BlockType blockType,
+    public static final CodecMapCodec<FallingBlockImpact> CODEC;   // dispatches on "Type"
+    public static final BuilderCodec<FallingBlockImpact> BASE_CODEC;
+
+    // Signature changed in 0.6.3: the chunk argument is now a Ref<ChunkStore>, and the
+    // falling entity's own Ref plus an EntityStore CommandBuffer were added.
+    public abstract void apply(Ref<ChunkStore> chunkRef, World world, BlockType blockType,
                                Vector3d position, RotationTuple rotation,
-                               Store<EntityStore> store);
+                               Store<EntityStore> store, Ref<EntityStore> fallingEntity,
+                               CommandBuffer<EntityStore> buffer);
 }
 ```
 
@@ -2090,8 +2315,14 @@ When a block's hitbox protrudes its own cell (`BlockBoundingBoxes.protrudesUnitB
 static final int NO_FILLER = 0;
 
 // Iterate / test the neighbor cells a rotated hitbox spills into
+// (overloads add a coverage threshold, and an origin, before the boxes)
 static void forEachFillerBlock(RotatedVariantBoxes boxes, TriIntConsumer consumer)
 static boolean testFillerBlocks(RotatedVariantBoxes boxes, TriIntPredicate predicate)
+
+// Multi-cell footprints (0.6.3+)
+static RotatedVariantBoxes multiCellFootprint(int width, int height)
+static boolean isFootprintFree(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
+static void markFootprint(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
 
 // Filler offsets are packed into one int
 static int pack(int x, int y, int z)
@@ -2099,11 +2330,14 @@ static int unpackX(int packed)
 static int unpackY(int packed)
 static int unpackZ(int packed)
 
-// Engine-side add/remove of the filler blocks around an anchor block
+// Engine-side add/remove of the filler blocks around an anchor block.
+// Both gained a BlockComponentSection parameter after the BlockSection in 0.6.3.
 static void setFillerBlocksAt(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref,
-                              BlockSection section, int x, int y, int z,
+                              BlockSection section, BlockComponentSection componentSection,
+                              int x, int y, int z,
                               int anchorX, int anchorY, int anchorZ, ChangeReason reason)
-static void removeFillerBlocksAt(ComponentAccessor<ChunkStore> accessor, BlockSection section,
+static void removeFillerBlocksAt(ComponentAccessor<ChunkStore> accessor,
+                                 BlockSection section, BlockComponentSection componentSection,
                                  int x, int y, int z,
                                  int anchorX, int anchorY, int anchorZ, ChangeReason reason)
 ```
@@ -2223,7 +2457,11 @@ public interface RandomTickProcedure {
 
 Each tick the random-tick system samples a few block positions per chunk section (defaults: 1 per stable section, 3 per recently-changed section) and invokes the sampled block's procedure if it has one. Coordinates passed to `onRandomTick` are world block coordinates.
 
-The random-tick plugin registers `"ChangeIntoBlock"` (key `TargetBlock`) and `"SpreadTo"`. Grass is the shipped example — `Soil_Grass.json`:
+The random-tick plugin registers three types: `"ChangeIntoBlock"` (key `TargetBlock`), `"SpreadTo"`
+(keys `SpreadDirections`, `MinY`, `MaxY`, `AllowedTag`, `AllowedAboveFluids`, `RequireEmptyAboveTarget`,
+`RequiredLightLevel`, `RevertBlock`), and — new in 0.6.3 — `"PlaceBlock"` (keys `Placements`, `Offset`,
+`RequireEmptyTarget`; each `Placements` entry is a weighted `Blocks` list, as
+`Test_PlaceBlockProcedure.json` shows). Grass is the shipped `SpreadTo` example — `Soil_Grass.json`:
 
 ```json
 {
@@ -2309,6 +2547,8 @@ public class PlaceBlockEvent extends CancellableEcsEvent {
     void setTargetBlock(Vector3i position)
     RotationTuple getRotation()
     void setRotation(RotationTuple rotation)
+    boolean isConsumeItem()               // 0.6.3+: whether placing consumes the held stack
+    void setConsumeItem(boolean)          // 0.6.3+: e.g. leave the item in hand
     boolean isCancelled()
     void setCancelled(boolean)
 }
@@ -2341,7 +2581,11 @@ Fired when a block takes damage (mining progress). This fires during the mining 
 public class DamageBlockEvent extends CancellableEcsEvent {
     ItemStack getItemInHand()
     Vector3i getTargetBlock()
+    void setTargetBlock(Vector3i position)
     BlockType getBlockType()
+    float getCurrentDamage()   // damage already accumulated on this block
+    float getDamage()          // damage this strike would add
+    void setDamage(float)      // scale or zero this strike without cancelling the event
     boolean isCancelled()
     void setCancelled(boolean)
 }
@@ -2388,18 +2632,25 @@ public class DamageBlockEventSystem extends EntityEventSystem<EntityStore, Damag
 
 ### UseBlockEvent
 
-Fired when a block is used/interacted with. Has `Pre` and `Post` variants.
+Fired when a block is used/interacted with. `UseBlockEvent` itself is abstract and carries the four
+accessors; the concrete events are its `Pre` and `Post` subclasses.
+
+```java
+public abstract class UseBlockEvent extends EcsEvent {
+    InteractionType getInteractionType()
+    InteractionContext getContext()   // com.hypixel.hytale.server.core.entity.InteractionContext
+    Vector3i getTargetBlock()
+    BlockType getBlockType()
+}
+```
 
 #### UseBlockEvent.Pre
 
-Fired before the block interaction is processed. Can be cancelled.
+Fired before the block interaction is processed. Can be cancelled — note it implements
+`ICancellableEcsEvent` rather than extending `CancellableEcsEvent`.
 
 ```java
-public class UseBlockEvent.Pre extends CancellableEcsEvent {
-    InteractionType getInteractionType()
-    InteractionContext getContext()
-    Vector3i getTargetBlock()
-    BlockType getBlockType()
+public final class UseBlockEvent.Pre extends UseBlockEvent implements ICancellableEcsEvent {
     boolean isCancelled()
     void setCancelled(boolean)
 }
@@ -2410,12 +2661,7 @@ public class UseBlockEvent.Pre extends CancellableEcsEvent {
 Fired after the block interaction is processed. Cannot be cancelled.
 
 ```java
-public class UseBlockEvent.Post extends EcsEvent {
-    InteractionType getInteractionType()
-    InteractionContext getContext()
-    Vector3i getTargetBlock()
-    BlockType getBlockType()
-}
+public final class UseBlockEvent.Post extends UseBlockEvent { }
 ```
 
 #### UseBlockEvent Usage
@@ -2587,7 +2833,7 @@ health.removeBlock(world, pos);                             // clear all tracked
 
 The worked example below compiles against the 0.6.3 jar and is covered by the example-build gate, so the API surface is current. The end-to-end run against a live server was last exercised on an older build and has not been repeated for 0.6.3 — treat the runtime behaviour as unconfirmed rather than guaranteed. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
 
-A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `Container`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
+A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `ItemContainerBlock`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
 
 Block-entity components live on the **`ChunkStore`** — the ECS store that backs chunks and blocks (see [Components](components.md)), distinct from the `EntityStore` that holds players, mobs, and dropped items. Living on the `ChunkStore` is what makes the state save and load with the chunk.
 

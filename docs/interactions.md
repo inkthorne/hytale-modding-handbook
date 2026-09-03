@@ -189,7 +189,7 @@ Interactions are actions entities can perform. Start with `SimpleInteraction` fo
 {
   "Type": "Simple",
   "RunTime": 0.2,
-  "Next": "Sword_Damage_Hit"
+  "Next": "Sword_Swing_Down_Damage"
 }
 ```
 
@@ -248,8 +248,18 @@ Static meta keys for storing context data during interaction execution:
 | `TARGET_BLOCK_TYPE` | `BlockType` | Resolved type of the targeted block (0.6.3+) |
 | `TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Rotation index of the targeted block (0.6.3+) |
 | `TARGET_SLOT` | `Integer` | Inventory slot |
-| `TIME_SHIFT` | `Float` | Time offset |
 | `DAMAGE` | `Damage` | Damage information |
+
+Those are all registered on `Interaction.CONTEXT_META_REGISTRY` and read/written through
+`context.getMetaStore()` (a `DynamicMetaStore<InteractionContext>`). One key belongs to the
+*other* registry:
+
+| Key | Type | Registry | Accessed via |
+|-----|------|----------|--------------|
+| `TIME_SHIFT` | `Float` | `Interaction.META_REGISTRY` | `context.getInstanceStore()` (a `DynamicMetaStore<Interaction>`) |
+
+`TIME_SHIFT` carries the per-interaction overshoot (`time - maxTime`) forward to the next
+interaction in the chain; `InteractionContext.setTimeShift(float)` is the convenience setter.
 
 ### Key Methods
 
@@ -549,9 +559,10 @@ if (!swordSwing.isUnknown()) {
 Interaction interaction = Interaction.getInteractionOrUnknown("my_interaction");
 Map<GameMode, InteractionSettings> settings = interaction.getSettings();
 
-InteractionSettings survivalSettings = settings.get(GameMode.Survival);
-if (survivalSettings != null) {
-    // Use survival-specific settings
+// GameMode has exactly two values: Adventure and Creative
+InteractionSettings adventureSettings = settings.get(GameMode.Adventure);
+if (adventureSettings != null) {
+    // Use adventure-specific settings
 }
 ```
 
@@ -599,7 +610,7 @@ Cooldowns prevent interactions from being spammed by enforcing minimum delays be
 The `CooldownHandler` manages cooldown timers for an entity:
 
 ```java
-public class CooldownHandler {
+public final class CooldownHandler implements Tickable {
     // Check if a cooldown is active
     boolean isOnCooldown(RootInteraction root, String cooldownId, float time,
                          float[] progress, boolean checkOnly);
@@ -617,28 +628,34 @@ public class CooldownHandler {
 
 #### Cooldown Configuration
 
-Cooldowns are configured in RootInteraction JSON files:
+Cooldowns are configured in RootInteraction JSON files, either at the top level (applies to every
+game mode) or per-`GameMode` under `Settings`:
 
 ```json
 {
-  "Interactions": ["Weapon_Sword_Primary"],
+  "Interactions": ["Block_Primary"],
   "Settings": {
     "Adventure": {
       "Cooldown": {
-        "Id": "SwordAttack",
+        "Id": "BlockInteraction",
         "Cooldown": 0.278
       }
     },
     "Creative": {
       "Cooldown": {
-        "Id": "SwordAttack_Creative",
-        "Cooldown": 0.0,
+        "Id": "BlockInteraction_Creative",
+        "Cooldown": 0.278,
         "ClickBypass": true
       }
     }
   }
 }
 ```
+
+`Id` is an author-chosen string, not a lookup into any asset store: two roots that use the same `Id`
+share one timer. (The shipped `Server/Item/RootInteractions/` tree uses only three: `BlockInteraction`,
+`BlockInteraction_Creative` and `SlowEffect` — everything else relies on the top-level `Cooldown`
+block, as `Root_Weapon_Sword_Primary.json` above does.)
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -920,7 +937,7 @@ Nested interactions can be referenced in two ways:
   "Type": "Serial",
   "Interactions": [
     "Sword_Swing_Down",
-    "Sword_Damage_Hit"
+    "Sword_Swing_Down_Damage"
   ]
 }
 ```
@@ -935,7 +952,7 @@ Nested interactions can be referenced in two ways:
       "RunTime": 0.2,
       "Effects": { "ItemAnimationId": "SwingDown" }
     },
-    "Sword_Damage_Hit"
+    "Sword_Swing_Down_Damage"
   ]
 }
 ```

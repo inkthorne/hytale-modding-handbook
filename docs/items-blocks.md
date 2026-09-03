@@ -14,7 +14,7 @@ seo:
 > **See also:** [Drop System](drops.md) for `DropList` loot tables
 >
 > All structures and examples below are taken directly from real asset files under
-> `Server/Item/Items/`. Counts cited (e.g. "~2358 blocks") are from the shipped assets.
+> `Server/Item/Items/`. Counts cited are from the shipped assets: 2,952 item files carry a `BlockType` in 0.6.3.
 
 This page documents the `BlockType` property an item carries to become a placeable block — rendering, collision, gathering, states, connections, interactions, and block-entity components.
 
@@ -131,7 +131,7 @@ a given file may only specify the fields it overrides.
 
 ### HitboxType
 
-`HitboxType` (~1719 blocks) selects a named, predefined collision/selection shape rather
+`HitboxType` (1,277 of the 2,952 shipped block items) selects a named, predefined collision/selection shape rather
 than describing one inline. `Full` is the standard whole-block hitbox; the rest are
 shape- or asset-specific names.
 
@@ -142,10 +142,13 @@ shape- or asset-specific names.
 Common values include `Full`, `Block_Half`, `Block_Vertical_Flat`, `Stairs`, `Door`,
 `Ladder`, `Window`, `Chest_Small`, `Chest_Large`, `Fence`, `Branch`, `Plant_Full`,
 `Plant_Medium`, `Torch`, and many model-specific names (e.g. `Door_Temple_Wind_Large`).
+244 hitbox assets ship under `Server/Item/Block/Hitboxes/`; `Full` is the exception with no
+file of its own — it is `BlockBoundingBoxes.DEFAULT`, id `0`, and is also what a block that omits
+`HitboxType` gets.
 
 ### Flags
 
-`Flags` (~1287 blocks) is usually `{}` but may carry boolean behavior flags:
+`Flags` (1,285 blocks) is usually `{}` but may carry boolean behavior flags:
 
 ```json
 { "BlockType": { "Flags": { "IsStackable": false } } }
@@ -153,7 +156,7 @@ Common values include `Full`, `Block_Half`, `Block_Vertical_Flat`, `Stairs`, `Do
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `IsStackable` | boolean | Whether the item form stacks (default `true`; ~75 blocks set it to `false`, ~42 set it to `true` explicitly) |
+| `IsStackable` | boolean | Whether the builder tool's scatter may stack this block on a like block (default `true`; 73 blocks set it to `false`, 42 set it to `true` explicitly) |
 
 `IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.6.3 (the
 `IsUsable` flag was removed by 0.6.3 — whether a block responds to Use is decided solely
@@ -161,7 +164,7 @@ by `BlockType.Interactions.Use`, see [Block Interactions](#block-interactions)).
 
 ### ParticleColor
 
-`ParticleColor` (~2742 blocks) is a hex string used to tint break/impact particles:
+`ParticleColor` (2,725 blocks) is a hex string used to tint break/impact particles:
 
 ```json
 { "BlockType": { "ParticleColor": "#969696" } }
@@ -262,7 +265,7 @@ For `DrawType: Model`, a `.blockymodel` is referenced and textured via
 
 ## Gathering & Drops
 
-`Gathering` (~2358 blocks) defines how a block is broken/harvested and what it produces.
+`Gathering` (2,311 blocks) defines how a block is broken/harvested and what it produces.
 It groups by interaction mode; `Breaking` is the most common.
 
 ```json
@@ -295,7 +298,7 @@ Inside a gathering mode:
 | `ItemId` | Item produced directly |
 | `DropList` | Drop table reference (string) or inline drop definition (object) — see [Drop System](drops.md) |
 | `Quality` | Integer quality override on the produced item (`Breaking` only) |
-| `IsWeaponBreakable` | `Soft` only — `false` stops weapons breaking the block (~199 blocks, e.g. `Deco_Lantern`) |
+| `IsWeaponBreakable` | `Soft` only — `false` stops weapons breaking the block (170 blocks, e.g. `Deco_Lantern`) |
 
 **`GatherType` values:** `Rocks`, `Woods`, `SoftBlocks`, `Soils`, `VolcanicRocks`,
 `Benches`, `SoftWoods`, `Unbreakable`, and ore tiers (`OreIron`, `OreGold`, `OreCopper`,
@@ -401,14 +404,14 @@ Controls which rotation variants a block supports.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `RotationMode` | string | `StairFacingPlayer` or `BlockNormal` |
+| `RotationMode` | string | `Default`, `FacingPlayer`, `BlockNormal`, or `StairFacingPlayer` (shipped blocks use only the last two: 127 `StairFacingPlayer`, 25 `BlockNormal`) |
 | `PlaceInEmptyBlocks` | boolean | Allow placement into empty/air blocks |
 | `AllowBreakReplace` | boolean | Allow replacing a breakable block on placement |
 | `AllowRotationKey` | boolean | Allow the player to rotate while placing |
 | `WallPlacementOverrideBlockId` | string | Block placed when targeting a wall |
 | `CeilingPlacementOverrideBlockId` | string | Block placed on a ceiling |
 | `FloorPlacementOverrideBlockId` | string | Block placed on a floor |
-| `BlockPreviewVisibility` | string | Preview visibility control |
+| `BlockPreviewVisibility` | string | `Default`, `AlwaysVisible`, or `AlwaysHidden` |
 
 ---
 
@@ -433,8 +436,11 @@ arrays of accepted support entries (any one entry satisfies that direction).
 }
 ```
 
-**Support directions:** `Down`, `Up`, `North`, `South`, `East`, `West`, plus the merged
-groups `CardinalDirections` (the four sides), `BlockSides`, and `All`.
+**Support directions:** any `BlockFace` name — the six faces (`Down`, `Up`, `North`, `South`,
+`East`, `West`), the twelve edges (`DownNorth`, `UpEast`, `NorthWest`, …) and the eight corners
+(`DownNorthEast`, `UpSouthWest`, …) — plus the six `MergedBlockFaces` groups, which expand to
+several faces at once: `All`, `BlockSides`, `CardinalDirections` (the four sides), `Horizontal`,
+`UpCardinalDirections`, `DownCardinalDirections`.
 
 **Support entry forms:**
 
@@ -448,9 +454,17 @@ groups `CardinalDirections` (the four sides), `BlockSides`, and `All`.
 The sibling key `Supporting` uses the same direction map to declare which faces *this*
 block offers to neighbours (e.g. a chest's `"Supporting": { "Up": [ { "FaceType": "Full" } ] }`).
 
-**`FaceType` values:** `Full`, `Branch`, `Rock_Beam`, `Wood_Beam`, `Shelf`, `Window`,
-`Wall`, `Wall_Corner`, `Fence`, `Fence_Corner`, `Rail`, `Bushes`, `BushBase`, `Platform`,
-`Rope`, `Vines`, `Barrel`.
+**`FaceType` is a free-form string, not an enum** — codec doc: *"Can be any string. Compared with
+FaceType in \"Supporting\" of other blocks. A LOT of blocks use 'Full'."* A custom block may invent
+its own face type as long as the supporting block advertises the same string. The 17 used by shipped
+blocks: `Full` (834 uses), `Branch` (168), `Rock_Beam` (76), `Shelf` (51), `Window` (46), `Wall`
+(45), `Fence` (39), `Platform` (34), `Rope` (29), `Wood_Beam` (29), `Fence_Corner` (23),
+`Wall_Corner` (23), `Bushes` (20), `Rail` (8), `Barrel` (6), `Vines` (3), `BushBase` (1).
+
+A `Support` entry (`RequiredBlockFaceSupport`) accepts more than the four forms above — the full key
+set is `FaceType`, `SelfFaceType`, `BlockSetId`, `BlockTypeId`, `FluidId`, `TagId`, `MatchSelf`,
+`Support`, `AllowSupportPropagation`, `Rotate`, `Filler`. A `Supporting` entry (`BlockFaceSupport`)
+accepts only `FaceType` and `Filler`.
 
 A sibling `BlockType` key, `SupportsRequiredFor` (`"Any"` or `"All"`, default `All`),
 controls whether one satisfied direction is enough or every declared direction must
@@ -550,7 +564,7 @@ shape states (`Corner_Left`, `Corner_Right`, `Inverted_Corner_Left`,
 ## Connected Blocks
 
 Blocks that connect to neighbors (stairs, roofs, walls/bars, doors) use
-`ConnectedBlockRuleSet` (~554 blocks). Its shape depends on `Type`.
+`ConnectedBlockRuleSet` (554 blocks). Its shape depends on `Type`.
 
 ### Stair
 
@@ -691,7 +705,7 @@ The top-level item also wires placement interactions in its own `Interactions` m
 ## Block Entity Components
 
 Blocks with server-side state (containers, benches, farming soil, spawners, etc.) declare
-it under `BlockType.BlockEntity.Components` (~166 blocks).
+it under `BlockType.BlockEntity.Components` (164 blocks).
 
 ```json
 {
@@ -725,7 +739,7 @@ no shipped block declares it yet.
 
 ### IsDoor
 
-Marks a block as a door (~46 blocks), used together with the `Door` Use interaction and
+Marks a block as a door (46 blocks), used together with the `Door` Use interaction and
 the directional door states:
 
 ```json
@@ -1263,10 +1277,10 @@ with a cooldown (`BlockInteraction`, 0.278 s, `ClickBypass`) and creative settin
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the block loader (verified against `HytaleServer.jar`).
+Backtick-quoted strings below are literal messages from `HytaleServer.jar`.
 
-- **`Block type not found`** → a `BlockType` key referenced for placement/lookup does not resolve to a loaded block. Fix: confirm the owning item loaded and the key matches the item's id exactly (case-sensitive).
-- **`does not have an associated item!`** → a block type exists but no item carries it, so it cannot be obtained or placed. Fix: define the `BlockType` inside an item file rather than as a standalone block (a block "can only be defined within an Item and not standalone").
+- **`Block type not found`** (`TeleportConfigInstanceInteraction`) → a `BlockType` key referenced for placement/lookup does not resolve to a loaded block. Fix: confirm the owning item loaded and the key matches the item's id exactly (case-sensitive).
+- **`does not have an associated item!`** (`BenchWindow`) → a block type exists but no item carries it, so it cannot be obtained or placed. Fix: define the `BlockType` inside an item file rather than as a standalone block — `BlockType.CODEC`'s own documentation says *"The definition for a block in the game. Can only be defined within an **Item** and not standalone."*
 - **`itemId cannot be BlockTypeKey.EMPTY!`** → an item/block operation was handed the empty block-type key. Fix: pass a real block-bearing item id, not an empty/placeholder key.
 - **Symptom:** a placeable block fails to register even though the JSON parses → the `BlockType` block was placed in a standalone block file instead of under an item's `BlockType` property. Fix: nest `BlockType` inside the item definition under `Server/Item/Items/`.
 

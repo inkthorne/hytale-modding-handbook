@@ -13,6 +13,10 @@ Complete reference for finding the right documentation file. For a beginner-frie
 
 ## Quick Reference Table
 
+Entry-point pages. Split sub-pages (`items-*`, `interactions-*`, `worldgen-*`, `ui-*`,
+`blockymodel-format`, `effects-stats`, `prefabs-categories`) are reached from their parent
+page and are all listed under [By Documentation Type](#by-documentation-type) below.
+
 | File | Description |
 |------|-------------|
 | [02-structure.md](02-structure.md) | Pack vs plugin directory structure, Server/ vs Common/ directories, and manifest configuration. |
@@ -201,7 +205,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PrefabStore](prefabs.md), [BlockSelection](prefabs.md), [PrefabRotation](prefabs.md), [PrefabEntry](prefabs.md), [PrefabWeights](prefabs.md), [PrefabPasteEvent](prefabs.md), [PrefabPlaceEntityEvent](prefabs.md)
 
 **Math**
-[Vector3d](math.md), [Vector3f](math.md), [Vector3i](math.md), [Vector3l](math.md), [Vector2d](math.md), [Vector2i](math.md), [Vector4d](math.md), [Matrix4d](math.md), [Transform](math.md), [Box](math.md), [Axis](math.md), [MathUtil](math.md)
+[Vector3d](math.md), [Vector3f](math.md), [Vector3i](math.md), [Vector2d](math.md), [Vector2i](math.md), [Vector4d](math.md), [Matrix4d](math.md), [Vector3dUtil](math.md), [Vector3iUtil](math.md), [Matrix4dUtil](math.md), [Rotation3f](math.md), [Transform](math.md), [Location](math.md), [Box](math.md), [Axis](math.md), [MathUtil](math.md)
 
 **Codecs**
 [Codec](codecs.md), [BuilderCodec](codecs.md), [KeyedCodec](codecs.md)

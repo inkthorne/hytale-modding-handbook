@@ -59,15 +59,18 @@ Tools follow the same inheritance pattern. The [Tool Items](items-tools.md) docu
 
 ## Documentation Structure
 
-The documentation is organized into categories:
+The reference pages cluster into these areas:
 
 - **Core** - Plugin lifecycle, commands, events, and ECS components
 - **Items** - Weapons, tools, consumables, and crafting
 - **Interactions** - Combat system, combo chains, and ability effects
-- **World** - Blocks, prefabs, and world management
+- **World** - Blocks, prefabs, world management, and saves/universes
 - **World Generation** - Zones, biomes, terrain, and caves
-- **Entities** - Players, NPCs, and entity systems
+- **Entities** - Players, NPCs, encounters, and entity systems
 - **UI** - Custom pages, HUD, and styling
+
+The index groups the same pages two other ways: by **documentation type** (Java API,
+JSON asset format, UI DSL, guide) and by **topic**.
 
 For a complete list of all documentation files with descriptions, see the [Documentation Index](01-index.md).
 
@@ -100,7 +103,8 @@ deploy.bat     :: Build and deploy to the Hytale mods folder
 
 ```bash
 # Linux / macOS (the .bat scripts are Windows-only)
-./gradlew jar  # Build the plugin (produces build/libs/*.jar)
+./gradlew build  # Build the plugin (produces build/libs/*.jar)
+./deploy.sh      # Build (if needed) and deploy to the mods folder
 ```
 
 Plugins are deployed to the mods folder:

@@ -71,7 +71,7 @@ JSON to self-document.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "^0.5.0",
+  "ServerVersion": "^0.6.0",
   "IncludesAssetPack": true
 }
 ```

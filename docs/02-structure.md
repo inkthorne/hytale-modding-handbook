@@ -147,10 +147,10 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 > YYYY.MM.DD-<sha> format. Treated as wildcard for backward compatibility. Update to a SemverRange.` — so it no
 > longer expresses any constraint. Use range syntax going forward.
 
-Any mod with `"IncludesAssetPack": true` should declare the server versions it targets, or the server logs a warning when the pack registers:
+Every mod should declare the server versions it targets, or the server logs a warning when it loads:
 
 ```
-Plugin '<name>' does not specify a target server version. You may encounter issues
+Plugin '<name>' does not specify a target server version. You may encounter issues, please check for plugin updates. This will be a hard error in the future
 ```
 
 Add the `ServerVersion` field as a **semver range**:
@@ -166,7 +166,7 @@ Add the `ServerVersion` field as a **semver range**:
 }
 ```
 
-`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.0` on Update 5 and `0.6.3` on the current build. Read it with:
+`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.9` on the last Update 5 build and `0.6.3` on the current one. Read it with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
@@ -177,9 +177,18 @@ unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 | Value | Matches |
 |-------|---------|
 | `^0.6.0` | Compatible with `0.6.x` (`>=0.6.0 <0.7.0`) — the recommended default on the current build |
-| `>=0.6.0 <0.7.0` | Explicit bounded range (equivalent to the caret above) |
-| `0.6.3` | Exactly `0.6.3` — valid, but brittle: won't match a `0.6.4` patch |
+| `~0.6.0` | `>=0.6.0 <0.7.0` — identical to the caret here; the tilde bumps the *minor* when the minor is non-zero, and the *major* when it is zero |
+| `>=0.6.0 <0.7.0` | Explicit bounded range (space = AND) |
+| `0.6.x` / `0.6.0` | Bare form; `x`/`*` become `0`, and a zero patch widens to `>=0.6.0 <0.7.0` — **not** an exact match |
+| `=0.6.3` | Exactly `0.6.3` — valid, but brittle: won't match a `0.6.4` patch |
+| `^0.5.0 \|\| ^0.6.0` | `\|\|` joins alternatives (OR) |
 | `*` | Any version (`SemverRange.WILDCARD`) — opts out of the check |
+
+> **Gotcha — a bare version with a non-zero patch is a parse error, not an exact match.**
+> `SemverRange.fromString` only accepts a bare version when the patch is zero. `"ServerVersion": "0.6.3"`
+> throws `Bare version '0.6.3' is not a valid range. Use '=0.6.3' for an exact match, or '^0.6.3' / '~0.6.3'
+> for a range. Bare ranges only work when the patch is zero (e.g. '1.2.0' or '1.x').` Write `=0.6.3` (or a
+> caret range) instead.
 
 A caret/range means you **no longer have to re-pin on every patch release** — the chief reason the old exact-string
 form was painful. Pin a range that reflects what your plugin actually tolerates. A caret does **not** survive a
@@ -187,14 +196,14 @@ form was painful. Pin a range that reflects what your plugin actually tolerates.
 still pinned to it now logs the `INCOMPATIBLE` warning below against `0.6.3`. Re-pin on each minor update.
 
 Warnings (all non-fatal):
-- **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues` (`INCOMPATIBLE`).
+- **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues, please check for plugin updates.` (`INCOMPATIBLE`).
 - **Running version unparsable:** `Plugin '<name>' targets server version range '<range>' but the running server version '<v>' could not be parsed.` (`PARSE_FAILED`).
-- **Field missing:** `Plugin '<name>' does not specify a target server version. You may encounter issues` (`MISSING`).
-- The server also logs an aggregate `One or more plugins are targeting a different server version...`.
+- **Field missing:** `Plugin '<name>' does not specify a target server version. You may encounter issues, please check for plugin updates. This will be a hard error in the future` (`MISSING`).
+- The server also logs an aggregate per surface: `One or more plugins are targeting a different server version...` (plugin loader) and `One or more asset packs are targeting an older server version...` (asset loader). Both are `SEVERE`, and both are suppressed by the `-Dhytale.allow_outdated_mods` system property. Players holding the `hytale.mods.outdated.notify` permission are also messaged on join.
 
 Caveats:
 - **Pre-release tags are excluded.** A range like `>=0.5.0` does **not** match a pre-release such as `0.5.0-pre.3` (standard semver behavior) — target the stable release, or include the pre-release explicitly.
-- Packs **without** `IncludesAssetPack` (code-only plugins) are not checked, but the example plugins set it anyway for forward-compatibility ("will be a hard error in the future").
+- **Every mod is checked as of 0.6.3, code-only ones included.** The check runs twice on two independent surfaces: the plugin loader validates *every* manifest whose `Group` is not `Hytale`, and the asset loader separately validates every registered asset pack. So omitting `ServerVersion` warns even without `IncludesAssetPack` — set it on every mod ("will be a hard error in the future").
 
 ## Server/ vs Common/ Directories
 
@@ -207,10 +216,11 @@ Assets in `Server/` are only loaded by the server and are **not sent to clients*
 | Directory | Contents |
 |-----------|----------|
 | `Server/Item/Items/` | Item definitions (.json) — see the folder-determines-type note under [Pack Structure](#pack-structure) |
-| `Server/Audio/` | Audio configurations (.json) |
-| `Server/Drops/` | Loot tables (.json) |
-| `Server/HytaleGenerator/` | World generation configs (.json) |
-| `Server/NPC/` | NPC definitions (.json) |
+| `Server/Item/Interactions/` | Interaction definitions (.json); root interactions live in `Server/Item/RootInteractions/` |
+| `Server/Drops/` | Loot tables (.json) — a leaf type folder |
+| `Server/Audio/<type>/` | Audio configs, subdivided by type: `SoundEvents/`, `SoundSets/`, `MusicContainers/`, `AudioCategories/`, … |
+| `Server/HytaleGenerator/<type>/` | World generation configs, subdivided by type: `Biomes/`, `Props/`, `Settings/`, `Density/`, … |
+| `Server/NPC/<type>/` | NPC configs, subdivided by type: `Roles/`, `Flocks/`, `Groups/`, `Spawn/World/`, … |
 
 ### Common/
 
@@ -220,7 +230,7 @@ Assets in `Common/` are shared with clients. Use this for:
 |-----------|----------|
 | `Common/UI/Custom/` | UI layouts (.ui files) |
 | `Common/Sounds/` | Sound files (.ogg) |
-| `Common/Blocks/` | Block models and definitions |
+| `Common/Blocks/` | Block models (.blockymodel), animations (.blockyanim) and textures (.png) — block *definitions* are server-side, under `Server/Item/Block/Blocks/` |
 | `Common/BlockTextures/` | Block texture files (.png) |
 | `Common/Items/` | Item models (.blockymodel) and textures (.png) |
 
@@ -258,7 +268,8 @@ Key built-in assets that may be useful for plugin and pack development:
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "Main": "hytale.examples.commands.CommandsPlugin"
+  "Main": "hytale.examples.commands.CommandsPlugin",
+  "ServerVersion": "^0.6.0"
 }
 ```
 
@@ -309,12 +320,31 @@ CustomSword/
 ```json
 {
   "Parent": "Template_Weapon_Sword",
-  "Name": "Custom Sword",
+  "TranslationProperties": {
+    "Name": "server.items.CustomSword.name"
+  },
+  "ItemLevel": 20,
+  "MaxDurability": 120,
   "InteractionVars": {
-    "BaseDamage": 15
+    "Swing_Left_Damage": {
+      "Interactions": [{
+        "Parent": "Weapon_Sword_Primary_Swing_Left_Damage",
+        "DamageCalculator": { "BaseDamage": { "Physical": 15 } }
+      }]
+    }
   }
 }
 ```
+
+> **`InteractionVars` values are interactions, never bare numbers.** The key is
+> `MapCodec(RootInteraction.CHILD_ASSET_CODEC, …)`: each entry names a **chain slot** the
+> template exposes (`Swing_Left_Damage`, `Guard_Wield`, `Consume_Charge`, …), and the value is
+> either the **id** of an existing interaction or an **inline `RootInteraction`** that overrides
+> one — a `ContainedAssetCodec`, so both forms are legal. Across every `Server/` asset in the
+> game, all 1,840 `InteractionVars` values are objects or id strings; none is a number. Damage
+> lives one level down, inside the interaction's `DamageCalculator`. There is no top-level
+> `Name` key on an item either — the display name comes from `TranslationProperties.Name`.
+> See [Weapon Items](items-weapons.md#example-child-iron-sword) for the full pattern.
 
 `Parent` references the template by its **id** (the filename without `.json`), not by
 a path — the game resolves item ids globally regardless of which folder they live in.
@@ -372,7 +402,18 @@ Both packs and plugins are deployed to the mods folder:
 
 For plugins, use the build scripts in each example:
 
-```bash
-./build.bat    # Build the plugin JAR
-./deploy.bat   # Build and copy to mods folder
+```batch
+:: Windows
+build.bat      :: Build the plugin JAR
+deploy.bat     :: Build and copy to the mods folder
 ```
+
+```bash
+# Linux / macOS
+./gradlew build  # Build the plugin JAR (build/libs/*.jar)
+./deploy.sh      # Build (if needed) and copy to the mods folder
+```
+
+On the Linux Flatpak launcher the mods folder resolves to
+`~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`; the deploy scripts
+resolve it for you.

@@ -253,7 +253,10 @@ section "[ADVISORY] Doc-type tags are present and consistent"
 OUT="$(python3 - <<'PY'
 import re, glob, os
 untagged=[]; mismatch=[]; counts={}; multi=[]
-type_re=re.compile(r'\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)')
+# Anchored: the tag is a line, never a prose mention. Unanchored, a page whose
+# real tag line was dropped would silently adopt the first inline `**Doc type:**`
+# in its body — a plausible wrong type AND a false green on the untagged check.
+type_re=re.compile(r'^\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)', re.M)
 tag_line_re=re.compile(r'^\*\*Doc type:\*\*', re.M)
 cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
 # Calibration skip-list: pages that legitimately cite backing codec classes

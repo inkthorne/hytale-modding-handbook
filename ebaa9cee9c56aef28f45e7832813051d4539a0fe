@@ -1,0 +1,52 @@
+SUBJECT UNDERSTATES SCOPE — per-page evidence recorded here after the fact.
+
+Same cause as the note on d003f50: staged with `git add -A docs` during
+parallel agent work, so the subject names only encounters.md while the commit
+carries the 0.6.3 re-verification of four other pages. Recorded so the log holds
+the evidence. Nothing here changes the tree.
+
+docs/items-weapons.md (+196) — the largest block. Established that exactly seven
+Template_Weapon_* assets exist and that the other seventeen weapon directories
+under Server/Item/Items/Weapon/ have no template parent, each declaring its own
+Interactions and stats (a few chaining off a sibling via a top-level Parent).
+Rewrote the StaminaCost section: it has exactly two keys and CostType exactly two
+values — the previously documented "Flat" mode does not exist — with both
+consumption formulas taken from computeStaminaAmountToConsume. Corrected the
+silent-sword list to the eight that ship with an empty InteractionVars in 0.6.3
+(Cutlass, Frost, Nexus, Runic, Silversteel, Steel, Steel_Incandescent, Wood),
+which also leaves them with no BaseDamage. Shortbow family count 19 -> 20;
+Physical base damage 9 -> 10; added MaxDurability and KnowledgeRequired.
+
+  Worth flagging for anyone re-checking this page: the claim that enum values in
+  item JSON are CamelCase and matched exactly ("DAMAGE" fails to decode) reads
+  wrong from the enum declaration alone, whose constants are MAX_HEALTH_PERCENTAGE
+  and DAMAGE. It is nonetheless correct. EnumStyle.detect returns LEGACY for those
+  constants, which is what *builds* the camel keys, but the codec's own enumStyle
+  is CAMEL_CASE, so getEnum takes the exact-equals branch against those keys rather
+  than name().equalsIgnoreCase. All 93 shipped CostType occurrences write "Damage".
+  This is the codec-chain rule applying to an enum — the case that looks safe.
+
+docs/tasks.md (+23) — documented what task cleanup actually does: the unregister
+action is exactly task.cancel(false), drained newest-first by PluginBase. Two
+consequences that change how you write a task: `false` means do not interrupt, so
+a running body (and a CompletableFuture.runAsync body in particular) continues to
+completion and must poll its own stop flag; an unfired ScheduledFuture, by
+contrast, is genuinely dropped. Added the `Registry is not enabled!` symptom for
+registering after disable. Dropped a stale "build-12" reference.
+
+docs/asset-editor.md (+29) — identified the key type of each keyed event (button
+id, asset-type id, dataset name) and added the symptom for the resulting silent
+failure: a plain register(EventClass, handler) never fires for the four keyed
+events because the Void-key overload cannot match. Also recorded that these
+dispatch on the server-wide bus only when a listener already exists, and that
+failure replies should be matched on Messages constants rather than rendered
+English. Dropped a stale "build-12" reference.
+
+docs/events.md (+25) — added the numeric getValue() of each EventPriority
+(-21844/-10922/0/10922/21844) and the fact that handlers bucket by raw short, so
+an unnamed priority slots between the named levels. Documented that PlayerChatEvent
+is an IAsyncEvent and how the bus wraps a sync consumer for it, and separated the
+WorldEvent bus family from the scripted world-event timelines. Dropped a stale
+"build-12" reference.
+
+Claude-Session: https://claude.ai/code/session_01AnCYv9SKxd87mbzaCFmpeq

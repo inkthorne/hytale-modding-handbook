@@ -1147,7 +1147,7 @@ buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback)
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages the 0.6.3 combat subsystem produces (verified against `HytaleServer.jar`). Two of them are assembled at runtime from a class name, so they will not be found by grepping the jar for the whole sentence.
+Backtick-quoted error strings below are the literal messages the combat subsystem produces (verified against `HytaleServer.jar`). Two of them are assembled at runtime from a class name, so they will not be found by grepping the jar for the whole sentence.
 
 - **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entity.damage.DamageCause doesn't exist!`** (logged under `Failed to validate asset!`; this replaced the pre-0.6.3 `Invalid DamageCause` wording, which no longer appears anywhere in the jar) → a key in `DamageCalculator.BaseDamage` — or in a `DamageModifiers` / `KnockbackModifiers` map on `Wielding` or `AngledWielding` — names a cause that isn't a `DamageCause` asset. All four maps run their keys through `DamageCause.VALIDATOR_CACHE.getMapKeyValidator()`, which lands in `AssetStore.validate`. Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
 - **`Missing default DamageCause assets`** → the default `DamageCause` assets failed to load. Fix: an asset-pack/install problem, not a plugin bug; verify the game install and `Assets.zip`.

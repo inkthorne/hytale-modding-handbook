@@ -80,13 +80,27 @@ boolean hasPermission(PermissionQuery query, boolean defaultValue)  // (0.6.3+) 
 `PlayerRef` forwards every overload to `PermissionsModule.get().hasPermission(uuid, …)`; the
 single-argument forms default to `false` when the node is unset.
 
-**Resolution (0.6.3):** the holder's effective node set (user grants plus every group in
-the inheritance chain) is matched against the query in this order — `-*` (deny all) →
-`-a.b.c` (exact deny) → `a.b.c` (exact grant) → deny wildcards `-a.b.*`, `-a.*` (most
-specific first) → `*` → grant wildcards `a.*`, `a.b.*`. The first hit decides; no hit
-falls through to the default value. So a deny always beats a grant at the same
-specificity, and the `hytale:Admin` group's `*` is why operators pass every check unless
-something explicitly denies the node.
+**Resolution (0.6.3):** matching happens **one node set at a time**, and the first set that
+says anything decides — it is not a single merged set. For each registered provider, in
+order: the user's own grants, then, for each of the user's groups, that group's stored nodes,
+its **virtual** nodes, then its parent chain walked upward (capped at 32 groups, so a cycle
+degrades to a warning rather than a hang). If nothing matches, `hasPermission` returns the
+default value (`false` for the single-argument overloads).
+
+*Virtual* nodes are the group assignments that live in code rather than in `permissions.json`:
+the group lists passed to `PermissionsModule.registerPermission(node, groups…)` plus the
+`setPermissionGroups(...)` declarations of every registered command (`CommandManager.createVirtualPermissionGroups()`).
+They are rebuilt at startup and on every `PermissionsModule.reload()` / `refreshVirtualGroups()`.
+
+Within one node set the query is tested in this order — `-*` (deny all) → `-a.b.c` (exact
+deny) → `a.b.c` (exact grant) → deny wildcards, **most specific first** (`-a.b.c.*`, then
+`-a.b.*`, then `-a.*`) → `*` → grant wildcards, **least specific first** (`a.*`, then
+`a.b.*`, then `a.b.c.*`).
+
+Two consequences worth internalising: within a set a deny beats a grant, but **a user-level
+grant is consulted before any group**, so a direct grant overrides a group-level deny; and
+the `hytale:Admin` group's `*` is why operators pass every check unless something more
+specific denies the node first.
 
 ## Groups & Roles
 
@@ -106,10 +120,10 @@ hytale:None  ←  hytale:Adventurer  ←  hytale:Builder  ←  hytale:WorldEdito
 | `GROUP_BUILDER` | `hytale:Builder` | Building / fly-cam |
 | `GROUP_WORLD_EDITOR` | `hytale:WorldEditor` | Builder-tool / prefab / selection editing |
 | `GROUP_SERVER_EDITOR` | `hytale:ServerEditor` | Asset-editor / pack management |
-| `GROUP_ADMIN` | `hytale:Admin` | Everything (holds the `*` wildcard); this is the `OP_GROUP` that `/op` assigns |
+| `GROUP_ADMIN` | `hytale:Admin` | Everything (holds the `*` wildcard); the group `/op self` assigns. (The older alias constant `OP_GROUP` still resolves to the same string but is `@Deprecated` as of 0.6.3 — use `GROUP_ADMIN`.) |
 
-So **`/op` no longer means "all flags on"** — it adds a player to `hytale:Admin`, a normal group that happens to
-hold `*`. You can re-scope what admin can do, or assign any other group instead.
+So **opping no longer means "all flags on"** — `/op self` (or `/op add <player>`) adds a player to `hytale:Admin`,
+a normal group that happens to hold `*`. You can re-scope what admin can do, or assign any other group instead.
 
 `HytalePermissionsProvider.resolveGroupName(String)` accepts friendly aliases: `op` → `hytale:Admin`,
 `default`/`adventure`/`adventurer` → `hytale:Adventurer`, `creative` → `hytale:WorldEditor`.
@@ -139,8 +153,12 @@ The engine's own feature nodes are also constants on `HytalePermissions` — as 
 are `PermissionQuery` values rather than `String`s (`ASSET_EDITOR`, `BUILDER_TOOLS_EDITOR`,
 `EDITOR_BRUSH_USE`, `FLY_CAM`, `NO_CLIP`, `SERVER_JOIN`, `WORLD_MAP_MARKER_TELEPORT`, …), so
 pass them to the `hasPermission(PermissionQuery)` overload or call `getId()` for the string.
-`HytalePermissions.toolPermission(String)` builds `hytale.editor.tool.<name>`
-(`EDITOR_TOOL_BASE`) for editor tools.
+`HytalePermissions.toolPermission(String)` builds `hytale.editor.tool.<toolid>` for editor tools —
+it **lowercases** the tool id it is given, so `toolPermission("LaserPointer")` is
+`hytale.editor.tool.laserpointer`. The prefix on its own is the `String` constant
+`EDITOR_TOOL_BASE` (`"hytale.editor.tool"`); the built-in tools are exposed as the
+`PermissionQuery` constants `EDITOR_TOOL_ENTITY`, `EDITOR_TOOL_RULER` and
+`EDITOR_TOOL_LASER_POINTER`.
 
 ```java
 // 0.5.x: playerRef.hasPermission(HytalePermissions.FLY_CAM)          — String
@@ -311,7 +329,15 @@ argument forms are discoverable in chat):
 | `/perm test …` | Test whether a node resolves for a user |
 | `/perm reload` | Reload the provider's backing store (`PermissionsModule.reload()`) |
 | `/setgroup …` | Set a player's group |
-| `/op`, `/op add <player>`, `/op remove <player>` | Add/remove a player from `hytale:Admin` |
+| `/op self` | Toggle **your own** membership of `hytale:Admin` (see the gating note below) |
+| `/op add <player>`, `/op remove <player>` | Add/remove another player from `hytale:Admin` |
+
+> **Gotcha:** `/op` on its own is a command collection — it prints usage, it does not op you.
+> The self-op sub-command is `/op self`, and it is deliberately hard to reach: in singleplayer
+> only the save owner may run it, and on a standalone server it refuses unless the server was
+> launched with `--allow-op`, telling you instead to add your UUID to `permissions.json` while
+> the server is off. It also refuses when a plugin has replaced the permission provider
+> (`PermissionsModule.areProvidersTampered()`).
 
 ---
 
@@ -432,7 +458,9 @@ protected void setup() {
 
 A separate subsystem from permissions, access control decides **whether a player may connect at all** (bans, join
 allow-list) rather than what an already-connected player is allowed to do. It ships as a core `JavaPlugin` module
-(`AccessControlModule`) and provides the built-in `/ban`, `/unban`, and `/whitelist …` commands — but it is also an
+(`AccessControlModule`) and provides the built-in `/ban`, `/unban`, and `/whitelist …` commands
+(`add`, `remove`, `clear`, `list`, `status`, and `enable` / `disable` — the last two flip the
+`RequireJoinPermission` config flag rather than editing a list) — but it is also an
 **extension point**: a plugin can register its own access source or swap the ban store.
 
 > **Reworked by 0.6.3.** The ban model is now a single codec-backed `Ban` value behind a `BanProvider` SPI —
@@ -450,7 +478,7 @@ allow-list) rather than what an already-connected player is allowed to do. It sh
 | `AccessControlModule` | Core module; singleton via `AccessControlModule.get()`. Entry points below |
 | `AccessProvider` (SPI, `.provider`) | A pluggable access source. `getDisconnectReason(UUID)` returns `CompletableFuture<Optional<Message>>` — a present `Message` denies the connection with that reason; empty allows it |
 | `JoinPermissionProvider` (`.provider`) | The built-in join gate: allows everyone unless `RequireJoinPermission` is set, then requires `hytale.server.join` |
-| `BanProvider` (SPI, `.provider`) | Extends `AccessProvider`; the ban store: `hasBan(UUID)`, `getBan(UUID)`, `addBan(Ban)`, `removeBan(UUID)`, `getBans()`, `load()` / `save()`; its default `getDisconnectReason` denies while `getBan(uuid).isInEffect()` |
+| `BanProvider` (SPI, `.provider`) | Extends `AccessProvider`; the ban store: `hasBan(UUID)`, `getBan(UUID)`, `addBan(Ban)`, `removeBan(UUID)`, `getBans()`, plus `default` no-op `load()` / `save()`. Its `default getDisconnectReason` denies with the ban's own `getDisconnectReason()` when `getBan(uuid)` is non-null, else denies with the generic `UNDESCRIBED_BAN` message when `hasBan(uuid)`, else allows (`NO_REASON`, an empty `Optional`). Expiry is the implementation's job — filter on `Ban.isInEffect()` inside `getBan`/`hasBan`, as `HytaleBanProvider` does |
 | `HytaleBanProvider` (`.provider`) | Default disk `BanProvider` (`bans.json`, `BAN_FILE_PATH`) |
 | `BanStorageProvider` (`.provider`) | Codec-selected factory (`CODEC`, keyed by id) that yields the `BanProvider` — `DiskBanStorageProvider` (`"Disk"`) is the built-in |
 | `Ban` (`.ban`) | A single ban (final, codec-backed `CODEC`): `new Ban(target, by, timestamp, expiresOn, reason)` — `expiresOn == null` is permanent; `getTarget()`, `getBy()`, `getTimestamp()`, `getExpiresOn()`, `getReason()`, `isInEffect()`, `getDisconnectReason()`, plus typed metadata via `getMetadata(KeyedCodec)` / `withMetadata(...)` |
@@ -486,7 +514,7 @@ AccessControlModule.get().ban(new Ban(targetUuid, adminUuid, Instant.now(),
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the 0.6.3 server (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the server (verified against `HytaleServer.jar`).
 
 - **`Cannot change permissions when a command has already completed registration`** → `requirePermission(...)`, `setPermissionGroups(...)`, or another permission setter was called after the command was registered. Fix: call it in the command constructor, before `registerCommand()`.
 - **Symptom:** `hasPermission("node")` returns `false` for a node nobody has explicitly set → the single-arg overload defaults to `false` when the node is unset. Fix: use `hasPermission("node", true)` when "unset" should mean allowed (see [With Default Value](#with-default-value)).

@@ -1173,7 +1173,7 @@ store.addComponent(ref, HitboxCollision.getComponentType(), new HitboxCollision(
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages the 0.6.3 entity subsystem produces (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages the entity subsystem produces (verified against `HytaleServer.jar`).
 
 - **`No EntityStatType found for index: <n>`** (a `WARNING` log from `EntityStatMap`, not an exception) → an `EntityStatMap` call was given a stat index that no registered stat type maps to (e.g. a hardcoded/stale integer). Fix: obtain indices from `DefaultEntityStatTypes` (`getHealth()`, `getStamina()`, ...) rather than literals.
 - **Symptom:** server-side `velocity.addVelocity(...)`/`velocity.set(...)` appear to do nothing on players → players are client-authoritative for movement, so direct velocity writes are not synchronized. Fix: use `velocity.addInstruction(impulse, config, ChangeVelocityType.Add)`, which queues a client-synced change (see [Player vs NPC Velocity](#important-player-vs-npc-velocity)). (`addVelocity` was named `addForce` before Update 5.)

@@ -1116,7 +1116,7 @@ Smaller helpers you'll mostly meet in passing:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are literal messages in the 0.6.3 `HytaleServer.jar` (the vector-format ones come from the NPC spawn command's coordinate parser, the plane one from the world generator's plane density asset).
+Backtick-quoted error strings below are literal messages in `HytaleServer.jar` (the vector-format ones come from the NPC spawn command's coordinate parser, the plane one from the world generator's plane density asset).
 
 - **`Invalid Vector3f format: must be three comma-separated floats`** / **`Invalid Vector3d format: must be three comma-separated doubles`** → a string-form vector did not parse as exactly three comma-separated numbers. Fix: format as `x,y,z` (e.g. `1.0,2.0,3.0`).
 - **`Plane normal can't be a zero vector.`** → a plane was constructed from a zero-length normal. Fix: pass a non-zero (ideally unit-length) normal.

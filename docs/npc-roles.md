@@ -1816,7 +1816,7 @@ The first three groups come from `Condition.CODEC` in `server.npc.decisionmaker`
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the NPC role/spawn loader (each re-verified against `HytaleServer.jar` for 0.6.3).
+Backtick-quoted error strings below are the literal messages thrown by the NPC role/spawn loader (each verified against `HytaleServer.jar`).
 
 - **`Unable to spawn entity with invalid role index`** → a spawn beacon `NPCs` entry references a role `Id` that does not resolve to a loaded role. Fix: the `Id` must match an existing variant's name exactly (case-sensitive), e.g. `Goblin_Scrapper`.
 - **`attempted to spawn invalid NPC role`** → a spawn marker named a role that failed to load or doesn't exist. Fix: confirm the referenced role file is present under `Server/NPC/Roles/` and validated.

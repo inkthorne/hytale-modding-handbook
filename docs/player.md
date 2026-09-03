@@ -1088,7 +1088,7 @@ public class AlwaysAllowed extends ChoiceRequirement {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the 0.6.3 color parser (`ColorParseUtil` / `ColorAlphaCodec`, verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the color parser (`ColorParseUtil` / `ColorAlphaCodec`, verified against `HytaleServer.jar`).
 
 - **`Hex color must start with '#'`** → you passed a hex string without the leading `#` to `Message.color(String hexColor)`. Fix: include it, e.g. `.color("#FF0000")` (see [Message](#message)).
 - **`Invalid color format, expected: #RGBA, #RRGGBBAA, rgba(#RGB,A), rgba(#RRGGBB,A) or rgba(R,G,B,A)`** → the color string passed to `Message.color(...)` didn't match a supported form. Fix: use a documented hex form such as `#RRGGBB` (e.g. `.color("#00FF00")`).

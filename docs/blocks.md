@@ -599,7 +599,11 @@ and neighbor shapes), evaluated against a rotatable pattern of block offsets.
 > — the directory the asset store reads — does not exist in `Assets.zip`, and all ~554
 > connected blocks still use `Stair`, `Roof` or `CustomTemplate`. The system is fully wired
 > (assets, codecs, client packets) and available to plugins, but there is no shipped example
-> to copy, so treat the JSON below as codec-derived rather than field-proven.
+> to copy. Read the JSON below accordingly: **key names, types and requiredness are
+> codec-certain** — they are taken from the codec builders and their own documentation strings,
+> the same normative source every JSON page here relies on. What is *not* corroborated is
+> **nesting and composition** (how deeply rules and shapes nest in practice) and **runtime
+> semantics** (what a given combination actually renders). Trust the keys; test the shapes.
 
 ### The two halves
 

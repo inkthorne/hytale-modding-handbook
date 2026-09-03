@@ -7,7 +7,7 @@ seo:
 
 # Plugin Lifecycle API
 
-**Doc type:** Java API · **Verified against 0.5.9**
+**Doc type:** Java API · **Verified against 0.6.3**
 
 This page covers the plugin entry point, its lifecycle phases, the registries and core modules it exposes, the `manifest.json` format, logging, and server/plugin lifecycle events.
 

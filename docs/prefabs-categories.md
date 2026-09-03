@@ -7,7 +7,7 @@ seo:
 
 # Prefab Categories
 
-**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.5.9**
+**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.3**
 
 Hytale ships 7,828 `.prefab.json` files under `Server/Prefabs`, organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 

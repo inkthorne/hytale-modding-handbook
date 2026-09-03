@@ -7,7 +7,7 @@ seo:
 
 # NPC Roles
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.5.9**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.3**
 
 This document covers NPC role asset definitions, including templates, variants, behaviors, and spawning configurations. These assets are found in `Assets.zip` under `Server/NPC/`.
 

@@ -7,7 +7,7 @@ seo:
 
 # World Generation
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.9**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as

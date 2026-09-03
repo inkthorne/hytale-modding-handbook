@@ -7,7 +7,7 @@ seo:
 
 # Trigger Volumes
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.5.9**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.6.3**
 
 New in Update 5, substantially extended in 0.6.3 (rules, signals, more events/effects). A **trigger volume** is a
 3D region (box, sphere, or cylinder) that runs a list of **effects** when something happens inside it — a player

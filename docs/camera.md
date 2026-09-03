@@ -7,7 +7,7 @@ seo:
 
 # Camera Control
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.5.9**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.3**
 
 The server can take control of a player's camera — pulling it back into a zoomed-out
 **top-down** or **side-scroller** view, repositioning it, locking its orientation, and

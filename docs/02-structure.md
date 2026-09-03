@@ -138,7 +138,7 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ### ServerVersion (target server version)
 
-> Verified against 0.5.9 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
+> Verified against 0.6.3 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
 
 > **Changed in Update 5.** `ServerVersion` is now a **semver range**, not a literal build string. It is parsed
 > into a `SemverRange` and checked by *range satisfaction* against the server's own version — the old

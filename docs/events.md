@@ -7,7 +7,7 @@ seo:
 
 # Events API
 
-**Doc type:** Java API · **Verified against 0.5.9**
+**Doc type:** Java API · **Verified against 0.6.3**
 
 This document covers the core event system. A compiling end-to-end demo of both mechanisms (global bus + ECS event system) lives in `examples/events/`. For specific event classes, see the relevant domain documentation:
 

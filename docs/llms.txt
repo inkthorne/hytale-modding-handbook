@@ -1,6 +1,6 @@
 # Hytale Modding Handbook
 
-> A Hytale server-plugin and asset-format API reference with descriptions, gotchas, and compiling examples — machine-verified against the game's HytaleServer.jar and Assets.zip (currently game version 0.5.9). Every documented Java symbol resolves against the real jar and every documented JSON key traces to shipped assets or decompiled codecs; example projects compile in CI.
+> A Hytale server-plugin and asset-format API reference with descriptions, gotchas, and compiling examples — machine-verified against the game's HytaleServer.jar and Assets.zip (currently game version 0.6.3). Every documented Java symbol resolves against the real jar and every documented JSON key traces to shipped assets or decompiled codecs; example projects compile in CI.
 
 Hytale mods are server-side Java plugins plus JSON/DSL asset packs. Start with the overview, then the index of all pages.
 

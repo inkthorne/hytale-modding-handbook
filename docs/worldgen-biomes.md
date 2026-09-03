@@ -79,7 +79,7 @@ Server/HytaleGenerator/Biomes/
 ├── Desert1/        Desert1_Oasis.json, Desert1_River.json, ...
 ├── Taiga1/         Taiga1_Redwood.json, Taiga1_Mountains.json, ...
 ├── Volcanic1/      Volcanic1_Jungle.json, Volcanic1_Caldera.json, ...
-├── Boreal1/        Boreal1_Hedera.json, Boreal1_Henges.json   (0.6.3+)
+├── Boreal1/        Boreal1_Hedera.json, Boreal1_Henges.json
 ├── Ocean1/         Oceans.json
 ├── Examples/       single-concept demo graphs
 ├── Experimental/   work-in-progress biomes
@@ -109,12 +109,18 @@ shipped biomes):
 | `EnvironmentProvider` | optional | Sky/ambient environment selection |
 | `TintProvider` | optional | Block color tint selection |
 | `FloatingFunctionNodes` | optional | Array of free-standing density nodes (typically carrying `ExportAs`) that are built but not wired into `Terrain`; unused by the shipped biomes |
-| `Tags` | optional | Generic asset tags (`{"Template": []}` on 11 shipped biomes); not read by the generator |
+| `Tags` | optional | Generic asset tags (`{"Template": []}` on 11 of the 75 shipped biomes); a `Map<String, String[]>` read by `AssetBuilderCodec.TAGS_CODEC` for every asset type, not by the generator |
 
-These are exactly the keys of the biome codec
-(`com.hypixel.hytale.builtin.hytalegenerator.assets.biomes.BiomeAsset`). There is no
-top-level `Density` key — shared fields are exported from inside `Terrain` (or from a
-`Density/` file) with `ExportAs`.
+The first seven are exactly the keys of the biome codec
+(`com.hypixel.hytale.builtin.hytalegenerator.assets.biomes.BiomeAsset.CODEC`); `Tags` comes
+from the shared `AssetBuilderCodec` every JSON asset inherits. There is no top-level
+`Density` key — shared fields are exported from inside `Terrain` (or from a `Density/` file)
+with `ExportAs`.
+
+Across the 75 shipped biome files: `Terrain` and `MaterialProvider` appear in all 75, `Name`
+in 74 (`Volcanic1/Volcanic1_Shore.json` is the one that omits it and falls back to
+`"DefaultName"`), `TintProvider` in 60, `EnvironmentProvider` in 59, `Props` in 47, and
+`FloatingFunctionNodes` in none.
 
 > There is **no** `TileBiome` / `CustomBiome` distinction, no `LayerContainer`,
 > `CoverContainer`, `PrefabContainer`, `WaterContainer`, `FadeContainer`,
@@ -232,9 +238,12 @@ Minimal solidity provider (from `Biomes/Examples/Example_CellNoise2D.json`):
 `SpaceAndDepth` layers are usually `ConstantThickness` entries (`Thickness` + `Material`);
 the other registered layer types are `RangeThickness` (`RangeMin`/`RangeMax`/`Seed`),
 `NoiseThickness` (`ThicknessFunctionXZ`), and `WeightedThickness` (`PossibleThicknesses`).
-The `SpaceAndDepth` node itself may carry a `Condition` (e.g. `GreaterThanCondition` with
-`ContextToCheck: "SPACE_ABOVE_FLOOR"` and a `Threshold`). `LayerContext` observed value:
-`"DEPTH_INTO_FLOOR"`.
+The `SpaceAndDepth` node itself may carry a `Condition` — `AlwaysTrueCondition`,
+`EqualsCondition` (`ContextToCheck` + `Value`), `GreaterThanCondition` /
+`SmallerThanCondition` (`ContextToCheck` + `Threshold`), `AndCondition` / `OrCondition`
+(`Conditions`) or `NotCondition` (`Condition`); `ContextToCheck` is
+`SPACE_ABOVE_FLOOR` or `SPACE_BELOW_CEILING`. `LayerContext` is `"DEPTH_INTO_FLOOR"` in
+every shipped biome; the enum's other value is `"DEPTH_INTO_CEILING"`.
 
 Surface layering example — grass on top, dirt below (from `Default_Flat/Default_Flat.json`):
 
@@ -437,8 +446,10 @@ The smallest complete shape — flat-ish terrain, dirt fill, required empty bran
 }
 ```
 
-(`Void.json` is essentially this with a `Constant` density of `0`, an `Empty` material,
-and a `Constant` environment/tint.)
+(`Void.json` is the real-world minimum and is even smaller: a `DAOTerrain` over
+`{"Type":"Constant","Value":0}`, a bare `{"Type":"Constant","Material":{"Solid":"Empty"}}`
+material provider with no `Solidity` wrapper at all, plus a `Constant` environment
+(`Env_Void`) and tint (`#5b9e28`).)
 
 ---
 

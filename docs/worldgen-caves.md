@@ -81,9 +81,18 @@ Server/HytaleGenerator/Density/Plains1_Caves_Mountains.json
 Server/HytaleGenerator/Density/Volcanic1_Caves_Terrain.json
 ```
 
-(`Plains1_Caves_Mountains.json` also exports a `Cave_Snakes_Ceiling` sub-field and
-`Plains1_Caves_Deeproot_Terrain.json` a `Plains1_Mountains_Cave_Deeproot_Snakes` one, so a
-biome can import just the tunnel-shape field rather than the whole cave.)
+Each of the four also publishes a second, inner `ExportAs` so a biome can import just the
+tunnel-shape noise rather than the whole cave field:
+
+| File | Root export | Inner export |
+|------|-------------|--------------|
+| `Plains1_Caves_Terrain.json` | `Plains1_Caves_Terrain` | `Plains1_Mountains_Cave_Snakes` |
+| `Plains1_Caves_Mountains.json` | `Plains1_Caves_Mountains` | `Cave_Snakes_Ceiling` |
+| `Plains1_Caves_Deeproot_Terrain.json` | `Plains1_Caves_Deeproot_Terrain` | `Plains1_Mountains_Cave_Deeproot_Snakes` |
+| `Volcanic1_Caves_Terrain.json` | `Volcanic1_Caves_Terrain` | `Volcanic1_Swamps_Giant_Roots_Wave` |
+
+(`Plains1_Caves_Deeproot_Terrain.json` is the one whose root is a plain `Mix` carrying the
+`ExportAs` rather than a `Cache`.)
 
 Each is a self-contained density graph with a root that `ExportAs` a name. Biomes then pull that
 name in. For example `Plains1_Caves_Terrain.json` exports `"Plains1_Caves_Terrain"`, and
@@ -110,8 +119,27 @@ The cave field is engineered to dip **below** the surface value (often strongly 
 the tunnels and chambers; where it does, `Min` selects it and the cell reads as empty. Everywhere
 else the cave field stays high enough that the surface field wins and the ground is untouched.
 
-There is no separate carve pass, no priority table, no corridor graph — carving is just this one
-`Min`.
+There is no separate carve pass, no priority table, no corridor graph — carving is one `Min` at
+the terrain root. What varies between biomes is the *wrapper* around the imported field, not the
+combinator:
+
+| Biome | Terrain root | How the cave field enters |
+|-------|--------------|---------------------------|
+| `Plains1_Oak`, `Plains1_Mountains`, `Desert1_Rocky`, `Desert1_Stacks` | `Min` | `Imported` directly |
+| `Plains1_Gorges`, `Taiga1_Redwood`, `Taiga1_Mountains` | `Min` | `Imported` inside a `Multiplier` (scales the carve strength) |
+| `Volcanic1_Caldera` | `Min` | `Imported` inside an `Inverter` — `Volcanic1_Caves_Terrain` is authored sign-flipped relative to the Plains fields, so it is negated before the `Min` |
+| `Volcanic1_Jungle` | `Mix` | `Imported` under the `Mix`'s third (influence) input via a `YSampled` — the cave field *selects* between two terrain fields instead of clipping one |
+| `Volcanic1_River` | `Multiplier` | `Imported` deep inside a `Cache`/`Exported` chain, not at the root |
+
+> **Gotcha:** a cave field's sign convention is not universal. `Plains1_Caves_Terrain` reads
+> "negative = hollow" and drops straight into a `Min`; `Volcanic1_Caves_Terrain` is the other
+> way round (its `Mix` returns `Constant -1` outside the depth band) and is only correct after an
+> `Inverter`. Check which way an existing field is authored before importing it.
+
+Import counts across the shipped assets (as of 0.6.3): `Plains1_Caves_Terrain` 8×,
+`Volcanic1_Caves_Terrain` 4×, `Plains1_Caves_Deeproot_Terrain` 2×, and
+`Plains1_Caves_Mountains` **0×** — that file is loaded only for its `Cave_Snakes_Ceiling`
+sub-export, so treat its top-level field as a reference graph rather than a live one.
 
 ---
 
@@ -128,6 +156,11 @@ a `Cache` (capacity 3) that exports `"Plains1_Caves_Terrain"`, wrapping a `Mix`:
   "Inputs": [ { "Type": "Mix", "Inputs": [ /* Max(...), Constant 1, CurveMapper(...) */ ] } ]
 }
 ```
+
+`Mix` takes exactly three inputs — `A`, `B`, and an influence field — so this reads as: **A** =
+the sculpted cave field (`Max` of the snake/cavern parts), **B** = `Constant 1` (solid, no cave),
+**influence** = the depth-band `CurveMapper` below. Influence `≤ 0` returns A, `≥ 1` returns B.
+That is the whole cave: sculpt a field, then fade it to "solid" outside the depth band.
 
 The editor groups (preserved in `$NodeEditorMetadata.$Groups`) name the parts of the field, which
 is the clearest description of how a cave is composed in practice:

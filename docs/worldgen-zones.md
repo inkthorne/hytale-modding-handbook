@@ -78,21 +78,23 @@ Every world structure file uses the same small set of top-level keys:
 |-----|----------|-------------|
 | `Type` | yes | Always `"NoiseRange"` in the shipped files |
 | `Biomes` | yes* | Array of biome assignments by density range (may be empty) |
-| `DefaultBiome` | yes | Biome name used outside any range / as fallback |
-| `DefaultTransitionDistance` | yes | Default blend width (blocks) between biomes |
+| `DefaultBiome` | yes | Fallback biome, used outside any range. Also a `ContainedAssetCodec` — a biome id or an inline biome definition. |
+| `DefaultTransitionDistance` | yes | Default blend width in blocks between biomes (clamped to `>= 1` at build time) |
 | `MaxBiomeEdgeDistance` | yes | Maximum distance over which biome edges are resolved |
 | `Density` | yes | Density graph whose value selects the biome (the "biome map") |
 | `Framework` | yes | Array of world-constant / positions blocks (see [Framework](#framework)) |
-| `SpawnPositions` | optional | Where players spawn |
-| `Tags` | optional | Generic asset tags (`Basic.json` carries `{"Template": []}`); not read by the generator |
+| `SpawnPositions` | optional | Where players spawn (the only key the codec marks non-required; present on 8 of the 15 shipped files) |
+| `Tags` | optional | Generic asset tags (`Basic.json`, the only file that carries them, has `{"Template": []}`); a `Map<String, String[]>` from the shared `AssetBuilderCodec`, not read by the generator |
 
 \* `Biomes` is present on most files; `Default_Flat`, `Default_Void`, and `Basic` ship it
 empty, and `Default.json` omits it entirely — all four rely solely on `DefaultBiome`.
 
-These are exactly the keys of the `NoiseRange` codec
+The seven non-`Tags` keys are exactly the keys of the `NoiseRange` codec
 (`com.hypixel.hytale.builtin.hytalegenerator.assets.worldstructures.basic.BasicWorldStructureAsset`;
-each `Biomes` entry is a `BiomeRangeAsset` with `Biome`/`Min`/`Max`). A `BiomeTransitions`
-key documented for 0.5.9 is neither in the codec nor in any shipped file as of 0.6.3.
+each `Biomes` entry is a `BiomeRangeAsset` with `Biome`/`Min`/`Max`); `Tags` is inherited
+from the shared `AssetBuilderCodec`. `NoiseRange` is also the *only* registered
+`WorldStructureAsset` type, and all 15 shipped files use it. A `BiomeTransitions` key
+documented for 0.5.9 appears in neither the 0.6.3 codec nor any shipped file.
 
 > There is **no** `ZonePatternGenerator`, `BiomePatternGenerator`, Voronoi `CellSize`,
 > `ZoneDiscoveryConfig`, `UniquePrefabContainer`, or `CaveGenerator` block. Biome
@@ -102,9 +104,11 @@ key documented for 0.5.9 is neither in the codec nor in any shipped file as of 0
 
 ## Biome Assignment (NoiseRange)
 
-With `Type: "NoiseRange"`, each entry in `Biomes` maps a half-open band of the `Density`
-value to a biome by name. Where the density falls between two entries, the named biomes
-blend over `DefaultTransitionDistance` blocks.
+With `Type: "NoiseRange"`, each entry in `Biomes` maps a band of the `Density` value to a
+biome. The band is **fully inclusive** on both ends — `BiomeRangeAsset.getRange()` returns
+`DoubleRange.inclusive(Min, Max)`, so shipped files deliberately butt one entry's `Max`
+against the next entry's `Min`. Where the density falls between two entries, the named
+biomes blend over `DefaultTransitionDistance` blocks (clamped to a minimum of `1`).
 
 ```json
 "Type": "NoiseRange",
@@ -120,9 +124,9 @@ blend over `DefaultTransitionDistance` blocks.
 
 | Field | Description |
 |-------|-------------|
-| `Biome` | Name of the biome file (without extension) under `Biomes/` |
-| `Min` | Lower density bound (inclusive in practice) |
-| `Max` | Upper density bound |
+| `Biome` | The biome. Its codec is a `ContainedAssetCodec`, so this is either the **id** of a biome asset (the file name without extension, e.g. `"Plains1_Oak"`) *or* an inline biome object. Every shipped file uses the id form. |
+| `Min` | Lower density bound (**inclusive**) |
+| `Max` | Upper density bound (**inclusive**) |
 
 Ranges are ordered low→high and typically over-extend their outer bounds (e.g. `-1`/`2`)
 so the field never falls outside coverage. `DefaultBiome` covers anything unmatched.
@@ -143,13 +147,26 @@ in the shared world biome map by name:
 ```
 
 `Biome-Map` is defined once in `Density/Map_Default.json` as an `Exported` density node
-(`"ExportAs": "Biome-Map"`). It mixes continent, river, and ocean fields built from several
-`SimplexNoise2D` sources through `Mix`/`Min`/`Normalizer`/`Clamp`/`Distance` nodes, and it
-also exports sub-fields such as `World-Continent-Map` and `World-River-Map`. Portal
-structures import a different map (`Biome-Map-Portals`, from `Density/Map_Portals.json`;
-`Map_Portals_Oasis.json` exports `Biome-Map-Portals-Oasis`). Two further maps ship unused by
-any structure: `Map_Default_Tiles.json` (`Biome-Map-Tiles`, a cell-based layout that also
-exports `World-Biome-Cells`) and `Map_Default_Tiles_Rivers.json` (`Biome-Map-Tiles-Rivers`).
+(`"ExportAs": "Biome-Map"`, `"SingleInstance": true`). It mixes continent, river, and ocean
+fields built from several `SimplexNoise2D` sources through `Mix`/`Min`/`Normalizer`/`Clamp`/
+`Distance` nodes, and also exports the sub-fields `World-Continent-Map` and `World-River-Map`.
+
+Which map each shipped structure reads (as of 0.6.3):
+
+| Structure(s) | `Density` | Defined in |
+|--------------|-----------|------------|
+| `Zone1_Plains1`, `Zone2_Desert1`, `Zone3_Taiga1`, `Zone4_Volcanic1`, `Basic`, `Default` | `Imported "Biome-Map"` | `Density/Map_Default.json` |
+| `Portals_Hedera`, `Portals_Henges`, `Portals_Oasis` | `Imported "Biome-Map-Portals"` | `Density/Map_Portals.json` |
+| `Portals_Jungles` | `Imported "Biome-Map-Tiles"` | `Density/Map_Default_Tiles.json` (a cell-based layout that also exports `World-Biome-Cells`) |
+| `Portals_Taiga` | `Imported "Biome-Map-Tiles-Rivers"` | `Density/Map_Default_Tiles_Rivers.json` |
+| `Default_Flat`, `Default_Void` | inline `Constant 0` | — |
+| `Test_Features` | inline `YOverride` → `Cache` → `PositionsCellNoise` | — |
+| `Dev/Interpolation` | inline `SimplexNoise2D` | — |
+
+`Map_Default.json` itself imports `Biome-Map-Tiles`, so the tile map feeds the main map as
+well as `Portals_Jungles`. The one map no structure reads is
+`Density/Map_Portals_Oasis.json` (`Biome-Map-Portals-Oasis`) — `Portals_Oasis.json` uses the
+plain `Biome-Map-Portals` despite the name.
 
 Density can also be inline rather than imported. `Default_Flat.json` and
 `Default_Void.json` use a flat field, and `Dev/Interpolation.json` inlines a noise field:
@@ -237,7 +254,7 @@ Position graph node types observed in world structures:
 |------|-----------|---------|
 | `List` | `Positions[]` of `{X,Y,Z}` | Explicit fixed points |
 | `Imported` | `Name` | Pull a named positions graph |
-| `Offset` | `OffsetY`, `Positions` | Shift child positions (e.g. lift spawns up) |
+| `Offset` | `OffsetX` / `OffsetY` / `OffsetZ` (plus a vector `Offset`), `Positions` | Shift child positions (e.g. lift spawns up) |
 | `Bound` | `Bounds.PointA`/`PointB`, `Positions` | Restrict positions to a box |
 | `FieldFunction` | `FieldFunction`, `Delimiters[]` (`Min`/`Max`), `Positions` | Keep points where a sampled field is in range |
 | `Mesh2D` / `Mesh` | `PointsY`, `PointGenerator` | Generate a candidate point grid |
@@ -324,14 +341,23 @@ No ranges; a flat density and a single default biome.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the world-structure loader (verified against `HytaleServer.jar`).
+Backtick-quoted strings below are the literal messages `BasicWorldStructureAsset` and the
+`HytaleGenerator` plugin log (verified against `HytaleServer.jar` 0.6.3). All of them are
+**warnings** — the world still generates, just wrong — so watch the server log rather than
+waiting for a load failure.
 
-- **`Invalid json-type for Biomes property. Must be an array!`** → the `Biomes` top-level key is present but not a JSON array. Fix: make `Biomes` an array of assignment objects (it may be empty, but it must be `[]`, not an object/scalar).
-- **`Invalid json-type for biome entry. Must be an object!`** → an element of the `Biomes` array is not an object. Fix: each entry must be an object like `{ "Biome": "...", "Min": -1, "Max": 0 }`.
-- **`Unexpected type for 'UniqueZones' field, expected array`** → the `UniqueZones` field is the wrong JSON type. Fix: declare it as an array.
-- **`Unexpected type for unique zone entry:`** / **`Unexpected type for 'Parent' field in unique zone entry:`** → an entry in `UniqueZones` (or its `Parent` field) is the wrong type. Fix: each unique-zone entry must be an object and `Parent` must be the expected scalar type.
-- **`Could not resolve all unique climate zones, resolved`** → the climate/zone resolver could not place every declared unique zone. Fix: reduce the number of unique zones or widen their candidate ranges so they all fit.
+- **`Reverting to empty WorldStructure because couldn't find default Biome asset with id: `** — assembled line appends the id → `DefaultBiome` names a biome that is not in the asset store. The *entire* structure is thrown away and replaced by `WorldStructure.DEFAULT_INSTANCE`, so every `Biomes` range is lost too. Fix: match the biome file name exactly (see the next gotcha).
+- **`Couldn't find Biome asset with name `** — assembled line appends the id → one `Biomes` entry's `Biome` id does not resolve. Only that band is dropped; the rest of the structure loads, so the symptom is a missing biome, not a broken world.
+- **`World Structure asset not found: `** (assembled line appends the structure name) / **`World Structure asset not loaded.`** (complete literal) → the world's generator profile names a structure that is not in `WorldStructures/`, or the store has not finished loading. Fix: check the structure name in the world's config against the file name.
+- **`Couldn't find Density asset exported with name: '`** — assembled line `Couldn't find Density asset exported with name: '<name>'. Using empty Node instead.` → the structure's `Density` is an `Imported` node naming a field nothing exports. It degrades to a constant `0` field, so the whole world collapses onto whichever single `Biomes` band contains `0` (or `DefaultBiome` if none does). Fix: confirm the `Density/*.json` that publishes that `ExportAs` is present. The `SpawnPositions` equivalent is **`Couldn't find Positions asset exported with name: '`**.
+- **Symptom:** a `"Biome": "Plains1_Oak"` entry resolves to the default biome even though `Plains1_Oak.json` exists → references use the **file name** (without extension), not the file's `Name` display field, and the match is case-sensitive.
 - **Symptom:** you added a `ZonePatternGenerator`, `BiomePatternGenerator`, Voronoi `CellSize`, `ZoneDiscoveryConfig`, or `CaveGenerator` block and it is ignored → none of those exist in the format. Fix: biome distribution is driven entirely by the `Density` field and the `Biomes` ranges (see [Top-Level Structure](#top-level-structure)).
+
+> The `Invalid json-type for Biomes property`, `Unexpected type for 'UniqueZones' field` and
+> `Could not resolve all unique climate zones` messages that older versions of this page
+> listed live in `com.hypixel.hytale.server.worldgen.loader.*` — the **legacy** folder-of-JSON
+> generator behind `WorldGen.Type: "Hytale"`. There is no `UniqueZones` key on a
+> `HytaleGenerator` world structure.
 
 ---
 

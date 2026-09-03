@@ -60,7 +60,7 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 | Node type | Family | Description |
 |-----------|--------|-------------|
 | `SimplexNoise2D` / `CellNoise2D` | Density source | Noise fields (the core scalar sources) |
-| `BaseHeight` | Density source | Injects a named world reference height (`Base`, `Bedrock`) |
+| `BaseHeight` | Density source | Injects a named world reference height (`Base`, `Water`, `Bedrock`) |
 | `Imported` / `Exported` | Reuse | Pull / publish a field by name across graphs |
 | `Sum` / `Min` / `Max` / `Mix` | Density combiner | Combine input fields |
 | `CurveMapper` / `Normalizer` / `Clamp` / `Pow` / `Abs` | Density shaping | Remap or reshape a field |
@@ -77,6 +77,9 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 |----------|------|-------------|
 | [Biomes](worldgen-biomes.md) | `worldgen-biomes.md` | Biome files: `Terrain`, `MaterialProvider`, `Props`, environment, tint |
 | [Zones / World Structures](worldgen-zones.md) | `worldgen-zones.md` | `WorldStructures/*.json`: biome assignment by noise range, framework |
+| [Terrain & Density](worldgen-terrain.md) | `worldgen-terrain.md` | Building heightfields out of density graphs |
+| [Caves](worldgen-caves.md) | `worldgen-caves.md` | Carving cave systems with 3D density fields |
+| [Worldgen Prefabs](worldgen-prefabs.md) | `worldgen-prefabs.md` | Placing prefabs and props from generation graphs |
 
 ---
 
@@ -106,8 +109,9 @@ Server/HytaleGenerator/
 └── Settings/           # Generator runtime settings (Settings.json)
 ```
 
-(The former `Graphs/` example folder is gone as of 0.6.3; the four `Graph*/` folders and
-`Props/` replaced it, each shipping a single `Example*.json`.)
+(The former `Graphs/` folder — a single `ExampleGraph.json` — is gone as of 0.6.3,
+replaced by the four `Graph*/` folders above, each shipping one `Example*.json`.
+`Positions/`, `PropDistributions/` and `Props/` are unchanged single-example folders.)
 
 How the pieces fit together:
 
@@ -132,8 +136,9 @@ appear in the assets, and both are valid input to the generator:
   groups, comments). Editor-only keys are prefixed with `$`.
 - **`$Position` / `$Title`** — used by editor-exported files instead of `$NodeId`.
 
-Editor-only metadata (`$NodeId`, `$Position`, `$Title`, `$NodeEditorMetadata`,
-`$WorkspaceID`, `$Groups`, `$Comment`, `$FloatingNodes`, `$Links`) does not affect
+Editor-only metadata (`$NodeId`, `$Position` — an `{"$x","$y"}` pair — `$Title`,
+`$NodeEditorMetadata` and its `$Nodes`/`$Links`/`$FloatingNodes`/`$Comments`,
+`$WorkspaceID`, `$Groups`, `$Comment`) does not affect
 generation; the load-bearing fields are `Type`, the node's parameters, and its child
 node references (commonly under `Inputs`).
 
@@ -195,7 +200,7 @@ maps, prop probability, and tint/environment selection.
 | `SimplexNoise2D` | 2D Simplex/fractal noise (`Lacunarity`, `Persistence`, `Octaves`, `Scale`, `Seed`) |
 | `CellNoise2D` | Cellular/Worley noise (`ScaleX`, `ScaleZ`, `Jitter`, `CellType`, `Octaves`, `Seed`) |
 | `Constant` | Fixed `Value` |
-| `BaseHeight` | The world base/sea-level reference (`BaseHeightName`: `"Base"`, `Distance` flag) |
+| `BaseHeight` | A named world reference height (`BaseHeightName`: `"Base"`, `"Water"` or `"Bedrock"`, declared by the world structure's `DecimalConstants`; plus a `Distance` flag) |
 | `Imported` | Pulls a value exported elsewhere by `Name` (e.g. `"Biome-Map"`) |
 | `Exported` | Wraps a subgraph and publishes it (`ExportAs`, optional `SingleInstance`) |
 
@@ -205,7 +210,7 @@ maps, prop probability, and tint/environment selection.
 |------|-------------|
 | `Sum` | Adds its `Inputs` |
 | `Min` / `Max` | Lower / upper envelope of `Inputs` |
-| `Mix` | Blends `Inputs` |
+| `Mix` | Linear blend of exactly **three** `Inputs`: `A`, `B`, and an influence field — `≤ 0` gives `A`, `≥ 1` gives `B`, in between `A·(1−t) + B·t`. Any other input count silently yields constant `0`. |
 | `Abs` | Absolute value |
 | `Pow` | Raises input to `Exponent` |
 | `Inverter` | Negates |
@@ -244,12 +249,22 @@ by terrain biomes is `Solidity` (it has separate `Solid` and `Empty` branches).
 | `Solidity` | Splits placement into `Solid` and `Empty` (required) branches |
 | `Constant` | Always places one `Material` |
 | `Queue` | Tries providers in order; first match wins |
-| `SimpleHorizontal` | Applies a provider within a Y band (`TopY`/`BottomY` + `BaseHeight`) |
-| `SpaceAndDepth` | Layers materials by depth into the floor (`Layers`, `LayerContext`) |
-| `FieldFunction` | Selects materials by sampling a density `FieldFunction` against `Delimiters` |
+| `SimpleHorizontal` | Applies a nested `Material` provider within a Y band (`TopY`/`BottomY`, all three required; optional `TopBaseHeight`/`BottomBaseHeight` name the reference heights the band is measured from) |
+| `SpaceAndDepth` | Layers materials by depth into the floor (`Layers`, `LayerContext`, `MaxExpectedDepth`, `Condition`) |
+| `FieldFunction` | Selects materials by sampling a density `FieldFunction` against `Delimiters` (each `From`/`To`/`Material`) |
 
-A `Material` is a leaf with a block id, e.g. `{"Solid": "Rock_Stone"}`,
+A `Material` is a leaf (`MaterialAsset`) with a block id, e.g. `{"Solid": "Rock_Stone"}`,
 `{"Solid": "Soil_Dirt"}`, `{"Solid": "Empty"}`, or a fluid `{"Fluid": "Water_Source"}`.
+`Solid` and `Fluid` are independent — a cell can carry both — and two optional keys rotate
+the solid:
+
+| Key | Meaning |
+|-----|---------|
+| `SolidBottomUp` | Boolean. Applies a 180° **pitch** (`RotationTuple.of(None, OneEighty, None)`), i.e. places the block upside-down. Widely used in the shipped biomes (stalactites, hanging vines). |
+| `SolidRotation` | An explicit orthogonal rotation: `{"Yaw": …, "Pitch": …, "Roll": …}`, each a `Rotation` enum name. Takes precedence — if it is anything but all-`None`, `SolidBottomUp` is ignored. |
+
+Because `MaterialAsset` is an *asset* codec, a `Material` value may equally be the id
+string of a standalone material asset instead of an inline object.
 
 ### Provider / selection nodes
 
@@ -265,14 +280,15 @@ Used inside biome `Props` and in `Assignments/*.json`:
 
 | Type | Description |
 |------|-------------|
-| `Mesh2D` / `Mesh` | Point grids (`PointGenerator`, `Jitter`, `Scale*`, `Seed`) for scatter |
-| `Occurrence` | Gates points by a probability `FieldFunction` |
-| `FieldFunction` | Maps a density field to assignments via `Delimiters` (`Min`/`Max`) |
-| `Weighted` | Random weighted choice among `WeightedAssignments` |
-| `Cluster` | Spawns grouped props with a `DistanceCurve` |
+| `Mesh2D` | Position provider: a point grid (`PointGenerator`, `PointsY`) |
+| `Mesh` | The point generator `Mesh2D` nests (`Jitter`, `ScaleX`/`ScaleY`/`ScaleZ`, `Seed`) |
+| `Occurrence` | Gates `Positions` by a probability `FieldFunction` (plus `Seed`) |
+| `FieldFunction` | Maps a density field to assignments via `Delimiters` (`Min`/`Max`/`Assignments`) |
+| `Weighted` | Random weighted choice among `WeightedAssignments` (plus `SkipChance`, `Seed`) |
+| `Cluster` | Spawns grouped props (`Range`, `DistanceCurve`, `WeightedProps`, `Pattern`, `Scanner`) |
 | `Constant` (Assignments) | Always assigns one `Prop` |
-| `Prefab` | Places prefab(s) by path (`WeightedPrefabPaths`, `Path`, `Weight`) |
-| `Column` | Places a stack of blocks (`ColumnBlocks`) |
+| `Prefab` | Places prefab(s) by path (`WeightedPrefabPaths` of `Weight`/`Path`; also `Directionality`, `Scanner`, `BlockMask`, `LoadEntities`) |
+| `Column` | Places a stack of blocks (`ColumnBlocks`, `Material`, `Y`, `Scanner`, `BlockMask`, `Directionality`) |
 | `Imported` | Pulls an assignment/positions graph by `Name` |
 
 ---
@@ -296,12 +312,14 @@ Used inside biome `Props` and in `Assignments/*.json`:
 These are the shipped values (codec:
 `com.hypixel.hytale.builtin.hytalegenerator.assets.SettingsAsset`). The three
 `*PriorityConcurrency` keys size the generator's low/normal/high-priority worker pools; a
-value `> 0` is used as-is (capped to the CPU count), while `0` (the shipped value) means
-*auto* — the plugin picks a default per CPU count (`HytaleGenerator.AUTO_CONCURRENCY`).
-The in-game `/worldgen2 concurrency <low> <normal> <high>` command overrides them at
-runtime. `BufferCapacityFactor`, `TargetViewDistance`, and `TargetPlayerCount` size the
-chunk-request buffers. (The single `CustomConcurrency` key documented for 0.5.9 no longer
-exists as of 0.6.3 — it was split into the three priority keys.)
+value `> 0` is used as-is, while `0` (`HytaleGenerator.AUTO_CONCURRENCY_LEVEL`, the shipped
+value) means *auto* — the plugin picks a default per CPU count
+(`HytaleGenerator.getDefaultConcurrency()`). The in-game
+`/worldgen2 concurrency <low> <normal> <high>` command overrides them at runtime; unlike
+the settings values, an override *is* capped to `Runtime.availableProcessors()`.
+`BufferCapacityFactor`, `TargetViewDistance`, and `TargetPlayerCount` size the
+chunk-request buffers. (0.5.9's single concurrency setting — `SettingsAsset`'s
+`customConcurrency` field — is gone as of 0.6.3, split into the three priority keys.)
 
 ---
 
@@ -349,10 +367,13 @@ void shutdown()                                // default method, no-op
   "nobody is waiting" value.
 - The default `getDefaultSpawnProvider(int)` wraps `getSpawnPoints(int)` in a
   `FitToHeightMapSpawnProvider`.
-- A sub-interface `IWorldGen.Cubic` (0.6.3+) adds a per-*section* entry point,
-  `generate(int seed, int x, int y, int z, StillNeededSection, SectionPriority)`, returning a
-  `Holder<ChunkStore>` for one 32³ section; the chunk store uses it when the world runs in
-  cubic-section mode (`ChunkStore.supportsCubicSections()`).
+- A sub-interface `IWorldGen.Cubic` (new as of 0.6.3) adds a per-*section* entry point,
+  `generate(int seed, int x, int y, int z, IWorldGen.StillNeededSection,
+  IWorldGen.SectionPriority)`, returning a `CompletableFuture<Holder<ChunkStore>>` for one
+  32³ section; the chunk store uses it when the world runs in cubic-section mode
+  (`ChunkStore.supportsCubicSections()`). Both callback interfaces are nested in
+  `IWorldGen`: `StillNeededSection.test(int x, int y, int z)` and
+  `SectionPriority.fetchPriority(int x, int y, int z)`.
 - The world's active generator hangs off the chunk store:
   `world.getChunkStore()` → `ChunkStore.getGenerator()` / `setGenerator(IWorldGen)` /
   `shutdownGenerator()`.
@@ -374,9 +395,9 @@ Registered `Type` values (as of 0.6.3):
 | `Flat` | `FlatWorldGenProvider` | core (`Universe`) |
 | `Void` | `VoidWorldGenProvider` | core (`Universe`) |
 | `Dummy` | `DummyWorldGenProvider` (internal no-op) | core (`Universe`) |
-| `CubicTest` | `CubicTestWorldGenProvider` (0.6.3+; a fixed test platform with scattered prefabs, used by the shipped `Instances/CubicTest`) | core (`Universe`) |
+| `CubicTest` | `CubicTestWorldGenProvider` (new as of 0.6.3; a fixed test platform with scattered prefabs, used by the shipped `Instances/CubicTest`) | core (`Universe`) |
 | `HytaleGenerator` | the node-graph generator documented on this page | `HytaleGenerator` plugin |
-| `Hytale` | `HytaleWorldGenProvider` (fixed named generator) | `WorldGenPlugin` |
+| `Hytale` | `HytaleWorldGenProvider` — the legacy folder-of-JSON generator; keys `Name` (default `"Default"`), `Version` (a semver, default `0.0.0`) and `Path` (defaults to the server's world-gen folder) | `WorldGenPlugin` |
 
 A plugin registers its own provider type on the shared codec, the same way the built-ins
 do:
@@ -388,7 +409,7 @@ IWorldGenProvider.CODEC.register("MyGen", MyProvider.class, MyProvider.CODEC);
 After that, `"WorldGen": { "Type": "MyGen", ... }` in a world's `config.json` decodes to
 your provider; at runtime it is reachable via
 `world.getWorldConfig().getWorldGenProvider()` (and swappable with
-`setWorldGenProvider(...)` on the same universe-level `WorldConfig`).
+`setWorldGenProvider(...)` on the same `WorldConfig`).
 
 ### FlatWorldGenProvider (`Type: "Flat"`)
 
@@ -398,7 +419,7 @@ Generates a flat world from a list of layers. Codec fields: `Tint` (a color, def
 | JSON key | Field | Meaning |
 |----------|-------|---------|
 | `From` | `int from` | Bottom Y of the layer (inclusive; clamped to ≥ 0) |
-| `To` | `int to` | Top Y of the layer (clamped to ≤ 320) |
+| `To` | `int to` | Top Y of the layer (**exclusive**; clamped to ≤ 320, and validated `> From`) |
 | `BlockType` | `String blockType` | Block asset id to fill with |
 | `Environment` | `String environment` | Environment asset id for the layer |
 
@@ -519,11 +540,17 @@ worldgen.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the world-generator loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the world-generator loaders (verified against `HytaleServer.jar`).
 
-- **`Invalid world gen name:`** → a world generator was registered/referenced with an empty or malformed name. Fix: use a valid generator name.
-- **`World gen path must be within a trusted directory:`** → a generator's resource path points outside the allowed roots. Fix: keep generator assets under the trusted `Server/HytaleGenerator/` tree.
-- **Symptom:** a node fails to load with a `Property … must be of type …` message → a node parameter has the wrong JSON type (e.g. a string where a number is expected). Fix: match the parameter to its declared type; the load-bearing fields on every node are `Type`, its parameters, and child references under `Inputs` (see [The Node-Graph Model](#the-node-graph-model)).
+All three come from the **legacy `Type: "Hytale"` provider** (`HytaleWorldGenProvider` +
+`ChunkGeneratorJsonLoader`), which loads a folder of JSON under a `Path`/`Name`/`Version`
+config — *not* from the `HytaleGenerator` node-graph assets this page documents. The
+node-graph generator loads through the asset codecs instead, so a malformed node there
+surfaces as a codec/asset-store error naming the offending key.
+
+- **`Invalid world gen name:`** → the `Name` in a `Type: "Hytale"` `WorldGen` block did not resolve to a directory inside the world-gen path. Fix: use a generator folder name that exists under the configured `Path` (or `Universe.getWorldGenPath()`).
+- **`World gen path must be within a trusted directory:`** → the `Path` key of a `Type: "Hytale"` `WorldGen` block points outside the server's trusted roots (`PathUtil.isInTrustedRoot`). Fix: keep the folder inside the server directory, or drop `Path` to use the default world-gen folder.
+- **Symptom:** a node fails to load with a `Property … must be of type …` message (`procedurallib.json.JsonLoader`) → a node parameter in a legacy generator's JSON has the wrong type (e.g. a string where a number is expected). Fix: match the parameter to its declared type; the load-bearing fields on every node are `Type`, its parameters, and child references under `Inputs` (see [The Node-Graph Model](#the-node-graph-model)).
 
 ---
 
@@ -531,4 +558,7 @@ Backtick-quoted error strings below are the literal messages thrown by the world
 
 - [Biomes](worldgen-biomes.md) — biome file structure
 - [Zones / World Structures](worldgen-zones.md) — biome assignment and world framework
+- [Terrain Density Graphs](worldgen-terrain.md) — the density vocabulary in depth
+- [Caves](worldgen-caves.md) — carving with density fields
+- [Props & Structure Placement](worldgen-prefabs.md) — prop, prefab and assignment graphs
 - [Block System](blocks.md) — block ids used as materials

@@ -82,6 +82,7 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 | [Delimiters](#delimiters) | Min/Max gating on a field |
 | [Prop types](#prop-types) | Prefab, Cluster, Column, Cuboid, Union, Density |
 | [Directionality & Scanner](#directionality--scanner) | Rotation and vertical placement |
+| [Block masks](#block-masks) | What a prop may place and overwrite |
 | [Positions & PropDistributions](#positions--propdistributions) | Standalone position graphs |
 | [Worked examples](#worked-examples) | Boulders, trees, ore veins |
 | [What does NOT exist](#what-does-not-exist) | Removed fictional schema |
@@ -108,7 +109,7 @@ entry has:
 | Field | Description |
 |-------|-------------|
 | `Skip` | When `true`, the entry is disabled. |
-| `Runtime` | Integer placement phase/pass. |
+| `Runtime` | Integer placement pass. The generator collects every distinct value across a biome's `Props[]` and runs one `PropStage` per index, in ascending order, so a later pass sees what earlier passes placed. The shipped biomes use `0` (112 entries), `1` (33) and `2` (9). |
 | `Positions` | A positions node (where to attempt placement). |
 | `Assignments` | What to place — usually `{ "Type": "Imported", "Name": "<assignment>" }`. |
 | `PropDistribution` | Alternative to the `Positions`+`Assignments` pair: a single prop-distribution node (see [Positions & PropDistributions](#positions--propdistributions)). |
@@ -220,7 +221,7 @@ References a pre-authored structure by path, with weighted variants.
 | `LoadEntities` | Whether to spawn the prefab's entities (observed `true`). |
 | `Directionality` | Rotation rule (see below). |
 | `Scanner` | Vertical scan to find the placement Y (see below). |
-| `BlockMask` | Optional `DontPlace` / `DontReplace` block sets (e.g. `Biomes/Examples/Example_Prop.json` refuses to overwrite `Soil_Dirt`). |
+| `BlockMask` | Optional `DontPlace` / `DontReplace` material sets — see [Block masks](#block-masks) below. |
 | `MoldingDirection` / `MoldingChildren` / `MoldingPattern` / `MoldingScanner` | Terrain-conforming options (observed `"None"` / `false`; the pattern/scanner pair is unused by the shipped files). |
 
 ```json
@@ -320,8 +321,9 @@ Places blocks wherever a 3D `Density` field exceeds a threshold — used for ore
 | `Scanner` | Vertical band to scan (e.g. `MinY: 60`, `MaxY: 120`, `BaseHeightName: "Bedrock"`). |
 | `Material` | The block to place (a `Solidity` provider, e.g. `Ore_Iron_Stone`). |
 | `Density` | A density node (e.g. `Sum` of `SimplexNoise3D` + `Anchor`/`Cube`). |
-| `PlacementMask` | A `BlockMask` with `DontPlace` / `DontReplace` block sets. |
-| `Range` | A `Point3D` cluster extent. |
+| `PlacementMask` | A `BlockMask` (see [Block masks](#block-masks)). |
+| `Range` | The placement extent — a `Vector3i`, i.e. `{"X":…,"Y":…,"Z":…}`. |
+| `Bounds` | Optional explicit bounds for the field sample. |
 
 ```json
 {
@@ -329,7 +331,8 @@ Places blocks wherever a 3D `Density` field exceeds a threshold — used for ore
   "Material": { "Type": "Solidity", "Solid": { "Type": "Constant", "Material": { "Solid": "Ore_Iron_Stone" } } },
   "Density": { "Type": "Sum", "Inputs": [ { "Type": "Normalizer", "Inputs": [ { "Type": "SimplexNoise3D", "ScaleXZ": 4, "ScaleY": 4, "Seed": "A" } ] }, "..." ] },
   "Scanner": { "Type": "ColumnLinear", "MaxY": 120, "MinY": 60, "BaseHeightName": "Bedrock", "ResultCap": 1 },
-  "PlacementMask": { "DontPlace": { "Materials": [ { "Solid": "Empty" } ] }, "DontReplace": { "Materials": [ { "Solid": "Empty" } ] } }
+  "PlacementMask": { "DontPlace":   { "Inclusive": true, "Materials": [ { "Solid": "Empty" } ] },
+                     "DontReplace": { "Inclusive": true, "Materials": [ { "Solid": "Empty" } ] } }
 }
 ```
 
@@ -368,12 +371,35 @@ pattern such as `Plains1_OakPattern_Floor`); also registered: `Wall`, `Surface`,
 
 | Field | Meaning |
 |-------|---------|
-| `Type` | Observed: `ColumnLinear` (also registered: `ColumnRandom`, `Linear` — `Axis`, `AscendingOrder`, `Range` — `Random`, `Radial`, `Area`, `Direct`, `Origin`, `Queue`, `Imported`). |
+| `Type` | Observed: `ColumnLinear`. The full registered set is `ColumnLinear`, `ColumnRandom`, `Linear` (`Axis`, `AscendingOrder`, `Range`, `Scanner`), `Random`, `Radial`, `Area`, `Origin` (the class is `DirectScannerAsset`, but `"Origin"` is the `Type` string), `Queue` and `Imported`. |
 | `MinY` / `MaxY` | Scan range. |
 | `RelativeToPosition` | Whether the range is relative to the candidate point. |
-| `BaseHeightName` | Reference height: `"Base"` or `"Bedrock"`. |
+| `BaseHeightName` | Reference height named by the world structure's `DecimalConstants`: `"Base"`, `"Water"` or `"Bedrock"`. |
 | `TopDownOrder` | Scan direction. |
 | `ResultCap` | Max placements found per column (usually `1`). |
+
+---
+
+## Block masks
+
+A `BlockMask` (inline on a prop, or a file under `BlockMasks/`) decides which blocks a prop
+may write and which existing blocks it may overwrite.
+
+| Key | Meaning |
+|-----|---------|
+| `DontPlace` | A material set of blocks the prop may **not** write (`BlockMask.canPlace` = *not* in this set). |
+| `DontReplace` | A material set of existing world blocks the prop may **not** overwrite (`canReplace` = *not* in this set), used when no `Advanced` entry matches. |
+| `Advanced` | Per-source overrides: entries of `Source` (a material set of the prop's own blocks) and `CanReplace` (the material set those blocks may overwrite). The first matching `Source` wins and bypasses `DontReplace` entirely. |
+| `ExportAs` / `Import` | Publish this mask under a name / pull one in by name. |
+
+A material set is `{"Inclusive": <bool>, "Materials": [ … ]}`, and **`Inclusive` inverts the
+whole set**: `MaterialSet.test` returns `contains && Inclusive || !contains && !Inclusive`.
+
+> **Gotcha:** because both fields are phrased as *don't*, an `Inclusive: false` set reads as
+> a double negative. `Biomes/Examples/Example_Prop.json` carries
+> `"DontReplace": {"Inclusive": false, "Materials": [{"Solid": "Soil_Dirt"}]}` — the set
+> matches everything *except* `Soil_Dirt`, and `canReplace` is its negation, so that prop
+> may overwrite **only** `Soil_Dirt`. It does not "protect" dirt.
 
 ---
 
@@ -408,10 +434,17 @@ named base height, e.g. `BedName: "Water"`), `Anchor`, `SimpleHorizontal`, `Cach
 
 **PropDistributions** pair positions with assignments. A biome `Props[]` entry may carry a
 `PropDistribution` instead of `Positions`+`Assignments`; `Biomes/Taiga1/Taiga1_River.json` uses a
-`Union` (`PropDistributions[]`) of `Assigned` entries, each with a `PropDistribution` (here a
-`Positions` distribution wrapping a positions graph), an `Assignments` node, and an
-`OverrideAllProps` flag. Registered distribution types: `Constant` (`Positions` + `Prop`),
-`Assigned`, `Positions`, `Union`, `Anchor`, `Graph`, `None`, and `Imported`.
+`Union` (`PropDistributions[]`) of `Assigned` entries, each carrying a `PropDistribution`
+(here a `Positions` distribution wrapping a positions graph) and an `Assignments` node.
+`Assigned` also accepts an `OverrideAllProps` boolean — omitted in the shipped file, so it
+defaults to `false`, meaning the assignment only fills positions that do not already hold a
+prop; `true` makes it overwrite whatever a previous distribution put there.
+
+Registered distribution types and their keys: `Constant` (`Positions` + `Prop`), `Assigned`
+(`PropDistribution`, `Assignments`, `OverrideAllProps`), `Positions` (`Positions`), `Union`
+(`PropDistributions[]`), `Anchor` (`PropDistribution`, `Reversed`), `Graph` (`GraphGenerator`,
+`ContentLayer`), `None`, and `Imported` (`Name`). All of them also take the shared `Skip` and
+`ExportAs`.
 
 ---
 
@@ -447,11 +480,28 @@ in any asset file and they are not part of the format:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the prefab/prop loader (verified against `HytaleServer.jar`).
+Backtick-quoted strings below are literal messages from `HytaleServer.jar` 0.6.3.
 
-- **`Prefabs are empty! Key: Prefab`** → a `Prefab` prop resolved to no prefab paths. Fix: give the prop a non-empty `WeightedPrefabPaths[]` (see [Prefab](#prefab)).
+The `HytaleGenerator` prop pipeline logs rather than throws, so a broken prop usually shows
+up as *nothing being placed* plus a line in the server log:
+
+- **`Couldn't load prefab with path: `** (SEVERE, `PrefabPropAsset`; the assembled line appends the path and a stack trace) → one of the prop's `WeightedPrefabPaths` did not resolve to a prefab file or folder. The whole prop yields no prefabs. Fix: check the path is a real resource path under the prefab root, e.g. `Trees/Oak/Stage_4`.
+- **`Exception thrown by HytaleGenerator while loading a Prefab:`** (SEVERE, `PrefabLoader`) → an I/O error while walking a prefab directory.
+- **`Couldn't place prefab prop.`** (WARNING, `PrefabProp`) → the prefab loaded but placement failed at a position (usually out-of-bounds writes).
+- **`Imported BlockMask asset with name '`** (WARNING; assembled line `Imported BlockMask asset with name '<name>' not found`, whose tail literal is **`' not found`**) → a prop's `BlockMask` uses `Import` naming a mask nothing publishes with `ExportAs`. It degrades to an **empty** mask, which permits everything, so the symptom is a prop that overwrites blocks it should not.
+
+Legacy-generator messages (`com.hypixel.hytale.server.worldgen.*` and `builtin.buildertools`),
+kept here because they still surface in server logs:
+
+- **`Prefabs are empty! Key: Prefab`** → thrown by `PrefabCaveNodeShapeGeneratorJsonLoader`, part of the legacy `WorldGen.Type: "Hytale"` cave loader. It is **not** raised by a `HytaleGenerator` `Prefab` prop.
+- **`Prefab nesting limit exceeded!`** → thrown by `buildertools`' `RecursivePrefabLoader` (the `/prefab` command), not by worldgen. Fix: flatten the prefab references / break the cycle.
 - **`prefab pool contains list with null element`** → a prefab pool list has a null/missing path entry. Fix: remove the null and provide a valid resource path. (Through build-17 an empty pool threw a sibling `prefab pool contains empty list` message; 0.5.7 removed that exact string — an empty pool still fails, but not with that text.)
-- **`Prefab nesting limit exceeded!`** → a prefab references other prefabs that nest too deeply (a cycle, or excessive depth). Fix: flatten the prefab references / break the cycle.
+
+> As of 0.6.3 the `prefab pool contains list with null element` string lives in the
+> `PrefabProp` under `hytalegenerator/props/deprecated/prefab/`, not the live `PrefabProp`
+> in `hytalegenerator/props/` — the live one logs the messages in the first list above
+> instead.
+
 - **Symptom:** you added a `PrefabContainer`, `PrefabPopulator`, `UniquePrefabContainer`, `RotationMode`, `FitHeightmap`, or a weighted top-level `PrefabList` and it is ignored → none of those exist in the format. Fix: use biome `Props[]` entries plus `Assignments/` graphs (see [What does NOT exist](#what-does-not-exist)).
 
 ---

@@ -12,7 +12,8 @@ seo:
 Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
 **node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
 a tree of math/noise nodes that, evaluated per world position, yields a scalar **density** value.
-Where density is `>= 0` the world is solid; where it is `< 0` the world is empty (air/fluid).
+Where density is `> 0` the world is solid; where it is `<= 0` the world is empty (air/fluid)
+(`TerrainStage`: `solidity = density > 0.0` — the boundary value `0` is *empty*).
 A separate `MaterialProvider` then decides *which* block fills each solid (or empty) cell.
 
 This document describes the real format used by the asset files under
@@ -32,11 +33,11 @@ Defined as JSON density node graphs under `Server/HytaleGenerator/` and provides
 ## Architecture
 ```
 Biome Terrain (DAOTerrain)
-└── Density graph (scalar field; >= 0 solid, < 0 empty)
+└── Density graph (scalar field; > 0 solid, <= 0 empty)
     ├── Combiners   Sum / Min / Max / Mix
     ├── Sources     SimplexNoise2D / SimplexNoise3D / CellNoise2D
     ├── Shaping     CurveMapper / Normalizer / Pow / Abs / Clamp
-    ├── BaseHeight  Base / Bedrock reference (+ Distance)
+    ├── BaseHeight  Base / Water / Bedrock reference (+ Distance)
     └── Reuse       Cache / Exported / Imported (e.g. cave field via Min)
 
 MaterialProvider (Solidity)
@@ -55,7 +56,7 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 | `Normalizer` / `Clamp` | Range remap | Linearly remap or clamp a field |
 | `SimplexNoise2D` / `SimplexNoise3D` / `CellNoise2D` | Noise source | The scalar field sources |
 | `CurveMapper` / `Distance` | Shaping | Map a value through a `Manual` curve |
-| `BaseHeight` | Reference | Inject a named reference height (`Base` / `Bedrock`) |
+| `BaseHeight` | Reference | Inject a named reference height (`Base` / `Water` / `Bedrock`) |
 | `Cache` / `Exported` / `Imported` | Reuse | Memoize, publish, and pull fields by name |
 | `Solidity` | Material provider | Routes solid cells and empty cells to providers |
 | `SpaceAndDepth` / `ConstantThickness` | Material provider | Stack material layers by depth into the floor |
@@ -174,7 +175,7 @@ codec keys are the JSON keys.)
 | `Sum` | Adds all input values. |
 | `Min` | Smallest of inputs. Used to carve (caves) and to clip terrain. |
 | `Max` | Largest of inputs. Used to union shapes (raise terrain). |
-| `Mix` | Blends inputs; commonly the first input is the value field and later inputs modulate it. Seen mixing noise fields together and mixing in `Constant` values. |
+| `Mix` | Linear blend of **exactly three** inputs — `Inputs[0]` = A, `Inputs[1]` = B, `Inputs[2]` = the influence field. Influence `≤ 0` returns A, `≥ 1` returns B, otherwise `A·(1−t) + B·t`. |
 
 ### Unary math
 
@@ -290,7 +291,7 @@ curve mapping distance-in to density-out).
 
 | Field | Notes |
 |-------|-------|
-| `BaseHeightName` | Named reference, observed values: `"Base"` (the terrain surface) and `"Bedrock"`. |
+| `BaseHeightName` | Named reference declared by the world structure's `DecimalConstants` block. All three shipped names are used across the assets: `"Base"` (the terrain surface, 621 uses), `"Water"` (sea level, 99) and `"Bedrock"` (35). |
 | `Distance` | When `true`, yields signed distance from that reference rather than the raw height. |
 
 ```json
@@ -347,8 +348,17 @@ and an `Empty` provider:
 | `Solidity` | `Solid`, `Empty` | Routes to one provider for solid cells, another for empty cells. |
 | `Queue` | `Queue[]` | Tries each provider in order; first match wins. |
 | `SimpleHorizontal` | `TopY`, `TopBaseHeight`, `BottomY`, `BottomBaseHeight`, `Material` | Applies its material only in a vertical band defined relative to a named base height. |
-| `SpaceAndDepth` | `LayerContext`, `MaxExpectedDepth`, `Layers[]`, optional `Condition` | Stacks `ConstantThickness` layers measured by depth into the floor — this is the closest real analogue to "soil layers". |
-| `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. |
+| `SpaceAndDepth` | `LayerContext` (`DEPTH_INTO_FLOOR` or `DEPTH_INTO_CEILING`), `MaxExpectedDepth`, `Layers[]`, optional `Condition` | Stacks layers measured by depth into the floor (or up into the ceiling) — this is the closest real analogue to "soil layers". |
+| `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. The only layer type the shipped biomes use. |
+
+The other registered `Layers[]` entry types (as of 0.6.3) are `NoiseThickness`
+(`ThicknessFunctionXZ` + `Material` — thickness driven by a density field),
+`RangeThickness` (`RangeMin`, `RangeMax`, `Seed`, `Material` — a random thickness per
+column) and `WeightedThickness` (`PossibleThicknesses` of `Weight`/`Thickness`, plus
+`Seed`, `Material`). A `Condition` on the `SpaceAndDepth` gates the whole stack; its
+predicate types are `AlwaysTrueCondition`, `EqualsCondition`, `GreaterThanCondition`,
+`SmallerThanCondition`, `AndCondition`, `OrCondition` and `NotCondition`, reading the
+parameters `SPACE_ABOVE_FLOOR` / `SPACE_BELOW_CEILING`.
 | `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Selects material based on a noise/density value falling inside a `From`/`To` range. Used for scattered surface variation (pebbles, leaves, grass patches). |
 | `Constant` | `Material` | A single fixed material. |
 
@@ -379,7 +389,7 @@ Real soil stack from `Plains1_Oak.json` (a `SpaceAndDepth` with two `ConstantThi
   "LayerContext": "DEPTH_INTO_FLOOR",
   "MaxExpectedDepth": 3,
   "Layers": [
-    { "Type": "ConstantThickness", "Thickness": 1, "Material": { "...": "grass/pebble FieldFunction queue" } },
+    { "Type": "ConstantThickness", "Thickness": 1, "Material": { "...": "a grass/pebble Queue of FieldFunction providers" } },
     { "Type": "ConstantThickness", "Thickness": 2, "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt" } } }
   ]
 }
@@ -425,13 +435,35 @@ in any asset file and they are not part of the format:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the density-graph loader (verified against `HytaleServer.jar`).
+Backtick-quoted strings below are the literal messages the density-asset codecs emit
+(verified against `HytaleServer.jar` 0.6.3). Codec **validator failures** reject the asset
+at load; **warnings** let generation continue with a degraded node, so they are easy to
+miss — watch the server log.
 
-- **`Number of noises must match number of thresholds`** → a threshold-selecting density node has unequal counts of noise inputs and threshold values. Fix: supply one threshold boundary per noise band.
-- **`Threshold array must contain at least one entry!`** → an empty threshold array. Fix: provide at least one entry.
-- **`Thresholds must be in ascending order and cannot be equal`** → threshold values are out of order or contain duplicates. Fix: list thresholds strictly low→high with no repeats.
-- **`Density Index out of bounds in MultiMix node`** → a `MultiMix`-style density node references an input index that does not exist. Fix: keep referenced indices within the node's input count.
+Validator failures (`Validators`/`results.fail`, asset is rejected):
+
+- **`FromMin must be less than FromMax. Given: `** / **`ToMin must be less than ToMax. Given: `** — assembled lines `FromMin must be less than FromMax. Given: <fromMin> and <fromMax>` (and the `ToMin`/`ToMax` twin) → a `Normalizer` node's range is **inverted** (`FromMin > FromMax`). Fix: order each pair strictly ascending. A *degenerate* pair (`FromMin == FromMax`) is only a warning today, with a different literal: **`FromMin must be less than FromMax. This will fail to load in future versions. Given: `** — so equal bounds still load in 0.6.3 but are on notice.
+- **`Inputs can't be empty. Anchor offsets its first input.`** → an `Anchor` density node with no `Inputs`. Fix: give it at least one input.
+- **`Keys must have unique Value entries. Keys[`** — assembled line `Keys must have unique Value entries. Keys[<j>] and Keys[<i>] both use <value>` → two `MultiMix` `Keys` entries share a `Value`. Fix: make every key's `Value` distinct.
+- **`Vector must have all components greater than 0, got `** — assembled line appends the offending vector → a vector-valued parameter (e.g. a scale) has a zero or negative component (`VectorAssetValidatorUtil`).
+- **`String not a valid enum value: `** — assembled line appends the provided string → an enum-typed key (`CellType`, `LayerContext`, a `Rotation`, …) got a name the enum does not define (`assets.ValidatorUtil`).
+
+Silent degradations (no message at all — the worst kind):
+
+- **A `Mix` node without exactly three non-skipped `Inputs` becomes constant `0`.** `MixDensityAsset.build` returns a `ConstantValueDensity(0)` rather than failing, and `Skip: true` on a child *removes* it from the count — so skipping one input of a `Mix` silently zeroes the whole subtree instead of passing the others through.
+
+Warnings (generation continues, node degrades):
+
+- **`Couldn't find Density asset exported with name: '`** — assembled line `Couldn't find Density asset exported with name: '<name>'. Using empty Node instead.` → an `Imported` node names a field nothing `ExportAs`-ed, and the import degrades to a constant `0`. Fix: check the exporting graph is loaded and the names match exactly. The other graph kinds have their own literals with the same shape: **`Couldn't find Assignments asset exported with name: '`**, **`Couldn't find Positions asset exported with name: '`**, **`Couldn't find VectorProvider asset exported with name: '`** and **`Couldn't find ReturnType asset exported with name: '`** (that last one ends `. Using a return type that only outputs 0 instead.`).
+- **`Duplicate export name for asset: `** — assembled line appends the export name → two nodes used the same `ExportAs`; the later registration wins. Fix: keep export names unique across *all* loaded graphs — the export table is global.
+- **`Density Index out of bounds in MultiMix node `** — assembled line `Density Index out of bounds in MultiMix node <index>, valid range is [0, <n>]` (the second literal fragment is `, valid range is [0, `) → a `MultiMix` `Keys` entry's `DensityIndex` does not address an input; that key is dropped. Note the jar rejects `DensityIndex == n` even though the message advertises `[0, n]` — usable indices stop one short of the last input.
 - **Symptom:** you added a `LayerContainer`, `StaticLayers`/`DynamicLayers`, a `HeightSupplier` `Type`, or per-layer `Conditions`/`SlopeMin` and they are ignored → none of those exist in the format. Fix: terrain is the `Density` node graph plus a `MaterialProvider` (see [What does NOT exist](#what-does-not-exist)).
+
+> The `Number of noises must match number of thresholds` /
+> `Thresholds must be in ascending order and cannot be equal` /
+> `Threshold array must contain at least one entry!` messages that older versions of this
+> page listed come from `com.hypixel.hytale.procedurallib.json` — the **legacy** folder-of-JSON
+> generator behind `WorldGen.Type: "Hytale"`, not from these density assets.
 
 ---
 

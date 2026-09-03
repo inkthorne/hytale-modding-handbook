@@ -34,7 +34,7 @@ UserData/Saves/<save>/
 ├── permissions.json · bans.json · whitelist.json
 └── universe/
     ├── players/<uuid>.json  per-player; PlayerData.World = current world, PerWorldData[...]
-    ├── memories.json
+    ├── resources/          0.6.3+: universe-scoped resources (Memories.json, GameFlags.json, Hardcore.json)
     └── worlds/
         └── <world-name>/    keyed by folder name in Universe.worlds
             ├── config.json   the world definition (WorldGen, SpawnProvider, IsPvpEnabled, ...)
@@ -42,6 +42,13 @@ UserData/Saves/<save>/
             ├── resources/     world-scoped resources
             └── instance.bson  world metadata
 ```
+
+> As of 0.6.3 the adventure "memories" file moved from `universe/memories.json` into the new
+> `universe/resources/` directory as `Memories.json`. The move is automatic on first boot
+> (`MemoriesPlugin` migrates the legacy file *and* its `.bak`), but only when the universe resource
+> storage is still disk-backed — a custom `UniverseResourceStorage` logs
+> `Legacy memories file memories.json cannot migrate to a custom universe resource storage` and
+> leaves the old file alone. See [Universe resources](#universe-resources).
 
 ## The save / server `config.json`
 
@@ -76,7 +83,7 @@ Top-level keys the config codec recognizes (capitalization exact):
 | **`Defaults`** | **Default world + game mode for joining players (see below)** |
 | `WorldMap` · `PlayerStorage` · `LogLevels` | World-map, player-storage, and logging config |
 | `RequireJoinPermission` | 0.6.3+: when `true`, only players holding the join permission can connect (bool) |
-| `UniverseResourceStorage` · `BanStorage` | 0.6.3+: storage-provider blocks for universe-level resources and the ban list (`{ "Type": ... }`, like the per-world `ChunkStorage`) |
+| `UniverseResourceStorage` · `BanStorage` | 0.6.3+: storage-provider blocks for universe-level resources (see [Universe resources](#universe-resources)) and the ban list (`{ "Type": ... }`, like the per-world `ChunkStorage`) |
 | `ConnectionTimeouts` · `RateLimit` · `ModLoadOrder` · `AuthCredentialStore` · `Update` · `FallbackServer` · `DisplayTmpTagsInStrings` | Connection timeouts, packet rate limits, explicit mod load order, auth credential storage, auto-update, fallback server (`Host`/`Port`), and a debug flag for untranslated strings |
 
 > Singleplayer saves omit most server fields (`ServerName`, `MOTD`, `Password`, `MaxPlayers`)
@@ -96,7 +103,7 @@ Top-level keys the config codec recognizes (capitalization exact):
 | `GameMode` | Default game mode (`Adventure` / `Creative`) |
 | `GameModeTypeOnDeath` | 0.6.3+: game-mode type players are switched to when they die — the server-wide *fallback*, used only when the world's gameplay config `Death.GameModeTypeOnDeath` is unset (`World.getGameModeTypeOnDeath()` checks the gameplay value first) |
 | `HardcoreMode` | 0.6.3+: `None`, `PerPlayer`, or `Global` (`server.core.universe.hardcore.HardcoreMode`) — enables the hardcore ruleset, scoped per player or for the whole universe |
-| `HardcoreLives` | 0.6.3+: lives per player/world in hardcore mode (int) |
+| `HardcoreLives` | 0.6.3+: lives per player/world in hardcore mode (int). Under `Global` the shared pool lives in the `Hardcore` universe resource — see [Universe resources](#universe-resources) |
 | `CrashRecovery` | 0.6.3+: what happens when a world crashes — `{ "Mode": None/Reload/Shutdown, "MaxAttempts", "RetryDelaySeconds", "Fallback": None/Shutdown }` (`MaxAttempts`/`RetryDelaySeconds`/`Fallback` apply to `Reload` only; the same block is accepted per world) |
 
 How it resolves, from `Universe.getDefaultWorld()` (decompiled):
@@ -464,6 +471,102 @@ returns the `IResourceStorage` backing the world's store resources; select the p
 per-world `ResourceStorage` config key or `WorldConfig.setResourceStorageProvider(...)`. Registered
 ids: `Hytale` (default), `Disk`, `Empty` — `EmptyResourceStorageProvider` (`INSTANCE`, id `Empty`)
 is the no-persistence choice.
+
+### Universe resources
+
+**Package:** `com.hypixel.hytale.server.core.universe.resources` (0.6.3+)
+
+The **universe-level** counterpart to the per-world store resources above. A universe resource is a
+single codec-typed object, registered by id, loaded once when the universe starts and written back to
+`universe/resources/<Id>.json`. Use it for state that belongs to the *save* rather than to one world
+or one player — campaign progression, hardcore bookkeeping, server-wide counters.
+
+Registration happens in a plugin's `setup()`:
+
+```java
+// Universe (com.hypixel.hytale.server.core.universe)
+static <T> UniverseResourceType<T> registerResource(Class<T> typeClass, String id, BuilderCodec<T> codec)
+<T> T getResource(UniverseResourceType<T> type)                    // instance method: Universe.get().getResource(...)
+CompletableFuture<Void> flushResource(UniverseResourceType<?> type)
+```
+
+```java
+public class MyPlugin extends JavaPlugin {
+    private UniverseResourceType<MyState> stateType;
+
+    @Override
+    protected void setup() {
+        // id becomes the filename: universe/resources/MyState.json
+        this.stateType = Universe.registerResource(MyState.class, "MyState", MyState.CODEC);
+    }
+
+    public MyState getState() {
+        return Universe.get().getResource(this.stateType);   // same instance for the whole universe
+    }
+
+    public void save() {
+        Universe.get().flushResource(this.stateType);        // write now, don't wait for the 10s flush
+    }
+}
+```
+
+| Class | Role |
+|-------|------|
+| `UniverseResources` | The per-universe holder. `static <T> UniverseResourceType<T> register(Class<T>, String, BuilderCodec<T>)` (what `Universe.registerResource` delegates to), `static Collection<UniverseResourceType<?>> registeredTypes()`, `void load(Collection<? extends UniverseResourceType<?>>)`, `<T> T get(UniverseResourceType<T>)`, `CompletableFuture<Void> flush(UniverseResourceType<?>)`, `CompletableFuture<Void> flushAll()` |
+| `UniverseResourceType<T>` | The registration handle (constructor is package-private — you only ever get one from `register`). `getTypeClass()`, `getId()`, `getCodec()` |
+| `IUniverseResourceStorage` | Backing store: `Map<UniverseResourceType<?>, Object> loadAll(Collection<? extends UniverseResourceType<?>>)`, `<T> CompletableFuture<Void> save(UniverseResourceType<T>, T)` |
+| `IUniverseResourceStorageProvider` | Codec-registered factory: `IUniverseResourceStorage getResourceStorage()` |
+| `DefaultUniverseResourceStorageProvider` | Id `Hytale`, the `Priority.DEFAULT` choice (`INSTANCE`); delegates to a `DiskUniverseResourceStorageProvider` exposed as `DEFAULT` |
+| `DiskUniverseResourceStorageProvider` | Id `Disk`; one `Path` key, default `<universe>/resources`. `getPath()` |
+
+Selected with the `UniverseResourceStorage` block in the save `config.json`, exactly like the
+per-world `ChunkStorage`:
+
+```json
+"UniverseResourceStorage": { "Type": "Disk", "Path": "universe/resources" }
+```
+
+**Lifecycle and persistence** (from `Universe.start()` / `DiskUniverseResourceStorageProvider`):
+
+- Every registered type is loaded **once**, at universe start, from `<dir>/<Id>.json` (JSON text, read
+  through the same `.bak` fallback as the other save files). A missing or unreadable file yields the
+  codec's default value, so `getResource` never returns `null`.
+- Writes are asynchronous and go through the `StorageManager`, so they respect
+  `Universe.lockSaving()`; each write rotates the previous file to `<Id>.json.bak`.
+- A background task flushes **all** universe resources every **10 seconds**, `runBackup()` flushes
+  them before archiving the save, and a `ShutdownEvent` handler flushes them with a **30-second**
+  timeout (`Timed out waiting for universe resource writes during shutdown ... unfinished writes are
+  lost when the process exits`). `flushResource(...)` forces one type immediately.
+- With `--bare`, the periodic flush is not scheduled and the disk store creates neither the directory
+  nor new files — it only overwrites files that already exist.
+
+The three universe resources the game registers itself:
+
+| Id | File | Class | Registered by |
+|----|------|-------|---------------|
+| `Memories` | `Memories.json` | `RecordedMemories` | `MemoriesPlugin` (`RECORDED_MEMORIES_ID`) |
+| `GameFlags` | `GameFlags.json` | `GameFlagsResource` | `GameFlagsPlugin` — see [Game Flags](world.md#game-flags) |
+| `Hardcore` | `Hardcore.json` | `HardcoreState` | `EntityModule` |
+
+`HardcoreState` is the pooled-lives record behind `HardcoreMode: "Global"` (see
+[Defaults](#defaults--the-spawn-world)); reach it with
+`Universe.get().getResource(HardcoreState.getResourceType())`, then
+`burnPoolLife(poolSize)` / `getPoolRemaining(poolSize)` / `isGameOver()` / `markGameOver()`. Its two
+persisted keys are `PoolRemaining` and `GameOver`. Per-player hardcore lives are **not** here — they
+live in the `PlayerLives` entity component (see [Combat API](combat.md)).
+
+> **Gotchas**
+> - **`Universe resources are not loaded yet`** → `getResource` / `flushResource` ran before
+>   `Universe.start()`. Register in `setup()`, read in `start()` or later.
+> - **`Universe resource 'X' was registered after resources loaded`** → the type was registered after
+>   the universe finished loading, so nothing was read for it. Register during plugin `setup()`.
+> - **`Duplicate universe resource id: X`** → ids are global across all plugins. Prefix yours.
+> - **`Invalid universe resource id: X`** → the id becomes a filename, so it must pass
+>   `PathUtil.isValidName` (no separators, no `..`).
+> - **`Ignoring unknown universe resource file <path>`** (WARNING at load) → a stray `*.json` in the
+>   resources directory that matches no registered id — usually a plugin that is no longer installed.
+> - **`Universe resource storage path must be within a trusted directory`** → a `Disk` provider
+>   `Path` pointing outside the trusted root.
 
 ### Data stores — plugin key/value persistence
 

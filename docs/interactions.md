@@ -125,6 +125,11 @@ Interaction System
 - [LaunchPadInteraction](interactions-world.md#launchpadinteraction) - Launch pad physics
 - [WieldingInteraction](interactions-world.md#wieldinginteraction) - Blocking and guarding mechanics
 
+**Documented with their subsystem** (0.6.3+)
+- [SetGameFlag](world.md#game-flags) - Write a universe-wide named integer flag
+- [GameFlagCondition](world.md#game-flags) - Succeed while a game flag is at (or at least) a level
+- [SpectateControl](player.md#spectatecontrol-interaction) - Cycle a spectator's follow camera, or detach it to free cam
+
 ---
 
 ## Quick Start
@@ -477,7 +482,9 @@ ComponentType<EntityStore, CarriedBlock> getCarriedBlockComponentType()         
 ResourceType<EntityStore, CarriedBlockSystems.QueueResource> getCarriedBlockQueueResourceType()
 ```
 
-Built-in `Type` strings added by 0.6.3 (not yet documented on these pages): `DragPlaceBlock`, `ExtrudePlaceBlock`, `SurfaceDrawPlaceBlock`, `DragEraseBlock`, `PlaceModeSelect`, `CarryBlock`, `CarryPlaceBlock`, `CarryDroppedBlock`, `RevealMapMarkersInView`, `ShowEventTitle`.
+Built-in `Type` strings added by 0.6.3 (not yet documented on these pages): `DragPlaceBlock`, `ExtrudePlaceBlock`, `SurfaceDrawPlaceBlock`, `DragEraseBlock`, `PlaceModeSelect`, `CarryBlock`, `CarryPlaceBlock`, `CarryDroppedBlock`, `RevealMapMarkersInView`, `ShowEventTitle`. `InteractionModule` also registers `SpectateControl` — documented with the rest of spectator mode in [player.md](player.md#spectatecontrol-interaction).
+
+**Types registered by other plugins.** `Interaction.CODEC` is shared, so bundled plugins add their own `Type` strings in *their* `setup()`, and those types only exist when that plugin is loaded. `Hytale:GameFlags` contributes `SetGameFlag` and `GameFlagCondition` — see [world.md → Game Flags](world.md#game-flags).
 
 #### Static Fields
 

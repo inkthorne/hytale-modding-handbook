@@ -694,6 +694,159 @@ These are **client-owned** values (re-sent whenever the player changes settings)
 
 ---
 
+## Spectator Mode
+
+**Packages:** `com.hypixel.hytale.server.core.modules.entity.spectator` and
+`...modules.entity.component.Spectating` (0.6.3+)
+
+Spectating is **not** a game mode of its own and not a boolean on the player. It is a
+`GameModeType` **asset** flag plus one marker component:
+
+1. A `GameModeType` asset with `"Spectator": true` is entered
+   (`GameModeTypes.enter(ref, accessor, "Spectator")`).
+2. `GameModeTypeState` reacts by putting an empty `Spectating` component on the entity and adding the
+   `Spectating` HUD; exiting the type removes both.
+3. Everything else — camera, invisibility, target following — is driven off that component by
+   `SpectatorSystems`.
+
+So the way to put a player into (or out of) spectating from Java is to enter/exit a spectator
+game-mode type, not to add the component yourself. The component's *target* is yours to set.
+
+### Spectating (component)
+
+```java
+if (Spectating.isSpectating(ref, store)) { /* player is spectating */ }
+
+// Follow another entity
+store.putComponent(ref, Spectating.getComponentType(), new Spectating(targetRef));
+
+// Detach back to free-fly (same component, no target)
+store.putComponent(ref, Spectating.getComponentType(), new Spectating());
+```
+
+| Member | Description |
+|--------|-------------|
+| `static getComponentType()` | `ComponentType<EntityStore, Spectating>` |
+| `static isSpectating(Ref<EntityStore>, ComponentAccessor<EntityStore>)` | Archetype test — true while the component is present |
+| `new Spectating()` | Free-fly spectating (no follow target) |
+| `new Spectating(Ref<EntityStore> targetRef)` | Follow-camera spectating of `targetRef` |
+| `getTargetRef()` | The followed entity, or `null` for free-fly |
+
+The component is immutable — to change the target you `putComponent` a new one, which is what the
+change systems watch for.
+
+### Spectator game-mode assets
+
+Three ship under `Server/Entity/GameMode/`:
+
+| Asset | Notes |
+|-------|-------|
+| `Spectator.json` | The default (`SpectateCommand`'s `"Spectator"`). `Spectator`, `Flying`, `NoClip`, `Invulnerable`, `Intangible`, `PreventInventoryAccess`, `PreventEmotes`, `OverrideAllInteractions`, `LockedCameraView: "FirstPerson"`, a trimmed `HudComponents` list |
+| `HardcoreSpectator.json` | `Parent: "Spectator"` plus a hardcore death-screen message and the `SpectateControl` bindings below |
+| `SpectatorInteractive.json` | `Parent: "Spectator"` with `OverrideAllInteractions: false` and `LockedCameraView: null` — spectating that can still use items |
+
+Your own asset with `"Spectator": true` works the same way; pass its id to
+`GameModeTypes.enter(...)` or `/spectate set <player> on <type>`.
+
+### SpectateControl interaction
+
+The `SpectateControl` [interaction](interactions.md) type (registered by `InteractionModule`) is how a
+spectator cycles the camera. Its codec documents it as *"Spectator camera control that cycles the
+follow camera through the world's living non-spectating players, or detaches it to free cam."*
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Type` | string | Required | Always `"SpectateControl"` |
+| `Action` | enum | *(none — the interaction no-ops)* | `Prev`, `Next`, or `Detach` |
+
+Candidates are the current world's `PlayerRef`s minus: the spectator itself, dead players
+(`DeathComponent`), other spectators, and anyone the spectator has hidden via
+[`HiddenPlayersManager`](#hiddenplayersmanager). The list is sorted by UUID, so `Next`/`Prev` cycle in
+a stable order. `HardcoreSpectator.json` binds all three actions:
+
+```json
+"InteractionOverrides": {
+  "Primary":  { "Interactions": [ { "Type": "SpectateControl", "Action": "Prev" } ],
+                "RequireNewClick": true, "HudInputBindingEntry": "server.hud.inputBinding.spectatePreviousPlayer" },
+  "Secondary": { "Interactions": [ { "Type": "SpectateControl", "Action": "Next" } ],
+                "RequireNewClick": true, "HudInputBindingEntry": "server.hud.inputBinding.spectateNextPlayer" },
+  "Ability1": { "Interactions": [ { "Type": "SpectateControl", "Action": "Detach" } ],
+                "RequireNewClick": true, "HudInputBindingEntry": "server.hud.inputBinding.spectateFreeCamera" }
+}
+```
+
+The plain `Spectator` asset has **no** such overrides, so a stock spectator has no camera-cycling
+input — bind it yourself (or use a `Parent: "Spectator"` asset like `HardcoreSpectator`).
+
+### SpectatorSystems
+
+`EntityModule` registers three systems, all keyed off the `Spectating` component:
+
+| System | Behavior |
+|--------|----------|
+| `SpectatorSystems.OnSpectatingChange` | A `RefChangeSystem`. Gaining a target teleports the spectator to it and sends a `SetServerCamera` third-person camera attached to the target's network id (follow, eye offset, raycast standoff at distance `4`, the target's rotation). Losing the target moves the player to where the camera was — backwards from the target's eye pivot (pivot height at least `1.0`), up to 4 blocks, pulled in to `1.0` short of any line-of-sight-blocking block and never closer than `0.5` — then restores the game-mode type's `LockedCameraView` or resets the camera |
+| `SpectatorSystems.FollowTarget` | Per-tick. Drops the target (back to free-fly, with the `Your spectate target is gone, returning to free-fly` message) when it becomes invalid, moves to another world's store, dies, starts spectating itself, or becomes hidden. Re-teleports the spectator whenever it drifts more than **32 blocks** from the target |
+| `SpectatorSystems.HideFromNonSpectators` | Strips spectators out of every non-spectator's visible-entity set, so spectators are invisible to normal players. Spectators still see each other |
+
+### SpectatingHud
+
+`SpectatingHud` is the small "SPECTATING" label at the top-left, a `CustomUIHud` with
+`KEY = "Spectating"` that `GameModeTypeState` adds on enter and removes on exit. To replace it with
+your own, remove it after entering:
+
+```java
+Player player = store.getComponent(ref, Player.getComponentType());
+player.getHudManager().removeCustomHud(playerRef, SpectatingHud.KEY);
+player.getHudManager().addCustomHud(playerRef, new MySpectatorHud(playerRef));
+```
+
+### Elsewhere in the engine
+
+Spectators are excluded from most world interactions, and several of these are the reason a
+spectator "doesn't count":
+
+- [`World.getNonSpectatorPlayerCount()`](world.md#players) — the player count that ignores spectators.
+- Item pickup, NPC detection, and spawn-beacon selection all skip entities with `Spectating`.
+- The server player list flags spectators, and the world map hides a spectator's marker from
+  non-spectators (a spectator still sees other spectators).
+- Mounted players are dismounted when they start spectating.
+- The death flow is where the game enters spectating on its own — see
+  [combat.md → The death screen *is* the respawn trigger](combat.md#the-death-screen-is-the-respawn-trigger)
+  for `GameModeTypeOnDeath` and the hardcore permadeath path that calls
+  `GameModeTypes.enterOnDeath(...)`.
+
+### `/spectate`
+
+`SpectateCommand` gates on `hytale.command.spectate.self` (toggle / `exit` / `free`),
+`hytale.command.spectate.watch` (`<player>` / `target`) and `hytale.command.spectate.other` (`set`);
+the permission groups are `hytale:Builder`, and `hytale:WorldEditor` for `set`:
+
+| Command | Effect |
+|---------|--------|
+| `/spectate` | Toggle spectating on yourself (enters the `Spectator` type, or exits) |
+| `/spectate <player>` | Enter spectating if needed and attach the follow camera to that player |
+| `/spectate target` | Same, for the entity you are looking at (32-block search) |
+| `/spectate free` | Detach the camera to free-fly (entering spectating first if needed) |
+| `/spectate exit` | Stop spectating |
+| `/spectate set <player> [on\|off] [type]` | Change another player's spectating; `type` defaults to `Spectator` and must be a game-mode type with `"Spectator": true` |
+
+> **Gotchas**
+> - **Adding `Spectating` by hand does not make a spectator.** The invisibility, camera and HUD follow
+>   the component, but flying, no-clip, invulnerability and the interaction overrides come from the
+>   game-mode type. Use `GameModeTypes.enter(ref, accessor, "Spectator")`.
+> - **You cannot spectate a spectator.** Both the command and `SpectateControl` skip entities that
+>   already have `Spectating`, and `FollowTarget` detaches if a target starts spectating.
+> - **Cross-world targets are rejected.** A follow target must be in the same `EntityStore`; the
+>   command reports `server.commands.errors.playerNotInWorld` and `FollowTarget` detaches if the
+>   target moves to another world.
+> - **The camera exit position is a teleport.** Detaching moves the *player entity* to roughly where
+>   the camera was, not back to where they entered spectating. Record the entry position yourself if
+>   you need to restore it.
+> - **A hidden player is not a valid target.** `HiddenPlayersManager.isPlayerHidden(...)` filters both
+>   the command and the cycle list, and detaches an in-progress follow.
+
+---
+
 ## Movement Settings (MovementManager & MovementConfig)
 
 **Package:** `com.hypixel.hytale.server.core.entity.entities.player.movement`

@@ -1182,6 +1182,148 @@ void setTimeDilationModifier(float modifier)
 
 ---
 
+## Game Flags
+**Package:** `com.hypixel.hytale.builtin.gameflags` (0.6.3+)
+
+A flat map of **named integer flags**, shared by every world in the universe and persisted with the
+save. The bundled `Hytale:GameFlags` plugin describes itself as *"Universe-wide named integer flags
+for campaign progression and settings, with asset-authorable read/write interactions"* — it is the
+engine's answer to "has the player finished the tutorial yet?", "which gate has this save unlocked?",
+"is hard mode on?".
+
+Two properties make it different from the per-world resources above:
+
+- **Scope is the universe, not the world.** `GameFlagsResource` is a
+  [universe resource](universe-saves.md#universe-resources) (id `GameFlags`), not an ECS resource on a
+  world's store. Every world, and every player, reads and writes the same map. There is **no**
+  per-world or per-player game-flag store — for per-player progression use player components or
+  `PlayerConfigData` instead.
+- **A missing flag reads as `0`.** The codec documents the map as *"Flag name to integer value; a
+  missing flag is 0."* There is no "unset" state to test for; `remove(key)` and `set(key, 0)` are
+  indistinguishable to a reader.
+
+### GameFlagsResource
+
+```java
+static GameFlagsResource get()            // Universe.get().getResource(GameFlagsPlugin.get().getResourceType())
+```
+
+| Method | Description |
+|--------|-------------|
+| `static get()` | The universe's single `GameFlagsResource`. Throws `Universe resources are not loaded yet` before the universe starts |
+| `getLevel(String key)` → `int` | The flag's value, or `0` if it was never set |
+| `set(String key, int value)` | Overwrite the flag |
+| `raise(String key, int level)` | `max(current, level)` — monotonic progression that can never go backwards |
+| `remove(String key)` | Drop the flag (subsequent reads return `0`) |
+| `snapshot()` → `Map<String, Integer>` | A sorted (`TreeMap`) copy of every flag — safe to iterate |
+| `static flush()` | Ask the universe to write `GameFlags.json` now (`Universe.flushResource(...)`) |
+| `static final String ID` | `"GameFlags"` — the resource id, and the filename stem |
+
+The backing map is a `ConcurrentHashMap`, so reads and writes are safe from any thread; the
+`snapshot()` copy is what you iterate, not the live map.
+
+```java
+// Gate a feature on campaign progress
+if (GameFlagsResource.get().getLevel("Campaign_Chapter") >= 3) {
+    // chapter 3+ content
+}
+
+// Advance progression without ever regressing it, then persist immediately
+GameFlagsResource flags = GameFlagsResource.get();
+flags.raise("Campaign_Chapter", 3);
+GameFlagsResource.flush();
+```
+
+This `raise`-then-`flush` pair is exactly what the built-in augment-blocks progression does
+(`AugmentProgression.raise(...)`).
+
+### Persistence
+
+Writes go into memory immediately; the file on disk is only rewritten when someone flushes.
+
+- Stored as `universe/resources/GameFlags.json` under the single key `Flags` (a string→int map).
+- The universe flushes **all** its resources every 10 seconds, before a backup, and on shutdown — so
+  a plain `set(...)` does eventually reach disk. `GameFlagsResource.flush()` is for the cases where
+  losing the last few seconds matters (the `/gameflags` commands and both interaction types flush).
+- See [Universe resources](universe-saves.md#universe-resources) for the storage provider, the
+  `.bak` rotation, and the shutdown-flush timeout.
+
+### Asset-authorable interactions
+
+`GameFlagsPlugin.setup()` registers two [interaction](interactions.md) types, so content can read and
+write flags without any Java. Both extend `SimpleInstantInteraction`, so they also accept the
+inherited `Next` / `Failed` keys and run server-side (`WaitForDataFrom.Server`).
+
+**`SetGameFlag`** — *"An interaction that writes the given game flag."*
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Type` | string | Required | Always `"SetGameFlag"` |
+| `Key` | string | Required | Flag name (validated non-null) |
+| `Value` | int | `1` | Value to write |
+| `Raise` | bool | `false` | *"Whether to only ever raise the flag instead of overwriting it."* — `true` uses `raise(...)`, `false` uses `set(...)` |
+
+**`GameFlagCondition`** — *"An interaction that is successful while the given game flag is at least
+(or exactly) the given level."*
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Type` | string | Required | Always `"GameFlagCondition"` |
+| `Key` | string | Required | Flag name (validated non-null) |
+| `Level` | int | `1` | Level to compare against |
+| `Exact` | bool | `false` | *"Whether the flag must equal the level instead of being at least the level."* — `false` tests `flag >= Level`, `true` tests `flag == Level` |
+
+The condition finishes the chain when the test passes and **fails** it when it does not, so the
+inherited `Next` / `Failed` branches work the same way as on the other `*Condition` types:
+
+```json
+{
+  "Type": "GameFlagCondition",
+  "Key": "Campaign_Chapter",
+  "Level": 3,
+  "Next": {
+    "Type": "SetGameFlag",
+    "Key": "Campaign_GateOpened",
+    "Value": 1,
+    "Raise": true,
+    "Next": "Gate_Open_Anim"
+  },
+  "Failed": "Gate_Locked_Message"
+}
+```
+
+No shipped asset uses either type yet — they exist for mod and campaign content.
+
+### `/gameflags`
+
+`GameFlagsCommand` registers a sub-command collection gated on the `hytale:WorldEditor` permission
+group:
+
+| Command | Effect |
+|---------|--------|
+| `/gameflags list` | Print every flag as `key = value` (or "No game flags set") |
+| `/gameflags get <key>` | Print `key = value` (`0` for an unset flag) |
+| `/gameflags set <key> <value>` | Set the flag and flush |
+| `/gameflags remove <key>` | Remove the flag and flush |
+
+> **Gotchas**
+> - **`GameFlagsResource.get()` throws `Universe resources are not loaded yet`** → it was called
+>   before the universe started (e.g. from a plugin's `setup()`). Read flags from `start()`, a
+>   command, or a system tick — never at registration time.
+> - **A plugin that touches game flags must depend on the bundled plugin.** Add
+>   `"Hytale:GameFlags": "*"` to your manifest's `Dependencies`
+>   (see [plugin-lifecycle.md](plugin-lifecycle.md#dependencies-format)); the class lives in the
+>   server jar but `GameFlagsPlugin.get()` is `null` until that plugin has run `setup()`, and
+>   `GameFlagsResource.get()` goes through it.
+> - **Flags are not per world.** Setting a flag in one world changes it for every world in the save.
+>   Prefix keys per feature (`MyPlugin_Chapter`) — ids are global and case-sensitive.
+> - **`remove` is not "unset".** A removed flag reads back as `0`, exactly like one that was set to
+>   `0`; design levels so `0` means "not started".
+> - **Flags survive world deletion.** They live in `universe/resources/`, not in
+>   `universe/worlds/<name>/` — deleting a world does not reset its progression flags.
+
+---
+
 ## ClientFeature
 **Package:** `com.hypixel.hytale.protocol.packets.setup`
 

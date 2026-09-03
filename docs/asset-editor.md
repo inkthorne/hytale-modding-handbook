@@ -76,7 +76,32 @@ Abstract base class for all asset editor events.
 |--------|-------------|-------------|
 | `getEditorClient()` | `EditorClient` | The editor client |
 
-> **See also:** [Asset Registry](assets.md#assetregistry)
+### EditorClient
+
+**Package:** `com.hypixel.hytale.builtin.asseteditor`
+
+The connected editor session every event above hands you. Implements
+`com.hypixel.hytale.server.core.permissions.PermissionHolder`, so it can be permission-checked exactly
+like a player.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getUuid()` | `UUID` | Account UUID of the editing user |
+| `getUsername()` | `String` | Account name |
+| `getLanguage()` / `setLanguage(String)` | `String` / `void` | The client's language tag (drives `Message` localization) |
+| `getAuth()` | `PlayerAuthentication` | Authentication data for the session |
+| `getPacketHandler()` | `PacketHandler` | The underlying connection |
+| `tryGetPlayer()` | `PlayerRef` | The in-world player for this user, or `null` if they are editor-only / disconnected |
+| `hasPermission(String)` / `hasPermission(String, boolean)` | `boolean` | Permission check by node (the `boolean` is the default when unset) |
+| `hasPermission(PermissionQuery)` / `hasPermission(PermissionQuery, boolean)` | `boolean` | Query-object overloads (0.6.3+) |
+| `sendPopupNotification(AssetEditorPopupNotificationType, Message)` | `void` | Show a popup in the editor UI |
+| `sendSuccessReply(int)` / `sendSuccessReply(int, Message)` | `void` | Acknowledge a request id as succeeded |
+| `sendFailureReply(int, Message)` | `void` | Reject a request id with a message |
+
+> **Gotcha:** `tryGetPlayer()` is nullable by design — an asset-editor connection is its own
+> connection type and need not have a player in a world. Never assume a `PlayerRef`.
+
+> **See also:** [Asset Registry](assets.md#assetregistry) · [Permissions](permissions.md)
 
 ---
 
@@ -115,7 +140,7 @@ Extends `EditorClientEvent<Void>`. Fired when an asset editor client disconnects
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getDisconnectReason()` | `DisconnectReason` | Why client disconnected |
+| `getDisconnectReason()` | `PacketHandler.DisconnectReason` | Why client disconnected (`com.hypixel.hytale.server.core.io.PacketHandler$DisconnectReason` — a nested class, not a top-level `DisconnectReason`) |
 
 ---
 
@@ -129,8 +154,13 @@ Extends `EditorClientEvent<Void>`. Fired when an asset is selected in the asset 
 |--------|-------------|-------------|
 | `getAssetType()` | `String` | Selected asset type |
 | `getAssetFilePath()` | `AssetPath` | Selected asset path |
-| `getPreviousAssetType()` | `String` | Previously selected type |
+| `getPreviousAssetType()` | `String` | Previously selected type (`null` on the first selection) |
 | `getPreviousAssetFilePath()` | `AssetPath` | Previous asset path |
+
+`AssetPath` here is the server-side record `com.hypixel.hytale.builtin.asseteditor.AssetPath`
+— components `packId()` (`String`) and `path()` (`java.nio.file.Path`), with `EMPTY_PATH` for "nothing
+selected" and `toPacket()` to convert to the wire type
+`com.hypixel.hytale.protocol.packets.asseteditor.AssetPath`. Don't confuse the two.
 
 ---
 

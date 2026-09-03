@@ -61,13 +61,14 @@ they load into — and how to roll a droplist from a plugin — see [Java API](#
 | [Mining](#mining-drops) | `Rock/` | 67 | Ore and crystal drops |
 | [Plants](#plant-drops) | `Plant/` | 23 | Wild plant harvesting |
 | [Ingredients](#ingredient-drops) | `Ingredients/` | 9 | Sap, grass, and gatherables |
-| [Wood](#wood-drops) | `Wood/` | 6 | Tree and branch drops |
-| [Containers](#container-drops) | `Items/` | 12 | Destructible container drops |
+| [Wood](#wood-drops) | `Wood/` | 8 | Tree, leaf, and branch drops |
+| [Containers](#container-drops) | `Items/` | 13 | Destructible container drops |
 | [Prefabs](#prefab-drops) | `Prefabs/` | 49 | Encounter loot by zone/tier |
 | [Objectives](#objective-drops) | `Objectives/` | 4 | Quest rewards |
 | [Traps](#trap-drops) | `Traps/` | 2 | Fishing trap catches |
 
-**Location:** `Assets.zip > Server/Drops/` (675 total files)
+**Location:** `Assets.zip > Server/Drops/` (678 total files, including two loose root-level
+files `Soil_Gravel.json` and `Soil_Gravel_Pickaxe.json`)
 
 ---
 
@@ -82,7 +83,7 @@ A single item that always drops:
   "Container": {
     "Type": "Single",
     "Item": {
-      "ItemId": "Plant_Crop_Carrot",
+      "ItemId": "Plant_Crop_Carrot_Item",
       "QuantityMin": 1,
       "QuantityMax": 1
     }
@@ -99,7 +100,7 @@ A single item with variable quantity:
   "Container": {
     "Type": "Single",
     "Item": {
-      "ItemId": "Ingredient_Wool",
+      "ItemId": "Ingredient_Bolt_Wool",
       "QuantityMin": 1,
       "QuantityMax": 3
     }
@@ -119,17 +120,17 @@ One item chosen randomly from a pool:
       {
         "Type": "Single",
         "Weight": 70,
-        "Item": { "ItemId": "Fish_Common_Carp", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Bluegill_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 25,
-        "Item": { "ItemId": "Fish_Uncommon_Bass", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Salmon_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 5,
-        "Item": { "ItemId": "Fish_Rare_Goldfish", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Pike_Item", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -151,7 +152,7 @@ All items drop together:
       },
       {
         "Type": "Single",
-        "Item": { "ItemId": "Ingredient_Meat_Raw", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Food_Wildmeat_Raw", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -189,9 +190,11 @@ Use for drops that should yield nothing. A standalone empty drop file is literal
 | `Type` | string | Container type: `Multiple`, `Choice`, `Single`, `Empty`, `Droplist` |
 | `Containers` | array | Nested containers (for Multiple/Choice) |
 | `Item` | object | Item definition (for Single) |
-| `Weight` | int | Selection weight (for Choice children) |
-| `RollsMin` | int | Minimum number of selections (for Choice) |
-| `RollsMax` | int | Maximum number of selections (for Choice) |
+| `Weight` | double | Selection weight (for Choice children); percent chance 0-100 for Multiple children. Defaults to `100` |
+| `RollsMin` | int | Minimum number of selections (for Choice). Defaults to `1` |
+| `RollsMax` | int | Maximum number of selections (for Choice). Defaults to `1` |
+| `MinCount` | int | Minimum number of passes over the child list (for Multiple). Defaults to `1` |
+| `MaxCount` | int | Maximum number of passes over the child list (for Multiple). Defaults to `1` |
 | `DroplistId` | string | Flat ID of a referenced drop file (for Droplist), e.g. `Zone1_Encounters_Tier1` |
 | `$Comment` | string | Documentation comment (ignored by game) |
 
@@ -200,8 +203,9 @@ Use for drops that should yield nothing. A standalone empty drop file is literal
 | Property | Type | Description |
 |----------|------|-------------|
 | `ItemId` | string | Item identifier from item definitions |
-| `QuantityMin` | int | Minimum quantity to drop |
-| `QuantityMax` | int | Maximum quantity to drop |
+| `QuantityMin` | int | Minimum quantity to drop. Defaults to `1` |
+| `QuantityMax` | int | Maximum quantity to drop. Defaults to `1` |
+| `Metadata` | object | Optional BSON metadata copied onto the produced item stack |
 
 ---
 
@@ -218,11 +222,11 @@ Evaluates all nested containers. Every child container produces drops.
     "Containers": [
       {
         "Type": "Single",
-        "Item": { "ItemId": "Ingredient_Bone", "QuantityMin": 1, "QuantityMax": 3 }
+        "Item": { "ItemId": "Ingredient_Bone_Fragment", "QuantityMin": 1, "QuantityMax": 3 }
       },
       {
         "Type": "Single",
-        "Item": { "ItemId": "Ingredient_Meat_Raw", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Food_Wildmeat_Raw", "QuantityMin": 1, "QuantityMax": 2 }
       }
     ]
   }
@@ -248,7 +252,30 @@ Within a Multiple container, child `Weight` values function as percentage chance
         "Type": "Single",
         "Weight": 25,
         "$Comment": "25% chance to drop",
-        "Item": { "ItemId": "Ingredient_Horn", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Ingredient_Bone_Fragment", "QuantityMin": 1, "QuantityMax": 1 }
+      }
+    ]
+  }
+}
+```
+
+**Repeating the whole list with MinCount/MaxCount:**
+
+`Multiple` also accepts `MinCount`/`MaxCount` (both default to `1`). The container picks a
+count in that range and runs the *entire* child list that many times, so each child's
+`Weight` percentage is rolled once per pass:
+
+```json
+{
+  "Container": {
+    "Type": "Multiple",
+    "MinCount": 1,
+    "MaxCount": 3,
+    "Containers": [
+      {
+        "Type": "Single",
+        "Weight": 50,
+        "Item": { "ItemId": "Ingredient_Stick", "QuantityMin": 1, "QuantityMax": 2 }
       }
     ]
   }
@@ -267,17 +294,17 @@ Selects one nested container based on weight. Higher weight = higher chance.
       {
         "Type": "Single",
         "Weight": 60,
-        "Item": { "ItemId": "Ingredient_Feather_Common", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Ingredient_Feathers_Light", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 30,
-        "Item": { "ItemId": "Ingredient_Feather_Uncommon", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Ingredient_Feathers_Dark", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 10,
-        "Item": { "ItemId": "Ingredient_Feather_Rare", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Ingredient_Feathers_Red", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -305,17 +332,17 @@ In the example above:
       {
         "Type": "Single",
         "Weight": 50,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Amethyst", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Rock_Gem_Topaz", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 30,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Ruby", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Rock_Gem_Ruby", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 20,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Sapphire", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Rock_Gem_Sapphire", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -333,7 +360,7 @@ Leaf node that defines an actual item drop.
   "Container": {
     "Type": "Single",
     "Item": {
-      "ItemId": "Plant_Crop_Corn",
+      "ItemId": "Plant_Crop_Corn_Item",
       "QuantityMin": 1,
       "QuantityMax": 3
     }
@@ -357,7 +384,7 @@ Produces no drops. Used within Choice containers to add a "nothing drops" outcom
       {
         "Type": "Single",
         "Weight": 80,
-        "Item": { "ItemId": "Ingredient_Seed_Wheat", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Plant_Seeds_Wheat", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Empty",
@@ -469,6 +496,7 @@ Organized by creature category. NPC drop files use a `Drop_` prefix (e.g. `Drop_
 
 ```
 Server/Drops/NPCs/
+├── Drop_Wildlife.json      (shared fallback, sits at the category root)
 ├── Beast/
 ├── Boss/
 ├── Critter/
@@ -484,7 +512,9 @@ Server/Drops/NPCs/
 │   ├── Outlander/
 │   ├── Trork/
 │   └── Tuluk/
+├── Inventory/              (droplists used to stock an NPC's inventory, e.g. Drop_Arrows)
 ├── Livestock/
+├── Loadouts/               (randomised weapon/hotbar loadouts)
 ├── Swimming_Beast/
 ├── Swimming_Critter/
 ├── Swimming_Wildlife/
@@ -559,17 +589,17 @@ Defines drops for ore blocks and crystals when mined.
       {
         "Type": "Single",
         "Weight": 60,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Amethyst", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Rock_Gem_Topaz", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 30,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Ruby", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Rock_Gem_Ruby", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 10,
-        "Item": { "ItemId": "Ingredient_Gem_Rough_Diamond", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Rock_Gem_Diamond", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -587,15 +617,23 @@ Wild plants and foraged items.
 ```json
 {
   "Container": {
-    "Type": "Single",
-    "Item": {
-      "ItemId": "Plant_Fruit_Berries_Red",
-      "QuantityMin": 2,
-      "QuantityMax": 5
-    }
+    "Type": "Multiple",
+    "Containers": [
+      {
+        "Type": "Single",
+        "Item": { "ItemId": "Plant_Fruit_Berries_Red", "QuantityMin": 1, "QuantityMax": 2 }
+      },
+      { "Type": "Single", "Weight": 50, "Item": { "ItemId": "Ingredient_Fibre" } },
+      { "Type": "Single", "Weight": 20, "Item": { "ItemId": "Ingredient_Fibre" } },
+      { "Type": "Single", "Weight": 50, "Item": { "ItemId": "Ingredient_Stick" } }
+    ]
   }
 }
 ```
+
+Note the two separate `Ingredient_Fibre` children: repeating the same item as two
+independently-weighted `Multiple` children is the idiomatic way to express "50% chance of
+one fibre, plus a further 20% chance of a second".
 
 Some plant drop files yield nothing (e.g. `Plant/Plant_Leaves.json` is `{}`).
 
@@ -609,31 +647,50 @@ Gatherable ingredients such as tree sap globs and wild grass. Files include `Tre
 
 **Location:** `Server/Drops/Wood/`
 
-Tree and branch drops when cut. Files include `Bark.json`, `Wood_Branch.json`, `Wood_Sticks.json`, `Tree_Leaves.json`.
+Tree, leaf, and branch drops when cut. The eight files are `Bark.json`, `Tree_Leaves.json`,
+`Tree_Leaves_Palm.json`, `Tree_Leaves_Physics.json`, `Tree_Leaves_Physics_Palm.json`,
+`Wood_Branch.json`, `Wood_Sticks.json`, and `Wood_Stripped_Deco.json`.
 
-**Example: Wood Branch Drop**
+**Example: Wood Branch Drop** (`Wood/Wood_Branch.json`)
+
+A `Choice` between two equally-weighted `Multiple` outcomes — one that can also yield sap,
+one that yields a single stick:
 
 ```json
 {
   "Container": {
-    "Type": "Multiple",
+    "Type": "Choice",
     "Containers": [
       {
-        "Type": "Single",
-        "Item": { "ItemId": "Wood_Sticks", "QuantityMin": 1, "QuantityMax": 2 }
+        "Type": "Multiple",
+        "Weight": 50,
+        "Containers": [
+          { "Type": "Single", "Item": { "ItemId": "Ingredient_Stick", "QuantityMin": 0, "QuantityMax": 2 } },
+          { "Type": "Single", "Item": { "ItemId": "Ingredient_Tree_Sap", "QuantityMin": 0, "QuantityMax": 1 } }
+        ]
+      },
+      {
+        "Type": "Multiple",
+        "Weight": 50,
+        "Containers": [
+          { "Type": "Single", "Item": { "ItemId": "Ingredient_Stick" } }
+        ]
       }
     ]
   }
 }
 ```
 
+(A `QuantityMin` of `0` is legal and yields "possibly nothing" for that entry.)
+
 ### Container Drops
 
 **Location:** `Server/Drops/Items/`
 
-Defines what destructible containers (barrels, pots, coffins) drop when broken. Files include `Barrels.json`, `Container_Pot_Clay.json`, `Container_Coffins.json`. An `Empty.json` (literally `{}`) is also present for containers that drop nothing.
+Defines what destructible containers (barrels, pots, coffins) drop when broken. Files include `Barrels.json`, `Container_Pot_Clay.json`, `Container_Coffins.json`, `Container_Trash.json`, `Spider_Cocoon.json`, and `Iron_Stack.json`. An `Empty.json` (literally `{}`) is also present for containers that drop nothing.
 
-**Example: Clay Pot Drop** (`Items/Container_Pot_Clay.json`)
+**Example: Clay Pot Drop** (`Items/Container_Pot_Clay.json`, abridged — the real file has
+three more loot children)
 
 A `Choice` with a heavily-weighted `Empty` child so most pots drop nothing:
 
@@ -718,9 +775,15 @@ A weighted `Choice` of loot rolls combined with a shared zone-encounter droplist
 
 **Location:** `Server/Drops/Traps/`
 
-Fishing traps and other trap-based loot.
+Fishing traps and other trap-based loot. The two shipped files are
+`Drops_Fishing_Trap_Crude.json` and `Drops_Fishing_Trap_Crude_Baited_Wild.json`. Both are a
+top-level `Choice` over `$Comment`-labelled rarity buckets — *Common Fish* (weight 100),
+*Common Resource* (99), *Common Junk* (98), *Uncommon Junk* (49), *Rare Junk* (9),
+*Epic Junk* (4), *Legendary Junk* (0.9), *Monster Fish* (0.01) — where each bucket is itself
+a `Choice` of equally-weighted items. Note that weights are `double`, so fractional weights
+like `0.9` and `0.01` are the normal way to express very rare buckets.
 
-**Example: Fishing Trap**
+**Example: Fishing Trap** (illustrative, same shape as the shipped files)
 
 ```json
 {
@@ -730,27 +793,27 @@ Fishing traps and other trap-based loot.
       {
         "Type": "Single",
         "Weight": 50,
-        "Item": { "ItemId": "Fish_Common_Carp", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Fish_Bluegill_Item", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 25,
-        "Item": { "ItemId": "Fish_Common_Trout", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Catfish_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 15,
-        "Item": { "ItemId": "Fish_Uncommon_Bass", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Salmon_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 8,
-        "Item": { "ItemId": "Fish_Rare_Goldfish", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Pike_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 2,
-        "Item": { "ItemId": "Fish_Legendary_Koi", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Whale_Humpback_Item", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -761,7 +824,8 @@ Fishing traps and other trap-based loot.
 
 **Location:** `Server/Drops/Objectives/`
 
-Quest completion rewards.
+Quest completion rewards. The four files are `Treasure.json`, `Treasure_Map.json`,
+`Trork_Camp_Chest.json`, and `Trork_Camp_Inventory.json`.
 
 ---
 
@@ -788,6 +852,7 @@ Server/Drops/
 │   ├── Empty.json
 │   └── ...
 ├── NPCs/
+│   ├── Drop_Wildlife.json
 │   ├── Beast/
 │   ├── Boss/
 │   ├── Critter/
@@ -801,10 +866,13 @@ Server/Drops/
 │   │   ├── Outlander/
 │   │   ├── Trork/
 │   │   └── Tuluk/
+│   ├── Inventory/
+│   │   └── Drop_Arrows.json
 │   ├── Livestock/
 │   │   ├── Drop_Bison.json
 │   │   ├── Drop_Boar.json
 │   │   └── ...
+│   ├── Loadouts/
 │   ├── Swimming_Beast/
 │   ├── Undead/
 │   ├── Void/
@@ -823,7 +891,9 @@ Server/Drops/
 │   ├── Crystal/
 │   └── ...
 ├── Traps/
-└── Wood/
+├── Wood/
+├── Soil_Gravel.json
+└── Soil_Gravel_Pickaxe.json
 ```
 
 ### Naming Conventions
@@ -851,30 +921,64 @@ Server/Drops/
 
 ### Block Drops
 
-Blocks reference drop files in their `BlockType.Components.container` configuration:
+Blocks reference drop files from their `BlockType.Gathering` block, once per gather mode
+(`Soft`, `Breaking`, `Harvest`, …). The value is the **flat droplist id** — the same id used
+by `DroplistId`, never a directory path. From `Server/Item/Items/Deco/Deco_Iron_Stack.json`:
 
 ```json
 {
   "BlockType": {
-    "Components": {
-      "container": {
-        "Droplist": "Items/Container_Pot_Clay"
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Rocks",
+        "DropList": "Iron_Stack"
+      },
+      "UseDefaultDropWhenPlaced": true
+    }
+  }
+}
+```
+
+`DropList` also accepts an **inline** drop-file object instead of an id, so a one-off drop
+need not get its own file under `Server/Drops/`. From
+`Server/Item/Items/Container/Furniture_Kweebec_Chest_Large.json`:
+
+```json
+{
+  "BlockType": {
+    "Gathering": {
+      "Breaking": {
+        "GatherType": "Woods",
+        "DropList": {
+          "Container": {
+            "Type": "Single",
+            "Item": { "ItemId": "Furniture_Kweebec_Chest_Small", "QuantityMin": 2, "QuantityMax": 2 }
+          }
+        }
       }
     }
   }
 }
 ```
 
+Container *contents* (as opposed to break drops) come from the block's block-entity
+component instead — `BlockType.BlockEntity.Components.ItemContainerBlock`, which carries a
+`Capacity` and, when the container should be stocked with loot, a `Droplist`.
+
 See [Block Items - Containers](items-blocks.md#containers) for details.
 
 ### NPC Drops
 
-NPC roles reference drop files via the `DropList` property:
+NPC roles reference drop files via the `DropList` property. Role files are `Variant`
+documents whose `Reference` is the **flat id** of the template they extend, with the
+overrides under `Modify`. From `Server/NPC/Roles/Creature/Livestock/Bison.json`:
 
 ```json
 {
-  "Reference": "Livestock/_Core/Template_Livestock",
+  "Type": "Variant",
+  "Reference": "Template_Animal_Neutral",
   "Modify": {
+    "Appearance": "Bison",
     "DropList": "Drop_Bison"
   }
 }
@@ -906,9 +1010,10 @@ definitions reference them via `Gathering` `DropList`:
 }
 ```
 
-The `BlockType.Farming` block (`FarmingData`) only drives growth — `Stages`,
-`StartingStageSet`, `StageSetAfterHarvest` — it holds no drop data; drops always
-come from the referenced drop files.
+The `BlockType.Farming` block (`FarmingData`) only drives growth — its keys are `Stages`,
+`StartingStageSet`, `StageSetAfterHarvest`, `ActiveGrowthModifiers`, `SoilConfig`,
+`Lifetime`, and `TargetBlock`. It holds no drop data; drops always come from the referenced
+drop files.
 
 See [Block Items - Farming & Soil](items-blocks.md#farming--soil) for details.
 
@@ -959,37 +1064,37 @@ A fishing trap with common to legendary fish:
         "Type": "Single",
         "Weight": 45,
         "$Comment": "Common (45%)",
-        "Item": { "ItemId": "Fish_Common_Carp", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Fish_Bluegill_Item", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 25,
         "$Comment": "Common (25%)",
-        "Item": { "ItemId": "Fish_Common_Trout", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Catfish_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 15,
         "$Comment": "Uncommon (15%)",
-        "Item": { "ItemId": "Fish_Uncommon_Bass", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Salmon_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 10,
         "$Comment": "Rare (10%)",
-        "Item": { "ItemId": "Fish_Rare_Goldfish", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Pike_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 4,
         "$Comment": "Epic (4%)",
-        "Item": { "ItemId": "Fish_Epic_Sturgeon", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Snapjaw_Item", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Single",
         "Weight": 1,
         "$Comment": "Legendary (1%)",
-        "Item": { "ItemId": "Fish_Legendary_Koi", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Fish_Whale_Humpback_Item", "QuantityMin": 1, "QuantityMax": 1 }
       }
     ]
   }
@@ -1020,27 +1125,27 @@ A dungeon chest with multiple random items:
           {
             "Type": "Single",
             "Weight": 20,
-            "Item": { "ItemId": "Potion_Health_Medium", "QuantityMin": 1, "QuantityMax": 2 }
+            "Item": { "ItemId": "Potion_Health", "QuantityMin": 1, "QuantityMax": 2 }
           },
           {
             "Type": "Single",
             "Weight": 20,
-            "Item": { "ItemId": "Food_Cooked_Steak", "QuantityMin": 2, "QuantityMax": 4 }
+            "Item": { "ItemId": "Food_Wildmeat_Cooked", "QuantityMin": 2, "QuantityMax": 4 }
           },
           {
             "Type": "Single",
             "Weight": 15,
-            "Item": { "ItemId": "Ingredient_Gem_Rough_Ruby", "QuantityMin": 1, "QuantityMax": 2 }
+            "Item": { "ItemId": "Rock_Gem_Ruby", "QuantityMin": 1, "QuantityMax": 2 }
           },
           {
             "Type": "Single",
             "Weight": 10,
-            "Item": { "ItemId": "Ingredient_Gem_Cut_Amethyst", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Rock_Gem_Emerald", "QuantityMin": 1, "QuantityMax": 1 }
           },
           {
             "Type": "Single",
             "Weight": 10,
-            "Item": { "ItemId": "Recipe_Weapon_Sword_Iron", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Recipe_Page", "QuantityMin": 1, "QuantityMax": 1 }
           }
         ]
       },
@@ -1056,7 +1161,7 @@ A dungeon chest with multiple random items:
           {
             "Type": "Single",
             "Weight": 30,
-            "Item": { "ItemId": "Armor_Chest_Iron", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Armor_Iron_Chest", "QuantityMin": 1, "QuantityMax": 1 }
           },
           {
             "Type": "Single",
@@ -1066,7 +1171,7 @@ A dungeon chest with multiple random items:
           {
             "Type": "Single",
             "Weight": 10,
-            "Item": { "ItemId": "Weapon_Bow_Iron", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Weapon_Shortbow_Iron", "QuantityMin": 1, "QuantityMax": 1 }
           }
         ]
       }
@@ -1089,25 +1194,25 @@ A predator with guaranteed meat and chance for rare drops:
         "Type": "Single",
         "Weight": 100,
         "$Comment": "Always drops meat",
-        "Item": { "ItemId": "Ingredient_Meat_Raw_Wolf", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Food_Wildmeat_Raw", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 100,
         "$Comment": "Always drops fur",
-        "Item": { "ItemId": "Ingredient_Fur_Wolf", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Ingredient_Hide_Soft", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 75,
         "$Comment": "75% chance for bone",
-        "Item": { "ItemId": "Ingredient_Bone", "QuantityMin": 1, "QuantityMax": 2 }
+        "Item": { "ItemId": "Ingredient_Bone_Fragment", "QuantityMin": 1, "QuantityMax": 2 }
       },
       {
         "Type": "Single",
         "Weight": 25,
         "$Comment": "25% chance for fang",
-        "Item": { "ItemId": "Ingredient_Fang_Wolf", "QuantityMin": 1, "QuantityMax": 1 }
+        "Item": { "ItemId": "Ingredient_Leather_Soft", "QuantityMin": 1, "QuantityMax": 1 }
       },
       {
         "Type": "Choice",
@@ -1117,12 +1222,12 @@ A predator with guaranteed meat and chance for rare drops:
           {
             "Type": "Single",
             "Weight": 80,
-            "Item": { "ItemId": "Trophy_Wolf_Pelt", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Rock_Gem_Ruby", "QuantityMin": 1, "QuantityMax": 1 }
           },
           {
             "Type": "Single",
             "Weight": 20,
-            "Item": { "ItemId": "Trophy_Wolf_Alpha_Pelt", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "Rock_Gem_Diamond", "QuantityMin": 1, "QuantityMax": 1 }
           }
         ]
       }

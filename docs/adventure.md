@@ -21,6 +21,11 @@ Implemented across `com.hypixel.hytale.builtin` (instances, adventure objectives
 - `WorldMapTracker` for querying and mutating per-player map/zone discovery state
 - Portal-world configuration assets (`PortalType`, `PortalDescription`, `PillTag`, `PortalSpawnConfig`)
 - The `PortalKey` item property and per-stack `AdventureMetadata` (cursed items)
+- Wilderness tracking (`WildernessConfig`, `WildernessTracker`) — which chunks are still "untouched"
+
+> **Scripted adventure timelines** (stages, forks, conditions, actions) are a separate
+> subsystem added in 0.6.3 and documented on their own page — see
+> [World Events](world-events.md).
 
 ## Architecture
 ```
@@ -50,6 +55,11 @@ Portal worlds (com.hypixel.hytale.server.core.asset.type.portalworld)
 Portal items (com.hypixel.hytale.server.core.asset.type.item.config)
 ├── PortalKey (item "PortalKey" property → portal type + time limit)
 └── metadata.AdventureMetadata (per-stack "Adventure" metadata: Cursed flag)
+
+Wilderness (com.hypixel.hytale.builtin.adventure.wilderness)
+├── WildernessConfig (GameplayConfig plugin section "Wilderness")
+├── WildernessTracker (per-world ChunkStore Resource: which chunks are home vs wilderness)
+└── component.Wilderness (per-entity wilderness-chunk bitset used by world events)
 ```
 
 ## Key Classes
@@ -70,6 +80,10 @@ Portal items (com.hypixel.hytale.server.core.asset.type.item.config)
 | `PortalSpawnConfig` | `server.core.asset.type.portalworld` | Return-portal and spawn-override settings for a portal world |
 | `PortalKey` | `server.core.asset.type.item.config` | Item config block that turns an item into a portal key |
 | `AdventureMetadata` | `server.core.asset.type.item.config.metadata` | Per-`ItemStack` adventure metadata (the cursed flag) |
+| `WildernessConfig` | `builtin.adventure.wilderness` | `GameplayConfig` plugin section `"Wilderness"` (0.6.3+) |
+| `WildernessTracker` | `builtin.adventure.wilderness.resource` | Per-world `Resource<ChunkStore>`: home vs. wilderness chunks (0.6.3+) |
+| `Wilderness` | `builtin.adventure.wilderness.component` | Per-entity component holding a bitset of nearby wilderness chunks (0.6.3+) |
+| `WildernessLocation` | `builtin.adventure.wilderness.component` | World-event `EventLocation` type `"WildernessLocation"` (0.6.3+) |
 
 ## Adventure Events
 
@@ -392,10 +406,17 @@ Tracks world map discovery state for a player. Provides methods to discover/undi
 | `undiscoverZone(World, String)` | `boolean` | Undiscover a zone |
 | `discoverZones(World, Set<String>)` | `boolean` | Discover multiple zones |
 | `undiscoverZones(World, Set<String>)` | `boolean` | Undiscover multiple zones |
-| `isAllowTeleportToCoordinates()` | `boolean` | Check if coordinate teleport allowed |
-| `isAllowTeleportToMarkers()` | `boolean` | Check if marker teleport allowed |
+| `isAllowTeleportToCoordinates(PlayerRef, Player)` **(static)** | `boolean` | Whether that player may teleport to raw coordinates |
+| `isAllowTeleportToMarkers(PlayerRef, Player)` | `boolean` | Whether that player may teleport to map markers |
 | `getViewRadiusOverride()` | `Integer` | Get view radius override (nullable) |
 | `setViewRadiusOverride(Integer)` | `void` | Set view radius override |
+| `getEffectiveViewRadius(World)` | `int` | View radius actually in force (override, else the world's) |
+| `getSentMarkers()` | `Map<String, MapMarker>` | Map markers already sent to this player |
+| `unregisterEvents()` | `void` | Detach the tracker's listeners (called when the player leaves) |
+
+> **Gotcha:** both teleport-permission checks take the player as arguments — they are *not*
+> no-arg getters, and `isAllowTeleportToCoordinates` is **static** while
+> `isAllowTeleportToMarkers` is an instance method.
 
 ### Accessing WorldMapTracker
 
@@ -403,6 +424,7 @@ The `WorldMapTracker` is accessed via `Player.getWorldMapTracker()`:
 
 ```java
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 
 // In a command or event handler where you have access to a Player
@@ -419,9 +441,11 @@ if (currentZone != null) {
 World world = player.getWorld();
 boolean discovered = tracker.discoverZone(world, "ancient_ruins");
 
-// Check teleport permissions
-boolean canTeleportToCoords = tracker.isAllowTeleportToCoordinates();
-boolean canTeleportToMarkers = tracker.isAllowTeleportToMarkers();
+// Check teleport permissions — both take the player, and the coordinate
+// check is a static method on the class, not on the tracker instance
+PlayerRef playerRef = player.getPlayerRef();
+boolean canTeleportToCoords = WorldMapTracker.isAllowTeleportToCoordinates(playerRef, player);
+boolean canTeleportToMarkers = tracker.isAllowTeleportToMarkers(playerRef, player);
 
 // Override view radius
 tracker.setViewRadiusOverride(500);  // Set custom view radius
@@ -455,6 +479,7 @@ filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taig
 | `VoidInvasionEnabled` | boolean | Whether the void invasion is enabled for this portal |
 | `CursedItems` | string[] | Item ids that are cursed inside this portal world |
 | `Spawn` | object | Return-portal spawn settings — see [PortalSpawnConfig](#portalspawnconfig) |
+| `CloseWhenEmpty` | boolean | Whether the portal and its world are closed once the last player leaves (default `true`, added in 0.6.3) |
 
 **Example** (`Server/PortalTypes/Jungles.json`):
 
@@ -485,6 +510,7 @@ filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taig
 | `isVoidInvasionEnabled()` | `boolean` | Whether the void invasion runs in this portal world |
 | `getCursedItems()` | `Set<String>` | Item ids cursed inside this portal world |
 | `getSpawn()` | `PortalSpawnConfig` | Return-portal spawn settings |
+| `isCloseWhenEmpty()` | `boolean` | Whether the portal world closes when empty (0.6.3+) |
 
 ```java
 import com.hypixel.hytale.server.core.asset.type.portalworld.PortalType;
@@ -660,6 +686,91 @@ ItemStack cursedStack = stack.withMetadata(AdventureMetadata.KEYED_CODEC, cursed
 ```
 
 > **See also:** [ItemStack → Metadata Access](inventory.md#metadata-access)
+
+---
+
+## Wilderness Tracking
+
+**Package:** `com.hypixel.hytale.builtin.adventure.wilderness`
+
+New as of 0.6.3. **Wilderness** is the engine's answer to "where can adventure content spawn without
+bulldozing somebody's base". `WildernessPlugin` keeps a per-world `WildernessTracker` that marks every
+chunk containing (or near) a `RespawnBlock` as **home**; every other chunk is **wilderness**. World-event
+location conditions use it through the `"WildernessLocation"` [`EventLocation`](world-events.md) type, and
+plugins can query it directly.
+
+It is **off by default** — `Enabled` is `false` in the shipped `Server/GameplayConfigs/Default.json`.
+
+### WildernessConfig
+
+`GameplayConfig` plugin section `"Wilderness"` (`WildernessConfig.ID`). Read it for a world with
+`WildernessConfig.getOrDefault(world)`.
+
+| Field | Type | Default (shipped `Default.json`) | Description |
+|-------|------|----------------------------------|-------------|
+| `Enabled` | boolean | `false` | Enable wilderness tracking in this world |
+| `OwnedHomeChunkRadius` | int | `8` | Horizontal chunk radius around an **owned** respawn marker (`-1` disables the radius) |
+| `OwnedHomeChunkRadiusY` | int | `4` | Vertical chunk radius around an owned marker |
+| `UnownedHomeChunkRadius` | int | `4` | Horizontal chunk radius around an **unowned** respawn marker |
+| `UnownedHomeChunkRadiusY` | int | `2` | Vertical chunk radius around an unowned marker |
+| `PlayerTrackerChunkRadius` | int | `2` | Horizontal chunk radius tracked around each player |
+| `PlayerTrackerChunkRadiusY` | int | `1` | Vertical chunk radius tracked around each player |
+
+```json
+{
+  "Plugin": {
+    "Wilderness": {
+      "Enabled": false,
+      "OwnedHomeChunkRadius": 8,
+      "OwnedHomeChunkRadiusY": 4,
+      "UnownedHomeChunkRadius": 4,
+      "UnownedHomeChunkRadiusY": 2,
+      "PlayerTrackerChunkRadius": 2,
+      "PlayerTrackerChunkRadiusY": 1
+    }
+  }
+}
+```
+
+> The compiled-in defaults are *not* the shipped ones: `WildernessConfig.DEFAULT_HOME_RADIUS_Y_CHUNKS_OWNED`
+> is `2`, `WildernessConfig.DEFAULT_HOME_RADIUS_CHUNKS_UNOWNED` is `2` and
+> `WildernessConfig.DEFAULT_HOME_RADIUS_Y_CHUNKS_UNOWNED` is `1`, while `Default.json` sets `4`, `4` and `2`.
+> Read the effective values with `WildernessConfig.getOrDefault(world)` rather than assuming either.
+
+### WildernessTracker
+
+**Package:** `com.hypixel.hytale.builtin.adventure.wilderness.resource` — a `Resource<ChunkStore>`, one per world.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getTracker(World)` **(static)** | `WildernessTracker` | The tracker resource for a world |
+| `getResourceType()` **(static)** | `ResourceType<ChunkStore, WildernessTracker>` | Its resource type |
+| `isEnabled()` / `isDisabled()` | `boolean` | Whether tracking is on for this world |
+| `isWilderness(int x, int y, int z)` | `boolean` | Whether that **block** position is in a wilderness chunk (also `Vector3i` / `Vector3d` overloads) |
+| `isHome(int x, int y, int z)` | `boolean` | Exactly `!isWilderness(...)` (also `Vector3i` / `Vector3d` overloads) |
+| `isWildernessChunk(int x, int y, int z)` | `boolean` | Same test, in **chunk** coordinates (also a `Vector3i` overload) |
+| `collectWildernessChunks(Vector3i, int, int, int, Collection<Vector3i>)` | `void` | Collect wilderness chunks in a radius (`Vector3d`, and raw-int-box, overloads too) |
+| `collectHomeChunks(Vector3i, int, int, int, Collection<Vector3i>)` | `void` | Same for home chunks |
+| `addHomeChunk(int, int, int, boolean)` | `void` | Mark a chunk as home (last arg = *owned*) |
+| `removeHomeChunk(int, int, int, boolean)` | `void` | Drop a home-chunk mark |
+| `generation()` | `long` | Bumped whenever the home-chunk set changes |
+
+```java
+import com.hypixel.hytale.builtin.adventure.wilderness.resource.WildernessTracker;
+
+// Chunk-store thread only — WildernessTracker is a ChunkStore resource
+WildernessTracker tracker = WildernessTracker.getTracker(world);
+if (tracker.isEnabled() && tracker.isWilderness(x, y, z)) {
+    // safe to spawn adventure content here
+}
+```
+
+> **Gotchas**
+> - `isHome(...)` is defined as the negation of `isWilderness(...)`, so with tracking **disabled**
+>   every position reports as wilderness — check `isEnabled()` before trusting either.
+> - Home chunks are derived from `RespawnBlock` block states, not from arbitrary player builds;
+>   a base with no bed/respawn block is still "wilderness".
+> - The tracker lives in the world's **chunk** store, so read it on that store's thread.
 
 ---
 

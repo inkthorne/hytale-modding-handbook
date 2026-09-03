@@ -68,24 +68,30 @@ waits for an encounter signal and prints a message.
 }
 ```
 
-| Key | Type | Meaning (from the codec documentation strings) |
-|-----|------|------------------------------------------------|
-| `Root` | stage | The starting stage — either an inline stage object (`Forks`) or the id of a `Server/WorldEvent/Stage` asset. Resolved with `StageAsset.getAssetOrUnknown(root)` at build time, so an unknown id degrades to the `"Unknown"` stage rather than failing |
-| `Persistent` | bool | Persist the running event with the world and resume it after a server restart |
-| `IterationCount` | int | How many times the event repeats; `-1` (`WorldEvent.INFINITE_ITERATIONS`) = forever |
-| `PlayerCountMin` | int | Minimum non-spectator players in the world for the event to tick (floor `WorldEvent.MIN_PLAYER_COUNT` = 1) |
-| `InstanceCountMax` | int | Maximum simultaneous instances of this asset; `-1` (`WorldEvent.INFINITE_INSTANCES`) = unlimited |
+| Key | Type | Default | Meaning (from the codec documentation strings) |
+|-----|------|---------|------------------------------------------------|
+| `Root` | stage id **or** inline stage | `"Unknown"` | The starting stage. The codec is `StageAsset.REF_CODEC` (a `ContainedAssetCodec`), so this is `anyOf(id, inline definition)` — either the id of a `Server/WorldEvent/Stage` asset, or a stage object written inline as in the example above, which is registered as a contained asset under a generated id. Omitting the key entirely fails validation with `Missing root stage: Unknown` |
+| `Persistent` | bool | **`true`** | Persist the running event with the world and resume it after a server restart. Note the default: omit the key and the event *is* persisted (the shipped example sets `false` explicitly, which makes `false` look like the default) |
+| `IterationCount` | int | `-1` | How many times the event repeats; `-1` (`WorldEvent.INFINITE_ITERATIONS`) = forever. Codec accepts `>= -1`, but `0` makes the asset permanently unstartable (see gotchas) |
+| `PlayerCountMin` | int | `1` | Minimum non-spectator players in the world for the event to tick. Codec accepts `>= 0`, and the value is used unclamped — `0` means it runs in an empty world |
+| `InstanceCountMax` | int | `-1` | Maximum simultaneous instances of this asset; `-1` (`WorldEvent.INFINITE_INSTANCES`) = unlimited. Enforced at start |
 
 The asset store is registered at path `WorldEvent/Event`, keyed by file name; `WorldEventAsset.ASSET_MAP` /
 `WorldEventAsset.getAssetOrUnknown(id)` look assets up, and `WorldEventAsset.build(UUID, boolean transient)` produces
-the `WorldEvent` component for a new instance. Every asset is run through `Validator` on load (stage graph must be
-acyclic; every context key an action *references* must be *defined* by an earlier condition); `WorldEventAsset.valid()`
-reports the result and an invalid asset is refused by the start paths.
+the `WorldEvent` component for a new instance.
+
+`WorldEventAsset.valid()` runs `Validator` over the asset and memoizes the verdict. The validator walks the whole
+reachable stage graph and fails on: a `Root` or `Next` id with no matching `StageAsset` (`Missing root stage: %s` /
+`Missing stage: %s`), a condition or action whose own `validate(...)` objected (`Invalid condition: %s` /
+`Invalid action: %s`), a context key that is *referenced* anywhere but *defined* nowhere
+(`Referenced name '%s' has not been defined`), and a **cyclic** stage graph
+(`Cyclic stage graph reachable from root stage: %s`). An asset that fails is refused by every start path.
 
 ### `Server/WorldEvent/Stage/<Id>.json` — `StageAsset`
 
 A stage is "a step in a world-event's timeline. May consist of multiple different forks that are taken depending on
-their conditions." Shared stages live in their own files and are referenced by id from `Root` / `Next`:
+their conditions." A stage can be written inline at `Root` / `Next` (as the reference asset above does), or split
+into its own file under `Server/WorldEvent/Stage/` and referenced by id — useful when several events share a stage:
 
 ```json
 {
@@ -103,10 +109,14 @@ their conditions." Shared stages live in their own files and are referenced by i
 |----------|---------|
 | `Conditions` | Array of condition objects that must **all** complete for the fork to complete |
 | `Actions` | Array of action objects run once the fork completes |
-| `Next` | Id of the next `StageAsset`; omit on a terminal fork — the event then ends with `EventEndEcsEvent.Reason.SUCCESS` |
+| `Next` | The next stage — like `Root`, `StageAsset.REF_CODEC`, so either a `StageAsset` id or an inline stage object. Omit on a terminal fork; the iteration then ends (see *Runtime model* — that is not necessarily the end of the event) |
 
 "Whichever fork's conditions complete first will be selected to run its actions and 'next' stage" — forks are
 alternatives, evaluated concurrently; the losing forks' conditions are cancelled.
+
+> **No stage assets ship in 0.6.3.** `Server/WorldEvent/Stage/` is a registered asset path but the game ships it
+> empty — the only shipped world-event asset writes its stage inline. The standalone-file example above is
+> therefore constructed from the codec, not copied from a shipped file.
 
 ---
 
@@ -160,9 +170,11 @@ An action returning `false` from `apply(...)` fails the fork (see *Runtime* belo
 ## Context keys
 
 Conditions **define** typed variables and actions **reference** them; both sides name them with a plain string
-(`"IntervalKey": "warmup"`, `"LocationKey": "site"`). At load time `Validator` checks that every referenced key
-was defined by an earlier stage, so a typo fails the asset rather than a running event. At runtime the values
-live in `WorldEvent.context`, a `ContextMap` keyed by `ContextKey` **and** context class:
+(`"IntervalKey": "warmup"`, `"LocationKey": "site"`). `Validator` checks that every referenced key is defined
+*somewhere* in the reachable graph, so a typo fails the asset — but it is a plain set-membership test with **no
+ordering or reachability-position check**, so referencing a key that is only defined by a *later* stage passes
+validation and fails at runtime instead (see gotchas). At runtime the values live in `WorldEvent.context`, a
+`ContextMap` keyed by `ContextKey` **and** context class:
 
 | Context `Type` | Produced by | Payload keys (persisted) |
 |----------------|-------------|---------------------------|
@@ -196,12 +208,16 @@ non-permanent prefab is rolled back and a map marker removed.
   On the first tick of a stage it submits the forks' conditions to the `ConditionManager` (`onStart`); afterwards
   it picks the first fork whose conditions all `test()` true, cancels the other forks' conditions, runs
   `onComplete` + `reset` on the winning conditions, applies the actions in order, then moves to `next()`.
-- **Failure:** if any winning condition's `onComplete` or any action returns `false`, the event resets to its root
-  stage and clears its context; after `WorldEvent.FAIL_COUNT_THRESHOLD` (`5`) consecutive failures it fires
-  `EventEndEcsEvent(event, Reason.FAIL)` and removes the entity.
-- **Success:** a fork with no `Next` ends the iteration: `EventEndEcsEvent(event, Reason.SUCCESS)` is invoked on the
-  event entity; a non-transient event's UUID is added to `WorldEventStorage` (`isComplete(uuid)`), and
-  `repeatCount` / `IterationCount` decide whether it restarts.
+- **Failure:** if any condition's `onStart` (during stage init), any winning condition's `onComplete`, or any action
+  returns `false`, the event resets to its root stage and clears its context; after
+  `WorldEvent.FAIL_COUNT_THRESHOLD` (`5`) consecutive failures it fires `EventEndEcsEvent(event, Reason.FAIL)` and
+  removes the entity.
+- **Success — and note it does not mean "over".** A fork with no `Next` ends the *iteration*. `nextStage` consults
+  `repeatCount` **first**: while the event still has iterations left (`repeatCount == -1`, or `--repeatCount > 0`)
+  it resets to the root stage, clears its context, fires `EventEndEcsEvent(event, Reason.SUCCESS)` and keeps
+  running — so a listener on an `IterationCount: -1` event sees `SUCCESS` on every lap, and the event is never
+  stored or removed. Only when the iterations are exhausted does the caller fire the final `SUCCESS`, add a
+  non-transient event's UUID to `WorldEventStorage` (`isComplete(uuid)`), and remove the entity.
 - Conditions are ticked by `ConditionManager.tick(dt, store)` for `EventCondition.Ticking` types, and ECS events are
   routed by `ConditionManager.handle(world, event)` (for conditions registered with a `ConditionEventHandler`) —
   that is how `SignalCondition` hears `WorldEventSignal` and `EventEndCondition` hears `EventEndEcsEvent`.
@@ -234,11 +250,23 @@ recorded after completion, allowing it to run again in future". Every shipped ga
 
 ### Global events (`GlobalWorldEventManager`)
 
-The universe-level singleton `GlobalWorldEventManager.INSTANCE` persists active global event UUIDs in
-`events.json` (`FILENAME`) and exposes `startEvent(UUID)` / `stopEvent(UUID)`,
-`scheduleStartEventInAllWorlds(UUID)` / `scheduleRestartEventInAllWorlds(UUID)`, `contains(UUID)`,
-`activeCount()` and `activeIds()`. It is loaded asynchronously in `WorldEventsPlugin.start()` (a failure logs
-`Failed to load events.json`).
+`GlobalWorldEventManager` persists active global event UUIDs in `events.json` (`FILENAME`). Mind the split:
+
+```java
+// static — the control API
+GlobalWorldEventManager.startEvent(id);
+GlobalWorldEventManager.stopEvent(id);
+GlobalWorldEventManager.scheduleStartEventInAllWorlds(id);
+GlobalWorldEventManager.scheduleRestartEventInAllWorlds(id);
+
+// instance — state, via the singleton
+GlobalWorldEventManager.INSTANCE.contains(id);
+GlobalWorldEventManager.INSTANCE.activeCount();
+GlobalWorldEventManager.INSTANCE.activeIds();
+```
+
+(`add`, `remove`, `clear`, `start`, `loadAsync`, `saveAsync`, `startup` and `shutdown` are likewise instance
+methods.) It is loaded asynchronously in `WorldEventsPlugin.start()`; a failure logs `Failed to load events.json`.
 
 ### From interactions
 
@@ -312,11 +340,20 @@ via `getCodecRegistry(...)`, exactly as the built-ins are in `WorldEventsPlugin.
 
 ## Gotchas
 
-- **Unknown asset ids don't fail loudly.** `Root` / `Next` resolve through `StageAsset.getAssetOrUnknown`, so a typo
-  yields the `"Unknown"` stage (no forks) and an event that silently never advances. Run `/worldevent list` /
-  `panel` to see what it is doing.
-- **Referenced-before-defined keys are rejected at load.** `Validator` flags a `LocationKey` used by an action in
-  stage 1 when the `LocationCondition` that defines it only runs in stage 2.
+- **Validation is lazy, not load-time.** `valid()` only runs `Validator` the first time it is called, and the first
+  call happens when something tries to *start* the event. A broken asset therefore loads silently and only warns
+  (`WorldEventAsset is invalid: %s`) at first use — then the start path refuses it
+  (`Refusing to start invalid world-event asset: %s`, `Cannot build world-event asset that failed validation: %s`,
+  or `Removed world-event for invalid asset: %s` from the init system). A missing asset id is a separate,
+  earlier message: `Failed to create world-event. Could not find asset: %s`.
+- **Key definition is order-insensitive.** `Validator` only checks that a referenced context key is defined
+  *somewhere* reachable. An action in stage 1 referencing a `LocationKey` that a `LocationCondition` in stage 2
+  defines **passes** validation, then fails at runtime with a null from `ContextMap.get`. Order your stages so a
+  key is genuinely produced before it is consumed — nothing checks it for you.
+- **Stages cannot loop.** A cycle in the stage graph is rejected (`Cyclic stage graph reachable from root stage`);
+  repetition is expressed with `IterationCount`, not by pointing `Next` back at an earlier stage.
+- **`"IterationCount": 0` is a silent brick.** The codec accepts it (`>= -1`), but `valid()` is
+  `state == VALID && iterationCount != 0`, so the asset can never start and reports only the generic refusal.
 - **Five failures and it's gone.** Actions and `onComplete` returning `false` reset the event; the fifth consecutive
   failure removes the entity with `Reason.FAIL`. The warning is logged as `Failed to initialize world-event at
   stage: %d. Resetting event. Fail count: %d`.

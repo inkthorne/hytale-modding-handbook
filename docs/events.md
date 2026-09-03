@@ -18,6 +18,7 @@ This document covers the core event system. A compiling end-to-end demo of both 
 - **Combat/Damage events** → [combat.md](combat.md)
 - **NPC/Sensor events** → [npc.md](npc.md)
 - **Adventure events** → [adventure.md](adventure.md) (includes DiscoverZoneEvent)
+- **World-event (scripted timeline) events** → [world-events.md](world-events.md) (0.6.3+)
 - **Inventory events** → [inventory.md](inventory.md) (includes ItemContainerChangeEvent)
 - **UI events** → [ui-api.md](ui-api.md) (includes WindowCloseEvent)
 - **Permission events** → [permissions.md](permissions.md)
@@ -306,8 +307,10 @@ boolean isRegistered()
 ### Static Methods
 ```java
 // Combine multiple registrations into one (unregistering the combined
-// registration will unregister all)
-static <K, E> EventRegistration<K, E> combine(EventRegistration<K, E>... registrations)
+// registration will unregister all). Note the first registration is a
+// separate parameter — you cannot call this with an empty array.
+static <K, E extends IBaseEvent<K>> EventRegistration<K, E> combine(
+        EventRegistration<K, E> first, EventRegistration<K, E>... rest)
 ```
 
 ### Usage Example
@@ -451,6 +454,20 @@ protected void setup() {
 | `handle(index, chunk, store, buffer, event)` | Called when the event fires. Use `chunk.getComponent(index, type)` to access entity components. |
 | `getQuery()` | Return a Query to filter which entities this system handles. Return `null` to handle all, or a ComponentType to filter. |
 
+### EntityEventSystem vs. WorldEventSystem
+
+An ECS event is dispatched either **at an entity** (`componentAccessor.invoke(ref, event)`) or **at the
+whole store** (`store.invoke(event)`). The two need different system base classes, both in
+`com.hypixel.hytale.component.system`:
+
+| Base class | Registered as | `handle(...)` signature | Use when |
+|------------|---------------|-------------------------|----------|
+| `EntityEventSystem<ECS_TYPE, EventType>` | `registerEntityEventType` | `handle(int index, ArchetypeChunk, Store, CommandBuffer, EventType)` | The event names an acting entity (`PlaceBlockEvent`, `RespawnEvent`, `UseEntityEvent.Pre`) |
+| `WorldEventSystem<ECS_TYPE, EventType>` | `registerWorldEventType` | `handle(Store, CommandBuffer, EventType)` | The event is world-scoped, with no acting entity (`EnvironmentBreakBlockEvent`) |
+
+`EntityEventSystem` also implements `QuerySystem`, which is why it has a `getQuery()`;
+`WorldEventSystem` has no query because there is no entity to match.
+
 ### Common ECS Events
 
 | Event | Package | Description |
@@ -458,8 +475,13 @@ protected void setup() {
 | `PlaceBlockEvent` | `...event.events.ecs` | Block placed. 0.6.3+: `isConsumeItem()` / `setConsumeItem(boolean)` — clear it and the placed block does not consume the held item (`BlockPlaceUtils` only removes the item when this is still `true`, and only in Adventure mode) |
 | `BreakBlockEvent` | `...event.events.ecs` | Block broken |
 | `DamageBlockEvent` | `...event.events.ecs` | Block damaged |
+| `EnvironmentBreakBlockEvent` | `...event.events.ecs` | Block broken by the environment (fire spread, harvest side effects) rather than by an entity (0.6.3+). `getTargetBlock()` → `org.joml.Vector3i`, `getBlockType()` → `BlockType`. Not cancellable, and dispatched on the **store**, so handle it with a `WorldEventSystem`, not an `EntityEventSystem` |
 | `UseBlockEvent.Pre/Post` | `...event.events.ecs` | Block used |
+| `UseEntityEvent.Pre/Post` | `...event.events.ecs` | Entity used/interacted with (0.6.3+). `getInteractionType()`, `getContext()` → `InteractionContext`, `getTargetEntity()` → `Ref<EntityStore>`. **`Pre` is cancellable, `Post` is not** |
 | `ChangeGameModeEvent` | `...event.events.ecs` | Game mode changes (cancellable) |
+| `GameModeTypeEnterEvent` | `...event.events.ecs` | Entity is entering a game-mode type (0.6.3+). `getGameModeTypeId()` → `String`; cancel it and the entity does not enter the type |
+| `GameModeTypeExitEvent` | `...event.events.ecs` | Entity is leaving a game-mode type (0.6.3+). `getGameModeTypeId()` → `String`; cancel it and the entity stays in the type |
+| `RespawnEvent` | `...event.events.ecs` | Entity is about to respawn (0.6.3+). No accessors — the acting entity is the one your query matched; cancel it and `DeathComponent.respawn` aborts |
 | `CraftRecipeEvent.Pre/Post` | `...event.events.ecs` | Crafting events (Pre is cancellable) |
 | `DiscoverZoneEvent.Display` | `...event.events.ecs` | Zone discovery UI (cancellable) |
 | `Damage` | `...modules.entity.damage` | Entity takes damage |

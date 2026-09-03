@@ -152,6 +152,10 @@ The workbench is the primary crafting station with multiple categories and tier 
 | `BenchUpgradeSoundEventId` | string | Sound when upgrade starts |
 | `BenchUpgradeCompletedSoundEventId` | string | Sound when upgrade completes |
 
+`Type` is the codec discriminator (`Bench.CODEC` is an `ObjectCodecMapCodec` keyed on `"Type"`), so it selects which subtype's keys are legal. Everything above except `Categories` lives on the shared base; `Categories` is declared by `CraftingBench` (objects) and `StructuralCraftingBench` (plain strings), and processing benches have none.
+
+A `Crafting`/`DiagramCrafting` category entry is a `BenchCategory`: `Id`, `Name` (localization key, conventionally `server.benchCategories.{id}`), `Icon`, and an optional nested `ItemCategories` array.
+
 #### Bench_Weapon
 
 **Location:** `Server/Item/Items/Bench/Bench_Weapon.json`
@@ -357,21 +361,29 @@ The furnace smelts ores into bars using fuel. It produces charcoal as a bonus ou
 | Property | Type | Description |
 |----------|------|-------------|
 | `AllowNoInputProcessing` | boolean | Allow processing with only fuel (for charcoal production) |
-| `Input` | array | Input slot configuration |
-| `FilterValidIngredients` | boolean | Only allow items with valid processing recipes |
+| `Input` | array | Input slot configuration (**required** — `Validators.nonNull()`) |
 | `Fuel` | array | Fuel slot configuration with resource type and icon |
-| `MaxFuel` | int | Fuel cap for the bench |
+| `MaxFuel` | int | Fuel cap for the bench (default `-1`, i.e. uncapped) |
 | `FuelDropItemId` | string | Item dropped for leftover fuel when the bench is broken |
 | `ExtraOutput` | object | Bonus outputs from fuel consumption |
-| `OutputSlotsCount` | int | Number of output slots |
+| `OutputSlotsCount` | int | Number of output slots (default `1`; must be ≥ 1) |
+| `Icon` / `IconId` / `IconItem` / `IconName` | string | Bench-level UI icon overrides |
 | `EndSoundEventId` | string | Sound when a processing run ends (processing benches only; the shared sound keys are listed under [Bench Configuration Properties](#bench-configuration-properties)) |
+
+##### Processing Slot Properties (`Input` / `Fuel` entries)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `FilterValidIngredients` | boolean | Only allow items with valid processing recipes |
+| `ResourceTypeId` | string | Restrict the slot to a resource type (e.g. `Fuel`) |
+| `Icon` | string | Slot placeholder icon (inherited from the shared `Bench.BenchSlot` codec) |
 
 ##### ExtraOutput Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Outputs` | array | Items produced as bonus output |
-| `PerFuelItemsConsumed` | int | Fuel items needed per bonus output |
+| `Outputs` | array | Items produced as bonus output (**required** — `Validators.nonNull()`) |
+| `PerFuelItemsConsumed` | int | Fuel items needed per bonus output (must be ≥ 1) |
 | `IgnoredFuelSources` | array | Fuel items that don't produce bonus output |
 
 #### Bench_Campfire
@@ -552,10 +564,17 @@ Advanced crafting station with diagram-based item selection. Note: This is a dev
 
 ##### DiagramCrafting Category Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `ItemCategories` | array | Nested categories within main category |
-| `Slots` | int | Number of crafting slots per item category |
+`ItemCategories` nests inside a `BenchCategory` and holds `BenchItemCategory` entries:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ItemCategories` | array | — | Nested categories within a main category (on `BenchCategory`) |
+| `Id` | string | — | Item-category id |
+| `Name` | string | — | Display name / localization key |
+| `Icon` | string | — | Category icon |
+| `Diagram` | string | — | Crafting-diagram UI asset for this category |
+| `Slots` | int | `1` | Number of crafting slots per item category |
+| `SpecialSlot` | boolean | `true` | Whether the category exposes the special (diagram) slot |
 
 ---
 
@@ -641,6 +660,11 @@ Every entry in `Input`, `Output`, and `PrimaryOutput` is a `MaterialQuantity`: e
 of `ItemId`, `ResourceTypeId`, or `ItemTag`, plus `Quantity` and an optional `Metadata`
 document.
 
+`Output` defaults to `[PrimaryOutput]` when it is absent or empty. On load, `CraftingRecipe`
+also collects every output item id and **excludes** those ids from each non-`ItemId` input
+(`MaterialQuantity.withExcludedItemIds`), so a `ResourceTypeId` or `ItemTag` input can never
+be satisfied by the recipe's own product — no `A → A` loop is possible by accident.
+
 ### Input Types
 
 Recipes can require specific items or abstract resource categories:
@@ -683,6 +707,8 @@ Accepts any item matching the resource type:
 | `Fruits` | Any fruit item |
 | `Vegetables` | Any vegetable item |
 
+Resource types are themselves assets — 181 files under `Server/Item/ResourceTypes/`, each typically just an `Icon` (`Rock.json` is `{ "Icon": "Icons/ResourceTypes/Any_Rock.png" }`). The most-used across shipped recipes are `Wood_Trunk` (113 references), `Wood_Hardwood`, `Rock_Shale`, `Rock_Quartzite`, `Rock_Sandstone`, `Rock_Marble` and `Rock`.
+
 Items register their resource types via `ResourceTypes`:
 
 ```json
@@ -714,7 +740,9 @@ Specifies which bench(es) can craft the recipe:
 | `Id` | string | Specific bench ID |
 | `Categories` | array | Bench categories where recipe appears |
 | `RequiredTierLevel` | int | Minimum bench tier required (1-indexed) |
-| `RequiredAugmentTags` | string[] | Tags that must be granted to the bench by nearby `AugmentBlock` block entities (added as of 0.6.3; no shipped recipe sets it yet) |
+| `RequiredAugmentTags` | string[] | Tags that must be granted to the bench by nearby augment blocks (added as of 0.6.3; no shipped recipe sets it yet) |
+
+`RequiredAugmentTags` is checked by `CraftingManager` when it lists recipes for an open bench: it reads the tags the bench block currently has granted to it by `AugmentBlock` block entities within their radius, and *silently skips* any recipe whose required tags are not all present — the recipe simply does not appear. An empty or absent array always passes. The augment-block side of the mechanism (`GrantsAugmentTags`, `Radius`, upgrade levels) is documented on [Blocks → Block Entity Components](items-blocks.md#block-entity-components).
 
 Multiple bench requirements allow crafting at different stations:
 
@@ -836,14 +864,17 @@ Benches can have multiple tiers that reduce crafting time and unlock additional 
 
 ### Tier Time Reduction by Bench
 
-| Bench | Tier 1 | Tier 2 | Tier 3 |
-|-------|--------|--------|--------|
-| Workbench | 0% | 15% | 30% |
-| Weapon Bench | 0% | 15% | 30% |
-| Armor Bench | 0% | 15% | 30% |
-| Alchemy Bench | 0% | 20% | 40% (tier 4: 60%) |
-| Furnace | 0% | 30% | - |
-| Tannery | 0% | 40% | - |
+| Bench | Tiers | Time reduction per tier |
+|-------|-------|-------------------------|
+| Workbench | 3 | 0% / 15% / 30% |
+| Weapon Bench | 3 | 0% / 15% / 30% |
+| Armor Bench | 3 | 0% / 15% / 30% |
+| Alchemy Bench | 4 | 0% / 20% / 40% / 60% |
+| Farming Bench | 7 | 0% / 15% / 30%, then four upgrade-only tiers with no modifier |
+| Furnace | 2 | 0% / 30% (tier 2 also adds `ExtraInputSlot: 1`) |
+| Tannery | 2 | 0% / 40% (tier 2 also adds `ExtraInputSlot: 1`, `ExtraOutputSlot: 2`) |
+
+`Bench_Farming` has the deepest ladder: seven `TierLevels`, each with an `UpgradeRequirement`, but only the first three set `CraftingTimeReductionModifier` — tiers 4–7 exist purely as a progression gate. Benches with no `TierLevels` at all (Cooking, Furniture, Arcane, Campfire, Salvage, Loom, Armory, Builders, Trough) are always tier 0.
 
 ---
 
@@ -1035,7 +1066,7 @@ Allow crafting at different benches:
 | Bench_WorkBench | Crafting | `Workbench` | Survival, Tools, Crafting, Tinkering |
 | Bench_Weapon | Crafting | `Weapon_Bench` | Sword, Mace, Battleaxe, Daggers, Bow |
 | Bench_Armour | Crafting | `Armor_Bench` | Head, Chest, Hands, Legs, Shield |
-| Bench_Alchemy | Crafting | `Alchemybench` | Potions, Misc Potions, Bombs |
+| Bench_Alchemy | Crafting | `Alchemybench` | Potions, Misc Potions, Seeds, Bombs |
 | Bench_Cooking | Crafting | `Cookingbench` | Prepared, Baked, Ingredients |
 | Bench_Furniture | Crafting | `Furniture_Bench` | Storage, Beds, Lighting, Pottery, Textiles, Village Walls, Misc, Seasonal |
 | Bench_Farming | Crafting | `Farmingbench` | Farming, Seeds, Saplings, Essence, Planters, Decorative |

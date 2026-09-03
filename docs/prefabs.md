@@ -269,10 +269,10 @@ void addBlockAtWorldPos(int x, int y, int z, int blockType, int rotation, int fi
 void addBlockAtLocalPos(int x, int y, int z, int blockType, int rotation, int filler, int supportValue)
 void addBlockAtLocalPos(int x, int y, int z, int blockType, int rotation, int filler, int supportValue, Holder<ChunkStore> state)
 
-// Support values (0.6.3+)
+// Support values
 void clearAllSupportValues()
-void setAllSupportValues(int supportValue)
-void setSupportValueAtLocalPos(int x, int y, int z, int supportValue)
+void setAllSupportValues(int supportValue)                            // 0.6.3+
+void setSupportValueAtLocalPos(int x, int y, int z, int supportValue) // 0.6.3+
 
 // Fluids
 void addFluidAtWorldPos(int x, int y, int z, int fluidType, byte level)
@@ -302,9 +302,10 @@ BlockSelection place(CommandSender sender, World world)
 BlockSelection place(CommandSender sender, World world, BlockMask mask)
 BlockSelection place(CommandSender sender, World world, Vector3ic position, BlockMask mask)
 BlockSelection place(CommandSender sender, World world, Vector3ic position, BlockMask mask, Consumer<Ref<EntityStore>> entityConsumer)
-// 0.6.3+ overloads: skip "empty" (air) entries, remap block ids on the way in
+// skip "empty" (air) entries
 BlockSelection place(CommandSender sender, World world, Vector3ic position, BlockMask mask,
     Consumer<Ref<EntityStore>> entityConsumer, boolean skipEmptyBlocks)
+// 0.6.3+ overloads: remap block ids on the way in
 BlockSelection place(CommandSender sender, World world, Vector3ic position, BlockMask mask,
     Consumer<Ref<EntityStore>> entityConsumer, boolean skipEmptyBlocks, IntUnaryOperator blockIdMapper)
 BlockSelection place(CommandSender sender, World world, Vector3ic position, BlockMask mask,
@@ -731,7 +732,7 @@ static void resolvePrefabFolder(Path rootFolder, String prefabName, Consumer<Pat
 static String resolveRelativeJsonPath(String, Path, Path)
 ```
 
-`.` is the path separator: `"Trees.Oak.Oak_Large_01"` resolves to `Trees/Oak/Oak_Large_01.prefab.json` under the root. The `.*` folder form walks the directory tree and emits every prefab file it finds (with the `.prefab.json` / `.lpf` suffix stripped — `PrefabBufferUtil` re-resolves the extension). A name that escapes the root folder throws `IllegalArgumentException` with the literal `Invalid prefab name: ` message from [Gotchas & Errors](#gotchas--errors).
+`.` is the path separator: `"Trees.Oak.Oak_Large_01"` resolves to `Trees/Oak/Oak_Large_01` under the root, probing the `.lpf` sibling before `.prefab.json` and emitting the first that exists (a name that matches neither emits nothing at all — it does not throw). The `.*` folder form walks the directory tree and emits every prefab file it finds (with the `.prefab.json` / `.lpf` suffix stripped — `PrefabBufferUtil` re-resolves the extension). A name that escapes the root folder throws `IllegalArgumentException` with the literal `Invalid prefab name: ` message from [Gotchas & Errors](#gotchas--errors).
 
 ### PrefabBufferUtil
 **Package:** `com.hypixel.hytale.server.core.prefab.selection.buffer`
@@ -883,9 +884,22 @@ static final Consumer<Holder<EntityStore>> NOOP_ENTITY_CONSUMER
 static int getNextPrefabId()   // source of the internal id seen in PrefabPasteEvent.getPrefabId()
 ```
 
-`pasteFlags` is a bit set (there is no named constant class for it as of 0.6.3 — the bits are read with `Flags.test`): **1** = force (overwrite non-empty blocks), **2** = technical paste (also stamp the editor "empty" marker block where the prefab has air), **4** = paste the anchor as a block, **8** = *skip* entities. Passing `0` is the plain paste. The `blockEntityConsumer` / `entityConsumer` callbacks see every block-entity holder and entity holder the paste creates; `PasteRegion` (a `PrefabUtil` nested class) is an optional pre-resolved set of chunk refs so a paste on the world thread never has to look chunks up.
+`pasteFlags` is a bit set. The constants live on the nested `PrefabUtil.Flags` interface (0.6.3+), which also carries the bit test the paste code itself uses:
 
-The 0.5.9-style overloads that take `boolean force` (three `paste(...)` with `force, Random, …, boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities` and three `remove(..., boolean force, …)`) still compile as of 0.6.3 but are `@Deprecated(forRemoval = true, since = "2026-06-16")` — they just translate the booleans into `pasteFlags` (`force → 1`, `technicalPaste → 2`, `pasteAnchorAsBlock → 4`, `!loadEntities → 8`) and delegate. Write new code against the flag-based forms above.
+```java
+// PrefabUtil.Flags
+static final int NONE         = 0;   // plain paste
+static final int FORCE        = 1;   // overwrite non-empty blocks
+static final int TECHNICAL    = 2;   // also stamp the editor "empty" marker block where the prefab has air
+static final int ANCHOR_BLOCK = 4;   // paste the anchor as a block
+static final int NO_ENTITIES  = 8;   // *skip* entities
+
+static boolean test(int value, int flag)   // (value & flag) == flag
+```
+
+The `blockEntityConsumer` / `entityConsumer` callbacks see every block-entity holder and entity holder the paste creates; `PasteRegion` (a `PrefabUtil` nested class) is an optional pre-resolved set of chunk refs so a paste on the world thread never has to look chunks up.
+
+The 0.5.9-style boolean overloads — three `paste(...)` taking `boolean force` (the widest also taking `boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities`) and three `remove(...)` taking `boolean force` — still compile as of 0.6.3 but are all `@Deprecated(forRemoval = true, since = "2026-06-16")`. They just fold the booleans into `pasteFlags` (`force → FORCE`, `technicalPaste → TECHNICAL`, `pasteAnchorAsBlock → ANCHOR_BLOCK`, `!loadEntities → NO_ENTITIES`) and delegate. Write new code against the flag-based forms above.
 
 Rotation here is the block-config `Rotation` enum (`None`, `Ninety`, `OneEighty`, `TwoSeventy`); it is converted internally via `PrefabRotation.fromRotation()`.
 
@@ -905,7 +919,7 @@ try {
     loader.resolvePrefabs("Trees.Oak.*", path -> {
         IPrefabBuffer buffer = PrefabBufferUtil.getCached(path);
         if (PrefabUtil.canPlacePrefab(buffer, world, pos, Rotation.None, null, random, false)) {
-            PrefabUtil.paste(buffer, world, pos, Rotation.None, random, accessor);   // pasteFlags 0
+            PrefabUtil.paste(buffer, world, pos, Rotation.None, random, accessor);   // pasteFlags = Flags.NONE
         }
     });
 } catch (IOException e) {
@@ -1169,13 +1183,13 @@ Prefabs are stored as `.prefab.json` files (JSON documents read through the BSON
 | `fluids` | array | No | [] | Array of fluid entries |
 | `entities` | array | No | [] | Array of serialized entity documents |
 
-(The anchor fields are read with `getInt32` without a default, so they are required in practice; every shipped prefab includes all three.)
+(The anchor fields are read with `getInt32` without a default, so they are required in practice; every shipped prefab includes all three.) The anchor is **not** applied while parsing — `SelectionPrefabSerializer.deserialize` stores it via `setAnchor(...)` and adds every block at its literal file coordinate. It is subtracted when the selection is placed (`localX + selectionX + position.x() - anchorX`), which is what makes the anchor the placement origin.
 
 ### Block Entry Properties
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `x` | int | Yes | - | X position (prefab-local; the anchor is subtracted on load) |
+| `x` | int | Yes | - | X position (prefab-local; the anchor is subtracted at **placement** time, not on load) |
 | `y` | int | Yes | - | Y position |
 | `z` | int | Yes | - | Z position |
 | `name` | string | Yes | - | Block type id (e.g., `"Rock_Stone"`, `"Furniture_Goblin_Chest_Small"`) |
@@ -1219,7 +1233,7 @@ Block components attach block-entity (ECS `ChunkStore`) data to placed blocks. T
 | `ItemContainer` | object | The serialized `SimpleItemContainer`: `Capacity` (slot count) and `Items` (slot → item stack map, `{}` for empty) |
 | `Capacity` | int | Container capacity (short) |
 
-Only `Goblin_Thief_Chest` sets a `Droplist` among the shipped prefabs; the other ~1,500 container blocks (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. Other component ids seen in shipped prefabs include `PlacedByInteraction` (`WhoPlacedUuid`).
+Of the 1,524 `ItemContainerBlock` blocks in the shipped 0.6.3 prefabs, exactly one — `Goblin_Thief_Chest` — sets a `Droplist`; the rest (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. The other block-component ids that appear in shipped prefabs, by frequency: `FarmingBlock` (7,715), `BlockSpawner` (3,027), `TilledSoil` (2,113), `PlacedByInteraction` (1,152 — a single `WhoPlacedUuid` binary field), `PrefabSpawner` (1,083 — see [PrefabSpawnerBlock](#prefabspawnerblock)), `RespawnBlock` (550), `BenchBlock` (170), `ProcessingBenchBlock` (150), `BlockMapMarker` (5).
 
 ### Fluid Entry Properties
 
@@ -1231,7 +1245,7 @@ Only `Goblin_Thief_Chest` sets a `Droplist` among the shipped prefabs; the other
 | `name` | string | Yes | `Fluid` asset id — `Water_Source`, `Water`, `Lava_Source`, `Lava`, `Poison_Source`, `Tar_Source`, … (`Server/Item/Block/Fluids/*.json`), or `Empty` |
 | `level` | int | Yes | Fluid level byte; shipped prefabs use 0–8 |
 
-An unknown `name` does not fail the load — `Fluid.getFluidIdOrUnknown` registers a placeholder `Unknown fluid '%s'` asset for it.
+An unknown `name` does not fail the load — `Fluid.getFluidIdOrUnknown` logs a warning (`Failed to find fluid '%s' in unknown legacy prefab!` on this path) and registers a placeholder `Fluid` asset for the key so the id resolves. The same is true of an unknown block `name` (`Failed to find block '%s' in unknown legacy prefab!`).
 
 **Example: Water Pool Prefab:**
 
@@ -1252,7 +1266,7 @@ An unknown `name` does not fail the load — `Fluid.getFluidIdOrUnknown` registe
 
 ### Entity Entries
 
-Each element of `entities` is a **complete serialized entity** — the document `EntityStore.REGISTRY.deserialize(...)` accepts, i.e. an outer `Components` object keyed by entity-component id. There is no `type` / `x` / `y` / `z` shorthand: the position lives in the `Transform` component (`Position` / `Rotation`), in the same prefab-local space as blocks (the anchor is subtracted on load). Shipped prefabs never embed live NPCs; they place **spawn markers** (`SpawnMarkerComponent`, model `NPC_Spawn_Marker`) that the spawn system turns into NPCs. This is an entity from `Server/Prefabs/Npc/Kweebec/Oak/Shops/Kweebec_Oak_Shops_008.prefab.json`, trimmed:
+Each element of `entities` is a **complete serialized entity** — the document `EntityStore.REGISTRY.deserialize(...)` accepts, i.e. an outer `Components` object keyed by entity-component id. There is no `type` / `x` / `y` / `z` shorthand: the position lives in the `Transform` component (`Position` / `Rotation`), in the same prefab-local space as blocks (the anchor is applied at placement, not on load). Shipped prefabs never embed live NPCs; they place **spawn markers** (`SpawnMarkerComponent`, model `NPC_Spawn_Marker`) that the spawn system turns into NPCs. This is an entity from `Server/Prefabs/Npc/Kweebec/Oak/Shops/Kweebec_Oak_Shops_008.prefab.json`, trimmed:
 
 ```json
 {
@@ -1278,7 +1292,7 @@ Each element of `entities` is a **complete serialized entity** — the document 
 }
 ```
 
-Entities are captured into a prefab only if they carry [`PrefabCopyableComponent`](#prefabcopyablecomponent); a `Transform` component is asserted on every entry at load.
+Entities are captured into a prefab only if they carry [`PrefabCopyableComponent`](#prefabcopyablecomponent). Loading is permissive (`BlockSelection.addEntityHolderRaw` just stores the holder), but both capture (`addEntityFromWorld`) and placement assert that a `Transform` component is present — an entity entry without one will trip that assertion when the prefab is pasted.
 
 ### Complete Examples
 

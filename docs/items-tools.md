@@ -68,10 +68,11 @@ Tool item (inherits Tool_<Family>_Crude base)
 | [Feedbag](#feedbag) | 1 | Feeding | Attracting livestock |
 | [Fertilizer](#fertilizer) | 2 | Growing | Accelerating plant growth |
 
-("Files" = JSON files in the family's folder as of 0.6.3, excluding the `Pickaxe/_Debug/` break-shape
-test items. `Server/Item/Items/Tool/` also holds a few loose tools outside these families —
-`Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map` — and a
-`Prototype/` folder.)
+("Files" = JSON files belonging to that family as of 0.6.3. It is not always the folder count: the
+`Pickaxe/_Debug/` break-shape test items are excluded, and Feedbag and Fertilizer share the one
+`Feedbag/` folder (3 files). `Server/Item/Items/Tool/` also holds five loose tools outside these
+families — `Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map` —
+and a `Prototype/` folder with three mana items.)
 
 ---
 
@@ -114,12 +115,14 @@ Defines power and efficiency for different block types. Each tool lists a spec f
 
 | GatherType | Primary Tool | Description |
 |------------|--------------|-------------|
-| `SoftBlocks` | All tools (1.0) | Soft blocks like grass, leaves |
-| `Soils` | Shovel | Dirt, sand, gravel |
-| `Woods` | Hatchet | Wood blocks, tree trunks |
 | `Rocks` | Pickaxe | Stone, rock formations |
+| `Woods` | Hatchet | Wood blocks, tree trunks |
+| `Soils` | Shovel | Dirt, sand, gravel |
+| `SoftBlocks` | All tools (1.0) | Soft blocks like grass, leaves |
 | `VolcanicRocks` | Pickaxe (low power) | Volcanic stone, obsidian |
 | `Benches` | Most tools | Crafting stations, furniture |
+| `SoftWoods` | — | Rare variant, on two blocks only |
+| `Unbreakable` | — | Marks a block no tool can gather |
 
 Ore deposits use granular per-metal gather types (there is no single `Ores` gather type in tool specs):
 
@@ -153,12 +156,13 @@ Configures durability loss per block set. This example is taken from `Tool_Picka
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `BlockSets` | array | Block sets this rule applies to |
+| `BlockSets` | string[] | Block sets this rule applies to |
+| `BlockTypes` | string[] | Individual block ids this rule applies to (no stock tool uses it) |
 | `DurabilityLossOnHit` | float | Durability points lost per hit on these blocks |
 
 ### Tool.Speed
 
-Optional speed multiplier (a double). Rarely set by stock assets — `Tool_Shears_Basic` is one that does:
+Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Tool_Shears_Basic` is the **only** item in the shipped 0.6.3 assets that sets it:
 
 ```json
 {
@@ -178,11 +182,39 @@ The full `Tool` (`ItemTool`) codec, as of 0.6.3:
 | `Speed` | double | Speed multiplier |
 | `DurabilityLossBlockTypes` | array | Per-block-set durability loss (above) |
 | `HitSoundLayer` | string | Sound played in addition to the block-break sound when hitting a block this tool is designed to break (tool-wide default; a spec's own `HitSoundLayer` is per gather type) |
-| `IncorrectMaterialSoundLayer` | string | Sound played in addition to the block-break sound when hitting a block this tool *cannot* break |
-| `BreakShape` | object | Optional multi-block break shape (0.6.3+): when set, a swing affects every block the shape covers, oriented to the user's view, instead of only the targeted block. Keys: `Id` (e.g. `Box`), `Width`, `Height`, `Depth`, `Centered`, `Offset`, `Orientation` (e.g. `View`) — codec `com.hypixel.hytale.server.core.modules.interaction.breakshape.BreakShape` |
+| `IncorrectMaterialSoundLayer` | string | Sound played in addition to the block-break sound when hitting a block this tool *cannot* break (no shipped item sets it) |
+| `BreakShape` | object | Optional multi-block break shape (0.6.3+) — see below |
 | `BreakShapeDurabilityMode` | enum | How durability is consumed when a break shape hits several blocks: `PerSwing` (once per swing) or `PerBlock` (once per block broken) — `com.hypixel.hytale.server.core.asset.type.item.config.BreakShapeDurabilityMode` |
 
-`BreakShape` is only used by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.3 assets (excerpt from `Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`):
+### BreakShape (0.6.3+)
+
+When `Tool.BreakShape` is set, one swing affects every block the shape covers instead of only the
+targeted block. `BreakShape` is a `CodecMapCodec` keyed on `Id`, and two shapes are registered by
+`InteractionModule`:
+
+| `Id` | Class | Shape |
+|------|-------|-------|
+| `Box` | `BoxBreakShape` | "Breaks a solid rectangular cuboid of blocks oriented to the user's view direction." |
+| `Cylinder` | `CylinderBreakShape` | "Breaks an elliptical disc of blocks in the user's view plane, extruded into the surface." |
+
+Shared keys (`BreakShape.BASE_CODEC`, descriptions quoted from the codec's own `documentation(...)`):
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Width` | int | — (**required**) | "The size of the shape along the user's horizontal view axis (right)." Range 1–32 |
+| `Height` | int | — (**required**) | "The size of the shape along the user's vertical view axis (up)." Range 1–32 |
+| `Depth` | int | `1` | "How many blocks deep the shape extends into the targeted surface." Range 1–32 |
+| `Centered` | boolean | `true` | "Whether the shape's width/height are centered on the targeted block." |
+| `Offset` | Vector3d | `(0,0,0)` | "Shifts the shape's center off the targeted block, in the view basis (x = right, y = up, z = into the surface). Rounded to whole blocks." Magnitude ≤ 32 per axis |
+| `Orientation` | enum | `View` | "How the shape is oriented: 'View' (the dominant axis of the look direction, the default) or 'Surface' (into the targeted block face that the look ray hits)." |
+
+Limits are enforced on decode (`BreakShape.validateShape`): `Width × Height × Depth` must not exceed
+**1024** cells (`MAX_TOTAL_CELLS`), each dimension must be 1–32 (`MAX_DIMENSION`), and each offset axis
+at most 32 (`MAX_OFFSET`). Exceeding either throws `IllegalArgumentException` at asset load
+("Break shape volume … exceeds the maximum of 1024").
+
+`BreakShape` is used only by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.3 assets
+(excerpt from `Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`):
 
 ```json
 {
@@ -198,6 +230,13 @@ The full `Tool` (`ItemTool`) codec, as of 0.6.3:
   }
 }
 ```
+
+`Debug_Pickaxe_Shaped_Cylinder.json` is the same item with `"Id": "Cylinder"`, `Width`/`Height` 5 and
+`"BreakShapeDurabilityMode": "PerBlock"`.
+
+On the Java side, `ItemTool.getBreakShape()` and `ItemTool.getBreakShapeDurabilityMode()` expose both
+(new as of 0.6.3); `BreakShape.forEachLocalOffset(TriIntConsumer)` enumerates the shape's cells and
+`BreakShape.selectBlocks(...)` maps them to world positions.
 
 ---
 
@@ -718,8 +757,13 @@ instead). From `Tool_Shears_Basic`:
 
 `ContextualUseNPC` (`com.hypixel.hytale.server.npc.interactions.ContextualUseNPCInteraction`) has a single
 key of its own, `Context`; there is no `Range` or `DurabilityLossOnUse` on it. Which NPCs respond is
-decided on the NPC side — the tamed livestock roles (`Tamed_Sheep`, `Tamed_Chicken`, `Tamed_Skrill`, …)
-declare the `Shear` context.
+decided on the NPC side — the tamed livestock roles under `Server/NPC/Roles/Creature/Livestock/Tamed/`
+(`Tamed_Sheep`, `Tamed_Chicken`, `Tamed_Chicken_Desert`, `Tamed_Skrill`) declare the `Shear` context.
+
+The `Shears_Attack` fallback is a `Chaining` step (`ChainingAllowance: 0.5`) whose `Next` is
+`Shears_Snip`, a `Simple` step whose own `Next` is `Shears_Block_Break` — a `BreakBlock` with
+`"Tool": "Shears"`, which is why the shears can cut blocks despite having only a `SoftBlocks` spec
+(see [BreakBlock Interaction](#breakblock-interaction)).
 
 ### Tags
 
@@ -755,7 +799,12 @@ Farming tool for irrigating crops. A single item (`Tool_Watering_Can`) uses the 
 
 ### State System
 
-A `State` block defines the filled variant. The empty model is the item's base `Model`; the `Filled_Water` state swaps in the filled model, durability, and a watering interaction (excerpt from the real `Tool_Watering_Can`):
+A `State` block defines the filled variant. The empty look comes from the template's
+`BlockType.CustomModel` (`Watering_Can_Empty.blockymodel`); the `Filled_Water` state swaps in the filled
+model, durability, and a watering interaction. The state duplicates a lot of the parent's keys — the file
+flags this with `"$Comment": "FOLLOWING PROPERTIES DUPLICATED BECAUSE OF SERVER BUG"` — so a state also
+restates `Quality`, `ItemLevel`, `Tool`, `Icon`, `Texture`, `IconProperties` and its own `BlockType`.
+Excerpt from the real `Tool_Watering_Can`:
 
 ```json
 {
@@ -841,9 +890,10 @@ holding the charge for 0.5s runs `Watering_Can_Use_3x3` instead:
 }
 ```
 
-`OnItemChangeBehavior` (`Cancel` / `Fail` / `Finish` / `Ignore`) is the common interaction key that
-replaced the boolean `CancelOnItemChange` by 0.6.3 — it says what happens to an in-flight interaction when
-the held item changes.
+`OnItemChangeBehavior` (`Cancel` / `Fail` / `Finish` / `Ignore`, the `InteractionItemChangeBehavior` enum,
+new as of 0.6.3) is the common interaction key describing "what should happen to the interaction when the
+entity's held item changes". It supersedes the boolean `CancelOnItemChange`, which still parses (mapping
+`true → Cancel`, `false → Ignore`) but now carries `Validators.deprecated()` — write the enum form.
 
 ### Recipe
 
@@ -1066,7 +1116,7 @@ can be placed in the world. Crafted at the `Farmingbench` from wheat, vegetables
 
 **None.** `Tool_Feedbag` defines no `Interactions` block at all — there is no "feed" interaction. It works
 from the NPC side: `Template_Livestock` lists it as the attractive item, so livestock follow a player
-holding it (`Template_Livestock.json`):
+holding it (`Server/NPC/Roles/_Core/Templates/Template_Livestock.json`):
 
 ```json
 {
@@ -1163,7 +1213,8 @@ consumables.
 ### All Fertilizer Variants
 
 Tool_Fertilizer, Tool_Fertilizer_Crystal (`Secondary` = `Fertilizer_Crystal_Use`; crafted at the
-`Alchemybench` from 25 `Crystal_Shards` and `Ingredient_Void_Essence`)
+`Alchemybench` tier 2, category `Alchemy_Seeds`, from 25 `Crystal_Shards` and `Ingredient_Void_Essence`.
+Unlike `Tool_Fertilizer` it sets no `MaxDurability` and has `ItemLevel: 0`.)
 
 ---
 
@@ -1171,7 +1222,11 @@ Tool_Fertilizer, Tool_Fertilizer_Crystal (`Secondary` = `Fertilizer_Crystal_Use`
 
 ### BreakBlock Interaction
 
-Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g. `Pickaxe_Attack`) whose chain falls through to a `BreakBlock` step. Which blocks a tool can break, and how fast, is driven by the item's `Tool.Specs` gather types — there is no `Tool` field on the `BreakBlock` interaction itself. This excerpt is from the real `Block_Break` interaction:
+Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g. `Pickaxe_Attack`, a
+`Chaining` step with `ChainingAllowance: 1.25` whose `Next` is `Pickaxe_Mine`) whose chain falls through
+to a `BreakBlock` step. Which blocks a tool can break, and how fast, is normally driven by the item's
+`Tool.Specs` gather types. This excerpt is from the real `Block_Break` interaction
+(`Server/Item/Interactions/Weapons/Block_Break.json`):
 
 ```json
 {
@@ -1195,6 +1250,20 @@ Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g
 
 (`Block_Hit_Camera_Effects` is the `InteractionVars` hook the pickaxe uses to swap in its own
 `Pickaxe_Mine_Impact` camera effect.)
+
+The `BreakBlock` interaction itself (`BreakBlockInteraction`, "Attempts to break the target block.")
+does take four keys of its own:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `Harvest` | boolean | "Whether this should trigger as a harvest gather vs a break gather." |
+| `SoftOnly` | boolean | "Whether this can only break soft blocks, whatever the breaking entity holds." (0.6.3+) |
+| `Tool` | string | "Tool to break as." — break using this gather tool id instead of the held item's |
+| `MatchTool` | boolean | "Whether to require an match to `Tool` to work." |
+
+`Tool` is how the shears cut blocks without a `Tool.Specs` entry for them —
+`Server/Item/Interactions/Weapons/Shears/Attacks/Shears_Block_Break.json` is
+`{"Type": "UseBlock", "Failed": {"Type": "BreakBlock", "Tool": "Shears", "UseLatestTarget": true}}`.
 
 ### ChangeBlock Interaction
 

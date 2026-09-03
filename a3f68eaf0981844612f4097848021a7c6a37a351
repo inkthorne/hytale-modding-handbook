@@ -1,0 +1,30 @@
+CORRECTION — two numbers in this commit message are stale. A third, queried in
+review, is correct and is recorded here so it is not re-queried.
+
+The evidence paragraph quotes a verify-docs run that predates the final doc
+edits of the pass. No commit after this one touches docs/, so docs/ at this SHA
+is byte-identical to HEAD's, and HEAD's run settles both figures:
+
+- "817 documented members" — the count is 818.
+- "5 of 1091 java blocks" — the corpus is 1092. Counted directly at this SHA and
+  at HEAD; both give 1092, so the quoted run was simply older than the tree it
+  was cited for.
+
+CORRECT AS WRITTEN: "3 of the 61 stamped pages". Review read 61 as a count of
+bumped stamp lines and proposed 62 instead, on the grounds that 62 files contain
+a "Verified against" line. 62 is the number of files carrying the string, but it
+is not the number of stamped topic pages: verify-docs.sh exempts three
+navigational pages (00-overview, 01-index, 02-structure) from the topic count,
+and 02-structure carries a stamp anyway. So the arithmetic is 65 docs - 3
+navigational = 62 topic pages, of which index.md is deliberately unstamped,
+leaving 61 stamped — exactly what the gate itself prints as "61/62 topic pages
+carry a build stamp". The original sentence used the right denominator.
+
+The class-reference (227) and gotcha-string (130) figures are correct and
+unchanged. Nothing about the stamps themselves is affected — this corrects the
+run cited as evidence, not the re-verification it attests to.
+
+The two stale figures were found by the hytale-reviewer peer session, which
+reconstructed docs/ at this SHA and recounted rather than trusting the message.
+
+Claude-Session: https://claude.ai/code/session_01AnCYv9SKxd87mbzaCFmpeq

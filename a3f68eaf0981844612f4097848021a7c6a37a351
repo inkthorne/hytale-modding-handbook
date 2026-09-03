@@ -1,0 +1,21 @@
+CORRECTION — two numbers in this commit message are stale.
+
+The evidence paragraph quotes a verify-docs run that predates the final doc
+edits in the pass. Corrected against a run at HEAD:
+
+- "817 documented members" — the count is 818.
+- "5 of 1091 java blocks" — the corpus is 1092 blocks. Reconstructing docs/ at
+  this SHA gives 1092 as well, so the quoted run was simply older than the tree
+  it was cited for; the block count did not change here.
+- "3 of the 61 stamped pages" — 61 is the number of stamp lines bumped in this
+  commit (59 page-level plus 2 section-level). The number of pages carrying a
+  stamp is 62. Both figures are real; the sentence conflates them.
+
+The class-reference (227) and gotcha-string (130) figures in that paragraph are
+correct and unchanged. Nothing about the stamps themselves is affected — this
+corrects the run cited as evidence, not the re-verification it attests to.
+
+Found by the hytale-reviewer peer session, which reconstructed docs/ at this SHA
+into a scratch tree and recounted rather than trusting the message.
+
+Claude-Session: https://claude.ai/code/session_01AnCYv9SKxd87mbzaCFmpeq

@@ -324,7 +324,7 @@ No ranges; a flat density and a single default biome.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 world-structure loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the world-structure loader (verified against `HytaleServer.jar`).
 
 - **`Invalid json-type for Biomes property. Must be an array!`** → the `Biomes` top-level key is present but not a JSON array. Fix: make `Biomes` an array of assignment objects (it may be empty, but it must be `[]`, not an object/scalar).
 - **`Invalid json-type for biome entry. Must be an object!`** → an element of the `Biomes` array is not an object. Fix: each entry must be an object like `{ "Biome": "...", "Min": -1, "Max": 0 }`.

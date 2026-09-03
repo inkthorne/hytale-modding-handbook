@@ -648,7 +648,7 @@ the field is a primitive `float` and `0` renders invisibly.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 projectile subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the projectile subsystem (verified against `HytaleServer.jar`).
 
 - **`has no valid ProjectileConfig`** → an entity/interaction tried to launch a projectile whose `ProjectileConfig` could not be resolved. Fix: pass a config obtained from `ProjectileConfig.getAssetMap().get(id)` and verify the id exists.
 - **`No projectile config typeName provided`** → a `ProjectileInteraction` (or launch config) omitted the projectile config type name. Fix: set the projectile config reference in the interaction JSON.

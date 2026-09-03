@@ -24,9 +24,15 @@ def field(fm, name):
     if v.startswith(('"', "'")): v = v[1:-1]
     return v or None
 
-stamp = "unknown"
-m = re.search(r'Verified against ([0-9.]+)', open("docs/inventory.md").read())
-if m: stamp = m.group(1)
+# The handbook is verified against a build only when EVERY page is. Reading one
+# page would announce the new version corpus-wide the moment a single page is
+# bumped — a handbook-level claim derived from an arbitrary page. Take the
+# minimum instead, so the line is self-correcting during a staged bump.
+stamps = set()
+for _p in glob.glob("docs/*.md"):
+    for _m in re.finditer(r'Verified against ([0-9]+(?:\.[0-9]+)*)', open(_p).read()):
+        stamps.add(tuple(int(x) for x in _m.group(1).split(".")))
+stamp = ".".join(str(x) for x in min(stamps)) if stamps else "unknown"
 
 pages = []
 for p in sorted(glob.glob("docs/*.md")):

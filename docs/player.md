@@ -635,7 +635,7 @@ Model model = cosmetics.createModel(skin);
 ```
 
 > [!WARNING]
-> Publicly exposed, but no first-party content plugin in build-12 references these classes (only `CosmeticsModule` itself, 8×, from the server bootstrap). Signatures above are verified against `HytaleServer.jar`; the end-to-end "apply this skin to a live player entity" flow is not demonstrated by any inspectable plugin and is intentionally not invented here.
+> Publicly exposed, and as of 0.6.3 there *are* first-party consumers: the built-in model plugin drives it from `ModelCommand` and `ChangeModelPage`, alongside the engine's own bootstrap (`Universe`, `PlayerUtil`, the login/game packet handlers). This was not true at 0.5.9, when `CosmeticsModule` was referenced only by itself. Signatures above are verified against `HytaleServer.jar`; the end-to-end "apply this skin to a live player entity" flow is not demonstrated by any inspectable plugin and is intentionally not invented here.
 
 ---
 

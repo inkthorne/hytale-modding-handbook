@@ -788,7 +788,7 @@ behavior itself comes from the item's `BuilderTool` property (see
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 item/recipe loaders (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the item/recipe loaders (verified against `HytaleServer.jar`).
 
 - **`One and only one of BlockTag or ItemId must be set!`** → **not** an item/recipe error: it is the validator of the adventure-objective task field `BlockTagOrItemIdField` (`com.hypixel.hytale.builtin.adventure.objectives.config.task`), fired when an objective task (e.g. a gather/break task) declares neither `BlockTag` nor `ItemId`. Fix: set exactly one of the two on the task.
 - **`itemId, resourceTypeId and tag cannot all be null!`** → a `MaterialQuantity` (recipe input/output) was declared with no identifier at all. Fix: set one of `ItemId`, `ResourceTypeId`, or `ItemTag` on every material entry.

@@ -1497,7 +1497,7 @@ The world generator selects prefabs from these lists based on biome rules and pl
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the prefab system (verified against `HytaleServer.jar`).
 
 - **`Could not locate prefab: `** → a prefab path/name handed to `PrefabStore` does not resolve to a stored prefab. Fix: use the exact string path the prefab is registered under (case-sensitive), not the internal integer id from `getPrefabId()`.
 - **`Invalid prefab name: `** / **`Invalid prefab path: `** → an empty or malformed prefab name/path was supplied. Fix: pass a non-empty, well-formed name/path.

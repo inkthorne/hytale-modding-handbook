@@ -1746,7 +1746,7 @@ protected void setup() {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 world system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the world system (verified against `HytaleServer.jar`).
 
 - **`Player is already in a world`** → you called `addPlayer()` for a `PlayerRef` that is already in a world. Fix: remove it from its current world first, or skip the add.
 - **`Entity is already in a world!`** → `addEntity()` was called on an entity already added to a world. Fix: add each entity once; check before re-adding.

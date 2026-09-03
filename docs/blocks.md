@@ -2579,13 +2579,13 @@ health.removeBlock(world, pos);                             // clear all tracked
 | `isFullHealth()` | Block is at maximum durability |
 
 > [!WARNING]
-> This is engine-internal infrastructure exposed publicly; no first-party content plugin in build-12 references it. The class/method surface above is verified against `HytaleServer.jar`, but the intended end-to-end authoring flow (how a custom block declares its max health and regen) is not exercised by any shipped plugin — treat the worked example as illustrative of the API shape, not a guaranteed recipe.
+> This is engine-internal infrastructure exposed publicly; re-surveyed against 0.6.3, no first-party *content plugin* references it — the only consumer outside its own package is the engine's own `BlockHarvestUtils`. The class/method surface above is verified against `HytaleServer.jar`, but the intended end-to-end authoring flow (how a custom block declares its max health and regen) is not exercised by any shipped plugin — treat the worked example as illustrative of the API shape, not a guaranteed recipe.
 
 ---
 
 ## Custom Block-Entity Components
 
-**Verified against build-12**, end to end against a live server — this is a guaranteed recipe, not an illustrative sketch. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
+The worked example below compiles against the 0.6.3 jar and is covered by the example-build gate, so the API surface is current. The end-to-end run against a live server was last exercised on an older build and has not been repeated for 0.6.3 — treat the runtime behaviour as unconfirmed rather than guaranteed. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
 
 A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `Container`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
 

@@ -951,7 +951,7 @@ result.setCollisionByMaterial(
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 collision subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the collision subsystem (verified against `HytaleServer.jar`).
 
 - **`Must provide supplier for CollisionDataArray`** → a `CollisionDataArray` was used without an element supplier configured. Fix: this is internal — use a `CollisionResult` (which sets up its arrays), rather than constructing `CollisionDataArray` directly.
 - **Symptom:** trigger-block queries return nothing → trigger checking wasn't enabled on the `CollisionResult`. Fix: construct it with `new CollisionResult(false, true)` (or call `enableTriggerBlocks()`) before `findIntersections(..., true, false)` (see [Check for Trigger Blocks](#check-for-trigger-blocks)).

@@ -296,7 +296,7 @@ protected void setup() {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 NPC subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the NPC subsystem (verified against `HytaleServer.jar`).
 
 - **`Map of all NPCs must not be empty in AllNPCsLoadedEvent`** → the event was constructed/fired with an empty NPC map. Fix: this is an internal invariant — if you see it, NPC assets failed to load; check the server log for earlier role-load failures rather than the event handler.
 - **`Roles do not have component indexes!`** → NPC role component indexes were queried before roles finished loading. Fix: do role/component work from inside an `AllNPCsLoadedEvent` handler (which fires once all NPCs are loaded), not at plugin `setup()` time.

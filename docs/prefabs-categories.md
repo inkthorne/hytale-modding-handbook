@@ -722,7 +722,7 @@ World generation references prefabs through PrefabList files that group related 
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 prefab-list system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the prefab-list system (verified against `HytaleServer.jar`).
 
 - **`No prefab found in prefab list. Please double check your PrefabList asset.`** → a `PrefabList` resolved but yielded no prefab — usually a `Path` that matches no files, or `Recursive: false` over an empty directory. Fix: verify the `Path` points at real prefab files and matches the on-disk casing (see [PrefabList Integration](#prefablist-integration)).
 - **`PrefabList asset not found: `** → a referenced `PrefabList` id does not exist. Fix: confirm the `Server/PrefabList/*.json` file exists and the referenced id matches exactly.

@@ -1263,7 +1263,7 @@ with a cooldown (`BlockInteraction`, 0.278 s, `ClickBypass`) and creative settin
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 block loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the block loader (verified against `HytaleServer.jar`).
 
 - **`Block type not found`** → a `BlockType` key referenced for placement/lookup does not resolve to a loaded block. Fix: confirm the owning item loaded and the key matches the item's id exactly (case-sensitive).
 - **`does not have an associated item!`** → a block type exists but no item carries it, so it cannot be obtained or placed. Fix: define the `BlockType` inside an item file rather than as a standalone block (a block "can only be defined within an Item and not standalone").

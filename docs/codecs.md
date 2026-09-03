@@ -698,7 +698,7 @@ public static int readNumber(MemorySegment segment, int offset, int bytes);
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 codec system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the codec system (verified against `HytaleServer.jar`).
 
 - **`codec parameter can't be null`** / **`encode parameter can't be null`** / **`decode parameter can't be null`** → a null was passed where a codec or the value/document to encode/decode was required. Fix: ensure the codec and target are non-null before the call.
 - **`This BuilderCodec is for an abstract or direct codec. To use this codec you must specify an existing object to decode into.`** → you called the no-argument decode on an abstract/direct `BuilderCodec` that has no blank-instance supplier. Fix: decode into an existing instance, or build the codec from a concrete supplier (`BuilderCodec.builder(...)`).

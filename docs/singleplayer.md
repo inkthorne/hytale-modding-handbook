@@ -112,7 +112,7 @@ if (SingleplayerModule.isOwner(playerRef)) {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 singleplayer module (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the singleplayer module (verified against `HytaleServer.jar`).
 
 - **`SetServerAccess can only be used by the owner of the singleplayer world!`** / **`UpdateServerAccess can only be by the owner of the singleplayer world!`** / **`ConfigureIcePeer can only be sent by the owner of the singleplayer world!`** (0.6.3+) → a non-owner attempted to set or change the singleplayer world's access level (or, as of 0.6.3, to configure an ICE peer for the shared world). Fix: only the world owner may change access; gate any access-changing logic on owner identity.
 - **Symptom:** offline singleplayer refuses to start when the game was launched outside the official launcher, with a message like "Offline singleplayer mode requires the game must be launched through the official launcher." That text is **client/launcher-side** — it does not appear in `HytaleServer.jar` (the server's own related string is `offline mode is only valid in singleplayer`, logged when a remote connection arrives in offline mode). Fix: launch through the official Hytale launcher.

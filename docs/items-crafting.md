@@ -1056,7 +1056,7 @@ Allow crafting at different benches:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 crafting/recipe loaders (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the crafting/recipe loaders (verified against `HytaleServer.jar`).
 
 - **`KnowledgeRequired in recipe can't be set for non crafting recipes`** → `KnowledgeRequired: true` was set on a recipe whose bench `Type` is not `Crafting` (e.g. `Processing` or a salvage recipe). Fix: only set `KnowledgeRequired` on standard `Crafting` recipes; remove it from processing/salvage recipes.
 - **`CraftingRecipe can't be null!`** → a recipe reference resolved to nothing — typically a recipe id or `Parent` that does not match a loaded recipe asset. Fix: confirm the recipe asset loaded and the referenced id matches exactly (case-sensitive).

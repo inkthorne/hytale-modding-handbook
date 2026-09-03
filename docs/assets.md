@@ -997,7 +997,7 @@ protected void setup() {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 asset system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the asset system (verified against `HytaleServer.jar`).
 
 - **`assetPackSubPath cannot be null when assetPackMode is enabled`** → asset-pack mode was turned on without a sub-path for the pack's files. Fix: supply the pack sub-path, or leave asset-pack mode disabled.
 - **Symptom:** your plugin's JSON files under `Server/[Type]/` are never loaded → the manifest is missing the asset-pack flag. Fix: add `"IncludesAssetPack": true` to `manifest.json` so the server scans your resources (see [Creating Custom Asset Types](#creating-custom-asset-types)).

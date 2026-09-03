@@ -425,7 +425,7 @@ in any asset file and they are not part of the format:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 density-graph loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the density-graph loader (verified against `HytaleServer.jar`).
 
 - **`Number of noises must match number of thresholds`** → a threshold-selecting density node has unequal counts of noise inputs and threshold values. Fix: supply one threshold boundary per noise band.
 - **`Threshold array must contain at least one entry!`** → an empty threshold array. Fix: provide at least one entry.

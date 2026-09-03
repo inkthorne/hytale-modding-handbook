@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a complete reference for Hytale server plugin development containing:
-- **docs/**: Comprehensive API documentation (33 markdown files)
-- **examples/**: Standalone Gradle projects demonstrating different aspects of the plugin API
+- **docs/**: Comprehensive API documentation (65 markdown files)
+- **examples/**: Standalone, runnable mods — six Gradle plugin projects plus two no-code asset packs
 
 Refer to `docs/00-overview.md` for guidance when implementing Java code for plugins.
 
@@ -153,3 +153,11 @@ Also worth doing when that code is next touched: give the gotcha-string matcher 
 - **examples/inventory/**: Inventory and item-stack management
 - **examples/entity-count/**: ECS ticking system (`EntityTickingSystem`) that counts world entities each tick and pushes the totals to a live `CustomUIHud`
 - **examples/events/**: both event mechanisms side by side — global bus (`PlayerConnectEvent`/`PlayerDisconnectEvent`) and an ECS `EntityEventSystem` for `BreakBlockEvent` (query-filtered to players, chat via `getPlayerRef()`)
+- **examples/item-respawner/**: the stateful-block example — a custom block with a block-entity component, a ticking system over the chunk store, a spawned item entity that persists across reloads, and a press-F GUI that edits the block's state in the world
+
+Two of the eight are **packs, not plugins**: pure JSON content the game loads directly, with no Java, Gradle or art. They exist because the shortest path into modding shouldn't require a compiler.
+
+- **examples/custom-food/**: one item (`Food_Hearty_Snack`) defined in a single JSON file, reusing shipped art and effects; its player-facing text lives in `Server/Languages/en-US/server.lang`
+- **examples/custom-drop/**: overrides the chicken's shipped loot table so that snack drops in the world — and demonstrates that packs *compose*, referencing another pack's content by id
+
+Note the denominator when reading the example-build gate: it reports **6 builds, not 8**, because the two packs have nothing to compile. That is full coverage of the compilable examples, not a gap — but the packs are consequently checked by no hard gate, so their asset ids and `.lang` keys rest on the same blind spots described above.

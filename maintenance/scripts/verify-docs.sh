@@ -255,6 +255,15 @@ import re, glob, os
 untagged=[]; mismatch=[]; counts={}
 type_re=re.compile(r'\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)')
 cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
+# Calibration skip-list: pages that legitimately cite backing codec classes
+# from a non-Java tag. See maintenance/scripts/doctype-skiplist.txt.
+skip=set()
+sl="maintenance/scripts/doctype-skiplist.txt"
+if os.path.exists(sl):
+    for line in open(sl):
+        line=line.split("#",1)[0].strip()
+        if line: skip.add(line)
+checked=0; skipped=0
 for p in sorted(glob.glob("docs/*.md")):
     bn=os.path.basename(p); txt=open(p).read()
     m=type_re.search(txt)
@@ -262,8 +271,12 @@ for p in sorted(glob.glob("docs/*.md")):
         untagged.append(bn); continue
     typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
     classes=set(cls_re.findall(txt))
-    if "Java API" not in typ and len(classes) >= 2:
-        mismatch.append((bn,typ,len(classes)))
+    if "Java API" in typ or len(classes) < 2: continue
+    checked+=1
+    if bn in skip:
+        skipped+=1; continue
+    mismatch.append((bn,typ,len(classes)))
+print(f"DENOM {checked} {skipped}")
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
 for bn,typ,n in mismatch: print(f"MISMATCH {bn} [{typ}] references {n} distinct com.hypixel.* classes")
@@ -272,9 +285,13 @@ PY
 echo "$OUT" | awk '/^COUNT/{printf "  %-4s %s\n",$2,substr($0,index($0,$3))}'
 U="$(echo "$OUT" | grep -c '^UNTAGGED' || true)"
 MM="$(echo "$OUT" | grep -c '^MISMATCH' || true)"
+DEN="$(echo "$OUT" | awk '/^DENOM/{print $2}')"
+SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $3}')"
 [ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
-if [ "$MM" -eq 0 ]; then pass "no JSON/DSL-tagged doc references Java classes"; else
-  warn "$MM doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
+if [ "$MM" -eq 0 ]; then
+  pass "no JSON/DSL-tagged doc references Java classes (${DEN:-0} candidate(s) checked, ${SKIPPED:-0} audited-skip)"
+else
+  warn "$MM of ${DEN:-0} candidate doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
   echo "$OUT" | grep '^MISMATCH' | sed 's/^MISMATCH/      /'
 fi
 

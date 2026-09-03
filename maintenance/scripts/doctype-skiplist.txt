@@ -1,0 +1,23 @@
+# Calibration skip-list for the doc-type/Java-reference consistency check in
+# verify-docs.sh.
+#
+# The check flags a doc not tagged "Java API" that names >= 2 distinct
+# com.hypixel.* classes, on the theory that it is mis-tagged. That heuristic
+# cannot tell "this page documents a Java API" from "this page cites the codec
+# class backing a JSON key" — and the second is exactly the cross-reference a
+# reader of a JSON-format page wants.
+#
+# Format: doc.md  # justification. Audited 2026-09-03 against the 0.6.3 jar:
+# every entry below was opened and every one of its class references confirmed
+# to be a citation in prose or a table cell, with no Java signatures, method
+# tables or API surface documented on the page. Broadening the Doc type tag
+# instead would be a false claim about the page and would mis-group it in
+# 01-index.md's "By Documentation Type" section.
+#
+# Re-audit an entry if the page gains genuine Java API content, and delete it
+# rather than carrying it forward.
+
+items-tools.md       # cites the codec (ItemToolSpec) and interaction classes behind documented JSON keys
+universe-saves.md    # names HytaleServerConfig / Options as the classes backing config.json fields
+worldgen.md          # cites AssetManager / SettingsAsset as the codecs behind the JSON, one in a code comment
+worldgen-biomes.md   # cites BiomeAsset / WeatherForecast as the codecs behind the documented biome JSON

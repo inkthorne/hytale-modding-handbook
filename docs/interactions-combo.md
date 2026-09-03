@@ -70,9 +70,16 @@ Enables combo attack chains where players can input subsequent attacks within a 
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Chaining"` |
 | `ChainingAllowance` | float | `0` | Time window (seconds) to input the next attack; `0` (the default) never expires the chain |
-| `Next` | array | Required | Sequence of interactions in the chain |
-| `ChainId` | string | - | Identifier for cross-interaction chain synchronization (when omitted, chain state is keyed by this interaction's own id) |
-| `Flags` | object | - | Named branches that can be triggered via ChainFlagInteraction |
+| `Next` | array | Required | Sequence of interactions in the chain. Validated `nonNull` with `nonNull` elements; each entry is an interaction id **or** an inline interaction object |
+| `ChainId` | string | - | Identifier for cross-interaction chain synchronization. When omitted, chain state is keyed by this interaction's own asset id and stored in a *different* map — see the warning below |
+| `Flags` | object | - | Named branches that can be triggered via ChainFlagInteraction. Values are interaction ids or inline interaction objects |
+
+> ⚠️ **A chain without a `ChainId` cannot be reset by `CancelChain`.** The server keeps two maps on the
+> `ChainingInteraction.Data` component: `namedMap`, keyed by `ChainId`, and an unnamed `map`, keyed by
+> the chaining interaction's own asset id. `CancelChainInteraction` only ever calls
+> `getNamedMap().removeInt(chainId)`, and `map` has no public accessor at all — so a chain that omits
+> `ChainId` is unreachable from `CancelChain`. `ChainFlag` is likewise addressed by `ChainId`, so give
+> any chain you intend to reset or flag an explicit `ChainId`.
 
 ### Attack Chain Timing
 
@@ -460,7 +467,7 @@ This detection integrates with the chain system - if FirstClickInteraction is pa
 
 **Tool with animation on click:**
 
-From `RootInteractions/Tools/Watering_Can_Use.json` - clicking plays the water animation then performs a single watering, while holding hands off to `Watering_Can_Use_Charge` (a `Charging` interaction that waters a 3x3 patch once held for 0.5 s):
+From `Server/Item/RootInteractions/Tools/Watering_Can_Use.json` - clicking plays the water animation then performs a single watering (`Watering_Can_Use`, `RadiusX`/`RadiusZ` of 1), while holding hands off to `Watering_Can_Use_Charge` — a `Charging` interaction whose `"0"` threshold falls back to the same single watering and whose `"0.5"` threshold runs `Watering_Can_Use_3x3`, a wider radius (`RadiusX`/`RadiusZ` of 3):
 
 ```json
 {
@@ -586,17 +593,51 @@ Enables charged attacks and abilities that scale with hold duration. Players hol
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Charging"` |
-| `Next` | object | Required | Map of charge time thresholds to interactions |
+| `Next` | object | - | Map of charge-time thresholds to interactions. The codec does **not** mark it required, but a `Charging` with no `Next` has no release behaviour and (with `AllowIndefiniteHold` false) a max charge of `0` |
 | `AllowIndefiniteHold` | boolean | `false` | If `true`, player can hold at max charge indefinitely |
 | `DisplayProgress` | boolean | `true` | Show charge progress indicator to player |
 | `Effects` | object | - | Animation, sound, and particle effects during charging |
-| `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while charging (0.0-1.0) |
-| `FailOnDamage` | boolean | `false` | Cancel charging if player takes damage |
-| `Failed` | object | - | Interaction to execute if charging fails/cancels |
-| `MouseSensitivityAdjustmentTarget` | float | - | Target sensitivity multiplier during charge |
-| `MouseSensitivityAdjustmentDuration` | float | - | Time to transition to target sensitivity |
+| `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while charging. No codec bound; every shipped value is between `0` and `1` |
+| `FailOnDamage` | boolean | `false` | Cancel the charge when the entity takes damage. The codec's own description is "the interaction will be cancelled and the item removed", so treat it as more than a pure cancel and test before shipping it on a non-consumable |
+| `Failed` | string/object | - | Interaction to execute if charging fails/cancels |
+| `MouseSensitivityAdjustmentTarget` | float | `1.0` | Target sensitivity multiplier during charge |
+| `MouseSensitivityAdjustmentDuration` | float | `1.0` | Overrides the global adjustment: the time taken to go from `1.0` to `0.0` |
 | `CancelOnOtherClick` | boolean | `true` | Cancel the charge when another click arrives while holding |
+| `Forks` | object | - | Map of `InteractionType` → **root interaction** to run when that input is pressed *while still holding* this one (see below) |
 | `Delay` | object | - | `ChargingDelay`: delays the charge when the user is damaged — `MinDelay`/`MaxDelay` (seconds, scaled between the `MinHealth` and `MaxHealth` health fractions), with `MaxTotalDelay` capping the accumulated delay |
+
+### Forks (input-while-holding)
+
+`Forks` is the mechanism behind "hold Secondary to guard, tap Primary to bash". Keys are
+`InteractionType` values (`Primary`, `Secondary`, `Ability1`–`Ability3`, `Use`, …); values are
+**root interaction** references — an id, or an inline `{ "Interactions": [...] }` object.
+
+Every shipped use is on a `Wielding` interaction, e.g. `Weapon_Shield_Secondary_Guard_Wield`:
+
+```json
+{
+  "Type": "Wielding",
+  "CancelOnOtherClick": false,
+  "Forks": {
+    "Primary": {
+      "Interactions": ["Weapon_Shield_Secondary_Guard_Bash"]
+    }
+  }
+}
+```
+
+Forking does **not** cancel the held interaction — but the `CancelOnOtherClick` check still runs and
+may cancel it, which is why the vanilla guards pair `Forks` with `"CancelOnOtherClick": false`. A
+forked chain keeps running even after the charging interaction itself ends.
+
+> **`Wielding` is a `Charging`.** `WieldingInteraction extends ChargingInteraction`, so `Forks`,
+> `CancelOnOtherClick`, `Failed`, `AllowIndefiniteHold`, `DisplayProgress`, `FailOnDamage`, `Delay`
+> and the mouse-sensitivity pair are all equally valid on a `"Type": "Wielding"` block, on top of
+> `Wielding`'s own `AngledWielding`, `DamageModifiers`, `KnockbackModifiers`, `StaminaCost`,
+> `BlockedEffects` and `BlockedInteractions`. The one property that does **not** carry over is `Next`:
+> `Wielding` redeclares it as a single interaction, not a charge-threshold map, so
+> `"Next": { "Type": "ChangeStat", ... }` on a `Wielding` and `"Next": { "0.5": ... }` on a `Charging`
+> are different keys that happen to share a name.
 
 ### The Next Map System
 
@@ -946,7 +987,7 @@ From `Debug_Combo_Primary.json` - when player holds during second attack, it set
   "Flags": {
     "Special_Second": {
       "Type": "SendMessage",
-      "Message": "Flag triggered!"
+      "Message": "Flag hit!"
     }
   }
 }
@@ -1031,6 +1072,10 @@ When `CancelChainInteraction` executes, the following steps occur internally:
 3. **Chain state removal** - Removes the entry for the specified `ChainId` from the component's `namedMap` (`getNamedMap().removeInt(chainId)`)
 
 **Effect:** The next time the player triggers an interaction using that `ChainId`, the chain starts from the beginning (index 0 of the `Next` array) instead of continuing from where it left off. Flags are not part of the server's `Data` component (it holds only the per-chain index maps and a shared `lastAttack` timestamp) — a pending flag set via `ChainFlagInteraction` is client-side state.
+
+> ⚠️ **Only `namedMap` is touched.** `CancelChain` calls `getNamedMap().removeInt(chainId)`, so it can
+> reset only chains that declared a matching `ChainId`. A `ChainingInteraction` without a `ChainId`
+> stores its index in the component's other, unexposed `map` and is unreachable from `CancelChain`.
 
 ```
 Before CancelChain:
@@ -1197,4 +1242,5 @@ This pattern cancels both primary and secondary attack chains before switching t
 - **Symptom:** a `ChainFlag` set in one chain never triggers a branch in another → the two chains don't share the same `ChainId`. Fix: give both interactions the identical `ChainId` so they share flag state (see [ChainId and Cross-Interaction Sync](#chainid-and-cross-interaction-sync)).
 - **Symptom:** a flag-triggered branch only fires once → flags are consumed (reset) immediately after triggering. Fix: re-set the flag with `ChainFlag` each time you need the branch to fire again.
 - **Symptom:** a `Charging` interaction releases the wrong tier (or nothing) → the `Next` map keys are **strings** representing charge-time thresholds, and the system picks the highest threshold reached. Fix: include a `"0"` entry for immediate release, and use string keys like `"0.5"`, not numbers (see [The Next Map System](#the-next-map-system)).
+- **Symptom:** `CancelChain` silently does nothing → the target `ChainingInteraction` has no `ChainId`, so its index lives in the `Data` component's unnamed map, which `CancelChain` cannot reach (it only removes from `namedMap`). Fix: give the chain an explicit `ChainId` and use the same string in `CancelChain`.
 - **Symptom:** `CancelChain` didn't behave like a partial reset → cancelling always removes the chain's index entry, so the chain restarts at index 0 (there is no reset-to-index). Flag state is client-side and not part of the server's `Data` component, so don't rely on a pending `ChainFlag` surviving a cancel; re-establish state afterward.

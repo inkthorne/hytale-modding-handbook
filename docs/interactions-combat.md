@@ -28,13 +28,13 @@ Defined as JSON interaction assets (server classes under `com.hypixel.hytale.ser
 ```
 Combat & Effects
 ├── Targeting
-│   └── Selector (Horizontal / AOECircle / Raycast / Stab) → HitEntity / HitBlock
+│   └── Selector (Horizontal / Stab / AOECircle / AOECylinder / Raycast / Donut) → HitEntity / HitBlock
 ├── Damage
 │   ├── DamageEntity (DamageCalculator + DamageEffects + EntityStatsOnHit)
 │   └── ApplyForce (Direction + Force knockback/launch)
 ├── Status effects
 │   ├── ApplyEffect (EffectId → effect asset)
-│   └── ClearEntityEffect (EntityEffectId / EntityEffectIds)
+│   └── ClearEntityEffect (EntityEffectId — one per interaction)
 ├── Stats
 │   └── ChangeStat (StatModifiers, Behaviour, ValueType)
 ├── Control
@@ -50,7 +50,7 @@ Combat & Effects
 | `Selector` (`SelectInteraction`) | `config/none/SelectInteraction` | Hitbox/target selection for melee, AOE, raycast, and stab |
 | `DamageEntity` (`DamageEntityInteraction`) | `config/server/DamageEntityInteraction` | Deals damage via `DamageCalculator` with `DamageEffects` |
 | `ApplyForce` (`ApplyForceInteraction`) | `config/client/ApplyForceInteraction` | Applies a physics force for knockback/launches |
-| `ApplyEffect` (`ApplyEffectInteraction`) | `config/none/ApplyEffectInteraction` | Applies a status effect by `EffectId` |
+| `ApplyEffect` (`ApplyEffectInteraction`) | `config/none/simple/ApplyEffectInteraction` | Applies a status effect by `EffectId` |
 | `ClearEntityEffect` (`ClearEntityEffectInteraction`) | `config/server/ClearEntityEffectInteraction` | Removes status effects by id |
 | `InterruptInteraction` | `config/server/InterruptInteraction` | Cancels the target's current interaction chain |
 
@@ -95,8 +95,8 @@ SimpleInteraction serves as:
 |----------|------|---------|-------------|
 | `RunTime` | float | `0` | Duration in seconds before completing |
 | `Effects` | InteractionEffects | - | Visual and audio effects configuration |
-| `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed modifier during interaction (0.0-1.0) |
-| `ViewDistance` | double | - | View distance modifier |
+| `HorizontalSpeedMultiplier` | float | `1.0` | Multiplier applied to the entity's horizontal speed while the interaction runs. The codec imposes no bound; every shipped value is between `0` and `1` |
+| `ViewDistance` | double | `96.0` | Distance within which other players can see this interaction's effects |
 | `OnItemChangeBehavior` | string | `Cancel` | What happens when the held item changes: `Cancel`, `Fail`, `Finish`, or `Ignore` (`InteractionItemChangeBehavior`, 0.6.3+). The old boolean `CancelOnItemChange` is still accepted as an alias — `true` → `Cancel`, `false` → `Ignore` — but no shipped asset uses it any more |
 | `Settings` | Map<GameMode, InteractionSettings> | - | Per-gamemode settings |
 | `Rules` | InteractionRules | - | Interaction rules |
@@ -345,15 +345,20 @@ Target selection for combat interactions. Defines hitbox shapes and detection ar
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `RunTime` | float | Duration of the selection window in seconds |
-| `Selector` | object | Hitbox configuration (see Selector Types below) |
-| `HitEntity` | object | Interactions to execute when an entity is hit |
-| `HitBlock` | object | Interactions to execute when a block is hit |
-| `HitEntityRules` | array | Conditional hit handling with matchers |
-| `IgnoreOwner` | boolean | Whether to ignore the attacking entity |
-| `FailOn` | string | Condition that causes the selector to fail |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `RunTime` | float | `0` | Duration of the selection window in seconds. The selector runs **every tick** and may sweep its search area across that window (e.g. tracing a sword arc) |
+| `Selector` | object | - | Hitbox configuration; `Id` picks the shape (see Selector Types below) |
+| `HitEntity` | string/object | - | **Root interaction** forked once per hit entity (hence the `{ "Interactions": [...] }` shape, not a bare interaction) |
+| `HitBlock` | string/object | - | **Root interaction** forked once per hit block |
+| `HitEntityRules` | array | - | Conditional hit handling with matchers; **overrides `HitEntity`** for any entity that matches |
+| `IgnoreOwner` | boolean | `true` | Ignore the owner of the affiliated entity (e.g. the thrower of a projectile) |
+| `MaxTargets` | int | `0` | Cap on how many of the selected entities actually get a fork; `0` = unlimited. When more are hit, the survivors are picked by reservoir sampling (i.e. randomly) |
+| `FailOn` | string | `Neither` | What makes the selector take its `Failed` branch: `Neither`, `Entity` (nothing hit an entity), `Block`, or `Either` |
+
+> **`HitEntity`/`HitBlock` are root-interaction references, not interactions.** They accept a
+> `RootInteractions/` asset id *or* an inline root interaction, which is why real assets write
+> `"HitEntity": { "Interactions": ["Weapon_Damage"] }` rather than `"HitEntity": { "Type": "DamageEntity" }`.
 
 ### Selector Types
 
@@ -379,10 +384,10 @@ Used for sword swings and wide melee attacks.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Direction` | string | `"ToLeft"` or `"ToRight"` - sweep direction |
-| `TestLineOfSight` | boolean | Check for obstacles between attacker and target |
-| `ExtendTop` | float | Hitbox extension upward |
-| `ExtendBottom` | float | Hitbox extension downward |
-| `StartDistance` | float | Starting distance from attacker |
+| `TestLineOfSight` | boolean | Check for obstacles between attacker and target (default `true` on `Horizontal`, `false` on `Stab`) |
+| `ExtendTop` | float | Hitbox extension upward (default `1.0`) |
+| `ExtendBottom` | float | Hitbox extension downward (default `1.0`) |
+| `StartDistance` | float | Starting distance from attacker (default `0.01`) |
 | `EndDistance` | float | Maximum reach distance |
 | `Length` | float | Arc length in degrees |
 | `RollOffset` | float | Rotation offset around forward axis |
@@ -405,15 +410,21 @@ Used for ground slams and radial attacks.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Range` | float | Radius of the circular area |
-| `Offset` | object | `{ "X", "Y", "Z" }` offset of the disc center from the entity position |
+| `Range` | float | Radius of the sphere. Validated with an inclusive max of `30`; a larger value fails validation with `Must be less than or equal to 30.0` |
+| `Offset` | object | `{ "X", "Y", "Z" }` offset of the sphere center from the entity position. **Rotated by the attacker's head yaw** before being added, so it is relative to facing, not to world axes. A zero offset centres the sphere on the entity's *feet* (its `TransformComponent` position), not its eyes |
 
-> ⚠️ **`AOECircle` is a flat, zero-height disc.** `AOECircleSelector` has only `Range` (radius) +
-> `Offset`, so a ground-level circle misses entities whose model center sits above the impact plane.
-> For vertical reach use **`AOECylinder`** (`AOECylinderSelector extends AOECircleSelector`), which
-> adds a `Height` field — though no shipped asset uses it (`Server/` uses `Horizontal` ×369, `Stab` ×76,
-> `AOECircle` ×17, `Raycast` ×3 and one debug `Donut`), so it is untested in content despite having a
-> registered codec.
+> ⚠️ **`AOECircle` is a sphere, not a disc.** Despite the name, `AOECircleSelector` runs
+> `Selector.selectNearbyEntities(...)`, a 3-D radius query over the entity spatial index
+> (`KDTree.collect` compares squared 3-D distance), and its debug draw is `DebugUtils.addSphere`.
+> There is no height field and none is needed: a `Range` of 4 reaches 4 blocks in every direction,
+> including straight up and straight down from the (feet-level) origin.
+>
+> **`AOECylinder`** (`AOECylinderSelector extends AOECircleSelector`) is the one that constrains
+> vertical reach: it adds `Height` and selects only entities whose vertical offset from the origin is
+> in `[0, Height]` — so it reaches *upward only*, and misses anything below the origin plane. Use it
+> when a ground slam should not hit a target hovering below a ledge. No shipped asset uses it
+> (`Server/` uses `Horizontal` ×369, `Stab` ×76, `AOECircle` ×17, `Raycast` ×3 and one debug `Donut`),
+> so it is untested in content despite having a registered codec.
 >
 > **`Donut` (0.6.3+)** is a ring selector whose radius grows from `MinRadius` to `MaxRadius` over the
 > interaction's `RunTime`, with a constant radial `Width` and vertical `Height` (extending up from the
@@ -429,8 +440,9 @@ Used for ground slams and radial attacks.
 > the static query `ExplosionUtils.performExplosion` uses internally).
 >
 > ⚠️ **`Explode` (`ExplosionConfig`) cannot apply a status effect.** It does radius **damage +
-> knockback + `ModelParticles` + sound** (`damageEntities`, `entityDamageRadius`, `entityDamage`,
-> `knockback`, `particles`, `soundEventId`, plus block damage) — but has **no field for an
+> knockback + model particles + sound** (`DamageEntities`, `EntityDamageRadius`, `EntityDamage`,
+> `EntityDamageFalloff`, `Knockback`, `Particles`, `SoundEventId`, plus `DamageBlocks`,
+> `BlockDamageRadius`, `BlockDamageFalloff`, `BlockDropChance`, `ItemTool`) — but has **no field for an
 > entity/status effect**. So `Explode` covers AOE *damage*, not AOE *slow/stun/etc.* For AOE **effects**
 > you need a Java radius query + `EffectControllerComponent.addEffect` (see
 > [interactions.md → Registering a Custom Interaction Type](interactions.md#registering-a-custom-interaction-type-java)),
@@ -452,9 +464,9 @@ Used for wand spells and targeted abilities.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Offset` | object | Starting point offset from entity position |
-| `Distance` | float | Maximum search distance for the ray |
+| `Distance` | int | Maximum search distance for the ray (default `30`; the codec is `Codec.INTEGER`, so a fractional value is rejected) |
 | `BlockTag` | string | Tag a block must carry for the ray to count it as a hit |
-| `IgnoreFluids` / `IgnoreEmptyCollisionMaterial` | boolean | Skip fluids / blocks with no collision material |
+| `IgnoreFluids` / `IgnoreEmptyCollisionMaterial` | boolean | Skip fluids / blocks with no collision material (both default `false`) |
 
 #### Stab (Thrust attacks)
 
@@ -498,6 +510,17 @@ For conditional hit handling based on entity matchers:
   }]
 }
 ```
+
+Each rule entry has:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Matchers` | array | Entity matchers that must **all** pass for the rule to apply. Each carries an `Invert` flag that flips its result |
+| `Next` | string/object | The **root interaction** to fork for a matching entity (same shape as `HitEntity`) |
+
+> **Rules override `HitEntity`, and the *last* matching rule wins.** The engine walks
+> `HitEntityRules` in order and assigns `hitEntity = rule.next` on every match without breaking, so a
+> later rule silently replaces an earlier one. Order the array most-general first, most-specific last.
 
 ### Examples
 
@@ -627,30 +650,42 @@ Most weapon attacks reference a shared `DamageEntityParent` via `"Parent"` inste
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `DamageCalculator` | object | Damage source (see below). Holds `BaseDamage` per damage class |
+| `DamageCalculator` | object | Damage source (see below). Holds `BaseDamage` per damage type |
 | `DamageEffects` | object | Hit feedback: knockback, sounds, particles (see below) |
 | `EntityStatsOnHit` | array | Stats granted to the attacker on a successful hit |
+| `AngledDamage` | array | Per-angle overrides: each entry takes `Angle`, `AngleDistance` and its own `DamageCalculator` / `DamageEffects` / `TargetEntityEffects` / `Next`, so a hit from behind can differ from a hit to the face |
+| `TargetedDamage` | object | Map of hit-detail key (the body part / sub-hitbox the selector reported) to the same per-hit override shape as `AngledDamage` |
+| `Next` | string/object | Interaction to run when the damage lands |
+| `Failed` | string/object | Interaction to run when the interaction fails |
+| `Blocked` | string/object | Interaction to run when the target blocked the hit |
 | `Parent` | string | Optional. Inherits another interaction (e.g. `DamageEntityParent`) |
 
 ### DamageCalculator Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `BaseDamage` | object | Map of damage class to amount, e.g. `{ "Physical": 10 }` (other classes such as `Fire` also appear) |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `BaseDamage` | object | - | Map of **damage-cause asset id** to amount, e.g. `{ "Physical": 10 }`. Keys are validated against `Server/Entity/Damage/*.json` (`Physical`, `Fire`, `Ice`, `Poison`, `Fall`, `Projectile`, …), so a typo fails asset load |
+| `Type` | string | `Absolute` | `Absolute` — the numbers *are* the damage; `Dps` — they are damage *per second* and get multiplied by how long the damage has been applying |
+| `Class` | string | `Unknown` | `Unknown`, `Light`, `Charged` or `Signature` — the damage system uses it to pick which of the source's equipment modifiers apply |
+| `RandomPercentageModifier` | float | `0` | Randomises the result within ±this fraction. Vanilla melee overwhelmingly uses `0.1`, with `0.15` / `0.2` on heavier weapons |
+| `SequentialModifierStep` | float | `0` | Falloff for repeated hits in one damage sequence: the amount is multiplied by `max(1 − Step × priorHits, SequentialModifierMinimum)` |
+| `SequentialModifierMinimum` | float | `0` | Floor for that multiplier (`0` means a long enough sequence can reach zero damage) |
 
 ### DamageEffects Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Knockback` | object | Knockback configuration (see below) |
-| `WorldParticles` | array | Particles spawned at the hit location, each an object with `SystemId` and `Scale` (see note) |
-| `LocalSoundEventId` | string | Sound played for the attacker only |
-| `WorldSoundEventId` | string | Sound played at hit location for all nearby |
-| `PlayerSoundEventId` | string | Sound played to a *player* receiving the damage |
-| `StaminaDrainMultiplier` | float | Multiplier for stamina drain on hit |
-| `ModelParticles` | array | Bone-attached `ModelParticle`s on the victim (`SystemId`, `TargetEntityPart`, `TargetNodeName`, `Scale`, `ClearParticlesOnRemove`) |
-| `CameraEffect` | string | Camera effect asset played for the victim on hit (e.g. `"Impact_Light"` in `Common_Melee_Damage`) |
-| `ViewDistance` | double | View-distance override for the hit particles |
+These nine keys are the whole of `DamageEffects` — there is nothing else the codec accepts:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Knockback` | object | - | Knockback configuration (see below) |
+| `WorldParticles` | array | - | World-space particles spawned at the hit location. Each entry is a `WorldParticle`: `SystemId`, `Color`, `Scale`, `PositionOffset`, `RotationOffset` (see note) |
+| `LocalSoundEventId` | string | - | Sound played for the attacker only |
+| `WorldSoundEventId` | string | - | Sound played at hit location for all nearby |
+| `PlayerSoundEventId` | string | - | Sound played to a *player* receiving the damage |
+| `StaminaDrainMultiplier` | float | `1.0` | Multiplier for stamina drain on hit |
+| `ModelParticles` | array | - | Bone-attached `ModelParticle`s on the victim (`SystemId`, `TargetEntityPart`, `TargetNodeName`, `Color`, `Scale`, `PositionOffset`, `RotationOffset`, `DetachedFromModel`, `ClearParticlesOnRemove`) |
+| `CameraEffect` | string | - | Camera effect asset played for the victim on hit (e.g. `"Impact_Light"` in `Common_Melee_Damage`) |
+| `ViewDistance` | double | `75.0` | View distance within which these hit effects are sent |
 
 > **`Scale` defaults to `1.0`.** As of 0.6.3 both `WorldParticle.scale` and `ModelParticle.scale`
 > initialise to `1.0f`, so omitting `"Scale"` is safe (vanilla omits it widely — e.g. the
@@ -673,14 +708,23 @@ Two `Type` forms appear in real assets — a simple relative form and a `Force`/
 }
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Type` | string | `"Directional"` (the default when omitted — the relative form, `RelativeX`/`RelativeZ`/`VelocityY`), `"Force"` (`Direction` vector), or `"Point"` (`OffsetX`/`OffsetZ`/`RotateY`/`VelocityY`, pushes away from a point) — see [Knockback Types](combat.md#knockback-types) |
-| `Force` | float | Strength of the knockback impulse |
-| `Direction` | object | `{ "X", "Y", "Z" }` push direction (with `Type: Force`/`Point`) |
-| `RelativeX` / `RelativeZ` / `VelocityY` | float | Relative push offsets and upward velocity (simple form) |
-| `VelocityType` | string | e.g. `"Set"` |
-| `VelocityConfig` | object | Air/ground resistance and `Style` tuning |
+Shared by every knockback type:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Type` | string | `Directional` | `Directional`, `Force` or `Point` — see [Knockback Types](combat.md#knockback-types). It is the first registered type, so omitting `Type` gives you `Directional` |
+| `Force` | float | `0` | Strength of the knockback impulse |
+| `Duration` | float | `0` | Seconds to keep applying the force. `0` = applied once. Validated `>= 0` |
+| `VelocityType` | string | `Add` | `Add` or `Set` (`ChangeVelocityType`) |
+| `VelocityConfig` | object | - | Air/ground resistance and `Style` tuning |
+
+Per-type keys — each type accepts **only** its own, on top of the shared four:
+
+| Type | Keys |
+|------|------|
+| `Directional` | `RelativeX`, `RelativeZ`, `VelocityY` — a push relative to the attacker's facing |
+| `Force` | `Direction` — a `{ "X", "Y", "Z" }` vector (defaults to straight up) |
+| `Point` | `OffsetX`, `OffsetZ`, `RotateY`, `VelocityY` — pushes away from an offset point. **It has no `Direction`** |
 
 ### EntityStatsOnHit
 
@@ -714,16 +758,31 @@ Applies physics force to entities, used for launches, dashes, and movement effec
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Direction` | object | Force direction as `{ "X", "Y", "Z" }` |
-| `Force` | float | Magnitude applied along `Direction` |
-| `AdjustVertical` | boolean | Adjust the vertical component of the force |
-| `WaitForGround` | boolean | Wait until the entity is grounded before applying |
-| `Duration` | float | Duration for sustained forces (optional) |
-| `Forces` | array | Alternative to a single `Direction`/`Force`: a list of `{ "Direction", "Force" }` pairs (used by `Debug_Stick_Parry`) |
-| `VelocityConfig` | object | Air/ground resistance tuning, as on knockback |
-| `UseTargetBlockForDirection` | boolean | Align the direction to the interaction chain's target block; `Direction` and `Forces` are then ignored and only the root settings are used (0.6.3+) |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Direction` | object | `{0, 1, 0}` | Force direction as `{ "X", "Y", "Z" }`, rotated by the entity's yaw |
+| `Force` | float | `1.0` | Magnitude applied along `Direction` |
+| `AdjustVertical` | boolean | `false` | Also rotate the direction by the entity's look pitch |
+| `Forces` | array | - | A list of `{ "Direction", "AdjustVertical", "Force" }` entries applied together. **Replaces** `Direction`/`AdjustVertical`/`Force` when present (used by `Debug_Stick_Parry`) |
+| `Duration` | float | `0` | Seconds to keep re-applying the force each tick. `0` = applied on first run only |
+| `VerticalClamp` | array | - | **Two-element array** `[minDeg, maxDeg]` clamping the look pitch used by `AdjustVertical` — e.g. `"VerticalClamp": [-85, 20]` in `Weapon_Sword_Primary_Thrust_Force`. An object form is rejected |
+| `ChangeVelocityType` | string | `Set` | `Set` or `Add`. Only the first force in `Forces` uses it; the rest are always `Add` |
+| `VelocityConfig` | object | - | Air/ground resistance tuning, as on knockback |
+| `WaitForGround` | boolean | `true` | **After** applying the force, keep the interaction running until the entity is on the ground, in fluid, or climbing. Not a precondition |
+| `GroundCheckDelay` | float | `0.1` | Seconds before the ground check starts (stops an immediate self-trigger) |
+| `GroundNext` | string/object | - | Interaction to run when the ground check fires; falls back to `Next` |
+| `WaitForCollision` | boolean | `false` | Same idea for colliding with another entity |
+| `CollisionCheckDelay` | float | `0` | Seconds before the collision check starts |
+| `CollisionNext` | string/object | - | Interaction to run when the collision check fires; falls back to `Next` |
+| `RaycastDistance` | float | `1.5` | Raycast length for the collision check |
+| `RaycastHeightOffset` | float | `0` | Raycast height offset for the collision check |
+| `RaycastMode` | string | `FollowMotion` | `FollowMotion` or `FollowLook` — what the collision raycast points along |
+| `UseTargetBlockForDirection` | boolean | `false` | Align the direction to the interaction chain's target block; `Direction` and `Forces` are then ignored and only the root settings are used (0.6.3+) |
+
+> **`WaitForGround` defaults to `true`, and it gates *completion*, not the force.** The force is applied
+> on the first tick either way; with `WaitForGround` the interaction then holds until the entity lands.
+> A launch that must finish immediately needs `"WaitForGround": false` **and** `RunTime: 0` — the
+> instant-complete path requires no `RunTime`, no `WaitForGround` and no `WaitForCollision`.
 
 ### Example: Double Jump
 
@@ -743,7 +802,7 @@ A vertical launch used by the double-jump interaction:
 
 ## ApplyEffect
 
-**Package:** `config/none/ApplyEffectInteraction`
+**Package:** `config/none/simple/ApplyEffectInteraction`
 
 Applies status effects to entities (buffs, debuffs, damage over time, etc.).
 
@@ -763,10 +822,12 @@ The effect's duration, magnitude, and particles are defined in the effect asset 
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `EffectId` | string | ID of the effect to apply (e.g. `Stun`, `Root`, `Red_Flash`) |
-| `Entity` | string | Who receives the effect — `Target`, `User`, or `Owner` (`InteractionTarget`; there is no `Self` — `User` is the entity running the chain). Defaults to the executing entity when omitted |
+These two keys are all `ApplyEffectInteraction` adds to the base interaction:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EffectId` | string/object | - | The effect to apply. A `ContainedAssetCodec`, so it takes either an `Server/Entity/Effects/**` asset id (e.g. `Stun`, `Root`, `Red_Flash`) **or an inline effect definition** |
+| `Entity` | string | `User` | Who receives the effect — `Target`, `User`, or `Owner` (`InteractionTarget`; there is no `Self` — `User` is the entity running the chain) |
 
 ### Example: Apply Root on a Wand Hit
 
@@ -796,7 +857,7 @@ After a raycast selector hits a vulnerable entity, grant brief immunity then app
 
 **Package:** `config/server/ClearEntityEffectInteraction`
 
-Removes status effects from entities. Effects are identified by their entity-effect id (`EntityEffectId` for one, or `EntityEffectIds` for several).
+Removes a status effect from an entity, identified by its entity-effect id.
 
 ### Structure
 
@@ -810,11 +871,17 @@ Removes status effects from entities. Effects are identified by their entity-eff
 
 ### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `Entity` | string | Whose effect to remove — typically `Target` |
-| `EntityEffectId` | string | Single effect id to remove |
-| `EntityEffectIds` | array | List of effect ids to remove |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Entity` | string | `User` | Whose effect to remove — typically `Target` |
+| `EntityEffectId` | string | - | The single effect id to remove |
+
+> ⚠️ **`ClearEntityEffect` clears exactly one effect — there is no `EntityEffectIds` array.**
+> `ClearEntityEffectInteraction`'s codec has only `EntityEffectId` and `Entity`; a plural key is
+> silently dropped as an unused key and nothing is cleared. To strip several effects, chain one
+> `ClearEntityEffect` per id inside a `Serial` (which is exactly what `DamageEntityParent` does — see
+> below). The plural `EntityEffectIds` belongs to a *different* interaction,
+> [`EffectCondition`](interactions-flow.md#effectcondition), which tests for effects rather than removing them.
 
 ### Example: Strip Regen Effects on Hit
 
@@ -862,6 +929,18 @@ Modifies entity stats like health, stamina, or signature energy.
 }
 ```
 
+### Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `StatModifiers` | object | **required** | Map of stat id to value. Validated `nonNull` **and** `nonEmptyMap`, so an empty `{}` fails asset load |
+| `Behaviour` | string | `Add` | How the value is applied (see below) |
+| `ValueType` | string | `Absolute` | `Absolute` or `Percent` |
+| `Entity` | string | `User` | Whose stats change — `User`, `Target` or `Owner` |
+
+(`ChangeStatWithModifier` is the same interaction plus an `InteractionModifierId`, which pulls the
+amount from an armour piece's interaction modifier instead of a literal.)
+
 ### StatModifiers
 
 A map of stat names to modification values:
@@ -874,11 +953,24 @@ A map of stat names to modification values:
 }
 ```
 
-**Available stats:**
-- `SignatureEnergy` - Ultimate/signature ability resource
-- `Stamina` - Used for blocking, sprinting, etc.
-- `Health` - Entity health
-- `Mana` - Magic resource (if applicable)
+**Available stats** — keys are `Server/Entity/Stats/*.json` asset ids, and the full shipped set is:
+
+| Stat | Purpose |
+|------|---------|
+| `Health` | Entity health |
+| `Stamina` | Used for blocking, sprinting, dashes |
+| `StaminaRegenDelay` | Delay before stamina starts regenerating (used with `"Behaviour": "Set"`) |
+| `SignatureEnergy` | Ultimate/signature ability resource |
+| `SignatureCharges` | Banked signature uses |
+| `Mana` | Magic resource |
+| `MagicCharges` | Banked magic uses |
+| `Immunity` | Damage/CC immunity window (see the stun-bomb pattern below) |
+| `Oxygen` | Breath underwater |
+| `Ammo` | Ranged ammunition |
+| `GlidingActive` / `DeployablePreview` | Internal state flags |
+
+An unrecognised key fails asset load, so these are the only names that work unless you ship your own
+stat asset.
 
 ### Behaviour Options
 
@@ -960,21 +1052,23 @@ Cancels the current interaction chain on the target entity. Used for stagger eff
 
 ### Core Properties
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `Type` | string | Yes | Always `"Interrupt"` |
-| `Entity` | string | Yes | Target entity selector (typically `"Target"`) |
-| `ExcludedTag` | string | No | Tag that makes entities immune to interruption |
-| `RequiredTag` | string | No | Tag the *root interaction* of an active chain must carry to be interrupted; unset = any chain |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Type` | string | **required** | Always `"Interrupt"` |
+| `Entity` | string | `User` | Target entity selector (`User`, `Target` or `Owner`; combat almost always writes `"Target"`) |
+| `RequiredTag` | string | - | Tag the **root interaction** of an active chain must carry to be interrupted; unset = any chain |
+| `ExcludedTag` | string | - | Tag that, if the **root interaction** of an active chain carries it, protects that chain from this interrupt |
+| `InterruptTypes` | array | - | Restrict the interrupt to chains of these `InteractionType`s (`Primary`, `Secondary`, `Ability1`…`Ability3`, `Use`, `Dodge`, `Wielding`, `ProjectileHit`, …). Unset = every type |
 
 ### How Interruption Works
 
 When an InterruptInteraction executes:
 
 1. The interaction resolves the target entity using the `Entity` selector
-2. If `ExcludedTag` is specified, entities with that tag are skipped
-3. The target's `InteractionManager` component receives the interrupt signal
-4. All active interaction chains on the target are immediately cancelled
+2. It reads the target's `InteractionManager` component and walks **every active chain** on it
+3. Each chain is skipped if its type is not in `InterruptTypes`, if its root interaction lacks
+   `RequiredTag`, or if its root interaction carries `ExcludedTag`
+4. Every surviving chain is cancelled via `interactionManager.cancelChains(chain)`
 
 This stops any ongoing:
 - Attack animations mid-swing
@@ -996,7 +1090,7 @@ This stops any ongoing:
 
 ### ExcludedTag System
 
-The `ExcludedTag` property allows certain entities to be immune to interruption:
+`ExcludedTag` marks an *interaction* as uninterruptible, not an entity:
 
 ```json
 {
@@ -1006,11 +1100,26 @@ The `ExcludedTag` property allows certain entities to be immune to interruption:
 }
 ```
 
-Common immunity tags:
-- `"Uninterruptable"` - Boss enemies or armored states
-- Custom tags for specific enemy types or phases
+> ⚠️ **The tag is read from the chain's root interaction, not from the entity.** The engine looks up
+> `interactionChain.getInitialRootInteraction().getData().getExpandedTagIndexes()` — the `Tags` block
+> on the **root interaction asset** that started the chain, e.g.
+>
+> ```json
+> { "Interactions": ["Boss_Slam"], "Tags": { "Attack": ["Uninterruptable"] } }
+> ```
+>
+> Putting `Uninterruptable` on a *mob* does nothing; you must tag the root interaction whose chain
+> should survive (a boss's wind-up attack, an armoured stance). `RequiredTag` is the inverse filter on
+> the same tag set. A boss whose every attack should survive interrupts therefore needs the tag on
+> each of its attack root interactions.
+>
+> As of 0.6.3 **no shipped root interaction actually declares an `Uninterruptable` tag** — the two
+> vanilla assets that write `"ExcludedTag": "Uninterruptable"` (`Bomb_Explode_Stun`,
+> `Debug_Stick_Stun`) therefore currently exclude nothing. Treat the name as a convention to follow,
+> not as an engine-recognised value; any string works as long as your root interactions declare it.
 
-Entities with the specified tag will not have their interactions cancelled, even when hit by the interrupt.
+Because the check is per chain, one entity can have some chains interrupted and others spared in the
+same interrupt — e.g. its movement ability cancelled while its tagged super-attack keeps running.
 
 ### Complete Examples
 
@@ -1157,4 +1266,8 @@ Use Interrupt alone for light staggers (enemy can recover quickly). Use both for
 
 - **Symptom:** a `DamageEntity` with a flat `Damage` (or `Amount`) number deals no damage → there is no flat-amount field; the amount comes from `DamageCalculator`. Fix: put the value under `DamageCalculator.BaseDamage` (e.g. `{ "Physical": 5 }`), and place knockback/sounds under `DamageEffects` (see [DamageEntity](#damageentity)).
 - **Symptom:** a single `Selector` sweep only damages each entity (or block) once even though the hitbox overlaps it on several frames → by design, a single selector cannot hit the same entity or block more than once. Fix: use a separate `Selector` (or re-trigger the interaction) for a second hit; don't rely on the same sweep hitting twice.
-- **Symptom:** a `HitEntity` interaction never fires even when the swing looks like a hit → the selector's `TestLineOfSight` blocked the target, or `IgnoreOwner` excluded the attacker. Fix: verify line-of-sight is clear and the intended target is not the owner; loosen `TestLineOfSight` for through-wall attacks.
+- **Symptom:** a `HitEntity` interaction never fires even when the swing looks like a hit → the selector's `TestLineOfSight` blocked the target (default `true` on `Horizontal`), or `IgnoreOwner` (default `true`) excluded the attacker. Fix: verify line-of-sight is clear and the intended target is not the owner; loosen `TestLineOfSight` for through-wall attacks.
+- **Symptom:** a `HitEntity` written as `{ "Type": "DamageEntity", ... }` is rejected or ignored → `HitEntity`/`HitBlock` take a **root interaction**, not an interaction. Fix: wrap it, `"HitEntity": { "Interactions": [ { "Type": "DamageEntity", ... } ] }`, or reference a `RootInteractions/` asset id.
+- **Symptom:** a `ClearEntityEffect` with `"EntityEffectIds": [...]` removes nothing → that key does not exist on `ClearEntityEffect` and is silently dropped. Fix: one `ClearEntityEffect` per `EntityEffectId` inside a `Serial` (see [ClearEntityEffect](#clearentityeffect)).
+- **Symptom:** an `Interrupt` with `ExcludedTag` still cancels the "immune" mob's attacks → the tag is matched against the **root interaction's** `Tags`, not the entity's. Fix: add the tag to each root interaction that should survive (see [ExcludedTag System](#excludedtag-system)).
+- **Symptom:** an `ApplyForce` launch never completes and the chain stalls in mid-air → `WaitForGround` defaults to **`true`**, so the interaction holds until the entity lands. Fix: set `"WaitForGround": false` (and leave `RunTime` at `0`) for a fire-and-forget impulse.

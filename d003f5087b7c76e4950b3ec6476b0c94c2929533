@@ -1,0 +1,49 @@
+SUBJECT UNDERSTATES SCOPE — per-page evidence recorded here after the fact.
+
+This commit was staged with `git add -A docs` while parallel re-verification
+agents were still editing, so its subject describes only world-events.md while
+the commit actually carries the 0.6.3 re-verification of five other pages.
+Added retroactively so the per-page evidence is recoverable from the log,
+which is where CLAUDE.md says it lives. Nothing here changes the tree.
+
+docs/drops.md (+261/-122) — the largest single correction of the pass, and the
+source of the "fabricated asset ids" finding CLAUDE.md cites as a headline
+blind spot. 31 item ids existed in neither 0.6.3 nor 0.5.9 — invention, not
+drift. Corrected against Server/Item/Items/: the whole Fish_<rarity>_<species>
+scheme was fabricated (Fish_Common_Carp -> Fish_Bluegill_Item, Fish_Rare_Goldfish
+-> Fish_Pike_Item, Fish_Legendary_Koi -> Fish_Whale_Humpback_Item, and the rest);
+Ingredient_Meat_Raw -> Food_Wildmeat_Raw; Ingredient_Bone -> Ingredient_Bone_Fragment;
+the Trophy_Wolf_* and Ingredient_*_Wolf families do not exist at all. Also: file
+count 675 -> 678 (two loose root-level Soil_Gravel files); Weight is a double, not
+an int, and doubles as a 0-100 percent chance for Multiple children; added the
+MinCount/MaxCount and Metadata keys; documented that container contents come from
+BlockType.BlockEntity.Components.ItemContainerBlock rather than break drops; NPC
+role files are Variant documents keyed by flat id under Modify; FarmingData's
+seven real keys.
+
+docs/adventure.md (+121) — documented the Wilderness subsystem new in 0.6.3
+(WildernessConfig as a GameplayConfig plugin section, WildernessTracker as a
+per-world ChunkStore Resource, component.Wilderness), with its method table and
+three gotchas: isHome is the negation of isWilderness so everything reads as
+wilderness when tracking is disabled; home chunks derive from RespawnBlock block
+states, not arbitrary builds; the tracker is a chunk-store resource and must be
+read on that thread. Added the pointer separating this from the scripted
+world-event timelines.
+
+docs/asset-editor.md (+36) — added the EditorClient reference section (the
+connected session every event hands you; implements PermissionHolder) with its
+full method table, and the gotcha that tryGetPlayer() is nullable by design
+because an editor connection need not have a player. Corrected DisconnectReason
+to the nested PacketHandler.DisconnectReason, and distinguished the server-side
+AssetPath record from the wire type of the same name.
+
+docs/events.md (+26) — corrected EventRegistration.combine's signature (the
+first registration is a separate parameter, so it cannot be called with an empty
+array) and added the EntityEventSystem vs WorldEventSystem distinction plus five
+0.6.3 event types.
+
+docs/blocks.md (+6) — version-wording only: "removed in 0.6" -> "removed by
+0.6.3" and "Since 0.6" -> "As of 0.6.3", since the pass diffed 0.5.9 -> 0.6.3 in
+one step and never observed 0.6.0-0.6.2.
+
+Claude-Session: https://claude.ai/code/session_01AnCYv9SKxd87mbzaCFmpeq

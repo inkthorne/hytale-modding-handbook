@@ -869,8 +869,9 @@ Master configuration class containing all gameplay settings for a world. Impleme
 // From World
 GameplayConfig config = world.getGameplayConfig();
 
-// From asset store (ids are the asset file names, e.g. "Default" — use the constant)
-GameplayConfig config = GameplayConfig.getAssetMap().get(GameplayConfig.DEFAULT_ID);
+// From asset store (ids are the asset file names, e.g. "Default" — use the constant).
+// The lookup method is getAsset(key), inherited from DefaultAssetMap — there is no get(key).
+GameplayConfig config = GameplayConfig.getAssetMap().getAsset(GameplayConfig.DEFAULT_ID);
 ```
 
 #### Key Methods

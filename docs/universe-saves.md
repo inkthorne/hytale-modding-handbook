@@ -103,7 +103,7 @@ Top-level keys the config codec recognizes (capitalization exact):
 | `GameMode` | Default game mode (`Adventure` / `Creative`) |
 | `GameModeTypeOnDeath` | 0.6.3+: game-mode type players are switched to when they die — the server-wide *fallback*, used only when the world's gameplay config `Death.GameModeTypeOnDeath` is unset (`World.getGameModeTypeOnDeath()` checks the gameplay value first) |
 | `HardcoreMode` | 0.6.3+: `None`, `PerPlayer`, or `Global` (`server.core.universe.hardcore.HardcoreMode`) — enables the hardcore ruleset, scoped per player or for the whole universe |
-| `HardcoreLives` | 0.6.3+: lives per player/world in hardcore mode (int). Under `Global` the shared pool lives in the `Hardcore` universe resource — see [Universe resources](#universe-resources) |
+| `HardcoreLives` | 0.6.3+: int ≥ 1, default `1`. The codec documents it as *"Lives per player for PerPlayer, or the shared pool size for Global. Defaults to 1. None ignores it."* Under `Global` the shared pool lives in the `Hardcore` universe resource — see [Universe resources](#universe-resources) |
 | `CrashRecovery` | 0.6.3+: what happens when a world crashes — `{ "Mode": None/Reload/Shutdown, "MaxAttempts", "RetryDelaySeconds", "Fallback": None/Shutdown }` (`MaxAttempts`/`RetryDelaySeconds`/`Fallback` apply to `Reload` only; the same block is accepted per world) |
 
 How it resolves, from `Universe.getDefaultWorld()` (decompiled):
@@ -415,7 +415,7 @@ void revertRecovery(Path file, Path recoveryPath)
 | Provider | Id | Use |
 |----------|----|-----|
 | `EmptyChunkStorageProvider` (`INSTANCE`) | `Empty` | Loads nothing, saves nowhere — for worlds that must never touch disk (e.g. throwaway instances) |
-| `MigrationChunkStorageProvider` | `Migration` | Wraps old (`from[]`) and new (`to`) providers: reads fall back through the old formats, writes go to the new one |
+| `MigrationChunkStorageProvider` | `Migration` | Chains providers to move a world between storage formats. `Loaders` (an array of providers) is tried in order until a chunk is found; `Saver` (one provider) takes every write. Pairing `Saver` with `Empty` gives a load-only, never-saving world |
 | `RocksDbChunkStorageProvider` | `RocksDb` | 0.6.3+: RocksDB-backed chunk store (this is the provider that sets `ChunkFlag.NEEDS_FORMAT_REWRITE` on old-format chunks). Tunable through `hytale.rocksdb.*` system properties (`stats`, `io_threads`, `min_blob_size`, `blob_cache_size`, `blob_gc_age_cutoff`, `blob_gc_force_threshold`, `blob_compaction_readahead_size`); `/world rocksdb compact` triggers a compaction |
 
 The loader/saver pair a provider hands out is the actual chunk I/O surface:

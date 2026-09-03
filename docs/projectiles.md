@@ -585,7 +585,7 @@ boolean needsRemoteSync()              // Whether to sync across network
 ProjectileModule module = ProjectileModule.get();
 
 // Get projectile config from assets
-ProjectileConfig config = ProjectileConfig.getAssetMap().get("arrow");
+ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset("arrow");
 
 // Spawn position (mutated in place by the config's spawn offset) and aim direction.
 // Only the direction's yaw/pitch matter: the module rebuilds a unit vector from them,
@@ -650,9 +650,9 @@ the field is a primitive `float` and `0` renders invisibly.
 
 Backtick-quoted error strings below are the literal messages thrown by the projectile subsystem (verified against `HytaleServer.jar`).
 
-- **`has no valid ProjectileConfig`** → an entity/interaction tried to launch a projectile whose `ProjectileConfig` could not be resolved. Fix: pass a config obtained from `ProjectileConfig.getAssetMap().get(id)` and verify the id exists.
+- **`has no valid ProjectileConfig`** → an entity/interaction tried to launch a projectile whose `ProjectileConfig` could not be resolved. Fix: pass a config obtained from `ProjectileConfig.getAssetMap().getAsset(id)` and verify the id exists.
 - **`No projectile config typeName provided`** → a `ProjectileInteraction` (or launch config) omitted the projectile config type name. Fix: set the projectile config reference in the interaction JSON.
-- **Symptom:** `ProjectileConfig.getAssetMap().get("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive). Fix: use the exact asset-file id and null-check before spawning.
+- **Symptom:** `ProjectileConfig.getAssetMap().getAsset("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive). Fix: use the exact asset-file id and null-check before spawning.
 - **Symptom:** a projectile bounces forever or never stops → bounce limits come from `StandardPhysicsConfig`. Fix: compare `physics.getBounces()` against `config.getBounceCount()` and check `getBounceLimit()`/`getBounciness()` (see [StandardPhysicsProvider](#standardphysicsprovider)).
 - **Symptom:** an `AOECircle`/`AOECylinder` selector in a projectile's `ProjectileHit`/`ProjectileMiss` affects only the directly-hit entity, never a radius → projectile-hosted selectors don't sweep (unlike melee). Fix: use `Type: "Explode"`, a trigger volume, or the Java radius query `Selector.selectNearbyEntities(...)` (see [interactions-combat.md → AOECircle](interactions-combat.md#aoecircle-area-of-effect)).
 

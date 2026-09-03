@@ -220,20 +220,27 @@ Events related to player connections, interactions, and input.
 |-------|-------------|-------|
 | `PlayerConnectEvent` | Player connects to server | No |
 | `PlayerDisconnectEvent` | Player disconnects from server | No |
-| `PlayerReadyEvent` | Player is ready (fully loaded) | No |
+| `PlayerReadyEvent` | Player is ready (fully loaded) | Yes (String, world name) |
 | `PlayerChatEvent` | Player sends a chat message | Yes (String) |
 | `PlayerInteractEvent` | Player interacts with something | Yes (String) |
-| `PlayerCraftEvent` | Player crafts an item | No |
+| `PlayerCraftEvent` | Player crafts an item | Yes (String, world name) |
 | `PlayerMouseButtonEvent` | Player mouse button input | No |
 | `PlayerMouseMotionEvent` | Player mouse movement | No |
-| `AddPlayerToWorldEvent` | Player added to a world | No |
-| `DrainPlayerFromWorldEvent` | Player removed from a world | No |
+| `AddPlayerToWorldEvent` | Player added to a world | Yes (String, world name) |
+| `DrainPlayerFromWorldEvent` | Player removed from a world | Yes (String, world name) |
 | `PlayerSetupConnectEvent` | Player setup phase connect | No |
 | `PlayerSetupDisconnectEvent` | Player setup phase disconnect | No |
 | `RemovedPlayerFromWorldEvent` | Player entity removed from a world; leave-message control | Yes (String, world name) |
 | `ChangeGameModeEvent` | Player game mode changes (ECS, cancellable) | No |
 
-**Note:** `PlayerMouseButtonEvent` is client-side only and does not fire on the server.
+**Note:** the five world-name-keyed events above are dispatched with `world.getName()` as the key,
+so `register(Class, "worldName", handler)` scopes a listener to one world and `registerGlobal(...)`
+catches every world.
+
+**Note:** `PlayerMouseButtonEvent` and `PlayerMouseMotionEvent` *do* fire on the server —
+`InteractionModule` dispatches them when it handles the client's mouse packet, and they are mutually
+exclusive (a packet carrying a `mouseButton` produces the button event, otherwise the motion event).
+Both are dispatched **only when a listener is already registered**, so they cost nothing when unused.
 
 ### Registration Example
 

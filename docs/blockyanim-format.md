@@ -69,10 +69,12 @@ common-asset registry.
 ## Frame Rate
 
 Animations run at **60 frames per second**. All time values in keyframes are specified in frames at this rate — the
-server's `BlockyAnimationCache.BlockyAnimation.FRAMES_PER_SECOND` is `60.0`, and its `getDurationMillis()` is
-`duration * 1000 / 60`. (The shipped `Door_Open_Out` clip is `duration: 60` with its swing finished by frame 20 — one
-second total, a third of a second of motion.) `BlockyAnimationCache` is also the *only* thing the server reads from a
-`.blockyanim`: its codec decodes just `duration`; the tracks are consumed by the client.
+server's `BlockyAnimationCache.BlockyAnimation.FRAMES_PER_SECOND` is `60.0`, with `getDurationFrames()`,
+`getDurationMillis()` (`duration * 1000 / 60`) and `getDurationSeconds()` (`duration / 60`) reading off it. (The
+shipped `Door_Open_Out` clip is `duration: 60` — one second — and the `Door` node's own swing is finished by frame 20;
+the trailing frames are the knocker settling.) `BlockyAnimationCache` is also the *only* thing the server reads from a
+`.blockyanim`: `BlockyAnimation.CODEC` decodes just the (required) `duration` key; the tracks are consumed by the
+client.
 
 ## File Structure
 
@@ -191,9 +193,11 @@ A door that swings open over 20 frames (⅓ s) and holds:
 The shipped `Blocks/Animations/Door/Door_Open_Out.blockyanim` is the same idea with more keys (`duration: 60`, orientation
 keys at frames 0/10/15/20 for a little overshoot) plus knocker and knob nodes.
 
-### Flickering Light
+### Visibility Switching
 
-A light that flickers by toggling visibility (a 60-frame = 1 s loop; the empty tracks are elided here for brevity):
+`shapeVisible` swaps which nodes of a model are drawn. The shipped `Blocks/Animations/Light/Light_On.blockyanim` is the
+minimal case — a single key per node, no motion at all, used to pick the lit or unlit variant of a lamp model (its
+sibling `Light_Off.blockyanim` is the same file with the two `delta` values swapped):
 
 ```json
 {
@@ -201,18 +205,16 @@ A light that flickers by toggling visibility (a 60-frame = 1 s loop; the empty t
   "duration": 60,
   "holdLastKeyframe": false,
   "nodeAnimations": {
-    "Flame": {
-      "shapeVisible": [
-        { "time": 0, "delta": true },
-        { "time": 9, "delta": false },
-        { "time": 15, "delta": true },
-        { "time": 36, "delta": false },
-        { "time": 42, "delta": true }
-      ]
-    }
+    "Light_Off": { "shapeVisible": [ { "time": 0, "delta": false } ] },
+    "Light_On":  { "shapeVisible": [ { "time": 0, "delta": true  } ] }
   }
 }
 ```
+
+*(empty tracks elided — the real file also carries the four empty transform tracks per node).* Add more keys to the
+same track for a flicker; because `holdLastKeyframe` is `false` the clip loops, so the toggles repeat every
+`duration` frames. The shipped fire and candle clips take the other route and animate `position` / `shapeStretch` /
+`shapeUvOffset` instead (`Fire_Burn.blockyanim`, `duration: 30`; `Candle_Burn.blockyanim`, `duration: 40`).
 
 ### UV Offset (Sprite Swap / Scroll)
 
@@ -223,7 +225,7 @@ between mouth sprites laid out 160 px apart, with no `interpolationType` so each
 ```json
 {
   "formatVersion": 1,
-  "duration": 60,
+  "duration": 40,
   "holdLastKeyframe": false,
   "nodeAnimations": {
     "Mouth": {
@@ -279,9 +281,10 @@ A chest whose lid rotates while a button sinks, then pops back — trimmed from 
 ## Integration with Blocks
 
 Blocks reference animations through the `CustomModelAnimation` property of their `BlockType`. It can sit directly on
-the `BlockType` (28 shipped blocks — always-on loops such as fires and lights), but the usual place is a **block-state
-definition** under `BlockType.State.Definitions.<State>` (333 shipped uses), so that each state — open, closed — plays
-its own clip. From `Server/Item/Items/Furniture/Desert/Furniture_Desert_Door.json`:
+the `BlockType` (28 of the 367 shipped references — always-on loops such as fires and lights), but the usual place is a
+**block-state definition** under `BlockType.State.Definitions.<State>` (338, six of them nested one level deeper), so
+that each state — open, closed — plays its own clip. Abridged from
+`Server/Item/Items/Furniture/Desert/Furniture_Desert_Door.json`:
 
 ```json
 {
@@ -335,4 +338,4 @@ extension blockyanim`).
 - **Symptom:** timings feel too fast or too slow → keyframe time values are interpreted as frames at a **fixed 60 FPS** (`BlockyAnimationCache.BlockyAnimation.FRAMES_PER_SECOND`), not seconds or 20 FPS ticks. Fix: convert seconds to frames (1 second = 60 frames).
 - **Symptom:** a one-shot animation (door, chest) snaps back to its start instead of holding → `holdLastKeyframe` is `false`. Fix: set `"holdLastKeyframe": true` for play-once animations; set it `false` for looping ones (always write it explicitly).
 - **Symptom:** UV animation does nothing → the `shapeUvOffset` deltas were written as `{u, v}`. Fix: the keys are `{x, y}`, in texture pixels.
-- **`Common Asset '<path>' must have the extension blockyanim`** / **`must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]`** / **`doesn't exist!`** → the block's `CustomModelAnimation` path failed `CommonAssetValidator.ANIMATION_ITEM_BLOCK`. Fix: include the `.blockyanim` extension, keep the clip under an allowed root, and make sure the file ships in the pack.
+- **`Common Asset '`** → the start of the three `CommonAssetValidator.ANIMATION_ITEM_BLOCK` failures, each assembled by concatenation: `Common Asset '<path>' must have the extension blockyanim`, `Common Asset '<path>' must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]`, and `Common Asset '<path>' doesn't exist!`. Fix: include the `.blockyanim` extension, keep the clip under an allowed root, and make sure the file ships in the pack.

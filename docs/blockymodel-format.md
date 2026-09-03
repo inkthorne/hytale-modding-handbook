@@ -60,14 +60,22 @@ Models live under `Common/`, grouped by what they are for (counts are the shippe
 | Cosmetics (haircuts, etc.) | `Common/Cosmetics/` | 285 |
 | Character models | `Common/Characters/` | 168 |
 | Resource/ingredient models | `Common/Resources/` | 101 |
+| Effect models | `Common/VFX/` | 2 |
 
 There is no `Common/Blocks/Models/` folder — block models sit beside their textures and animations inside a category
 folder (e.g. `Blocks/Decorative_Sets/Desert/Door.blockymodel` next to `Door_Texture.png`).
 
-The server only validates the **path** of a model referenced from an asset, never its geometry. A block's `CustomModel`
-goes through `CommonAssetValidator.MODEL_ITEM`, which requires the path to start with one of `Blocks/`, `Items/`,
-`Resources/`, `NPC/`, `VFX/` or `Consumable/`, to end in `.blockymodel`, and to exist in the common-asset registry
+Asset **validation** only checks the model's *path*: a block's `CustomModel` goes through
+`CommonAssetValidator.MODEL_ITEM`, which requires the path to start with one of `Blocks/`, `Items/`, `Resources/`,
+`NPC/`, `VFX/` or `Consumable/`, to end in `.blockymodel`, and to exist in the common-asset registry
 (`MODEL_CHARACTER` is the equivalent for character models: `Characters/`, `NPC/`, `Items/`, `VFX/`).
+
+The geometry itself is rendered by the client, but the server does read one thing out of it:
+`BlockyModelBoundsParser.computeBounds(String modelPath)` walks the `nodes` tree — honouring `position`,
+`orientation`, `shape.offset`, `shape.stretch`, `shape.settings.size`, `shape.settings.normal` and `shape.visible` —
+and returns the model's world-space `Box`. Invisible nodes (`"visible": false`) and `none` shapes contribute nothing;
+a model whose every shape is invisible yields `null`. A file it cannot parse logs
+`Failed to compute bounds for blockymodel: <name>` and yields `null` rather than failing the asset.
 
 ## File Structure
 
@@ -84,7 +92,7 @@ goes through `CommonAssetValidator.MODEL_ITEM`, which requires the path to start
 |-------|------|----------|-------------|
 | `nodes` | array | Yes | Array of root-level node objects defining the model hierarchy (688 shipped models have more than one root) |
 | `lod` | string | No | Level-of-detail mode: `"auto"` (2,673 files), `"off"` (132), `"disappear"` (6 — foliage such as `Blocks/Foliage/Plants/Mushroom.blockymodel`) or `"billboard"` (6 — leaves such as `Blocks/Foliage/Leaves/PineShape.blockymodel`). 13 files omit it |
-| `format` | string | No | Model kind tag written by the editor: `"character"` (272 files — Characters, Cosmetics, NPC) or `"prop"` (93 files, all under `Blocks/`). Absent from most files |
+| `format` | string | No | Model kind tag written by the editor: `"character"` (272 files — mostly `Characters/` (120), `Cosmetics/` (76) and `NPC/` (39), but also `Items/` (26), `Resources/` (6) and `Blocks/` (5)) or `"prop"` (93 files, all under `Blocks/`). Absent from 2,465 of the 2,830 files |
 | `lodFriendly` | boolean | No | Rare editor flag (3 files) |
 | `editor` | string | No | Rare provenance tag, e.g. `"blockbench"` (15 files) |
 
@@ -119,7 +127,11 @@ In practice every node in the shipped assets carries all of `id`, `name`, `posit
 
 ### Position and Orientation
 
-Position values are in pixels (16 pixels = 1 block unit). Orientation uses quaternion format where `{x: 0, y: 0, z: 0, w: 1}` represents no rotation.
+Position values are in model units — **32 units = 1 block**. The server's `BlockyModelBoundsParser` converts model
+space to world space with `BLOCK_SCALE = 0.03125f` (1/32), and the shipped `Blocks/Structures/Base_Shapes/`
+primitives confirm it: `HalfBlock.blockymodel` measures 32 × 16 × 32 units and `QuarterBlock.blockymodel`
+32 × 8 × 32, i.e. 1 × ½ × 1 and 1 × ¼ × 1 blocks. Orientation uses quaternion format where
+`{x: 0, y: 0, z: 0, w: 1}` represents no rotation.
 
 Common quaternion values:
 
@@ -154,11 +166,12 @@ Cuboid meshes defined by size in each dimension:
 }
 ```
 
-Size values are in pixels (16 pixels = 1 block unit).
+Size values are in model units (32 units = 1 block). The box is centred on the node's shape origin — `size` is the
+full span, so the corners sit at ±`size/2` before `stretch` is applied.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `settings.size` | object | Box dimensions in pixels `{x, y, z}` (always present) |
+| `settings.size` | object | Box dimensions in model units `{x, y, z}` (always present) |
 | `settings.isPiece` | boolean | Optional editor flag (3,564 boxes; also on every `none` shape) |
 | `settings.isStaticBox` | boolean | Optional editor flag (931 boxes) |
 
@@ -171,8 +184,8 @@ Flat 2D planes, commonly used for foliage and flat decorations:
   "type": "quad",
   "offset": {"x": 0, "y": 0, "z": 0},
   "settings": {
-    "size": {"x": 16, "y": 16},
-    "normal": {"x": 0, "y": 0, "z": 1}
+    "size": {"x": 32, "y": 32},
+    "normal": "+Z"
   },
   "doubleSided": true,
   "textureLayout": {...}
@@ -181,9 +194,12 @@ Flat 2D planes, commonly used for foliage and flat decorations:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `settings.size` | object | Width and height in pixels `{x, y}` (always present) |
-| `settings.normal` | object | Direction the quad faces `{x, y, z}` (present on 10,929 of 11,299 shipped quads) |
+| `settings.size` | object | Width and height in model units — `{x, y}` on 10,980 shipped quads, `{x, y, z}` on 319 (the `z` is ignored) |
+| `settings.normal` | **string** | Axis the quad lies on: `"+Z"` (9,385 shipped quads), `"-Z"` (767), `"+Y"` (295), `"+X"` (263), `"-X"` (167), `"-Y"` (52). Present on 10,929 of 11,299 quads; `BlockyModelBoundsParser` defaults a missing one to `"+Z"`. It is **not** a `{x, y, z}` vector |
 | `settings.isPiece` / `settings.isStaticBox` | boolean | Optional editor flags, as for boxes |
+
+The `±X` / `±Y` / `±Z` pairs each select the same corner set, so the sign only affects which way the face is lit and
+textured, not the quad's extent.
 
 ### None Shape
 
@@ -274,7 +290,7 @@ Quads have a single `front` face (a `back` entry appears on only 16 of 11,299 sh
 
 ### Simple Single-Box Model
 
-A basic cube model:
+A full-block cube (32 units on a side):
 
 ```json
 {
@@ -285,7 +301,7 @@ A basic cube model:
       "shape": {
         "type": "box",
         "settings": {
-          "size": {"x": 16, "y": 16, "z": 16}
+          "size": {"x": 32, "y": 32, "z": 32}
         },
         "shadingMode": "standard",
         "textureLayout": {
@@ -306,7 +322,7 @@ A basic cube model:
 
 A chest with a separate lid for animation — trimmed from the shipped
 `Common/Blocks/Decorative_Sets/Kweebec/Chest.blockymodel` (the `textureLayout` blocks are elided). Note that the
-`Lid` is a **child of `Base`**, positioned in pixels at the hinge, with its box `offset` pushing the mesh forward so the
+`Lid` is a **child of `Base`**, positioned in model units at the hinge, with its box `offset` pushing the mesh forward so the
 node origin is the pivot; the `Chest_Open.blockyanim` rotates the `Lid` node about that origin:
 
 ```json
@@ -362,7 +378,8 @@ node origin is the pivot; the `Chest_Open.blockyanim` rotates the `Lid` node abo
 
 ### Quad-Based Foliage Model
 
-A simple grass or flower using crossed quads:
+A simple grass or flower using crossed quads. `32 × 32` is the most common shipped foliage quad size (a full block
+face); the two quads share the same `+Z` normal and are crossed by their node `orientation`:
 
 ```json
 {
@@ -379,8 +396,8 @@ A simple grass or flower using crossed quads:
           "shape": {
             "type": "quad",
             "settings": {
-              "size": {"x": 16, "y": 16},
-              "normal": {"x": 0, "y": 0, "z": 1}
+              "size": {"x": 32, "y": 32},
+              "normal": "+Z"
             },
             "doubleSided": true,
             "shadingMode": "flat"
@@ -393,8 +410,8 @@ A simple grass or flower using crossed quads:
           "shape": {
             "type": "quad",
             "settings": {
-              "size": {"x": 16, "y": 16},
-              "normal": {"x": 0, "y": 0, "z": 1}
+              "size": {"x": 32, "y": 32},
+              "normal": "+Z"
             },
             "doubleSided": true,
             "shadingMode": "flat"
@@ -507,10 +524,11 @@ Blocks reference models through `CustomModel` in their definition (from
 }
 ```
 
-`CustomModelTexture` is an array of `{Texture, Weight}` entries (2,507 shipped entries carry `Weight`, 48 omit it);
-several entries make the game pick a texture variant by weight. The texture path is relative to `Common/` — usually
-beside the model (`Blocks/…`), sometimes under `BlockTextures/`. `CustomModelScale` (float, e.g. `0.5`–`1`) is
-optional and appears on 235 shipped blocks. Animated blocks add `CustomModelAnimation` — see
+`CustomModelTexture` is an array of `{Texture: string, Weight: integer}` entries (of the 2,884 shipped entries, 2,835
+carry `Weight` and 49 omit it); several entries make the game pick a texture variant by weight. The texture path is
+relative to `Common/` — usually beside the model (`Blocks/…`), sometimes under `BlockTextures/`. `CustomModelScale`
+(float, e.g. `0.5`–`1`) is optional and appears 319 times across 235 shipped asset files (block-state definitions can
+each set their own). Animated blocks add `CustomModelAnimation` — see
 [Block Animation Format](blockyanim-format.md#integration-with-blocks).
 
 ### Item Usage
@@ -537,7 +555,7 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 5. **Consider LOD settings** - Use `"lod": "auto"` for most models; only disable with `"lod": "off"` if auto-LOD causes issues. Foliage uses `"disappear"` (cull at distance) or `"billboard"` (flatten to a sprite at distance)
 
-6. **Units in pixels** - Both sizes and positions are in pixels (16 pixels = 1 block unit)
+6. **Units** - Both sizes and positions are in model units, **32 units = 1 block** (`BlockyModelBoundsParser.BLOCK_SCALE` is `1/32`); texture-layout `offset` values are a separate space, measured in texture pixels
 
 7. **Pivot placement** - Position offsets in shapes determine where the pivot point is - this affects how the shape rotates
 
@@ -547,14 +565,20 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 ## Gotchas & Errors
 
-The server never parses `.blockymodel` geometry — it only validates the *path* an asset points at (`CommonAssetValidator`,
-verified against the 0.6.3 `HytaleServer.jar`). Backtick-quoted strings are its literal failure messages; geometry
-problems surface only on the client.
+Asset validation only checks the *path* an asset points at (`CommonAssetValidator`). Backtick-quoted strings are its
+literal failure messages. Geometry problems surface on the client — the server's only look at the geometry is
+`BlockyModelBoundsParser`, which computes a bounding box and never rejects a file.
 
-- **`Common Asset '<path>' must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]`** → a block's `CustomModel` points outside the allowed top-level folders. Fix: keep block models under one of those roots (character models: `Characters/`, `NPC/`, `Items/`, `VFX/`).
-- **`Common Asset '<path>' must have the extension blockymodel`** → the path omitted `.blockymodel`. Fix: model references always include the extension.
-- **`Common Asset '<path>' doesn't exist!`** → the file is not in the common-asset registry (typo, wrong folder, or the pack lacks `"IncludesAssetPack": true`). Fix: check the path against `Common/` and the manifest.
+`CommonAssetValidator` assembles its three failures by concatenation, so the log line reads
+`Common Asset '<path>' <tail>` where `<tail>` is one of the three below.
+
+- **`' must be within the root: `** — full line `Common Asset '<path>' must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]` → a block's `CustomModel` points outside the allowed top-level folders. Fix: keep block models under one of those roots (character models: `Characters/`, `NPC/`, `Items/`, `VFX/`).
+- **`' must have the extension `** — full line `Common Asset '<path>' must have the extension blockymodel` → the path omitted `.blockymodel`. Fix: model references always include the extension.
+- **`' doesn't exist!`** — full line `Common Asset '<path>' doesn't exist!` → the file is not in the common-asset registry (typo, wrong folder, or the pack lacks `"IncludesAssetPack": true`). Fix: check the path against `Common/` and the manifest.
 - **Symptom:** a shape has no visible size → a `size` component of `0`. Fix: keep every box/quad dimension `> 0` (the asset editor enforces this; the server does not).
 - **Symptom:** an animation does not move the part you expect → a `.blockyanim` references a node name that does not exist in this model. Fix: node names must match exactly between the `.blockymodel` and the `.blockyanim`.
 - **Symptom:** the model is not picked up by the game → it is in the wrong folder. Fix: place models under an allowed `Common/` root for their kind (blocks: `Blocks/`, `Items/`, `Resources/`, `NPC/`, `VFX/`, `Consumable/`; characters: `Characters/`, `NPC/`, `Items/`, `VFX/`) and reference them with the `.blockymodel` extension.
 - **Symptom:** thin geometry is invisible from one side → quads/thin boxes default to single-sided. Fix: set `"doubleSided": true`.
+- **Symptom:** a quad renders edge-on or in the wrong plane → `settings.normal` was written as a `{x, y, z}` object. Fix: it is a **string** — one of `"+X"`, `"-X"`, `"+Y"`, `"-Y"`, `"+Z"`, `"-Z"`; anything unrecognised is treated as `"+Z"`.
+- **Symptom:** the model is twice (or half) the size you intended → model units are **1/32 of a block**, not 1/16. Fix: a full-block shape is `32 × 32 × 32`, matching `Blocks/Structures/Base_Shapes/`.
+- **`Failed to compute bounds for blockymodel: %s`** (WARN, `%s` is the asset name) → `BlockyModelBoundsParser` could not parse the file (malformed JSON, or a `size`/`normal` of the wrong JSON type). The model is not rejected, but anything relying on its bounds falls back to `null`.

@@ -60,9 +60,11 @@ static final int UNKNOWN_ID // ID for unknown fluid
 
 ### Identity
 ```java
-int getId()
+String getId()      // The asset key ("Water_Source", "Lava", …) — not the numeric id
 boolean isUnknown()
 ```
+
+The **numeric** fluid id used by `FluidSection`, `CollisionConfig.fluidId` and the `Collisions` map is the asset-map index, not `getId()`. Resolve one with `Fluid.getFluidIdOrUnknown(String key, String errorFormat, Object... args)` or `Fluid.getAssetMap().getIndex(key)`; `EMPTY_ID` is `0` and `UNKNOWN_ID` is `1`.
 
 ### Properties
 ```java
@@ -102,16 +104,16 @@ Base keys (all ticker types):
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `FlowRate` | float | Spread speed (e.g. lava sets `2.0`) |
-| `CanDemote` | boolean | Whether the fluid level may decrease over time |
-| `SupportedBy` | string | Fluid id that keeps this fluid alive (e.g. flowing `Water` is `"SupportedBy": "Water_Source"`) |
+| `FlowRate` | float | "The tick frequency for this fluid type, **in seconds**" — a tick *period*, so a larger value is a **slower** fluid. Default `0.5`; must be greater than `0`. Lava and fire set `2.0` |
+| `CanDemote` | boolean | "If false then the fluid will stay at its level". Default `true` |
+| `SupportedBy` | string | Fluid key that keeps this fluid alive (e.g. flowing `Water` is `"SupportedBy": "Water_Source"`) |
 
 `DefaultFluidTicker` adds:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `SpreadFluid` | string | Fluid id placed when this fluid spreads (source blocks spread as their flowing variant) |
-| `Collisions` | object | Map of *other fluid id* → collision result: `BlockToPlace`, `SoundEvent`, `PlaceFluid` (whether the fluid is still placed) |
+| `SpreadFluid` | string | Fluid key placed when this fluid spreads (source blocks spread as their flowing variant); validated against the `Fluid` asset store |
+| `Collisions` | object | "Defines what happens when this fluid tries to spread into another fluid" — map of *other fluid key* → `FluidCollisionConfig`: `BlockToPlace` (block placed on collision), `SoundEvent`, `PlaceFluid` (whether to still place the fluid; default `false`) |
 
 ```json
 "Ticker": {
@@ -125,7 +127,17 @@ Base keys (all ticker types):
 ```
 *(from `Water_Source.json` — the water + lava transform rules)*
 
-`FireFluidTicker` adds `SpreadFluid` plus a `Flammability` array — tag-pattern rules deciding what fire can ignite. Each entry: `TagPattern` (an `Op` tree of `Equals` / `And` / `Not` over block tags), `Priority`, `BurnLevel`, `BurnChance`, and optional `ResultingBlock` / `ResultingState` / `SoundEvent`:
+`FireFluidTicker` adds `SpreadFluid` plus a `Flammability` array — tag-pattern rules deciding what fire can ignite. Each entry:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `TagPattern` | id **or** inline object | "TagPattern to match blocks that this config applies to". A `ContainedAssetCodec`, so either a `TagPattern` asset key or an inline `Op` tree of `Equals` / `And` / `Not` over block tags (the shipped `Fire.json` inlines them) |
+| `Priority` | integer | "Priority for pattern matching - higher values are checked first" |
+| `BurnLevel` | byte | "The fluid level the fluid has to be greater than or equal to to burn this block". Default `1` |
+| `BurnChance` | float | "Probability (0.0 to 1.0) that the block will burn each tick when above the burn level". Default `0.1` |
+| `ResultingBlock` | string | "The block to place after burning, if any". Default `"Empty"` |
+| `ResultingState` | string | "The block state to attempt to change to after burning, if any" |
+| `SoundEvent` | string | Sound played when the block burns; validated against the `SoundEvent` asset store |
 
 ```json
 "Ticker": {
@@ -171,7 +183,18 @@ public abstract class FluidTicker {
 }
 ```
 
-Subclasses implement the protected `spread(...)` hook (and may override `isAlive(...)`) — both also return a `BlockTickStrategy`, the same enum scheduled block ticks use (see [Block Ticking](blocks.md#blocktickstrategy)): `CONTINUE` keeps the fluid ticking, `SLEEP` parks it until a neighboring block change re-wakes it via `setTickingSurrounding`, `WAIT_FOR_ADJACENT_CHUNK_LOAD` retries once the neighbor chunk is in.
+Subclasses implement the protected `spread(...)` hook, which returns a `BlockTickStrategy` — the same enum scheduled block ticks use (see [Block Ticking](blocks.md#blocktickstrategy)): `CONTINUE` keeps the fluid ticking, `SLEEP` parks it until a neighboring block change re-wakes it via `setTickingSurrounding`, `WAIT_FOR_ADJACENT_CHUNK_LOAD` retries once the neighbor chunk is in.
+
+They may also override the protected `isAlive(...)`, which returns a **`FluidTicker.AliveStatus`** (`ALIVE`, `DEMOTE`, `WAIT_FOR_ADJACENT_CHUNK`) rather than a `BlockTickStrategy`. Both `FiniteFluidTicker` and `FireFluidTicker` override it to always return `ALIVE`; the base implementation is what enforces `SupportedBy` and `CanDemote`. Both hooks take the same argument list, with the fluid's current level as a `byte` between `Fluid` and the block coordinates:
+
+```java
+protected abstract BlockTickStrategy spread(World world, long tick, FluidTicker.Accessor accessor,
+                                            FluidSection fluids, BlockSection blocks, Fluid fluid,
+                                            int fluidId, byte fluidLevel, int x, int y, int z)
+protected FluidTicker.AliveStatus isAlive(FluidTicker.Accessor accessor,
+                                          FluidSection fluids, BlockSection blocks, Fluid fluid,
+                                          int fluidId, byte fluidLevel, int x, int y, int z)
+```
 
 Subclass extras:
 
@@ -225,8 +248,10 @@ Level semantics (from `DefaultFluidTicker.spread`): fluid flowing straight down 
 
 ## Gotchas & Errors
 
-Verified against the 0.6.3 `HytaleServer.jar`. (The 0.5-era `Attempted to register an invalid Fluid` message no longer exists in the jar — an invalid fluid asset now fails at codec/validation time like any other asset.)
+Backtick-quoted strings below are literal messages in the jar.
 
+- **`Attempted to register a Fluid with an invalid name`** (the full line appends `<name>: using Unknown instead.`) → world generation asked `MaterialCache.getFluidMaterial(String)` for a fluid key that is not in the `Fluid` asset store. It is a **warning**, not a failure: generation continues with the unknown-fluid material. Fix: check the key's spelling against `Server/Item/Block/Fluids/`. (Earlier revisions of this page quoted this as "Attempted to register an invalid Fluid"; that exact wording is not in the jar.)
+- **`Unknown fluid: %s`** → a `PlaceFluid` interaction names a fluid key that does not resolve; the interaction falls back to `Fluid.UNKNOWN` (see [Interactions — World](interactions-world.md)). Sibling messages exist for other call sites: `Unknown fluid %s` (`RefillContainerInteraction`), `Unknown fluid '%s'` (prefab deserialization), `Unknown fluid! <name>` (worldgen block-array loading, which throws).
 - **Symptom:** a collision reports a fluid even where there is none → `collision.fluid` is non-null but set to the `Fluid.EMPTY` sentinel. Fix: guard with `collision.fluid != null && collision.fluid != Fluid.EMPTY` (and treat `Fluid.UNKNOWN` as unresolved), as in the usage example above.
 
 ---

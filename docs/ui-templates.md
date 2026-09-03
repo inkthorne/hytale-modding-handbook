@@ -501,6 +501,7 @@ The full targeting syntax is `#ElementId.Property` where:
 | Numeric value | `#Id.Value` | `cmd.set("#Progress.Value", 0.5f)` |
 | Style property | `#Id.Style.Property` | `cmd.set("#Label.Style.TextColor", "#FF0000")` |
 | Nested property | `#Id.Parent.Child` | `cmd.set("#Button.Style.Default.Background.Color", "#3498db")` |
+| *n*-th repeated child | `#Container[n] #Id.Property` | `cmd.set("#IconList[3] #Icon.AssetPath", path)` — note the space between the index and the child selector |
 
 ### In Event Bindings
 
@@ -529,8 +530,9 @@ cmd.set("#LoadingPanel.Visible", false);
 cmd.set("#HealthBar.Value", 0.85f);
 cmd.set("#ExperienceBar.Value", currentXp / maxXp);
 
-// Set boolean properties
-cmd.set("#Checkbox.Checked", true);
+// Set boolean properties — a CheckBox's state property is Value, not Checked
+// (`@Checked` is a *template* parameter of `$C.@CheckBoxWithLabel`, which sets `Value: @Checked`)
+cmd.set("#EnableOption.Value", true);
 
 // Append to specific element
 cmd.append("#Container", "Components/ListItem.ui");

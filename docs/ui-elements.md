@@ -92,6 +92,7 @@ Basic container for grouping and laying out child elements.
 | `Visible` | Boolean | Visibility state |
 | `FlexWeight` | Number | Flex layout weight |
 | `Opacity` | Number | Opacity (0.0 to 1.0) |
+| `HitTestVisible` | Boolean | Whether the element takes part in pointer hit-testing; set `false` on purely decorative overlays (see [Java API → Gotchas](ui-api.md#gotchas--errors)) |
 
 **Example:**
 ```
@@ -179,6 +180,8 @@ keybind settings).
 | Property | Type | Description |
 |----------|------|-------------|
 | `InputBindingKey` | String | Name of the input binding to display |
+| `InputBindingKeyPrefix` | String | A second binding rendered before the main one (e.g. a modifier) |
+| `InputBindingKeyPrefixBinding` | String | Binding backing the prefix, when the prefix is itself a binding |
 | `Anchor` | Anchor | Position and size |
 | `Style` | Style | Text styling |
 
@@ -550,15 +553,18 @@ Image/sprite display.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Texture` | String | Texture asset path |
-| `Color` | Color | Tint color |
+| `TexturePath` | String | Texture asset path (**not** `Texture` — `Texture:` is a key of the nested `Icon:`/decoration objects on input fields, not a `Sprite` property) |
+| `Frame` | Object | Sprite-sheet frame layout: `(Width, Height, PerRow, Count)` |
+| `FramesPerSecond` | Number | Playback rate when `Frame` describes a sheet |
 | `Visible` | Boolean | Visibility state |
 
-**Example:**
+**Example** (the animated spinner from `Common.ui`):
 ```
-Sprite #Logo {
-    Anchor: (Width: 128, Height: 128);
-    Texture: "Common/ContainerHeader.png";
+Sprite #Spinner {
+    Anchor: (Width: 32, Height: 32);
+    TexturePath: "Common/Spinner.png";
+    Frame: (Width: 32, Height: 32, PerRow: 8, Count: 72);
+    FramesPerSecond: 30;
 }
 ```
 
@@ -571,11 +577,12 @@ Image display that resolves a texture by path, with a fallback when missing.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `TexturePath` | String | Texture/asset path to display |
+| `AssetPath` | String | Texture/asset path to display — set from the server, e.g. `cmd.set("#Icon.AssetPath", path)` (this is `AssetPath`, **not** `TexturePath`) |
 | `FallbackTexturePath` | String | Texture shown when the asset is unavailable |
 | `Visible` | Boolean | Visibility state |
 
-**Example** (from the Memories UI):
+**Example** (from the Memories UI — the `.ui` file declares only the fallback, and `MemoriesPage`
+fills the real icon in with `commandBuilder.set(selector + "#Icon.AssetPath", iconPath)`):
 ```
 AssetImage #Icon {
     Anchor: (Width: 128, Height: 128);

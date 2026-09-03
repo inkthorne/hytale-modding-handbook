@@ -101,7 +101,7 @@ Build pipeline (shared by pages/windows/HUD):
 ```
 Group {
     LayoutMode: CenterMiddle;
-    Anchor: Full;
+    Anchor: (Full: 0);
     Background: (Color: #000000(0.7));
 
     Group #Panel {
@@ -192,7 +192,7 @@ ElementType #OptionalId {
 ```
 Group {
     LayoutMode: CenterMiddle;
-    Anchor: Full;
+    Anchor: (Full: 0);
 
     Group #Panel {
         Anchor: (Width: 400, Height: 300);
@@ -299,7 +299,7 @@ Always-visible interface elements:
 HudManager hud = player.getHudManager();
 hud.setVisibleHudComponents(playerRef, HudComponent.Hotbar, HudComponent.Health);
 hud.hideHudComponents(playerRef, HudComponent.Chat);
-hud.resetVisibleHudComponents(playerRef);   // back to the default set (0.6.3+)
+hud.resetVisibleHudComponents(playerRef);   // back to the default set (added by 0.6.3)
 ```
 
 ---

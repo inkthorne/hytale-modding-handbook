@@ -238,6 +238,12 @@ Padding: (Top: 10, Bottom: 10, Left: 20, Right: 20);
 Padding: (Full: 10, Left: 20);  // 10 all sides, but 20 on left
 ```
 
+**Bare scalar shorthand** (equivalent to `Padding: (Full: n)`, used in shipped pages such as
+`Pages/DroppedItemSlot.ui`):
+```
+Padding: 2;
+```
+
 ---
 
 ## Backgrounds
@@ -413,19 +419,24 @@ visual states above — they are sound-event triggers:
 | `Activate` | The element is activated/clicked |
 | `MouseHover` | The pointer moves over the element |
 
+Each sound entry takes `SoundPath` and `Volume`, and optionally `MinPitch` / `MaxPitch` for random
+pitch variation:
+
 ```
 Style: (
     Default: (Background: "Common/Buttons/Primary.png"),
     Hovered: (Background: "Common/Buttons/Primary_Hovered.png"),
     Sounds: (
-        Activate: (SoundPath: "Sounds/ButtonsLightActivate.ogg", Volume: 4),
+        Activate: (SoundPath: "Sounds/ButtonsLightActivate.ogg", MinPitch: -0.4, MaxPitch: 0.4, Volume: 4),
         MouseHover: (SoundPath: "Sounds/ButtonsLightHover.ogg", Volume: 6)
     )
 );
 ```
 
-In `Common.ui`, button styles pull these in from `Sounds.ui`, e.g.
-`Sounds: $Sounds.@ButtonsLight`.
+That is the shipped `@ButtonsLight` block from `Common/UI/Custom/Sounds.ui`. `Common.ui` imports the
+file once (`$Sounds = "Sounds.ui";`), aliases the sets it uses
+(`@ButtonSounds = $Sounds.@ButtonsLight;`), and then either assigns the alias (`Sounds: @ButtonSounds,`)
+or spreads the set into a style block (`...$Sounds.@ButtonsLight,`).
 
 ### Button Syntax
 

@@ -478,14 +478,26 @@ public class InteractivePage extends BasicCustomUIPage {
 incremental update from inside the page with the protected `CustomUIPage` methods:
 
 ```java
-protected void sendUpdate(UICommandBuilder cmd)   // push incremental changes to the open page
-protected void sendUpdate()                       // re-run build() and push the result
-protected void rebuild()                          // rebuild the page contents
-protected void close()                            // close the page
+protected void sendUpdate(UICommandBuilder cmd)          // push incremental changes to the open page
+protected void sendUpdate(UICommandBuilder cmd, boolean clear)  // clear=true wipes the page first
+protected void sendUpdate()                              // push an *empty* update (no commands)
+protected void rebuild()                                 // re-run build(...) and push the result
+protected void close()                                   // close the page (setPage(..., Page.None))
 ```
 
 For example, a page driving a live countdown can `sendUpdate(...)` a single label each second
 without rebuilding the whole page.
+
+> **`sendUpdate()` does not re-run `build()`** — only `rebuild()` does. The no-argument form sends an
+> update carrying `UICommandBuilder.EMPTY_COMMAND_ARRAY`; it is a way to push the current
+> `CustomPageLifetime`, not a refresh. Every `sendUpdate(...)` overload also sends
+> `UIEventBuilder.EMPTY_EVENT_BINDING_ARRAY`, so an incremental update carries **no event bindings**:
+> if the update adds elements that need handlers, call `rebuild()`, or — on an
+> `InteractiveCustomUIPage<T>` — use its `sendUpdate(UICommandBuilder, UIEventBuilder, boolean)`
+> overload, which does send bindings. That overload also marshals onto the world thread
+> (`world.execute(...)`) and re-checks `ref.isValid()`; the plain `CustomUIPage` forms read the store
+> on the calling thread, so they follow the usual
+> [threading rules](#obtaining-ecs-context-for-ui-operations).
 
 **Opening a page replaces (and dismisses) the current one.** `openCustomPage(ref, store, page)`
 fires the **previous page's `onDismiss(...)`** before showing the new page. That callback is where a
@@ -513,7 +525,7 @@ EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor /*bool
 EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);   // floats, in seconds
 EventTitleUtil.showEventTitleToWorld(title, subtitle, isMajor,
-        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, world);   // World, not Store (0.6.3+)
+        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, world);   // World, not Store, as of 0.6.3
 EventTitleUtil.showEventTitleToUniverse(title, subtitle, isMajor,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);
 
@@ -588,7 +600,7 @@ public class MyPageSupplier implements CustomPageSupplier {
     // Define codec for JSON deserialization (see codecs.md#buildercodect)
     public static final BuilderCodec<MyPageSupplier> CODEC =
         BuilderCodec.builder(MyPageSupplier.class, MyPageSupplier::new)
-            .addField(new KeyedCodec<>("customProperty", Codec.STRING),
+            .addField(new KeyedCodec<>("CustomProperty", Codec.STRING),   // engine convention: PascalCase keys
                       (s, v) -> s.customProperty = v, s -> s.customProperty)
             .build();
 
@@ -604,22 +616,25 @@ public class MyPageSupplier implements CustomPageSupplier {
 }
 ```
 
-Register the supplier in your plugin:
+Register the supplier's **codec** in your plugin — not the supplier instance:
 
 ```java
 @Override
 protected void setup() {
-    OpenCustomUIInteraction.registerCustomPageSupplier(
-        this,
-        MyPageSupplier.class,
-        "MyPage",
-        new MyPageSupplier()   // supplier INSTANCE, not a codec
-    );
+    getCodecRegistry(OpenCustomUIInteraction.PAGE_CODEC)
+        .register("MyPage", MyPageSupplier.class, MyPageSupplier.CODEC);
 }
 ```
 
-> **Signature:** `registerCustomPageSupplier(PluginBase plugin, Class<?> pageClass, String id, S supplier)`
-> — the 4th argument is an instance of your `CustomPageSupplier`, not a codec.
+> **Do not use `registerCustomPageSupplier(...)` for a supplier with JSON properties.** Its
+> signature is `registerCustomPageSupplier(PluginBase plugin, Class<?> pageClass, String id, S supplier)`
+> — the 4th argument is an *instance*, not a codec, and internally it registers
+> `BuilderCodec.builder(pageClass, () -> supplier).build()`: a codec with **no fields**, so every extra
+> key in the JSON is ignored. Use it only for stateless suppliers (the engine uses it exactly that way
+> for `MemoriesPageSupplier` / `MemoriesUnlockedPageSuplier`); register your own codec through
+> `getCodecRegistry(OpenCustomUIInteraction.PAGE_CODEC)` whenever the page reads properties, which is
+> what the engine does for `ShopPageSupplier`, `TeleporterSettingsPageSupplier` and
+> `PortalDevicePageSupplier`.
 
 Usage in JSON with custom properties:
 ```json
@@ -627,7 +642,7 @@ Usage in JSON with custom properties:
   "Type": "OpenCustomUI",
   "Page": {
     "Id": "MyPage",
-    "customProperty": "hello"
+    "CustomProperty": "hello"
   }
 }
 ```
@@ -658,9 +673,10 @@ public interface CustomPageSupplier {
 
 | Method | Use Case |
 |--------|----------|
-| `registerSimple()` | Pages with no extra JSON properties |
-| `registerCustomPageSupplier()` | Pages with custom JSON properties |
-| `registerBlockEntityCustomPage()` | Pages tied to block entities |
+| `registerSimple()` | Pages with no extra JSON properties — takes a `Function<PlayerRef, CustomUIPage>` |
+| `registerCustomPageSupplier()` | A **stateless** supplier instance; registers a field-less codec, so it reads no extra JSON properties |
+| `getCodecRegistry(OpenCustomUIInteraction.PAGE_CODEC).register(id, cls, codec)` | Pages with custom JSON properties (the only form that decodes them) |
+| `registerBlockEntityCustomPage()` | Pages tied to block entities — takes a `BlockEntityCustomPageSupplier`, optionally plus a `Supplier<Holder<ChunkStore>>` |
 
 ### Complete Example
 
@@ -671,7 +687,7 @@ This example shows a custom shop page that accepts a shop ID from JSON:
 public class ShopPageSupplier implements OpenCustomUIInteraction.CustomPageSupplier {
     public static final BuilderCodec<ShopPageSupplier> CODEC =
         BuilderCodec.builder(ShopPageSupplier.class, ShopPageSupplier::new)
-            .addField(new KeyedCodec<>("shopId", Codec.STRING),
+            .addField(new KeyedCodec<>("ShopId", Codec.STRING),
                       (s, v) -> s.shopId = v, s -> s.shopId)
             .build();
 
@@ -705,16 +721,12 @@ public class ShopPage extends BasicCustomUIPage {
 }
 ```
 
-**Plugin setup:**
+**Plugin setup** (this is how the engine's own `ShopPlugin` registers `"Shop"`):
 ```java
 @Override
 protected void setup() {
-    OpenCustomUIInteraction.registerCustomPageSupplier(
-        this,
-        ShopPageSupplier.class,
-        "MyShop",
-        new ShopPageSupplier()   // supplier INSTANCE, not a codec
-    );
+    getCodecRegistry(OpenCustomUIInteraction.PAGE_CODEC)
+        .register("MyShop", ShopPageSupplier.class, ShopPageSupplier.CODEC);
 }
 ```
 
@@ -724,10 +736,14 @@ protected void setup() {
   "Type": "OpenCustomUI",
   "Page": {
     "Id": "MyShop",
-    "shopId": "blacksmith"
+    "ShopId": "blacksmith"
   }
 }
 ```
+
+`"Id"` is the discriminator the `PAGE_CODEC` map looks up; the remaining keys are decoded by the
+supplier's own codec (`Server/Item/Items/Electrum/Portal/Teleporter.json` shows the shipped form:
+`"Id": "Teleporter"` alongside `"Mode"`, `"ActiveState"` and `"WarpNameWordList"`).
 
 ---
 
@@ -887,13 +903,17 @@ void addCustomHud(PlayerRef playerRef, CustomUIHud hud)
 void removeCustomHud(PlayerRef playerRef, String key)
 
 // Reset
-void resetVisibleHudComponents(PlayerRef playerRef)   // default component set only (0.6.3+)
+void resetVisibleHudComponents(PlayerRef playerRef)   // default component set only (added by 0.6.3)
 void resetHud(PlayerRef playerRef)
 void resetUserInterface(PlayerRef playerRef)
 
 // Network
 void sendVisibleHudComponents(PacketHandler handler)
 ```
+
+> The "default component set" `resetVisibleHudComponents(...)` restores is every `HudComponent`
+> **except** `Requests`, `PlayerList` and `BuilderToolsMaterialSlotSelector` — the same set a fresh
+> `HudManager` starts with.
 
 ### HudComponent Enum
 **Package:** `com.hypixel.hytale.protocol.packets.interface_`
@@ -926,8 +946,8 @@ Individual HUD components that can be shown or hidden.
 | `Mana` | Mana bar |
 | `Oxygen` | Oxygen/breath bar |
 | `Sleep` | Sleep indicator |
-| `Abilities` | Ability slots (0.6.3+) |
-| `BossBar` | Boss health bar (0.6.3+) |
+| `Abilities` | Ability slots (added by 0.6.3) |
+| `BossBar` | Boss health bar (added by 0.6.3) |
 
 ```java
 static HudComponent[] values()
@@ -976,14 +996,14 @@ protected abstract void build(UICommandBuilder cmd)
 protected void onRemove()
 
 // Update HUD
-void show()                                    // Force refresh (calls build() internally)
+void show()                                    // Force refresh: runs build(), then update(true, cmd)
 void update(boolean clear, UICommandBuilder cmd)  // Update with commands
 
 // Access
 PlayerRef getPlayerRef()
 String getKey()                                // The key passed to the constructor
 int getZOrder()
-void setZOrder(int zOrder)                     // Draw order vs. other custom HUDs
+void setZOrder(int zOrder)                     // Draw order vs. other custom HUDs; re-sends the HUD immediately
 ```
 
 > The **key** identifies this HUD on the player. `addCustomHud()` replaces any existing HUD registered under
@@ -1180,6 +1200,17 @@ cmd.clear("#NotificationList");
 cmd.remove("#TempMessage");
 ```
 
+**Indexing repeated children.** When you `append()` the same `.ui` fragment into a container several
+times, address the *n*-th copy with `#Container[n]` and then descend with a space-separated child
+selector. The engine's `MemoriesPage` builds its category rows exactly this way:
+
+```java
+cmd.append("#IconList", "Pages/Memories/MemoriesCategory.ui");   // one row per category
+String selector = "#IconList[" + i + "] ";                       // note the trailing space
+cmd.set(selector + "#CategoryIcon.AssetPath", iconPath);
+cmd.set(selector + "#CompleteCategoryBackground.Visible", true);
+```
+
 ### Event Handling
 
 **CustomUIHud does NOT support event handling.** The `build()` method only receives `UICommandBuilder`, not `UIEventBuilder`.
@@ -1322,7 +1353,7 @@ public class StatusHudManager {
 **Usage from commands:**
 ```java
 public class HudCommand extends AbstractPlayerCommand {
-    private final Arg<Mode> modeArg;
+    private final RequiredArg<Mode> modeArg;   // server.core.command.system.arguments.system
 
     public enum Mode { SHOW, HIDE }
 
@@ -1517,7 +1548,7 @@ browser.buildUI(cmd, events);
 
 **Package:** `com.hypixel.hytale.server.core.ui.browser` · **New in 0.5.7**
 
-An embeddable "save into which asset pack?" widget: a searchable pack list (filtered to writable, on-disk packs) plus a create-new-pack form that writes a fresh pack skeleton (with `manifest.json`) into a mods directory. The engine embeds it in the trigger-volume inspector's save-preset flow (`TriggerVolumeInspectorPage`) and the builder-tools prefab pages (`PrefabSavePage`, `PrefabEditorSaveSettingsPage`, `PrefabEditorLoadSettingsPage`) — any [`InteractiveCustomUIPage`](#customuipage) can embed it the same way.
+An embeddable "save into which asset pack?" widget: a searchable pack list (filtered to writable, on-disk packs) plus a create-new-pack form that writes a fresh pack skeleton (with `manifest.json`) into a mods directory. The engine embeds it in the trigger-volume inspector's save-preset flow (`TriggerVolumeInspectorPage`), the builder-tools prefab pages (`PrefabSavePage`, `PrefabEditorSaveSettingsPage`, `PrefabEditorLoadSettingsPage`) and, as of 0.6.3, the block-spawner settings page (`BlockSpawnerSettingsPage`) — any [`InteractiveCustomUIPage`](#customuipage) can embed it the same way.
 
 Unlike [`ServerFileBrowser`](#serverfilebrowser), it does **not** append its own page markup: your page's `.ui` file must contain the browser panels (`#PackBrowserPage`, `#CreatePackPage`, and the list/search elements named by the config — see `Common/UI/Custom/Pages/PrefabSavePage.ui` for the reference markup). The browser fills the list, toggles panel visibility, and validates the create form.
 
@@ -1661,7 +1692,8 @@ public static void sendNotification(PacketHandler ph, Message message, Message s
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item);
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item, NotificationStyle style);
 // Everything at once — icon OR item (pass null for the other) plus a free-form `tag` string
-// forwarded in the Notification packet (0.6.3+):
+// forwarded in the Notification packet (added by 0.6.3; per-player only — there is no
+// universe/world form that takes a tag):
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, String icon, ItemWithAllMetadata item, NotificationStyle style, String tag);
 ```
 
@@ -1793,12 +1825,15 @@ windows.closeWindow(ref, opened.getId(), store);
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are literal messages thrown by the UI system. The first two are verified against `HytaleServer.jar`; the rest were observed at runtime and may shift between builds.
+Backtick-quoted error strings below are literal messages thrown by the UI system. Two of them —
+`CustomUIPage doesn't support events!` (thrown by `CustomUIPage`) and `Assert not in thread!` (thrown
+by `Store`) — are verified against `HytaleServer.jar`; the rest were observed at runtime and may
+shift between builds.
 
 - **`CustomUIPage doesn't support events!`** → you registered an event binding (or an event was dispatched) on a page whose `build()` override only takes `UICommandBuilder` — the display-only `BasicCustomUIPage` form has no `UIEventBuilder`. Fix: override the four-argument `build(Ref, UICommandBuilder, UIEventBuilder, Store)` and register bindings there (see [Event Handling in Custom Pages](#event-handling-in-custom-pages)).
 - **Symptom:** a second `addCustomHud()` call makes your first custom HUD disappear → both HUDs were constructed with the **same key**, and `HudManager` keys its `Map<String, CustomUIHud>` so a duplicate key replaces the previous HUD. Fix: give each HUD a distinct key (multiple keyed HUDs can coexist), and remove one with `removeCustomHud(playerRef, key)` (see [Multiple HUDs](#multiple-huds)).
 - **Symptom:** a `CustomUIHud` ignores `addEventBinding`/click handling → `CustomUIHud.build()` receives only `UICommandBuilder`, never `UIEventBuilder`; HUDs cannot handle events. Fix: use a [`CustomUIPage`](#customuipage) for interactive UI (see [Event Handling](#event-handling)).
-- **Symptom:** a `CustomUIHud` appears but the player gets a mouse cursor and can no longer mouse-look → any hit-testable element (a `Group` with a `Background`, `Label`s, etc.) grabs the pointer. A HUD has no event handling, so it should never be a hit-test target. Fix: set **`HitTestVisible: false`** on the root element *and its children* in the `.ui` (the engine's own `Common/UI/Custom/Pages/EntitySpawnPage.ui` does this).
+- **Symptom:** a `CustomUIHud` appears but the player gets a mouse cursor and can no longer mouse-look → any hit-testable element (a `Group` with a `Background`, `Label`s, etc.) grabs the pointer. A HUD has no event handling, so it should never be a hit-test target. Fix: set **`HitTestVisible: false`** on the root element *and its children* in the `.ui`. (`HitTestVisible` is a real element property, but the shipped assets use it exactly once — on the non-interactive `#DropIndicator` overlay group in `Common/UI/Custom/Pages/EntitySpawnPage.ui` — so treat the root-and-children rule as the runtime-observed fix, not an engine convention you can copy from an asset.)
 - **Symptom:** the client logs `failed to apply customui hud commands` and then disconnects (a **client-side** message — it is not in the server jar) → you passed a `Message` to `UICommandBuilder.set(selector, value)` in a **HUD** (`build()`/`update()`). The `set(String, Message)` overload is fine for *pages* but not for the HUD layer. Fix: resolve text to a plain `String` before `set(...)`; for a translation key, resolve it server-side ([i18n](i18n.md#resolving-a-key-to-text-server-side)) — you can't defer localization to the client in a HUD label.
 - **Symptom:** `IllegalStateException: Assert not in thread!` (`ForkJoinPool.commonPool-worker-N`) when attaching a HUD or reading the store → you ran `addCustomHud(...)`/store access off the world thread, typically from a global event consumer. Fix: attach from an ECS system tick, a command, or `world.execute(Runnable)` (see [Obtaining ECS Context](#obtaining-ecs-context-for-ui-operations)).
 - **Symptom:** a UUID-keyed HUD doesn't reappear after a player reconnects → the stored HUD is bound to the player's old `PlayerRef`. Fix: prune on `PlayerDisconnectEvent`, or rebuild when the stored HUD's `getPlayerRef()` differs from the current one (see [Managing HUD State Across Players](#managing-hud-state-across-players)).

@@ -154,15 +154,19 @@ Use to control handler execution order. Lower priority number executes first.
 ### Enum Values
 ```java
 public enum EventPriority {
-    FIRST,   // Executes first (lowest priority number)
-    EARLY,   // Early execution
-    NORMAL,  // Default priority
-    LATE,    // Late execution
-    LAST     // Executes last (highest priority number)
+    FIRST,   // getValue() == -21844 — executes first (lowest priority number)
+    EARLY,   // getValue() == -10922
+    NORMAL,  // getValue() ==      0 — default priority
+    LATE,    // getValue() ==  10922
+    LAST     // getValue() ==  21844 — executes last (highest priority number)
 
     short getValue()  // Get numeric priority value
 }
 ```
+
+Handlers are bucketed by their `short` priority and the buckets are walked in ascending order, so a raw
+short slots in between the named levels — `(short) -15000` runs between `FIRST` and `EARLY`, `(short) 100`
+between `NORMAL` and `LATE`.
 
 ### Usage
 ```java
@@ -353,8 +357,13 @@ Some events are "keyed" (filtered by a key type like String or item type). Use:
 ### Keyed Events
 Use `registerGlobal()` or provide a specific key:
 - `PlayerInteractEvent` (keyed by String)
-- `PlayerChatEvent` (keyed by String)
-- World events (keyed by String)
+- `PlayerChatEvent` (keyed by String, and an **`IAsyncEvent`**) — the bus routes any async event class to
+  the async registry, so `registerGlobal(...)` still works: your `Consumer` is wrapped as
+  `f -> f.thenApply(e -> { consumer.accept(e); return e; })`. Use `registerAsyncGlobal(...)` when the
+  handler itself needs to be asynchronous (do I/O, then complete the future)
+- `WorldEvent` and its subclasses in `server.core.universe.world.events` (keyed by String) — these are the
+  bus events *about* a world (`StartWorldEvent`, `WorldGenChunksClearedEvent`, …), not the scripted
+  [world-event timelines](world-events.md), which are a separate 0.6.3 subsystem
 
 ### Non-Keyed Events
 Use `register()`:
@@ -526,7 +535,7 @@ if (event.isCancelled()) {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 event/ECS-event system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the event/ECS-event system (verified against `HytaleServer.jar`).
 
 - **`eventTypeClass must extend EcsEvent!`** → an ECS event class registered via `registerEntityEventType`/`registerWorldEventType` (or used by an `EntityEventSystem`) does not extend `EcsEvent`. Fix: extend `EcsEvent`, or `CancellableEcsEvent` for cancellable ones.
 - **Symptom:** a handler registered with `register()` on a keyed event (e.g. `PlayerInteractEvent`) never fires → keyed events are filtered by key, so a plain `register()` only matches the default/`Void` key. Fix: use `registerGlobal()` for all keys, or `register(EventClass, key, handler)` for a specific key (see [Keyed vs Non-Keyed Events](#keyed-vs-non-keyed-events)).

@@ -38,6 +38,8 @@ TaskRegistry (getTaskRegistry())
 
 Register async tasks. Access via `getTaskRegistry()` in your plugin.
 
+**Extends:** `Registry<TaskRegistration>` (`com.hypixel.hytale.registry.Registry`)
+
 ### Methods
 ```java
 TaskRegistration registerTask(CompletableFuture<Void> future)
@@ -135,16 +137,31 @@ getTaskRegistry().registerTask(task);
 
 ## Notes
 - Registered tasks are tracked by the plugin system
-- Tasks are cleaned up when the plugin is disabled
+- Tasks are cleaned up when the plugin is disabled — cleanup calls `Future.cancel(false)` on each registered task
 - Use for operations that need to run outside the main thread
+
+### What "cleanup" actually does
+
+`TaskRegistration`'s unregister action is exactly `task.cancel(false)`; the same action runs for every
+registered task when the plugin is disabled (`PluginBase` drains its shutdown list, newest first).
+
+Two consequences worth knowing before you rely on it:
+
+- **`false` means *do not interrupt*.** A task already executing is not interrupted, and a
+  `CompletableFuture` from `CompletableFuture.runAsync(...)` keeps running its body to completion —
+  cancelling only completes the *future* exceptionally. Long-running loops must poll their own stop
+  flag; registration alone will not stop them.
+- **A `ScheduledFuture` that has not fired yet is genuinely dropped**, which is the case cleanup
+  handles well: use `registerTask` for delayed/periodic work you must not have fire after a reload.
 
 ---
 
 ## Gotchas & Errors
 
-These are observable behaviors of the build-12 task system; no literal error strings are thrown by `TaskRegistry` itself.
+These are observable behaviors of the task system; no literal error strings are thrown by `TaskRegistry` itself.
 
-- **Symptom:** a long-running future keeps running after the plugin is disabled/reloaded → you never registered it, so the plugin system can't cancel it on shutdown. Fix: wrap it with `getTaskRegistry().registerTask(future)` (registered tasks are cleaned up when the plugin is disabled).
+- **Symptom:** a long-running future keeps running after the plugin is disabled/reloaded → either you never registered it, or you registered it and expected cancellation to be forceful. Fix: register it with `getTaskRegistry().registerTask(future)` *and* make the body itself interruptible — cleanup calls `cancel(false)`, which never interrupts a task that is already running (see [What "cleanup" actually does](#what-cleanup-actually-does)).
+- **`Registry is not enabled!`** (an `IllegalStateException`) → `registerTask(...)` was called after the plugin was disabled; the registry rejects the registration and immediately cancels the future you handed it. Fix: register tasks from `setup()` while the plugin is enabled, not from a shutdown path or a late callback.
 - **Symptom:** game-state reads inside a `runAsync` task race against the server → registered tasks run outside the main thread. Fix: don't touch the live entity `Store` directly from a task thread; marshal world reads/writes back onto the world thread.
 - **Compile error** on `registerTask(...)` → both overloads accept only `CompletableFuture<Void>` or `ScheduledFuture<Void>`. Fix: type the future as `<Void>` (return `null` from a scheduled callable).
 

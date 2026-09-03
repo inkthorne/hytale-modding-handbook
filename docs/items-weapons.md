@@ -61,9 +61,18 @@ Weapon item (inherits a Template_Weapon_* template)
 | [Template_Weapon_Daggers](#template_weapon_daggers) | 17 | Razorstrike | Dual-wielded fast attacks |
 | [Template_Weapon_Shield](#template_weapon_shield) | 16 | - | Defensive blocking with bash |
 | [Template_Weapon_Battleaxe](#template_weapon_battleaxe) | 16 | Whirlwind | Heavy two-handed sweeping attacks |
-| [Template_Weapon_Shortbow](#template_weapon_shortbow) | 19 | Volley | Charged arrow shots |
+| [Template_Weapon_Shortbow](#template_weapon_shortbow) | 20 | Volley | Charged arrow shots |
 | [Template_Weapon_Mace](#template_weapon_mace) | 13 | Groundslam | Heavy blunt weapon |
 | [Template_Weapon_Crossbow](#template_weapon_crossbow) | 3 | BigArrow | Ammo-based ranged weapon |
+
+(Counts are the `.json` files in each family directory, template included.)
+
+These seven are the **only** `Template_Weapon_*` assets in the game. The other weapon
+directories under `Server/Item/Items/Weapon/` — `Axe`, `Blowgun`, `Bomb`, `Claws`, `Club`,
+`Dart`, `Deployable`, `Flamethrower`, `Gun`, `Kunai`, `Longsword`, `Spear`, `Spellbook`,
+`Staff`, `Wand`, plus `Arrow` and `_Debug` — have no `Template_Weapon_*` parent: each item
+declares its own `Interactions` and stats directly (a few chain off a sibling item via a
+top-level `Parent`, e.g. `Weapon_Longsword_Praetorian`).
 
 ---
 
@@ -99,6 +108,7 @@ One-handed sword with a 4-hit combo chain (left swing, right swing, down swing, 
 | `Quality` | Template |
 | `ItemLevel` | 15 |
 | `PlayerAnimationsId` | Sword |
+| `Reticle` | DefaultMelee |
 | `MaxDurability` | 80 |
 | `DurabilityLossOnHit` | 0.21 |
 | `Categories` | Items.Weapons |
@@ -171,6 +181,7 @@ Child items must provide these variables to customize damage:
   "MaxDurability": 120,
   "Recipe": {
     "TimeSeconds": 3.5,
+    "KnowledgeRequired": false,
     "Input": [
       { "ItemId": "Ingredient_Bar_Iron", "Quantity": 6 },
       { "ItemId": "Ingredient_Leather_Light", "Quantity": 3 },
@@ -186,7 +197,7 @@ Child items must provide these variables to customize damage:
     "Swing_Left_Damage": {
       "Interactions": [{
         "Parent": "Weapon_Sword_Primary_Swing_Left_Damage",
-        "DamageCalculator": { "BaseDamage": { "Physical": 9 } },
+        "DamageCalculator": { "BaseDamage": { "Physical": 10 } },
         "DamageEffects": {
           "WorldSoundEventId": "SFX_Sword_T2_Impact",
           "LocalSoundEventId": "SFX_Sword_T2_Impact"
@@ -252,17 +263,31 @@ Child items must provide these variables to customize damage:
         "StaminaCost": { "Value": 10, "CostType": "Damage" }
       }]
     }
-  }
+  },
+  "MaxDurability": 120,
+  "DurabilityLossOnHit": 0.21
 }
 ```
+
+> `BenchRequirement` entries also accept `RequiredTierLevel` (int) and, as of 0.6.3,
+> `RequiredAugmentTags` (string array) alongside `Type`, `Id`, and `Categories`.
+> See [Crafting Items](items-crafting.md) for the full recipe schema.
 
 ### Damage Scaling by Tier
 
 | Sword | Quality | ItemLevel | Swing L/R | Swing Down | Thrust | Vortex Spin | Vortex Stab |
 |-------|---------|-----------|-----------|------------|--------|-------------|-------------|
-| Copper | Common | 10 | 8/9 | 14 | 21 | 15 | 44 |
-| Iron | Uncommon | 20 | 9/10 | 18 | 26 | 19 | 56 |
-| Adamantite | Rare | 40 | 14/16 | 28 | 41 | 29 | 87 |
+| Crude | Common | 3 | 6/6 | 11 | 16 | 12 | 35 |
+| Copper | Common | 10 | 8/8 | 14 | 21 | 15 | 44 |
+| Scrap / Steel_Rusty / Bronze | Uncommon | 15-25 | 9/9 | 16 | 24 | 17 | 50 |
+| Iron | Uncommon | 20 | 10/10 | 18 | 26 | 19 | 56 |
+| Stone_Trork | Uncommon | 25 | 11/11 | 20 | 30 | 21 | 63 |
+| Bone / Cobalt / Doomed / Thorium | Rare | 25-30 | 12/12 | 22 | 32 | 23 | 70 |
+| Adamantite | Rare | 40 | 14/14 | 28 | 41 | 29 | 87 |
+| Mithril / Onyxium | Epic | 50 | 18/18 | 34 | 51 | 37 | 110 |
+
+Left and right swings carry the *same* base damage on every stock sword; the combo's
+escalation comes from the down swing and thrust.
 
 ### All Sword Variants
 
@@ -283,6 +308,7 @@ Dual-wielded daggers with fast attacks and the Razorstrike signature ability.
 | `Quality` | Template |
 | `ItemLevel` | 30 |
 | `PlayerAnimationsId` | Daggers |
+| `Reticle` | DefaultMelee |
 | `MaxDurability` | 80 |
 | `DurabilityLossOnHit` | 0.1 |
 | `Categories` | Items.Weapons |
@@ -328,7 +354,8 @@ Dual-wielded daggers with fast attacks and the Razorstrike signature ability.
 
 ### Signature Ready Effects
 
-Daggers display particles on both the primary and secondary item when signature energy is full:
+Daggers display particles on both the primary and secondary item when signature energy is full
+(abridged — the real template repeats three systems per hand):
 
 ```json
 {
@@ -340,18 +367,33 @@ Daggers display particles on both the primary and secondary item when signature 
         {
           "SystemId": "Daggers_Signature_Ready",
           "TargetNodeName": "Handle",
+          "PositionOffset": { "X": 0.5 },
           "TargetEntityPart": "PrimaryItem"
         },
         {
           "SystemId": "Daggers_Signature_Ready",
           "TargetNodeName": "Handle",
+          "PositionOffset": { "X": 0.5 },
           "TargetEntityPart": "SecondaryItem"
+        }
+      ],
+      "ModelVFXId": "Sword_Signature_Status",
+      "FirstPersonParticles": [
+        {
+          "SystemId": "Daggers_Signature_Ready",
+          "TargetNodeName": "Handle",
+          "PositionOffset": { "X": 0.5 },
+          "TargetEntityPart": "PrimaryItem"
         }
       ]
     }]
   }
 }
 ```
+
+`TargetEntityPart` selects which held item the particle attaches to (`PrimaryItem` /
+`SecondaryItem`), `ModelVFXId` applies a shader effect to the model itself, and
+`FirstPersonParticles` is a separate list rendered only in the wielder's own view.
 
 ---
 
@@ -368,6 +410,7 @@ Defensive shield with blocking and shield bash. No signature ability.
 | `Quality` | Template |
 | `ItemLevel` | 40 |
 | `PlayerAnimationsId` | Shield |
+| `Reticle` | DefaultMelee |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapons_Shield_Metal |
 
@@ -465,6 +508,7 @@ Heavy two-handed axe with sweeping attacks and the Whirlwind signature ability.
 | `Quality` | Template |
 | `ItemLevel` | 15 |
 | `PlayerAnimationsId` | Battleaxe |
+| `Reticle` | DefaultMelee |
 | `MaxDurability` | 80 |
 | `DurabilityLossOnHit` | 0.45 |
 | `Categories` | Items.Weapons |
@@ -521,6 +565,7 @@ Ranged bow with charge-based damage scaling and the Volley signature ability.
 | `Quality` | Template |
 | `ItemLevel` | 5 |
 | `PlayerAnimationsId` | Bow |
+| `Reticle` | DefaultMelee |
 | `MaxDurability` | 80 |
 | `DurabilityLossOnHit` | 0.58 |
 | `Categories` | Items.Weapons |
@@ -533,6 +578,10 @@ Ranged bow with charge-based damage scaling and the Volley signature ability.
 | `Primary` | Root_Weapon_Shortbow_Primary_Shoot | Charged arrow shot |
 | `Secondary` | Root_Weapon_Shortbow_Secondary_Guard | Blocking with bow |
 | `Ability1` | Root_Weapon_Shortbow_Signature_Volley | Triple arrow volley |
+| `SwapFrom` | *(inline interaction list)* | Refunds a nocked arrow and clears `StaminaRegenDelay` on weapon swap |
+
+Unlike the other slots, the shortbow's `SwapFrom` is not a root-interaction id — it is an
+inline `{ "Interactions": [ … ] }` list written directly in the template.
 
 ### Tags
 
@@ -550,7 +599,7 @@ Ranged bow with charge-based damage scaling and the Volley signature ability.
 ```json
 {
   "Weapon": {
-    "EntityStatsToClear": ["SignatureEnergy", "SignatureCharges"],
+    "EntityStatsToClear": ["SignatureEnergy", "SignatureCharges", "Ammo"],
     "StatModifiers": {
       "SignatureEnergy": [{
         "Amount": 6,
@@ -559,26 +608,75 @@ Ranged bow with charge-based damage scaling and the Volley signature ability.
       "SignatureCharges": [{
         "Amount": 1,
         "CalculationType": "Additive"
+      }],
+      "Ammo": [{
+        "Amount": 1,
+        "CalculationType": "Additive"
       }]
     }
   }
 }
 ```
 
-Shortbow uses both SignatureEnergy and SignatureCharges for its volley ability.
+Shortbow uses SignatureEnergy and SignatureCharges for its volley ability, plus a
+single-slot `Ammo` stat (below) for the nocked arrow.
+
+### Arrow Consumption (as of 0.6.3)
+
+The shortbow now tracks the nocked arrow through an `Ammo` stat with a maximum of 1, and the
+whole arrow economy is gated on `"RequiredGameMode": "Adventure"` — in Creative the bow costs
+nothing. Drawing the bow (`Weapon_Shortbow_Primary_Shoot`) runs a `ModifyInventory` that
+removes one `Weapon_Arrow_Crude` and banks it as `Ammo: 1`; the chain ends in a
+`StatsCondition` that refunds any `Ammo` still held (the shot never fired) as an arrow item.
+With no arrow in the inventory the `ModifyInventory` fails and the `No_Ammo_Effects` var
+runs instead (default `Common_Bow_No_Ammo`). The template's `SwapFrom` performs the same
+refund when the player switches weapons mid-draw:
+
+```json
+{
+  "SwapFrom": {
+    "Interactions": [
+      {
+        "Type": "StatsCondition",
+        "Costs": { "Ammo": 1 },
+        "Next": {
+          "Type": "ModifyInventory",
+          "RequiredGameMode": "Adventure",
+          "ItemToAdd": { "Id": "Weapon_Arrow_Crude", "Quantity": 1 },
+          "Next": {
+            "Type": "ChangeStat",
+            "Behaviour": "Set",
+            "StatModifiers": { "StaminaRegenDelay": -1 }
+          }
+        }
+      },
+      { "Type": "ChangeActiveSlot" }
+    ]
+  }
+}
+```
+
+The same "spend an item, bank it as a stat, refund the stat on swap" pattern the crossbow
+uses — see the [ammo/arrow gotcha](#template_weapon_crossbow) below, which applies here too.
 
 ### Charge-Based Damage
 
-Shortbow damage scales with charge time:
+Shortbow damage scales with charge time. The thresholds live in
+`Weapon_Shortbow_Primary_Shoot_Charge` (`"Type": "Charging"`), whose `Next` map is keyed by
+hold time in seconds; each entry replaces the `Primary_Shoot_Strength_N` var:
 
 | Charge Level | Charge Time | Damage (Template) |
 |--------------|-------------|-------------------|
-| Strength_0 | 0.0s | 6 Projectile |
+| *(none)* | 0.0s | released too early — no shot |
+| Strength_0 | 0.1s | 6 Projectile |
 | Strength_1 | 0.3s | 10 Projectile |
 | Strength_2 | 0.6s | 12 Projectile |
 | Strength_3 | 0.9s | 14 Projectile |
 | Strength_4 | 1.2s+ (full) | 15 Projectile |
 | Signature Volley | - | 25 Projectile |
+
+The charge interaction also sets `AllowIndefiniteHold: true` and
+`HorizontalSpeedMultiplier: 0.67` (the template overrides the latter to `0.667`).
 
 ### InteractionVars
 
@@ -612,14 +710,18 @@ When SignatureCharges >= 1, the bow model changes to show three arrows:
       "LocalSoundEventId": "SFX_Bow_T2_Signature_Loop_Local",
       "WorldSoundEventId": "SFX_Bow_T2_Signature_Loop",
       "Particles": [
-        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "Y": 0.25 } },
-        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "Y": 0 } },
-        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "Y": -0.25 } }
-      ]
+        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "X": 0.5, "Y": 0.25, "Z": 0 }, "Scale": 0.5, "TargetEntityPart": "PrimaryItem" },
+        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "X": 0.5, "Y": 0, "Z": 0 }, "Scale": 0.5, "TargetEntityPart": "PrimaryItem" },
+        { "SystemId": "Bow_Signature_Charge", "TargetNodeName": "ARROW-PLACEHOLDER", "PositionOffset": { "X": 0.5, "Y": -0.25, "Z": 0 }, "Scale": 0.5, "TargetEntityPart": "PrimaryItem" }
+      ],
+      "ModelVFXId": "Bow_Signature_Status"
     }]
   }
 }
 ```
+
+The template also carries a second `ItemAppearanceConditions` entry keyed on
+`SignatureEnergy` at `[100, 100]`, which adds the shared `Sword_Signature_Ready` particles.
 
 ---
 
@@ -691,6 +793,7 @@ Ammo-based ranged weapon with reload mechanics and the BigArrow signature abilit
 |----------|-------|
 | `Quality` | Template |
 | `PlayerAnimationsId` | Crossbow |
+| `Reticle` | DefaultMelee |
 | `MaxDurability` | 80 |
 | `DurabilityLossOnHit` | 0.28 |
 | `Categories` | Items.Weapons |
@@ -752,9 +855,13 @@ Crossbow manages three stats:
 > spends one `Ammo` stat (granted 6 on equip via `Weapon.StatModifiers`); reloading **converts arrow
 > items → Ammo** (`Reload_ItemConsume` → `Common_StatAmmoReload_ItemConsume`, a `ModifyInventory`
 > removing `Weapon_Arrow_Crude`); and `SwapFrom` (`Weapon_Crossbow_Swap_From`) **refunds leftover Ammo
-> back into arrow items** on weapon swap. So raising the `Ammo` grant to fake "infinite ammo" lets a
+> back into arrow items** on weapon swap — a `StatsCondition` ladder testing `Ammo` 6 down to 1 and
+> adding that many arrows. So raising the `Ammo` grant to fake "infinite ammo" lets a
 > player swap weapons to harvest the surplus as real arrows. The safe approach is to make *reload*
 > free — drop the arrow `ModifyInventory` from the reload chain — rather than inflating `Ammo`.
+>
+> The entire chain is wrapped in `"RequiredGameMode": "Adventure"`, so none of it costs or
+> refunds anything in Creative.
 
 ### DisplayEntityStatsHUD
 
@@ -783,18 +890,25 @@ Displays the Ammo stat on the HUD when wielding.
 | `Reload_ItemConsume` | Consume arrow per reload iteration |
 | `Reload_Effects` | Reload animation/sound effects |
 | `Reload_StatModifier` | Grant Ammo stat per reload |
-| `Signature_*` | Signature ability configuration |
-| `Guard_*` | Blocking configuration |
+| `Signature_Activate_Effects` | Sound/VFX when the signature activates |
+| `Signature_BigArrow_Launch` | BigArrow projectile launch |
+| `Signature_BigArrow_Damage` | BigArrow damage |
+| `Signature_BigArrow_Miss` | BigArrow miss effects |
+| `Guard_Start_StaminaCost` | Stamina cost to begin guarding |
+| `Guard_Wield` | Active blocking configuration |
+| `Guard_Bash` | Bash on guard release |
+| `Guard_Bash_Damage` | Bash damage |
 
 ### Ammo Consumption
 
-The crossbow consumes `Weapon_Arrow_Crude` items from inventory:
+The crossbow consumes `Weapon_Arrow_Crude` items from inventory (Adventure mode only):
 
 ```json
 {
   "Arrow_Inventory_Condition": {
     "Interactions": [{
       "Type": "ModifyInventory",
+      "RequiredGameMode": "Adventure",
       "ItemToRemove": {
         "Id": "Weapon_Arrow_Crude",
         "Quantity": 1
@@ -847,9 +961,27 @@ All weapon damage uses `DamageCalculator` with `BaseDamage`:
 }
 ```
 
-Damage types:
+`DamageCalculator` accepts five keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `BaseDamage` | object | Map of damage-cause id → amount |
+| `Type` | enum | `Absolute` (default) or `Dps` — whether `BaseDamage` is a flat amount or a per-second rate scaled by the interaction's duration |
+| `Class` | enum | `Unknown` (default), `Light`, `Charged`, or `Signature` — the damage class used for resistance/animation bucketing |
+| `SequentialModifierStep` | float | Per-hit falloff applied when one interaction damages several targets in sequence |
+| `SequentialModifierMinimum` | float | Floor for that falloff |
+| `RandomPercentageModifier` | float | Random ± spread applied to the rolled damage |
+
+The `BaseDamage` keys are `DamageCause` asset ids from `Server/Entity/Damage/`
+— `Bludgeoning`, `Command`, `Drowning`, `Elemental`, `Environment`, `Environmental`, `Fall`,
+`Fire`, `Ice`, `OutOfWorld`, `Physical`, `Poison`, `Projectile`, `Slashing`, `Suffocation`.
+Weapons overwhelmingly use two:
 - `Physical` - Melee weapon damage
 - `Projectile` - Ranged weapon damage
+
+The shared base interactions (e.g. `Weapon_Sword_Primary_Swing_Left_Damage`) set only
+`"DamageCalculator": { "Class": "Light" }` — no `BaseDamage` — which is why a sword that
+supplies no `InteractionVars` override does no configured weapon damage.
 
 ### Stamina Cost for Blocking
 
@@ -862,10 +994,18 @@ Damage types:
 }
 ```
 
-| CostType | Description |
-|----------|-------------|
-| `Damage` | Stamina cost per damage blocked |
-| `Flat` | Fixed stamina cost per block |
+`StaminaCost` has exactly two keys, and `CostType` has exactly two values (there is no
+"flat" mode — the cost is always proportional to the damage blocked):
+
+| CostType | Meaning | `Value` |
+|----------|---------|---------|
+| `MaxHealthPercentage` (default) | `Value` is the fraction of the blocker's **max health** that one stamina point absorbs | ratio, e.g. `0.04` for 4%. Default `0.04` |
+| `Damage` | `Value` is the raw **damage** that one stamina point absorbs | flat damage, e.g. `10` |
+
+Stamina consumed is `damage / Value` for `Damage`, and
+`damage / (Value × maxHealth)` for `MaxHealthPercentage`. The stock weapon templates all use
+`"CostType": "Damage"`. Enum values in item JSON are written in CamelCase and matched
+**exactly** — `"DAMAGE"` fails to decode.
 
 ### Blocked Effects
 
@@ -900,9 +1040,11 @@ interaction's `DamageEffects` carries `WorldSoundEventId` (spatial, heard by all
 
 The shared `Weapon_Sword_Primary_*_Damage` interactions (and the common `DamageEntityParent`) carry
 **no** sound of their own, so a weapon that doesn't override `DamageEffects` in its `InteractionVars`
-is **silent on hit**. In 0.5.0 several stock swords ship this way (e.g. Wood, Steel, Cutlass, Frost,
-Nexus, Runic, Silversteel) — if you base a weapon on one of those and want an impact sound, add a
-`DamageEffects` block per combo hit. (The exact silent-weapon list is version-specific.)
+is **silent on hit**. As of 0.6.3 eight stock swords ship with an empty `InteractionVars`
+block — so they also get no `BaseDamage` — Cutlass, Frost, Nexus, Runic, Silversteel, Steel,
+Steel_Incandescent, and Wood. If you base a weapon on one of those and want an impact sound
+(or any tier damage at all), add a `DamageEffects` and `DamageCalculator` block per combo
+hit. (The exact list is version-specific.)
 
 To play a sound from Java instead of JSON, see [Audio → Playing Sounds from Java](audio.md#playing-sounds-from-java).
 

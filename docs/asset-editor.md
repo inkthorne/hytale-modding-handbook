@@ -56,12 +56,12 @@ EditorClientEvent<KeyType> (base — exposes EditorClient)
 | Class | Key Type | Description |
 |-------|----------|-------------|
 | [`EditorClientEvent<K>`](#editorclienteventkeytype-base-class) | Generic | Abstract base for editor events |
-| [`AssetEditorActivateButtonEvent`](#asseteditoractivatebuttonevent) | `String` | Button activated |
-| [`AssetEditorAssetCreatedEvent`](#asseteditorassetcreatedevent) | `String` | Asset created |
+| [`AssetEditorActivateButtonEvent`](#asseteditoractivatebuttonevent) | `String` — the **button id** | Button activated |
+| [`AssetEditorAssetCreatedEvent`](#asseteditorassetcreatedevent) | `String` — the **asset-type id** | Asset created |
 | [`AssetEditorClientDisconnectEvent`](#asseteditorclientdisconnectevent) | `Void` | Client disconnected |
 | [`AssetEditorSelectAssetEvent`](#asseteditorselectassetevent) | `Void` | Asset selected |
-| [`AssetEditorFetchAutoCompleteDataEvent`](#asseteditorfetchautocompletedataevent) | `String` | Async - autocomplete fetch |
-| [`AssetEditorRequestDataSetEvent`](#asseteditorrequestdatasetevent) | `String` | Async - dataset request |
+| [`AssetEditorFetchAutoCompleteDataEvent`](#asseteditorfetchautocompletedataevent) | `String` — the **dataset name** | Async - autocomplete fetch |
+| [`AssetEditorRequestDataSetEvent`](#asseteditorrequestdatasetevent) | `String` — the **dataset name** | Async - dataset request |
 | [`AssetEditorUpdateWeatherPreviewLockEvent`](#asseteditorupdateweatherpreviewlockevent) | `Void` | Weather preview lock |
 
 ---
@@ -152,10 +152,10 @@ Extends `EditorClientEvent<Void>`. Fired when an asset is selected in the asset 
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getAssetType()` | `String` | Selected asset type |
-| `getAssetFilePath()` | `AssetPath` | Selected asset path |
-| `getPreviousAssetType()` | `String` | Previously selected type (`null` on the first selection) |
-| `getPreviousAssetFilePath()` | `AssetPath` | Previous asset path |
+| `getAssetType()` | `String` | Selected asset type — `null` when the selection was *cleared* |
+| `getAssetFilePath()` | `AssetPath` | Selected asset path — `null` when the selection was cleared |
+| `getPreviousAssetType()` | `String` | Previously selected type — `null` on the client's first selection |
+| `getPreviousAssetFilePath()` | `AssetPath` | Previous asset path — `null` on the first selection, `AssetPath.EMPTY_PATH` after a clear |
 
 `AssetPath` here is the server-side record `com.hypixel.hytale.builtin.asseteditor.AssetPath`
 — components `packId()` (`String`) and `path()` (`java.nio.file.Path`), with `EMPTY_PATH` for "nothing
@@ -245,7 +245,14 @@ protected void setup() {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 asset-editor system (verified against `HytaleServer.jar`).
+Backtick-quoted strings below are literal identifiers verified against `HytaleServer.jar`.
 
-- **Symptom:** an editor packet arrives referencing a player who has disconnected or whose ref is no longer valid (through build-17 this logged the literal `Unable to process AssetEditorUpdateJsonAsset packet. Player ref is invalid!`; 0.5.7 removed that exact string, but the invalid-ref condition remains). Fix: this is a transient/disconnect condition rather than a plugin bug; handle `AssetEditorClientDisconnectEvent` and avoid relying on a player ref after disconnect.
-- **Symptom:** an autocomplete request never returns results → an `AssetEditorFetchAutoCompleteDataEvent` handler registered via `registerAsyncGlobal` did not complete its future. Fix: always return the event from the `thenApply` chain (and call `setResults(...)`), so the future completes. see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.
+- **Symptom:** an editor packet arrives referencing a player who has disconnected or whose ref is no longer valid (through build-17 this logged the literal `Unable to process AssetEditorUpdateJsonAsset packet. Player ref is invalid!`; 0.5.7 removed that exact string, and it is still absent in 0.6.3, but the invalid-ref condition remains). Fix: this is a transient/disconnect condition rather than a plugin bug; handle `AssetEditorClientDisconnectEvent` and avoid relying on a player ref after disconnect.
+- **Symptom:** an autocomplete request never returns results → an `AssetEditorFetchAutoCompleteDataEvent` handler registered via `registerAsyncGlobal` did not complete its future. Fix: always return the event from the `thenApply` chain (and call `setResults(...)`), so the future completes.
+- **Symptom:** a handler registered with plain `register(EventClass, handler)` never fires for `AssetEditorActivateButtonEvent`, `AssetEditorAssetCreatedEvent`, `AssetEditorFetchAutoCompleteDataEvent` or `AssetEditorRequestDataSetEvent` → these four are dispatched **keyed** (button id, asset-type id, dataset name, dataset name respectively), so the `Void`-key overload never matches. Fix: use `registerGlobal` / `registerAsyncGlobal`, or pass the key you care about. The `Void`-keyed events (`AssetEditorClientDisconnectEvent`, `AssetEditorSelectAssetEvent`, `AssetEditorUpdateWeatherPreviewLockEvent`) work with plain `register`.
+- **Symptom:** your listener never fires at all → these are dispatched on the **server-wide event bus** (`HytaleServer.get().getEventBus()`), and only when a listener already exists (`dispatchFor(...).hasListener()`). Fix: register in `setup()`, before any editor client connects.
+- **Failure replies** the editor itself sends are `Message` constants on `com.hypixel.hytale.builtin.asseteditor.Messages` (`USAGE_DENIED`, `ASSETS_READ_ONLY`, `INVALID_ASSET_TYPE`, `RENAME_ASSET_CROSS_PACK_UNSUPPORTED`, …). Match on those rather than on rendered English text.
+
+---
+
+> **Authoritative signatures:** see the [official server API reference](https://release.server.docs.hytale.com) (auto-generated, always current). This page adds the descriptions, context, and examples it lacks.

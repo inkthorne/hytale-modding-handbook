@@ -145,6 +145,7 @@ static void findBlockCollisionsIterative(
 
 // Find character (entity) collisions
 static void findCharacterCollisions(
+    Box hitbox,
     Vector3d startPos,
     Vector3d endPos,
     CollisionResult result,
@@ -183,11 +184,11 @@ void findIntersections(
     boolean checkDamage
 )
 
-// Validate a position
+// Validate a position (position is read-only: any Vector3dc, e.g. a Vector3d)
 int validatePosition(
     World world,
     Box hitbox,
-    Vector3d position,
+    Vector3dc position,
     CollisionResult result
 )
 
@@ -195,7 +196,7 @@ int validatePosition(
 <T> int validatePosition(
     World world,
     Box hitbox,
-    Vector3d position,
+    Vector3dc position,
     int flags,
     T filterData,
     CollisionFilter<BoxBlockIntersectionEvaluator, T> filter,
@@ -212,11 +213,14 @@ Container for collision query results. Manages block collisions, character colli
 
 ### Public Fields
 ```java
-List<Entity> collisionEntities  // Entities involved in collision
-double slideStart               // Start of slide collision
-double slideEnd                 // End of slide collision
-boolean isSliding               // Whether entity is sliding
-int validate                    // Validation result
+List<Ref<EntityStore>> collisionEntities  // Entity refs involved in the collision (never Entity objects)
+double slideStart                         // Start of slide collision
+double slideEnd                           // End of slide collision
+boolean isSliding                         // Whether entity is sliding
+int validate                              // Validation result
+Predicate<CollisionConfig> isNonWalkable  // Current non-walkable predicate (see setNonWalkablePredicate)
+
+static final Comparator<BlockCollisionData> BLOCK_COLLISION_DATA_COMPARATOR  // Sort order used by process()
 ```
 
 ### Constructor
@@ -238,6 +242,7 @@ void addCollision(IBlockCollisionEvaluator evaluator, int flags)
 ### Character Collision Methods
 ```java
 int getCharacterCollisionCount()
+CharacterCollisionData getCharacterCollision(int index)
 CharacterCollisionData getFirstCharacterCollision()
 CharacterCollisionData forgetFirstCharacterCollision()
 CharacterCollisionData allocCharacterCollision()
@@ -269,6 +274,17 @@ void disableTriggerBlocks()
 boolean isCheckingTriggerBlocks()
 ```
 
+### Pass-Through Blocks
+Blocks the sweep passed *through* (non-colliding by material or filter) can be recorded separately:
+```java
+boolean isRecordingPassThrough()
+void setRecordPassThrough(boolean record)
+int getPassThroughCount()
+BlockCollisionData getPassThrough(int index)
+BlockCollisionData newPassThrough()
+void addPassThrough(IBlockCollisionEvaluator evaluator, int flags)
+```
+
 ### Damage Block Methods
 ```java
 void enableDamageBlocks()
@@ -290,6 +306,13 @@ void setDefaultNonWalkablePredicate()
 void setWalkableByMaterial(int material)
 void setDefaultWalkableBehaviour()
 void setDefaultPlayerSettings()
+
+// Extra per-block filter applied on top of the material mask (returns the previous filter)
+Predicate<CollisionConfig> getBlockCollisionFilter()
+Predicate<CollisionConfig> setBlockCollisionFilter(Predicate<CollisionConfig> filter)
+
+// The per-query CollisionConfig this result drives
+CollisionConfig getConfig()
 ```
 
 ### Character Collision Control
@@ -314,6 +337,17 @@ void process()                  // Process accumulated results
 void acquireCollisionModule()   // Acquire module reference
 ```
 
+### Debug Logging
+Attach a logger to have the sweep log per-block decisions for one entity; `shouldLog()` is simply "a logger is set". The `debugEntityId` overloads are new as of 0.6.3.
+```java
+HytaleLogger getLogger()
+boolean shouldLog()
+void setLogger(HytaleLogger logger)
+void setLogger(HytaleLogger logger, int debugEntityId)   // 0.6.3+
+void setDebugEntityId(int debugEntityId)                 // 0.6.3+
+int getDebugEntityId()                                   // 0.6.3+
+```
+
 ---
 
 ## BlockCollisionData
@@ -336,6 +370,7 @@ int fluidId                     // Fluid ID if present
 Fluid fluid                     // Fluid asset if present
 boolean touching                // Whether touching the block
 boolean overlapping             // Whether overlapping the block
+boolean filteredByCollisionFilter  // Rejected by the CollisionResult block-collision filter
 ```
 
 ### Methods
@@ -377,6 +412,8 @@ Information about a character (entity) collision.
 
 ### Public Fields
 ```java
+final Vector3d sourcePosition     // Moving entity's position at the collision
+final Vector3d targetPosition     // Collided entity's position
 Ref<EntityStore> entityReference  // Reference to collided entity
 boolean isPlayer                  // Whether the entity is a player
 ```
@@ -384,8 +421,9 @@ boolean isPlayer                  // Whether the entity is a player
 ### Methods
 ```java
 void assign(
-    Vector3d position,
-    double time,
+    Vector3dc sourcePosition,
+    Vector3dc targetPosition,
+    double collisionStart,
     Ref<EntityStore> entityRef,
     boolean isPlayer
 )
@@ -407,6 +445,7 @@ static final int MATERIAL_SUBMERGED // Inside fluid
 static final int MATERIAL_DAMAGE    // Damage-causing blocks
 static final int MATERIAL_SET_NONE  // No materials
 static final int MATERIAL_SET_ANY   // All materials
+static final int MATERIAL_INVALID   // -1, sentinel for "no material resolved"
 ```
 
 ### Public Fields
@@ -425,8 +464,11 @@ boolean blockCanTrigger
 boolean blockCanTriggerPartial
 boolean checkTriggerBlocks
 boolean checkDamageBlocks
+boolean blockFilteredOut                              // Set when extraBlockCollisionFilter rejected the block
 Predicate<CollisionConfig> canCollide
+Predicate<CollisionConfig> extraBlockCollisionFilter  // Extra filter (CollisionResult.setBlockCollisionFilter)
 boolean dumpInvalidBlocks
+boolean dumpNonOverlappingBlocks                      // 0.6.3+: debug-log blocks that were tested but not overlapping (from CollisionModuleConfig)
 Object extraData1, extraData2
 ```
 
@@ -483,14 +525,16 @@ boolean test(T filterData, int flags, D evaluator, CollisionConfig config)
 Constants for collision material types.
 
 ### Constants
+Bit flags (same values as the `MATERIAL_*` constants on `CollisionConfig`):
 ```java
-static final int MATERIAL_EMPTY      // 0 - Air/empty
-static final int MATERIAL_FLUID      // Fluid blocks
-static final int MATERIAL_SOLID      // Solid blocks
-static final int MATERIAL_SUBMERGED  // Inside fluid
-static final int MATERIAL_SET_ANY    // Match any material
-static final int MATERIAL_DAMAGE     // Damage blocks
-static final int MATERIAL_SET_NONE   // Match no materials
+static final int MATERIAL_EMPTY      = 1   // Air/empty
+static final int MATERIAL_FLUID      = 2   // Fluid blocks
+static final int MATERIAL_SOLID      = 4   // Solid blocks
+static final int MATERIAL_SUBMERGED  = 8   // Inside fluid
+static final int MATERIAL_DAMAGE     = 16  // Damage blocks
+static final int MATERIAL_SET_NONE   = 0   // Match no materials
+static final int MATERIAL_SET_ANY    = 15  // Match any material (EMPTY|FLUID|SOLID|SUBMERGED — not DAMAGE)
+static final int MATERIAL_INVALID    = -1  // Sentinel
 ```
 
 ---
@@ -548,8 +592,15 @@ Evaluates intersection between a box and blocks. Used for position validation an
 ```java
 // These return the evaluator (builder pattern), not void
 BoxBlockIntersectionEvaluator setBox(Box box)
-BoxBlockIntersectionEvaluator setPosition(Vector3d position)
+BoxBlockIntersectionEvaluator setBox(Box box, Vector3dc position)
+BoxBlockIntersectionEvaluator setPosition(Vector3dc position)
+BoxBlockIntersectionEvaluator offsetPosition(Vector3d offset)
 BoxBlockIntersectionEvaluator expandBox(double amount)
+BoxBlockIntersectionEvaluator setStartEnd(double start, double end)
+
+// "Up" axis used for on-ground / ceiling tests (default +Y)
+Vector3dc getWorldUp()
+void setWorldUp(Vector3dc up)
 ```
 
 ### Intersection Tests
@@ -582,8 +633,9 @@ Configuration for the collision module.
 
 ### Constants
 ```java
-static final double MOVEMENT_THRESHOLD  // Minimum movement to trigger collision check
-static final double EXTENT              // Default extent value
+static final double MOVEMENT_THRESHOLD          // 1.0E-5 — minimum movement to trigger a collision check
+static final double MOVEMENT_THRESHOLD_SQUARED  // MOVEMENT_THRESHOLD²
+static final double EXTENT                      // 1.0E-5 — default extent value
 ```
 
 ### Methods
@@ -595,6 +647,10 @@ void setExtentMax(double value)
 // Debug: dump invalid block positions
 boolean isDumpInvalidBlocks()
 void setDumpInvalidBlocks(boolean dump)
+
+// Debug (0.6.3+): also dump blocks that were tested but not overlapping
+boolean isDumpNonOverlappingBlocks()
+void setDumpNonOverlappingBlocks(boolean dump)
 
 // Minimum thickness for collision surfaces
 double getMinimumThickness()
@@ -623,6 +679,7 @@ boolean isEmpty()
 T get(int index)
 T getFirst()
 T forgetFirst()  // Get first element and remove it
+void remove(int index)
 ```
 
 ### Sorting
@@ -729,7 +786,7 @@ if (collisionComp != null) {
 
 **Implements:** `IBlockCollisionConsumer`
 
-Self-contained physics integrator for simple ballistic bodies: gravity, drag/terminal velocity, bounces, fluid buoyancy and swimming damping, move-out-of-solid resolution, and a rest state. It consumes block collisions from the collision system (hence `IBlockCollisionConsumer`). Used by block entities (e.g. falling blocks) and legacy projectiles; the modern projectile path uses `StandardPhysicsProvider` (see [projectiles.md](projectiles.md#standardphysicsprovider)).
+Self-contained physics integrator for simple ballistic bodies: gravity, drag/terminal velocity, bounces, fluid buoyancy and swimming damping, move-out-of-solid resolution, and a rest state. It consumes block collisions from the collision system (hence `IBlockCollisionConsumer`). Used by block entities (e.g. falling blocks) and legacy projectiles; the modern projectile path uses `StandardPhysicsProvider` (see [projectiles.md](projectiles.md#standardphysicsprovider)). As of 0.6.3 it records the block it came to rest on (`contactBlockPosition`, protected) and hands that to `RestingSupport`, so a resting body wakes and falls again when its support block is broken (`fallingAfterBreak`, protected — no public accessors on this class).
 
 ### Getting an Instance
 ```java

@@ -52,8 +52,8 @@ Operation System
 | `Operation` | `server.core.modules.interaction.interaction.operation` | Interface for executable interaction steps |
 | `OperationsBuilder` | `server.core.modules.interaction.interaction.operation` | Builds operation sequences with label-based flow control |
 | `Label` | `interaction.operation` | Jump target within an operation sequence |
-| `Collector` | `interaction.operation` | Visitor receiving callbacks during `walk()` traversal |
-| `CollectorTag` | `interaction.operation` | Identifies which branch is visited (SerialTag, ParallelTag, ...) |
+| `Collector` | `interaction.config.data` | Visitor receiving callbacks during `walk()` traversal (`ListCollector`, `SingleCollector`, `TreeCollector` live here too) |
+| `CollectorTag` | `interaction.config.data` | Identifies which branch is visited (`SerialTag`, `ParallelTag`, ...; `StringTag` is the generic one) |
 | `WaitForDataFrom` | `protocol` | Enum controlling client/server execution sync |
 
 ---
@@ -69,46 +69,46 @@ The `Operation` interface defines the contract for executable interaction steps.
 ```java
 public interface Operation {
     // Server-side execution (called every frame while active)
-    void tick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-              float deltaTime, InteractionType type, InteractionContext context,
-              CooldownHandler cooldown);
+    void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+              InteractionType type, InteractionContext context, CooldownHandler cooldown);
 
-    // Client-side prediction (mirrors tick for client simulation)
-    void simulateTick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-                      float deltaTime, InteractionType type, InteractionContext context,
-                      CooldownHandler cooldown);
+    // Server-side simulation of the client's prediction (mirrors tick)
+    void simulateTick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+                      InteractionType type, InteractionContext context, CooldownHandler cooldown);
 
-    // Called when operation becomes active
-    void handle(Ref<EntityStore> ref, boolean isStart, float deltaTime,
-                InteractionType type, InteractionContext context);
+    // Called when operation becomes active / ends (default: no-op)
+    default void handle(Ref<EntityStore> ref, boolean isStart, float deltaTime,
+                        InteractionType type, InteractionContext context);
 
     // Determines client/server sync behavior
     WaitForDataFrom getWaitForDataFrom();
 
-    // Returns conflict resolution rules
-    InteractionRules getRules();
+    // Returns conflict resolution rules (default: InteractionRules.DEFAULT_RULES)
+    default InteractionRules getRules();
 
-    // Tag-based metadata for the operation
-    Int2ObjectMap<IntSet> getTags();
+    // Tag-based metadata for the operation (default: empty)
+    default Int2ObjectMap<IntSet> getTags();
 
-    // For wrapped/decorated operations
-    Operation getInnerOperation();
+    // For wrapped/decorated operations (default: null; see Operation.NestedOperation)
+    default Operation getInnerOperation();
 }
 ```
+
+There is **no** `LivingEntity` parameter — resolve components from `ref` through
+`context.getCommandBuffer()`. Only `tick`, `simulateTick` and `getWaitForDataFrom` are abstract.
 
 ### tick() vs simulateTick()
 
 | Method | Runs On | Purpose |
 |--------|---------|---------|
 | `tick()` | Server | Authoritative execution with full world access |
-| `simulateTick()` | Client | Prediction for responsive feel; may be corrected |
+| `simulateTick()` | Server, replaying the client's prediction | Mirrors what the client predicted so the two chains can be compared (`InteractionManager` throws `Simulation and server tick are not in sync` when they diverge) |
 
 Both methods receive identical parameters:
 - `ref` - Entity store reference for the executing entity
-- `entity` - The `LivingEntity` performing the operation
 - `isFirstTick` - `true` on the first frame of this operation
 - `deltaTime` - Time since last frame (for timing calculations)
-- `type` - The `InteractionType` (PRIMARY, SECONDARY, etc.)
+- `type` - The `InteractionType` (`Primary`, `Secondary`, etc.)
 - `context` - Execution state container (see [InteractionContext](interactions-context.md))
 - `cooldown` - Manages cooldown timers (see [Cooldowns](interactions.md#cooldown-system))
 
@@ -155,7 +155,7 @@ RUNTIME EXECUTION PHASE
 | `compile()` | Loading | After walk() | Build flat Operation[] from tree |
 | `handle(true)` | Runtime | Operation starts | Initialize operation state |
 | `tick()` | Runtime | Every server frame | Execute operation logic |
-| `simulateTick()` | Runtime | Every client frame | Client-side prediction |
+| `simulateTick()` | Runtime | Every frame of a predicted chain | Server-side replay of the client prediction |
 | `handle(false)` | Runtime | Operation ends | Cleanup operation state |
 
 ---
@@ -214,7 +214,7 @@ Tags identify which branch is being visited in container interactions:
 | `Parallel` | `ParallelTag.of(index)` | `ParallelTag.of(0)` |
 | `Chaining` | `ChainingTag.of(index)` | `ChainingTag.of(2)` |
 | `Charging` | `ChargingTag.of(level)` | `ChargingTag.of(0.5f)` |
-| `FirstClick` | `StringTag` | `TAG_CLICK`, `TAG_HELD` |
+| `FirstClick` | `StringTag.of(name)` | `FirstClickInteraction.TAG_CLICK`, `FirstClickInteraction.TAG_HELD` |
 
 ### Implementation Patterns
 
@@ -253,6 +253,8 @@ public boolean walk(Collector collector, InteractionContext context) {
 ```java
 public class OperationsBuilder {
     // Add an operation to the sequence
+    void addOperation(Operation operation);
+    // Add an operation that may jump to the given labels (wrapped so context.getLabel(i) sees them)
     void addOperation(Operation operation, Label... jumpTargets);
 
     // Build the final operation array
@@ -364,7 +366,7 @@ public void tick(..., InteractionContext context, ...) {
 }
 ```
 
-The labels passed to `addOperation()` become available for the operation to jump to during execution.
+The labels passed to `addOperation()` become available for the operation to jump to during execution — the builder wraps it in a `LabelOperation` that calls `context.setLabels(labels)` before each `tick`/`simulateTick`/`handle`, so inside the operation `context.getLabel(i)` (guarded by `context.hasLabels()`) returns the *i*-th label you passed. A `builder.jump(label)` emits a `JumpOperation` that sets the counter to `label.getIndex()` and finishes.
 
 ---
 
@@ -453,8 +455,8 @@ public class MyCustomOp implements Operation {
     }
 
     @Override
-    public void tick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-                     float deltaTime, InteractionType type, InteractionContext context,
+    public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+                     InteractionType type, InteractionContext context,
                      CooldownHandler cooldown) {
         if (isFirstTick) {
             // Initialize on first frame
@@ -464,17 +466,17 @@ public class MyCustomOp implements Operation {
         elapsed += deltaTime;
 
         if (elapsed >= duration) {
-            // Operation complete - advance to next
-            context.advanceOperation();
+            // Operation complete - the manager advances to the next operation
+            context.getState().state = InteractionState.Finished;
         }
     }
 
     @Override
-    public void simulateTick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-                             float deltaTime, InteractionType type, InteractionContext context,
+    public void simulateTick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+                             InteractionType type, InteractionContext context,
                              CooldownHandler cooldown) {
-        // Client prediction - usually mirrors tick()
-        tick(ref, entity, isFirstTick, deltaTime, type, context, cooldown);
+        // Client-prediction mirror - must reach the same counter/state as tick()
+        tick(ref, isFirstTick, deltaTime, type, context, cooldown);
     }
 
     @Override
@@ -518,7 +520,7 @@ Most operations track elapsed time:
 public void tick(..., float deltaTime, ..., InteractionContext context, ...) {
     elapsed += deltaTime;
     if (elapsed >= runTime) {
-        context.advanceOperation();
+        context.getState().state = InteractionState.Finished;
     }
 }
 ```
@@ -530,8 +532,10 @@ Some operations complete based on conditions:
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
-    if (targetReached || cancelled) {
-        context.advanceOperation();
+    if (targetReached) {
+        context.getState().state = InteractionState.Finished;
+    } else if (cancelled) {
+        context.getState().state = InteractionState.Failed;   // takes the Failed branch, if any
     }
 }
 ```
@@ -564,12 +568,14 @@ public void tick(..., boolean isFirstTick, ...) {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 operation system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the interaction operation system (`OperationsBuilder` / `InteractionManager`, verified against `HytaleServer.jar`).
 
-- **`No operations to execute`** → an interaction compiled to an empty `Operation[]` (e.g. a container interaction whose children all dropped out). Fix: ensure `compile(OperationsBuilder)` adds at least one operation.
-- **`Could not find the origin for the operation.`** → the runtime could not locate the operation's origin while resolving a jump/label. Fix: every `createUnresolvedLabel()` must be paired with a `resolveLabel(...)` before `build()` (see [Label System](#label-system)).
-- **`This operation does not allow you to jump to an operation in the future, only the past. Index name:`** → a runtime `context.jump(...)` targeted a label resolved *later* in the sequence. Fix: only jump backward (e.g. loops); for skip-forward branching, structure with a label resolved at the skip point rather than jumping past unresolved operations.
-- **`Cannot set a negative operation index:`** / **`Cannot set an operation index higher than the highest operation index:`** → `setOperationCounter(...)` (or a jump) addressed a slot outside the built operation array. Fix: keep the counter within `[0, build().length - 1]`; advance by `+1` rather than computing arbitrary indices.
+- **`Label already resolved`** (`IllegalArgumentException` from `OperationsBuilder.resolveLabel`) → `resolveLabel(...)` was called on a label that already has a position — either twice on the same unresolved label, or on a label made with `createLabel()` (which is resolved at creation). Fix: resolve each `createUnresolvedLabel()` exactly once; never call `resolveLabel` on a `createLabel()` label.
+- **`Failed to find operation during simulation tick of chain '<root id>'`** (`IllegalStateException`) → the operation counter points outside the built `Operation[]`. An unresolved label still holds `Integer.MIN_VALUE`, so jumping to one you forgot to `resolveLabel(...)` lands here; so does `setOperationCounter(...)` with an arbitrary index. Fix: pair every `createUnresolvedLabel()` with a `resolveLabel(...)` before `build()`, and keep the counter within `[0, build().length - 1]`.
+- **`Simulation and server tick are not in sync (operation position).`** / **`... (root interaction).`** → `simulateTick()` and `tick()` diverged (different jump, or one finished and the other didn't), so the server's prediction replay and its authoritative run are at different counters. Fix: `simulateTick` must mirror `tick`'s flow control exactly (same `jump`/`Finished`/`Failed` decisions), differing only in world side-effects.
+- **`Can't shift backwards`** (`InteractionManager.setGlobalTimeShift`) → a negative time shift was requested. Fix: time shifts are forward-only.
+- **`Failed to find interaction: <id>`** → a chain referenced an interaction id that is not in the asset map. Fix: see [interactions.md — Gotchas](interactions.md#gotchas--errors).
+- **Symptom:** your operation runs once and the chain hangs on it → nothing set the sync state. Fix: an operation must end its turn with `context.getState().state = InteractionState.Finished` (or `Failed`); there is no `advanceOperation()`.
 
 ---
 

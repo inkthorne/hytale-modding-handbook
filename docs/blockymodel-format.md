@@ -25,7 +25,8 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 ## Architecture
 ```
 .blockymodel (JSON)
-├── lod                "auto" | "off"
+├── lod                "auto" | "off" | "disappear" | "billboard"
+├── format             optional: "character" | "prop"
 └── nodes[]            hierarchical node tree
     └── node           id, name, position, orientation
         ├── shape       mesh geometry
@@ -40,7 +41,7 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 
 | Section | Location | Description |
 |---------|----------|-------------|
-| Top-level fields | `.blockymodel` root | `nodes` array and optional `lod` mode |
+| Top-level fields | `.blockymodel` root | `nodes` array, optional `lod` mode and `format` tag |
 | Node | `nodes[]` entry | `id`, `name`, `position`, `orientation`, optional `shape` and `children` |
 | `box` shape | node `shape` | Cuboid mesh defined by `size` per dimension |
 | `quad` shape | node `shape` | Flat 2D plane (foliage, flat decorations) |
@@ -49,16 +50,24 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 
 ## File Location
 
-Block models are stored in various locations depending on their purpose:
+Models live under `Common/`, grouped by what they are for (counts are the shipped `.blockymodel` files as of 0.6.3, 2,830 in total):
 
-| Category | Location |
-|----------|----------|
-| Block models | `Common/Blocks/Models/` |
-| Character models | `Common/Characters/` |
-| Item models | `Common/Items/` |
-| NPC models | `Common/NPC/` |
+| Category | Location | Shipped files |
+|----------|----------|---------------|
+| Block models | `Common/Blocks/<Category>/` — `Decorative_Sets/`, `Structures/`, `Foliage/`, `Benches/`, `Miscellaneous/`, `Dungeons/`, `Tinkering/`, `Stone/`, `Farming/` … | 1,151 |
+| NPC models | `Common/NPC/` | 669 |
+| Item models | `Common/Items/` | 454 |
+| Cosmetics (haircuts, etc.) | `Common/Cosmetics/` | 285 |
+| Character models | `Common/Characters/` | 168 |
+| Resource/ingredient models | `Common/Resources/` | 101 |
 
-Models are organized into subdirectories by category (e.g., `Doors/`, `Furniture/`, `Tools/`).
+There is no `Common/Blocks/Models/` folder — block models sit beside their textures and animations inside a category
+folder (e.g. `Blocks/Decorative_Sets/Desert/Door.blockymodel` next to `Door_Texture.png`).
+
+The server only validates the **path** of a model referenced from an asset, never its geometry. A block's `CustomModel`
+goes through `CommonAssetValidator.MODEL_ITEM`, which requires the path to start with one of `Blocks/`, `Items/`,
+`Resources/`, `NPC/`, `VFX/` or `Consumable/`, to end in `.blockymodel`, and to exist in the common-asset registry
+(`MODEL_CHARACTER` is the equivalent for character models: `Characters/`, `NPC/`, `Items/`, `VFX/`).
 
 ## File Structure
 
@@ -73,8 +82,11 @@ Models are organized into subdirectories by category (e.g., `Doors/`, `Furniture
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `nodes` | array | Yes | Array of root-level node objects defining the model hierarchy |
-| `lod` | string | No | Level-of-detail mode: `"auto"` or `"off"`. Default is `"auto"` |
+| `nodes` | array | Yes | Array of root-level node objects defining the model hierarchy (688 shipped models have more than one root) |
+| `lod` | string | No | Level-of-detail mode: `"auto"` (2,673 files), `"off"` (132), `"disappear"` (6 — foliage such as `Blocks/Foliage/Plants/Mushroom.blockymodel`) or `"billboard"` (6 — leaves such as `Blocks/Foliage/Leaves/PineShape.blockymodel`). 13 files omit it |
+| `format` | string | No | Model kind tag written by the editor: `"character"` (272 files — Characters, Cosmetics, NPC) or `"prop"` (93 files, all under `Blocks/`). Absent from most files |
+| `lodFriendly` | boolean | No | Rare editor flag (3 files) |
+| `editor` | string | No | Rare provenance tag, e.g. `"blockbench"` (15 files) |
 
 ## Node Structure
 
@@ -101,6 +113,9 @@ Each node in the hierarchy can contain geometry and/or child nodes:
 | `orientation` | object | No | Quaternion rotation `{x, y, z, w}` |
 | `shape` | object | No | Mesh geometry definition |
 | `children` | array | No | Array of child node objects |
+
+In practice every node in the shipped assets carries all of `id`, `name`, `position`, `orientation` and `shape`
+(39,440 of 39,440 nodes); only `children` is ever omitted. Write all five to match the editor's output.
 
 ### Position and Orientation
 
@@ -134,12 +149,18 @@ Cuboid meshes defined by size in each dimension:
   "visible": true,
   "doubleSided": false,
   "shadingMode": "standard",
-  "unwrapMode": "standard",
+  "unwrapMode": "custom",
   "textureLayout": {...}
 }
 ```
 
 Size values are in pixels (16 pixels = 1 block unit).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `settings.size` | object | Box dimensions in pixels `{x, y, z}` (always present) |
+| `settings.isPiece` | boolean | Optional editor flag (3,564 boxes; also on every `none` shape) |
+| `settings.isStaticBox` | boolean | Optional editor flag (931 boxes) |
 
 ### Quad Shape
 
@@ -160,8 +181,9 @@ Flat 2D planes, commonly used for foliage and flat decorations:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `settings.size` | object | Width and height in pixels `{x, y}` |
-| `settings.normal` | object | Direction the quad faces `{x, y, z}` |
+| `settings.size` | object | Width and height in pixels `{x, y}` (always present) |
+| `settings.normal` | object | Direction the quad faces `{x, y, z}` (present on 10,929 of 11,299 shipped quads) |
+| `settings.isPiece` / `settings.isStaticBox` | boolean | Optional editor flags, as for boxes |
 
 ### None Shape
 
@@ -190,18 +212,22 @@ Structural nodes without visible geometry. Used for grouping, attachment points,
 
 ### Shading Modes
 
-| Mode | Description |
-|------|-------------|
-| `"standard"` | Normal lighting and shading (default) |
-| `"flat"` | Flat/unlit shading, no shadows |
-| `"reflective"` | Reflective surface rendering |
+| Mode | Shipped shapes | Description |
+|------|----------------|-------------|
+| `"flat"` | 29,722 | Flat/unlit shading, no shadows — the most common value |
+| `"standard"` | 8,844 | Normal lighting and shading |
+| `"fullbright"` | 765 | Always fully lit (emissive-looking) |
+| `"reflective"` | 106 | Reflective surface rendering |
 
 ### Unwrap Modes
 
-| Mode | Description |
-|------|-------------|
-| `"standard"` | Default UV mapping based on shape dimensions |
-| `"custom"` | Use explicit textureLayout for UV coordinates |
+| Mode | Shipped shapes | Description |
+|------|----------------|-------------|
+| `"custom"` | 38,587 | Use the explicit `textureLayout` for UV coordinates — effectively the default |
+| `"full"` | 613 | Automatic unwrap of the whole shape |
+| `"collapsed"` | 240 | Automatic unwrap with all faces collapsed onto one region |
+
+There is **no** `"standard"` unwrap mode — it appears in no shipped model.
 
 ## Texture Layout
 
@@ -226,7 +252,7 @@ Boxes have six faces that can each be configured:
 
 ### Quad Texture Layout
 
-Quads have a single face:
+Quads have a single `front` face (a `back` entry appears on only 16 of 11,299 shipped quads):
 
 ```json
 {
@@ -278,51 +304,55 @@ A basic cube model:
 
 ### Multi-Part Model with Hierarchy
 
-A chest with a separate lid for animation:
+A chest with a separate lid for animation — trimmed from the shipped
+`Common/Blocks/Decorative_Sets/Kweebec/Chest.blockymodel` (the `textureLayout` blocks are elided). Note that the
+`Lid` is a **child of `Base`**, positioned in pixels at the hinge, with its box `offset` pushing the mesh forward so the
+node origin is the pivot; the `Chest_Open.blockyanim` rotates the `Lid` node about that origin:
 
 ```json
 {
+  "lod": "auto",
   "nodes": [
     {
-      "id": "1",
+      "id": "22",
       "name": "R-Attachment",
-      "shape": {"type": "none"},
+      "position": {"x": -9, "y": 0, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {"type": "none", "offset": {"x": -7, "y": 0, "z": 0}, "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {"isPiece": true}, "visible": true, "doubleSided": false,
+                "shadingMode": "standard", "unwrapMode": "custom", "textureLayout": {}},
       "children": [
         {
-          "id": "2",
+          "id": "1",
           "name": "Base",
-          "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+          "position": {"x": 0, "y": 10, "z": 0},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
           "shape": {
             "type": "box",
-            "offset": {"x": -7, "y": 0, "z": -7},
-            "settings": {
-              "size": {"x": 14, "y": 10, "z": 14}
+            "offset": {"x": 0, "y": 0, "z": 0},
+            "stretch": {"x": 0.95, "y": 1, "z": 0.95},
+            "settings": {"size": {"x": 52, "y": 12, "z": 26}},
+            "visible": true, "doubleSided": false,
+            "shadingMode": "standard", "unwrapMode": "custom",
+            "textureLayout": {...}
+          },
+          "children": [
+            {
+              "id": "3",
+              "name": "Lid",
+              "position": {"x": 0, "y": 6, "z": -12},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 7, "z": 12},
+                "stretch": {"x": 1, "y": -1, "z": 1},
+                "settings": {"size": {"x": 51, "y": 14, "z": 26}},
+                "visible": true, "doubleSided": false,
+                "shadingMode": "standard", "unwrapMode": "custom",
+                "textureLayout": {...}
+              }
             }
-          }
-        },
-        {
-          "id": "3",
-          "name": "Lid",
-          "position": {"x": 0.0, "y": 0.625, "z": -0.4375},
-          "shape": {
-            "type": "box",
-            "offset": {"x": -7, "y": 0, "z": 0},
-            "settings": {
-              "size": {"x": 14, "y": 4, "z": 14}
-            }
-          }
-        },
-        {
-          "id": "4",
-          "name": "Latch",
-          "position": {"x": 0.0, "y": 0.375, "z": 0.5},
-          "shape": {
-            "type": "box",
-            "offset": {"x": -1, "y": 0, "z": 0},
-            "settings": {
-              "size": {"x": 2, "y": 4, "z": 1}
-            }
-          }
+          ]
         }
       ]
     }
@@ -378,38 +408,54 @@ A simple grass or flower using crossed quads:
 
 ### Model with Animated Nodes
 
-A door model with nodes named for animation compatibility:
+A door model with nodes named for animation compatibility — trimmed from the shipped
+`Common/Blocks/Decorative_Sets/Desert/Door.blockymodel`. The `Door` node sits at the hinge edge (`x: -16`) and its
+box is offset by half its width so the node origin is the rotation pivot:
 
 ```json
 {
+  "lod": "auto",
   "nodes": [
     {
-      "id": "1",
+      "id": "22",
       "name": "R-Attachment",
-      "shape": {"type": "none"},
+      "position": {"x": 0, "y": 16, "z": 0},
+      "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+      "shape": {"type": "none", "offset": {"x": 0, "y": 0, "z": 0}, "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {"isPiece": true}, "visible": true, "doubleSided": false,
+                "shadingMode": "standard", "unwrapMode": "custom", "textureLayout": {}},
       "children": [
         {
-          "id": "2",
-          "name": "Frame",
-          "shape": {
-            "type": "box",
-            "offset": {"x": -8, "y": 0, "z": -1.5},
-            "settings": {
-              "size": {"x": 16, "y": 32, "z": 3}
-            }
-          }
-        },
-        {
-          "id": "3",
+          "id": "7",
           "name": "Door",
-          "position": {"x": -0.5, "y": 0.0, "z": 0.0},
+          "position": {"x": -16, "y": 16, "z": 0},
+          "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
           "shape": {
             "type": "box",
-            "offset": {"x": 0, "y": 1, "z": -1},
-            "settings": {
-              "size": {"x": 13, "y": 30, "z": 2}
+            "offset": {"x": 16, "y": 0, "z": 0},
+            "stretch": {"x": 1, "y": 1, "z": 1},
+            "settings": {"size": {"x": 32, "y": 64, "z": 4}},
+            "visible": true, "doubleSided": false,
+            "shadingMode": "standard", "unwrapMode": "custom",
+            "textureLayout": {...}
+          },
+          "children": [
+            {
+              "id": "9",
+              "name": "MetalKnob",
+              "position": {"x": 11, "y": 0, "z": 0},
+              "orientation": {"x": 0, "y": 0, "z": 0, "w": 1},
+              "shape": {
+                "type": "box",
+                "offset": {"x": 0, "y": 0, "z": 0},
+                "stretch": {"x": 1, "y": 1, "z": 1},
+                "settings": {"size": {"x": 3, "y": 6, "z": 10}},
+                "visible": true, "doubleSided": false,
+                "shadingMode": "standard", "unwrapMode": "custom",
+                "textureLayout": {...}
+              }
             }
-          }
+          ]
         }
       ]
     }
@@ -417,19 +463,26 @@ A door model with nodes named for animation compatibility:
 }
 ```
 
-The corresponding `.blockyanim` file can reference the "Door" node to rotate it open:
+The corresponding `.blockyanim` references the `Door` node to swing it open (trimmed from the shipped
+`Common/Blocks/Animations/Door/Door_Open_Out.blockyanim`; times are frames at **60 FPS**, so the swing lands at
+frame 20 = ⅓ s and the 60-frame clip then holds):
 
 ```json
 {
   "formatVersion": 1,
-  "duration": 10,
+  "duration": 60,
   "holdLastKeyframe": true,
   "nodeAnimations": {
     "Door": {
+      "position": [],
       "orientation": [
         {"time": 0, "delta": {"x": 0, "y": 0, "z": 0, "w": 1}, "interpolationType": "smooth"},
-        {"time": 10, "delta": {"x": 0, "y": 0.707, "z": 0, "w": 0.707}, "interpolationType": "smooth"}
-      ]
+        {"time": 10, "delta": {"x": 0, "y": 0.73728, "z": 0, "w": 0.67559}, "interpolationType": "smooth"},
+        {"time": 20, "delta": {"x": 0, "y": 0.70091, "z": 0, "w": 0.71325}, "interpolationType": "smooth"}
+      ],
+      "shapeStretch": [],
+      "shapeVisible": [],
+      "shapeUvOffset": []
     }
   }
 }
@@ -439,20 +492,26 @@ The corresponding `.blockyanim` file can reference the "Door" node to rotate it 
 
 ### Block Usage
 
-Blocks reference models through `CustomModel` in their definition:
+Blocks reference models through `CustomModel` in their definition (from
+`Server/Item/Items/Furniture/Desert/Furniture_Desert_Door.json`):
 
 ```json
 {
   "BlockType": {
     "DrawType": "Model",
-    "CustomModel": "Blocks/Furniture/Chair_Wood.blockymodel",
+    "CustomModel": "Blocks/Decorative_Sets/Desert/Door.blockymodel",
     "CustomModelTexture": [
-      {"Texture": "BlockTextures/Wood_Oak.png"}
-    ],
-    "CustomModelScale": 1.0
+      {"Texture": "Blocks/Decorative_Sets/Desert/Door_Texture.png", "Weight": 1}
+    ]
   }
 }
 ```
+
+`CustomModelTexture` is an array of `{Texture, Weight}` entries (2,507 shipped entries carry `Weight`, 48 omit it);
+several entries make the game pick a texture variant by weight. The texture path is relative to `Common/` — usually
+beside the model (`Blocks/…`), sometimes under `BlockTextures/`. `CustomModelScale` (float, e.g. `0.5`–`1`) is
+optional and appears on 235 shipped blocks. Animated blocks add `CustomModelAnimation` — see
+[Block Animation Format](blockyanim-format.md#integration-with-blocks).
 
 ### Item Usage
 
@@ -468,7 +527,7 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 ## Best Practices
 
-1. **Use R-Attachment root nodes** - Name your root node "R-Attachment" for proper attachment point handling in the game engine
+1. **Root node naming is free for blocks** - `R-Attachment` is the character/NPC convention (the root of the player and most NPC rigs, where attachments hang off named nodes), and 234 of the 1,151 shipped block models use it too — but `Node`, `Origin`, `Block` and `Base` are just as common for blocks, and the server code never references the name
 
 2. **Name nodes for animation** - Use clear, descriptive names that match what you'll reference in `.blockyanim` files
 
@@ -476,7 +535,7 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 4. **Use hierarchy for animation** - Child nodes inherit parent transformations, making complex animations easier
 
-5. **Consider LOD settings** - Use `"lod": "auto"` for most models; only disable with `"lod": "off"` if auto-LOD causes issues
+5. **Consider LOD settings** - Use `"lod": "auto"` for most models; only disable with `"lod": "off"` if auto-LOD causes issues. Foliage uses `"disappear"` (cull at distance) or `"billboard"` (flatten to a sprite at distance)
 
 6. **Units in pixels** - Both sizes and positions are in pixels (16 pixels = 1 block unit)
 
@@ -488,9 +547,14 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 model loader (verified against `HytaleServer.jar`).
+The server never parses `.blockymodel` geometry — it only validates the *path* an asset points at (`CommonAssetValidator`,
+verified against the 0.6.3 `HytaleServer.jar`). Backtick-quoted strings are its literal failure messages; geometry
+problems surface only on the client.
 
-- **`You cannot set shape width to be less than or equal to zero. Width:`** / **`You cannot set shape height to be less than or equal to zero. Height:`** → a shape was given a non-positive dimension. Fix: every shape dimension must be `> 0`.
+- **`Common Asset '<path>' must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]`** → a block's `CustomModel` points outside the allowed top-level folders. Fix: keep block models under one of those roots (character models: `Characters/`, `NPC/`, `Items/`, `VFX/`).
+- **`Common Asset '<path>' must have the extension blockymodel`** → the path omitted `.blockymodel`. Fix: model references always include the extension.
+- **`Common Asset '<path>' doesn't exist!`** → the file is not in the common-asset registry (typo, wrong folder, or the pack lacks `"IncludesAssetPack": true`). Fix: check the path against `Common/` and the manifest.
+- **Symptom:** a shape has no visible size → a `size` component of `0`. Fix: keep every box/quad dimension `> 0` (the asset editor enforces this; the server does not).
 - **Symptom:** an animation does not move the part you expect → a `.blockyanim` references a node name that does not exist in this model. Fix: node names must match exactly between the `.blockymodel` and the `.blockyanim`.
-- **Symptom:** the model is not picked up by the game → it is in the wrong folder. Fix: place models under the correct `Common/` location for their kind (`Blocks/Models/`, `Characters/`, `Items/`, `NPC/`).
+- **Symptom:** the model is not picked up by the game → it is in the wrong folder. Fix: place models under an allowed `Common/` root for their kind (blocks: `Blocks/`, `Items/`, `Resources/`, `NPC/`, `VFX/`, `Consumable/`; characters: `Characters/`, `NPC/`, `Items/`, `VFX/`) and reference them with the `.blockymodel` extension.
 - **Symptom:** thin geometry is invisible from one side → quads/thin boxes default to single-sided. Fix: set `"doubleSided": true`.

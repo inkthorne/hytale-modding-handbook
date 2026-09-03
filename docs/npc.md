@@ -53,7 +53,7 @@ NPC System
 
 | Category | File | Description |
 |----------|------|-------------|
-| [NPC Roles](npc-roles.md) | `npc-roles.md` | Asset definitions: templates, variants, behaviors, spawning (897 roles) |
+| [NPC Roles](npc-roles.md) | `npc-roles.md` | Asset definitions: templates, variants, behaviors, spawning (1,000 roles) |
 
 ---
 
@@ -175,7 +175,7 @@ Abstract base class for sensor events. Extends `SensorBase`.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `matches(Ref, Role, double, Store)` | `boolean` | Check if sensor matches given criteria |
+| `matches(Ref, ExecutionSupport, double, Store)` | `boolean` | Check if sensor matches given criteria (the second parameter was `Role` before 0.6.3 — it is now `com.hypixel.hytale.server.npc.instructions.ExecutionSupport`) |
 | `getSensorInfo()` | `InfoProvider` | Get sensor information provider |
 
 ### SensorEntityEvent
@@ -214,6 +214,7 @@ Sensor events use builder patterns for configuration.
 | `getRange(BuilderSupport)` | `double` | Sensor detection range |
 | `getEventSearchType(BuilderSupport)` | `EventSearchType` | Target search strategy |
 | `getLockOnTargetSlot(BuilderSupport)` | `int` | Blackboard slot for locked target |
+| `isLockRebind(BuilderSupport)` | `boolean` | Whether the locked target slot rebinds to the entity so it survives short reloads/role changes (JSON key `Rebind`, default `false`; added in 0.6.3) |
 
 ### BuilderSensorEntityEvent
 

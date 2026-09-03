@@ -14,7 +14,7 @@ seo:
 > **See also:** [Drop System](drops.md) for `DropList` loot tables
 >
 > All structures and examples below are taken directly from real asset files under
-> `Server/Item/Items/`. Counts cited (e.g. "~2344 blocks") are from the shipped assets.
+> `Server/Item/Items/`. Counts cited (e.g. "~2358 blocks") are from the shipped assets.
 
 This page documents the `BlockType` property an item carries to become a placeable block — rendering, collision, gathering, states, connections, interactions, and block-entity components.
 
@@ -91,6 +91,9 @@ a given file may only specify the fields it overrides.
 | `BlockParticleSetId` | string | Particle set for breaking effects |
 | `CubeShadingMode` | string | Cube shading: `Standard`, `Flat`, `Fullbright`, `Reflective` |
 | `Gathering` | object | How the block is broken/harvested and what it drops |
+| `PhysicalMaterialId` | string | Physical material for hit/impact response (e.g. `Wood`, `Wool`, `Glass`, `Foliage`) |
+| `TextureComputedColor` | string | Hex average colour of the block's texture (generated; present on most shipped blocks) |
+| `ExplosionReactionState` | string | State to switch to when an explosion reaches the block (as of 0.6.3; only `Debug_Explosive` uses it, with `"Exploding"`) |
 
 ### Material
 
@@ -111,6 +114,7 @@ a given file may only specify the fields it overrides.
 | `Model` | Custom `.blockymodel` (most furniture, plants, doors) |
 | `CubeWithModel` | A cube combined with a model overlay |
 | `Empty` | Not rendered |
+| `GizmoCube` | Editor gizmo cube (dev-only; no shipped block uses it) |
 
 ```json
 { "BlockType": { "DrawType": "Cube" } }
@@ -127,7 +131,7 @@ a given file may only specify the fields it overrides.
 
 ### HitboxType
 
-`HitboxType` (~1715 blocks) selects a named, predefined collision/selection shape rather
+`HitboxType` (~1719 blocks) selects a named, predefined collision/selection shape rather
 than describing one inline. `Full` is the standard whole-block hitbox; the rest are
 shape- or asset-specific names.
 
@@ -141,20 +145,23 @@ Common values include `Full`, `Block_Half`, `Block_Vertical_Flat`, `Stairs`, `Do
 
 ### Flags
 
-`Flags` (~1280 blocks) is usually `{}` but may carry boolean behavior flags:
+`Flags` (~1287 blocks) is usually `{}` but may carry boolean behavior flags:
 
 ```json
-{ "BlockType": { "Flags": { "IsUsable": true } } }
+{ "BlockType": { "Flags": { "IsStackable": false } } }
 ```
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `IsUsable` | boolean | Whether the block responds to the Use interaction |
-| `IsStackable` | boolean | Whether the item form stacks |
+| `IsStackable` | boolean | Whether the item form stacks (default `true`; ~75 blocks set it to `false`, ~42 set it to `true` explicitly) |
+
+`IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.6.3 (the
+`IsUsable` flag was removed by 0.6.3 — whether a block responds to Use is decided solely
+by `BlockType.Interactions.Use`, see [Block Interactions](#block-interactions)).
 
 ### ParticleColor
 
-`ParticleColor` (~2706 blocks) is a hex string used to tint break/impact particles:
+`ParticleColor` (~2742 blocks) is a hex string used to tint break/impact particles:
 
 ```json
 { "BlockType": { "ParticleColor": "#969696" } }
@@ -249,12 +256,13 @@ For `DrawType: Model`, a `.blockymodel` is referenced and textured via
 | `CustomModelTexture` | array | Weighted `{ "Weight", "Texture" }` entries |
 | `CustomModelScale` | float | Model scale multiplier |
 | `CustomModelAnimation` | string | `.blockyanim` to play (often set per state, see [Block States](#block-states)) |
+| `CustomModelAnimationSpeed` | float | Playback-speed multiplier for `CustomModelAnimation` (`1` = authored speed; validated `0 ≤ x < 100`). Added as of 0.6.3; no shipped block sets it yet |
 
 ---
 
 ## Gathering & Drops
 
-`Gathering` (~2344 blocks) defines how a block is broken/harvested and what it produces.
+`Gathering` (~2358 blocks) defines how a block is broken/harvested and what it produces.
 It groups by interaction mode; `Breaking` is the most common.
 
 ```json
@@ -286,7 +294,8 @@ Inside a gathering mode:
 | `GatherType` | Required gathering category (see below) |
 | `ItemId` | Item produced directly |
 | `DropList` | Drop table reference (string) or inline drop definition (object) — see [Drop System](drops.md) |
-| `Quality` | Quality override on the produced item |
+| `Quality` | Integer quality override on the produced item (`Breaking` only) |
+| `IsWeaponBreakable` | `Soft` only — `false` stops weapons breaking the block (~199 blocks, e.g. `Deco_Lantern`) |
 
 **`GatherType` values:** `Rocks`, `Woods`, `SoftBlocks`, `Soils`, `VolcanicRocks`,
 `Benches`, `SoftWoods`, `Unbreakable`, and ore tiers (`OreIron`, `OreGold`, `OreCopper`,
@@ -353,6 +362,7 @@ A state may set `"Light": null` to turn emission off (see [Block States](#block-
 | `RotationOffset` | object | `{ "Pitch", "Yaw" }` rotation offset |
 | `TargetEntityPart` | string | Entity part to attach to |
 | `DetachedFromModel` | boolean | Whether the system is detached from the model |
+| `ClearParticlesOnRemove` | boolean | Clear live particles when the block/state goes away |
 
 ---
 
@@ -423,7 +433,8 @@ arrays of accepted support entries (any one entry satisfies that direction).
 }
 ```
 
-**Support directions:** `Down`, `Up`, `North`, `South`, `East`, `West`.
+**Support directions:** `Down`, `Up`, `North`, `South`, `East`, `West`, plus the merged
+groups `CardinalDirections` (the four sides), `BlockSides`, and `All`.
 
 **Support entry forms:**
 
@@ -432,6 +443,10 @@ arrays of accepted support entries (any one entry satisfies that direction).
 | `{ "FaceType": "Full" }` | Requires a face of the given type |
 | `{ "FaceType": "Full", "Filler": [] }` | Face type plus optional filler shapes |
 | `{ "BlockTypeId": "..." }` | Requires a specific block type as the supporter |
+| `{ "TagId": "Family=Leaves" }` | Requires a supporter carrying the given item tag (fruit hanging from leaves) |
+
+The sibling key `Supporting` uses the same direction map to declare which faces *this*
+block offers to neighbours (e.g. a chest's `"Supporting": { "Up": [ { "FaceType": "Full" } ] }`).
 
 **`FaceType` values:** `Full`, `Branch`, `Rock_Beam`, `Wood_Beam`, `Shelf`, `Window`,
 `Wall`, `Wall_Corner`, `Fence`, `Fence_Corner`, `Rail`, `Bushes`, `BushBase`, `Platform`,
@@ -508,9 +523,11 @@ Doors use directional open/close states; a state may change the `HitboxType` whi
     "State": {
       "Definitions": {
         "OpenDoorOut": {
+          "SoundOcclusionOpacity": 0.0,
           "HitboxType": "Door_Temple_Wind_Large_Open",
           "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim",
-          "InteractionSoundEventId": "SFX_Door_Temple_Light_Open"
+          "InteractionSoundEventId": "SFX_Door_Temple_Light_Open",
+          "InteractionHint": "server.interactionHints.closeDoor"
         },
         "CloseDoorOut": {
           "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim",
@@ -604,7 +621,7 @@ block IDs (a `*` prefix references another block's state definitions):
 
 | Key | Description |
 |-----|-------------|
-| `Type` | `Stair`, `Roof`, or `CustomTemplate` |
+| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 (backed by a new `Server/Item/ConnectedBlockRuleSets/` asset store) but no shipped block uses it |
 | `Regular` / shape keys | Per-shape `{ "State": "<state name>" }` mappings |
 | `MaterialName` | Material/group name (Roof) |
 | `Topper` | Top-piece state (Roof) |
@@ -658,6 +675,11 @@ A block's primary use is configured via `BlockType.Interactions.Use`. It is eith
 `InteractionHint` (on the block or per state) supplies the localized prompt string, e.g.
 `"server.interactionHints.openDoor"`.
 
+> **Gotcha — `null` removes an inherited interaction.** `BlockType.Interactions` allows
+> `null` values: a state (or a child template) that sets `"Use": null` drops the parent's
+> `Use` entirely, so e.g. a one-shot switch can become inert once flipped. (Documented on
+> the `Interactions` codec in `BlockType`.)
+
 The top-level item also wires placement interactions in its own `Interactions` map:
 
 ```json
@@ -669,7 +691,7 @@ The top-level item also wires placement interactions in its own `Interactions` m
 ## Block Entity Components
 
 Blocks with server-side state (containers, benches, farming soil, spawners, etc.) declare
-it under `BlockType.BlockEntity.Components` (~160 blocks).
+it under `BlockType.BlockEntity.Components` (~166 blocks).
 
 ```json
 {
@@ -684,9 +706,13 @@ it under `BlockType.BlockEntity.Components` (~160 blocks).
 ```
 
 **Component types seen in assets:** `FarmingBlock`, `ItemContainerBlock`, `BenchBlock`,
-`ProcessingBenchBlock`, `RespawnBlock`, `TreasureChest`, `SpawnMarkerBlock`,
-`BlockSpawner`, `PrefabSpawner`, `Teleporter`, `Portal`, `LaunchPad`, `Coop`,
-`TilledSoil`, `TrackedPlacement`, `BlockMapMarker`, `InstanceConfig`.
+`ProcessingBenchBlock`, `RespawnBlock`, `MusicEmitterBlock`, `TreasureChest`,
+`SpawnMarkerBlock`, `BlockSpawner`, `PrefabSpawner`, `Teleporter`, `Portal`, `LaunchPad`,
+`Coop`, `TilledSoil`, `TrackedPlacement`, `BlockMapMarker`, `InstanceConfig`. As of 0.6.3
+the jar also registers `AugmentBlock` (`GrantsAugmentTags`, `Radius`, upgrade levels) —
+a bench near an augment block collects its tags, which recipes can demand via
+`BenchRequirement.RequiredAugmentTags` (see [Crafting](items-crafting.md#benchrequirement));
+no shipped block declares it yet.
 
 > Note: container capacity lives at
 > `BlockType.BlockEntity.Components.ItemContainerBlock.Capacity` — not under a
@@ -745,8 +771,9 @@ There are two distinct `Farming` shapes in the assets.
 ### Stages (growing plants/crops)
 
 Growing plants list growth `Stages` keyed by stage set, a `StartingStageSet`, and the
-modifiers that affect growth. Each stage entry has a `Type` (`BlockType` or `Prefab`), a
-`Duration` range, and the block/prefab to display.
+modifiers that affect growth. Each stage entry has a `Type` (`BlockState` is the most
+common in shipped crops, then `Prefab`, `BlockType`, and `Spread`), a `Duration` range, and
+the block/prefab to display.
 
 `Plant_Sapling_Camphor` (abridged):
 
@@ -768,6 +795,7 @@ modifiers that affect growth. Each stage entry has a `Type` (`BlockType` or `Pre
             "Prefabs": [ { "Path": "Trees/Camphor/Stage_00/Camphor_Stage00_001.prefab.json", "Weight": 1 } ],
             "Duration": { "Min": 40000, "Max": 60000 },
             "ReplaceMaskTags": ["Soil"],
+            "TolerateObstructionsBelowY": -1,
             "SoundEventId": "SFX_Crops_Grow"
           }
         ]
@@ -784,8 +812,9 @@ modifiers that affect growth. Each stage entry has a `Type` (`BlockType` or `Pre
 | `ActiveGrowthModifiers` | Modifiers that affect growth (`Fertilizer`, `Water`, `LightLevel`) |
 | `StageSetAfterHarvest` | Stage set to switch to after harvesting |
 
-Stage entry fields: `Type` (`BlockType`/`Prefab`), `Block` or `Prefabs[]`,
-`Duration { Min, Max }`, optional `ReplaceMaskTags`, `SoundEventId`.
+Stage entry fields: `Type` (`BlockType`/`BlockState`/`Prefab`/`Spread`), `Block` or
+`Prefabs[]`, `Duration { Min, Max }`, optional `ReplaceMaskTags`, `SoundEventId`, and (for
+`Prefab` stages) `TolerateObstructionsBelowY`.
 
 > Java side: stage entries decode into `FarmingStageData` subtypes (registered `Type`
 > values: `BlockType`, `BlockState`, `Prefab`, `Spread`), and each id in
@@ -820,7 +849,7 @@ A standard textured cube.
     "Group": "Dev",
     "HitboxType": "Full",
     "Flags": {},
-    "Gathering": { "Breaking": { "GatherType": "SoftBlocks" } },
+    "Gathering": { "Breaking": { "GatherType": "Rocks" } },
     "BlockParticleSetId": "Dust",
     "Textures": [
       {
@@ -831,7 +860,9 @@ A standard textured cube.
     ],
     "ParticleColor": "#969696",
     "BlockSoundSetId": "Soft",
-    "CubeShadingMode": "Standard"
+    "PhysicalMaterialId": "Wool",
+    "CubeShadingMode": "Standard",
+    "TextureComputedColor": "#727272"
   },
   "Tags": { "Type": ["Soil"], "Family": ["Build"] },
   "Quality": "Technical",
@@ -860,7 +891,8 @@ particle color.
   "BlockType": {
     "Textures": [ { "All": "BlockTextures/Soil_Dirt.png", "Weight": 1 } ],
     "ParticleColor": "#98743b",
-    "TransitionTexture": "BlockTextures/Transition_Soil_Dirt.png"
+    "TransitionTexture": "BlockTextures/Transition_Soil_Dirt.png",
+    "TextureComputedColor": "#88632B"
   },
   "Tags": {
     "Type": ["Soil"],
@@ -907,19 +939,26 @@ interaction, and a long list of support options.
     "HitboxType": "Plant_Full",
     "Light": { "Radius": 0, "Color": "#dca" },
     "Flags": {},
-    "Gathering": { "Soft": {} },
+    "Gathering": { "Soft": { "IsWeaponBreakable": false } },
     "BlockParticleSetId": "Dust",
     "BlockSoundSetId": "Wood",
+    "PhysicalMaterialId": "Wood",
     "Support": {
       "Down": [
         { "FaceType": "Full" },
+        { "FaceType": "Full", "Filler": [] },
         { "FaceType": "Branch" },
+        { "FaceType": "Rock_Beam" },
+        { "FaceType": "Wood_Beam" },
         { "FaceType": "Fence" },
+        { "FaceType": "Fence_Corner" },
         { "FaceType": "Wall" },
+        { "FaceType": "Wall_Corner" },
         { "FaceType": "Rope" },
-        { "BlockTypeId": "Deco_Iron_Chain_Small" }
+        { "BlockTypeId": "Deco_Iron_Chain_Small" },
+        { "BlockTypeId": "Deco_Iron_Chains_Vertical" }
       ],
-      "Up": [ { "FaceType": "Full", "Filler": [] }, { "FaceType": "Rope" } ]
+      "Up": [ { "FaceType": "Full", "Filler": [] }, { "FaceType": "Branch" }, { "FaceType": "Rope" } ]
     },
     "CustomModel": "Blocks/Decorative_Sets/Village/Lantern.blockymodel",
     "Interactions": {
@@ -943,7 +982,8 @@ interaction, and a long list of support options.
       }
     },
     "InteractionHint": "server.interactionHints.turnoff",
-    "CustomModelScale": 0.8
+    "CustomModelScale": 0.8,
+    "TextureComputedColor": "#673D25"
   },
   "PlayerAnimationsId": "Block",
   "Tags": { "Type": ["Deco"] },
@@ -980,8 +1020,8 @@ state swaps in an open hitbox), and a `CustomTemplate` connected-block rule set.
       "Definitions": {
         "CloseDoorIn":  { "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Close" },
         "CloseDoorOut": { "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Close.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Close" },
-        "OpenDoorIn":   { "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open" },
-        "OpenDoorOut":  { "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open" }
+        "OpenDoorIn":   { "SoundOcclusionOpacity": 0.0, "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open", "InteractionHint": "server.interactionHints.closeDoor" },
+        "OpenDoorOut":  { "SoundOcclusionOpacity": 0.0, "HitboxType": "Door_Temple_Wind_Large_Open", "CustomModelAnimation": "Blocks/Decorative_Sets/Temple_Wind/Door_Large_Open.blockyanim", "InteractionSoundEventId": "SFX_Door_Temple_Light_Open", "InteractionHint": "server.interactionHints.closeDoor" }
       }
     },
     "VariantRotation": "NESW",
@@ -1028,7 +1068,7 @@ Ladders use a `Ladder` hitbox and `MovementSettings.IsClimbable`:
 
 A container: `ItemContainerBlock` capacity, `Open_Container` use, open/close window
 states, and a `DropList` (under `Gathering.Breaking`) that drops two small chests when
-broken.
+broken (abridged — model, texture, support and sound keys omitted).
 
 ```json
 {
@@ -1037,6 +1077,7 @@ broken.
     "Material": "Solid",
     "DrawType": "Model",
     "HitboxType": "Chest_Large",
+    "VariantRotation": "NESW",
     "Interactions": { "Use": "Open_Container" },
     "BlockEntity": {
       "Components": { "ItemContainerBlock": { "Capacity": 36 } }
@@ -1049,7 +1090,7 @@ broken.
     },
     "Gathering": {
       "Breaking": {
-        "GatherType": "SoftBlocks",
+        "GatherType": "Woods",
         "DropList": {
           "Container": {
             "Type": "Single",
@@ -1057,7 +1098,9 @@ broken.
           }
         }
       }
-    }
+    },
+    "Supporting": { "Up": [ { "FaceType": "Full" } ] },
+    "Support": { "Down": [ { "FaceType": "Full" } ] }
   }
 }
 ```
@@ -1185,24 +1228,36 @@ the tier/upgrade keys.
 **Location:** `Server/Item/Interactions/Block_Secondary.json`
 
 The interaction referenced by an item's `Secondary` slot. It attempts to use the targeted
-block first, and on failure falls back to placing the held block:
+block first, and on failure falls back to placing the held block. As of 0.6.3 the fallback
+is no longer a bare `PlaceBlock`: it is a `PlaceModeSelect` that dispatches to one
+interaction chain per placement mode (drag-place by default; replace/retype/extrude/
+surface-draw in Creative):
 
 ```json
 {
   "Type": "UseBlock",
   "Failed": {
-    "Type": "PlaceBlock",
-    "RunTime": 0.125,
-    "Effects": {
-      "WaitForAnimationToFinish": false,
-      "ItemAnimationId": "Build"
-    }
+    "Type": "PlaceModeSelect",
+    "DefaultInteractions": "Place_Drag",
+    "ReplaceInteractions": "Creative_Place_Replace",
+    "RetypeInteractions": "Creative_Place_Retype",
+    "ExtrudeInteractions": "Creative_Place_Extrude",
+    "SurfaceDrawInteractions": "Creative_Place_SurfaceDraw",
+    "FastPlaceInteractions": "Place_Drag"
   }
 }
 ```
 
+`PlaceModeSelect` accepts exactly those six keys (`DefaultInteractions`,
+`ReplaceInteractions`, `RetypeInteractions`, `ExtrudeInteractions`,
+`SurfaceDrawInteractions`, `FastPlaceInteractions`), each naming an interaction. The default
+chain, `Server/Item/Interactions/Place_Drag.json`, is a `DragPlaceBlock` (`MaxBlocksPerTick`
+4, `MaxBlocksPerGesture` 512) that forks to `Place_Single` — the single-block placement
+lives there rather than in `Block_Secondary` itself.
+
 A matching root interaction (`Server/Item/RootInteractions/Block_Secondary.json`) wraps it
-with a cooldown and creative settings and references the interaction by name.
+with a cooldown (`BlockInteraction`, 0.278 s, `ClickBypass`) and creative settings
+(`AllowSkipChainOnClick`) and references the interaction by name.
 
 ---
 

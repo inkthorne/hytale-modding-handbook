@@ -54,9 +54,9 @@ Entity & World
 | Class | Location | Description |
 |-------|----------|-------------|
 | `SpawnPrefabInteraction` | `config/server/SpawnPrefabInteraction` | Spawns entity prefabs at a location |
-| `RemoveEntityInteraction` | `config/none/RemoveEntityInteraction` | Despawns entities from the world |
+| `RemoveEntityInteraction` | `config/none/simple/RemoveEntityInteraction` | Despawns entities from the world |
 | `LaunchProjectileInteraction` | `config/server/LaunchProjectileInteraction` | Fires projectiles from an entity |
-| `SendMessageInteraction` | `config/none/SendMessageInteraction` | Sends chat messages to players |
+| `SendMessageInteraction` | `config/none/simple/SendMessageInteraction` | Sends chat messages to players |
 | `OpenCustomUIInteraction` | `config/server/OpenCustomUIInteraction` | Opens a custom UI page |
 | `EquipItemInteraction` | `config/server/EquipItemInteraction` | Equips an item |
 | `ModifyInventoryInteraction` | `config/server/ModifyInventoryInteraction` | Adjusts inventory contents |
@@ -142,7 +142,7 @@ From `Server/Item/Interactions/NPCs/Intelligent/Goblin_Thief/Goblin_Thief_Chest.
 
 ## RemoveEntity
 
-**Package:** `config/none/RemoveEntityInteraction`
+**Package:** `config/none/simple/RemoveEntityInteraction`
 
 Despawns/removes entities from the world.
 
@@ -159,18 +159,20 @@ Despawns/removes entities from the world.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Entity` | string | Which entity to remove (e.g. `User`, `Target`) |
-| `Effects` | object | Optional sound/particle effects played on removal |
+| `Entity` | string | Which entity to remove — `User` (the executor; every shipped use), `Owner` or `Target` (`InteractionTarget`; codec doc: "The entity to target for this interaction.") |
+| `Effects` | object | Optional sound/particle effects played on removal (inherited `Effects`) |
 
-### Example: Projectile self-removal (from Bomb_Popberry.json)
+### Example: Projectile self-removal on hit
+
+From `Weapons/Bow/Prototype/CombatBow/Bow_Combat_Projectile_Damage_End.json` (run as the projectile's `ProjectileHit` chain, so `User` is the projectile):
 
 ```json
 {
   "Type": "RemoveEntity",
   "Entity": "User",
   "Effects": {
-    "WorldSoundEventId": "SFX_Goblin_Lobber_Bomb_Death",
-    "LocalSoundEventId": "SFX_Goblin_Lobber_Bomb_Death"
+    "LocalSoundEventId": "SFX_Daggers_T2_Stab_Impact",
+    "WorldSoundEventId": "SFX_Daggers_T2_Stab_Impact"
   }
 }
 ```
@@ -197,8 +199,12 @@ Fires projectiles from an entity.
 | Property | Type | Description |
 |----------|------|-------------|
 | `ProjectileId` | string | Projectile config ID |
+| `IgnorePitch` | boolean | 0.6.3+. Codec doc: "If true, the shooter's pitch is set to 0 before the launch direction is computed, so the projectile's pitch is fixed by RotationOffset." |
+| `IgnoreYaw` | boolean | 0.6.3+. Same for yaw |
+| `IgnoreRoll` | boolean | 0.6.3+. Same for roll |
+| `RotationOffset` | object | 0.6.3+. `{Yaw, Pitch, Roll}` `Direction`; codec doc: "A fixed rotation offset (in degrees) added to the launch rotation after any ignored axes are zeroed." |
 
-`ProjectileId` is the interaction's only own property — speed, gravity, spawn offset,
+Apart from the 0.6.3 launch-rotation controls, `ProjectileId` is the interaction's only own property — speed, gravity, spawn offset,
 and spread all live on the referenced projectile config, not on the interaction.
 Charged bows fire stronger shots by launching a different projectile per charge level
 (`Arrow_NoCharge` / `Arrow_HalfCharge` / `Arrow_FullCharge`), and the interaction can
@@ -210,7 +216,7 @@ See [projectiles.md](projectiles.md) for more projectile details.
 
 ## SendMessage
 
-**Package:** `config/none/SendMessageInteraction`
+**Package:** `config/none/simple/SendMessageInteraction`
 
 Sends chat messages to players.
 
@@ -229,6 +235,9 @@ Sends chat messages to players.
 |----------|------|-------------|
 | `Message` | string | Literal text to display |
 | `Key` | string | Localization key to display (alternative to `Message`) |
+| `Target` | string | 0.6.3+. Codec doc: "The set of players that receive the message." `Owner` (default — the chain's owning entity), `World` (every player in the executor's world) or `Universe` (every player on the server) |
+
+With `Owner`, if the owning entity has no `PlayerRef` (e.g. an NPC chain) the message is written to the server log at INFO instead.
 
 `SendMessage` is used heavily in the debug interactions (e.g. `Debug_Combo_Primary.json`) with a literal `Message`, and in system interactions (e.g. `Teleporter_Try_Place.json`) with a localization `Key`.
 
@@ -247,7 +256,7 @@ Opens a custom UI page registered via Java. Unlike `OpenPage`, this interaction 
   "Type": "OpenCustomUI",
   "Page": {
     "Id": "ItemRepair",
-    "RepairPenalty": 0.1
+    "RepairPenalty": 0.2
   }
 }
 ```
@@ -262,25 +271,27 @@ Opens a custom UI page registered via Java. Unlike `OpenPage`, this interaction 
 | Page ID | Supplier Properties | Description |
 |---------|---------------------|-------------|
 | `ItemRepair` | `RepairPenalty` (float) | Item repair UI |
-| `Shop` | `shopId` (string) | Shop interface |
-| `Memories` | - | Memories/journal page |
-| `PrefabSpawner` | - | Prefab spawner settings |
+| `Shop` | `ShopId` (string) | Shop interface (`ShopPageSupplier`) |
+| `Memories` / `MemoriesUnlocked` | - | Memories/journal pages |
+| `PrefabSpawner`, `BlockSpawner`, `LaunchPad`, `ConfigInstanceBlock` | - | Block-entity settings pages (registered via `registerBlockEntityCustomPage`) |
+
+Other page ids used by shipped assets: `Teleporter`, `PortalDevice`, `Arcanebench`, `Workbench`.
 
 #### Example: Item Repair Interaction
 
-From `Tool_Repair_Kit_Crude.json`:
+From `Server/Item/Items/Tool/Repair_Kit/Tool_Repair_Kit_Crude.json`:
 
 ```json
 {
   "Type": "OpenCustomUI",
   "Page": {
     "Id": "ItemRepair",
-    "RepairPenalty": 0.1
+    "RepairPenalty": 0.2
   }
 }
 ```
 
-This opens the item repair UI with a 10% durability penalty applied to repairs.
+This opens the item repair UI with a 20% durability penalty applied to repairs.
 
 See [UI API - Registering Pages for OpenCustomUI](ui-api.md#registering-pages-for-opencustomui) for creating custom pages that work with this interaction.
 
@@ -292,13 +303,11 @@ See [UI API - Registering Pages for OpenCustomUI](ui-api.md#registering-pages-fo
 
 **Package:** `config/server/EquipItemInteraction`
 
-Equips an item to an equipment slot.
+Equips the item currently being held (codec doc: "Equips the item being held."). It has **no properties of its own** — there is no slot or item id to configure; the held stack's own equipment slot decides where it goes:
 
 ```json
 {
-  "Type": "EquipItem",
-  "Slot": "MainHand",
-  "ItemId": "Weapon_Sword_Iron"
+  "Type": "EquipItem"
 }
 ```
 
@@ -319,6 +328,11 @@ Adjusts the quantity of the currently held item. Used to consume items on use (e
 |----------|------|-------------|
 | `AdjustHeldItemQuantity` | int | Amount to add to (positive) or remove from (negative) the held stack |
 | `RequiredGameMode` | string | Optional game mode gate (e.g. `Adventure`) for the adjustment to apply |
+| `AdjustHeldItemDurability` | double | Durability delta for the held item |
+| `ItemToRemove` / `ItemToAdd` | item | Remove / add an item stack |
+| `BrokenItem` | string | Item the held item turns into when its durability hits 0 |
+| `NotifyOnBreak` | boolean | Codec doc: "If true, shows the 'item broken' message and plays the break sound when durability reaches 0. Defaults to true for tools (no BrokenItem or same item), false for transformations (different BrokenItem)." |
+| `NotifyOnBreakMessage` | string | "Custom translation key for the break notification message. Supports {itemName} parameter. Defaults to 'server.general.repair.itemBroken' if not specified." |
 
 ### Example: Consume one item only in Adventure mode (from Half_Block.json)
 
@@ -362,6 +376,7 @@ Attempts to break the target block.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Harvest` | boolean | Trigger as a harvest gather instead of a break gather |
+| `SoftOnly` | boolean | 0.6.3+. Codec doc: "Whether this can only break soft blocks, whatever the breaking entity holds." |
 | `Tool` | string | Tool to break as |
 | `MatchTool` | boolean | Require a match to `Tool` to work |
 
@@ -383,7 +398,11 @@ Places the current or given block.
 |----------|------|-------------|
 | `BlockTypeToPlace` | string | Overrides the placed block type of the held item with the provided block type |
 | `RemoveItemInHand` | boolean | Remove the item in the instigating entity's hand |
-| `AllowDragPlacement` | boolean | Use drag placement when click is held |
+| `QuickReplace` | boolean | 0.6.3+. "Replaces the targeted block without requiring it to be broken first. Only honored for players in Creative." |
+| `QuickRetype` | boolean | 0.6.3+. "Swaps the targeted block to the held block type while keeping its shape and rotation. Only honored for players in Creative." |
+| `NoPhysics` | boolean | 0.6.3+. "Suppresses block physics updates for the placement. Only honored for players in Creative." |
+
+`AllowDragPlacement` was removed by 0.6.3 — drag/extrude/surface placement are now their own interaction types (`DragPlaceBlock`, `ExtrudePlaceBlock`, `SurfaceDrawPlaceBlock`, `DragEraseBlock`, with `PlaceModeSelect` to switch between them), not a flag on `PlaceBlock`.
 
 ### PlaceFluid
 
@@ -446,6 +465,11 @@ boolean getIsHorizontal()
 // Find the door (and its double-door pairing info) at a position
 static DoorInteraction.DoorInfo getDoorAtPosition(ChunkStore chunkStore,
         int x, int y, int z, Rotation rotation)
+
+// DoorInteraction.DoorInfo
+BlockType getBlockType()
+Vector3i getBlockPosition()
+DoorBlockUtils.DoorState getDoorState()   // CLOSED / OPENED_IN / OPENED_OUT (moved to DoorBlockUtils by 0.6.3)
 ```
 
 ---
@@ -530,11 +554,12 @@ Changes block or entity state machine state. Used for toggleable blocks (torches
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Changes` | object | State transition map defining from→to state mappings |
+| `Changes` | object | State transition map defining from→to state mappings (codec doc: "`\"default\"` can be used for the initial state of a block.") |
 | `Effects` | object | Sound/particle effects triggered on state change |
 | `RunTime` | float | Duration in seconds before `Next` interaction executes |
 | `Next` | interaction | Chained interaction to execute after `RunTime` |
 | `UpdateBlockState` | boolean | Force visual state update after change |
+| `RequireBlockPlacement` | boolean | 0.6.3+. Codec doc: "When set, the state change is treated as a block placement and only runs in worlds where block placement is allowed." (used by `Block/Half_Block.json`, whose `default → Block` change stands in for placing a half block) |
 
 ### State Transition Map (Changes)
 
@@ -603,16 +628,20 @@ Basic on/off toggle for a wall torch:
 
 #### Multi-State Transition (Colored Lantern)
 
-Transition any non-default state back to default:
+Send every colour (and `default`) to one target colour — `Block/Lantern/Lantern_Blue.json`, the `Next` of a `BlockCondition` that first checks the block is `Furniture_Human_Ruins_Lantern`:
 
 ```json
 {
   "Type": "ChangeState",
   "Changes": {
-    "Off": "default",
-    "Blue": "default",
-    "Green": "default",
-    "Red": "default"
+    "default": "Blue",
+    "Yellow": "Blue",
+    "Red": "Blue",
+    "White": "Blue",
+    "Cyan": "Blue",
+    "Green": "Blue",
+    "Pink": "Blue",
+    "Purple": "Blue"
   }
 }
 ```
@@ -632,51 +661,55 @@ Irreversible state change for triggered traps:
 
 #### Timed State Change (Geyser)
 
-Temporary state with automatic reversion using `RunTime` and `Next`:
+Temporary state with automatic reversion using `RunTime` and `Next` (from `MISC/Prototype_Geyser.json`; the root also carries a 5 s `Cooldown`):
 
 ```json
 {
   "Type": "ChangeState",
   "Changes": {
-    "default": "Erupting"
+    "default": "On",
+    "On": "default"
   },
   "RunTime": 3,
   "Next": {
     "Type": "ChangeState",
     "Changes": {
-      "Erupting": "default"
+      "default": "On",
+      "On": "default"
     }
-  }
+  },
+  "UpdateBlockState": true
 }
 ```
 
-The geyser enters `Erupting` state, waits 3 seconds, then returns to `default`.
+The geyser toggles to `On`, waits 3 seconds, then the same toggle map flips it back to `default`.
 
 #### With Sound Effects (Trophy)
 
-State change with audio feedback:
+State change with audio feedback (from `Deco/Deco_Trophy_Harvest.json`):
 
 ```json
 {
   "Type": "ChangeState",
   "Changes": {
     "default": "Off",
-    "Off": "default"
+    "On": "Off",
+    "Off": "On"
   },
   "Effects": {
-    "LocalSoundEventId": "SFX_Door_Crude_Open"
+    "LocalSoundEventId": "SFX_Plushie_Interact"
   }
 }
 ```
 
 ### File Locations
 
-Example assets using ChangeState:
-- `data/BlockTypes/Light_Sources/Wood_Torch_Wall.json` - Simple toggle
-- `data/BlockTypes/Light_Sources/Lantern_Blue.json` - Multi-state
-- `data/BlockTypes/Traps/Survival_Trap_Snapjaw.json` - One-way trap
-- `data/BlockTypes/Nature/Prototype_Geyser.json` - Timed with RunTime/Next
-- `data/BlockTypes/Decorative/Deco_Trophy_Harvest.json` - Effects property
+Example assets using ChangeState (all under `Server/Item/`; block definitions live in the item files):
+- `Items/Wood/Wood_Torch_Wall.json` - Simple toggle
+- `Interactions/Block/Lantern/Lantern_Blue.json` - Multi-state (one file per colour)
+- `Items/Trap/Survival_Trap_Snapjaw.json` - One-way trap (`default → Closed` on `CollisionEnter`; a separate `Closed → default` resets it)
+- `Items/MISC/Prototype_Geyser.json` - Timed with RunTime/Next
+- `Items/Deco/Deco_Trophy_Harvest.json` - Effects property
 
 ### Related
 
@@ -763,20 +796,21 @@ Enables blocking and guarding mechanics for shields and weapons. When active, th
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `RunTime` | float | - | Maximum duration in seconds (omit for indefinite hold) |
-| `AllowIndefiniteHold` | boolean | `true` | If `true`, block can be held indefinitely |
-| `CancelOnOtherClick` | boolean | `false` | If `true`, interaction cancels when another input is pressed |
-| `FailOnDamage` | boolean | `false` | If `true`, interaction ends when hit (even if blocked) |
-| `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while blocking (0.0-1.0) |
-| `DisplayProgress` | boolean | - | Show guard duration indicator |
+| `AllowIndefiniteHold` | boolean | `true` for Wielding (`false` on a plain `Charging`) | If `true`, block can be held indefinitely |
+| `CancelOnOtherClick` | boolean | `true` | If `true`, interaction cancels when another input is pressed — the shipped weapon guards set it to `false` so `Forks` can fire |
+| `FailOnDamage` | boolean | `false` | Codec doc: "Whether the interaction will be cancelled and the item removed when the entity takes damage" |
+| `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while blocking (0.0-1.0) — from the `Interaction` base |
+| `DisplayProgress` | boolean | `true` | Show guard duration indicator |
+| `OnItemChangeBehavior` | string | `Cancel` | From the `Interaction` base; the shipped guards use `Finish` so swapping items ends the guard cleanly (see [interactions.md](interactions.md#held-item-change-behavior)) |
 
 ### File Locations
 
 **Player weapon guards:**
 ```
-Server/Item/Interactions/Weapons/{WeaponType}/Secondary/Guard/*_Guard_Wield.json
+Server/Item/Interactions/Weapons/{WeaponType}/Secondary/Guard/Weapon_{WeaponType}_Secondary_Guard_Wield.json
 ```
 
-Weapon types with guard: Sword, Shield, Battleaxe, Daggers, Mace, Crossbow, Shortbow
+Weapon types with guard: Sword (under `Weapons/Sword/Attacks/Secondary/Guard/`), Shield, Battleaxe, Daggers, Mace, Crossbow, Shortbow; plus the shared `Weapons/Common/Guarding/Common_Guard_Wield.json`
 
 **NPC blocks:**
 ```
@@ -851,35 +885,30 @@ The `Forks` system allows branching to different interactions while blocking is 
 ```json
 "Forks": {
   "Primary": {
-    "Type": "Replace",
-    "Var": "Weapon",
-    "DefaultValue": {
-      "Interactions": ["Guard_Bash"]
-    }
+    "Interactions": [
+      {
+        "Type": "Replace",
+        "Var": "Guard_Bash",
+        "DefaultOk": true,
+        "DefaultValue": {
+          "Interactions": ["Weapon_Sword_Secondary_Guard_Bash"]
+        }
+      }
+    ]
   }
 }
 ```
+
+`Forks` is a map of [`InteractionType`](interactions.md#interactiontype-enum) → interaction (codec doc: "A collection of interactions to fork into when the input associated with the interaction type is used."). Because `CancelOnOtherClick` defaults to `true`, a fork only gets a chance to fire if the guard sets it to `false`.
 
 | Fork Key | Trigger | Common Use |
 |----------|---------|------------|
 | `Primary` | Primary click while blocking | Shield bash, guard counter |
 | `Secondary` | Secondary click while blocking | Alternate guard action |
 
-**Shield Bash Pattern:**
+**Guard Bash Pattern:**
 
-The Primary fork typically uses Replace to select the correct bash animation based on weapon type:
-
-```json
-"Forks": {
-  "Primary": {
-    "Type": "Replace",
-    "Var": "Weapon",
-    "DefaultValue": {
-      "Interactions": ["Sword_Guard_Bash"]
-    }
-  }
-}
-```
+The shipped guards (above, from `Weapon_Sword_Secondary_Guard_Wield.json`) wrap a `Replace` in the fork so an item can override the bash via its `InteractionVars` (`Guard_Bash`), falling back to the weapon's own `*_Secondary_Guard_Bash` interaction when the var is unset (`DefaultOk`).
 
 ### Effects (Guard Start)
 
@@ -914,10 +943,10 @@ Stamina consumption when blocking damage:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `CostType` | string | `"Damage"` = cost per point of damage blocked |
-| `Value` | float | Stamina consumed per damage point blocked |
+| `CostType` | string | `Damage` — `Value` is how much blocked damage one stamina point is worth; `MaxHealthPercentage` (the default) — `Value` is the fraction of max health one stamina point is worth (codec doc: "for 4% of max health, the value expected here is 0.04"; default `0.04`) |
+| `Value` | float | Per `CostType` above; must be ≥ 0 |
 
-**Real values:** Most weapons use `Value: 7` for their guard stamina cost.
+**Real values:** Every shipped weapon guard uses `"CostType": "Damage", "Value": 7`.
 
 ### BlockedEffects
 
@@ -958,36 +987,39 @@ Interactions triggered when a block succeeds. This enables mechanics like:
 }
 ```
 
-**Parry Example (from Debug_Stick_Parry):**
+**Parry Example (from `_Debug/Debug_Stick_Parry.json`):**
 
-A parry is a short-duration wielding that triggers special interactions on block:
+A parry is a wielding that ends on the first hit (`FailOnDamage`) and triggers a riposte from `BlockedInteractions` — here a short step back (`ApplyForce` always acts on the **user**), the `Stick_Attack` counter and a cooldown reset, run in `Parallel`:
 
 ```json
 {
   "Type": "Wielding",
-  "RunTime": 0.3,
-  "AngledWielding": {
-    "Angle": 0,
-    "AngleDistance": 180,
-    "DamageModifiers": { "Physical": 0 }
-  },
+  "Effects": { "ItemAnimationId": "Guard", "ClearAnimationOnFinish": true },
+  "RunTime": 5,
+  "FailOnDamage": true,
+  "DamageModifiers": { "Physical": 0 },
   "BlockedInteractions": {
     "Interactions": [
       {
-        "Type": "SendMessage",
-        "Message": "Perfect Parry!"
+        "Type": "Parallel",
+        "Interactions": [
+          {
+            "Interactions": [
+              { "Type": "Simple", "RunTime": 0.1 },
+              {
+                "Type": "ApplyForce",
+                "WaitForGround": false,
+                "Forces": [ { "Direction": { "X": 0, "Y": 0, "Z": -1 }, "Force": 10 } ],
+                "VelocityConfig": { "AirResistance": 0.93, "GroundResistance": 0.93 }
+              }
+            ]
+          },
+          { "Interactions": [ "Stick_Attack" ] }
+        ]
       },
       {
-        "Type": "ApplyForce",
-        "Entity": "Target",
-        "Direction": { "X": 0, "Y": 5, "Z": -15 },
-        "AdjustVertical": false,
-        "Force": 15
-      },
-      {
-        "Type": "ChainFlag",
-        "ChainId": "Debug_Combat",
-        "Flag": "Parry_Counter"
+        "Type": "ResetCooldown",
+        "Cooldown": { "Id": "Debug_Stick_Parry", "Cooldown": 0.5 }
       }
     ]
   }
@@ -1033,89 +1065,85 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 
 ### Complete Examples
 
-**Full Sword Guard Configuration:**
+**Full Sword Guard Configuration** (`Weapons/Sword/Attacks/Secondary/Guard/Weapon_Sword_Secondary_Guard_Wield.json`, verbatim):
 
 ```json
 {
   "Type": "Wielding",
+  "OnItemChangeBehavior": "Finish",
   "Effects": {
     "ItemAnimationId": "Guard",
     "ClearAnimationOnFinish": true,
-    "WorldSoundEventId": "SFX_Sword_T2_Guard_Raise",
-    "LocalSoundEventId": "SFX_Sword_T2_Guard_Raise_Local"
+    "WorldSoundEventId": "SFX_Light_Melee_T2_Block",
+    "LocalSoundEventId": "SFX_Sword_T2_Block_Local"
+  },
+  "Forks": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "Replace",
+          "Var": "Guard_Bash",
+          "DefaultOk": true,
+          "DefaultValue": { "Interactions": ["Weapon_Sword_Secondary_Guard_Bash"] }
+        }
+      ]
+    }
   },
   "AngledWielding": {
     "Angle": 0,
     "AngleDistance": 90,
-    "DamageModifiers": {
-      "Physical": 0,
-      "Projectile": 0,
-      "Poison": 0
-    },
-    "KnockbackModifiers": {
-      "Physical": 0.25,
-      "Projectile": 0.25
-    }
+    "DamageModifiers": { "Physical": 0, "Projectile": 0, "Poison": 0 },
+    "KnockbackModifiers": { "Physical": 0.25, "Projectile": 0.25 }
   },
-  "StaminaCost": {
-    "CostType": "Damage",
-    "Value": 7
+  "StaminaCost": { "Value": 7, "CostType": "Damage" },
+  "CancelOnOtherClick": false,
+  "Failed": {
+    "Type": "Replace",
+    "Var": "Guard_Break",
+    "DefaultOk": true,
+    "DefaultValue": {
+      "Interactions": [
+        {
+          "Type": "Simple",
+          "Effects": {
+            "Particles": [ { "SystemId": "Shield_Shatter" } ],
+            "WorldSoundEventId": "SFX_Light_Melee_T2_Guard_Break",
+            "LocalSoundEventId": "SFX_Light_Melee_T2_Guard_Break"
+          }
+        }
+      ]
+    }
   },
   "BlockedEffects": {
-    "WorldSoundEventId": "SFX_Sword_T2_Impact",
-    "LocalSoundEventId": "SFX_Sword_T2_Impact_Local",
-    "WorldParticles": [
-      { "SystemId": "Sword_Block_Sparks" }
-    ]
-  },
-  "BlockedInteractions": {
-    "Interactions": [
-      {
-        "Type": "ChangeStat",
-        "StatModifiers": {
-          "SignatureEnergy": 3
-        }
-      }
-    ]
-  },
-  "Forks": {
-    "Primary": {
-      "Type": "Replace",
-      "Var": "Weapon",
-      "DefaultValue": {
-        "Interactions": ["Sword_Guard_Bash"]
-      }
-    }
-  },
-  "Failed": {
-    "Interactions": [
-      {
-        "Type": "ApplyEffect",
-        "EffectId": "Stamina_Broken"
-      }
-    ]
+    "WorldSoundEventId": "SFX_Light_Melee_T2_Guard_Hit",
+    "WorldParticles": [ { "SystemId": "Shield_Block" } ]
   },
   "Next": {
     "Type": "ChangeStat",
-    "Behaviour": "Set",
-    "StatModifiers": {
-      "StaminaRegenDelay": -1
-    }
+    "Behaviour": "Min",
+    "OnItemChangeBehavior": "Ignore",
+    "StatModifiers": { "StaminaRegenDelay": -0.5 }
   }
 }
 ```
 
-**Simple NPC Block:**
+Note what the real file does *not* do: no `BlockedInteractions` (signature-energy-on-block is a pattern, not the sword's default), and the guard-break `Failed` branch is just particles + sound — the stagger comes from the stamina system, not from an `ApplyEffect` here.
+
+**Simple NPC Block** (`NPCs/Undead/Skeleton_Knight/Skeleton_Knight_Shield_Block.json` — a 0.1 s `Simple` "prepare" step, then the guard):
 
 ```json
 {
-  "Type": "Wielding",
-  "DamageModifiers": {
-    "Physical": 0.2,
-    "Projectile": 0.2
+  "Type": "Simple",
+  "Effects": {
+    "ItemPlayerAnimationsId": "Skeleton_Shield",
+    "ItemAnimationId": "Guard",
+    "ClearAnimationOnFinish": true
   },
-  "BlockedEffects": {
-    "WorldSoundEventId": "SFX_Metal_Block"
+  "RunTime": 0.1,
+  "Next": {
+    "Type": "Wielding",
+    "Effects": { "ItemAnimationId": "Guard", "ClearAnimationOnFinish": true },
+    "DamageModifiers": { "Physical": 0.2, "Projectile": 0.2 }
   }
 }
 ```
@@ -1143,10 +1171,9 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
         "Interactions": [
           {
             "Type": "ApplyForce",
-            "Entity": "Target",
-            "Direction": { "X": 0, "Y": 3, "Z": -12 },
+            "Direction": { "X": 0, "Y": 0, "Z": -1 },
             "AdjustVertical": false,
-            "Force": 12
+            "Force": 10
           },
           {
             "Type": "ApplyEffect",
@@ -1185,7 +1212,9 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 
 ### Technical Notes
 
-- **Inheritance** - WieldingInteraction inherits all properties from ChargingInteraction, including movement speed modifiers, progress display, and the `Next` map system. However, Wielding typically uses `AllowIndefiniteHold: true` by default.
+- **Inheritance** - WieldingInteraction inherits all properties from ChargingInteraction, including progress display, `Forks`/`Failed` and the `Next` map system. Its constructor flips `AllowIndefiniteHold` to `true`, so a guard with no `RunTime` holds until released.
+
+- **`ApplyForce` acts on the user** - it has no `Entity` property (codec doc: "A collection of forces to apply to the user"), so a "knock the attacker back" riposte cannot be expressed with it; `ApplyEffect` does take `Entity: "Target"`.
 
 - **Stamina Integration** - When `StaminaCost` is configured with `CostType: "Damage"`, each point of damage blocked consumes `Value` stamina. When stamina reaches zero, the `Failed` branch triggers.
 
@@ -1216,29 +1245,44 @@ Server-side helpers behind the block interactions on this page. Java API, not JS
 Static utilities implementing block damage, breaking, pickup, and drops. Used by `BreakBlock`/`DestroyBlock` interactions, doors (soft-block clearing), explosions, and the block-physics plugins — and useful from your own plugin when you want block breaking that respects tools, durability, and drop lists.
 
 ```java
-// Tool/spec resolution and durability
-static ItemToolSpec getSpecPowerDamageBlock(Item item, BlockType blockType, ItemTool tool)
-static double calculateDurabilityUse(Item item, BlockType blockType)
-
-// Damage a block (returns true when handled); the long overload can require a matching tool
+// Damage a block (returns true when handled). 0.6.3 added a `boolean softOnly` (see BreakBlock's
+// SoftOnly) to both overloads, a separate `instigator` ref (the entity credited with the break —
+// e.g. the shooter of a projectile — next to the executing `ref`), and a multi-block overload that
+// damages a whole `targets` list at once and returns the number of blocks handled.
 static boolean performBlockDamage(Vector3i targetBlock, ItemStack itemStack, ItemTool tool,
-        float damageScale, int setBlockSettings, Ref<ChunkStore> chunkReference,
+        float damageScale, int setBlockSettings, boolean softOnly, Ref<ChunkStore> chunkReference,
         ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
-static boolean performBlockDamage(Ref<EntityStore> ref, Vector3i targetBlock, ItemStack itemStack,
-        ItemTool tool, String toolId, boolean matchTool, float damageScale, int setBlockSettings,
-        Ref<ChunkStore> chunkReference, ComponentAccessor<EntityStore> entityStore,
-        ComponentAccessor<ChunkStore> chunkStore)
+static boolean performBlockDamage(Ref<EntityStore> ref, Ref<EntityStore> instigator, Vector3i targetBlock,
+        ItemStack itemStack, ItemTool tool, String toolId, boolean matchTool, float damageScale,
+        int setBlockSettings, boolean softOnly, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static int performBlockDamage(Ref<EntityStore> ref, Ref<EntityStore> instigator, List<Vector3i> targets,
+        Vector3i primaryTarget, ItemStack itemStack, ItemTool tool, String toolId, boolean matchTool,
+        float damageScale, int setBlockSettings, boolean softOnly, boolean applyDurabilityPerBlock,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
 
-// Break a block outright (with drops); the World overload lets you override drop item/list/quantity
+// Break a block outright (with drops). The BlockType overloads let you override drop
+// item/list/quantity (the former `World`-first overload was removed by 0.6.3 — the world is
+// resolved from the accessors); a List<Vector3i> overload breaks several blocks and returns the count.
 static void performBlockBreak(Ref<EntityStore> ref, ItemStack heldItemStack, Vector3i targetBlock,
         Ref<ChunkStore> chunkReference, ComponentAccessor<EntityStore> entityStore,
         ComponentAccessor<ChunkStore> chunkStore)
 static void performBlockBreak(Ref<EntityStore> ref, ItemStack heldItemStack, Vector3i targetBlock,
         int setBlockSettings, Ref<ChunkStore> chunkReference,
         ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
-static void performBlockBreak(World world, Vector3i blockPosition, BlockType targetBlockType,
-        ItemStack heldItemStack, int dropQuantity, String dropItemId, String dropListId,
-        int setBlockSettings, Ref<EntityStore> ref, Ref<ChunkStore> chunkReference,
+static void performBlockBreak(Ref<EntityStore> ref, Ref<EntityStore> instigator, ItemStack heldItemStack,
+        Vector3i targetBlock, int setBlockSettings, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static int performBlockBreak(Ref<EntityStore> ref, ItemStack heldItemStack, List<Vector3i> targets,
+        int setBlockSettings, ComponentAccessor<EntityStore> entityStore,
+        ComponentAccessor<ChunkStore> chunkStore)
+static void performBlockBreak(Vector3i blockPosition, BlockType targetBlockType, ItemStack heldItemStack,
+        int dropQuantity, String dropItemId, String dropListId, int setBlockSettings,
+        Ref<EntityStore> ref, Ref<ChunkStore> chunkReference,
+        ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
+static void performBlockBreak(Vector3i blockPosition, BlockType targetBlockType, ItemStack heldItemStack,
+        int dropQuantity, String dropItemId, String dropListId, int setBlockSettings,
+        Ref<EntityStore> ref, Ref<EntityStore> instigator, Ref<ChunkStore> chunkReference,
         ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
 
 // "Natural" removal (physics-driven, e.g. support lost), replacing with a filler block id
@@ -1253,12 +1297,23 @@ static void naturallyRemoveBlock(Vector3i blockPosition, BlockType blockType, in
 // Blocks picked up directly into the inventory instead of breaking
 static boolean shouldPickupByInteraction(BlockType blockType)
 static void performPickupByInteraction(Ref<EntityStore> ref, Vector3i targetBlock,
-        BlockType blockType, int filler, Ref<ChunkStore> chunkReference,
+        BlockType blockType, int filler, Ref<ChunkStore> chunkReference, BlockSection blockSection,
         ComponentAccessor<EntityStore> entityStore, ComponentAccessor<ChunkStore> chunkStore)
 
 // Compute the drop stacks for a block (drop-list aware)
 static List<ItemStack> getDrops(BlockType blockType, int quantity, String itemId, String dropListId)
+
+// 0.6.3+: run a block type's OnBreak / OnBreakImpact interactions (the two InteractionTypes added in 0.6.3)
+static void fireOnBreakInteraction(Ref<EntityStore> ref, Ref<EntityStore> instigator, BlockType blockType,
+        Vector3i blockPosition, int rotationIndex, int blockId, ComponentAccessor<EntityStore> entityStore)
+static void queueOnBreakImpactInteraction(Ref<EntityStore> ref, BlockType blockType, Vector3i blockPosition,
+        int blockId, CommandBuffer<EntityStore> commandBuffer)
 ```
+
+Removed by 0.6.3 with no direct replacement: `getSpecPowerDamageBlock(Item, BlockType, ItemTool)` and
+`calculateDurabilityUse(Item, BlockType)` — tool/spec resolution and durability now happen inside
+`performBlockDamage` (see `ItemTool.getBreakShape()` / `getBreakShapeDurabilityMode()` for the new
+multi-block "break shape" durability rules).
 
 See [drops.md](drops.md) for how drop lists are defined.
 
@@ -1286,10 +1341,12 @@ The component type is also reachable via `InteractionModule.get().getPlacedByCom
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 server (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are literal messages from the server (verified against `HytaleServer.jar`).
 
-- **`State transition edge cannot be defined from a state to itself:`** → a `ChangeState` `Changes` entry maps a state to itself (e.g. `"Off": "Off"`). Fix: every `Changes` key must map to a *different* target state; use distinct from→to names (see [State Transition Map](#state-transition-map-changes)).
-- **`No projectile config typeName provided`** → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
-- **`has no valid ProjectileConfig:`** → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
-- **Symptom:** a `ChangeState` does nothing → the current state isn't a key in the `Changes` map, so no transition matches. Fix: include the entity/block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
+- **`Unknown fluid: <key>`** (`PlaceFluidInteraction`) → `FluidToPlace` names a fluid that isn't loaded; the interaction falls back to the unknown fluid. Fix: use a key from the fluid asset store (see [fluids.md](fluids.md)).
+- **`server.interactions.invalidBlockState`** (translation message sent to the player by `OpenContainerInteraction`) → the targeted block has no `ItemContainerBlock` component. Fix: only wire `OpenContainer` to container blocks.
+- **`No projectile config typeName provided`** (`ProjectileComponent`) → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
+- **`has no valid ProjectileConfig:`** (`ProjectileInteraction`) → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
+- **Symptom:** a `ChangeState` does nothing → the current state isn't a key in the `Changes` map, so no transition matches (the codec does not validate the map — a self-mapping like `"Off": "Off"` loads fine and is simply a no-op). Fix: include the entity/block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
+- **Symptom:** a `ChangeState` with `RequireBlockPlacement` never fires → it is treated as block placement and is skipped in worlds where placement is disallowed. Fix: drop the flag unless the state change really stands in for placing a block.
 - **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabPath` doesn't resolve to a stored prefab. Fix: use the prefab's file name as registered in the prefab store (e.g. `Goblin_Thief_Chest.prefab.json`).

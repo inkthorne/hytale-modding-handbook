@@ -73,6 +73,7 @@ All formatting methods return `Message` for chaining:
 Message bold(boolean bold)
 Message italic(boolean italic)
 Message monospace(boolean mono)
+Message strikethrough(boolean strike)  // (0.6.3+)
 Message color(String hexColor)       // e.g., "#FF0000"
 Message color(Color awtColor)
 Message link(String url)
@@ -353,6 +354,8 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `GameModeSwap` | Game mode changed |
 | `EntityStatEffect` | Stat effect applied |
 | `Wielding` | Wielding state change |
+| `OnBreak` | (0.6.3+) Item/tool broke |
+| `OnBreakImpact` | (0.6.3+) Break impact follow-up |
 
 > **See also:** [Complete InteractionType Reference](interactions.md#interactiontype-enum)
 
@@ -384,7 +387,7 @@ getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
     var item = event.getItemInHand();
     if (item != null) {
         event.getPlayer().getPlayerRef().sendMessage(
-            Message.raw("Interacted while holding: " + item.getItemType().getName())
+            Message.raw("Interacted while holding: " + item.getItemId())   // or item.getItem().getId()
         );
     }
 });
@@ -670,16 +673,22 @@ An immutable record of the client's **creative-mode preferences**, sent by the c
 |----------|------|---------|
 | `allowNPCDetection()` | `boolean` | NPCs may notice/target this creative player |
 | `respondToHit()` | `boolean` | Creative player still reacts to being hit |
-| `placeMode()` | `String` | Block place mode (client default: `"default"`) |
-| `creativeInteractionDistance()` | `int` | Extended reach distance in creative |
+| `placeMode()` | `PlaceMode` | Block place mode — the `protocol.PlaceMode` enum (`Default`, `Replace`, `Retype`, `Extrude`, `SurfaceDraw`, `FastPlace`); was a `String` before 0.6.3. Default: `PlaceMode.Default` |
+| `creativeInteractionDistance()` | `int` | Extended reach distance in creative (default `10`) |
 | `showBuilderToolsNotifications()` | `boolean` | Show builder-tools toast messages |
 | `noPhysics()` | `boolean` | Free-flight without collision |
+| `eraserEnabled()` | `boolean` | (0.6.3+) Builder "eraser" mode on |
 
 ```java
 PlayerSettings settings = store.getComponent(ref, PlayerSettings.getComponentType());
 PlayerCreativeSettings creative = settings.creativeSettings();
 if (creative.noPhysics()) { /* skip collision checks for this builder */ }
 ```
+
+`PlayerSettings` (the record component) also carries `showEntityMarkers()`, the five
+`…PreferredPickupLocation()` slots, the `hideHelmet()` / `hideCuirass()` / `hideGauntlets()` /
+`hidePants()` armor toggles and, as of 0.6.3, `voiceSettings()` → `PlayerVoiceSettings`
+(`voiceChatEnabled()`, `voiceInputEnabled()`, `voiceInputMode()`).
 
 These are **client-owned** values (re-sent whenever the player changes settings) — treat them as read-only input, not server state to mutate.
 
@@ -702,7 +711,7 @@ float jump = config.getJumpForce();
 MovementSettings packet = config.toPacket();   // protocol form for MovementManager
 ```
 
-Every tuning field has a getter — a sampling: `getBaseSpeed()`, `getAcceleration()`, `getJumpForce()`, `getSwimJumpForce()`, `getClimbSpeed()`, `getHorizontalFlySpeed()`, `getVerticalFlySpeed()`, `getForwardSprintSpeedMultiplier()`, `getAirSpeedMultiplier()`, `getMinSlideEntrySpeed()`, `getRollTimeToComplete()`, `getFallDamagePartialMitigationPercent()`. (The full list mirrors the asset's JSON fields — see the auto-generated API reference linked at the bottom of this page.)
+Every tuning field has a getter — a sampling: `getBaseSpeed()`, `getAcceleration()`, `getJumpForce()`, `getSwimJumpForce()`, `getClimbSpeed()`, `getHorizontalFlySpeed()`, `getVerticalFlySpeed()`, `getForwardSprintSpeedMultiplier()`, `getAirSpeedMultiplier()`, `getRollTimeToComplete()`, `getFallDamagePartialMitigationPercent()`. Added in 0.6.3: `getFly()` → `protocol.FlyMode` (`Disabled` / `Allowed` / `Forced`; `null` in a config means "keep the game-mode default"), `getMaxSlopeAngleDegrees()`, `getMaxWallAngleDegrees()`. (The full list mirrors the asset's JSON fields — see the auto-generated API reference linked at the bottom of this page.)
 
 ### MovementManager (component)
 
@@ -711,11 +720,13 @@ Every tuning field has a getter — a sampling: `getBaseSpeed()`, `getAccelerati
 | `static getComponentType()` | Component type for store access |
 | `getSettings()` | The live `MovementSettings` currently applied |
 | `getDefaultSettings()` | The player's baseline settings |
-| `setDefaultSettings(MovementSettings, PhysicsValues, GameMode)` | Replace the baseline |
+| `setDefaultSettings(MovementConfig, PhysicsValues, GameMode)` | Replace the baseline from a config (builds the `MovementSettings`, remembers the config's `FlyMode`, derives `fly` from the game mode). The `MovementSettings`-taking overload was removed by 0.6.3 |
 | `applyDefaultSettings()` | Copy defaults → live settings |
+| `applyConfigAndUpdate(MovementConfig, Ref, ComponentAccessor)` | (0.6.3+) One call: build live settings from the config (physics read from the entity), keep the current `fly` unless the config sets one, and push to the client |
 | `update(PacketHandler)` | **Push the live settings to the client** |
 | `refreshDefaultSettings(Ref, ComponentAccessor)` | Recompute defaults from the player's current state |
 | `resetDefaultsAndUpdate(Ref, ComponentAccessor)` | Reset to engine defaults *and* sync the client |
+| `resetFly(GameMode)` | (0.6.3+) Re-derive the fly mode for a game mode (Creative → allowed, Adventure → per config) |
 
 ### Changing a player's movement at runtime
 
@@ -727,9 +738,12 @@ PhysicsValues physics = store.getComponent(ref, PhysicsValues.getComponentType()
 Player player = store.getComponent(ref, Player.getComponentType());
 
 MovementManager movement = store.getComponent(ref, MovementManager.getComponentType());
-movement.setDefaultSettings(movementConfig.toPacket(), physics, player.getGameMode());
+movement.setDefaultSettings(movementConfig, physics, player.getGameMode());   // takes the config itself (0.6.3)
 movement.applyDefaultSettings();
 movement.update(playerRef.getPacketHandler());   // nothing changes client-side without this
+
+// Equivalent one-liner for a live (non-baseline) swap:
+// movement.applyConfigAndUpdate(movementConfig, ref, store);
 
 // ...later, restore stock movement:
 movement.resetDefaultsAndUpdate(ref, store);
@@ -820,7 +834,9 @@ Per-world slice of the profile, from `getPerWorldData(worldName)`:
 | `getRespawnPoints()` / `setRespawnPoints(PlayerRespawnPointData[])` | Bound respawn points |
 | `getDeathPositions()` | Recent death locations (engine keeps the last 5) |
 | `addLastDeath(String, Transform, int)` / `removeLastDeath(String)` | Death-position bookkeeping |
-| `getUserMapMarkers()` / `getUserMapMarker(String)` / `setUserMapMarkers(...)` | The player's custom map markers |
+| `getUserMapMarkers()` / `getUserMapMarkers(UUID)` / `getUserMapMarker(String)` / `setUserMapMarkers(...)` | The player's custom map markers |
+| `isMarkerRevealed(String)` / `revealMarker(String)` / `hideMarker(String)` | (0.6.3+) Per-player discovery state of a world-map marker id; the mutators return whether anything changed |
+| `retainRevealedMarkers(Set<String>)` / `hasRevealedMarkers()` | (0.6.3+) Prune revealed ids to a set (returns how many were dropped) / any revealed at all |
 
 ### PlayerRespawnPointData
 
@@ -919,7 +935,7 @@ public class AlwaysAllowed extends ChoiceRequirement {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 color parser (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the 0.6.3 color parser (`ColorParseUtil` / `ColorAlphaCodec`, verified against `HytaleServer.jar`).
 
 - **`Hex color must start with '#'`** → you passed a hex string without the leading `#` to `Message.color(String hexColor)`. Fix: include it, e.g. `.color("#FF0000")` (see [Message](#message)).
 - **`Invalid color format, expected: #RGBA, #RRGGBBAA, rgba(#RGB,A), rgba(#RRGGBB,A) or rgba(R,G,B,A)`** → the color string passed to `Message.color(...)` didn't match a supported form. Fix: use a documented hex form such as `#RRGGBB` (e.g. `.color("#00FF00")`).

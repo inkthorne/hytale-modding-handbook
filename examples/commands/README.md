@@ -95,5 +95,5 @@ public HelloCommand() {
     requireNoPermission();
 }
 ```
-(Before 0.6 this was an `@Override protected boolean canGeneratePermission() { return false; }`;
-that method was removed in 0.6 and the override no longer compiles.)
+(Before 0.6.3 this was an `@Override protected boolean canGeneratePermission() { return false; }`;
+that method is gone as of 0.6.3 and the override no longer compiles.)

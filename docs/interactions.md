@@ -59,6 +59,7 @@ Interaction System
 | `RootInteractionSettings` | `protocol` | Per-`GameMode` settings + cooldown for a root interaction |
 | `InteractionType` | `protocol` | Enum of interaction trigger types (PRIMARY, SECONDARY, ...) |
 | `SimpleBlockInteraction` | `server.core.modules.interaction.interaction.config.client` | Abstract base for block-targeting interactions (client-supplied target block) |
+| `InteractionItemChangeBehavior` | `protocol` | Enum: what an interaction does when the held item changes (`Cancel`/`Fail`/`Finish`/`Ignore`) |
 | `InteractionModule` | `server.core.modules.interaction` | Core plugin that registers interaction assets, components, and all built-in `Type` strings |
 | `InteractionValidation` | `server.core.modules.interaction.interaction.util` | Static server-side range checks for player block/entity interactions |
 | `OriginSource` | `server.core.modules.interaction.interaction.config` | Enum: position interactions relative to the entity or the targeted block |
@@ -222,9 +223,10 @@ AssetStore<String, Interaction, ...> store = Interaction.getAssetStore();
 // Get the asset map
 IndexedLookupTableAssetMap<String, Interaction> map = Interaction.getAssetMap();
 
-// Get interaction by ID (returns unknown if not found)
-Interaction interaction = Interaction.getInteractionOrUnknown("Melee_Root");
-int interactionId = Interaction.getInteractionIdOrUnknown("Melee_Root");
+// Get interaction by ID (returns unknown if not found). Note: this is the *nested*
+// interaction store — root interactions (e.g. "Melee_Root") live in RootInteraction's store.
+Interaction interaction = Interaction.getInteractionOrUnknown("Weapon_Sword_Primary");
+int interactionId = Interaction.getInteractionIdOrUnknown("Weapon_Sword_Primary");
 ```
 
 ### Meta Keys
@@ -238,6 +240,8 @@ Static meta keys for storing context data during interaction execution:
 | `HIT_DETAIL` | `String` | Detail about what was hit |
 | `TARGET_BLOCK` | `BlockPosition` | Block being targeted |
 | `TARGET_BLOCK_RAW` | `BlockPosition` | Raw block position |
+| `TARGET_BLOCK_TYPE` | `BlockType` | Resolved type of the targeted block (0.6.3+) |
+| `TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Rotation index of the targeted block (0.6.3+) |
 | `TARGET_SLOT` | `Integer` | Inventory slot |
 | `TIME_SHIFT` | `Float` | Time offset |
 | `DAMAGE` | `Damage` | Damage information |
@@ -254,20 +258,26 @@ InteractionEffects getEffects()        // Visual/audio effects
 float getHorizontalSpeedMultiplier()   // Movement speed during interaction
 double getViewDistance()               // View distance modifier
 float getRunTime()                     // Duration of interaction
-boolean isCancelOnItemChange()         // Cancel when item changes
+InteractionItemChangeBehavior getOnItemChangeBehavior()   // What happens when the held item changes (see below)
 
 // Rules and settings
 InteractionRules getRules()
 Map<GameMode, InteractionSettings> getSettings()
 
-// Execution (called by framework)
-void tick(Ref<EntityStore> ref, LivingEntity entity, boolean flag, float time,
+// Execution (called by framework; both are final)
+void tick(Ref<EntityStore> ref, boolean firstRun, float time,
+          InteractionType type, InteractionContext context, CooldownHandler cooldown)
+void simulateTick(Ref<EntityStore> ref, boolean firstRun, float time,
           InteractionType type, InteractionContext context, CooldownHandler cooldown)
 
 // Override in subclasses
 void compile(OperationsBuilder builder)
-boolean walk(Collector collector, InteractionContext context)  // Visitor pattern for tree traversal and metadata collection
-boolean needsRemoteSync()
+protected abstract void tick0(boolean firstRun, float time, InteractionType type,
+          InteractionContext context, CooldownHandler cooldown)
+protected abstract void simulateTick0(boolean firstRun, float time, InteractionType type,
+          InteractionContext context, CooldownHandler cooldown)
+abstract boolean walk(Collector collector, InteractionContext context)  // Visitor pattern for tree traversal and metadata collection
+abstract boolean needsRemoteSync()
 
 // Network
 Interaction toPacket()
@@ -279,6 +289,23 @@ Interaction toPacket()
 // Check if interaction state indicates failure
 static boolean failed(InteractionState state)
 ```
+
+### Held-Item Change Behavior
+
+Every interaction carries an `OnItemChangeBehavior` (`com.hypixel.hytale.protocol.InteractionItemChangeBehavior`) that decides what happens when the executing entity's held item changes mid-interaction (`isCancelOnItemChange()` / the boolean `cancelOnItemChange` field were removed by 0.6.3 — use `getOnItemChangeBehavior()`):
+
+| Value | Meaning |
+|-------|---------|
+| `Cancel` | Default. The chain is cancelled |
+| `Fail` | The interaction ends in `InteractionState.Failed` (so a `Failed` branch can react) |
+| `Finish` | The interaction ends in `InteractionState.Finished` as if it completed |
+| `Ignore` | The item change is ignored and the interaction keeps running |
+
+```json
+{ "Type": "Simple", "RunTime": 0.5, "OnItemChangeBehavior": "Ignore" }
+```
+
+The old boolean `CancelOnItemChange` key is still parsed (codec doc: "Deprecated field for whether the interaction will be cancelled when the entity's held item changes.") — `true` maps to `Cancel`, `false` to `Ignore` — but it is flagged deprecated by the validator; write `OnItemChangeBehavior` in new assets.
 
 ### SimpleInstantInteraction
 
@@ -357,6 +384,10 @@ protected abstract void interactWithBlock(World world, CommandBuffer<EntityStore
         Vector3i targetBlock, CooldownHandler cooldownHandler)
 protected abstract void simulateInteractWithBlock(InteractionType type, InteractionContext context,
         ItemStack itemInHand, World world, Vector3i targetBlock)
+
+// Helpers (0.6.3+)
+static BlockPosition resolveBaseBlockPosition(World world, BlockPosition pos)  // multi-block: the block's base/anchor position
+protected static boolean hasRemovedBlockContext(InteractionContext context)   // true when the targeted block was already removed
 ```
 
 #### Codec
@@ -379,7 +410,7 @@ To write your own block-targeting interaction type, extend `SimpleBlockInteracti
 
 **Package:** `com.hypixel.hytale.protocol`
 
-Enum representing the type of interaction trigger.
+Enum representing the type of interaction trigger. Members are PascalCase (`Primary`, `Secondary`, `Ability1`–`Ability3`, `Use`, `Pick`, `Pickup`, `CollisionEnter`, `CollisionLeave`, `Collision`, `EntityStatEffect`, `SwapTo`, `SwapFrom`, `Death`, `Wielding`, `ProjectileSpawn`, `ProjectileHit`, `ProjectileMiss`, `ProjectileBounce`, `Held`, `HeldOffhand`, `Equipped`, `Dodge`, `GameModeSwap`, and, as of 0.6.3, `OnBreak` and `OnBreakImpact` — block-break hooks fired via `BlockHarvestUtils.fireOnBreakInteraction` / `queueOnBreakImpactInteraction`). The JSON `EnumCodec` matches names case-insensitively, so `"PRIMARY"` and `"Primary"` both parse; shipped assets use PascalCase.
 
 See [Player Documentation](player.md) for full details.
 
@@ -439,7 +470,14 @@ ComponentType<EntityStore, ChainingInteraction.Data> getChainingDataComponent()
 ComponentType<ChunkStore, PlacedByInteractionComponent> getPlacedByComponentType()
 ResourceType<ChunkStore, BlockCounter> getBlockCounterResourceType()
 ComponentType<ChunkStore, TrackedPlacement> getTrackedPlacementComponentType()
+
+// 0.6.3+
+ComponentType<EntityStore, InteractionHost> getInteractionHostComponentType()          // standalone entity that runs an interaction chain at a position (InteractionHost.spawnHost(...))
+ComponentType<EntityStore, CarriedBlock> getCarriedBlockComponentType()                // block currently carried (CarryBlock / CarryPlaceBlock / CarryDroppedBlock types)
+ResourceType<EntityStore, CarriedBlockSystems.QueueResource> getCarriedBlockQueueResourceType()
 ```
+
+Built-in `Type` strings added by 0.6.3 (not yet documented on these pages): `DragPlaceBlock`, `ExtrudePlaceBlock`, `SurfaceDrawPlaceBlock`, `DragEraseBlock`, `PlaceModeSelect`, `CarryBlock`, `CarryPlaceBlock`, `CarryDroppedBlock`, `RevealMapMarkersInView`, `ShowEventTitle`.
 
 #### Static Fields
 
@@ -467,6 +505,12 @@ static boolean canPlayerInteractWithBlock(Ref<EntityStore> ref, ComponentAccesso
         ItemStack heldItem, Vector3i pos)
 static boolean canPlayerInteractWithBlock(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
         ItemStack heldItem, BlockPosition pos)
+
+// 0.6.3+: any entity (players delegate to canPlayerInteractWithBlock)
+static boolean canEntityInteractWithBlock(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor,
+        ItemStack heldItem, BlockPosition blockPosition, BlockPosition contactPosition)
+// 0.6.3+: may `ref` run a projectile-type interaction through `proxy` (a predicted projectile it created)?
+static boolean isAccessibleProxyTarget(Ref<EntityStore> ref, Ref<EntityStore> proxy, InteractionType type)
 ```
 
 How the allowed distance is computed (from the decompiled source):
@@ -475,14 +519,16 @@ How the allowed distance is computed (from the decompiled source):
 - In **Creative**, the client's `creativeInteractionDistance` setting is honored, clamped to `0–128` blocks (default `10` if no settings component), and the larger of the two distances wins.
 - A `+2.0` buffer is added before squaring, and distance is measured from the player's **eye height** to the target (block center for blocks).
 - A `ref` without a `Player` component always passes (`true`); a player missing a `TransformComponent` always fails.
+- `canEntityInteractWithBlock` (0.6.3+): a player delegates to the player check; a non-player without a `StandardPhysicsProvider` always passes; a physics entity must be within **8 blocks** (64 squared, from its position, no eye offset) of `contactPosition`.
+- `isAccessibleProxyTarget` (0.6.3+) is `true` only for `ProjectileSpawn`/`ProjectileHit`/`ProjectileMiss`/`ProjectileBounce`, when `proxy` is a valid `PredictedProjectile` whose `StandardPhysicsProvider` creator UUID equals `ref`'s `UUIDComponent`.
 
 ### Usage Examples
 
 #### Getting an Interaction
 
 ```java
-// Get interaction from assets
-Interaction swordSwing = Interaction.getInteractionOrUnknown("Melee_Root");
+// Get interaction from assets (a nested interaction id, i.e. a file under Server/Item/Interactions/)
+Interaction swordSwing = Interaction.getInteractionOrUnknown("Weapon_Sword_Primary");
 
 if (!swordSwing.isUnknown()) {
     float duration = swordSwing.getRunTime();
@@ -514,7 +560,7 @@ Damage damage = meta.getMetaObject(Interaction.DAMAGE);
 
 ### Root Interaction Configuration
 
-Root interactions are defined in `Server/Item/RootInteractions/` and configure how interactions are triggered:
+Root interactions are defined in `Server/Item/RootInteractions/` and configure how interactions are triggered. `Weapons/Sword/Root_Weapon_Sword_Primary.json`:
 
 ```json
 {
@@ -529,8 +575,11 @@ Root interactions are defined in `Server/Item/RootInteractions/` and configure h
 |----------|------|-------------|
 | `RequireNewClick` | boolean | If true, must click again to chain (holding won't auto-chain) |
 | `ClickQueuingTimeout` | float | Buffer window to queue next attack input |
-| `Cooldown` | object | Minimum delay between attacks |
-| `Interactions` | array | List of interactions to execute |
+| `Cooldown` | object | Minimum delay between attacks (see [Cooldown Configuration](#cooldown-configuration)) |
+| `Interactions` | array | List of interactions to execute (required, non-empty) |
+| `Rules` | object | [InteractionRules](#interactionrules) for the whole chain |
+| `Settings` | object | Per-`GameMode` [RootInteractionSettings](#rootinteractionsettings) |
+| `HudInputBindingEntry` | string | 0.6.3+. Codec doc: "The localization key the client shows as an input binding hint on the HUD for whichever input this root interaction is bound to. When unset, no hint is shown." |
 
 ### Cooldown System
 
@@ -586,9 +635,12 @@ Cooldowns are configured in RootInteraction JSON files:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Id` | string | Unique cooldown identifier |
-| `Cooldown` | float | Cooldown duration in seconds |
+| `Id` | string | Unique cooldown identifier (codec doc: "Cooldowns can be used on different interactions but share a cooldown.") |
+| `Cooldown` | float | Cooldown duration in seconds (must be ≥ 0) |
 | `ClickBypass` | boolean | If true, clicking can bypass cooldown |
+| `Charges` | float[] | "The charge times available for this interaction." — a charge-based cooldown (see `CooldownHandler.Cooldown.deductCharge()` / `replenishCharge(...)`) |
+| `SkipCooldownReset` | boolean | "Determines whether resetting cooldown should be skipped." |
+| `InterruptRecharge` | boolean | "Determines whether recharge is interrupted by use." |
 
 #### Cooldown Interactions
 
@@ -645,20 +697,22 @@ public class InteractionRules {
   "Type": "Simple",
   "RunTime": 0.5,
   "Rules": {
-    "BlockedBy": ["SECONDARY"],
-    "InterruptedBy": ["DODGE"],
-    "Interrupting": ["PRIMARY"]
+    "BlockedBy": ["Secondary"],
+    "InterruptedBy": ["Dodge"],
+    "Interrupting": ["Primary"]
   }
 }
 ```
 
+Values are [`InteractionType`](#interactiontype-enum) names (PascalCase in shipped assets; parsing is case-insensitive).
+
 | Property | Type | Description |
 |----------|------|-------------|
-| `BlockedBy` | array | Interaction types that prevent starting |
-| `Blocking` | array | Interaction types this blocks |
-| `InterruptedBy` | array | Types that can cancel mid-execution |
-| `Interrupting` | array | Types this cancels |
-| `*Bypass` | string | Condition name that bypasses the rule |
+| `BlockedBy` | array | Interaction types that prevent starting. Codec doc: "If not set then a set of default rules will be applied based on the interaction type that the interaction is fired with. This is only effective when used on the root interaction of a chain." |
+| `Blocking` | array | Interaction types this blocks from starting while running (defaults to blocking nothing) |
+| `InterruptedBy` | array | Types that can cancel mid-execution ("only effective when used on the root interaction of a chain") |
+| `Interrupting` | array | Types this cancels when it starts |
+| `*Bypass` | string | A **tag** that, if matched, bypasses the corresponding rule (`BlockedByBypass`, `BlockingBypass`, `InterruptedByBypass`, `InterruptingBypass`) |
 
 #### Common Patterns
 
@@ -666,7 +720,7 @@ public class InteractionRules {
 ```json
 {
   "Rules": {
-    "InterruptedBy": ["DODGE", "BLOCK"]
+    "InterruptedBy": ["Dodge", "Wielding"]
   }
 }
 ```
@@ -675,7 +729,7 @@ public class InteractionRules {
 ```json
 {
   "Rules": {
-    "Blocking": ["PRIMARY", "SECONDARY"]
+    "Blocking": ["Primary", "Secondary"]
   }
 }
 ```
@@ -764,7 +818,7 @@ RootInteractionSettings are configured in root interaction files (`Server/Item/R
       "AllowSkipChainOnClick": true,
       "Cooldown": {
         "Id": "BlockInteraction_Creative",
-        "Cooldown": 0.0,
+        "Cooldown": 0.278,
         "ClickBypass": true
       }
     }
@@ -811,7 +865,7 @@ Root interactions are entry points triggered by player input (PRIMARY, SECONDARY
       "AllowSkipChainOnClick": true,
       "Cooldown": {
         "Id": "BlockInteraction_Creative",
-        "Cooldown": 0.0,
+        "Cooldown": 0.278,
         "ClickBypass": true
       }
     }
@@ -838,11 +892,16 @@ Nested interactions are reusable building blocks. They:
   "Next": {
     "Type": "MovementCondition",
     "ForwardLeft": { "Type": "Simple" },
+    "ForwardRight": { "Type": "Simple" },
     "Left": "Dodge_Left",
-    "Right": "Dodge_Right"
+    "Right": "Dodge_Right",
+    "BackLeft": { "Type": "Simple" },
+    "BackRight": { "Type": "Simple" }
   }
 }
 ```
+
+(`Dodge_Left` / `Dodge_Right` live in the `Dodge/` subfolder — IDs are filenames, subfolders don't matter.)
 
 #### Reference Patterns
 
@@ -903,11 +962,12 @@ Interaction (abstract)
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 interaction system (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are literal messages from the server (verified against `HytaleServer.jar`).
 
-- **`No such interaction:`** / **`No interaction ID found for`** → a string reference (in `Next`, `Interactions`, `Serial`, etc.) points to an interaction ID that was never loaded. Fix: the ID must match a `.json` filename (minus the extension) under `Server/Item/Interactions/` or `Server/Item/RootInteractions/`; see [Asset Discovery](#asset-discovery).
+- **`No interaction ID found for`** / **`Failed to find interaction:`** (`InteractionManager`) → a string reference (in `Next`, `Interactions`, `Serial`, etc.) points to an interaction ID that was never loaded. Fix: the ID must match a `.json` filename (minus the extension) under `Server/Item/Interactions/` or `Server/Item/RootInteractions/`; see [Asset Discovery](#asset-discovery). (`No such interaction:` is the NPC combat-action evaluator's version of the same problem, for an `AbilityCombatAction` naming an unknown interaction.)
 - **`Missing interaction:`** → an interaction expected at lookup time is absent from the asset store. Fix: ensure the referenced asset ships in your asset pack and loaded without error.
-- **`No interactions are defined for`** → a root interaction has an empty (or missing) `Interactions` list, so there is nothing to run. Fix: list at least one nested interaction in the root's `Interactions` array.
+- **`No interactions are defined for`** → a root interaction has an empty (or missing) `Interactions` list, so there is nothing to run. Fix: list at least one nested interaction in the root's `Interactions` array (the codec also rejects a missing/empty list at load time).
+- **Symptom:** a `BlockedBy` / `InterruptedBy` rule on a nested interaction has no effect → per the codec docs those two rules are "only effective when used on the root interaction of a chain". Fix: put them in the root interaction's `Rules`.
 - **Symptom:** an ID resolves at runtime but the interaction silently does nothing → `getInteractionOrUnknown(...)` returns the *unknown* placeholder rather than throwing for a bad ID. Fix: guard with `!interaction.isUnknown()` before using a looked-up `Interaction` (see [Getting an Interaction](#getting-an-interaction)).
 - **Symptom:** an interaction never starts even though the input fires → another interaction's `Rules` block it. `BlockedBy`/`Blocking` (and the default rules applied per `InteractionType` when `Rules` is unset) gate starting. Fix: review the [InteractionRules](#interactionrules) of both interactions, or set a `*Bypass` condition.
 

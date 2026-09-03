@@ -36,31 +36,37 @@ Hytale separates block visual assets from game logic:
 
 | Location | Content |
 |----------|---------|
-| `Server/Item/Items/<Category>/` | Block item definitions (449 files) |
-| `Server/Item/Block/Fluids/` | Fluid block definitions |
-| `Server/Item/Block/Hitboxes/` | Collision shape definitions |
-| `Server/Item/Block/Sounds/` | Sound set mappings (76 files) |
-| `Server/Item/Block/Particles/` | Particle set mappings (50+ files) |
+| `Server/Item/Items/<Category>/` | Block item definitions (~2,950 item files carry a `BlockType` in 0.6.3) |
+| `Server/Item/Block/Fluids/` | Fluid block definitions (14 files) |
+| `Server/Item/Block/Hitboxes/<Category>/` | Collision shape definitions |
+| `Server/Item/Block/Sounds/` | Sound set mappings (57 files) |
+| `Server/Item/Block/Particles/` | Particle set mappings (30 files) |
 | `Server/Item/Block/BreakingDecals/` | Breaking texture effects |
 | `Server/Item/Block/FluidFX/` | Fluid visual effects |
+| `Server/Item/Block/PhysicalMaterials/` | Physical materials referenced by `BlockType.PhysicalMaterialId` (11 files) |
+| `Server/Item/Block/Sets/` | Block sets (`BlockSet` assets, 58 files) |
+| `Server/Item/Block/Spawners/` | Block-spawner configs (46 files) |
 | `Server/Item/CustomConnectedBlockTemplates/` | Connected block rules (11 templates) |
-| `Server/BlockTypeList/` | Block categorization lists (12 files) |
-| `Common/Blocks/` | Visual models and animations (1,040 files) |
+| `Server/BlockTypeList/` | Block categorization lists (13 files) |
+| `Common/Blocks/` | Visual models and animations (~2,600 files) |
 
 ### Block Categories
 
 Blocks are organized into categories for the Creative Library:
 
-| Category | Examples |
+| Category | Examples (shipped usage in 0.6.3) |
 |----------|----------|
-| `Blocks.Rocks` | Stone, sandstone, marble, ores |
-| `Blocks.Soils` | Dirt, grass, sand, gravel |
-| `Blocks.Wood` | Planks, logs, bark |
-| `Blocks.Cloth` | Wool, fabric blocks |
-| `Blocks.Furniture` | Chairs, tables, beds |
-| `Blocks.Containers` | Chests, barrels, crates |
-| `Blocks.Lighting` | Torches, lanterns, candles |
-| `Blocks.Plants` | Flowers, crops, trees |
+| `Blocks.Wood` | Planks, logs, bark (315 items) |
+| `Blocks.Plants` | Flowers, crops, leaves (217) |
+| `Blocks.Rocks` | Stone, sandstone, marble (190) |
+| `Blocks.Deco` | Furniture, containers, doors, lighting (173) |
+| `Blocks.Soils` | Dirt, grass, sand, gravel (138) |
+| `Blocks.Cloth` | Wool, fabric blocks (119) |
+| `Blocks.Metal` | Metal blocks (100) |
+| `Blocks.Ores` | Ore blocks (76) |
+| `Blocks.Portals` / `Blocks.Fluids` | Portal blocks (18) / fluid blocks (9) |
+
+(There are no `Blocks.Furniture` / `Blocks.Containers` / `Blocks.Lighting` categories — those blocks live under `Blocks.Deco`.)
 
 ---
 
@@ -121,7 +127,7 @@ All block items support standard item properties plus `BlockType`:
 | `Icon` | string | Path to inventory icon |
 | `Recipe` | object | Crafting requirements |
 | `ResourceTypes` | array | Resource type memberships |
-| `MaxStack` | int | Inventory stack limit (default: 10 for blocks) |
+| `MaxStack` | int | Inventory stack limit (shipped rock blocks use `100`) |
 | `ItemSoundSetId` | string | Sound effects when handling item |
 | `PlayerAnimationsId` | string | Player animation when placing |
 | `BlockType` | object | Block-specific configuration |
@@ -133,35 +139,40 @@ All block items support standard item properties plus `BlockType`:
   "TranslationProperties": {
     "Name": "server.items.Rock_Stone.name"
   },
+  "ItemLevel": 10,
+  "MaxStack": 100,
   "Icon": "Icons/ItemsGenerated/Rock_Stone.png",
   "Categories": ["Blocks.Rocks"],
-  "Set": "Rock_Stone",
-  "Tags": {
-    "Type": ["Rock"],
-    "Family": ["Stone"]
-  },
-  "MaxStack": 10,
   "PlayerAnimationsId": "Block",
-  "ItemSoundSetId": "ISS_Items_Rock",
+  "Set": "Rock_Stone",
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
-    "Opacity": "Solid",
-    "Group": "Rock",
-    "Textures": [
-      { "Weight": 1, "All": "BlockTextures/Rock_Stone.png" }
-    ],
-    "BlockSoundSetId": "Stone",
-    "BlockParticleSetId": "Stone",
-    "ParticleColor": "#808080",
+    "Group": "Stone",
+    "Flags": {},
     "Gathering": {
       "Breaking": {
-        "GatherType": "Rocks"
+        "GatherType": "Rocks",
+        "ItemId": "Rock_Stone_Cobble"
       }
-    }
-  }
+    },
+    "BlockParticleSetId": "Stone",
+    "Textures": [
+      { "All": "BlockTextures/Rock_Stone.png", "Weight": 2 },
+      { "All": "BlockTextures/Rock_Stone_2.png", "Weight": 1 },
+      { "All": "BlockTextures/Rock_Stone_3.png", "Weight": 1 }
+    ],
+    "ParticleColor": "#737055",
+    "BlockSoundSetId": "Stone",
+    "PhysicalMaterialId": "Stone",
+    "BlockBreakingDecalId": "Breaking_Decals_Rock"
+  },
+  "ResourceTypes": [ { "Id": "Rock" }, { "Id": "Rock_Stone" } ],
+  "Tags": { "Type": ["Rock"] },
+  "ItemSoundSetId": "ISS_Blocks_Stone"
 }
 ```
+*(abridged from `Server/Item/Items/Rock/Stone/Rock_Stone.json` — `Opacity` is omitted because `Solid` is the default; the real file also carries `Aliases` and `TextureComputedColor`)*
 
 ---
 
@@ -173,16 +184,18 @@ The `BlockType` object defines how a block renders, collides, and behaves in the
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `DrawType` | string | Rendering mode: `"Cube"`, `"Model"` |
+| `DrawType` | string | Rendering mode: `"Cube"`, `"Model"`, `"CubeWithModel"`, `"Empty"` (invisible), `"GizmoCube"` |
 | `Material` | string | Physical type: `"Solid"`, `"Empty"` |
 | `Opacity` | string | Visual transparency: `"Solid"`, `"Transparent"`, `"Semitransparent"`, `"Cutout"` |
 | `Group` | string | Block family for texture blending |
 | `Textures` | array | Texture definitions with variants |
 | `CustomModel` | string | Path to `.blockymodel` file |
-| `CustomModelTexture` | array | Texture assignments for model |
+| `CustomModelTexture` | array | Texture assignments for model (`{ "Texture", "Weight" }`) |
 | `CustomModelAnimation` | string | Path to `.blockyanim` file |
+| `CustomModelAnimationSpeed` | float | 0.6.3+: playback-speed multiplier for the model animation (1 = authored speed; must be ≥ 0 and < 100 — `BlockType.MAX_CUSTOM_MODEL_ANIMATION_SPEED`) |
 | `CustomModelScale` | float | Scale multiplier for model |
-| `Light` | object | Light emission properties |
+| `Light` | object | Light emission: `Color` (hex string) + `Radius` |
+| `PhysicalMaterialId` | string | Physical material (`Server/Item/Block/PhysicalMaterials/<id>.json`) |
 
 ### Texture Configuration
 
@@ -210,9 +223,9 @@ Textures support per-face assignment and weighted random variants:
   "Textures": [
     {
       "Weight": 1,
-      "Top": "BlockTextures/Grass_Top.png",
-      "Bottom": "BlockTextures/Dirt.png",
-      "Side": "BlockTextures/Grass_Side.png"
+      "Up": "BlockTextures/Grass_Top.png",
+      "Down": "BlockTextures/Dirt.png",
+      "Sides": "BlockTextures/Grass_Side.png"
     }
   ]
 }
@@ -221,10 +234,14 @@ Textures support per-face assignment and weighted random variants:
 | Face Property | Description |
 |---------------|-------------|
 | `All` | Apply to all faces |
-| `Top` | Top face (+Y) |
-| `Bottom` | Bottom face (-Y) |
-| `Side` | All side faces |
+| `Up` | Top face (+Y) |
+| `Down` | Bottom face (-Y) |
+| `UpDown` | Both top and bottom |
+| `Sides` | All four side faces |
 | `North`, `South`, `East`, `West` | Individual side faces |
+| `Weight` | Relative weight of this variant (int) |
+
+(Keys are those of `BlockTypeTextures.CODEC` — there are no `Top` / `Bottom` / `Side` keys.)
 
 ### Light Emission
 
@@ -233,29 +250,38 @@ Blocks can emit colored light:
 ```json
 {
   "Light": {
-    "Color": [255, 200, 100],
-    "Intensity": 15
+    "Color": "#015",
+    "Radius": 1
   }
 }
 ```
+
+`Light` decodes through `ProtocolCodecs.COLOR_LIGHT`: `Color` is a hex string (`"#RGB"` or `"#RRGGBB"`) and `Radius` an int; there is no `Intensity` key. Shipped fluids and lamps set only `Color` (e.g. `"Light": { "Color": "#765" }`).
 
 ### Collision Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `HitboxType` | string | Reference to hitbox definition |
-| `Support` | string | Support requirements: `"Down"`, `"Up"`, `"All"` |
+| `HitboxType` | string | Reference to hitbox definition (file basename under `Server/Item/Block/Hitboxes/`) |
+| `Support` | object | Required support, keyed by face (`Up`/`Down`/`North`/`South`/`East`/`West`) → array of `RequiredBlockFaceSupport` entries, e.g. `"Support": { "Down": [ { "FaceType": "Full" } ] }` |
+| `Supporting` | object | Which faces this block offers as support to neighbors, same face-keyed shape (e.g. `{ "Up": [ { "FaceType": "Full" } ] }`) |
+| `SupportsRequiredFor` | string | `"Any"` / `"All"` — see [BlockSupportsRequiredForType](#blocksupportsrequiredfortype) |
+| `MaxSupportDistance` | int | 0–14 |
+| `IgnoreSupportWhenPlaced` | boolean | Skip the support check at placement time |
+
+`Support` is not a string — the full rule shape (`FaceType`, `BlockTypeId`, `TagId`, `BlockSetId`, `FluidId`, `MatchSelf`, `Rotate`, …) is documented in [Support System](items-blocks.md#support-system).
 
 ### Behavior Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `Gathering` | object | Tool type and drop configuration |
-| `VariantRotation` | string | Rotation support: `"NESW"` |
-| `Flags` | object | Boolean flags (e.g., `IsUsable`) |
-| `Interactions` | object | Primary, Use, Collision handlers |
-| `State` | object | State machine configuration |
-| `Ticker` | object | Automatic update behavior |
+| `VariantRotation` | string | Rotation support — see [VariantRotation](#variantrotation) |
+| `Flags` | object | Boolean flags (only `IsStackable` as of 0.6.3 — see [Flags](#flags)) |
+| `Interactions` | object | Primary, Use, Collision, OnBreak, … handlers |
+| `State` | object | State definitions (`Definitions` map) |
+| `IsDoor` | boolean | Marks a door block (`BlockType.isDoor()`; shipped doors set it) |
+| `TickProcedure` / `RandomTickProcedure` | object | Scheduled / random ticking — see [Block Ticking](#block-ticking). (There is no `Ticker` key on a `BlockType`; `Ticker` belongs to fluid blocks.) |
 
 ### Gathering Configuration
 
@@ -266,30 +292,15 @@ Defines what tool breaks the block and what it drops:
   "Gathering": {
     "Breaking": {
       "GatherType": "Rocks",
-      "DropList": [
-        {
-          "ItemId": "Rock_Stone",
-          "Quantity": 1,
-          "Chance": 1.0
-        },
-        {
-          "ItemId": "Ingredient_Stone_Chip",
-          "Quantity": [1, 3],
-          "Chance": 0.25
-        }
-      ]
+      "ItemId": "Rock_Stone_Cobble"
     }
   }
 }
 ```
 
-| GatherType | Tool Required |
-|------------|---------------|
-| `Rocks` | Pickaxe |
-| `Woods` | Hatchet |
-| `SoftBlocks` | Shovel |
-| `Plants` | Hand/Sickle |
-| `Ores` | Pickaxe |
+`Breaking` either names a direct drop (`ItemId` + optional `Quantity` / `Quality`) or references a drop table by id — `"DropList": "Iron_Stack"` (a **string**, resolved against [drop tables](drops.md); `Deco_Iron_Stack.json` does this). `DropList` is not an inline array.
+
+`GatherType` values used by shipped blocks (0.6.3): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Benches`, `OreCopper` / `OreIron` / `OreSilver` / `OreGold` / `OreCobalt` / `OreThorium` / `OreMithril` / `OreAdamantite`, `Unbreakable`, `SoftWoods`. The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
 
 ### VariantRotation
 
@@ -303,23 +314,31 @@ Enables directional placement based on player facing:
 
 | Value | Description |
 |-------|-------------|
-| `"NESW"` | 4 cardinal directions (North, East, South, West) |
+| `"None"` | No placement rotation |
+| `"NESW"` | 4 cardinal directions (North, East, South, West) — the common case (487 shipped items) |
+| `"UpDownNESW"` | Cardinal directions plus up/down facing (236) |
+| `"Wall"` | Wall-mounted orientation (75) |
+| `"UpDown"` | Vertical axis only (44) |
+| `"Pipe"` / `"DoublePipe"` | Axis-aligned pipe orientations (58 / 128) |
+| `"All"` | Every rotation (1) |
+
+(The `VariantRotation` enum; counts are shipped 0.6.3 usage.)
 
 ### Flags
-
-Boolean behavior flags:
 
 ```json
 {
   "Flags": {
-    "IsUsable": true
+    "IsStackable": true
   }
 }
 ```
 
 | Flag | Description |
 |------|-------------|
-| `IsUsable` | Block responds to Use interaction |
+| `IsStackable` | Builder-tool scatter may stack this block on top of a like block (`BlockFlags.isStackable`) |
+
+`IsUsable` was removed by 0.6.3 (the `BlockFlags` codec now has only `IsStackable`, and the client packet no longer carries flags). A block is "usable" simply by having a `Use` interaction — shipped doors and chests set `"Flags": {}` and `"Interactions": { "Use": ... }`.
 
 ---
 

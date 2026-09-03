@@ -515,11 +515,14 @@ Ready-made codecs for common server/protocol value types, so you don't hand-roll
 ```java
 public static final ColorCodec COLOR;                              // Codec<Color>
 public static final ArrayCodec<Color> COLOR_ARRAY;
-public static final ColorAlphaCodec COLOR_AlPHA;                   // sic — note the lowercase 'l'
+public static final ColorAlphaCodec COLOR_ALPHA;                   // was misspelled COLOR_AlPHA before 0.6.3
 public static final BuilderCodec<ColorLight> COLOR_LIGHT;
 public static final BuilderCodec<Direction> DIRECTION;
 public static final EnumCodec<GameMode> GAMEMODE;
+public static final EnumCodec<GameMode> GAMEMODE_LEGACY;
 public static final BuilderCodec<Size> SIZE;
+public static final BuilderCodec<IntersectionHighlight> INTERSECTION_HIGHLIGHT;
+public static final BuilderCodec<SavedMovementStates> SAVED_MOVEMENT_STATES;
 public static final BuilderCodec<Range> RANGE;                     // int Min/Max
 public static final BuilderCodec<Rangeb> RANGEB;                   // byte Min/Max
 public static final BuilderCodec<Rangef> RANGEF;                   // float Min/Max
@@ -536,13 +539,15 @@ public static final BuilderCodec<RailPoint> RAIL_POINT_CODEC;
 public static final BuilderCodec<RailConfig> RAIL_CONFIG_CODEC;
 ```
 
-> The alpha-color constant really is spelled **`COLOR_AlPHA`** (lowercase `l`) in the jar — `ProtocolCodecs.COLOR_ALPHA` does not compile.
+> The alpha-color constant is **`COLOR_ALPHA`** as of 0.6.3. Through 0.5.x it was misspelled `COLOR_AlPHA` (lowercase `l`) in the jar; the old name was removed by 0.6.3, so code written against it no longer compiles — rename to `ProtocolCodecs.COLOR_ALPHA`.
 
 ### ColorCodec
 
 **Package:** `com.hypixel.hytale.server.core.codec.protocol`
 
 A `Codec<com.hypixel.hytale.protocol.Color>`. Encodes to a `#RRGGBB` hex string; decodes `#RGB`, `#RRGGBB`, or `rgb(R,G,B)` strings (via [`ColorParseUtil`](assets.md#colorparseutil)). An unparseable string throws a `CodecException`: `Invalid color format, expected: #RGB, #RRGGBB or rgb(R,G,B)`. Normally reached through `ProtocolCodecs.COLOR` rather than `new ColorCodec()`.
+
+> **`CodecException` messages carry the key path.** When a codec throws with an `ExtraInfo` in hand, `getMessage()` is the bare message plus the offending key and source (`<message> '<key>' \nFrom: '<value>'`). As of 0.6.3 `CodecException.getRawMessage()` returns the bare message on its own — match on that (or on a fragment) rather than on the full `getMessage()` text.
 
 ### WeightedMapCodec<T>
 
@@ -610,6 +615,7 @@ Static helpers for moving `BsonDocument`s between bytes, files, and JSON. The fi
 ```java
 // bytes / buffers
 public static byte[] writeToBytes(BsonDocument doc);
+public static int encodeInto(BsonDocument doc, BasicOutputBuffer out);  // 0.6.3+: bytes written
 public static BsonDocument readFromBytes(byte[] bytes);
 public static BsonDocument readFromBuffer(ByteBuffer buffer);
 public static BsonDocument readFromBinaryStream(ByteBuffer buffer);
@@ -628,9 +634,15 @@ public static BsonValue translateJsonToBson(com.google.gson.JsonElement json);
 public static com.google.gson.JsonElement translateBsonToJson(BsonDocument doc);
 public static String toJson(BsonDocument doc);
 
+// JSON string -> BsonDocument with a nesting cap (0.6.3+); default maxDepth = 256
+public static BsonDocument parseWithMaxDepth(String json);
+public static BsonDocument parseWithMaxDepth(String json, int maxDepth);
+
 // encode a value with its codec and write it, synchronously
 public static <T> void writeSync(Path path, Codec<T> codec, T value, HytaleLogger logger) throws IOException;
 ```
+
+`parseWithMaxDepth` (0.6.3+) is the safe way to turn **untrusted** JSON text into a `BsonDocument`: it reads through `com.hypixel.hytale.server.core.util.DepthLimitedJsonReader`, which counts document/array nesting and throws `DepthLimitedJsonReader.MaxDepthExceededException` (`JSON nesting exceeded the maximum allowed depth of <N>`) once the cap is passed. The engine uses it for JSON that arrives over the wire (asset-editor edits, anchor-action payloads); ordinary asset loading goes through `RawJsonReader` and is **not** depth-limited by it.
 
 ### HashUtil
 
@@ -695,6 +707,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`JSON config cannot be null when creating builder`** → `withConfig(...)` / builder creation received a null JSON config source. Fix: provide a non-null config.
 - **`Codec cannot be null if persistence is enabled.`** → persistence was enabled but no codec was supplied to serialize the persisted value. Fix: pass a codec, or disable persistence.
 - **`VarInt cannot encode negative values:`** → a negative number was written as a VarInt. Fix: VarInts are unsigned; use a signed/zigzag encoding for values that can be negative.
+- **`JSON nesting exceeded the maximum allowed depth of`** (0.6.3+) → `BsonUtil.parseWithMaxDepth` hit its nesting cap (default 256) on a deeply nested JSON string. Fix: flatten the payload, or pass a larger `maxDepth` if the depth is legitimate.
 - **Symptom:** custom polymorphic types fail to resolve with a *"Failed to find codec for"* style error → the concrete type was never registered. Fix: register each subtype via `getCodecRegistry(...)` during `setup()` using the 3-arg `register(id, type, codec)` (there is no 2-arg `register("name", instance)`).
 
 ---

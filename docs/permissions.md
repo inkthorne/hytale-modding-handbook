@@ -1,6 +1,6 @@
 ---
 title: "Permissions API"
-description: "Check Hytale permissions in Java — the PermissionHolder interface (implemented by Player), permission checks with default values, command-level permissions, and permission events."
+description: "Check Hytale permissions in Java — the PermissionHolder interface (implemented by PlayerRef), permission checks with default values, command-level permissions, and permission events."
 seo:
   type: TechArticle
 ---
@@ -20,7 +20,8 @@ This page covers the role-based permission system: checking permissions on playe
 ## Overview
 
 Implemented in `com.hypixel.hytale.server.core.permissions` (with permission events in `com.hypixel.hytale.server.core.event.events.permissions`) and provides:
-- A `PermissionHolder` interface for permission checks (implemented by `Player`)
+- A `PermissionHolder` interface for permission checks (implemented by `PlayerRef` and `ConsoleSender` — not by the entity `Player`)
+- `PermissionQuery` (0.6.3+) — a pre-split node used by the `hasPermission` overloads and by command gating
 - A role/group model with inheritance, served by a pluggable `PermissionProvider` (default: disk-backed `HytalePermissionsProvider`)
 - `PermissionsModule` — register permission nodes, assign users/groups, swap providers
 - Namespaced node + group naming, validated by `PermissionValidation`
@@ -30,8 +31,8 @@ Implemented in `com.hypixel.hytale.server.core.permissions` (with permission eve
 ## Architecture
 ```
 Permission checks
-├── PermissionHolder (Player implements it)
-│   └── hasPermission(node) / hasPermission(node, default)   (Admin group holds "*" = all)
+├── PermissionHolder (PlayerRef / ConsoleSender implement it)
+│   └── hasPermission(node | PermissionQuery) / hasPermission(…, default)   (Admin group holds "*" = all)
 ├── PermissionsModule (singleton; register nodes, assign users/groups, manage providers)
 │   └── PermissionProvider (SPI)  ── default: HytalePermissionsProvider (permissions.json on disk)
 │         └── groups with inheritance: None ← Adventurer ← Builder ← WorldEditor ← ServerEditor ← Admin
@@ -49,9 +50,10 @@ Permission Events (event.events.permissions)
 
 | Class | Location | Description |
 |-------|----------|-------------|
-| `PermissionHolder` | `server.core.permissions` | Interface for entities that can hold permissions; `Player` implements it |
+| `PermissionHolder` | `server.core.permissions` | Interface for anything that can hold permissions; `PlayerRef` (and `ConsoleSender`) implement it |
+| `PermissionQuery` | `server.core.permissions` | (0.6.3+) A node id pre-split into its wildcard/deny forms; `PermissionQuery.of(id)`, `getId()` |
 | `PermissionsModule` | `server.core.permissions` | Core module (`get()` singleton): register nodes, assign users/groups, manage providers, `reload()` |
-| `HytalePermissions` | `server.core.permissions` | Built-in node/group name constants + `fromCommand(...)` node helper |
+| `HytalePermissions` | `server.core.permissions` | Built-in node constants (`PermissionQuery`s as of 0.6.3) + `fromCommand(...)` / `toolPermission(...)` helpers |
 | `PermissionValidation` | `server.core.permissions` | `isValidPermissionNode(String)` / `isValidGroupName(String)` |
 | `PermissionProvider` | `server.core.permissions.provider` | SPI for the permission backend (users, groups, inheritance) |
 | `HytalePermissionsProvider` | `server.core.permissions.provider` | Default disk-backed provider; defines the built-in groups |
@@ -62,15 +64,29 @@ Permission Events (event.events.permissions)
 ## PermissionHolder
 **Package:** `com.hypixel.hytale.server.core.permissions`
 
-Interface for entities that can have permissions. `Player` implements this.
+Interface for anything that can hold permissions. `PlayerRef` implements it (as does the
+console's `ConsoleSender`); the entity component `Player` does **not** — get the `PlayerRef`
+from your command's `execute` parameters, from `player.getPlayerRef()`, or from the store
+(`PlayerRef.getComponentType()`).
 
 ### Methods
 ```java
 boolean hasPermission(String permission)
 boolean hasPermission(String permission, boolean defaultValue)
+boolean hasPermission(PermissionQuery query)                        // (0.6.3+) default method
+boolean hasPermission(PermissionQuery query, boolean defaultValue)  // (0.6.3+) default method
 ```
 
-A holder is granted a node if it (or one of its groups, walking the inheritance chain) holds that exact node — or the wildcard `*`. The `hytale:Admin` group holds `*`, which is why operators pass every check.
+`PlayerRef` forwards every overload to `PermissionsModule.get().hasPermission(uuid, …)`; the
+single-argument forms default to `false` when the node is unset.
+
+**Resolution (0.6.3):** the holder's effective node set (user grants plus every group in
+the inheritance chain) is matched against the query in this order — `-*` (deny all) →
+`-a.b.c` (exact deny) → `a.b.c` (exact grant) → deny wildcards `-a.b.*`, `-a.*` (most
+specific first) → `*` → grant wildcards `a.*`, `a.b.*`. The first hit decides; no hit
+falls through to the default value. So a deny always beats a grant at the same
+specificity, and the `hytale:Admin` group's `*` is why operators pass every check unless
+something explicitly denies the node.
 
 ## Groups & Roles
 
@@ -119,6 +135,20 @@ String node = HytalePermissions.fromCommand("tp");        // the node for comman
 String sub  = HytalePermissions.fromCommand("perm", "reload");  // node for a subcommand
 ```
 
+The engine's own feature nodes are also constants on `HytalePermissions` — as of 0.6.3 they
+are `PermissionQuery` values rather than `String`s (`ASSET_EDITOR`, `BUILDER_TOOLS_EDITOR`,
+`EDITOR_BRUSH_USE`, `FLY_CAM`, `NO_CLIP`, `SERVER_JOIN`, `WORLD_MAP_MARKER_TELEPORT`, …), so
+pass them to the `hasPermission(PermissionQuery)` overload or call `getId()` for the string.
+`HytalePermissions.toolPermission(String)` builds `hytale.editor.tool.<name>`
+(`EDITOR_TOOL_BASE`) for editor tools.
+
+```java
+// 0.5.x: playerRef.hasPermission(HytalePermissions.FLY_CAM)          — String
+// 0.6.3: still compiles — resolves to the PermissionQuery overload
+if (playerRef.hasPermission(HytalePermissions.FLY_CAM)) { /* ... */ }
+String id = HytalePermissions.FLY_CAM.getId();   // "hytale.camera.flycam"
+```
+
 ## PermissionsModule
 
 The core module (`PermissionsModule.get()`) is where you **register permission nodes** and **assign** users/groups
@@ -145,8 +175,27 @@ Set<String> groups = perms.getGroupsForUser(playerUuid);
 Set<String> all    = perms.getAllRegisteredGroups();
 Map<String, Set<String>> nodes = PermissionsModule.getRegisteredPermissions();
 
+// Check a user directly (no PlayerRef needed — works for offline players too)
+boolean ok = perms.hasPermission(playerUuid, "myplugin.shop.use");
+boolean ok2 = perms.hasPermission(playerUuid, PermissionQuery.of("myplugin.shop.use"), false);
+
 perms.reload();   // re-read the provider's backing store (also exposed as /perm reload)
 ```
+
+Bulk / reverse-lookup helpers added in 0.6.3 (these back the join-grant "whitelist" — see
+[Access Control](#access-control-bans--join-permission)):
+
+| Method | Purpose |
+|--------|---------|
+| `addUserPermission(Collection<UUID>, Set<String>)` | Grant nodes to many users at once; returns the UUIDs actually changed |
+| `removeUserPermissionFromAll(String node)` | Revoke one node from every user that holds it directly; returns the affected UUIDs |
+| `hasUserGrant(UUID, String node)` | `true` only if the node is a **direct user grant** (ignores groups and wildcards) |
+| `getUsersWithPermission(String node)` | Every user with that direct grant |
+| `hasPermission(UUID, PermissionQuery[, boolean])` | The `PermissionQuery` form of the per-user check |
+| `ROOT` / `ROOT_DENY` | The `"*"` grant-all and `"-*"` deny-all node strings |
+
+`registerPermission` validates its inputs and throws `IllegalArgumentException`
+(`Invalid permission node: …` / `Invalid group name: …`) rather than failing silently.
 
 > Register nodes during your plugin's `setup()` so they exist before checks/commands run. Changes made through the
 > module are persisted by the active provider.
@@ -173,6 +222,8 @@ Key SPI methods (all on `PermissionProvider`):
 | `getGroupParent(String)` | The parent group (drives **inheritance**) |
 | `getEffectiveGroupPermissions(String)` | Inheritance-resolved node set for a group |
 | `getAllRegisteredGroups()` | All known groups |
+| `getUsersWithPermission(String)` | **Abstract as of 0.6.3** — a custom provider must implement this reverse lookup (used by the join-grant commands) |
+| `addUserPermissions(Collection<UUID>, Set)` / `removeUserPermissionFromAll(String)` | `default` bulk methods (0.6.3+) built on the per-user ones; override for efficiency |
 
 ## Usage
 
@@ -181,9 +232,8 @@ Key SPI methods (all on `PermissionProvider`):
 @Override
 protected void execute(CommandContext ctx, Store<EntityStore> store,
                       Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-    Player player = store.getComponent(ref, Player.getComponentType());
-
-    if (player.hasPermission("myplugin.admin")) {
+    // PlayerRef is the PermissionHolder (the Player component is not)
+    if (playerRef.hasPermission("myplugin.admin")) {
         // Admin-only action
         playerRef.sendMessage(Message.raw("Admin access granted"));
     } else {
@@ -195,10 +245,10 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
 ### With Default Value
 ```java
 // Returns true if permission not explicitly set
-boolean canUse = player.hasPermission("myplugin.feature", true);
+boolean canUse = playerRef.hasPermission("myplugin.feature", true);
 
 // Returns false if permission not explicitly set
-boolean isAdmin = player.hasPermission("myplugin.admin", false);
+boolean isAdmin = playerRef.hasPermission("myplugin.admin", false);
 ```
 
 ## Command Permissions
@@ -222,9 +272,9 @@ public class AdminCommand extends AbstractPlayerCommand {
 | Method | Use |
 |--------|-----|
 | `requirePermission(String node)` | Gate on a specific permission node |
-| `requirePermission(PermissionQuery query)` | Same, with a pre-built `PermissionQuery` (0.6+) |
-| `requireNoPermission()` | Skip the auto-generated per-command node so everyone can run it (0.6+; replaces the removed `canGeneratePermission()` override) |
-| `registerExtendedPermission(String suffix)` | Register and return `<command node>.<suffix>` as a `PermissionQuery` for finer gating inside the command; `null` if the command has no node (0.6+) |
+| `requirePermission(PermissionQuery query)` | Same, with a pre-built `PermissionQuery` (0.6.3+) |
+| `requireNoPermission()` | Skip the auto-generated per-command node so everyone can run it (0.6.3+; replaces the `canGeneratePermission()` override removed by 0.6.3) |
+| `registerExtendedPermission(String suffix)` | (0.6.3+, `protected`) Register and return `<command node>.<suffix>` as a `PermissionQuery` for finer gating inside the command. **Not a constructor call**: it returns `null` while the command's node is unset, and the node only exists after `setOwner()` at registration — call it from an override of `completeRegistration()`, after `super.completeRegistration()` (the engine's target-player bases derive `.other` / `.all` this way) |
 | `setPermissionGroups(String... groups)` | Assign the command to permission group(s) — the role-based form |
 | `setPermissionGroup(GameMode)` | **Deprecated** (Update 5) — the old game-mode-keyed form; use `setPermissionGroups(String...)` |
 
@@ -234,11 +284,13 @@ sub-commands append their own segment, and `CommandManager`-owned commands use `
 players (`hytale:Adventurer`) don't hold it, so it reads as "no permission" until granted (the `hytale:Admin` wildcard
 `*` is why ops can always run it). Call `requireNoPermission()` in the constructor for a command any player should run.
 (`HytalePermissions.fromCommand(name)` → `hytale.command.<name>` is a constant helper, not what registration generates.
-`CommandUtil.requirePermission(holder, node)` is the static check used internally.)
+`CommandUtil.requirePermission(holder, node)` — `String` or, as of 0.6.3, `PermissionQuery` — is the static check used
+internally; it throws a `CommandException` that reaches the sender as *"no permission"*.)
 
-Since 0.6 the command's stored permission is a **`PermissionQuery`** (`server.core.permissions`): `PermissionQuery.of(id)`
-pre-splits the node into its wildcard ancestors (`a.*`, `a.b.*`, …) and deny forms (`-a.b.c`) so `hasPermission` can
-match them without re-parsing; `getId()` returns the plain node string.
+As of 0.6.3 the command's stored permission is a **`PermissionQuery`** (`server.core.permissions`): `PermissionQuery.of(id)`
+pre-splits the node into its wildcard ancestors (`a.*`, `a.b.*`, …) and deny forms (`-a.b.c`, `-a.*`, …) so `hasPermission` can
+match them without re-parsing; `getId()` returns the plain node string (see [PermissionHolder](#permissionholder) for the
+match order).
 
 Players without the required permission won't be able to execute the command.
 
@@ -370,56 +422,79 @@ protected void setup() {
         System.out.println("Group " + group + " gained permissions: " + added);
     });
 }
+```
 
 ---
 
-## Access Control (Bans & Whitelist)
+## Access Control (Bans & Join Permission)
 
 **Package:** `com.hypixel.hytale.server.core.modules.accesscontrol`
 
-A separate subsystem from permissions, access control decides **whether a player may connect at all** (bans, whitelist) rather than what an already-connected player is allowed to do. It ships as a core `JavaPlugin` module (`AccessControlModule`) and provides the built-in `/ban`, `/unban`, and `/whitelist …` commands — but it is also an **extension point**: a plugin can register its own access source.
+A separate subsystem from permissions, access control decides **whether a player may connect at all** (bans, join
+allow-list) rather than what an already-connected player is allowed to do. It ships as a core `JavaPlugin` module
+(`AccessControlModule`) and provides the built-in `/ban`, `/unban`, and `/whitelist …` commands — but it is also an
+**extension point**: a plugin can register its own access source or swap the ban store.
+
+> **Reworked by 0.6.3.** The ban model is now a single codec-backed `Ban` value behind a `BanProvider` SPI —
+> `BanParser`, `InfiniteBan`, `TimedBan`, `AbstractBan`, `registerBanParser(...)` and `parseBan(...)` were removed. The
+> whitelist became a **permission**: `HytalePermissions.SERVER_JOIN` (`hytale.server.join`), enforced by
+> `JoinPermissionProvider` when the server config's `RequireJoinPermission` is on (`HytaleServerConfig.isRequireJoinPermission()`);
+> `HytaleWhitelistProvider` is gone and an existing `whitelist.json` is migrated once into per-user grants
+> (`WhitelistMigration`, which renames the file). Because it is an ordinary permission, a **group or wildcard grant also
+> satisfies it** — `hytale:Admin`'s `*` lets ops join a join-restricted server without an explicit entry.
 
 ### Key Classes
 
 | Class | Description |
 |-------|-------------|
-| `AccessControlModule` | Core module; singleton via `AccessControlModule.get()`. Registration entry points below |
+| `AccessControlModule` | Core module; singleton via `AccessControlModule.get()`. Entry points below |
 | `AccessProvider` (SPI, `.provider`) | A pluggable access source. `getDisconnectReason(UUID)` returns `CompletableFuture<Optional<Message>>` — a present `Message` denies the connection with that reason; empty allows it |
-| `Ban` (SPI, `.ban`) | Extends `AccessProvider`; a single ban with `getTarget()`, `getBy()`, `getTimestamp()`, `getReason()`, `isInEffect()`, `getType()`, `toJsonObject()` |
-| `BanParser` (SPI, `.ban`) | Deserializes a `Ban` from a `JsonObject` (`parse(JsonObject)`); register one per ban `type` string |
-| `InfiniteBan` / `TimedBan` | Built-in `Ban` implementations (permanent / time-limited) |
+| `JoinPermissionProvider` (`.provider`) | The built-in join gate: allows everyone unless `RequireJoinPermission` is set, then requires `hytale.server.join` |
+| `BanProvider` (SPI, `.provider`) | Extends `AccessProvider`; the ban store: `hasBan(UUID)`, `getBan(UUID)`, `addBan(Ban)`, `removeBan(UUID)`, `getBans()`, `load()` / `save()`; its default `getDisconnectReason` denies while `getBan(uuid).isInEffect()` |
+| `HytaleBanProvider` (`.provider`) | Default disk `BanProvider` (`bans.json`, `BAN_FILE_PATH`) |
+| `BanStorageProvider` (`.provider`) | Codec-selected factory (`CODEC`, keyed by id) that yields the `BanProvider` — `DiskBanStorageProvider` (`"Disk"`) is the built-in |
+| `Ban` (`.ban`) | A single ban (final, codec-backed `CODEC`): `new Ban(target, by, timestamp, expiresOn, reason)` — `expiresOn == null` is permanent; `getTarget()`, `getBy()`, `getTimestamp()`, `getExpiresOn()`, `getReason()`, `isInEffect()`, `getDisconnectReason()`, plus typed metadata via `getMetadata(KeyedCodec)` / `withMetadata(...)` |
 
-### Registering a custom provider
-
-`AccessControlModule.get()` exposes:
+### AccessControlModule entry points
 
 | Method | Description |
 |--------|-------------|
-| `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection |
-| `registerBanParser(String type, BanParser)` | Register a deserializer for a custom ban `type` |
-| `parseBan(String type, JsonObject)` | Parse a stored ban via the registered parser for `type` |
+| `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection (the `SingleplayerModule` uses this) |
+| `getBanProvider()` / `setBanProvider(BanProvider)` / `restoreBanProvider(expected, previous)` | Read or swap the ban store; `setBanProvider` returns the previous one and `restoreBanProvider` puts it back only if the current one is still `expected` |
+| `ban(Ban)` / `unban(UUID)` / `isBanned(UUID)` | Ban bookkeeping through the active provider |
+| `isJoinPermissionRequired()` / `setJoinPermissionRequired(boolean)` | Read / persist the config flag (`CompletableFuture<Void>`) |
+| `allowJoin(UUID)` / `allowJoin(Collection<UUID>)` / `disallowJoin(UUID)` / `disallowAllJoins()` | Grant / revoke the `hytale.server.join` **user** grant (the `/whitelist add|remove|clear` commands) |
+| `isAllowedToJoin(UUID)` / `getUsersWithJoinGrant()` | Effective check (groups/wildcards count) / the direct grants only |
 
 ```java
 AccessControlModule.get().registerAccessProvider(uuid ->
     isOnMyExternalBlocklist(uuid)
         ? CompletableFuture.completedFuture(Optional.of(Message.raw("Blocked by external list")))
         : CompletableFuture.completedFuture(Optional.empty()));
+
+// Ban for 24 hours
+AccessControlModule.get().ban(new Ban(targetUuid, adminUuid, Instant.now(),
+        Instant.now().plus(Duration.ofHours(24)), "Griefing"));
 ```
 
 > [!WARNING]
-> Verified against `HytaleServer.jar`. No first-party content plugin in build-12 references this module, so the registration entry points are documented from their signatures; the lifecycle timing (when during startup to call `registerAccessProvider`) is not demonstrated by an inspectable plugin — register during your plugin `setup()` and test against your target build.
+> Verified against `HytaleServer.jar` (0.6.3). Apart from `SingleplayerModule`, no first-party plugin registers an
+> `AccessProvider` or swaps the `BanProvider`, so those entry points are documented from their signatures — register
+> during your plugin `setup()` and test against your target build.
 
 ---
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the 0.5.0 server (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the 0.6.3 server (verified against `HytaleServer.jar`).
 
 - **`Cannot change permissions when a command has already completed registration`** → `requirePermission(...)`, `setPermissionGroups(...)`, or another permission setter was called after the command was registered. Fix: call it in the command constructor, before `registerCommand()`.
 - **Symptom:** `hasPermission("node")` returns `false` for a node nobody has explicitly set → the single-arg overload defaults to `false` when the node is unset. Fix: use `hasPermission("node", true)` when "unset" should mean allowed (see [With Default Value](#with-default-value)).
 - **Symptom:** a freshly registered command replies *"no permission"* for ordinary players even without `requirePermission(...)` → every command auto-generates a node (`<group>.<name>.command.<cmd>`, from the plugin manifest) that the default `hytale:Adventurer` group doesn't hold; only `hytale:Admin` (via the `*` wildcard) does. Fix: call `requireNoPermission()` in the constructor, or grant the node to a group via `PermissionsModule`. See [Commands: Permission model](commands.md#permission-model-why-a-new-command-says-no-permission).
 - **Symptom:** `setPermissionGroup(GameMode)` no longer behaves as expected → it's **deprecated** in Update 5 and permissions are no longer game-mode-keyed. Fix: use `setPermissionGroups(String...)` with group names (e.g. `"hytale:Admin"`).
-- **Symptom:** a registered permission node or group name is silently rejected → it failed validation. Fix: namespace nodes (`myplugin.feature`) and groups (`myplugin:Role`), and pre-check with `PermissionValidation.isValidPermissionNode` / `isValidGroupName`.
+- **`Invalid permission node: <node>`** / **`Invalid group name: <group>`** (`IllegalArgumentException` from `PermissionsModule.registerPermission`) → the name failed validation. Fix: namespace nodes (`myplugin.feature`) and groups (`myplugin:Role`), and pre-check with `PermissionValidation.isValidPermissionNode` / `isValidGroupName`.
+- **Symptom:** `player.hasPermission(...)` does not compile → the entity `Player` is not a `PermissionHolder`. Fix: check on the `PlayerRef` (`playerRef.hasPermission(...)`) or by UUID via `PermissionsModule.get().hasPermission(uuid, node)`.
+- **Symptom:** a player who is not on the join list can still connect with `RequireJoinPermission` on → `hytale.server.join` is a normal permission, so a group grant or wildcard (`hytale:Admin`'s `*`) satisfies it. Fix: this is by design; deny it explicitly (`-hytale.server.join`) on the group if you need a hard block.
 
 ---
 

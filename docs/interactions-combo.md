@@ -33,7 +33,7 @@ Combo System (coordinated by shared ChainId)
 │   └── Held path ─► often a Charging │ or sets a flag
 ├── ChargingInteraction (Next: time-threshold → interaction)
 ├── ChainFlagInteraction ─────────────┘ (sets Flag on a ChainId)
-└── CancelChainInteraction (clears chain state + flags for a ChainId)
+└── CancelChainInteraction (removes the stored chain index for a ChainId)
 ```
 
 ## Key Classes
@@ -44,7 +44,7 @@ Combo System (coordinated by shared ChainId)
 | `FirstClickInteraction` | `config/client/FirstClickInteraction` | Branches on tap (`Click`) vs hold (`Held`) input |
 | `ChargingInteraction` | `config/client/ChargingInteraction` | Charge-and-release, keyed by hold-time thresholds |
 | `ChainFlagInteraction` | `config/none/ChainFlagInteraction` | Sets a named flag on a chain to trigger a `Flags` branch |
-| `CancelChainInteraction` | `config/none/CancelChainInteraction` | Resets an active chain's state (and clears its flags) |
+| `CancelChainInteraction` | `config/none/CancelChainInteraction` | Resets an active chain's position to the start |
 
 ## Quick Navigation
 
@@ -69,9 +69,9 @@ Enables combo attack chains where players can input subsequent attacks within a 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Chaining"` |
-| `ChainingAllowance` | float | Required | Time window (seconds) to input the next attack |
+| `ChainingAllowance` | float | `0` | Time window (seconds) to input the next attack; `0` (the default) never expires the chain |
 | `Next` | array | Required | Sequence of interactions in the chain |
-| `ChainId` | string | - | Identifier for cross-interaction chain synchronization |
+| `ChainId` | string | - | Identifier for cross-interaction chain synchronization (when omitted, chain state is keyed by this interaction's own id) |
 | `Flags` | object | - | Named branches that can be triggered via ChainFlagInteraction |
 
 ### Attack Chain Timing
@@ -90,7 +90,7 @@ Attack chains allow sequential attacks to flow together as combos. The timing be
 
 Defines how long (in seconds) the player has to execute the next attack before the chain breaks and resets.
 
-**File location:** `Server/Item/Interactions/Weapons/{WeaponType}/Primary/*_Chain.json`
+**File location:** `Server/Item/Interactions/Weapons/{WeaponType}/Primary/*_Chain.json` (e.g. `Battleaxe/Primary/Weapon_Battleaxe_Primary_Chain.json`, `Daggers/Primary/Weapon_Daggers_Primary_Chain.json`; the sword's sits one level deeper at `Sword/Attacks/Primary/Weapon_Sword_Primary_Chain.json`)
 
 **Example:**
 ```json
@@ -129,14 +129,14 @@ Configured in Root Interaction files: `Server/Item/RootInteractions/Weapons/{Wea
 
 ### ChainingAllowance Timing
 
-The `ChainingAllowance` value determines how long the player has to input the next attack in the chain. This window opens during the current attack animation.
+The `ChainingAllowance` value determines how long the player has to input the next attack in the chain. This window opens during the current attack animation. The server accepts a small grace band around the boundary — `min(0.5, ChainingAllowance × 0.25)` seconds — during which either the next step or a restart from step 0 is accepted; an input past the allowance restarts the chain at index 0, and once the last `Next` entry has run the chain wraps back to index 0.
 
 **Recommended values by weapon type:**
 
 | Weapon Type | ChainingAllowance | Feel |
 |-------------|-------------------|------|
 | Fast tools (shears) | 0.5 | Very responsive |
-| Light weapons (daggers, sticks) | 0.725-0.93 | Quick combos |
+| Light weapons (sticks, knives, daggers) | 0.725-1.2 | Quick combos |
 | Medium weapons (spears, staves) | 1.2-1.5 | Balanced timing |
 | Heavy weapons (swords, battleaxes) | 2.0-3.0 | Deliberate, weighty |
 | NPCs/AI | 10-15 | Effectively unlimited for AI timing |
@@ -460,7 +460,7 @@ This detection integrates with the chain system - if FirstClickInteraction is pa
 
 **Tool with animation on click:**
 
-From `Watering_Can_Use.json` - clicking plays the water animation then performs the action, while holding goes directly to continuous watering:
+From `RootInteractions/Tools/Watering_Can_Use.json` - clicking plays the water animation then performs a single watering, while holding hands off to `Watering_Can_Use_Charge` (a `Charging` interaction that waters a 3x3 patch once held for 0.5 s):
 
 ```json
 {
@@ -473,7 +473,7 @@ From `Watering_Can_Use.json` - clicking plays the water animation then performs 
     },
     "Next": "Watering_Can_Use"
   },
-  "Held": "Watering_Can_Use"
+  "Held": "Watering_Can_Use_Charge"
 }
 ```
 
@@ -595,6 +595,8 @@ Enables charged attacks and abilities that scale with hold duration. Players hol
 | `Failed` | object | - | Interaction to execute if charging fails/cancels |
 | `MouseSensitivityAdjustmentTarget` | float | - | Target sensitivity multiplier during charge |
 | `MouseSensitivityAdjustmentDuration` | float | - | Time to transition to target sensitivity |
+| `CancelOnOtherClick` | boolean | `true` | Cancel the charge when another click arrives while holding |
+| `Delay` | object | - | `ChargingDelay`: delays the charge when the user is damaged — `MinDelay`/`MaxDelay` (seconds, scaled between the `MinHealth` and `MaxHealth` health fractions), with `MaxTotalDelay` capping the accumulated delay |
 
 ### The Next Map System
 
@@ -614,7 +616,7 @@ The `Next` property is a map where **keys are charge time thresholds** (in secon
 **Key patterns:**
 - `"0"` - Triggered on immediate release (no charge)
 - Numeric strings like `"0.5"`, `"1.2"` - Minimum charge time to trigger
-- Values can be inline interactions, string references, or `"Parent"` to chain back
+- Values can be inline interactions or string references (an inline object may itself use `"Parent"` to inherit from a named interaction and override a few fields)
 
 **Example with references:**
 
@@ -644,8 +646,10 @@ The `Effects` object configures visual and audio feedback during the charging ph
 | `Particles` | array | Particle effects during charging |
 
 **Particles array entry** (a `ModelParticle`: `SystemId` names the particle system,
-`TargetEntityPart`/`TargetNodeName` pick the model node to attach to, and
-`PositionOffset`/`RotationOffset`/`Scale` adjust placement):
+`TargetEntityPart`/`TargetNodeName` pick the model node to attach to,
+`PositionOffset`/`RotationOffset`/`Scale` adjust placement, `Color` tints it,
+`DetachedFromModel` spawns it in world space instead of following the model, and
+`ClearParticlesOnRemove` (0.6.3+) removes the emitted particles when the entry is removed):
 
 ```json
 {
@@ -851,11 +855,10 @@ Sets a flag on a chain that a [ChainingInteraction](#chaininginteraction) can us
 
 When `ChainFlagInteraction` executes:
 
-1. The system looks up the entity's active chain state for the given `ChainId`
-2. It sets a flag index that points to the named flag
-3. On the next tick of the target `ChainingInteraction`, it checks `flagIndex`
-4. If a flag is set (`flagIndex != -1`), the chain jumps to the interaction defined in `Flags[flagName]` instead of continuing its normal `Next` sequence
-5. The flag is consumed (reset) after triggering
+1. The flag is recorded in the **client's** interaction state for the given `ChainId` — the server-side `ChainFlagInteraction.firstRun` is empty; the server only forwards `ChainId`/`Flag` to the client in the interaction packet
+2. The next time the target `ChainingInteraction` runs, the client sends a `flagIndex` (the position of the flag name among the chain's sorted `Flags` keys) instead of a `chainingIndex`
+3. The server validates the index (an out-of-range value fails the interaction with a `WARNING` log) and, when `flagIndex != -1`, jumps to the interaction defined in `Flags[flagName]` instead of continuing its normal `Next` sequence
+4. The flag is consumed (reset) after triggering, so the following run resumes the normal sequence
 
 This allows interactions to "inject" behavior into an ongoing chain without interrupting it directly.
 
@@ -951,7 +954,7 @@ From `Debug_Combo_Primary.json` - when player holds during second attack, it set
 
 **Secondary attack triggering primary's special:**
 
-From `Debug_Combo_Secondary.json` - secondary attack sets a flag on the primary chain:
+From `Debug_Combo_Secondary.json` - the second step of the secondary chain sets a flag on the shared `Debug_Combo` chain (abbreviated):
 
 ```json
 {
@@ -960,25 +963,28 @@ From `Debug_Combo_Secondary.json` - secondary attack sets a flag on the primary 
   "ChainingAllowance": 0.8,
   "Next": [
     {
-      "Type": "Serial",
-      "Interactions": [
-        {
-          "Type": "SendMessage",
-          "Message": "First - Secondary"
-        },
-        {
-          "Type": "ChainFlag",
-          "ChainId": "Debug_Combo",
-          "Flag": "Special_Second"
-        }
-      ],
+      "Type": "SendMessage",
+      "Message": "First - Secondary",
       "RunTime": 0.5
+    },
+    {
+      "Type": "SendMessage",
+      "Message": "Second - Secondary",
+      "RunTime": 0.5,
+      "Next": {
+        "Type": "ChainFlag",
+        "ChainId": "Debug_Combo",
+        "Flag": "Special_Second"
+      }
     }
-  ]
+  ],
+  "Flags": {
+    "Held_Second": { "Type": "SendMessage", "Message": "Held Flag hit!" }
+  }
 }
 ```
 
-When the player uses secondary attack, it immediately sets `Special_Second`. The next primary attack will jump to the flag target instead of the normal combo.
+The second secondary attack sets `Special_Second`; the next primary attack then jumps to the primary chain's `Special_Second` flag target instead of continuing its normal combo. Symmetrically, the primary chain's held second step sets `Held_Second`, which this chain's `Flags` map handles.
 
 ### Common Patterns
 
@@ -992,7 +998,7 @@ When the player uses secondary attack, it immediately sets `Special_Second`. The
 ### Related Interactions
 
 - [ChainingInteraction](#chaininginteraction) - Defines the `Flags` map that ChainFlag targets
-- [CancelChainInteraction](#cancelchaininteraction) - Resets chain state (clears flags)
+- [CancelChainInteraction](#cancelchaininteraction) - Resets chain position to the start
 - [FirstClickInteraction](#firstclickinteraction) - Often used to trigger flags on held input
 
 ---
@@ -1003,7 +1009,7 @@ When the player uses secondary attack, it immediately sets `Special_Second`. The
 
 **Class hierarchy:** `CancelChainInteraction` → `SimpleInstantInteraction` → `SimpleInteraction` → `Interaction`
 
-**Protocol class:** `CancelChainInteractionProtocol` (handles client-server synchronization)
+**Protocol class:** `com.hypixel.hytale.protocol.CancelChainInteraction` (the wire form of the config class, carrying `chainId` to the client)
 
 Cancels and resets an active chain's state, returning it to the beginning. This is used to break combos early, reset chain state after special moves, or clear chain flags without waiting for the `ChainingAllowance` timeout.
 
@@ -1021,25 +1027,24 @@ The `ChainId` validator ensures the property cannot be null or empty - every Can
 When `CancelChainInteraction` executes, the following steps occur internally:
 
 1. **Entity lookup** - Gets the entity from the `InteractionContext`
-2. **Component access** - Retrieves the entity's `ChainingInteraction.Data` component which stores all active chain states
-3. **Chain state removal** - Removes the entry for the specified `ChainId` from the component's `namedMap`
-4. **Flag clearing** - Any flags set on that chain via `ChainFlagInteraction` are also cleared
+2. **Component access** - Retrieves (creating it if absent) the entity's `ChainingInteraction.Data` component, which stores the last-reached index per chain
+3. **Chain state removal** - Removes the entry for the specified `ChainId` from the component's `namedMap` (`getNamedMap().removeInt(chainId)`)
 
-**Effect:** The next time the player triggers an interaction using that `ChainId`, the chain starts from the beginning (index 0 of the `Next` array) instead of continuing from where it left off.
+**Effect:** The next time the player triggers an interaction using that `ChainId`, the chain starts from the beginning (index 0 of the `Next` array) instead of continuing from where it left off. Flags are not part of the server's `Data` component (it holds only the per-chain index maps and a shared `lastAttack` timestamp) — a pending flag set via `ChainFlagInteraction` is client-side state.
 
 ```
 Before CancelChain:
 ┌─────────────────────────────────────────────┐
-│ Chain State for "Sword_Primary"             │
-│   currentIndex: 2                           │
-│   flagIndex: 1 (Counter flag set)           │
-│   timeRemaining: 1.5s                       │
+│ ChainingInteraction.Data                    │
+│   namedMap["Sword_Primary"] = 2             │
+│   lastAttack: <timestamp, shared by chains> │
 └─────────────────────────────────────────────┘
 
 After CancelChain:
 ┌─────────────────────────────────────────────┐
-│ Chain State for "Sword_Primary"             │
+│ ChainingInteraction.Data                    │
 │   (entry removed - chain resets on next use)│
+│   lastAttack: <unchanged>                   │
 └─────────────────────────────────────────────┘
 ```
 
@@ -1054,41 +1059,38 @@ After CancelChain:
 
 **Reset combo after charged attack:**
 
-From `Sword_Combo_Stage_1.json` - after a charged attack, the chain resets:
+From `Sword_Combo_Stage_1.json` (now under `Weapons/Sword/Attacks/Deprecated/Combo/` — the live sword uses `Weapon_Sword_Primary_Chain.json`, but the pattern is unchanged) - a stamina-gated `Charging` step whose charged release runs the dash attack and then cancels the `Sword_Combo` chain (abbreviated):
 
 ```json
 {
-  "Type": "Chaining",
-  "ChainId": "Sword_Primary",
-  "ChainingAllowance": 2,
-  "Next": [
-    {
-      "Type": "FirstClick",
-      "Click": "Sword_Swing_1",
-      "Held": {
+  "Type": "StatsCondition",
+  "Costs": { "Stamina": 2.01 },
+  "Next": {
+    "Type": "Serial",
+    "Interactions": [
+      {
         "Type": "Charging",
+        "DisplayProgress": false,
+        "Effects": { "ItemAnimationId": "StabDashCharging" },
         "Next": {
-          "0": "Sword_Swing_Cancel",
-          "1.0": {
+          "0": "Sword_Swing_Left_Fast",
+          "0.45": {
             "Type": "Serial",
             "Interactions": [
-              "Sword_Heavy_Attack",
-              {
-                "Type": "CancelChain",
-                "ChainId": "Sword_Primary"
-              }
+              { "Type": "ChangeStat", "StatModifiers": { "Stamina": -2 } },
+              "Sword_Stab_Dash_Charged",
+              { "Type": "CancelChain", "ChainId": "Sword_Combo" }
             ]
           }
         }
       }
-    },
-    "Sword_Swing_2",
-    "Sword_Swing_3"
-  ]
+    ]
+  },
+  "Failed": "Sword_Swing_Left_Fast"
 }
 ```
 
-The charged attack (`Sword_Heavy_Attack`) is followed by `CancelChain`, so the next attack will restart from `Sword_Swing_1` instead of continuing to `Sword_Swing_2`.
+The charged release (`Sword_Stab_Dash_Charged`) is followed by `CancelChain`, so the next primary attack restarts the `Sword_Combo` chain from its first step instead of continuing.
 
 **Reset after special flag execution:**
 
@@ -1173,11 +1175,11 @@ This pattern cancels both primary and secondary attack chains before switching t
 
 ### Technical Notes
 
-- **Empty `firstRun()`** - The `CancelChainInteraction` class has an empty `firstRun()` method. All cancellation logic executes in `simulateFirstRun()`, which runs on both client and server.
+- **Empty `firstRun()`** - `firstRun()` (reached from `tick0`) is empty; the cancellation lives in `simulateFirstRun()` (reached from `simulateTick0`), the path the server takes when simulating a client-initiated chain.
 
-- **Client/server sync** - The `CancelChainInteractionProtocol` class handles network synchronization. When a cancel occurs on the client, it's replicated to the server to ensure both sides have consistent chain state.
+- **Client/server sync** - The config class serialises to `com.hypixel.hytale.protocol.CancelChainInteraction` (just `chainId` on top of the base interaction fields), so the client runs the same cancel locally and both sides keep a consistent chain index.
 
-- **Clears flags too** - Canceling a chain also clears any flags set via `ChainFlagInteraction`. If you need to preserve flags while resetting position, you would need a custom solution.
+- **Flags are client-side** - The server's `ChainingInteraction.Data` stores only per-chain indices and a `lastAttack` timestamp; a pending `ChainFlag` is not stored there, so whether it survives a cancel is client behaviour. Don't design around a flag persisting across a cancel.
 
 - **No partial reset** - There's no built-in way to reset a chain to a specific index. CancelChain always fully removes the chain state, causing it to restart from index 0.
 
@@ -1195,4 +1197,4 @@ This pattern cancels both primary and secondary attack chains before switching t
 - **Symptom:** a `ChainFlag` set in one chain never triggers a branch in another → the two chains don't share the same `ChainId`. Fix: give both interactions the identical `ChainId` so they share flag state (see [ChainId and Cross-Interaction Sync](#chainid-and-cross-interaction-sync)).
 - **Symptom:** a flag-triggered branch only fires once → flags are consumed (reset) immediately after triggering. Fix: re-set the flag with `ChainFlag` each time you need the branch to fire again.
 - **Symptom:** a `Charging` interaction releases the wrong tier (or nothing) → the `Next` map keys are **strings** representing charge-time thresholds, and the system picks the highest threshold reached. Fix: include a `"0"` entry for immediate release, and use string keys like `"0.5"`, not numbers (see [The Next Map System](#the-next-map-system)).
-- **Symptom:** `CancelChain` wiped flags you wanted to keep → cancelling a chain also clears any flags set via `ChainFlag`, and always resets to index 0 (no partial reset). Fix: don't rely on flag persistence across a cancel; re-establish state afterward.
+- **Symptom:** `CancelChain` didn't behave like a partial reset → cancelling always removes the chain's index entry, so the chain restarts at index 0 (there is no reset-to-index). Flag state is client-side and not part of the server's `Data` component, so don't rely on a pending `ChainFlag` surviving a cancel; re-establish state afterward.

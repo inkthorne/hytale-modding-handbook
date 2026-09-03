@@ -138,10 +138,21 @@ getIdentifier()     // PluginIdentifier
 getManifest()       // PluginManifest
 getDataDirectory()  // Path - plugin data folder
 getState()          // PluginState - current state
-getBasePermission() // String - base permission node
+getBasePermission() // String - base permission node (see below)
 isEnabled()         // boolean
-isDisabled()        // boolean
+isDisabled()        // boolean — true in NONE, DISABLED, SHUTDOWN, and FAILED
+
+// Typed registries for codec-map / asset-map extension points (see assets.md)
+getCodecRegistry(StringCodecMapCodec<T, C> codec)   // CodecMapRegistry<T, C>
+getCodecRegistry(AssetCodecMapCodec<K, T> codec)    // CodecMapRegistry.Assets<T, ?>
+getCodecRegistry(MapKeyMapCodec<V> codec)           // MapKeyMapRegistry<V>
 ```
+
+#### Base permission and generated command permissions
+
+`getBasePermission()` is computed once in the constructor from the manifest: `Group + "." + Name`, lower-cased, with spaces replaced by `_` (`PluginBase.createBasePermission`). A manifest of `{"Group": "MyStudio", "Name": "Warp Pads"}` yields `mystudio.warp_pads`.
+
+The command system uses it to **generate permission nodes for commands that don't set one**: a top-level command owned by your plugin gets `<basePermission>.command.<commandName>`, sub-commands get `<parentPermission>.<subName>`, and the server's own commands use `hytale.system.command.<name>`. So a plugin's `/warp` command with no explicit permission is gated by `mystudio.warp_pads.command.warp` — grant that node (or set an explicit permission on the command, see [Commands](commands.md)).
 
 ---
 
@@ -230,6 +241,7 @@ public enum PluginState {
     DISABLED,  // Fully disabled
     FAILED     // Plugin failed to load or run
 }
+// plus: boolean isInactive()
 ```
 
 ### Usage Example
@@ -277,7 +289,7 @@ String getMain()                     // Main class path
 ### Metadata
 ```java
 String getDescription()              // Plugin description
-List<AuthorInfo> getAuthors()        // Author information
+List<AuthorInfo> getAuthors()        // Author information (common.plugin.AuthorInfo: getName / getEmail / getUrl)
 String getWebsite()                  // Plugin website URL
 ```
 
@@ -286,7 +298,7 @@ String getWebsite()                  // Plugin website URL
 Map<PluginIdentifier, SemverRange> getDependencies()          // Required dependencies
 Map<PluginIdentifier, SemverRange> getOptionalDependencies()  // Optional dependencies
 Map<PluginIdentifier, SemverRange> getLoadBefore()            // Plugins to load before
-String getServerVersion()                                      // Required server version
+SemverRange getServerVersion()                                 // Required server version range
 ```
 
 ### Other
@@ -382,9 +394,11 @@ Dependencies use `group:name` as keys with semver ranges as values:
 
 #### Authors Format
 
+Each entry is an `AuthorInfo` object; `Name` is the only field you normally set, `Email` and `Url` are optional:
+
 ```json
 "Authors": [
-  { "Name": "Primary Author" },
+  { "Name": "Primary Author", "Email": "dev@example.com", "Url": "https://example.com" },
   { "Name": "Contributor" }
 ]
 ```
@@ -402,6 +416,7 @@ The loader that discovers, loads, and tracks every plugin/mod. Obtain it with `P
 | `PluginManager.get()` | `PluginManager` | Static singleton |
 | `getPlugins()` | `List<PluginBase>` | All currently loaded plugins |
 | `getPlugin(PluginIdentifier)` | `PluginBase` | A loaded plugin by id (`null` if not loaded) |
+| `getPlugin(Class<T>)` | `T extends PluginBase` | 0.6.3+ — a loaded plugin by its main class (`null` if not loaded); the typed way to reach another mod's API |
 | `hasPlugin(PluginIdentifier, SemverRange)` | `boolean` | Whether a plugin is loaded at a matching version |
 | `getAvailablePlugins()` | `Map<PluginIdentifier, PluginManifest>` | Everything found on disk/classpath, loaded or not |
 | `getState()` | `PluginState` | The loader's own lifecycle state |
@@ -446,7 +461,7 @@ public class ModConfig {
 }
 ```
 
-Read via `HytaleServer.get().getConfig().getModConfig()`. A plugin whose entry is disabled is skipped at boot — this is what the in-game mods page toggles.
+Read via `HytaleServer.get().getConfig().getModConfig()`; the companions `getDefaultModsEnabled()` (whether mods without an entry are enabled) and `getModLoadOrder()` (`PluginIdentifier[]`) live on the same `HytaleServerConfig`. A plugin whose entry is disabled is skipped at boot — this is what the in-game mods page toggles.
 
 ---
 
@@ -480,30 +495,33 @@ SchemaGenerator.registerConfig("MyPluginConfig", MyConfig.CODEC,
 
 **Package:** `com.hypixel.hytale.server.core.modules.debug`
 
-Static helpers that draw **debug shapes** into a world, rendered by every client in it — invaluable for visualizing hitboxes, paths, radii, and forces while developing. All methods are static and take the target `World` first; colors are `org.joml.Vector3f` RGB (constants provided: `COLOR_RED`, `COLOR_LIME`, `COLOR_BLUE`, `COLOR_YELLOW`, `COLOR_CYAN`, `COLOR_MAGENTA`, `COLOR_WHITE`, `COLOR_BLACK`, and more, plus `INDEXED_COLORS` / `INDEXED_COLOR_NAMES`).
+Static helpers that draw **debug shapes** into a world, rendered by every client in it — invaluable for visualizing hitboxes, paths, radii, and forces while developing. All methods are static and take the target `World` first; positions/colors are the read-only JOML interfaces (`Vector3dc` / `Vector3fc` / `Matrix4dc` as of 0.6.3, so any `Vector3d` / `Vector3f` / `Matrix4d` works) — colors are RGB in 0..1 (constants provided: `COLOR_RED`, `COLOR_LIME`, `COLOR_BLUE`, `COLOR_YELLOW`, `COLOR_CYAN`, `COLOR_MAGENTA`, `COLOR_WHITE`, `COLOR_BLACK`, and more, plus `INDEXED_COLORS` / `INDEXED_COLOR_NAMES`).
 
 ```java
 // primitives (selection — see the jar for every overload)
-public static void addSphere(World world, Vector3d pos, Vector3f color, double scale, float time);
-public static void addCube(World world, Vector3d pos, Vector3f color, double scale, float time);
-public static void addCylinder(World world, Vector3d pos, Vector3f color, double scale, float time);
-public static void addCone(World world, Vector3d pos, Vector3f color, double scale, float time);
-public static void addLine(World world, Vector3d start, Vector3d end, Vector3f color, double thickness, float time, int flags);
-public static void addArrow(World world, Vector3d position, Vector3d direction, Vector3f color, float opacity, float time, int flags);
-public static void addDisc(World world, Vector3d center, double radius, Vector3f color, float time, int flags);
-public static void addFrustum(World world, Matrix4d matrix, Matrix4d frustumProjection, Vector3f color, float time, int flags);
+public static void addSphere(World world, Vector3dc pos, Vector3fc color, double scale, float time);
+public static void addCube(World world, Vector3dc pos, Vector3fc color, double scale, float time);
+public static void addCylinder(World world, Vector3dc pos, Vector3fc color, double scale, float time);
+public static void addCylinder(World world, Vector3dc pos, Vector3fc color, double diameter, double height, float time);
+public static void addCone(World world, Vector3dc pos, Vector3fc color, double scale, float time);
+public static void addLine(World world, Vector3dc start, Vector3dc end, Vector3fc color, double thickness, float time, int flags);
+public static void addArrow(World world, Vector3dc position, Vector3dc direction, Vector3fc color, float opacity, float time, int flags);
+public static void addDisc(World world, Vector3dc center, double radius, Vector3fc color, float time, int flags);
+public static void addDonut(World world, double x, double y, double z, double outerRadius, double innerRadius,
+                            double height, double heading, double angle, Vector3fc color, float opacity, float time, int flags);  // 0.6.3+ (DebugShape.Donut)
+public static void addFrustum(World world, Matrix4dc matrix, Matrix4dc frustumProjection, Vector3fc color, float time, int flags);
 
 // generic entry point + helpers
-public static void add(World world, DebugShape shape, Matrix4d matrix, Vector3f color, float time, int flags);
-public static Matrix4d makeMatrix(Vector3d position, double scale);
+public static void add(World world, DebugShape shape, Matrix4dc matrix, Vector3fc color, float time, int flags);
+public static Matrix4d makeMatrix(Vector3dc position, double scale);
 public static void clear(World world);   // remove all debug shapes
 
-// flags
-public static final int FLAG_NONE;
-public static final int FLAG_FADE;          // fade out over the duration
-public static final int FLAG_NO_WIREFRAME;
-public static final int FLAG_NO_SOLID;
-public static final float DEFAULT_OPACITY;  // 0.8f
+// flags (bit set; compile-time constants as of 0.6.3)
+public static final int FLAG_NONE = 0;
+public static final int FLAG_FADE = 1;          // fade out over the duration
+public static final int FLAG_NO_WIREFRAME = 2;
+public static final int FLAG_NO_SOLID = 4;
+public static final float DEFAULT_OPACITY = 0.8f;
 ```
 
 ```java
@@ -663,6 +681,20 @@ Events related to server lifecycle.
 | `ShutdownEvent` | Server is shutting down |
 | `PrepareUniverseEvent` | Universe preparation phase (configure worlds) |
 
+### ShutdownEvent ordering
+
+Listeners run in **ascending priority** (`EventPriority.FIRST = -21844` … `NORMAL = 0` … `LAST = 21844`; `EventRegistry.register` also accepts a raw `short`). `ShutdownEvent` publishes the priorities at which the server's own shutdown steps run, so you can slot in before or after them:
+
+| Constant | Value | Step |
+|----------|-------|------|
+| `ShutdownEvent.TELEMETRY` | `-56` | Final telemetry flush |
+| `ShutdownEvent.DISCONNECT_PLAYERS` | `-48` | All players are kicked |
+| `ShutdownEvent.UNBIND_LISTENERS` | `-40` | Network listeners close |
+| `ShutdownEvent.SHUTDOWN_WORLDS` | `-32` | Worlds are shut down (and saved) |
+| `ShutdownEvent.FLUSH_UNIVERSE_RESOURCES` | `-24` | 0.6.3+ — universe-level resources are flushed |
+
+A default-priority (`NORMAL`, `0`) `ShutdownEvent` listener therefore runs **after** all of these — players are gone and worlds are already closed. To touch players or world state on shutdown, register earlier than the step you need, e.g. `getEventRegistry().register((short) (ShutdownEvent.DISCONNECT_PLAYERS - 1), ShutdownEvent.class, e -> ...)`.
+
 ---
 
 ### PrepareUniverseEvent
@@ -812,6 +844,7 @@ public class MyPlugin extends JavaPlugin {
         // Clean up plugin resources
     }
 }
+```
 
 ---
 

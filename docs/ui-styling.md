@@ -145,6 +145,7 @@ The `LayoutMode` property controls how child elements are arranged within a cont
 | `MiddleCenter` | Center both horizontally and vertically (alternate) |
 | `TopScrolling` | Top layout with vertical scrolling |
 | `LeftCenterWrap` | Left-aligned with center wrapping |
+| `LeftWrap` | Left-to-right, wrapping to a new row when the width runs out |
 
 **Note:** `Top` and `Left` are the most commonly used values for stacking layouts.
 
@@ -292,11 +293,8 @@ Background: (
 
 **Explicit `PatchStyle` constructor** (as used for button backgrounds in `Common.ui`):
 ```
-@DefaultButtonDefaultBackground = PatchStyle(
-    TexturePath: "Common/Buttons/Primary.png",
-    VerticalBorder: 12,
-    HorizontalBorder: 80
-);
+@ButtonBorder = 12;
+@DefaultButtonDefaultBackground = PatchStyle(TexturePath: "Common/Buttons/Primary.png", VerticalBorder: @ButtonBorder, HorizontalBorder: 80);
 ```
 
 > Only `Border` (uniform), `VerticalBorder`, and `HorizontalBorder` exist. There are no

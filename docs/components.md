@@ -91,6 +91,8 @@ Container for entities and their components. Implements `ComponentAccessor`.
 ```java
 // Get component from entity
 <T extends Component<ECS_TYPE>> T getComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
+// Same, but safe off the store's thread (seqlock read that retries instead of asserting)
+<T extends Component<ECS_TYPE>> T getComponentConcurrent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
 
 // Add component (creates if not exists)
 <T extends Component<ECS_TYPE>> T addComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
@@ -176,9 +178,11 @@ Ref(Store<ECS_TYPE> store, int index)
 Store<ECS_TYPE> getStore()
 int getIndex()
 boolean isValid()
-void validate()
-void invalidate()
+void validate()                 // throws if the ref is no longer valid
+int validate(Store<ECS_TYPE> store)  // also checks the ref belongs to this store; returns the entity index
 ```
+
+Invalidation is engine-side (package-private) — a `Ref` becomes invalid when its entity is removed; plugins only ever test with `isValid()`.
 
 ---
 
@@ -223,9 +227,17 @@ Interface for accessing components. Store implements this.
 <T extends Component<ECS_TYPE>> void addComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type, T component)
 <T extends Component<ECS_TYPE>> T addComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
 <T extends Component<ECS_TYPE>> void removeComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
+<T extends Component<ECS_TYPE>> void tryRemoveComponent(Ref<ECS_TYPE> ref, ComponentType<ECS_TYPE, T> type)
 Archetype<ECS_TYPE> getArchetype(Ref<ECS_TYPE> ref)
 <T extends Resource<ECS_TYPE>> T getResource(ResourceType<ECS_TYPE, T> type)
 ECS_TYPE getExternalData()
+
+// Entity lifecycle and ECS events are on the accessor too (Store applies them now, CommandBuffer defers them)
+Ref<ECS_TYPE> addEntity(Holder<ECS_TYPE> holder, AddReason reason)
+Ref<ECS_TYPE>[] addEntities(Holder<ECS_TYPE>[] holders, AddReason reason)
+Holder<ECS_TYPE> removeEntity(Ref<ECS_TYPE> ref, Holder<ECS_TYPE> outHolder, RemoveReason reason)
+<Event extends EcsEvent> void invoke(Ref<ECS_TYPE> ref, Event event)
+<Event extends EcsEvent> void invoke(Event event)
 ```
 
 ---
@@ -241,6 +253,12 @@ Used in `EntityEventSystem` handlers and iteration to access components by entit
 
 // Number of entities in this chunk
 int size()
+
+// The Ref for the entity at index (for CommandBuffer calls, which take a Ref, not an index)
+Ref<ECS_TYPE> getReferenceTo(int index)
+
+// The component layout shared by every entity in this chunk
+Archetype<ECS_TYPE> getArchetype()
 ```
 
 See [Events API - ECS Events](events.md#ecs-events-entityeventsystem) for usage example.
@@ -451,6 +469,7 @@ public class MyEventSystem extends EntityEventSystem<EntityStore, MyEvent> {
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        MyEvent event) {
         Player player = chunk.getComponent(index, Player.getComponentType());
+        Ref<EntityStore> ref = chunk.getReferenceTo(index);
 
         // Read component (immediate)
         Health health = buffer.getComponent(ref, Health.getComponentType());
@@ -494,11 +513,14 @@ Blueprint/template for creating entities. Use to define entity composition befor
 Archetype<ECS_TYPE> getArchetype()
 
 // Component management
-<T extends Component<ECS_TYPE>> T ensureComponent(ComponentType<ECS_TYPE, T> type)
+<T extends Component<ECS_TYPE>> void ensureComponent(ComponentType<ECS_TYPE, T> type)
+<T extends Component<ECS_TYPE>> T ensureAndGetComponent(ComponentType<ECS_TYPE, T> type)
 <T extends Component<ECS_TYPE>> void addComponent(ComponentType<ECS_TYPE, T> type, T component)
 <T extends Component<ECS_TYPE>> void putComponent(ComponentType<ECS_TYPE, T> type, T component)
+<T extends Component<ECS_TYPE>> void replaceComponent(ComponentType<ECS_TYPE, T> type, T component)
 <T extends Component<ECS_TYPE>> T getComponent(ComponentType<ECS_TYPE, T> type)
 <T extends Component<ECS_TYPE>> void removeComponent(ComponentType<ECS_TYPE, T> type)
+<T extends Component<ECS_TYPE>> boolean tryRemoveComponent(ComponentType<ECS_TYPE, T> type)
 
 // Cloning
 Holder<ECS_TYPE> clone()
@@ -540,8 +562,9 @@ boolean requiresComponentType(ComponentType<ECS_TYPE, ?> type)
 static <ECS_TYPE, T extends Component<ECS_TYPE>> Archetype<ECS_TYPE> add(Archetype<ECS_TYPE> archetype, ComponentType<ECS_TYPE, T> type)
 static <ECS_TYPE, T extends Component<ECS_TYPE>> Archetype<ECS_TYPE> remove(Archetype<ECS_TYPE> archetype, ComponentType<ECS_TYPE, T> type)
 
-// Serialization
-Archetype<ECS_TYPE> getSerializableArchetype(ComponentRegistry.Data<ECS_TYPE> data)
+// Serialization — the subset of this archetype that gets persisted; 0.6.3 added the
+// predicate (extra per-component-type filter on top of the registry's serializable flag)
+Archetype<ECS_TYPE> getSerializableArchetype(ComponentRegistry.Data<ECS_TYPE> data, Predicate<ComponentType<ECS_TYPE, ?>> filter)
 ```
 
 ---
@@ -551,10 +574,10 @@ Archetype<ECS_TYPE> getSerializableArchetype(ComponentRegistry.Data<ECS_TYPE> da
 ### Resource<ECS_TYPE>
 **Package:** `com.hypixel.hytale.component`
 
-Interface for world-level singleton resources (not per-entity).
+Interface for world-level singleton resources (not per-entity). Like `Component`, it extends `Cloneable` and has one abstract method:
 
 ```java
-// Marker interface - implement for your resource classes
+Resource<ECS_TYPE> clone()   // implement for your resource classes
 ```
 
 ### ResourceType<ECS_TYPE, T>
@@ -588,19 +611,27 @@ Reason for removing an entity from the store.
 ```java
 public enum RemoveReason {
     REMOVE,
-    UNLOAD
+    UNLOAD,
+    BUILDER_TOOLS_UNDO   // removal caused by a builder-tools undo
 }
 ```
 
 ---
 
-## Annotations
+## Marker Components: NonSerialized and NonTicking
 
-### @NonSerialized
-Mark components or fields that should not be serialized.
+**Package:** `com.hypixel.hytale.component`
 
-### @NonTicking
-Mark components that should not participate in ticking systems.
+These are **components, not annotations** — generic marker classes you attach to an entity (shared instance via `get()`). The registry exposes their types: `registry.getNonSerializedComponentType()` / `registry.getNonTickingComponentType()`.
+
+| Component | Effect |
+|-----------|--------|
+| `NonSerialized<ECS_TYPE>` | The entity is skipped by serialization (`Archetype.hasSerializableComponents` / `getSerializableArchetype` treat it as having nothing to save) — use for purely transient entities |
+| `NonTicking<ECS_TYPE>` | Ticking systems that don't declare an explicit query (`ArchetypeTickingSystem.isExplicitQuery() == false`) skip the entity's archetype |
+
+```java
+holder.addComponent(EntityStore.REGISTRY.getNonSerializedComponentType(), NonSerialized.get());
+```
 
 ---
 
@@ -660,21 +691,28 @@ static final ComponentRegistry<ChunkStore> REGISTRY  // Component registry for c
 Store<ChunkStore> getStore()                     // Get the chunk store
 World getWorld()                                 // Get the world
 
-// Chunk access
-Ref<ChunkStore> getChunkReference(long index)    // Get chunk ref by packed index
-Ref<ChunkStore> getChunkSectionReference(int x, int y, int z)  // Get chunk by coordinates
+// Chunk access (chunk = column, section = 16³ cell; x/y/z here are SECTION coordinates)
+Ref<ChunkStore> getChunkReference(long index)    // Get chunk (column) ref by packed index
+Ref<ChunkStore> getChunkSectionReference(int x, int y, int z)          // Section by section coords
+Ref<ChunkStore> getChunkSectionReferenceAtBlock(int x, int y, int z)   // Section containing a BLOCK position
+boolean hasLoadedSections(long index)             // 0.6.3+: any section of that column loaded?
 
 // Async chunk access
 CompletableFuture<Ref<ChunkStore>> getChunkSectionReferenceAsync(int x, int y, int z)
+CompletableFuture<Ref<ChunkStore>> getChunkSectionReferenceAtBlockAsync(int x, int y, int z)
 CompletableFuture<Ref<ChunkStore>> getChunkReferenceAsync(long index)
 
 // Get component directly
-<T> T getChunkComponent(long index, ComponentType<ChunkStore, T> type)
+<T extends Component<ChunkStore>> T getChunkComponent(long index, ComponentType<ChunkStore, T> type)
 
 // Statistics
 int getLoadedChunksCount()
 int getTotalGeneratedChunksCount()
 int getTotalLoadedChunksCount()
+
+// 0.6.3+: sections can be loaded/unloaded individually ("cubic" sections)
+boolean supportsCubicSections()
+void removeSection(Ref<ChunkStore> sectionRef, RemoveReason reason)
 ```
 
 ---
@@ -705,7 +743,15 @@ void registerSystem(ISystem<ECS_TYPE> system)
 void registerSystem(ISystem<ECS_TYPE> system, boolean enabled)
 void unregisterSystem(Class<? extends ISystem<ECS_TYPE>> systemClass)
 SystemGroup<ECS_TYPE> registerSystemGroup()
+SystemGroup<ECS_TYPE> registerSystemGroup(Set<Dependency<ECS_TYPE>> dependencies)
 void unregisterSystemGroup(SystemGroup<ECS_TYPE> group)
+```
+
+### Spatial Resource Registration
+```java
+// Registers a SpatialResource<Ref<ECS_TYPE>, ECS_TYPE> backed by the structure your supplier builds
+ResourceType<ECS_TYPE, SpatialResource<Ref<ECS_TYPE>, ECS_TYPE>> registerSpatialResource(
+        Supplier<SpatialStructure<Ref<ECS_TYPE>>> structureSupplier)
 ```
 
 ### Event Type Registration
@@ -742,32 +788,50 @@ Component storing entity position and rotation. Present on all positioned entiti
 TransformComponent transform = store.getComponent(ref, TransformComponent.getComponentType());
 ```
 
+### Constructors
+```java
+TransformComponent()
+TransformComponent(Vector3dc position, Rotation3fc rotation)
+```
+
 ### Position Methods
 ```java
 Vector3d getPosition()
-void setPosition(Vector3d position)
-void teleportPosition(Vector3d position)  // Teleport (bypasses interpolation)
+void setPosition(Vector3dc position)
+void teleportPosition(Vector3dc position)  // Teleport (bypasses interpolation)
 ```
 
 ### Rotation Methods
+Rotations are Hytale's `Rotation3f` (`com.hypixel.hytale.math.vector`), not a JOML vector — see [Math API](math.md).
 ```java
-Vector3f getRotation()
-void setRotation(Vector3f rotation)
-void teleportRotation(Vector3f rotation)  // Teleport rotation
+Rotation3f getRotation()
+void setRotation(Rotation3f rotation)
+void teleportRotation(Rotation3f rotation)  // Teleport rotation
 ```
 
 ### Transform Access
 ```java
-Transform getTransform()  // Get combined position/rotation
+Transform getTransform()            // Get combined position/rotation
+ModelTransform getSentTransform()   // Last transform broadcast to clients (engine bookkeeping)
 ```
 
-### Chunk Access
+### Section Access
+The entity's owning chunk **section** (a `Ref<ChunkStore>`); resolve the `WorldChunk` from it via the chunk store if you need block data.
 ```java
-WorldChunk getChunk()                // Get current chunk
-Ref<ChunkStore> getChunkRef()        // Get chunk reference
-void setChunkLocation(Ref<ChunkStore> ref, WorldChunk chunk)
-void markChunkDirty(ComponentAccessor<EntityStore> accessor)
+Ref<ChunkStore> getSectionRef()
+void setSectionLocation(Ref<ChunkStore> sectionRef)   // engine-managed; don't set this yourself
 ```
+
+> **Removed by 0.6.3:** `getChunk()`, `getChunkRef()`, `setChunkLocation(Ref, WorldChunk)` and
+> `markChunkDirty(ComponentAccessor)` are gone — the component now tracks a section `Ref` only
+> (`getSectionRef()` / `setSectionLocation(...)`), and dirtying is handled by the entity systems.
+
+### Save Tracking (0.6.3+)
+```java
+void seedLastSavedPosition()     // remember the current position as "last saved"
+boolean pollMovedEnoughToSave()  // true if moved ≥ 1.5 blocks since the last poll/seed (and re-seeds)
+```
+Used by the persistence systems to skip re-saving entities that haven't meaningfully moved; a plugin doing its own periodic snapshots can reuse the same test.
 
 ### Usage Example
 ```java
@@ -775,7 +839,7 @@ void markChunkDirty(ComponentAccessor<EntityStore> accessor)
 TransformComponent transform = store.getComponent(ref, TransformComponent.getComponentType());
 if (transform != null) {
     Vector3d pos = transform.getPosition();
-    Vector3f rot = transform.getRotation();
+    Rotation3f rot = transform.getRotation();
 
     // Teleport entity
     transform.teleportPosition(new Vector3d(100, 64, 100));
@@ -805,8 +869,26 @@ The `Teleport` component is the primary example of this pattern. Instead of call
 
 #### Factory Methods
 ```java
-// Create teleport for a player (handles player-specific synchronization)
-static Teleport createForPlayer(World world, Vector3d position, Vector3f rotation)
+// Create teleport for a player (resets the client's velocity on arrival; 0.6.3 widened the
+// parameters to the read-only JOML/Hytale interfaces, so any Vector3d / Rotation3f still works)
+static Teleport createForPlayer(World world, Vector3dc position, Rotation3fc rotation)
+static Teleport createForPlayer(World world, Transform transform)
+static Teleport createForPlayer(Vector3dc position, Rotation3fc rotation)   // same world
+static Teleport createForPlayer(Transform transform)
+
+// Exact variant: no velocity reset, optional separate head rotation
+static Teleport createExact(Vector3dc position, Rotation3fc rotation)
+static Teleport createExact(Vector3dc position, Rotation3fc rotation, Rotation3fc headRotation)
+
+// Plain constructors (world may be null = current world)
+Teleport(World world, Vector3dc position, Rotation3fc rotation)
+Teleport(Vector3dc position, Rotation3fc rotation)
+
+// Tweaks / completion
+Teleport setHeadRotation(Rotation3fc headRotation)
+Teleport withoutVelocityReset()
+void setOnComplete(CompletableFuture<Void> future)   // completed when the move has been applied
+World getWorld()  Vector3d getPosition()  Rotation3f getRotation()  Rotation3f getHeadRotation()  boolean isResetVelocity()
 
 // Get component type for ECS operations
 static ComponentType<EntityStore, Teleport> getComponentType()
@@ -836,12 +918,12 @@ Both approaches exist for teleportation:
 
 | Approach | Method | Use Case |
 |----------|--------|----------|
-| Direct | `transform.teleportPosition(pos)` | Simple position changes, NPCs |
-| Action Component | `store.addComponent(ref, Teleport.getComponentType(), teleport)` | Player teleportation with proper client sync |
+| Direct | `transform.teleportPosition(pos)` | Simple same-world position changes for server-side entities |
+| Action Component | `store.addComponent(ref, Teleport.getComponentType(), teleport)` | Players (client sync, ack tracking) and **any** cross-world move |
 
 **When to use each:**
-- **Action Component (Teleport):** Recommended for players — handles network synchronization, chunk loading, and client state properly
-- **Direct (TransformComponent):** Suitable for server-side entities or when you need immediate position changes without system processing
+- **Action Component (Teleport):** Recommended for players — `TeleportSystems.PlayerMoveSystem` handles network synchronization, the ack round-trip (see [Teleport Bookkeeping](entities.md#teleport-bookkeeping-pendingteleport--teleportrecord)), and world transfer. Non-player entities are handled too: `TeleportSystems.MoveSystem` (query `Teleport AND TransformComponent AND NOT PlayerRef`) applies the position/rotation and, if `getWorld()` is a different world, removes the entity with `RemoveReason.UNLOAD` and re-adds it there with `AddReason.LOAD` — the only supported way to move an NPC between worlds.
+- **Direct (TransformComponent):** Suitable for server-side entities when you need an immediate same-world position change without system processing
 
 ### Other Action Components
 
@@ -1206,7 +1288,8 @@ public enum OrderPriority { CLOSEST, CLOSE, NORMAL, FURTHER, FURTHEST }
 `Order` is the direction of the constraint; `OrderPriority` breaks ties when multiple systems declare the same relative order — `CLOSEST` sorts nearest to the anchor system, `FURTHEST` farthest. Constructors also accept a raw `int` priority; `OrderPriority.getValue()` exposes the underlying value.
 
 > ⚠️ A `SystemDependency` on a system class that was never registered fails at sort time with
-> `System dependency isn't registered:` (see [Gotchas](#gotchas--errors)) — register the anchor
+> `SystemType dependency isn't registered:` (a `SystemGroupDependency` on an unregistered group says
+> `System dependency isn't registered:`) — see [Gotchas](#gotchas--errors); register the anchor
 > system before the dependent one.
 
 ### SystemType<ECS_TYPE, T>
@@ -1255,12 +1338,13 @@ public static <ECS_TYPE> List<Ref<ECS_TYPE>> getThreadLocalReferenceList()
 int size()
 void rebuild(SpatialData<T> data)
 
-T closest(Vector3d position)                                     // nearest single entry
-void collect(Vector3d center, double radius, List<T> results)    // sphere
-void collectCylinder(Vector3d center, double radius, double height, List<T> results)
-void collectBox(Vector3d min, Vector3d max, List<T> results)     // axis-aligned corners
-void ordered(Vector3d center, double radius, List<T> results)    // sorted nearest-first
-void ordered3DAxis(Vector3d center, double x, double y, double z, List<T> results)
+// Positions are the read-only org.joml.Vector3dc interface as of 0.6.3 (any Vector3d still works)
+T closest(Vector3dc position)                                     // nearest single entry
+void collect(Vector3dc center, double radius, List<T> results)    // sphere
+void collectCylinder(Vector3dc center, double radius, double height, List<T> results)
+void collectBox(Vector3dc min, Vector3dc max, List<T> results)    // axis-aligned corners
+void ordered(Vector3dc center, double radius, List<T> results)    // sorted nearest-first
+void ordered3DAxis(Vector3dc center, double x, double y, double z, List<T> results)
 ```
 
 Verified parameter semantics: `collectCylinder`'s `height` is the **total** height (halved internally around `center`), and `collectBox` takes **min/max corner** vectors, not center + extents. The `collect*` methods append to the list you pass without clearing it first.
@@ -1319,7 +1403,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **`ComponentType is not in archetype:`** → you removed (or read by required slot) a component the entity doesn't have. Fix: guard with `archetype.contains(type)` / `getComponent(...) != null`, or use `tryRemoveComponent` / `removeComponentIfExists`.
 - **`eventTypeClass must extend EcsEvent!`** → `registerEntityEventType`/`registerWorldEventType` got a class that isn't an `EcsEvent`. Fix: make your ECS event class extend `EcsEvent` (or `CancellableEcsEvent`).
 - **`System is already registered!`** → the same system instance was passed to `registerSystem()` twice. Fix: register each system instance once (registering in `setup()` already runs once per plugin load).
-- **`System dependency isn't registered:`** → a system declares a dependency on another system that wasn't registered first. Fix: register the dependency system before the dependent one.
+- **`SystemType dependency isn't registered:`** → a `SystemDependency` names a system class that wasn't registered first. Fix: register the dependency system before the dependent one. (The `SystemGroupDependency` twin is **`System dependency isn't registered:`** — the group wasn't created via `registerSystemGroup()` on this registry.)
 - **Symptom:** modifying an entity's components directly inside a `tick()`/`handle()` iteration corrupts iteration → structural changes during iteration are unsafe. Fix: route add/remove/spawn through the `CommandBuffer` passed in (operations are applied after iteration completes).
 
 ---

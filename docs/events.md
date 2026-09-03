@@ -455,7 +455,7 @@ protected void setup() {
 
 | Event | Package | Description |
 |-------|---------|-------------|
-| `PlaceBlockEvent` | `...event.events.ecs` | Block placed |
+| `PlaceBlockEvent` | `...event.events.ecs` | Block placed. 0.6.3+: `isConsumeItem()` / `setConsumeItem(boolean)` — clear it and the placed block does not consume the held item (`BlockPlaceUtils` only removes the item when this is still `true`, and only in Adventure mode) |
 | `BreakBlockEvent` | `...event.events.ecs` | Block broken |
 | `DamageBlockEvent` | `...event.events.ecs` | Block damaged |
 | `UseBlockEvent.Pre/Post` | `...event.events.ecs` | Block used |

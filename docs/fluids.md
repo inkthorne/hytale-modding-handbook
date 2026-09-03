@@ -25,8 +25,8 @@ Implemented in `com.hypixel.hytale.server.core.asset.type.fluid` and provides:
 Fluid (asset type)
 ├── Identity (getId / isUnknown; EMPTY / UNKNOWN constants)
 ├── Properties (max level, light, damage-to-entities, isTrigger)
-├── Ticker (fluid spread behavior)
-└── Interactions (fluid-meets-fluid rules)
+├── Ticker (fluid spread behavior; fluid-meets-fluid rules live on DefaultFluidTicker)
+└── Interactions (interaction slots — Use / Collision / …, like BlockType)
 
 Collision exposure
 ├── BlockCollisionData (fluid, fluidId on a block collision)
@@ -66,17 +66,20 @@ boolean isUnknown()
 
 ### Properties
 ```java
-int getMaxFluidLevel()      // Maximum level (typically 7)
-Ticker getTicker()          // Tick behavior for fluid spread
-float getDamageToEntities() // Damage dealt to entities (e.g., lava)
-int getLight()              // Light level emitted
+int getMaxFluidLevel()      // JSON "MaxFluidLevel" — 1 for source blocks, 8 for flowing Water
+FluidTicker getTicker()     // Tick behavior for fluid spread (see FluidTicker below)
+int getDamageToEntities()   // Damage dealt to entities (e.g., lava)
+ColorLight getLight()       // Light emitted (protocol.ColorLight)
 boolean isTrigger()         // Whether fluid triggers collision events
+String getFluidFXId()       // JSON "FluidFXId" (Server/Item/Block/FluidFX/<id>.json)
 ```
 
 ### Interactions
 ```java
-Object getInteractions()  // Fluid interaction rules (e.g., water + lava = cobblestone)
+Map<InteractionType, String> getInteractions()  // Interaction slots (Use / Collision / …), same shape as BlockType.getInteractions()
 ```
+
+Fluid-meets-fluid transforms (water + lava → cobblestone) are **not** here — they are the ticker's `Collisions` map, `DefaultFluidTicker.getCollisionMap()` (below).
 
 > **See also:** [Collision API](collision.md#collisionconfig)
 
@@ -213,16 +216,17 @@ Access fluid information during collision queries:
 CollisionConfig config = ...;
 Fluid fluid = config.fluid;
 int fluidId = config.fluidId;
-byte fluidLevel = config.fluidLevel;  // 0-7, where 0 is full
+byte fluidLevel = config.fluidLevel;  // 1..MaxFluidLevel; MaxFluidLevel = full, one less per spread step; 0 = no fluid
 ```
+
+Level semantics (from `DefaultFluidTicker.spread`): fluid flowing straight down is placed at the spread fluid's full `getMaxFluidLevel()` (8 for flowing `Water`); each *horizontal* spread step places the `SpreadFluid` at `level - 1`, and a non-source block at level 1 sleeps instead of spreading sideways. A source (max level 1) spreads its flowing variant at *that* fluid's `MaxFluidLevel - 1` (7 for `Water`).
 
 ---
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 fluid system (verified against `HytaleServer.jar`).
+Verified against the 0.6.3 `HytaleServer.jar`. (The 0.5-era `Attempted to register an invalid Fluid` message no longer exists in the jar — an invalid fluid asset now fails at codec/validation time like any other asset.)
 
-- **`Attempted to register an invalid Fluid`** → fluid registration received a malformed/invalid fluid asset. Fix: register a valid `Fluid` asset.
 - **Symptom:** a collision reports a fluid even where there is none → `collision.fluid` is non-null but set to the `Fluid.EMPTY` sentinel. Fix: guard with `collision.fluid != null && collision.fluid != Fluid.EMPTY` (and treat `Fluid.UNKNOWN` as unresolved), as in the usage example above.
 
 ---

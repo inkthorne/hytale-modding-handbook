@@ -79,12 +79,14 @@ Server/HytaleGenerator/Biomes/
 ├── Desert1/        Desert1_Oasis.json, Desert1_River.json, ...
 ├── Taiga1/         Taiga1_Redwood.json, Taiga1_Mountains.json, ...
 ├── Volcanic1/      Volcanic1_Jungle.json, Volcanic1_Caldera.json, ...
+├── Boreal1/        Boreal1_Hedera.json, Boreal1_Henges.json   (0.6.3+)
 ├── Ocean1/         Oceans.json
 ├── Examples/       single-concept demo graphs
 ├── Experimental/   work-in-progress biomes
 ├── Generative/     generative structure biomes
 ├── Default_Flat/   Default_Flat.json
-└── Void.json, Void_Buffer.json, Basic.json, ...
+├── Default_Void/   Default_Void.json
+└── Void.json, Void_Buffer.json, Void_Buffer_Oasis.json, Basic.json, Test_Features.json
 ```
 
 The file's `Name` field is the display name; biomes are wired together by the **file
@@ -100,13 +102,19 @@ shipped biomes):
 
 | Key | Required | Description |
 |-----|----------|-------------|
-| `Name` | yes | Display name |
+| `Name` | yes | Display name (defaults to `"DefaultName"` if omitted — one shipped biome does) |
 | `Terrain` | yes | A `DAOTerrain` node wrapping a `Density` graph — the heightfield |
 | `MaterialProvider` | yes | A material graph (usually `Solidity`) choosing blocks |
-| `Density` | sometimes | A shared density graph (some biomes export terrain fields here) |
 | `Props` | optional | Array of prop-placement entries |
 | `EnvironmentProvider` | optional | Sky/ambient environment selection |
 | `TintProvider` | optional | Block color tint selection |
+| `FloatingFunctionNodes` | optional | Array of free-standing density nodes (typically carrying `ExportAs`) that are built but not wired into `Terrain`; unused by the shipped biomes |
+| `Tags` | optional | Generic asset tags (`{"Template": []}` on 11 shipped biomes); not read by the generator |
+
+These are exactly the keys of the biome codec
+(`com.hypixel.hytale.builtin.hytalegenerator.assets.biomes.BiomeAsset`). There is no
+top-level `Density` key — shared fields are exported from inside `Terrain` (or from a
+`Density/` file) with `ExportAs`.
 
 > There is **no** `TileBiome` / `CustomBiome` distinction, no `LayerContainer`,
 > `CoverContainer`, `PrefabContainer`, `WaterContainer`, `FadeContainer`,
@@ -221,9 +229,12 @@ Minimal solidity provider (from `Biomes/Examples/Example_CellNoise2D.json`):
 | `SpaceAndDepth` | `LayerContext`, `MaxExpectedDepth`, `Layers[]` | Stack materials by depth into the floor |
 | `FieldFunction` | `FieldFunction`, `Delimiters[]` | Choose material by where a sampled density falls (`From`/`To`) |
 
-`SpaceAndDepth` layers are `ConstantThickness` entries (`Thickness` + `Material`), and may
-carry a `Condition` (e.g. `GreaterThanCondition` on `SPACE_ABOVE_FLOOR`). `LayerContext`
-observed value: `"DEPTH_INTO_FLOOR"`.
+`SpaceAndDepth` layers are usually `ConstantThickness` entries (`Thickness` + `Material`);
+the other registered layer types are `RangeThickness` (`RangeMin`/`RangeMax`/`Seed`),
+`NoiseThickness` (`ThicknessFunctionXZ`), and `WeightedThickness` (`PossibleThicknesses`).
+The `SpaceAndDepth` node itself may carry a `Condition` (e.g. `GreaterThanCondition` with
+`ContextToCheck: "SPACE_ABOVE_FLOOR"` and a `Threshold`). `LayerContext` observed value:
+`"DEPTH_INTO_FLOOR"`.
 
 Surface layering example — grass on top, dirt below (from `Default_Flat/Default_Flat.json`):
 
@@ -255,6 +266,9 @@ Y values, then falls through to `{"Solid": "Empty"}`.
 
 `Props` is an array of placement entries. Each entry pairs a set of `Positions` with the
 `Assignments` to place there, and may carry `Skip` and a `Runtime` ordering value.
+(Alternatively an entry carries a single `PropDistribution` node — e.g. a `Union` of
+`Assigned` distributions — instead of the `Positions`/`Assignments` pair; `Taiga1_River.json`
+does this.)
 
 ```json
 "Props": [
@@ -308,11 +322,14 @@ Selects the ambient environment for the biome. Two forms occur:
 ```
 
 Observed environment names include `Env_Zone1_Plains`, `Env_Zone1_Shores`, `Env_Zone0`,
-`Env_Void`, `Env_Default_Flat`, `Env_Zone3_Glacial_Henges`.
+`Env_Void`, `Env_Default_Flat`, `Env_Zone3_Glacial_Henges` (files live in zone subfolders,
+e.g. `Server/Environments/Zone1/Env_Zone1_Plains.json`).
 
 **DensityDelimited** — chooses among environments by where a `Density` value falls,
-using `Delimiters` each carrying an `Environment` and a `Range`. Used where the
-environment should vary within the biome (e.g. `Volcanic1/Volcanic1_Jungle.json`).
+using `Delimiters` each carrying an `Environment` (itself a `Constant` provider) and a
+`Range` (`MinInclusive`/`MaxExclusive`). Used where the environment should vary within the
+biome — `Volcanic1/Volcanic1_Jungle.json` switches between `Env_Zone4_Wastes` and
+`Env_Zone4_Jungles` on a `CurveMapper` over `BaseHeight`.
 
 ### Weather forecasts (WeatherForecast)
 
@@ -330,8 +347,8 @@ holding a weighted list of forecasts:
 
 Each entry decodes to
 `com.hypixel.hytale.server.core.asset.type.environment.config.WeatherForecast`:
-`WeatherId` (required, must name an existing Weather asset) and `Weight` (the relative
-pick weight among that hour's entries). Java side:
+`WeatherId` (required, must name an existing Weather asset under `Server/Weathers/`) and
+`Weight` (the relative pick weight among that hour's entries). Java side:
 
 ```java
 WeatherForecast(String weatherId, double weight)
@@ -351,7 +368,8 @@ single-entry map.
 
 Selects a block tint color. Two forms occur:
 
-**Constant** — one color for the whole biome (from `Void.json`):
+**Constant** — one color for the whole biome (from `Void.json`). A third form, `Mix`,
+blends tint providers (registered as of 0.6.3; unused by the shipped biomes).
 
 ```json
 "TintProvider": {
@@ -428,7 +446,7 @@ and a `Constant` environment/tint.)
 
 - **Symptom:** a world structure's `"Biome": "Plains1_Oak"` entry resolves to a missing/default biome even though `Plains1_Oak.json` exists → references use the **file name** (without extension), not the file's `Name` display field, and the match is case-sensitive. Fix: reference the exact file name, e.g. `Plains1/Plains1_Oak.json` → `"Plains1_Oak"`.
 - **Symptom:** you added `LayerContainer`, `CoverContainer`, `WaterContainer`, `PrefabContainer`, or a `TileBiome`/`CustomBiome` type and it is silently ignored → none of those exist in the format. Fix: terrain is a `DAOTerrain`→`Density` node graph, materials are a `MaterialProvider` graph, and water is a fluid `Material` placed by the `Empty` branch of the material provider (see [Top-Level Structure](#top-level-structure)).
-- **Symptom:** a top-level key like `Terrain` or `MaterialProvider` is missing and the biome fails to load → `Name`, `Terrain`, and `MaterialProvider` are required. Fix: provide all three; `Density`, `Props`, `EnvironmentProvider`, and `TintProvider` are optional.
+- **Symptom:** a biome loads but generates nonsense (uniform terrain, no blocks) → a missing `Terrain` or `MaterialProvider` does not fail the load; the codec silently substitutes its defaults (`Terrain` → a `DAOTerrain` over a `Constant` density, `MaterialProvider` → a `Constant` provider with an empty material id). Fix: always provide `Name`, `Terrain`, and `MaterialProvider`; `Props`, `EnvironmentProvider`, `TintProvider`, and `FloatingFunctionNodes` are optional.
 
 ---
 

@@ -161,7 +161,11 @@ so wherever the cave field goes negative it carves the solid terrain away. See
 ## Density node families
 
 These are the node `Type` values observed across `Density/` and biome `Terrain` graphs. All take
-their children in `Inputs` unless noted.
+their children in `Inputs` unless noted. (The generator registers many more density types — comparators,
+logic gates, smooth min/max, shapes, 3D/cell/white noise, warps, position-driven fields — see the
+full list in [worldgen.md](worldgen.md#density-nodes-the-core); each one is a
+`*DensityAsset` class in `com.hypixel.hytale.builtin.hytalegenerator.assets.density`, whose
+codec keys are the JSON keys.)
 
 ### Combiners
 
@@ -304,7 +308,7 @@ Large graphs avoid recomputation and share fields with three node types:
 
 | Type | Fields | Purpose |
 |------|--------|---------|
-| `Cache` | `Capacity` | Memoizes its input's result (cache size = `Capacity`). |
+| `Cache` | `Capacity` | Memoizes its input's result (cache size = `Capacity`). `Cache2D` is a deprecated alias. |
 | `Exported` | `ExportAs`, `SingleInstance` | Publishes its input under a name. Also appears as an `ExportAs` field directly on other nodes. |
 | `Imported` | `Name` | Pulls in a previously exported field by name. |
 | `YOverride` | `Value` | Forces the Y coordinate to a constant (used to make a 3D field behave as a flat 2D field). |
@@ -347,6 +351,13 @@ and an `Empty` provider:
 | `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. |
 | `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Selects material based on a noise/density value falling inside a `From`/`To` range. Used for scattered surface variation (pebbles, leaves, grass patches). |
 | `Constant` | `Material` | A single fixed material. |
+
+Also registered (as of 0.6.3, mostly unused by the shipped biomes): `Weighted`
+(`WeightedMaterials` with `Weight`/`Material`, `SkipChance`, `Seed`), `Striped` (`Stripes`
+between `TopY`/`BottomY`), `UpwardDepth`/`DownwardDepth` (`Depth` + `Material`),
+`UpwardSpace`/`DownwardSpace` (`Space` + `Material`), `TerrainDensity` (`Delimiters` over the
+terrain density itself), `Transparent`, `Imported` (`Name`), and `Graph` (`GraphGenerator` +
+`ContentLayer`, for graph-generator content).
 
 ### Materials
 

@@ -135,13 +135,13 @@ Controls how the item renders in the inventory:
 
 Controls which animation set the player uses when holding or using the item. Can be a string referencing a predefined animation set, or an object for custom overrides.
 
-**String format** (common values):
+**String format** (values used by the 0.6.3 item set; `Block` and `Item` account for ~90% of items):
 
 | Category | Values |
 |----------|--------|
-| Generic | `Item`, `Block`, `Stick`, `Default` |
-| Weapons | `Sword`, `Daggers`, `Shield`, `Battleaxe`, `Bow`, `Mace`, `Crossbow` |
-| Tools | `Pickaxe`, `Hatchet`, `Shovel`, `Hoe`, `Hammer`, `Shears`, `WateringCan`, `Sickle` |
+| Generic | `Item`, `Block`, `Stick`, `Torch` |
+| Weapons | `Sword`, `Longsword`, `Dagger`, `Daggers`, `Daggers_Claw`, `Shield`, `Axe`, `Battleaxe`, `Club`, `Club_Flail`, `Mace`, `Spear`, `Bow`, `Crossbow`, `Rifle`, `Handgun`, `Throwing_Knife`, `Staff`, `Wand`, `Spellbook` |
+| Tools | `Pickaxe`, `Hatchet`, `Shovel`, `Hoe`, `Shears`, `Watering_Can`, `Sickle` |
 
 ```json
 {
@@ -149,15 +149,20 @@ Controls which animation set the player uses when holding or using the item. Can
 }
 ```
 
-**Object format** for custom animation overrides:
+**Object format** for custom animation overrides — `Parent` names the base set and `Animations` maps an animation
+slot to a first/third-person clip pair (e.g. `Deco_Tankard.json`):
 
 ```json
 {
   "PlayerAnimationsId": {
-    "Parent": "Sword",
+    "Parent": "Item",
     "Animations": {
-      "Idle": "Custom_Sword_Idle",
-      "Walk": "Custom_Sword_Walk"
+      "Consume": {
+        "FirstPerson": "Characters/Animations/Items/Main_Handed/Item/Attacks/Drink/Drink_FPS.blockyanim",
+        "ThirdPerson": "Characters/Animations/Items/Main_Handed/Item/Attacks/Drink/Drink.blockyanim",
+        "Speed": 1,
+        "Looping": true
+      }
     }
   }
 }
@@ -209,8 +214,9 @@ Marks how an item behaves with the player's utility slot. The `Utility` object h
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Compatible` | boolean | Item may be placed in the utility slot (82 items use this) |
-| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (27 items use this) |
+| `Compatible` | boolean | Item may be placed in the utility slot (117 items in 0.6.3) |
+| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (26 items in 0.6.3) |
+| `EntityStatsToClear` | string[] | Stats reset when the item leaves the utility slot (accepted by the codec; unused by shipped items) |
 
 Either `Compatible` or `Usable` is present; both are plain booleans.
 
@@ -220,9 +226,14 @@ Either `Compatible` or `Usable` is present; both are plain booleans.
 
 Quality determines an item's rarity tier, affecting its UI border color and sort order:
 
+Each tier is its own asset under `Server/Item/Qualities/<Quality>.json` (`QualityValue`, slot/tooltip textures,
+`TextColor`, `LocalizationKey`, `VisibleQualityLabel`, …); the `Quality` string on an item must match one of those
+filenames. 0.6.3 ships eleven:
+
 | Quality | Description | Usage |
 |---------|-------------|-------|
 | `Template` | Base templates (not obtainable) | Parent items for inheritance |
+| `Junk` | `QualityValue` 0, label hidden | Vendor trash / salvage |
 | `Common` | White border | Basic crafted items |
 | `Uncommon` | Green border | Standard equipment |
 | `Rare` | Blue border | Advanced equipment |
@@ -292,7 +303,7 @@ Items use a `Parent` field to inherit all properties from a template, then overr
       "Interactions": [{
         "Parent": "Weapon_Sword_Primary_Swing_Left_Damage",
         "DamageCalculator": {
-          "BaseDamage": { "Physical": 9 }
+          "BaseDamage": { "Physical": 10 }
         }
       }]
     }
@@ -449,7 +460,7 @@ Additional `Items.*` category IDs appear directly on item files even though they
 |-------------|----------------|
 | `Items.Utility` | 3 |
 | `Items.Consumables` | 1 |
-| `Items.Debug` | 3 |
+| `Items.Debug` | 4 |
 
 ---
 
@@ -457,15 +468,22 @@ Additional `Items.*` category IDs appear directly on item files even though they
 
 ResourceTypes group items for recipe input flexibility. Instead of requiring a specific item, recipes can accept any item of a ResourceType.
 
-**Location:** `Server/Item/ResourceTypes/*.json`
+**Location:** `Server/Item/ResourceTypes/*.json` — the resource-type id **is the filename** (`Foods.json` → `Foods`).
+The file body carries only an optional `Icon` (shown in recipe UIs when a recipe input is a resource type); most of
+the 181 shipped files are simply `{}`.
 
 ### Example ResourceType
 
+`Server/Item/ResourceTypes/Rock.json`:
+
 ```json
 {
-  "Id": "Foods"
+  "Icon": "Icons/ResourceTypes/Any_Rock.png"
 }
 ```
+
+(Server-side class: `com.hypixel.hytale.server.core.asset.type.item.config.ResourceType` — `getId()` / `getIcon()`
+only; the `Name`/`Description` fields it had in 0.5.9 were removed by 0.6.3.)
 
 ### Using in Items
 
@@ -591,7 +609,8 @@ Defines crafting requirements:
 | `Input[].ResourceTypeId` | string | Any item of this type accepted |
 | `Input[].Quantity` | int | Amount required |
 | `BenchRequirement` | array | Required crafting station |
-| `RequiredTierLevel` | int | Minimum bench tier (1-3) |
+| `BenchRequirement[].RequiredTierLevel` | int | Minimum bench tier (1-3) |
+| `BenchRequirement[].RequiredAugmentTags` | string[] | Augment-block tags the bench must carry (0.6.3+; accepted by the codec, no shipped recipe uses it yet) |
 
 ---
 
@@ -771,8 +790,8 @@ behavior itself comes from the item's `BuilderTool` property (see
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 item/recipe loaders (verified against `HytaleServer.jar`).
 
-- **`One and only one of BlockTag or ItemId must be set!`** → a recipe/material entry (e.g. a `Recipe.Input` element) declared both a block-tag and an `ItemId`, or neither. Fix: give each input exactly one of `ItemId`, `ResourceTypeId`, or a tag — not several.
-- **`itemId, resourceTypeId and tag cannot all be null!`** → a `MaterialQuantity` (recipe input/output) was declared with no identifier at all. Fix: set one of `ItemId`, `ResourceTypeId`, or `tag` on every material entry.
+- **`One and only one of BlockTag or ItemId must be set!`** → **not** an item/recipe error: it is the validator of the adventure-objective task field `BlockTagOrItemIdField` (`com.hypixel.hytale.builtin.adventure.objectives.config.task`), fired when an objective task (e.g. a gather/break task) declares neither `BlockTag` nor `ItemId`. Fix: set exactly one of the two on the task.
+- **`itemId, resourceTypeId and tag cannot all be null!`** → a `MaterialQuantity` (recipe input/output) was declared with no identifier at all. Fix: set one of `ItemId`, `ResourceTypeId`, or `ItemTag` on every material entry.
 - **Symptom:** a child item ignores properties it should inherit (or fails to load) → the `Parent` value does not exactly match a template's asset id. Asset ids are case-sensitive and carry no namespace prefix. Fix: set `Parent` to the exact template filename without `.json`, e.g. `Template_Weapon_Sword` (see [Inheritance System](#inheritance-system)).
 
 ---

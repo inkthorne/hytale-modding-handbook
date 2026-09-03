@@ -155,7 +155,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PermissionHolder](permissions.md), [PlayerGroupEvent](permissions.md), [PlayerPermissionChangeEvent](permissions.md)
 
 **Inventory & Crafting**
-[Inventory](inventory.md), [ItemStack](inventory.md), [Item](inventory.md), [ItemContainer](inventory.md), [CombinedItemContainer](inventory.md), [SmartMoveType](inventory.md), [SortType](inventory.md), [FilterType](inventory.md), [FilterActionType](inventory.md), [SlotFilter](inventory.md), [ActionType](inventory.md), [ItemStackTransaction](inventory.md), [CraftingRecipe](inventory.md), [MaterialQuantity](inventory.md), [ResourceQuantity](inventory.md), [BenchRequirement](inventory.md), [BenchType](inventory.md), [DropItemEvent](inventory.md), [SwitchActiveSlotEvent](inventory.md), [InteractivelyPickupItemEvent](inventory.md), [InventoryChangeEvent](inventory.md), [CraftRecipeEvent](inventory.md)
+[Inventory](inventory.md), [ItemStack](inventory.md), [Item](inventory.md), [ItemContainer](inventory.md), [CombinedItemContainer](inventory.md), [SmartMoveType](inventory.md), [SortType](inventory.md), [FilterType](inventory.md), [FilterActionType](inventory.md), [SlotFilter](inventory.md), [ActionType](inventory.md), [ItemStackTransaction](inventory.md), [CraftingRecipe](inventory.md), [MaterialQuantity](inventory.md), [ResourceQuantity](inventory.md), [BenchRequirement](inventory.md), [BenchType](inventory.md), [DropItemEvent](inventory.md), [InteractivelyPickupItemEvent](inventory.md), [InventoryChangeEvent](inventory.md), [CraftRecipeEvent](inventory.md)
 
 **Tasks**
 [TaskRegistry](tasks.md), [TaskRegistration](tasks.md)

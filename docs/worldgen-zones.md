@@ -84,10 +84,15 @@ Every world structure file uses the same small set of top-level keys:
 | `Density` | yes | Density graph whose value selects the biome (the "biome map") |
 | `Framework` | yes | Array of world-constant / positions blocks (see [Framework](#framework)) |
 | `SpawnPositions` | optional | Where players spawn |
-| `BiomeTransitions` | optional | Explicit transition list (seen empty in `Dev/Interpolation.json`) |
+| `Tags` | optional | Generic asset tags (`Basic.json` carries `{"Template": []}`); not read by the generator |
 
 \* `Biomes` is present on most files; `Default_Flat`, `Default_Void`, and `Basic` ship it
-empty and rely solely on `DefaultBiome`.
+empty, and `Default.json` omits it entirely — all four rely solely on `DefaultBiome`.
+
+These are exactly the keys of the `NoiseRange` codec
+(`com.hypixel.hytale.builtin.hytalegenerator.assets.worldstructures.basic.BasicWorldStructureAsset`;
+each `Biomes` entry is a `BiomeRangeAsset` with `Biome`/`Min`/`Max`). A `BiomeTransitions`
+key documented for 0.5.9 is neither in the codec nor in any shipped file as of 0.6.3.
 
 > There is **no** `ZonePatternGenerator`, `BiomePatternGenerator`, Voronoi `CellSize`,
 > `ZoneDiscoveryConfig`, `UniquePrefabContainer`, or `CaveGenerator` block. Biome
@@ -141,7 +146,10 @@ in the shared world biome map by name:
 (`"ExportAs": "Biome-Map"`). It mixes continent, river, and ocean fields built from several
 `SimplexNoise2D` sources through `Mix`/`Min`/`Normalizer`/`Clamp`/`Distance` nodes, and it
 also exports sub-fields such as `World-Continent-Map` and `World-River-Map`. Portal
-structures import a different map (`Biome-Map-Portals`).
+structures import a different map (`Biome-Map-Portals`, from `Density/Map_Portals.json`;
+`Map_Portals_Oasis.json` exports `Biome-Map-Portals-Oasis`). Two further maps ship unused by
+any structure: `Map_Default_Tiles.json` (`Biome-Map-Tiles`, a cell-based layout that also
+exports `World-Biome-Cells`) and `Map_Default_Tiles_Rivers.json` (`Biome-Map-Tiles-Rivers`).
 
 Density can also be inline rather than imported. `Default_Flat.json` and
 `Default_Void.json` use a flat field, and `Dev/Interpolation.json` inlines a noise field:
@@ -234,6 +242,11 @@ Position graph node types observed in world structures:
 | `FieldFunction` | `FieldFunction`, `Delimiters[]` (`Min`/`Max`), `Positions` | Keep points where a sampled field is in range |
 | `Mesh2D` / `Mesh` | `PointsY`, `PointGenerator` | Generate a candidate point grid |
 | `Distance` | `Curve` (`Manual` with `In`/`Out` points) | Distance-based field used to gate points |
+
+`Test_Features.json` instead drives its `Density` from a `PositionsCellNoise` node over a
+`List` of positions (a Voronoi-style field around fixed points). The complete position-node
+vocabulary (grids, jitter, `Scaler`, `Union`, `Clusters`, …) is listed in
+[worldgen-prefabs.md](worldgen-prefabs.md#positions--propdistributions).
 
 `Portals_Oasis.json` shows these composed: a `Bound` box constrains an outer
 `FieldFunction` (gated on an imported `Desert1_Oasis_Pillar_Distance` field), which in turn

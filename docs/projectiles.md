@@ -83,7 +83,7 @@ Pick based on whether you need on-hit logic (effects, AOE, despawn handling).
 | Physics | flat fields (`MuzzleVelocity`, `Gravity`, `Bounciness`, `TimeToLive`, …) | typed `Physics` object (`"Type": "Standard"`, …) + `LaunchForce`, `SpawnOffset` |
 | Particles/despawn | native (`HitParticles`, `MissParticles`, `TimeToLive`, `DeadTime`) — "just work", world-oriented | **none native** — you spawn particles and despawn from interactions |
 | Interactions | **none** | **`Interactions`** (`ProjectileSpawn` / `ProjectileHit` / `ProjectileMiss`) |
-| Launched via | the `LaunchProjectile` interaction (only field `projectileId` — no on-hit hook) | `{ "Type": "Projectile", "Config": "<id>" }` |
+| Launched via | the `LaunchProjectile` interaction (`ProjectileId`, plus `RotationOffset` and, as of 0.6.3, `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` — no on-hit hook) | `{ "Type": "Projectile", "Config": "<id>" }` (also accepts `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` as of 0.6.3) |
 
 Only the **config** schema can run interactions, so it's the one you need to apply effects, AOE, or
 custom on-hit logic. Hit routing: a **terrain/wall** hit fires **`ProjectileMiss`**; a **direct entity**
@@ -97,10 +97,12 @@ hit fires **`ProjectileHit`** (confirmed in vanilla `Projectile_Config_Ice_Ball`
   `BuilderCodec` objects; a `Map` container, like an array, is replaced wholesale.) Restate **every**
   handler you want — omit `ProjectileMiss` and terrain hits never despawn, so the projectile sticks in
   the wall forever.
-- **No native `TimeToLive`** on config projectiles — they despawn via a `RemoveEntity` interaction.
-  Put a `{ "Type": "Simple", "RunTime": 0.2 }` (or `RunTime: 0`) **before** `RemoveEntity` so impact
-  effects dispatch before the entity is destroyed — the pattern vanilla `Projectile_Config_Ice_Ball`
-  uses in both its `ProjectileHit` and `ProjectileMiss`.
+- **No native `TimeToLive`** on config projectiles — they despawn via a `RemoveEntity` interaction
+  (`"Entity": "User"`). Run the effect-bearing interaction **before** `RemoveEntity` so impact effects
+  dispatch before the entity is destroyed: vanilla `Projectile_Config_Ice_Ball` puts a
+  `{ "Type": "Simple", "RunTime": 0, "Effects": { … } }` ahead of `RemoveEntity` in `ProjectileMiss`, and
+  the `DamageEntityParent` interaction (whose `DamageEffects` carry the particles/sound) ahead of it in
+  `ProjectileHit`.
 
 ## ProjectileModule
 **Package:** `com.hypixel.hytale.server.core.modules.projectile`
@@ -114,23 +116,28 @@ ProjectileModule module = ProjectileModule.get();
 
 ### Key Methods
 ```java
-// Spawn a projectile
+// Spawn a projectile. `direction` is re-derived from its yaw/pitch (magnitude ignored) and
+// scaled by config.getLaunchForce(); `position` is mutated in place by the spawn offset.
 Ref<EntityStore> spawnProjectile(
-    Ref<EntityStore> shooter,
+    Ref<EntityStore> creatorRef,
     CommandBuffer<EntityStore> commandBuffer,
     ProjectileConfig config,
     Vector3d position,
-    Vector3d velocity
+    Vector3d direction
 )
 
-// Spawn with custom UUID
+// Spawn with a client-prediction UUID and a model-scale seed (both nullable).
+// `scaleSeed` feeds ProjectileConfig.createSpawnModel(Long) when the config sets
+// "UseModelScale": true; null picks a random scale.
+// (the 6-arg (UUID, Ref, …) overload was replaced by this 7-arg form as of 0.6.3)
 Ref<EntityStore> spawnProjectile(
-    UUID uuid,
-    Ref<EntityStore> shooter,
+    UUID predictionId,
+    Long scaleSeed,
+    Ref<EntityStore> creatorRef,
     CommandBuffer<EntityStore> commandBuffer,
     ProjectileConfig config,
     Vector3d position,
-    Vector3d velocity
+    Vector3d direction
 )
 
 // Get component types
@@ -170,19 +177,24 @@ double getLaunchForce()
 double getMuzzleVelocity()
 double getGravity()
 double getVerticalCenterShot()
+double getHorizontalCenterShot()
 double getDepthShot()
 boolean isPitchAdjustShot()
 
 // Spawn positioning
 Vector3f getSpawnOffset()
+boolean isRotateSpawnOffsetByPitch()   // 0.6.3+: JSON "RotateSpawnOffsetByPitch"
+boolean isRotateSpawnOffsetByYaw()     // 0.6.3+: JSON "RotateSpawnOffsetByYaw"
 Direction getSpawnRotationOffset()
-Vector3d getCalculatedOffset(float yaw, float pitch)
+Vector3d getCalculatedOffset(float pitch, float yaw)
 
 // Physics behavior
 PhysicsConfig getPhysicsConfig()
 
 // Visuals
 Model getModel()
+ModelAsset getModelAsset()              // 0.6.3+
+Model createSpawnModel(Long scaleSeed)  // 0.6.3+: scaled per "UseModelScale" (random when seed is null)
 
 // Sound events
 int getLaunchWorldSoundEventIndex()
@@ -204,6 +216,7 @@ Interface for ballistic properties.
 double getMuzzleVelocity()    // Initial projectile speed
 double getGravity()           // Gravity multiplier
 double getVerticalCenterShot() // Vertical offset for aiming
+double getHorizontalCenterShot() // Horizontal offset for aiming
 double getDepthShot()         // Forward offset for spawn
 boolean isPitchAdjustShot()   // Whether to adjust pitch for trajectory
 ```
@@ -285,11 +298,13 @@ Callback interface for handling projectile impacts.
 void onImpact(
     Ref<EntityStore> projectileRef,    // The projectile entity
     Vector3d impactPosition,           // Where it hit
-    Ref<EntityStore> targetRef,        // Entity that was hit (if any)
-    String interactionId,              // Interaction identifier
+    Vector3i impactBlock,              // Block it bounced off / came to rest on (null if none) — added as of 0.6.3
+    Ref<EntityStore> targetRef,        // Entity that was hit (null on a terrain hit)
+    String collisionDetailName,        // Hitbox detail name on the hit entity (null on a terrain hit)
     CommandBuffer<EntityStore> buffer  // Command buffer for responses
 )
 ```
+The tick system fires this twice over: on an entity contact (`targetRef` set, state → `INACTIVE`) and when a bounce settles into rest (`targetRef`/`collisionDetailName` null, state → `RESTING`).
 
 ---
 
@@ -395,9 +410,9 @@ ComponentType<EntityStore, StandardPhysicsProvider> type =
 
 ### Constants
 ```java
-static final int WATER_DETECTION_EXTREMA_COUNT;  // Samples for water detection
-static final double MIN_BOUNCE_EPSILON;          // Minimum bounce velocity
-static final double MIN_BOUNCE_EPSILON_SQUARED;  // Squared minimum
+static final int WATER_DETECTION_EXTREMA_COUNT = 2;    // Samples for water detection
+static final double MIN_BOUNCE_EPSILON = 0.4;          // Minimum bounce velocity
+static final double MIN_BOUNCE_EPSILON_SQUARED = 0.16; // Squared minimum
 ```
 
 ### State Enum
@@ -435,6 +450,10 @@ boolean isBounced()
 void setBounced(boolean bounced)
 int getBounces()
 void incrementBounces()
+Vector3i bounceBlockPosition()        // 0.6.3+: block hit by the last bounce (null once cleared)
+void clearBounced()                   // 0.6.3+: resets bounced flag and bounceBlockPosition
+BlockPosition getContactBlock()       // 0.6.3+: block the projectile is resting against (null if none)
+void setFallingAfterBreak(boolean b)  // 0.6.3+: set when the support block breaks (see RestingSupport)
 ```
 
 ### Collision Data
@@ -481,7 +500,9 @@ RestingSupport getRestingSupport()
 ### Callbacks
 ```java
 ImpactConsumer getImpactConsumer()
+void setImpactConsumer(ImpactConsumer consumer)
 BounceConsumer getBounceConsumer()
+void setBounceConsumer(BounceConsumer consumer)
 ```
 
 ### World and Entity
@@ -508,7 +529,7 @@ void onCollisionFinished()
 ### Tick Methods
 ```java
 void finishTick(TransformComponent transform, Velocity velocity)
-void rotateBody(double angle, Vector3f axis)
+void rotateBody(double deltaTime, Rotation3f rotation)   // applies the config RotationMode to the body rotation
 ```
 
 ### Usage Example
@@ -566,11 +587,11 @@ ProjectileModule module = ProjectileModule.get();
 // Get projectile config from assets
 ProjectileConfig config = ProjectileConfig.getAssetMap().get("arrow");
 
-// Calculate spawn position and velocity
+// Spawn position (mutated in place by the config's spawn offset) and aim direction.
+// Only the direction's yaw/pitch matter: the module rebuilds a unit vector from them,
+// adds SpawnRotationOffset, and scales by config.getLaunchForce() — do not pre-multiply.
 Vector3d spawnPos = new Vector3d(x, y, z);
-Vector3d velocity = new Vector3d(dirX * config.getMuzzleVelocity(),
-                                  dirY * config.getMuzzleVelocity(),
-                                  dirZ * config.getMuzzleVelocity());
+Vector3d direction = new Vector3d(dirX, dirY, dirZ);
 
 // Spawn the projectile
 Ref<EntityStore> projectileRef = module.spawnProjectile(
@@ -578,7 +599,7 @@ Ref<EntityStore> projectileRef = module.spawnProjectile(
     commandBuffer,
     config,
     spawnPos,
-    velocity
+    direction
 );
 ```
 
@@ -601,7 +622,7 @@ overloads; the general one:
 
 ```java
 ParticleUtil.spawnParticleEffect(
-    String systemId, Vector3d pos,
+    String systemId, Vector3dc pos,       // any Vector3d works (position parameters are Vector3dc as of 0.6.3)
     float pitch, float yaw, float roll,   // ROTATION IN RADIANS — (0,0,0) = world-aligned
     float scale, float duration,
     ComponentAccessor<EntityStore> accessor);   // a CommandBuffer works here
@@ -609,14 +630,16 @@ ParticleUtil.spawnParticleEffect(
 
 The three rotation floats are pitch/yaw/roll in **radians** (the `PlayVfxEffect` trigger calls this
 after `Math.toRadians(...)` on its degree fields). Simpler overloads exist —
-`spawnParticleEffect(String, Vector3d, ComponentAccessor)`,
-`spawnParticleEffect(WorldParticle, Vector3d, ...)`, and `Rotation3f`/`List<Ref>`/`Color` variants.
+`spawnParticleEffect(String, Vector3dc, ComponentAccessor)`,
+`spawnParticleEffect(WorldParticle, Vector3dc, ...)`, and `Rotation3f`/`List<Ref>`/`Color` variants.
 
 Spawning from code with rotation `(0,0,0)` is how you get an **untilted, world-oriented** impact
 effect. A `ModelParticle` placed in JSON attaches to an `EntityPart` (`Self`, `Entity`, `PrimaryItem`,
 or `SecondaryItem` — there is **no world-space anchor**) and inherits that entity's transform, so a
 particle on a pitched projectile tilts with the shot — a flat ground decal looks wrong. `DetachedFromModel: true`
-only makes the system *persist* after the entity despawns; it does **not** change spawn orientation.
+only makes the system *persist* after the entity despawns; it does **not** change spawn orientation
+(0.6.3 adds a sibling `ClearParticlesOnRemove` boolean on `ModelParticle`; by its name it does the opposite — the
+flag is only serialized to the client, so the effect is inferred).
 For a world-oriented effect, use a `WorldParticle` (only available via `DamageEffects`, i.e. entity
 hits) or spawn from code with rotation `(0,0,0)`. As with JSON particles, pass a non-zero `scale` —
 the field is a primitive `float` and `0` renders invisibly.

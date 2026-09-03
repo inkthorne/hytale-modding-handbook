@@ -75,13 +75,18 @@ For a complete list of all documentation files with descriptions, see the [Docum
 
 ### Working Examples
 
-The `examples/` directory contains working Gradle projects:
+The `examples/` directory contains two no-code packs and six working Gradle plugin projects (see `examples/README.md` for the full tour):
 
+- **examples/custom-food/** - Pack (pure JSON): a custom food item built from a template — start here
+- **examples/custom-drop/** - Pack (pure JSON): override a creature's loot table so your item drops
 - **examples/commands/** - Command system (simple commands, position arguments)
 - **examples/ui/** - Custom UI pages and HUD management
 - **examples/inventory/** - Inventory manipulation and transactions
+- **examples/entity-count/** - ECS ticking system that pushes live entity counts to a custom HUD
+- **examples/events/** - Global event bus and an ECS `EntityEventSystem` side by side
+- **examples/item-respawner/** - Stateful placeable block: custom block-entity component, chunk-store ticking, persistence, settings GUI
 
-Each example can be built and deployed to test changes immediately.
+Packs deploy by copying the folder; each plugin can be built and deployed to test changes immediately.
 
 ### Building and Deploying
 

@@ -9,8 +9,9 @@ seo:
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.5.9**
 
-New in Update 5. A **trigger volume** is a 3D region (box, sphere, or cylinder) that runs a list of **effects**
-when something happens inside it — a player enters, a creature leaves, a block breaks, a tick elapses. Designers
+New in Update 5, substantially extended in 0.6.3 (rules, signals, more events/effects). A **trigger volume** is a
+3D region (box, sphere, or cylinder) that runs a list of **effects** when something happens inside it — a player
+enters, a creature leaves, a block breaks or is used, a signal arrives, an entity dies, a tick elapses. Designers
 place and configure volumes in-world with the Trigger Volume Tool (no code), but the system was **built with mod
 support in mind**: a plugin can register its own effect and condition types so they show up in the tool and can be
 used from JSON, exactly like the built-ins.
@@ -28,18 +29,23 @@ com.hypixel.hytale.builtin.triggervolumes
 ├── effect
 │   ├── TriggerEffect        abstract — subclass + override execute(TriggerContext); registered in TriggerEffect.CODEC
 │   ├── TriggerCondition     abstract — subclass + override test(TriggerContext);    registered in TriggerCondition.CODEC
+│   ├── TriggerRule          abstract (0.6.3+) — passive rule active while inside the volume; TriggerRule.CODEC
 │   ├── TriggerContext       what an effect/condition receives at fire time (entity, store, volume, event, block…)
-│   ├── TriggerEventType     ENTER / EXIT / TICK / TAG_ADDED / TAG_REMOVED / BLOCK_PLACED / BLOCK_BROKEN
-│   ├── TriggerVolumeCodecs  tolerant array codecs for the effect / condition lists in JSON
-│   └── builtin.*            the ~22 shipped effects + 8 conditions (Type names below)
+│   ├── TriggerEventType     ENTER / EXIT / TICK / TAG_ADDED / TAG_REMOVED / BLOCK_PLACED / BLOCK_BROKEN + (0.6.3)
+│   │                        VOLUME_CREATE / BLOCK_USED / SIGNAL_RECEIVED / ENTITY_DIED — an open registry, not an enum
+│   ├── EffectOrigin, SignalTag  (0.6.3+) origin selector for positional effects; key/value signal payload
+│   ├── TriggerVolumeCodecs  tolerant array codecs for the effect / condition / rule lists in JSON
+│   └── builtin.*            29 shipped effects, 10 conditions, 11 rules (Type names below)
 ├── asset.TriggerEffectAsset reusable effect bundle loaded from Server/TriggerVolumes/Effects/
 ├── component
 │   ├── TriggerVolume        ECS component: shape + effects + enabled flag (one placed volume)
-│   └── TriggerVolumeGroup   a named group of volumes
+│   ├── TriggerVolumeGroup   a named group of volumes
+│   └── IgnoreTriggerVolumes (0.6.3+) marker component: entity is invisible to volumes
 ├── manager.TriggerVolumeManager   per-world Resource: register / lookup / enumerate volumes & groups
 ├── shape.{BoxShape, SphereShape, CylinderShape}  : TriggerVolumeShape
 ├── event.TriggerVolumeEvent       IEvent<String> fired when a volume triggers
 ├── EntityTargetType        PLAYER / NPC / ITEM_DROP / PROJECTILE (who a volume reacts to)
+├── interaction.*           (0.6.3+) SpawnTriggerVolume / SignalNearbyVolumes / DestroyTaggedVolumes interaction types
 └── command.*               the /triggervolume command family (tooling)
 ```
 
@@ -83,8 +89,10 @@ launches and chimes when a player enters:
 | `Effects` | array | Effects to run. Tolerant array — an unknown/malformed entry is skipped, not fatal. |
 | `Conditions` | array | Optional gate (see [Conditions](#conditions)). All must pass for the effects to run. |
 | `RejectionEffects` | array | Optional effects run when a condition **fails** (e.g. a "denied" message). |
-| `ConditionTiming` | enum | When conditions are evaluated relative to the effects (`ConditionTiming`). |
+| `Rules` | array | 0.6.3+ — passive [rules](#rules) active while an entity is inside (tolerant array, `TriggerVolumeCodecs.TOLERANT_RULES`). |
+| `ConditionTiming` | enum | When conditions are evaluated relative to the volume's activation delay: `BEFORE_VOLUME_DELAY` or `AFTER_VOLUME_DELAY` (default). |
 | `TargetTypes` | array | Which entity kinds the volume reacts to. The sample uses `"Player"`; values map to [`EntityTargetType`](#entitytargettype). |
+| `IncludeVolumeSettings` | bool | 0.6.3+ — when `true`, the asset also carries per-volume settings that are copied onto any volume it is assigned to: `VolumeTags`, `RejectionDelayMode`, `Cooldown` (s), `CooldownMode`, `ActivationDelay` (s), `ProjectileSource`, `KeepLoaded`, `RotateEffectsOnPaste`, `CancelDelayedOnExit`. Ignored (and not written back) when `false`. |
 
 ### Effect entry fields
 
@@ -96,35 +104,45 @@ Every effect entry carries the base keys below (from `TriggerEffect`), plus its 
 | `Event` | `TriggerEventType` | Which event fires this effect (`ENTER`, `EXIT`, …). |
 | `Interval` | float | For `TICK` effects: seconds between repeats. |
 | `Delay` | float | Seconds to wait after the event before running. |
+| `Entry` | int | 0.6.3+ — groups conditions with the effects they gate: a condition only applies to effects/rejection effects carrying the same `Entry` number (default `0`). Also on conditions. |
 
 ## Built-in effect types
 
 The `Type` value selects the effect. These are the names registered by the built-in `TriggerVolumesPlugin`
-(verified against the jar) — type-specific fields aside from the base keys above are not all enumerated here;
-inspect the corresponding `…effect.builtin.<Name>Effect` class or the in-game inspector for each.
+(verified against the 0.6.3 jar). The JSON keys listed are each effect's codec keys (enum values in
+`UPPER_SNAKE`); for semantics read the corresponding `…effect.builtin.<Name>Effect` class or use the in-game inspector.
 
-| `Type` | Effect | Notes |
-|--------|--------|-------|
-| `SetVelocity` | Launch/push the entity | `Velocity` (Vector3d), `Additive` (bool) |
-| `Teleport` | Move the entity | |
-| `SendMessage` | Send a chat message | `Message` (i18n key or text) |
-| `PlaySound` | Play a sound | `SoundEvent`, `Volume`, `Pitch` |
-| `PlayVfx` | Spawn a particle system | `ParticleSystem` |
-| `SetWeather` | Change weather | `Weather` |
-| `SetMusic` | Set music | `MusicContainer` |
-| `ShowEventTitle` | Show an on-screen title | |
-| `EntityEffect` | Apply/remove a status effect | `EntityEffect` (see [effects-stats](effects-stats.md)) |
-| `DamageEntity` | Deal damage | |
-| `GiveItem` | Give an item | `Item` |
-| `PlaceBlock` | Place a block | `BlockType` |
-| `ReplaceBlockType` | Swap block types in range | `FromBlockTypes`, `ToBlockType` |
-| `ControlDoors` | Open/close doors | |
-| `PastePrefab` | Paste a prefab | `Prefab` / `PrefabList` |
-| `TriggerNpcMarkers` | Activate NPC spawn markers | `MarkerType`, `ManualSpawnMarker` |
-| `RunRootInteraction` | Run an interaction graph | `RootInteraction` (see [interactions](interactions.md)) |
-| `SetGameMode` | Change the entity's game mode | |
-| `ModifyTags` | Add/remove volume tags | |
-| `EnableVolume` / `DisableVolume` / `DeleteVolume` | Toggle/remove another volume | by tag |
+| `Type` | Effect | Type-specific JSON keys |
+|--------|--------|-------------------------|
+| `SetVelocity` | Launch/push the entity | `Velocity` (Vector3d), `Additive` (bool), `RelativeMode` (`ABSOLUTE` / `VOLUME_ORIGIN` / `HORIZONTAL_FACING` / `FULL_LOOK`) |
+| `Teleport` | Move the entity | `Position`, `World`, `ResetVelocity`, `RelativeToEntity`, `RelativeToVolume`, `UseRotation`, `Rotation` |
+| `SendMessage` | Send a chat message | `Message` (i18n key or text), `Recipient` (`TRIGGERING_PLAYER` / `NEAREST_PLAYER` / `PLAYERS_IN_VOLUME` / `ALL_PLAYERS`) |
+| `PlaySound` | Play a sound | `SoundEvent`, `Volume`, `Pitch`, `Location` (`VOLUME_CENTER` / `ENTITY` / `EVENT` / `PLAYER`), `Offset` |
+| `PlayVfx` | Spawn a particle system | `ParticleSystem`, `Offset`, `Anchor` (`VOLUME` / `ENTITY` / `EVENT`), `Scale`, `Rotation`, `Duration` |
+| `CancelParticles` | 0.6.3+ — stop running particle systems | `ParticleSystems`, `Instant` |
+| `SetWeather` | Change weather | `Weather`, `PlayerOnly`, `ResetWeather` |
+| `SetMusic` | Set music | `MusicContainer`, `ClearMusic` |
+| `Time` | 0.6.3+ — pause/resume/set the world clock | `Mode` (`PAUSE` / `RESUME` / `SET`), `TargetHour`, `DurationSeconds`, `Forward`, `PauseOnComplete`, `PlayerOnly` |
+| `ShowEventTitle` | Show an on-screen title | `PrimaryTitle`, `SecondaryTitle`, `IsMajor`, `Icon`, `Duration`, `FadeInDuration`, `FadeOutDuration` |
+| `EntityEffect` | Apply/remove a status effect | `Effect` (the entity-effect id — **not** `EntityEffect`; see [effects-stats](effects-stats.md)), `Mode` (`APPLY` / `REMOVE`), `Duration` |
+| `DamageEntity` | Deal damage | `Mode` (`FLAT` / `PERCENT_MAX` / `PERCENT_CURRENT`), `Amount` |
+| `RemoveEntities` | 0.6.3+ — kill or delete entities in the volume | `Mode` (`KILL` / `REMOVE`), `IncludeNpcs`, `IncludePlayers`, `IgnoreInvulnerability`, `Roles`, `MaxCount` |
+| `GiveItem` | Give an item | `Item`, `Quantity`, `OverflowBehavior` (`DROP_REMAINDER` / `IGNORE_REMAINDER` / `REQUIRE_FULL_STACK`) |
+| `PlaceBlock` | Place a block | `BlockType`, `BlockState`, `Position`, `Origin`, `ReplaceMode` (`ALWAYS` / `ONLY_AIR`), `Rotation`, `Pitch`, `Roll` |
+| `ReplaceBlockType` | Swap block types in range | `FromBlockTypes`, `FromBlockState`, `ToBlockType`, `ToBlockState`, `Bounds` (`SHAPE` / `AABB`), `X`, `Y`, `Z`, `Offset`, `Origin`, `Rotation`, `Pitch`, `Roll` |
+| `ControlDoors` | Open/close doors | `Action` |
+| `PastePrefab` | Paste a prefab | `Prefab` / `PrefabList`, `Position`, `Origin`, `Rotation`, `ShowParticles` |
+| `TriggerNpcMarkers` | Activate NPC spawn markers | `MarkerType`, `Range`, `MatchTag`, `Radius`, `Center` |
+| `SpawnNpc` | 0.6.3+ — spawn NPCs directly | `NpcType`, `GroupType`, `Origin`, `Offset`, `Count`, `Yaw` |
+| `PlayAnimation` | 0.6.3+ — play an NPC animation | `NpcType`, `Animation`, `Target` (`TRIGGERING_ENTITY` / `NPCS_IN_VOLUME`), `Duration`, `Stop` |
+| `RunRootInteraction` | Run an interaction graph | `RootInteraction`, `InteractionType`, `EquipSlot` (see [interactions](interactions.md)) |
+| `SetGameMode` | Change the entity's game mode | `GameMode` |
+| `ModifyTags` | Add/remove volume tags | `Operation` (`SET` / `REMOVE` / `INCREMENT` / `TOGGLE` / `REPLACE` / `APPEND`), `TagKey`, `TagValue`, `MatchKey`, `MatchValue`, `Radius`, `Center` |
+| `SendSignal` | 0.6.3+ — raise `SIGNAL_RECEIVED` on matching volumes | `MatchKey`, `MatchValue`, `Radius`, `Center`, `SignalKeys`, `SignalValues` |
+| `ModifyRules` | 0.6.3+ — edit a volume's rule list at runtime | `Operation` (`SET` / `APPEND` / `SET_FIELD` / `REMOVE` / `SET_RULES_ACTIVE`), `Rule`, `FieldKey`, `Active` |
+| `EnableVolume` / `DisableVolume` / `DeleteVolume` | Toggle/remove other volumes | by tag: `MatchKey`, `MatchValue`, `Radius`, `Center` (`VOLUME` / `ENTITY` / `EVENT`); `DeleteVolume` adds `DeleteGroup` |
+
+`Origin` keys take an `EffectOrigin`: `VOLUME_ORIGIN`, `ENTITY`, `EVENT`, or `WORLD_ABSOLUTE` (0.6.3+).
 
 ## Conditions
 
@@ -139,15 +157,40 @@ Conditions gate an asset's effects: list them under `Conditions`, and the effect
 | `ItemCondition` | Entity holds / has an item |
 | `RandomChanceCondition` | Random roll |
 | `PlayerCountCondition` | Number of players in the volume |
-| `TagCondition` | Volume has a tag |
-| `BlockTypeCondition` | Block at the event position is a given type |
+| `TagCondition` | Volume has a tag (`Source`: `EVENT` / `SELF` / `GROUP` / `RADIUS`) |
+| `BlockTypeCondition` | Block at the event position is a given type (`PositionSource`: `EVENT` / `VOLUME_ORIGIN` / `ENTITY` / `WORLD_ABSOLUTE`) |
+| `EntityCountCondition` | 0.6.3+ — number of entities of `EntityType` in the volume (`Comparison`: `AT_LEAST` / `AT_MOST` / `EXACTLY` / `NOT_EQUALS` / `MORE_THAN` / `LESS_THAN`, `Count`) |
+| `TimeOfDay` | 0.6.3+ — world hour within `MinHour`…`MaxHour` (class `TimeOfDayCondition`; note the short `Type` name) |
 
 > Note the naming asymmetry: **effect** type names drop the `Effect` suffix (`SendMessageEffect` → `"SendMessage"`),
-> while **condition** type names keep the full class name (`PermissionCondition` → `"PermissionCondition"`).
+> while **condition** type names keep the full class name (`PermissionCondition` → `"PermissionCondition"`) — except
+> `TimeOfDayCondition`, registered as plain `"TimeOfDay"` in 0.6.3.
+
+## Rules
+
+A `TriggerRule` is *passive*: rather than firing on an event it stays in force for whatever is inside the volume
+(the engine's systems consult `TriggerVolumeManager.hasActiveRule(position, RuleClass)` /
+`getActiveRules(...)` on each guarded action). List them under `Rules`; toggle them at runtime with the
+`ModifyRules` effect or `VolumeEntry.setRulesActive(boolean)`. Registered `Type` names:
+
+| `Type` | Rule | Keys |
+|--------|------|------|
+| `NoBuild` / `NoDestroy` / `NoHarvest` / `NoUse` | Deny placing / breaking / harvesting / using blocks | `ExceptBlocks`, `ExceptBlockTags` (`NoDestroy` also `ExceptTools`, `ExceptToolTags`) |
+| `NoDamage` | Deny damage | `EntityFilter`, `Entities`, `PvpOnly` |
+| `NoDoorOpen` / `NoHeal` / `Fly` / `CreativePlacement` | Deny door use / deny healing / allow flight / creative-style placement | — |
+| `DamageMultiplier` | Scale damage | `Multiplier`, `Direction` (`RECEIVED` / `DEALT` / `BOTH`), `EntityFilter`, `Entities` |
+| `NoTick` | Suppress block ticking | `ScheduledTick`, `RandomTick` |
+
+The deny rules share `AbstractDenyRule` keys `Target` (`SELF` / `OTHER` / `BOTH`), `MatchKey`, `MatchValue`, `Radius`,
+`SignalKeys`, `SignalValues` — a denied action can send a signal to matching volumes. Custom rules follow the
+effect pattern against `TriggerRule.CODEC` (`TriggerVolumesPlugin.registerRuleType(...)`).
 
 ## TriggerEventType
 
-The event that fires an effect/condition (field `Event`):
+The event that fires an effect/condition (field `Event`). As of 0.6.3 `TriggerEventType` is a **registry class, not
+an enum**: the built-ins are `public static final` instances, `TriggerEventType.values()` returns a `List`, and a
+plugin can add its own with `TriggerVolumesPlugin.registerEventType("MY_EVENT")` (or `TriggerEventType.register`)
+and raise it via the manager's `enqueue*Event(...)` methods. `TriggerEventType.get(name)` resolves a name.
 
 | Value | Fires when |
 |-------|-----------|
@@ -156,6 +199,10 @@ The event that fires an effect/condition (field `Event`):
 | `TICK` | Repeatedly while a target is inside (paced by `Interval`) |
 | `TAG_ADDED` / `TAG_REMOVED` | A tag is added to / removed from the volume |
 | `BLOCK_PLACED` / `BLOCK_BROKEN` | A block is placed / broken inside the volume |
+| `BLOCK_USED` | 0.6.3+ — a block inside the volume is used (interacted with) |
+| `VOLUME_CREATE` | 0.6.3+ — the volume itself is created (e.g. by `SpawnTriggerVolume`) |
+| `SIGNAL_RECEIVED` | 0.6.3+ — a `SendSignal` effect / `SignalNearbyVolumes` interaction / deny-rule signal targeted this volume (`TriggerContext.getSignalTags()`) |
+| `ENTITY_DIED` | 0.6.3+ — a target entity died inside the volume |
 
 ## EntityTargetType
 
@@ -215,8 +262,9 @@ Authors can now use it in any effect asset:
 { "Effects": [ { "Type": "Greet", "Event": "ENTER", "Greeting": "Hi there" } ], "TargetTypes": ["Player"] }
 ```
 
-> Register **before** worlds/effect assets load (in `setup()`). The base game registers its built-ins the same way
-> from `TriggerVolumesPlugin`, logging `Registered trigger effect type '<id>' (<class>)`.
+> Register **before** worlds/effect assets load (in `setup()`). `TriggerVolumesPlugin.get().registerEffectType(id,
+> Class, BuilderCodec)` is the equivalent helper (it logs `Registered trigger effect type '<id>' (<class>)`);
+> `registerConditionType` / `registerRuleType` / `registerEventType` cover the other extension points.
 
 ### Custom conditions
 
@@ -235,12 +283,19 @@ What `execute`/`test` receive at fire time:
 | `getEventType()` | `TriggerEventType` | Which event fired |
 | `getVolume()` | `VolumeEntry` | The volume that fired |
 | `getSpatialVolumes()` | `List<VolumeEntry>` | Other volumes overlapping the point |
-| `getTagKey()` / `getTagValue()` | `String` | For `TAG_ADDED` / `TAG_REMOVED` events |
-| `getBlockPosition()` | `Vector3d` | For `BLOCK_PLACED` / `BLOCK_BROKEN` events |
+| `getSignalTags()` | `List<SignalTag>` | 0.6.3+ — key/value pairs carried by `TAG_ADDED` / `TAG_REMOVED` / `SIGNAL_RECEIVED` events (`SignalTag(String key, String value)` record). Replaces the 0.5.9 `getTagKey()` / `getTagValue()`, removed by 0.6.3. |
+| `getActorPosition()` | `Vector3d` | 0.6.3+ — the triggering entity's position |
+| `getEventPosition()` | `Vector3d` | 0.6.3+ — where the event happened (block / hit position) |
+| `getBlockPosition()` | `Vector3d` | For `BLOCK_PLACED` / `BLOCK_BROKEN` / `BLOCK_USED` events |
 | `getBlockId()` | `String` | The block involved, for block events |
+| `getInteractionType()` | `InteractionType` | 0.6.3+ — for `BLOCK_USED` (which click) |
+| `resolveOrigin(EffectOrigin, Vector3d offset, MissingActor)` | `Vector3d` | 0.6.3+ — resolve an `Origin` key (volume / entity / event / absolute) to a world position |
 
 > The effect/condition instance is shared across firings — keep per-entity state out of fields. `TriggerEffect` and
-> `TriggerCondition` provide an `onEntityExit(UUID)` hook for cleaning up any per-entity tracking you do keep.
+> `TriggerCondition` provide an `onEntityExit(UUID)` hook for cleaning up any per-entity tracking you do keep, and
+> (0.6.3+) `rotateInPlace(float yawRadians, Vector3d volumeOrigin)`, called when a volume is pasted with a rotation
+> (`RotateEffectsOnPaste`) so effects holding positions can rotate them; `getEntry()` / `setEntry(int)` expose the
+> `Entry` grouping key.
 
 ---
 
@@ -266,6 +321,11 @@ tv.setEnabled(false);                 // disable without deleting
 String group = tv.getGroupLinkId();   // group membership, if any
 ```
 
+`TriggerVolumesPlugin.get()` is the static accessor. The same plugin also exposes
+`getTriggerVolumeGroupComponentType()`, `getManagerResourceType()` (the per-world manager below) and, as of 0.6.3,
+`getIgnoreTriggerVolumesComponentType()` — add the `IgnoreTriggerVolumes` marker component (`IgnoreTriggerVolumes.INSTANCE`)
+to an entity to make every volume ignore it.
+
 ### TriggerVolumeManager (per-world resource)
 
 A world-scoped `Resource` that owns the live volume registry. Use it to enumerate or look up volumes by id, or to
@@ -278,6 +338,11 @@ VolumeEntry v = mgr.getVolume("my-volume-id");
 boolean exists = mgr.hasVolume("my-volume-id");
 mgr.register("my-volume-id", volumeEntry);
 mgr.unregister("my-volume-id");
+
+// 0.6.3+: rules and custom events
+boolean noBuild = mgr.hasActiveRule(position, NoBuildRule.class);
+List<DamageMultiplierRule> mults = mgr.getActiveRules(position, DamageMultiplierRule.class);
+mgr.enqueueVolumeEvent(myEventType, actorRef, actorUuid, "my-volume-id", List.of(new SignalTag("key", "value")));
 ```
 
 ### TriggerVolumeEvent
@@ -294,7 +359,9 @@ from your own systems without authoring an effect:
 
 `TriggerVolumeShape` is the abstract base (a `CodecMapCodec`, so shapes are also extensible) with three built-ins —
 `BoxShape`, `SphereShape`, `CylinderShape`. Key methods: `contains(point, origin)`, `getBoundingRadius()`,
-`getWorldAABB(origin, minOut, maxOut)`, `rotateInPlace(degrees)`, `copy()`.
+`getMaxDistanceFromOrigin()`, `getWorldAABB(origin, minOut, maxOut)`, `rotateInPlace(yawRadians)` (a `float` in
+**radians**), `copy()`. As of 0.6.3 a `BoxShape` can carry its own rotation (`hasRotation()`, `getRotation()`,
+`setRotation(Vector3d)`, plus a `BoxShape(min, max, rotation)` constructor).
 
 ---
 
@@ -309,15 +376,23 @@ The `/triggervolume` family backs the in-game tool and is handy for testing from
 | `/triggervolume info` | Inspect a volume |
 | `/triggervolume assigneffect` | Attach an effect asset to a volume |
 | `/triggervolume enable` / `disable` | Toggle a volume (also `enabletag` / `disabletag` by tag) |
+| `/triggervolume tag` / `listtag` | 0.6.3+ — set/remove tags on a volume; list volumes by tag |
 | `/triggervolume test` | Fire a volume's effects for testing |
+| `/triggervolume rename` / `tp` / `tool` | 0.6.3+ — rename a volume; teleport to one; give the tool item |
+| `/triggervolume benchmark spread\|stacked\|cleanup` | 0.6.3+ — spawn/remove synthetic volumes for performance testing |
 | `/triggervolume remove` | Delete a volume |
+
+Three interaction types (0.6.3+) drive volumes from item/NPC interaction graphs: `SpawnTriggerVolume` (`EffectAsset`,
+`Shape`, `LifetimeS`, `RequireHitLocation` — creates a temporary volume at the hit point, firing `VOLUME_CREATE`),
+`SignalNearbyVolumes` (`MatchKey`, `MatchValue`, `Radius`, `SignalKeys`, `SignalValues`, `RequireHitLocation`) and
+`DestroyTaggedVolumes` (`MatchKey`, `MatchValue`, `Radius`).
 
 ---
 
 ## Gotchas & Errors
 
-- **Effect/condition lists are tolerant.** `TriggerVolumeCodecs.TOLERANT_EFFECTS` / `TOLERANT_CONDITIONS` skip an
-  entry that fails to decode rather than failing the whole asset. A typo'd `Type` silently drops that one effect —
+- **Effect/condition/rule lists are tolerant.** `TriggerVolumeCodecs.TOLERANT_EFFECTS` / `TOLERANT_CONDITIONS` /
+  `TOLERANT_RULES` skip an entry that fails to decode rather than failing the whole asset. A typo'd `Type` silently drops that one effect —
   check the server log for the load, not just the absence of an error.
 - **Register custom types early.** A volume that names a `Type` you haven't registered loses that effect; register
   in `setup()` before worlds load.
@@ -325,7 +400,9 @@ The `/triggervolume` family backs the in-game tool and is handy for testing from
   `Volume '<id>' references missing effect asset '<assetId>'` and runs nothing — confirm the asset id matches the
   file under `Server/TriggerVolumes/Effects/`.
 - **`Type` is the discriminator key**, not `"Effect"` or `"Name"`. The base codec also reads `Event`, `Interval`,
-  `Delay`; everything else is type-specific.
+  `Delay`, `Entry`; everything else is type-specific.
+- **`EntityEffect`'s id key is `Effect`.** `{ "Type": "EntityEffect", "EntityEffect": "…" }` never sets the effect id —
+  the codec key is `Effect` (plus `Mode`, `Duration`).
 
 ---
 

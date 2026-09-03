@@ -225,6 +225,10 @@ String str = Vector3dUtil.formatShortString(vec);
 Vector3i blockPos = Vector3dUtil.toVector3i(vec);
 Vector3dUtil.clipToZero(vec, epsilon);        // set components < epsilon to 0 (in place)
 boolean nearZero = Vector3dUtil.closeToZero(vec, epsilon);
+Vector3dUtil.sanitizeNonFinite(vec);          // 0.6.3+: NaN/Infinite components → 0 (in place)
+
+// 0.6.3+: quadratic Bézier point at t in [0, 1], written into dest
+Vector3d p = Vector3dUtil.quadraticBezier(p0, control, p2, t, new Vector3d());
 ```
 
 ### Codec
@@ -270,6 +274,7 @@ Vector3iUtil.BLOCK_PARTS      // all parts, grouped
 Vector3i lower = Vector3iUtil.min(a, b);
 Vector3i upper = Vector3iUtil.max(a, b);
 Vector3d asDouble = Vector3iUtil.toVector3d(blockPos);
+long cells = Vector3iUtil.inclusiveBoxVolume(minX, minY, minZ, maxX, maxY, maxZ);  // 0.6.3+: block count, both corners inclusive
 ```
 
 ---
@@ -345,9 +350,19 @@ Rotation3f pos = Rotation3f.lerpUnclamped(start, end, t);
 Rotation3f rot = Rotation3f.lerpAngle(start, end, 0.5f);   // handles wrap-around
 Rotation3f rot = Rotation3f.lerpAngle(start, end, 0.5f, result);
 
-// Rotation that faces a direction vector
+// Rotation that faces a direction vector (parameters are read-only Vector3dc, so any Vector3d works)
 Rotation3f look = Rotation3f.lookAt(directionVec3d);
 Rotation3f look = Rotation3f.lookAt(directionVec3d, result);
+Rotation3f look = Rotation3f.lookAt(dx, dy, dz);              // 0.6.3+: component form
+Rotation3f look = Rotation3f.lookAt(fromPos, toPos);          // 0.6.3+: from one point toward another
+Rotation3f look = Rotation3f.lookAt(fromPos, toPos, result);  //        (also with a result parameter)
+```
+
+### Non-finite guard
+
+```java
+boolean ok = rot.isFinite();   // false if any component is NaN/Infinite
+rot.sanitizeNonFinite();       // 0.6.3+: replace NaN/Infinite components with 0, in place
 ```
 
 ### Applying a Rotation
@@ -478,6 +493,17 @@ tc.setRotation(newRot);
 tc.teleportPosition(newPos);
 tc.teleportRotation(newRot);
 ```
+
+### Chunk-section linkage (0.6.3+)
+
+The component also records which **chunk section** (32×32×32 `ChunkSection` entity in the `ChunkStore`) the entity currently lives in — engine-maintained, but readable when you need the section's ECS `Ref`:
+
+```java
+Ref<ChunkStore> section = tc.getSectionRef();   // null until the entity has been placed in a loaded section
+tc.setSectionLocation(sectionRef);              // engine-side: called when the entity crosses a section boundary
+```
+
+The 0.5.9 column-chunk accessors `getChunk()` / `getChunkRef()` / `setChunkLocation(...)` / `markChunkDirty(...)` were removed by 0.6.3 (the world moved from column `WorldChunk` tracking to per-section tracking); `getSectionRef()` is the replacement.
 
 ### Transform vs TransformComponent
 
@@ -741,7 +767,7 @@ long key = BlockUtil.pack(x, y, z);        // also packUnchecked(x, y, z)
 int bx = BlockUtil.unpackX(key);
 int by = BlockUtil.unpackY(key);
 int bz = BlockUtil.unpackZ(key);
-Vector3i pos = new Vector3i(bx, by, bz);   // 0.6 removed pack(Vector3i)/unpack(long) — only the per-axis forms remain
+Vector3i pos = new Vector3i(bx, by, bz);   // pack(Vector3i)/unpack(long) were removed by 0.6.3 — only the per-axis forms remain
 ```
 
 ---
@@ -827,8 +853,9 @@ Static utility methods for common scalar math operations.
 ### Constants
 
 ```java
-MathUtil.EPSILON_DOUBLE  // small double for comparisons
-MathUtil.EPSILON_FLOAT   // small float for comparisons
+MathUtil.EPSILON_DOUBLE       // small double for comparisons
+MathUtil.EPSILON_FLOAT        // small float for comparisons
+MathUtil.ZERO_LENGTH_EPSILON  // 1.0E-8 — "is this vector effectively zero-length" threshold (0.6.3+)
 ```
 
 ### Rounding
@@ -849,6 +876,8 @@ double rounded = MathUtil.round(value, decimalPlaces);
 double clamped = MathUtil.clamp(value, min, max);
 float clamped = MathUtil.clamp(value, min, max);
 int clamped = MathUtil.clamp(value, min, max);
+long clamped = MathUtil.clamp(value, min, max);
+long product = MathUtil.saturatedMultiply(a, b);   // 0.6.3+: a*b clamped to Long.MIN/MAX instead of overflowing
 ```
 
 ### Random
@@ -866,6 +895,7 @@ float lerped = MathUtil.lerp(a, b, t);
 double lerped = MathUtil.lerp(a, b, t);
 float lerped = MathUtil.lerpUnclamped(a, b, t);
 float angleLerp = MathUtil.lerpAngle(fromAngle, toAngle, t);
+float seeded = MathUtil.seededLerp(a, b, seed);   // 0.6.3+: lerp at a deterministic t derived from a long seed
 ```
 
 ### Angle Utilities
@@ -975,6 +1005,7 @@ T drop = RandomExtra.randomWeightedElement(items, weightFn);       // ToDoubleFu
 T drop2 = RandomExtra.randomIntWeightedElement(items, intWeightFn);
 int idx = RandomExtra.pickWeightedIndex(weights);                  // double[] of weights
 RandomExtra.reservoirSample(source, filter, sampleCount, results); // uniform sample of a filtered List
+int n = RandomExtra.reservoirSample(population, sampleCount, outIndices); // 0.6.3+: int indices 0..population-1 into outIndices[]
 
 // Vectors
 RandomExtra.jitter(vec, maxRange);   // adds a random 0..maxRange to each component, in place
@@ -1048,7 +1079,7 @@ Smaller helpers you'll mostly meet in passing:
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the 0.5.0 math types (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are literal messages in the 0.6.3 `HytaleServer.jar` (the vector-format ones come from the NPC spawn command's coordinate parser, the plane one from the world generator's plane density asset).
 
 - **`Invalid Vector3f format: must be three comma-separated floats`** / **`Invalid Vector3d format: must be three comma-separated doubles`** → a string-form vector did not parse as exactly three comma-separated numbers. Fix: format as `x,y,z` (e.g. `1.0,2.0,3.0`).
 - **`Plane normal can't be a zero vector.`** → a plane was constructed from a zero-length normal. Fix: pass a non-zero (ideally unit-length) normal.

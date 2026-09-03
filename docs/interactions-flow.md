@@ -297,8 +297,9 @@ A dodge combines movement, animation, effects, and stat changes in sequence:
 
 **Double Jump (from Double_Jump.json):**
 
-A stamina-gated aerial boost. The real asset uses a `StatsCondition` with a `Costs`
-map (which both checks and deducts the cost) and branches with `Next`:
+A stamina-gated aerial boost. The real asset gates on a `StatsCondition` (`Costs` is a
+pure affordability check) and spends the stamina with a separate `ChangeStat` inside `Next`
+(abbreviated — the asset also resets `StaminaRegenDelay` and emits feather particles):
 
 ```json
 {
@@ -333,35 +334,43 @@ map (which both checks and deducts the cost) and branches with `Next`:
 
 **Consumable with Charge (from Consume_Charge.json):**
 
-A consumable that requires holding, then executes multiple effects:
+A consumable that requires holding for 4 s, then consumes the item and runs a Serial of `Replace` hooks the item fills in (`ConsumedSFX`, `Effect`):
 
 ```json
 {
   "Type": "Serial",
   "Interactions": [
     {
+      "Type": "Replace",
+      "Var": "ConsumeSFX",
+      "DefaultValue": { "Interactions": ["Consume_SFX"] }
+    },
+    {
       "Type": "Charging",
       "FailOnDamage": true,
-      "HorizontalSpeedMultiplier": 0.3,
-      "DisplayProgress": true,
+      "HorizontalSpeedMultiplier": 0.4,
       "Effects": {
-        "ItemAnimationId": "Consume"
+        "ItemAnimationId": "Consume",
+        "ClearAnimationOnFinish": true,
+        "ClearSoundEventOnFinish": true
       },
       "Next": {
-        "0": {
-          "Type": "Simple",
-          "Effects": { "ClearAnimationOnFinish": true }
-        },
-        "2.0": {
-          "Type": "Serial",
-          "Interactions": [
-            { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-            { "Type": "ApplyEffect", "EffectId": "Satiated" },
-            { "Type": "ChangeStat", "StatModifiers": { "Health": 20 } },
-            { "Type": "Simple", "Effects": { "LocalSoundEventId": "SFX_Eat_Finish" } }
-          ]
+        "4.0": {
+          "Type": "ModifyInventory",
+          "AdjustHeldItemQuantity": -1,
+          "Next": {
+            "Type": "Serial",
+            "Interactions": [
+              { "Type": "Replace", "Var": "ConsumedSFX", "DefaultOk": true,
+                "DefaultValue": { "Interactions": ["Consumed_SFX"] } },
+              { "Type": "Replace", "Var": "Effect",
+                "DefaultValue": { "Interactions": ["Effect"] } },
+              { "Type": "Simple", "RunTime": 0.2 }
+            ]
+          }
         }
-      }
+      },
+      "Failed": { "Type": "Simple" }
     }
   ]
 }
@@ -370,8 +379,8 @@ A consumable that requires holding, then executes multiple effects:
 **Signature Ability:**
 
 A powerful ability with a signature-energy cost, animation, AOE damage, and cleanup.
-The `StatsCondition.Costs` map both checks for and deducts the energy, and an AOE
-`Selector` finds entities to damage:
+A `StatsCondition` checks the energy (it does not spend it — the `ChangeStat` step does),
+and an AOE `Selector` finds entities to damage:
 
 ```json
 {
@@ -380,6 +389,7 @@ The `StatsCondition.Costs` map both checks for and deducts the energy, and an AO
   "Next": {
     "Type": "Serial",
     "Interactions": [
+      { "Type": "ChangeStat", "StatModifiers": { "SignatureEnergy": -100 } },
       {
         "Type": "Simple",
         "RunTime": 1.2,
@@ -556,7 +566,7 @@ Executes multiple interactions concurrently. Unlike [Serial](#serial) which wait
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Parallel"` |
-| `Interactions` | array | Required | List of interactions to execute concurrently |
+| `Interactions` | array | Required | List of interactions to execute concurrently (validated to contain at least **two** entries) |
 
 ### Interactions Array Format
 
@@ -974,7 +984,7 @@ The base Condition interaction provides branching based on game mode and entity 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"Condition"` |
-| `RequiredGameMode` | string | `null` | Game mode that must be active (`Creative`, `Survival`, `Adventure`) |
+| `RequiredGameMode` | string | `null` | Game mode that must be active (`Adventure` or `Creative` — the `GameMode` enum has no other members) |
 | `Jumping` | boolean | `null` | If set, entity must be/not be jumping |
 | `Swimming` | boolean | `null` | If set, entity must be/not be swimming |
 | `Crouching` | boolean | `null` | If set, entity must be/not be crouching |
@@ -1139,7 +1149,7 @@ All specified conditions must be true:
 ```json
 {
   "Type": "Condition",
-  "RequiredGameMode": "Survival",
+  "RequiredGameMode": "Adventure",
   "Running": true,
   "Jumping": false,
   "Next": "Sprint_Slide_Start",
@@ -1147,7 +1157,7 @@ All specified conditions must be true:
 }
 ```
 
-This checks: Survival mode AND sprinting AND NOT jumping.
+This checks: Adventure mode AND sprinting AND NOT jumping.
 
 ### Related Interactions
 
@@ -1161,18 +1171,19 @@ This checks: Survival mode AND sprinting AND NOT jumping.
 
 **Package:** `config/none/StatsConditionInteraction`
 
-Branch based on whether an entity can afford a set of stat costs. Each entry in the `Costs` map names a stat and the amount required; when all costs are satisfiable the interaction deducts them and branches to `Next`, otherwise it branches to `Failed`. Essential for resource gating (stamina, signature energy) and stat-based ability variations.
+Branch based on whether an entity's stats meet a set of thresholds. Each entry in the `Costs` map names a stat and the amount required; when every listed stat is at or above its amount the interaction branches to `Next`, otherwise to `Failed`. It is a **pure check** — nothing is deducted (pair it with [ChangeStat](interactions-combat.md#changestat) to spend the resource, as the real `Double_Jump.json` does). Essential for resource gating (stamina, signature energy) and stat-based ability variations.
 
 ### Core Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"StatsCondition"` |
-| `Costs` | object | Required | Map of stat name to required amount (deducted when the check passes) |
-| `ValueType` | string | `"Absolute"` | How to interpret the cost amounts (`Absolute` or `Percent`) |
-| `Lenient` | boolean | `false` | If true, passes when a referenced stat doesn't exist on the entity |
-| `Next` | interaction | `null` | Interaction when the costs can be paid (and are deducted) |
-| `Failed` | interaction | `null` | Interaction when the costs cannot be paid |
+| `Costs` | object | Required | Map of stat name to threshold amount; passes when every listed stat is ≥ its amount (nothing is deducted) |
+| `LessThan` | boolean | `false` | Invert the comparison: pass when every listed stat is **below** its amount |
+| `ValueType` | string | `"Absolute"` | How to interpret the amounts (`Absolute` or `Percent`) |
+| `Lenient` | boolean | `false` | Allow overdraw: a stat below its amount still passes as long as it is above zero and the stat's minimum is negative |
+| `Next` | interaction | `null` | Interaction when all thresholds are met |
+| `Failed` | interaction | `null` | Interaction when any threshold is not met (or a listed stat is missing on the entity) |
 
 ### ValueType Reference
 
@@ -1183,19 +1194,19 @@ Branch based on whether an entity can afford a set of stat costs. Each entry in 
 
 ### Lenient Mode
 
-When `Lenient` is `true`, the condition passes if a referenced stat doesn't exist on the entity. This is useful for optional stats that not all entities have.
+When `Lenient` is `true`, a stat that is *below* its amount still passes provided its current value is above zero and the stat's configured minimum is negative (i.e. the stat may be overdrawn into negative territory by the follow-up `ChangeStat`). A stat that does not exist on the entity always fails, lenient or not.
 
 ```json
 {
   "Type": "StatsCondition",
-  "Costs": { "CustomAbilityCharge": 100 },
+  "Costs": { "Stamina": 10 },
   "Lenient": true,
   "Next": "Execute_Ability",
-  "Failed": "Charge_More"
+  "Failed": "Out_Of_Stamina"
 }
 ```
 
-If an entity doesn't have `CustomAbilityCharge`, it will execute `Next` instead of failing.
+With 4 stamina left this still runs `Next` (4 > 0) if the Stamina stat's minimum is below zero.
 
 ### Common Stats
 
@@ -1210,7 +1221,7 @@ If an entity doesn't have `CustomAbilityCharge`, it will execute `Next` instead 
 
 **Stamina Cost Check (from Double_Jump.json):**
 
-The `Costs` map both checks for and deducts the stamina, so no separate `ChangeStat` is needed for the cost itself:
+The `Costs` map only checks affordability; the real asset spends the stamina with a separate `ChangeStat` inside `Next` (abbreviated):
 
 ```json
 {
@@ -1224,12 +1235,12 @@ The `Costs` map both checks for and deducts the stamina, so no separate `ChangeS
         "Direction": { "X": 0, "Y": 2, "Z": 0 },
         "AdjustVertical": false,
         "Force": 15
+      },
+      {
+        "Type": "ChangeStat",
+        "StatModifiers": { "Stamina": -2 }
       }
     ]
-  },
-  "Failed": {
-    "Type": "SendMessage",
-    "Message": "Not enough stamina!"
   }
 }
 ```
@@ -1264,7 +1275,7 @@ Interpret the cost as a percentage of the stat's maximum:
 
 **Nested Cost Checks:**
 
-Multiple resource requirements, each checked (and deducted) in turn:
+Multiple resource requirements, each checked in turn:
 
 ```json
 {
@@ -1301,7 +1312,7 @@ Branch based on whether an entity has active status effects. Supports checking f
 | `Type` | string | Required | Always `"EffectCondition"` |
 | `EntityEffectIds` | array | Required | List of effect IDs to check |
 | `Match` | string | `"All"` | Match mode: `"All"` or `"None"` |
-| `Entity` | string | `"User"` | Which entity to check (e.g. `"User"`, `"Target"`) |
+| `Entity` | string | `"User"` | Which entity to check: `"User"`, `"Owner"`, or `"Target"` |
 | `Next` | interaction | `null` | Interaction when the match condition holds |
 | `Failed` | interaction | `null` | Interaction when the match condition does not hold |
 
@@ -1317,6 +1328,7 @@ Branch based on whether an entity has active status effects. Supports checking f
 | Entity | Description |
 |--------|-------------|
 | `User` | Check the entity executing the interaction |
+| `Owner` | Check the entity that owns the interaction chain (differs from `User` when a chain runs on behalf of another entity) |
 | `Target` | Check the target entity (from context) |
 
 ### Execution Behavior
@@ -1387,30 +1399,25 @@ Combo system requiring multiple debuffs:
 }
 ```
 
-**Immunity Check (None):**
+**Immunity Check (None, from Stamina_Broken_Check.json):**
 
-Prevent effect stacking:
+Prevent applying an effect while its immunity effect is active:
 
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["immunity"],
+  "EntityEffectIds": ["Stamina_Broken_Immune"],
   "Match": "None",
-  "Entity": "Target",
   "Next": {
     "Type": "ApplyEffect",
-    "EffectId": "stun"
-  },
-  "Failed": {
-    "Type": "Simple",
-    "Effects": { "WorldSoundEventId": "ability_blocked" }
+    "EffectId": "Stamina_Broken"
   }
 }
 ```
 
-Only apply stun if target doesn't have immunity.
+`Entity` is omitted, so the check runs against the `User`; `Stamina_Broken` is only applied when the user does not carry `Stamina_Broken_Immune`.
 
-**Tiered Buff System (Meat_TierCheck pattern):**
+**Tiered Buff System (illustrative nested `None` checks):**
 
 Check for food buff tiers:
 
@@ -1520,33 +1527,32 @@ Each `BlockMatcher` in the array nests block identity in a `Block` object, with 
 | `Block` | object | Required | Block matcher: `{ "Id": ..., "State": ... }` |
 | `Block.Id` | string | `null` | Exact block ID to match |
 | `Block.State` | string | `null` | Block state name to match (e.g. `"default"`) |
-| `Face` | string | `"None"` | Which face to check relative to target |
-| `StaticFace` | boolean | `false` | If true, face is absolute; if false, face is relative to player |
+| `Block.Tag` | string | `null` | Block tag to match (any block type carrying the tag) |
+| `Face` | string | `"None"` | Which face of the target block the player must have hit for the matcher to apply |
+| `StaticFace` | boolean | `false` | If true, `Face` is an absolute world face; if false, it is rotated by the player's yaw/pitch |
 
 ### Face Reference
 
+`Face` is a `BlockFace` (the same enum block-type configs use); the matcher only applies when the face the player clicked equals it (after the `StaticFace` transform). A matcher whose `Block` matches but whose `Face` does not is skipped.
+
 | Face | Description |
 |------|-------------|
-| `None` | Check block at target position |
-| `Up` | Check block above target |
-| `Down` | Check block below target |
-| `Left` | Check block to the left |
-| `Right` | Check block to the right |
-| `Front` | Check block in front |
-| `Back` | Check block behind |
+| `None` | Ignore the clicked face; match on the block alone |
+| `Up` / `Down` | Top / bottom face |
+| `North` / `South` / `East` / `West` | Side faces |
 
 ### StaticFace Behavior
 
 | StaticFace | Behavior |
 |------------|----------|
-| `false` | Face directions are relative to player's facing direction |
-| `true` | Face directions are absolute world directions |
+| `false` | `Face` is rotated by the player's yaw and pitch before comparing (so `Up` means "the face on top from the player's view") |
+| `true` | `Face` is compared as an absolute world face |
 
 ### Examples
 
 **Specific Block ID Check (from Lantern_Yellow.json):**
 
-Only act when the target block is a specific lantern, then change its state:
+Only act when the target block is a specific lantern, then change its state (`Changes` abbreviated — the asset maps every colour state to `Yellow`):
 
 ```json
 {
@@ -1568,7 +1574,7 @@ Only act when the target block is a specific lantern, then change its state:
 
 **Block + State + Face Check (from Half_Block.json):**
 
-Check that the block on the `Up` face is stone in its `default` state before placing:
+Check that the clicked block is stone in its `default` state and was hit on its `Up` face before changing it to the full-block state:
 
 ```json
 {
@@ -1586,6 +1592,7 @@ Check that the block on the `Up` face is stone in its `default` state before pla
   "Next": {
     "Type": "ChangeState",
     "Changes": { "default": "Block" },
+    "RequireBlockPlacement": true,
     "Next": {
       "Type": "ModifyInventory",
       "AdjustHeldItemQuantity": -1,
@@ -1664,9 +1671,9 @@ Cooldowns are typically started using [TriggerCooldown](#triggercooldown) and ca
 
 ### Examples
 
-**NPC Poison Attack (from Spider.json):**
+**NPC Poison Attack (from the Spider role, `Bite_Damage`; simplified):**
 
-Check if poison cooldown has elapsed before applying poison effect:
+Check if the poison cooldown has elapsed before applying the poison effect (the real asset applies `Poison_T1` to the `Target` via an `EffectCondition` that skips targets with `Antidote`):
 
 ```json
 {
@@ -1683,44 +1690,52 @@ Check if poison cooldown has elapsed before applying poison effect:
         }
       },
       {
-        "Type": "ApplyEffect",
-        "EffectId": "poison"
-      },
-      {
         "Type": "DamageEntity",
-        "DamageCalculator": { "BaseDamage": { "Physical": 5 } }
+        "DamageCalculator": { "BaseDamage": { "Physical": 23 } },
+        "Next": {
+          "Type": "ApplyEffect",
+          "Entity": "Target",
+          "EffectId": "Poison_T1"
+        }
       }
     ]
   },
   "Failed": {
     "Type": "DamageEntity",
-    "DamageCalculator": { "BaseDamage": { "Physical": 5 } }
+    "DamageCalculator": { "BaseDamage": { "Physical": 23 } }
   }
 }
 ```
 
-**Boss Special Attack (from Snapdragon.json):**
+**Boss Poison Bite (from the Snapdragon role, `Melee_Damage`; simplified):**
 
-Cooldown-gated fire breath attack:
+Same shape with a shorter cooldown and a stronger poison tier:
 
 ```json
 {
   "Type": "CooldownCondition",
-  "Id": "Snapdragon_FireBreath",
+  "Id": "Snapdragon_Poison",
   "Next": {
     "Type": "Serial",
     "Interactions": [
       {
         "Type": "TriggerCooldown",
         "Cooldown": {
-          "Id": "Snapdragon_FireBreath",
-          "Cooldown": 12
+          "Id": "Snapdragon_Poison",
+          "Cooldown": 5
         }
       },
-      "Snapdragon_FireBreath_Execute"
+      {
+        "Type": "DamageEntity",
+        "DamageCalculator": { "BaseDamage": { "Physical": 27 } },
+        "Next": { "Type": "ApplyEffect", "Entity": "Target", "EffectId": "Poison_T3" }
+      }
     ]
   },
-  "Failed": "Snapdragon_BasicAttack"
+  "Failed": {
+    "Type": "DamageEntity",
+    "DamageCalculator": { "BaseDamage": { "Physical": 27 } }
+  }
 }
 ```
 
@@ -1816,18 +1831,22 @@ The `Cooldown` property uses the InteractionCooldown configuration object:
 }
 ```
 
-**Cooldown with Click Bypass (from RootInteractions):**
+**Cooldown with Click Bypass (from RootInteractions/Tools/Watering_Can_Use.json):**
 
-Used in block interactions where clicking can bypass the wait:
+The same `InteractionCooldown` object is used by root interactions' `Cooldown` (top-level or per game mode under `Settings`); `ClickBypass` lets a fresh click skip the remaining wait:
 
 ```json
 {
-  "Type": "TriggerCooldown",
-  "Cooldown": {
-    "Id": "BlockInteraction_Creative",
-    "Cooldown": 0.0,
-    "ClickBypass": true
-  }
+  "Settings": {
+    "Creative": {
+      "Cooldown": {
+        "Id": "BlockInteraction_Creative",
+        "Cooldown": 0.01,
+        "ClickBypass": true
+      }
+    }
+  },
+  "Interactions": [ "..." ]
 }
 ```
 
@@ -1903,23 +1922,28 @@ Reset a cooldown timer, making it immediately ready. Used to cancel active coold
 }
 ```
 
-**Reset on Parry (from Debug_Stick_Parry.json):**
+**Reset on Parry (from Debug_Stick_Parry.json, abbreviated):**
 
-Successful parry resets attack cooldown:
+A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-attacks and then resets the parry's own cooldown so it can be used again immediately:
 
 ```json
 {
-  "Type": "Serial",
-  "Interactions": [
-    "Parry_Success_Effects",
-    {
-      "Type": "ResetCooldown",
-      "Cooldown": {
-        "Id": "attack_cooldown",
-        "Cooldown": 0
+  "Type": "Wielding",
+  "RunTime": 5,
+  "FailOnDamage": true,
+  "DamageModifiers": { "Physical": 0 },
+  "BlockedInteractions": {
+    "Interactions": [
+      "Stick_Attack",
+      {
+        "Type": "ResetCooldown",
+        "Cooldown": {
+          "Id": "Debug_Stick_Parry",
+          "Cooldown": 0.5
+        }
       }
-    }
-  ]
+    ]
+  }
 }
 ```
 
@@ -2166,7 +2190,7 @@ Only handle cardinal directions, default others to Failed:
 
 **Package:** `config/server/PlacementCountConditionInteraction`
 
-Server-side condition that checks the count of a specific block type placed by the player in the current instance. Used to enforce placement limits for special blocks like teleporters. The condition passes when the player's placement count is less than the threshold value.
+Server-side condition that checks how many blocks of a specific type are currently placed in the world (per world, not per player — the count lives in the world's `BlockCounter` resource). Used to enforce placement limits for special blocks like teleporters. By default the condition passes when the count is less than the threshold value.
 
 ### Core Properties
 
@@ -2174,9 +2198,10 @@ Server-side condition that checks the count of a specific block type placed by t
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"PlacementCountCondition"` |
 | `Block` | string | Required | Block ID to count (without namespace prefix) |
-| `Value` | int | Required | Threshold value - condition passes when count < this value |
-| `Next` | interaction | `null` | Interaction when count < Value (condition passes) |
-| `Failed` | interaction | `null` | Interaction when count >= Value (condition fails) |
+| `Value` | int | `0` | Threshold value - condition passes when count < this value |
+| `LessThan` | boolean | `true` | Comparison direction: `true` passes when count < `Value`; `false` passes when count > `Value` |
+| `Next` | interaction | `null` | Interaction when the comparison holds (condition passes) |
+| `Failed` | interaction | `null` | Interaction when it does not (condition fails) |
 
 ### Execution Flow
 
@@ -2185,22 +2210,23 @@ PlacementCountCondition
     │
     ▼
 ┌─────────────────────────┐
-│ Get player's block      │
-│ placement count from    │
-│ instance BlockCounter   │
+│ Get the world's count   │
+│ of placed `Block` from  │
+│ the BlockCounter        │
+│ resource (ChunkStore)   │
 └─────────────────────────┘
     │
-    ├─► count < Value ──► Execute Next
+    ├─► count < Value ──► Execute Next      (LessThan: true, default)
     │
     └─► count >= Value ──► Execute Failed
 ```
 
-PlacementCountCondition performs server-side validation:
+PlacementCountCondition performs server-side validation (`WaitForDataFrom.Server`):
 
 1. Reads the block type from `Block` property
-2. Queries the instance's `BlockCounter` for the player's placement count of that block type
-3. Compares count against `Value` threshold
-4. Branches to `Next` if count is below threshold, `Failed` if at or above
+2. Queries the world's `BlockCounter` resource (`BlockCounter.getBlockPlacementCount(block)`) for the number of that block currently placed
+3. Compares count against `Value` threshold (`<` by default, `>` with `"LessThan": false`)
+4. Branches to `Next` if the comparison holds, `Failed` otherwise
 
 ### Block Tracking Requirements
 
@@ -2208,12 +2234,17 @@ For PlacementCountCondition to work, two components must be configured:
 
 **1. Block must have TrackedPlacement component:**
 
-Blocks that should be counted need the `TrackedPlacement` component in their BlockEntity definition:
+Blocks that should be counted need the `TrackedPlacement` component among their block-entity `Components` (from `Items/Electrum/Portal/Teleporter.json`, abbreviated):
 
 ```json
 {
-  "BlockEntity": {
-    "TrackedPlacement": {}
+  "BlockType": {
+    "BlockEntity": {
+      "Components": {
+        "Teleporter": { "WarpNameWordList": "Runes" },
+        "TrackedPlacement": {}
+      }
+    }
   }
 }
 ```
@@ -2250,36 +2281,27 @@ Only allow placing a teleporter if the player has fewer than 2:
 }
 ```
 
-**Combined with MemoriesCondition for Tier-Based Limits:**
+**Combined with MemoriesCondition for Tier-Based Limits (from Teleporter_Place.json, abbreviated):**
 
-Different memory states can unlock higher placement limits:
+`MemoriesCondition` (`builtin.adventure.memories.interactions.MemoriesConditionInteraction`) branches on the world's *memories level*: `Next` is a map from level (integer, as a string key) to interaction, and `Failed` runs when the current level has no entry. Each branch inherits `Teleporter_Try_Place` via `Parent` and overrides only `Value`, so higher levels allow more teleporters:
 
 ```json
 {
   "Type": "MemoriesCondition",
-  "Conditions": [
-    {
-      "Condition": "UnlockedTeleporterTier2",
-      "Interaction": {
-        "Type": "PlacementCountCondition",
-        "Block": "Teleporter",
-        "Value": 4,
-        "Next": "Place_Teleporter",
-        "Failed": {
-          "Type": "SendMessage",
-          "Key": "server.interactions.teleporter.limitReached"
-        }
-      }
-    }
-  ],
+  "Next": {
+    "0": { "Parent": "Teleporter_Try_Place", "Value": 2 },
+    "1": { "Parent": "Teleporter_Try_Place", "Value": 2 },
+    "2": { "Parent": "Teleporter_Try_Place", "Value": 3 },
+    "3": { "Parent": "Teleporter_Try_Place", "Value": 4 },
+    "4": { "Parent": "Teleporter_Try_Place", "Value": 6 },
+    "5": { "Parent": "Teleporter_Try_Place", "Value": 8 }
+  },
   "Failed": {
-    "Type": "PlacementCountCondition",
-    "Block": "Teleporter",
-    "Value": 2,
-    "Next": "Place_Teleporter",
+    "Parent": "Teleporter_Try_Place",
+    "Value": 8,
     "Failed": {
       "Type": "SendMessage",
-      "Key": "server.interactions.teleporter.failedCollectMore"
+      "Key": "server.interactions.teleporter.failed"
     }
   }
 }
@@ -2303,7 +2325,7 @@ Different memory states can unlock higher placement limits:
 ### Related Interactions
 
 - [CooldownCondition](#cooldowncondition) - Check cooldown state (also uses `Next`/`Failed`)
-- MemoriesCondition - Branch based on player memory states
+- MemoriesCondition - Branch on the world's memories level (`Next` map keyed by level, plus `Failed`)
 - [Block Interactions](interactions-world.md#block-interactions) - PlaceBlock interaction for actual placement
 
 ---
@@ -2340,7 +2362,7 @@ Loop execution of interactions with timing control and optional interruption.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Repeat` | int | Number of repetitions. Use `-1` for indefinite looping until interrupted |
+| `Repeat` | int | Number of repetitions (default `1`); must be ≥ 1, or `-1` for indefinite looping until interrupted (`0` fails validation) |
 | `RunTime` | float | Duration of each iteration in seconds |
 | `ForkInteractions` | object | Contains `Interactions` array to execute each iteration |
 | `Next` | interaction | Interaction to execute after all repetitions complete |
@@ -2443,8 +2465,10 @@ Variable substitution for creating reusable interaction templates. Looks up a va
 | `DefaultOk` | Variable Missing | Result |
 |-------------|------------------|--------|
 | `true` | Yes | Silently uses `DefaultValue` |
-| `false`/omitted | Yes | Logs SEVERE error, then uses `DefaultValue` |
+| `false`/omitted | Yes | Logs SEVERE error (rate-limited to once a minute), then uses `DefaultValue` |
 | either | No | Uses the variable's value |
+
+If the variable is missing **and** there is no `DefaultValue`, the interaction ends in the `Failed` state.
 
 ### Example: Reusable Consumable Template
 

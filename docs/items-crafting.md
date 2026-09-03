@@ -77,7 +77,8 @@ Standard crafting benches allow players to craft items from recipes displayed in
 
 **Location:** `Server/Item/Items/Bench/Bench_WorkBench.json`
 
-The workbench is the primary crafting station with multiple categories and tier upgrades.
+The workbench is the primary crafting station with multiple categories and tier upgrades
+(abridged — the bench's sound-event ids and the `BlockType` rendering keys are omitted).
 
 ```json
 {
@@ -142,6 +143,8 @@ The workbench is the primary crafting station with multiple categories and tier 
 | `Id` | string | Unique bench identifier referenced by recipes |
 | `Categories` | array | Crafting categories with icons and localization |
 | `TierLevels` | array | Upgrade tiers with time reduction and requirements |
+| `DescriptiveLabel` | string | Optional label shown in the bench UI |
+| `Icon` | string | Optional bench icon |
 | `LocalOpenSoundEventId` | string | Sound when opening bench UI |
 | `LocalCloseSoundEventId` | string | Sound when closing bench UI |
 | `CompletedSoundEventId` | string | Sound when crafting completes |
@@ -153,7 +156,8 @@ The workbench is the primary crafting station with multiple categories and tier 
 
 **Location:** `Server/Item/Items/Bench/Bench_Weapon.json`
 
-Weapon bench for crafting swords, maces, battleaxes, daggers, and bows.
+Weapon bench for crafting swords, maces, battleaxes, daggers, and bows (abridged — the
+first two tiers also carry `UpgradeRequirement` material lists, omitted here).
 
 ```json
 {
@@ -208,10 +212,14 @@ Armor bench for crafting armor pieces and shields.
 
 **Location:** `Server/Item/Items/Bench/Bench_Alchemy.json`
 
-Alchemy bench for crafting potions and bombs. Requires Workbench Tier 2 to craft.
+Alchemy bench for crafting potions, seeds, and bombs. Requires Workbench Tier 2 to craft.
+As of 0.6.3 it has **four** categories (`Alchemy_Seeds` was added) and **four** tiers
+(0 / 20 / 40 / 60 % time reduction), each of the first three with an `UpgradeRequirement`
+(abridged below to the first tier's materials):
 
 ```json
 {
+  "ItemLevel": 9,
   "Recipe": {
     "TimeSeconds": 3,
     "Input": [
@@ -233,12 +241,26 @@ Alchemy bench for crafting potions and bombs. Requires Workbench Tier 2 to craft
       "Categories": [
         { "Id": "Alchemy_Potions", "Icon": "Icons/CraftingCategories/Alchemy/Combat_Potions.png", "Name": "server.benchCategories.combatPotions" },
         { "Id": "Alchemy_Potions_Misc", "Icon": "Icons/CraftingCategories/Alchemy/Misc_Potions.png", "Name": "server.benchCategories.miscPotions" },
+        { "Id": "Alchemy_Seeds", "Icon": "Icons/CraftingCategories/Alchemy/Seeds.png", "Name": "server.benchCategories.alchemy.seeds" },
         { "Id": "Alchemy_Bombs", "Icon": "Icons/CraftingCategories/Alchemy/Bombs.png", "Name": "server.benchCategories.bombs" }
       ],
       "Id": "Alchemybench",
       "TierLevels": [
-        { "CraftingTimeReductionModifier": 0.0 },
-        { "CraftingTimeReductionModifier": 0.3 }
+        {
+          "CraftingTimeReductionModifier": 0.0,
+          "UpgradeRequirement": {
+            "Material": [
+              { "ItemId": "Ingredient_Bar_Silver", "Quantity": 5 },
+              { "ItemId": "Ingredient_Bar_Gold", "Quantity": 10 },
+              { "ItemId": "Ingredient_Sac_Venom", "Quantity": 10 },
+              { "ItemId": "Rock_Gem_Emerald", "Quantity": 1 }
+            ],
+            "TimeSeconds": 3
+          }
+        },
+        { "CraftingTimeReductionModifier": 0.2 },
+        { "CraftingTimeReductionModifier": 0.4 },
+        { "CraftingTimeReductionModifier": 0.6 }
       ]
     }
   }
@@ -276,15 +298,7 @@ The furnace smelts ores into bars using fuel. It produces charcoal as a bonus ou
       { "ResourceTypeId": "Wood_Trunk", "Quantity": 6 },
       { "ResourceTypeId": "Rock", "Quantity": 6 }
     ],
-    "Output": [{
-      "ItemId": "Bench_Furnace",
-      "Metadata": {
-        "BlockState": {
-          "Type": "processingBench",
-          "FuelContainer": { "Capacity": 2 }
-        }
-      }
-    }],
+    "Output": [{ "ItemId": "Bench_Furnace" }],
     "BenchRequirement": [{
       "Type": "Crafting",
       "Categories": ["Workbench_Crafting"],
@@ -346,8 +360,11 @@ The furnace smelts ores into bars using fuel. It produces charcoal as a bonus ou
 | `Input` | array | Input slot configuration |
 | `FilterValidIngredients` | boolean | Only allow items with valid processing recipes |
 | `Fuel` | array | Fuel slot configuration with resource type and icon |
+| `MaxFuel` | int | Fuel cap for the bench |
+| `FuelDropItemId` | string | Item dropped for leftover fuel when the bench is broken |
 | `ExtraOutput` | object | Bonus outputs from fuel consumption |
 | `OutputSlotsCount` | int | Number of output slots |
+| `EndSoundEventId` | string | Sound when a processing run ends (processing benches only; the shared sound keys are listed under [Bench Configuration Properties](#bench-configuration-properties)) |
 
 ##### ExtraOutput Properties
 
@@ -361,12 +378,12 @@ The furnace smelts ores into bars using fuel. It produces charcoal as a bonus ou
 
 **Location:** `Server/Item/Items/Bench/Bench_Campfire.json`
 
-Simple processing bench for early-game cooking and smelting.
+Simple processing bench for early-game cooking and smelting. Its recipe sets no
+`TimeSeconds` (it crafts instantly) and no `TierLevels`.
 
 ```json
 {
   "Recipe": {
-    "TimeSeconds": 1,
     "Input": [
       { "ItemId": "Ingredient_Stick", "Quantity": 4 },
       { "ResourceTypeId": "Rubble", "Quantity": 2 }
@@ -447,7 +464,8 @@ Breaks down items into component materials. Requires Workbench Tier 2 to craft.
 
 **Location:** `Server/Item/Items/Bench/Bench_Tannery.json`
 
-Processes hides into leather. No fuel required.
+Processes hides into leather. No fuel required (abridged — tier 1's `UpgradeRequirement`
+and the sound-event ids are omitted).
 
 ```json
 {
@@ -545,6 +563,35 @@ Advanced crafting station with diagram-based item selection. Note: This is a dev
 
 Used for creating building block variants (stairs, slabs, walls). Referenced by the Builder's Bench.
 
+#### Bench_Builders
+
+**Location:** `Server/Item/Items/Bench/Bench_Builders.json`
+
+A structural bench's `Categories` are plain strings (not `{ Id, Icon, Name }` objects), and
+the type adds three keys of its own (abridged — the full file lists 28 categories):
+
+```json
+{
+  "BlockType": {
+    "Bench": {
+      "Type": "StructuralCrafting",
+      "Id": "Builders",
+      "AllowBlockGroupCycling": true,
+      "AlwaysShowInventoryHints": true,
+      "HeaderCategories": ["WoodPlanks", "OrnatePlanks", "DecorativePlanks"],
+      "Categories": ["WoodPlanks", "OrnatePlanks", "DecorativePlanks", "Bricks", "Stairs", "HalfSlab", "Roof", "Wall", "Door", "Window"]
+    }
+  }
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Categories` | string[] | Block-group category ids |
+| `HeaderCategories` | string[] | Categories pinned to the header row |
+| `AllowBlockGroupCycling` | boolean | Let the player cycle through a block group's variants |
+| `AlwaysShowInventoryHints` | boolean | Always show inventory hints in the bench UI |
+
 ---
 
 ## Recipe Structure
@@ -588,6 +635,11 @@ Recipes are typically embedded within item JSON files under the `Recipe` propert
 | `PrimaryOutput` | object | Main output item |
 | `OutputQuantity` | int | Number of items produced (default: 1) |
 | `KnowledgeRequired` | boolean | Whether recipe must be learned first |
+| `RequiredMemoriesLevel` | int | Minimum player Memories level to craft (e.g. `4` on the morph potions; ~38 recipes use it) |
+
+Every entry in `Input`, `Output`, and `PrimaryOutput` is a `MaterialQuantity`: exactly one
+of `ItemId`, `ResourceTypeId`, or `ItemTag`, plus `Quantity` and an optional `Metadata`
+document.
 
 ### Input Types
 
@@ -662,6 +714,7 @@ Specifies which bench(es) can craft the recipe:
 | `Id` | string | Specific bench ID |
 | `Categories` | array | Bench categories where recipe appears |
 | `RequiredTierLevel` | int | Minimum bench tier required (1-indexed) |
+| `RequiredAugmentTags` | string[] | Tags that must be granted to the bench by nearby `AugmentBlock` block entities (added as of 0.6.3; no shipped recipe sets it yet) |
 
 Multiple bench requirements allow crafting at different stations:
 
@@ -788,7 +841,7 @@ Benches can have multiple tiers that reduce crafting time and unlock additional 
 | Workbench | 0% | 15% | 30% |
 | Weapon Bench | 0% | 15% | 30% |
 | Armor Bench | 0% | 15% | 30% |
-| Alchemy Bench | 0% | 30% | - |
+| Alchemy Bench | 0% | 20% | 40% (tier 4: 60%) |
 | Furnace | 0% | 30% | - |
 | Tannery | 0% | 40% | - |
 
@@ -826,6 +879,7 @@ MaterialQuantity getPrimaryOutput()
 BenchRequirement[] getBenchRequirement()
 float getTimeSeconds()
 boolean isKnowledgeRequired()
+int getRequiredMemoriesLevel()
 
 // Check tier restrictions
 boolean isRestrictedByBenchTierLevel(String benchId, int tierLevel)
@@ -836,10 +890,11 @@ boolean isRestrictedByBenchTierLevel(String benchId, int tierLevel)
 **Package:** `com.hypixel.hytale.protocol`
 
 ```java
-BenchType type           // Type of bench required
-String id                // Specific bench ID
-String[] categories      // Bench categories
-int requiredTierLevel    // Minimum bench tier
+BenchType type                 // Type of bench required
+String id                      // Specific bench ID
+String[] categories            // Bench categories
+int requiredTierLevel          // Minimum bench tier
+String[] requiredAugmentTags   // Augment tags the bench must hold (0.6.3+)
 ```
 
 ### BenchType
@@ -922,42 +977,41 @@ public class CraftingSystem extends EntityEventSystem<EntityStore, CraftRecipeEv
 
 ### Recipe in Item Definition
 
-Most items embed their recipe directly:
+Most items embed their recipe directly (`Food_Bread`):
 
 ```json
 {
   "Parent": "Template_Food",
   "Recipe": {
-    "TimeSeconds": 5.0,
     "Input": [
-      { "ItemId": "Ingredient_Flour", "Quantity": 3 }
+      { "ItemId": "Ingredient_Dough", "Quantity": 1 },
+      { "ResourceTypeId": "Fuel", "Quantity": 3 }
     ],
+    "Output": [ { "ItemId": "Food_Bread" } ],
     "BenchRequirement": [{
       "Type": "Crafting",
-      "Categories": ["Food"],
-      "Id": "Cooking_Campfire"
-    }]
+      "Id": "Cookingbench",
+      "Categories": ["Baked"]
+    }],
+    "TimeSeconds": 5
   }
 }
 ```
 
-### Recipe with Metadata Output
+### Explicit Output
 
-Benches can output items with pre-configured metadata:
+`Output` is optional — it defaults to one of the item that carries the recipe. Benches that
+list it explicitly do so as a plain `MaterialQuantity`:
 
 ```json
 {
-  "Output": [{
-    "ItemId": "Bench_Furnace",
-    "Metadata": {
-      "BlockState": {
-        "Type": "processingBench",
-        "FuelContainer": { "Capacity": 2 }
-      }
-    }
-  }]
+  "Output": [ { "ItemId": "Bench_Furnace" } ]
 }
 ```
+
+The `MaterialQuantity` codec also accepts a `Metadata` document on an output entry, but
+**no shipped recipe uses it** as of 0.6.3 — do not copy a `Metadata.BlockState` shape from
+older references; the furnace recipe that once carried one is now a bare `ItemId`.
 
 ### Multiple Bench Options
 
@@ -983,15 +1037,20 @@ Allow crafting at different benches:
 | Bench_Armour | Crafting | `Armor_Bench` | Head, Chest, Hands, Legs, Shield |
 | Bench_Alchemy | Crafting | `Alchemybench` | Potions, Misc Potions, Bombs |
 | Bench_Cooking | Crafting | `Cookingbench` | Prepared, Baked, Ingredients |
-| Bench_Furniture | Crafting | `Furniture_Bench` | Various furniture categories |
-| Bench_Farming | Crafting | `Farming_Bench` | Farming items |
+| Bench_Furniture | Crafting | `Furniture_Bench` | Storage, Beds, Lighting, Pottery, Textiles, Village Walls, Misc, Seasonal |
+| Bench_Farming | Crafting | `Farmingbench` | Farming, Seeds, Saplings, Essence, Planters, Decorative |
+| Bench_Trough | Crafting | `Farmingbench` | `All` (shares the farming bench id) |
+| Bench_Arcane | Crafting | `Arcanebench` | `Arcane_Portals`, `Arcane_Misc` |
 | Bench_Furnace | Processing | `Furnace` | Smelting with fuel |
 | Bench_Campfire | Processing | `Campfire` | Basic cooking/smelting |
 | Bench_Tannery | Processing | `Tannery` | Hide processing |
 | Bench_Salvage | Processing | `Salvagebench` | Item deconstruction |
-| Bench_Loom | Processing | `Loom` | Fabric processing |
-| Bench_Armory | DiagramCrafting | `Armory` | Blueprint-based weapons/armor |
-| Bench_Builders | StructuralCrafting | `Buildersbench` | Block variants |
+| Bench_Loom | Crafting | `Loombench` | `All` (`Quality: Developer`) |
+| Bench_Armory | DiagramCrafting | `Armory` | Blueprint-based weapons/armor (`Quality: Developer`) |
+| Bench_Builders | StructuralCrafting | `Builders` | Block variants (28 block-group categories) |
+
+`Bench_Lumbermill` and `Bench_Memories` also live under `Items/Bench/` but carry no
+`BlockType.Bench` — they are not crafting benches.
 
 ---
 

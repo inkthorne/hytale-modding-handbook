@@ -15,7 +15,7 @@ This page covers the entity class tree (Entity, LivingEntity, Player), the light
 
 Implemented in `com.hypixel.hytale.server.core.entity` (and related `modules` packages) and provides:
 - An entity class hierarchy: `Entity` → `LivingEntity` → `Player`
-- `PlayerRef`, a lightweight player handle for messaging, identity, and position
+- `PlayerRef`, a lightweight player handle for messaging, identity, permissions, and position
 - `EntityStatMap` for reading and modifying entity stats (health, stamina, mana, etc.)
 - `StatModifiersManager` for recalculating stats when modifiers change
 - `Velocity` for applying forces and impulses to entities
@@ -25,8 +25,8 @@ Implemented in `com.hypixel.hytale.server.core.entity` (and related `modules` pa
 ## Architecture
 ```
 Entity (ECS-backed entity + lifecycle)
-├── PlayerRef            (lightweight handle: messaging / identity / position)
-├── Player               (full component: permissions, inventory, UI managers)
+├── PlayerRef            (lightweight handle: messaging / identity / permissions / position)
+├── Player               (full component: inventory, game mode, UI managers)
 │   ├── HudManager / PageManager / WindowManager / HotbarManager
 │   └── Inventory
 ├── Stats
@@ -45,7 +45,7 @@ Entity (ECS-backed entity + lifecycle)
 | `Entity` | `server.core.entity` | Base class for all entities; lifecycle and identity |
 | `LivingEntity` | `server.core.entity` | Entities with health and inventory |
 | `Player` | `server.core.entity.entities` | Full player entity with all game state |
-| `PlayerRef` | `server.core.universe` | Lightweight player reference for messaging and identity |
+| `PlayerRef` | `server.core.universe` | Lightweight player reference for messaging, identity, and permissions (it is the `CommandSender` / `PermissionHolder`) |
 | `EntityStatMap` | `server.core.modules.entitystats` | Component holding entity stats (health, mana, etc.) |
 | `DefaultEntityStatTypes` | `server.core.modules.entitystats.asset` | Provides stat indices for common stats |
 | `StatModifiersManager` | `server.core.entity` | Recalculates stat modifiers for living entities |
@@ -71,9 +71,9 @@ InteractionManager (component for interaction chains)
 ## PlayerRef
 **Package:** `com.hypixel.hytale.server.core.universe`
 
-Lightweight reference to a player, passed to commands. Use this for sending messages.
+Lightweight reference to a player, passed to commands. Use this for sending messages and checking permissions — since Update 5 it, not `Player`, is the `CommandSender` / `PermissionHolder`.
 
-**Implements:** `Component<EntityStore>`, `MetricProvider`, `IMessageReceiver`
+**Implements:** `Component<EntityStore>`, `MetricProvider`, `CommandSender`, `PermissionHolder`
 
 ### Key Methods
 ```java
@@ -84,6 +84,12 @@ PlayerRef(Holder<EntityStore> holder, UUID uuid, String username, String languag
 // Messaging
 void sendMessage(Message msg)
 
+// Permissions (PermissionHolder)
+boolean hasPermission(String permission)
+boolean hasPermission(String permission, boolean defaultValue)
+boolean hasPermission(PermissionQuery query)                        // 0.6.3+; PermissionQuery.of("node")
+boolean hasPermission(PermissionQuery query, boolean defaultValue)  // 0.6.3+
+
 // Identity
 UUID getUuid()
 String getUsername()
@@ -93,14 +99,16 @@ void setLanguage(String lang)
 // Position
 Transform getTransform()
 UUID getWorldUuid()
-Vector3f getHeadRotation()
-void updatePosition(World world, Transform transform, Vector3f headRotation)
+void setWorldUuid(UUID worldUuid)          // 0.6.3+ (engine bookkeeping on world transfer)
+Rotation3f getHeadRotation()
+void updatePosition(World world, Transform transform, Rotation3f headRotation)
 
 // References
 boolean isValid()
 Ref<EntityStore> getReference()
 Holder<EntityStore> getHolder()
 <T extends Component<EntityStore>> T getComponent(ComponentType<EntityStore, T> type)
+<T extends Component<EntityStore>> T getComponentConcurrent(ComponentType<EntityStore, T> type)  // 0.6.3+, see note
 
 // Network
 PacketHandler getPacketHandler()
@@ -110,6 +118,7 @@ void referToServer(String host, int port, byte[] data)
 
 // Player Management
 HiddenPlayersManager getHiddenPlayersManager()
+TeleportAckTracker getTeleportAckTracker()   // 0.6.3+, see Teleport Bookkeeping below
 
 // Lifecycle
 Ref<EntityStore> addToStore(Store<EntityStore> store)
@@ -119,23 +128,23 @@ Holder<EntityStore> removeFromStore()
 static ComponentType<EntityStore, PlayerRef> getComponentType()
 ```
 
+> **`getComponentConcurrent` (0.6.3+):** a read that is safe to call **off the world thread** — it reads the
+> detached `Holder` if the player is between worlds, otherwise goes through `Store.getComponentConcurrent`
+> (a seqlock read that retries instead of asserting the thread). Plain `getComponent` on a different thread
+> trips the store's `Assert not in thread!` check. Treat the result as a snapshot, and never mutate it there.
+
 ## Player
 **Package:** `com.hypixel.hytale.server.core.entity.entities`
 
-Full player entity with all game state.
+Full player entity with all game state. It has **no** `sendMessage` / `hasPermission` — those live on
+[`PlayerRef`](#playerref) (see the hierarchy note above).
 
 **Extends:** `LivingEntity`
-**Implements:** `CommandSender`, `PermissionHolder`, `MetricProvider`
+**Implements:** `MetricProvider`
 
 ### Key Methods
 ```java
-// Messaging & Permissions
-void sendMessage(Message msg)
-boolean hasPermission(String permission)
-boolean hasPermission(String permission, boolean defaultValue)
-
 // Identity
-String getDisplayName()
 PlayerRef getPlayerRef()           // @Deprecated(forRemoval=true) — still works; no 1:1 replacement
 PacketHandler getPlayerConnection()  // @Deprecated(forRemoval=true) — use PlayerRef.getPacketHandler()
 
@@ -145,15 +154,18 @@ static void setGameMode(Ref<EntityStore> ref, GameMode mode, ComponentAccessor<E
 static void initGameMode(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 boolean isFirstSpawn()
 void setFirstSpawn(boolean firstSpawn)
+boolean isFlying(Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
+void setFlying(Ref<EntityStore> ref, boolean flying, ComponentAccessor<EntityStore> accessor)
 
 // Inventory
-Inventory getInventory()
+Inventory getInventory()           // inherited from LivingEntity
+static ItemStackTransaction giveItem(ItemStack stack, Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
 
 // Position & Movement
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
-void addLocationChange(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
+static void addLocationChange(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 static CompletableFuture<Transform> getRespawnPosition(Ref<EntityStore> ref, String spawnPoint, ComponentAccessor<EntityStore> accessor)
-void applyMovementStates(Ref<EntityStore> ref, SavedMovementStates saved, MovementStates current, ComponentAccessor<EntityStore> accessor)
+static void applyMovementStates(Ref<EntityStore> ref, SavedMovementStates saved, MovementStates current, ComponentAccessor<EntityStore> accessor)
 void resetVelocity(Velocity velocity)
 void processVelocitySample(double deltaTime, Vector3d sample, Velocity velocity)
 
@@ -178,14 +190,14 @@ long getSinceLastSpawnNanos()
 int getMountEntityId()
 void setMountEntityId(int id)
 
-// Item Durability
+// Item Durability (inherited from LivingEntity)
 ItemStackSlotTransaction updateItemStackDurability(Ref<EntityStore> ref, ItemStack stack, ItemContainer container, int slot, double amount, ComponentAccessor<EntityStore> accessor)
 
 // Block Processing
 void configTriggerBlockProcessing(boolean trigger, boolean process, CollisionResultComponent result)
 
 // Persistence
-CompletableFuture<Void> saveConfig(World world, Holder<EntityStore> holder)
+CompletableFuture<Void> saveConfig(World world, Holder<EntityStore> holder, boolean async)
 
 // Connection State
 boolean isWaitingForClientReady()
@@ -217,6 +229,9 @@ Inventory getInventory()
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 double getCurrentFallDistance()
 void setCurrentFallDistance(double distance)
+
+// Item durability (see ItemUtils below for the static form)
+ItemStackSlotTransaction updateItemStackDurability(Ref<EntityStore> ref, ItemStack stack, ItemContainer container, int slot, double amount, ComponentAccessor<EntityStore> accessor)
 ```
 
 > **Changed in Update 5.** `LivingEntity#canBreathe(...)` was **removed**. Breathing state is now the
@@ -245,9 +260,8 @@ UUID getUuid()
 void setLegacyUUID(UUID uuid)
 String getLegacyDisplayName()
 
-// Position
-TransformComponent getTransformComponent()
-void setTransformComponent(TransformComponent transform)
+// Position — there is no getTransformComponent(); read the ECS component instead:
+//   store.getComponent(entity.getReference(), TransformComponent.getComponentType())
 void moveTo(Ref<EntityStore> ref, double x, double y, double z, ComponentAccessor<EntityStore> accessor)
 World getWorld()
 
@@ -269,6 +283,7 @@ Commands receive both `PlayerRef` and `Ref<EntityStore>`. Understanding when to 
 
 `PlayerRef` is a lightweight wrapper providing:
 - **Messaging:** `sendMessage()`, `getLanguage()`
+- **Permissions:** `hasPermission()` (it is the `PermissionHolder`)
 - **Identity:** `getUuid()`, `getUsername()`
 - **Position:** `getTransform()`, `getWorldUuid()`
 - **Network:** `getPacketHandler()`, `referToServer()`
@@ -278,9 +293,8 @@ Use `PlayerRef` when you only need these operations.
 ### Player — Full Component Access
 
 `Player` is the full entity component with access to:
-- **Permissions:** `hasPermission()`
-- **Inventory:** `getInventory()`
-- **Game State:** `getGameMode()`, `isFirstSpawn()`
+- **Inventory:** `getInventory()`, `giveItem()`
+- **Game State:** `getGameMode()`, `isFirstSpawn()`, `isFlying()`
 - **UI Managers:** `getWindowManager()`, `getPageManager()`, `getHudManager()`, `getHotbarManager()`
 - **Movement:** `moveTo()`, `resetVelocity()`
 
@@ -295,11 +309,10 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
     // PlayerRef is sufficient for messaging
     playerRef.sendMessage(Message.raw("Hello!"));
 
-    // Get Player component for extended functionality
-    Player player = store.getComponent(ref, Player.getComponentType());
-
-    // Now you can access Player-specific features
-    if (player.hasPermission("myplugin.admin")) {
+    // Permissions are checked on the PlayerRef (Player has no hasPermission)
+    if (playerRef.hasPermission("myplugin.admin")) {
+        // Get Player component for extended functionality
+        Player player = store.getComponent(ref, Player.getComponentType());
         HudManager hud = player.getHudManager();
         Inventory inventory = player.getInventory();
         // ...
@@ -314,7 +327,7 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
 | Send message | `PlayerRef` | `playerRef.sendMessage(msg)` |
 | Get UUID/username | `PlayerRef` | `playerRef.getUuid()` |
 | Get position | `PlayerRef` | `playerRef.getTransform()` |
-| Check permissions | `Player` | `player.hasPermission(perm)` |
+| Check permissions | `PlayerRef` | `playerRef.hasPermission(perm)` |
 | Access inventory | `Player` | `player.getInventory()` |
 | Manage HUD | `Player` | `player.getHudManager()` |
 | Open pages/windows | `Player` | `player.getPageManager()`, `player.getWindowManager()` |
@@ -336,12 +349,13 @@ Player player = playerRef.getComponent(Player.getComponentType());
 @Override
 protected void execute(CommandContext ctx, Store<EntityStore> store,
                       Ref<EntityStore> ref, PlayerRef playerRef, World world) {
-    // Use playerRef for simple messaging
+    // Use playerRef for messaging and permissions
     playerRef.sendMessage(Message.raw("Hello!"));
+    boolean admin = playerRef.hasPermission("myplugin.admin");
 
-    // Get full Player for more operations
+    // Get full Player for inventory / game state / UI managers
     Player player = store.getComponent(ref, Player.getComponentType());
-    player.hasPermission("myplugin.admin");
+    Inventory inventory = player.getInventory();
 
     // Get player position
     Transform transform = playerRef.getTransform();
@@ -364,7 +378,7 @@ These carry state and have getters/setters (and a constructor that seeds the val
 
 | Component | Holds | Key members |
 |-----------|-------|-------------|
-| `ModelComponent` | The entity's render model | `new ModelComponent(Model)`, `getModel()` |
+| `ModelComponent` | The entity's render model | `new ModelComponent(Model)`, `getModel()`, `static getEyeHeight(Ref, ComponentAccessor)` (0.6.3+; `0` when the entity has no model) |
 | `PersistentModel` | A model that persists across reloads | `new PersistentModel(Model.ModelReference)`, `getModelReference()` / `setModelReference(...)` |
 | `DisplayNameComponent` | Floating name | `new DisplayNameComponent(Message)`, `getDisplayName()` |
 | `EntityScaleComponent` | Uniform render scale | `new EntityScaleComponent(float)`, `getScale()` / `setScale(float)` |
@@ -458,7 +472,24 @@ stats.addStatValue(healthIndex, 10.0f);       // Add 10 health
 stats.setStatValue(healthIndex, 100.0f);      // Set to 100
 stats.maximizeStatValue(healthIndex);         // Set to max
 stats.minimizeStatValue(healthIndex);         // Set to min (usually 0)
+stats.resetStatValue(healthIndex);            // Back to the stat type's initial value
+stats.minStatValue(healthIndex, 20.0f);       // 0.6.3+: clamp DOWN — value = min(current, 20)
+stats.maxStatValue(healthIndex, 50.0f);       // 0.6.3+: clamp UP   — value = max(current, 50)
 ```
+
+Every mutator returns the resulting `float` and has a twin taking an `EntityStatMap.Predictable` first argument (`NONE` — the default for the short forms — `SELF`, or `ALL`), which controls whether the change is sent to clients as a *predicted* update; plain plugin code uses the short forms.
+
+#### Suppressing changes (0.6.3+)
+
+```java
+// Block healing on this entity (a no-heal zone), but still allow damage
+stats.setStatChangeSuppressed(healthIndex, StatChangeDirection.RAISE, true);
+boolean noHeal = stats.isStatChangeSuppressed(healthIndex, StatChangeDirection.RAISE);
+// ...later
+stats.setStatChangeSuppressed(healthIndex, StatChangeDirection.RAISE, false);
+```
+
+`StatChangeDirection` (`server.core.modules.entitystats`) is `RAISE`, `LOWER`, or `BOTH`. While a direction is suppressed, every mutator above that would move the stat in that direction is a no-op returning the unchanged value. Suppression is runtime-only (`transient`) — it does not survive save/reload. The built-in `TriggerVolumeNoHealSystem` is the reference user.
 
 ### Reading Stat Values
 
@@ -644,10 +675,11 @@ void clear()  // Clear all interaction chains
 ### Chain Management
 ```java
 // Start a new interaction chain
-boolean tryStartChain(...)
+boolean tryStartChain(Ref<EntityStore> ref, CommandBuffer<EntityStore> buffer, InteractionType type,
+                      InteractionContext context, RootInteraction root)
 
-// Execute pending chains
-void executeChain(...)
+// Execute a chain now
+void executeChain(Ref<EntityStore> ref, CommandBuffer<EntityStore> buffer, InteractionChain chain)
 
 // Cancel active chains
 void cancelChains(InteractionChain chain)
@@ -656,7 +688,8 @@ void cancelChains(InteractionChain chain)
 ### Query
 ```java
 // Check if a chain can run
-boolean canRun(...)
+boolean canRun(InteractionType type, RootInteraction root)
+boolean canRun(InteractionType type, short chainId, RootInteraction root)
 
 // Get active chains
 Int2ObjectMap<InteractionChain> getChains()
@@ -664,8 +697,8 @@ Int2ObjectMap<InteractionChain> getChains()
 
 ### Rules
 ```java
-// Apply interaction rules
-void applyRules(...)
+// Apply interaction rules; false if the chain was rejected
+boolean applyRules(InteractionContext context, InteractionChainData data, InteractionType type, RootInteraction root)
 ```
 
 ### Usage with CollisionResult
@@ -682,10 +715,10 @@ result.defaultTriggerBlocksProcessing(manager, entity, ref, flag, accessor);
 
 > [!question]
 > Unlike the other components on this page, `InteractionManager` does **not**
-> expose a static `getComponentType()` accessor in build-12 (verified via
+> expose a static `getComponentType()` accessor (still true as of 0.6.3, verified via
 > `javap`), so the `store.getComponent(ref, …)` retrieval used elsewhere does not
 > apply here. Its only public constructor is
-> `InteractionManager(LivingEntity, PlayerRef, IInteractionSimulationHandler)`.
+> `InteractionManager(PlayerRef, IInteractionSimulationHandler)`.
 > The exact supported way for a plugin to obtain an existing entity's
 > `InteractionManager` is unconfirmed from bytecode alone — treat `manager` above
 > as already-resolved rather than copying a specific lookup call.
@@ -854,7 +887,7 @@ store.addComponent(ref, DespawnComponent.getComponentType(),
 
 **Package:** `com.hypixel.hytale.server.core.entity.movement`
 
-Holds an entity's current `MovementStates` (protocol object) — the flag set describing what the entity is *doing*: `idle`, `walking`, `running`, `sprinting`, `crouching`, `jumping`, `falling`, `fallingFar`, `climbing`, `swimming`, `inFluid`, `onGround`, `flying`, `gliding`, `sliding`, `rolling`, `mantling`, `mounting`, `sitting`, `sleeping` (public boolean fields on `MovementStates`). For players these flags are set from client input; systems across the engine read them (bounding-box sizing, stamina drain conditions, animation selection).
+Holds an entity's current `MovementStates` (protocol object) — the flag set describing what the entity is *doing*: `idle`, `horizontalIdle`, `walking`, `running`, `sprinting`, `crouching`, `forcedCrouching`, `jumping`, `falling`, `fallingFar`, `climbing`, `swimming`, `swimJumping`, `inFluid`, `onGround`, `flying`, `gliding`, `sliding`, `rolling`, `mantling`, `mounting`, `sitting`, `sleeping` (public boolean fields on `MovementStates`), plus a `byte extraJumpsUsed` counter (0.6.3+ — how many mid-air/extra jumps the entity has spent since it was last grounded). For players these flags are set from client input; systems across the engine read them (bounding-box sizing, stamina drain conditions, animation selection).
 
 | Method | Description |
 |--------|-------------|
@@ -877,7 +910,7 @@ Treat it as **read-mostly** for players: the client re-asserts states every move
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.teleport`
 
-Server-initiated teleports are asynchronous for players: the server adds a `Teleport` component (position + rotation — see the built-in teleport flow in [world.md](world.md)); the engine's `TeleportSystems` then queues the expected position on the player's **`TeleportAckTracker`** (`PlayerRef.getTeleportAckTracker()`), sends the `ClientTeleport` packet, marks the entity with the **`PendingTeleport`** component, and waits for the client to acknowledge (the packet handler calls `validate(...)` on the tracker) before `completeTeleport` removes `PendingTeleport` and writes a `TeleportRecord` entry. Since 0.6 the bookkeeping lives on the tracker; `PendingTeleport` is a pure marker component.
+Server-initiated teleports are asynchronous for players: the server adds a `Teleport` component (position + rotation — see the built-in teleport flow in [world.md](world.md)); the engine's `TeleportSystems` marks the entity with the **`PendingTeleport`** component, moves the `TransformComponent`, records the hop in **`TeleportRecord`**, then queues the expected position on the player's **`TeleportAckTracker`** (`PlayerRef.getTeleportAckTracker()`) and sends the `ClientTeleport` packet (finally removing the `Teleport` component). On the client's ack the packet handler calls `validate(...)` on the tracker; once the queue has drained, `TeleportSystems.completeTeleport` removes `PendingTeleport`, resets the collision start position, and `moveTo`s the player to the acked position. So the `TeleportRecord` entry is written on the *send* side, before the ack, while `PendingTeleport` spans the whole round trip. As of 0.6.3 the queue bookkeeping lives on the tracker; `PendingTeleport` is a pure marker component.
 
 ### PendingTeleport
 
@@ -885,7 +918,7 @@ Server-initiated teleports are asynchronous for players: the server adds a `Tele
 |--------|-------------|
 | `static getComponentType()` | Component type for store access |
 
-No other members (0.6): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. Before 0.6 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); those moved to `TeleportAckTracker`.
+No other members (0.6.3): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. In 0.5.9 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); by 0.6.3 those moved to `TeleportAckTracker`.
 
 ### TeleportAckTracker
 
@@ -897,15 +930,18 @@ Per-player (owned by `PlayerRef`, not a component), synchronized:
 | `validate(int, Position)` | Match a client ack against the head of the queue → a `Result` record |
 | `rollback(int)` | Drop a queued teleport by id (used when the send fails) |
 | `isEmpty()` | No teleports in flight |
-| `MAX_OFFSET_SQUARED` | `0.001` — squared position tolerance (plus the client's half-float precision at that magnitude) when validating the echoed position |
+| `MAX_OFFSET_SQUARED` | `0.001` — the *square* of the base tolerance: validation allows `sqrt(0.001)` ≈ 0.0316 blocks plus the client's half-float ulp at that magnitude (`Math.scalb(1.0, getExponent(v) - 24)` per axis) between the expected and echoed position |
 
-`TeleportAckTracker.Result` is a record: `status()` (`TeleportAckTracker.Status.OK`, `INVALID_ID`, or `INVALID_POSITION`), `expectedTeleportId()`, `expectedPosition()`, `ackedPosition()`, `remainingQueueDepth()`. Ids are compared on their low byte (the wire id is a `byte`).
+`TeleportAckTracker.Result` is a record: `status()` (`TeleportAckTracker.Status.OK`, `INVALID_ID`, or `INVALID_POSITION`), `expectedTeleportId()`, `expectedPosition()`, `ackedPosition()`, `remainingQueueDepth()`, plus `expectedWireId()` (the low byte as a string, `"none"` when the queue is empty). Ids are compared on their low byte (the wire id is a `byte`). An `INVALID_ID` or `INVALID_POSITION` result makes the packet handler **disconnect** the player.
 
 ```java
-// Teleport-in-flight guard
-boolean teleporting = store.getComponent(ref, PendingTeleport.getComponentType()) != null
+// Teleport-in-flight guard (the engine's own idiom also checks for a not-yet-processed Teleport)
+boolean teleporting = store.getComponent(ref, Teleport.getComponentType()) != null
+        || store.getComponent(ref, PendingTeleport.getComponentType()) != null
         || !playerRef.getTeleportAckTracker().isEmpty();
 ```
+
+The `Teleport` check closes the one-tick window between a plugin adding the component and `TeleportSystems` picking it up.
 
 ### TeleportRecord
 
@@ -916,7 +952,7 @@ boolean teleporting = store.getComponent(ref, PendingTeleport.getComponentType()
 | `hasElapsedSinceLastTeleport(Duration)` | True if that long has passed (or no teleport yet) |
 | `hasElapsedSinceLastTeleport(long, Duration)` | Same, against a supplied `System.nanoTime()` |
 
-`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every completed teleport (`ensureAndGetComponent` + `setLastTeleport`), so it's reliable to read:
+`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every *initiated* teleport (`ensureAndGetComponent` + `setLastTeleport`, at send time — same-world and cross-world), so it's reliable to read; note that for a same-world teleport both `origin()` and `destination()` currently hold the destination transform (0.6.3), so use `timestampNanos()` / `hasElapsedSinceLastTeleport` rather than `origin()` for "where did they come from":
 
 ```java
 // Teleport cooldown: 5s since the player last teleported
@@ -983,7 +1019,7 @@ Most new content should be **component-based entities via prefabs** rather than 
 
 **Package:** `com.hypixel.hytale.server.core.entity`
 
-Static helpers to **play or stop an animation on an entity** for all its viewers, addressed by animation slot. The slots (`com.hypixel.hytale.protocol.AnimationSlot`) are layers: `Movement`, `Status`, `Action`, `Face`, `Emote`.
+Static helpers to **play or stop an animation on an entity** for all its viewers, addressed by animation slot. The slots (`com.hypixel.hytale.protocol.AnimationSlot`) are layers: `Movement`, `Status`, `Action`, `Face`, `Emote`, and (0.6.3+) `ServerAction` — a second action layer reserved for server-driven actions so they don't fight the client's own `Action` animations.
 
 ```java
 // Overloads (all take the target Ref first and a ComponentAccessor last):
@@ -999,7 +1035,7 @@ AnimationUtils.stopAnimation(ref, slot, sendToSelf, accessor);
 - `animationId` is the animation name; the `itemAnimationsId` / `ItemPlayerAnimations` overloads scope it to an item's animation set (see [Items](items.md)).
 - `sendToSelf` (default `false`) controls whether a *player* target also sees their own animation — pass `true` for emote-style animations the player should see in third person.
 - Passing a `null` `animationId` on the base overload stops the slot, so `stopAnimation(ref, slot, accessor)` is the readable form of that.
-- For the `Movement`/`Status`/`Face` slots the animation must exist in the entity model's animation set — a missing id logs a warning and sends nothing (`Action` and `Emote` skip that check).
+- For every slot except `Action` and `Emote` (i.e. `Movement`/`Status`/`Face`/`ServerAction`) the animation must exist in the entity model's animation set — a missing id logs a warning (rate-limited to once a minute) and sends nothing.
 
 ```java
 // Play an emote on an NPC for everyone nearby
@@ -1053,10 +1089,11 @@ Vector3d getTargetLocation(ref, maxDistance, accessor)            // exact point
 Vector3d getTargetLocation(ref, blockPredicate, maxDistance, accessor)
 Ref<EntityStore> getTargetEntity(ref, accessor)                   // entity under the crosshair
 Ref<EntityStore> getTargetEntity(ref, maxDistance, accessor)
+Ref<EntityStore> getTargetEntity(ref, maxDistance, includeItemDrops, accessor)   // 0.6.3+
 Transform getLook(ref, accessor)                                  // eye position + look rotation
 ```
 
-The predicate overloads take a `java.util.function.IntPredicate` over block ids, letting you ray through non-solid blocks of your choosing. `getTargetBlock` returns the hit block; `getTargetBlockOrigin` returns the adjacent empty cell — the one you'd *place* into.
+The predicate overloads take a `java.util.function.IntPredicate` over block ids, letting you ray through non-solid blocks of your choosing. `getTargetBlock` returns the hit block; `getTargetBlockOrigin` returns the adjacent empty cell — the one you'd *place* into. `getTargetEntity`'s `maxDistance` is a `float` sphere radius around the eye position; candidates come from the entity spatial index, and dropped-item entities are excluded unless you pass `includeItemDrops = true` (which also queries the item spatial index).
 
 ### Area queries
 
@@ -1084,17 +1121,20 @@ World-space raycast variants that don't need an entity (`getTargetBlock(World, B
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.hitboxcollision`
 
-Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** (built-ins: `"HardCollision"`, `"SoftCollision"`) with a `CollisionType` and a `getSoftOffsetRatio()`; `HitboxCollision` is the network-synced **component** referencing one config by id.
+Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/` (built-ins: `"HardCollision"` = `{"CollisionType": "Hard"}`, `"SoftCollision"` = `{"CollisionType": "Soft", "SoftCollisionOffsetRatio": 1.25}`); `HitboxCollision` is the network-synced **component** referencing one config by id.
 
 ### HitboxCollisionConfig (asset)
 
-| Member | Description |
-|--------|-------------|
-| `static getAssetMap()` / `getAssetStore()` | Asset lookup (id ⇄ index) |
-| `getId()` | Asset id string |
-| `getCollisionType()` | Protocol `CollisionType` |
-| `getSoftOffsetRatio()` | Push-apart softness factor |
-| `NO_HITBOX` | `-1` — index meaning "no collision config" |
+| Member | JSON key | Description |
+|--------|----------|-------------|
+| `static getAssetMap()` / `getAssetStore()` | — | Asset lookup (id ⇄ index) |
+| `getId()` | (file name) | Asset id string |
+| `getCollisionType()` | `CollisionType` | Protocol `CollisionType`: `Hard` or `Soft` |
+| `getSoftOffsetRatio()` | `SoftCollisionOffsetRatio` | How much of the client's move offset applies when passing through a `Soft` hitbox |
+| `getRotateHitbox()` | `RotateHitbox` | 0.6.3+ — rotate the hitbox with the body orientation (Hard collision) |
+| `getAllowEntityAnchoring()` | `AllowEntityAnchoring` | 0.6.3+ — let entities standing on this one anchor to it (ride along; Hard collision) |
+| *(packet-only)* | `RotateAnchoredEntities` | 0.6.3+ — also rotate anchored entities with the body; no public getter, sent via `toPacket()` |
+| `NO_HITBOX` | — | `-1` — index meaning "no collision config" |
 
 ### HitboxCollision (component)
 

@@ -51,8 +51,8 @@ InteractionContext (passed to every operation tick)
 | Class | Location | Description |
 |-------|----------|-------------|
 | `InteractionContext` | `server.core.entity` | Execution-state container passed to operations |
-| `DynamicMetaStore` | `server.core` (returned by `getMetaStore`) | Key-value store for passing data between operations |
-| `MetaKey<T>` | `server.core.meta` | Type-safe key for meta-store values (registered internally) |
+| `DynamicMetaStore` | `server.core.meta` (returned by `getMetaStore`) | Key-value store for passing data between operations |
+| `MetaKey<T>` | `server.core.meta` | Type-safe key for meta-store values (obtained from a `MetaRegistry`, see [Custom Keys](#custom-meta-keys)) |
 | `InteractionChain` | `server.core.entity` | Full chain execution context (id, type, server state, root) |
 | `InteractionEntry` | `server.core.entity` | Per-entry execution state within a chain |
 
@@ -70,10 +70,16 @@ public class InteractionContext {
     Ref<EntityStore> getEntity();           // Entity executing the interaction
     Ref<EntityStore> getOwningEntity();     // Entity that owns the interaction chain
     Ref<EntityStore> getTargetEntity();     // Current target (from Selector)
+    BlockPosition getTargetBlock();         // Targeted block (meta TARGET_BLOCK), or null
+    BlockPosition getTargetBlockRaw();      // 0.6.3+: raw client target (meta TARGET_BLOCK_RAW), or null
+    CommandBuffer<EntityStore> getCommandBuffer();   // ECS access for the current tick (also a ComponentAccessor)
+    InteractionManager getInteractionManager();
 
     // Item access
     ItemStack getHeldItem();                // The item being used
+    void setHeldItem(ItemStack stack);
     byte getHeldItemSlot();                 // Slot index of held item
+    ItemContainer getHeldItemContainer();   // Container the held item lives in
     Item getOriginalItemType();             // Item config when chain started
 
     // Meta store (dynamic data)
@@ -84,23 +90,36 @@ public class InteractionContext {
     void setInteractionVarsGetter(Function<InteractionContext, Map<String, String>> getter);
 
     // Flow control
-    void jump(Label label);
+    void jump(Label label);                 // = setOperationCounter(label.getIndex())
     int getOperationCounter();
     void setOperationCounter(int counter);
-    void setLabels(Label... labels);
+    void setLabels(Label[] labels);         // set by the framework for labels passed to addOperation(op, labels...)
+    boolean hasLabels();
+    Label getLabel(int index);
+
+    // Per-operation sync state (what an operation sets to finish/fail)
+    InteractionSyncData getState();         // getState().state = InteractionState.Finished / Failed
 
     // Chain management
     InteractionChain getChain();
     InteractionEntry getEntry();
+    InteractionContext duplicate();
     // fork(...) overloads return InteractionChain and take args, e.g.:
     InteractionChain fork(InteractionType type, InteractionContext ctx,
                           RootInteraction root, boolean flag);
+
+    // Static factories (used by the framework; see "Receiving Contexts")
+    static InteractionContext forInteraction(InteractionManager mgr, Ref<EntityStore> ref,
+                          InteractionType type, ComponentAccessor<EntityStore> accessor);
+    static InteractionContext withoutEntity();
 }
 ```
 
 > **Note:** `InteractionContext` does **not** expose `getMeta`/`setMeta` convenience
 > methods. Meta values are accessed through the `DynamicMetaStore` returned by
-> `getMetaStore()`. There is no `advanceOperation()` and no static factory method.
+> `getMetaStore()`. There is no `advanceOperation()`: an operation finishes by setting
+> `context.getState().state = InteractionState.Finished` (or `Failed`), after which
+> `InteractionManager` advances the chain to the next operation.
 
 ---
 
@@ -140,9 +159,10 @@ public void tick(..., InteractionContext context, ...) {
     Ref<EntityStore> target = context.getTargetEntity();
 
     if (target != null && target.isValid()) {
-        // Apply effect to target
-        LivingEntity targetEntity = target.get(LivingEntity.class);
-        if (targetEntity != null) {
+        // Read the target's components through the tick's CommandBuffer
+        TransformComponent transform =
+            context.getCommandBuffer().getComponent(target, TransformComponent.getComponentType());
+        if (transform != null) {
             // Deal damage, apply effect, etc.
         }
     }
@@ -161,8 +181,9 @@ public void tick(..., InteractionContext context, ...) {
     ItemStack heldItem = context.getHeldItem();
 
     if (heldItem != null && !heldItem.isEmpty()) {
-        ItemType itemType = heldItem.getItemType();
-        int count = heldItem.getCount();
+        Item item = heldItem.getItem();        // item config (there is no ItemType class)
+        String itemId = heldItem.getItemId();
+        int count = heldItem.getQuantity();
 
         // Access item data
         // ...
@@ -173,7 +194,7 @@ public void tick(..., InteractionContext context, ...) {
 ### Original Item Type
 
 Tracks the item config when the chain started. Useful for detecting item swaps.
-`getOriginalItemType()` returns an `Item` (the item config type), not an `ItemType`:
+`getOriginalItemType()` returns an `Item` (the item config); compare it with `ItemStack.getItem()`:
 
 ```java
 @Override
@@ -181,11 +202,15 @@ public void tick(..., InteractionContext context, ...) {
     Item original = context.getOriginalItemType();
     ItemStack current = context.getHeldItem();
 
-    if (current != null && !current.getItemType().equals(original)) {
+    if (current != null && current.getItem() != original) {
         // Item changed during interaction - might want to cancel
     }
 }
 ```
+
+The framework already handles this case for you: each interaction's `OnItemChangeBehavior`
+(`Cancel` by default) decides what happens when the held item changes — see
+[Held-Item Change Behavior](interactions.md#held-item-change-behavior).
 
 ### Held Item Slot
 
@@ -209,6 +234,8 @@ The meta store is a key-value map for passing data between operations. Standard 
 | `HIT_DETAIL` | `String` | Selector | Hit detail info |
 | `TARGET_BLOCK` | `BlockPosition` | Block targeting | Block being interacted with |
 | `TARGET_BLOCK_RAW` | `BlockPosition` | Block targeting | Raw block position |
+| `TARGET_BLOCK_TYPE` | `BlockType` | Block targeting | 0.6.3+. Resolved `BlockType` of the targeted block |
+| `TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Block targeting | 0.6.3+. Rotation index of the targeted block |
 | `TARGET_SLOT` | `Integer` | Inventory ops | Target inventory slot |
 | `TIME_SHIFT` | `Float` | Timing ops | Time offset |
 | `DAMAGE` | `Damage` | Damage ops | Damage calculation result |
@@ -258,7 +285,7 @@ The meta system provides type-safe key-value storage for passing data between op
 
 **Package:** `com.hypixel.hytale.server.core.meta`
 
-`MetaKey` has a package-private constructor (keys are registered internally) and exposes only `getId()`. There is no public `MetaKey.create(...)` factory, so plugins use the predefined standard keys on the `Interaction` class rather than creating their own.
+`MetaKey` has a package-private constructor and exposes only `getId()`. There is no `MetaKey.create(...)` factory: keys come from a `MetaRegistry` — the standard ones are registered on `Interaction.CONTEXT_META_REGISTRY`, and plugins can register their own there (see [Custom Meta Keys](#custom-meta-keys)).
 
 #### DynamicMetaStore
 
@@ -283,12 +310,32 @@ The `Interaction` class defines standard keys used by built-in operations:
 | `Interaction.HIT_LOCATION` | `Vector4d` | Selector | World position of hit |
 | `Interaction.HIT_DETAIL` | `String` | Selector | Hit detail info |
 | `Interaction.TARGET_BLOCK` | `BlockPosition` | Block targeting | Block being interacted with |
+| `Interaction.TARGET_BLOCK_RAW` | `BlockPosition` | Block targeting | Raw client target position |
+| `Interaction.TARGET_BLOCK_TYPE` | `BlockType` | Block targeting | 0.6.3+ |
+| `Interaction.TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Block targeting | 0.6.3+ |
+| `Interaction.TARGET_SLOT` | `Integer` | Inventory ops | Target inventory slot |
+| `Interaction.TIME_SHIFT` | `Float` | Timing ops | Time offset |
 | `Interaction.DAMAGE` | `Damage` | Damage ops | Damage calculation result |
 
-> **Note:** `MetaKey` instances are registered internally and have no public
-> `create(...)` factory, so plugins cannot define arbitrary custom keys. Use the
-> predefined standard keys above. To carry your own data between operations, prefer
-> the item's `InteractionVars` (see below).
+#### Custom Meta Keys
+
+`Interaction.CONTEXT_META_REGISTRY` is a public `MetaRegistry<InteractionContext>`; register a key
+**once**, at plugin setup (a static field is the usual home), before any context is created. The
+function supplies the initial value the store creates on first access:
+
+```java
+public static final MetaKey<Integer> BOUNCES =
+    Interaction.CONTEXT_META_REGISTRY.registerMetaObject(ctx -> 0);
+
+// later, inside an operation:
+DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
+meta.putMetaObject(BOUNCES, meta.getMetaObject(BOUNCES) + 1);
+```
+
+`registerMetaObject(Function<K,T> initial, String keyName, Codec<T> codec)` registers a
+*persistent* key (serialized with the store; the key name must be unique, or the registry throws
+`Codec key is already registered.`). For item-driven tuning values, the item's `InteractionVars`
+(below) are usually the simpler channel.
 
 #### Operation Communication Pattern
 
@@ -313,8 +360,8 @@ public class ApplyDamageOp implements Operation {
 
 #### Best Practices
 
-1. **Use the standard keys** - The `Interaction` constants cover targeting, hits, and damage
-2. **Check for null** - Meta values may not be set if earlier operations were skipped
+1. **Use the standard keys** where they fit - The `Interaction` constants cover targeting, hits, and damage; register your own on `Interaction.CONTEXT_META_REGISTRY` for anything else
+2. **Check for null** - Meta values may not be set if earlier operations were skipped (`getIfPresentMetaObject` reads without creating a default)
 3. **Type safety** - The `MetaKey<T>` generic ensures compile-time type checking
 
 ---
@@ -404,12 +451,16 @@ public void tick(..., InteractionContext context, ...) {
 ### Operation Counter
 
 Track and set the current position in the operation array. There is no
-`advanceOperation()` convenience method; the operation counter is read and written
-directly:
+`advanceOperation()` convenience method — an operation ends its own turn by setting the
+sync state, and the manager then advances the counter:
 
 ```java
+context.getState().state = InteractionState.Finished;   // done; move to the next operation
+context.getState().state = InteractionState.Failed;     // done; take the Failed branch (if any)
+
+// The counter itself is also readable/writable (this is what jump(label) does):
 int currentOp = context.getOperationCounter();
-context.setOperationCounter(currentOp + 1);  // Move to next operation
+context.setOperationCounter(currentOp + 1);
 ```
 
 ---
@@ -457,17 +508,19 @@ InteractionChain forked = context.fork(type, context, rootInteraction, false);
 
 ## Receiving Contexts
 
-`InteractionContext` is created by the interaction system (via internal static
-factories such as `forInteraction(...)`); plugins do not construct it directly.
+`InteractionContext` is created by the interaction system (via the static factories
+`forInteraction(...)`, `forProxyEntity(...)` and `withoutEntity()`); plugins normally do not
+construct it directly.
 
 ### Context in Custom Interactions
 
-When implementing custom interactions, you receive the context:
+When implementing custom interactions, you receive the context (there is no `LivingEntity`
+parameter — resolve components from `ref` via `context.getCommandBuffer()`):
 
 ```java
 @Override
-public void tick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-                 float deltaTime, InteractionType type, InteractionContext context,
+public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+                 InteractionType type, InteractionContext context,
                  CooldownHandler cooldown) {
     // Context is fully initialized
     // Access any data you need
@@ -483,8 +536,8 @@ public void tick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
 ```java
 public class ApplyBurnOp implements Operation {
     @Override
-    public void tick(Ref<EntityStore> ref, LivingEntity entity, boolean isFirstTick,
-                     float deltaTime, InteractionType type, InteractionContext context,
+    public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+                     InteractionType type, InteractionContext context,
                      CooldownHandler cooldown) {
         if (!isFirstTick) {
             return;
@@ -503,11 +556,10 @@ public class ApplyBurnOp implements Operation {
         float burnDuration = vars.containsKey("BurnDuration")
             ? Float.parseFloat(vars.get("BurnDuration")) : 5.0f;
 
-        // Apply burn effect to target
-        LivingEntity targetEntity = target.get(LivingEntity.class);
-        if (targetEntity != null) {
-            // Apply effect logic...
-        }
+        // Apply burn effect to target (e.g. EffectControllerComponent.addEffect(...) via
+        // context.getCommandBuffer(); see interactions-combat.md#applyeffect)
+        // ...
+        context.getState().state = InteractionState.Finished;
     }
 
     // ... other Operation methods
@@ -518,6 +570,7 @@ public class ApplyBurnOp implements Operation {
 
 ```java
 public class CheckCriticalHitOp implements Operation {
+    private static final float CRIT_THRESHOLD = 20f;
     private final Label critLabel;
     private final Label normalLabel;
 
@@ -528,13 +581,15 @@ public class CheckCriticalHitOp implements Operation {
 
     @Override
     public void tick(..., InteractionContext context, ...) {
-        Damage damage = context.getMetaStore().getMetaObject(Interaction.DAMAGE);
+        Damage damage = context.getMetaStore().getIfPresentMetaObject(Interaction.DAMAGE);
 
-        if (damage != null && damage.isCritical()) {
+        // Damage has no "critical" flag; branch on the amount (or your own meta key)
+        if (damage != null && damage.getAmount() >= CRIT_THRESHOLD) {
             context.jump(critLabel);
         } else {
             context.jump(normalLabel);
         }
+        context.getState().state = InteractionState.Finished;
     }
 }
 ```
@@ -553,11 +608,12 @@ public class CheckCriticalHitOp implements Operation {
 ## Gotchas & Errors
 
 - **Symptom:** code won't compile against `context.getMeta(...)` / `setMeta(...)` → `InteractionContext` exposes no such convenience methods. Fix: go through the `DynamicMetaStore` from `getMetaStore()`, using `getMetaObject(key)` / `putMetaObject(key, value)`.
-- **Symptom:** `context.advanceOperation()` won't compile → there is no `advanceOperation()` method. Fix: read/write the position directly with `getOperationCounter()` / `setOperationCounter(counter + 1)`.
-- **Symptom:** you can't construct your own `MetaKey<T>` → `MetaKey` has a package-private constructor and no public `create(...)` factory, so plugins cannot define arbitrary keys. Fix: use the predefined standard keys on `Interaction` (e.g. `Interaction.TARGET_ENTITY`), or carry custom data via the item's `InteractionVars`.
+- **Symptom:** `context.advanceOperation()` won't compile → there is no `advanceOperation()` method. Fix: finish the operation with `context.getState().state = InteractionState.Finished` (or `Failed`); the manager advances the counter. `setOperationCounter(...)`/`jump(label)` exist for explicit repositioning.
+- **Symptom:** you can't construct your own `MetaKey<T>` → `MetaKey` has a package-private constructor and no `create(...)` factory. Fix: register the key once on `Interaction.CONTEXT_META_REGISTRY.registerMetaObject(ctx -> initialValue)` (see [Custom Meta Keys](#custom-meta-keys)), or carry item-driven values via `InteractionVars`.
+- **Symptom:** `tick(..., LivingEntity entity, ...)` doesn't override anything → neither `Operation.tick` nor `Interaction.tick` takes a `LivingEntity`; the signature is `tick(Ref<EntityStore>, boolean, float, InteractionType, InteractionContext, CooldownHandler)`. Fix: drop the parameter and resolve components from `ref` through `context.getCommandBuffer()`.
 - **Symptom:** a meta read returns `null` mid-chain → meta values are only present if an earlier operation set them, and a skipped/branched-past operation never runs. Fix: null-check every `getMetaObject(...)` result before use (e.g. `TARGET_ENTITY` is unset until a `Selector` runs).
 - **Symptom:** `getInteractionVars()` values come back as the wrong type → it returns a plain `Map<String, String>`; there are no typed accessors. Fix: parse manually (`Float.parseFloat`, `Integer.parseInt`) and supply your own defaults.
-- **Symptom:** `getOriginalItemType()` doesn't `.equals()` an `ItemType` → it returns an `Item` (the item config), not an `ItemType`. Fix: compare against the right type when detecting item swaps.
+- **Symptom:** `ItemStack.getItemType()` / `getCount()` won't compile → there is no `ItemType` class; the accessors are `getItem()` (the `Item` config), `getItemId()` and `getQuantity()`. `getOriginalItemType()` likewise returns an `Item` — compare it with `getHeldItem().getItem()` when detecting item swaps (or just set `OnItemChangeBehavior`).
 
 ---
 

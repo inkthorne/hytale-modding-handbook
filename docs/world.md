@@ -58,7 +58,7 @@ World (tick thread)
 | `MoonPhaseChangeEvent` | `server.core.universe.world.events.ecs` | ECS event fired on moon phase change |
 | `SetBlockSettings` | `server.core.universe.world` | Bit flags controlling `setBlock`/`breakBlock` side effects |
 | `ChunkAccessor` / `LocalCachedChunkAccessor` | `server.core.universe.world.accessor` | World-coordinate block access; cached accessor for area edits |
-| `ChunkColumn` / `BlockSection` / `FluidSection` | `server.core.universe.world.chunk(.section)` | ECS chunk-column component and per-section block/fluid storage |
+| `ChunkColumn` / `ChunkSection` / `BlockSection` / `FluidSection` | `server.core.universe.world.chunk(.section)` | ECS chunk-column component, the per-section entity component, and per-section block/fluid storage |
 | `GetChunkFlags` | `server.core.universe.world.storage` | Bit flags for async chunk loading via `ChunkStore` |
 | `WorldTimeResource` | `server.core.modules.time` | Per-world game clock resource (time of day, moon phase, sun) |
 | `MapMarkerBuilder` / `MarkersCollector` | `server.core.universe.world.worldmap.markers` | Building and collecting world-map markers |
@@ -98,6 +98,7 @@ See [Configuration Classes](#configuration-classes) below for details on WorldCo
 ```java
 List<Player> getPlayers()          // @Deprecated(forRemoval=true) — prefer getPlayerRefs()
 int getPlayerCount()
+int getNonSpectatorPlayerCount()
 Collection<PlayerRef> getPlayerRefs()
 void trackPlayerRef(PlayerRef ref)
 void untrackPlayerRef(PlayerRef ref)
@@ -120,12 +121,17 @@ Ref<EntityStore> getEntityRef(UUID uuid)
 ### Chunks
 ```java
 WorldChunk loadChunkIfInMemory(long chunkKey)
-WorldChunk getChunkIfInMemory(long chunkKey)
-WorldChunk getChunkIfLoaded(long chunkKey)
-WorldChunk getChunkIfNonTicking(long chunkKey)
-CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)
-CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey)
+WorldChunk getChunkIfInMemory(long chunkKey)                        // @Deprecated
+WorldChunk getChunkIfLoaded(long chunkKey)                          // @Deprecated
+WorldChunk getChunkIfNonTicking(long chunkKey)                      // @Deprecated
+CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)          // @Deprecated
+CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey) // @Deprecated
 ```
+
+> As of 0.6.3 the five `@Deprecated` getters above carry a plain `@Deprecated` (no `forRemoval`), as does
+> the whole `IChunkAccessorSync` interface they come from — they still work. The un-deprecated route to a
+> chunk is the `ChunkStore` reference API: `world.getChunkStore().getChunkReferenceAsync(chunkKey, flags)`
+> (see [GetChunkFlags](#getchunkflags)) and `getChunkComponent(chunkKey, WorldChunk.getComponentType())`.
 
 ### ECS Stores
 ```java
@@ -161,6 +167,7 @@ Path getSavePath()
 CompletableFuture<World> init()
 void stopIndividualWorld()
 void execute(Runnable task)  // Execute on world thread
+ScheduledFuture<?> scheduleAfter(Runnable task, long delay, TimeUnit unit)  // run on the world thread after a delay
 ```
 
 > **See also:** [ECS Components](components.md#common-store-types)
@@ -170,7 +177,7 @@ void execute(Runnable task)  // Execute on world thread
 ## WorldChunk
 **Package:** `com.hypixel.hytale.server.core.universe.world.chunk`
 
-Represents a chunk in the world. Implements `BlockAccessor` and `Component<ChunkStore>`. Provides direct access to block data, states, and chunk properties.
+Represents a chunk column in the world. Implements `Component<ChunkStore>`. Provides direct access to block data, states, and chunk properties. (The `BlockAccessor` interface it used to implement was removed by 0.6.3; the `setBlock`/`breakBlock` convenience overloads it contributed now live directly on `WorldChunk` — see below.)
 
 ### Getting the ComponentType
 ```java
@@ -179,12 +186,25 @@ static ComponentType<ChunkStore, WorldChunk> getComponentType()
 
 ### Block Access
 ```java
-// Get block ID at local coordinates (0-31 for x/z, 0-255 for y)
+// Get block ID / type at local coordinates (0-31 for x/z, 0-319 for y — ChunkUtil.HEIGHT is 320)
 int getBlock(int x, int y, int z)
+BlockType getBlockType(int x, int y, int z)
+BlockType getBlockType(Vector3ic localPos)
 
-// Set block at local coordinates
+// Full-control write at local coordinates (settings = SetBlockSettings flags)
 boolean setBlock(int x, int y, int z, int blockId,
-                 BlockType blockType, int rotation, int filler, int flags)
+                 BlockType blockType, int rotation, int filler, int settings)
+
+// Convenience overloads (0.6.3+, moved here from the removed BlockAccessor interface);
+// the forms without `settings` pass SetBlockSettings.NONE
+boolean setBlock(int x, int y, int z, String blockTypeKey)
+boolean setBlock(int x, int y, int z, String blockTypeKey, int settings)
+boolean setBlock(int x, int y, int z, int blockId)
+boolean setBlock(int x, int y, int z, int blockId, int settings)
+boolean setBlock(int x, int y, int z, BlockType blockType)
+boolean setBlock(int x, int y, int z, BlockType blockType, int settings)
+boolean breakBlock(int x, int y, int z, int settings)
+boolean breakBlock(int x, int y, int z, int filler, int settings)
 
 // Get filler block ID
 int getFiller(int x, int y, int z)
@@ -203,6 +223,9 @@ Ref<ChunkStore> getBlockComponentEntity(int x, int y, int z)
 
 // Get block component holder
 Holder<ChunkStore> getBlockComponentHolder(int x, int y, int z)
+
+// Switch a block's interaction state (0.6.3+ on WorldChunk; also on the accessors)
+void setBlockInteractionState(Vector3i localPos, BlockType type, String state)
 ```
 
 ### Ticking Blocks
@@ -220,8 +243,8 @@ boolean setTicking(int x, int y, int z, boolean ticking)
 short getHeight(int x, int z)
 short getHeight(int index)
 
-// Get tint at position
-int getTint(int x, int z)
+// Tint lookup moved off WorldChunk by 0.6.3 — read it from the block-data component:
+//   chunk.getBlockChunk().getTint(x, z)
 
 // Get fluid data
 int getFluidId(int x, int y, int z)
@@ -240,19 +263,16 @@ int getZ()         // Chunk Z coordinate
 
 // Get parent world
 World getWorld()
-
-// Get chunk accessor
-ChunkAccessor getChunkAccessor()
+// (getChunkAccessor() was removed by 0.6.3 — the owning World implements ChunkAccessor; use getWorld())
 ```
 
 ### Chunk Flags
 ```java
 // Check/set chunk flags
 boolean is(ChunkFlag flag)
-boolean not(ChunkFlag flag)
 void setFlag(ChunkFlag flag, boolean value)
-boolean toggleFlag(ChunkFlag flag)
 void initFlags()
+// not(ChunkFlag) and toggleFlag(ChunkFlag) were removed by 0.6.3 — use !is(flag) / setFlag(flag, !is(flag))
 ```
 
 ### Keep-Alive & Loading
@@ -283,23 +303,22 @@ void setSaving(boolean saving)
 
 ### Lighting
 ```java
-// Lighting updates
+// Lighting updates (the isLightingUpdatesEnabled() getter was removed by 0.6.3)
 void setLightingUpdatesEnabled(boolean enabled)
-boolean isLightingUpdatesEnabled()
 ```
 
 ### Chunk Components
 ```java
-// Get internal chunk components
+// Get the block-data component (heightmap, tints, environment, section refs)
 BlockChunk getBlockChunk()
-BlockComponentChunk getBlockComponentChunk()
-EntityChunk getEntityChunk()
+// getBlockComponentChunk() / getEntityChunk() were removed by 0.6.3: BlockComponentChunk and EntityChunk
+// are now bare serialization carriers (takeEntityHolders()) with no runtime lookup API. Resolve block
+// entities through getBlockComponentEntity / getBlockComponentHolder above instead.
 ```
 
 ### ECS Integration
 ```java
-// Convert to holder (blueprint)
-Holder<ChunkStore> toHolder()
+// (toHolder() was removed by 0.6.3 — chunk columns are serialized by the ChunkSavingSystems, not by hand)
 
 // Reference management
 void setReference(Ref<ChunkStore> ref)
@@ -332,6 +351,7 @@ Enum defining chunk state flags. Implements `Flag` interface.
 | `NEWLY_GENERATED` | Chunk was newly generated (not loaded from disk) |
 | `ON_DISK` | Chunk exists on disk |
 | `TICKING` | Chunk is actively ticking |
+| `NEEDS_FORMAT_REWRITE` | Set by the `RocksDb` storage provider when a chunk is loaded from an older on-disk format; `ChunkStore` rewrites it on the next save and clears the flag (0.6.3+) |
 
 ### Methods
 ```java
@@ -388,7 +408,7 @@ if (chunk != null) {
 ## SetBlockSettings
 **Package:** `com.hypixel.hytale.server.core.universe.world`
 
-Bit-flag constants for the `int settings` (a.k.a. `flags`) parameter accepted by every block-writing method: `WorldChunk.setBlock(...)`, the `BlockAccessor` `setBlock`/`breakBlock`/`placeBlock` overloads, and the [chunk accessor](#chunk-accessors) `setBlock(x, y, z, blockTypeKey, settings)` defaults. Combine with bitwise OR. `NONE` (0) runs the full default side-effect pipeline — most flags *suppress* a side effect, while `PHYSICS`, `FORCE_CHANGED`, and `PERFORM_BLOCK_UPDATE` *opt in* to extra behavior.
+Bit-flag constants for the `int settings` (a.k.a. `flags`) parameter accepted by every block-writing method: the `WorldChunk` `setBlock`/`breakBlock` overloads and the [chunk accessor](#chunk-accessors) `setBlock(x, y, z, blockTypeKey, settings)` / `breakBlock(x, y, z, settings)` defaults. Combine with bitwise OR. `NONE` (0) runs the full default side-effect pipeline — most flags *suppress* a side effect, while `PHYSICS`, `FORCE_CHANGED`, and `PERFORM_BLOCK_UPDATE` *opt in* to extra behavior.
 
 | Constant | Value | Effect |
 |----------|-------|--------|
@@ -405,6 +425,7 @@ Bit-flag constants for the `int settings` (a.k.a. `flags`) parameter accepted by
 | `NO_UPDATE_HEIGHTMAP` | 512 | Skip the heightmap update |
 | `NO_SEND_AUDIO` | 1024 | Skip break/place audio |
 | `NO_DROP_ITEMS` | 2048 | Skip item drops when breaking |
+| `NO_FIRE_ON_BREAK` | 4096 | Declared in 0.6.3 (intent: skip fire spread/ignition on break); nothing in the 0.6.3 jar reads it yet |
 
 The decompiled `WorldChunk.setBlock` pipeline consumes `NO_UPDATE_STATE`, `NO_SEND_PARTICLES`, `NO_SET_FILLER`, `NO_BREAK_FILLER`, `PHYSICS`, `FORCE_CHANGED`, `PERFORM_BLOCK_UPDATE`, and `NO_UPDATE_HEIGHTMAP` directly; the notify/connections/audio/drops flags are honored by the higher-level breaking and interaction paths.
 
@@ -425,12 +446,12 @@ world.breakBlock(x, y, z, SetBlockSettings.NO_DROP_ITEMS);
 ## Chunk Accessors
 **Package:** `com.hypixel.hytale.server.core.universe.world.accessor`
 
-The accessor interfaces provide **world-coordinate** block access that spans chunk boundaries — each default method resolves the owning chunk from the block coordinates and delegates to it. **`World` implements `ChunkAccessor<WorldChunk>`**, so all of these methods can be called directly on a `World`.
+The accessor interfaces provide **world-coordinate** block access that spans chunk boundaries — each default method resolves the owning chunk from the block coordinates and delegates to it. **`World` implements `ChunkAccessor`** (and `IWorldChunks`), so all of these methods can be called directly on a `World`. As of 0.6.3 the accessor interfaces are **no longer generic** — they are typed to `WorldChunk` directly, and the `BlockAccessor` abstraction that used to sit under them was removed.
 
 ```
-IChunkAccessorSync<WorldChunk>       @Deprecated base: chunk getters + block defaults
-└── ChunkAccessor<WorldChunk>        adds fluid lookup + neighbor block updates   ← implemented by World
-    └── OverridableChunkAccessor<X>  adds overwrite()
+IChunkAccessorSync                   @Deprecated base: chunk getters + block defaults
+└── ChunkAccessor                    adds fluid lookup + neighbor block updates   ← implemented by World
+    └── OverridableChunkAccessor     adds overwrite(WorldChunk)
         └── LocalCachedChunkAccessor caching implementation for area edits
 ```
 
@@ -451,20 +472,16 @@ WorldChunk getChunkIfNonTicking(long chunkIndex)
 int getBlock(int x, int y, int z)
 int getBlock(Vector3i pos)
 BlockType getBlockType(int x, int y, int z)
-BlockType getBlockType(Vector3i pos)
+BlockType getBlockType(Vector3ic pos)
 void setBlock(int x, int y, int z, String blockTypeKey)
 void setBlock(int x, int y, int z, String blockTypeKey, int settings)   // SetBlockSettings flags
 boolean breakBlock(int x, int y, int z, int settings)
-boolean testBlockTypes(int x, int y, int z, BlockType type, int rotation, TestBlockFunction predicate)
-boolean testPlaceBlock(int x, int y, int z, BlockType type, int rotation)
-boolean testPlaceBlock(int x, int y, int z, BlockType type, int rotation, TestBlockFunction predicate)
 Holder<ChunkStore> getBlockComponentHolder(int x, int y, int z)
 void setBlockInteractionState(Vector3i pos, BlockType type, String state)
-int getBlockRotationIndex(int x, int y, int z)
 BlockPosition getBaseBlock(BlockPosition position)   // @Deprecated(forRemoval=true)
 ```
 
-The nested functional interface `IChunkAccessorSync.TestBlockFunction` is the predicate used by the `test*` methods: `boolean test(int, int, int, BlockType, int, int)`.
+The `testBlockTypes` / `testPlaceBlock` defaults and `getBlockRotationIndex` were removed from the accessor by 0.6.3. Placement testing is now a static on `BlockOperations` (`server.core.universe.world.chunk`): `BlockOperations.testPlaceBlock(ComponentAccessor<ChunkStore> accessor, BlockSection section, int x, int y, int z, BlockType type, int rotation[, BlockOperations.TestBlockFunction predicate])`, and the predicate interface moved with it — `BlockOperations.TestBlockFunction` is `boolean test(int, int, int, BlockType, int, int)` (the old `IChunkAccessorSync.TestBlockFunction` nested type is gone). For a rotation index use `WorldChunk.getRotationIndex(x, y, z)` on the owning chunk.
 
 ### ChunkAccessor
 
@@ -481,18 +498,18 @@ boolean performBlockUpdate(int x, int y, int z, boolean allowPartialLoad) // upd
 Extends `ChunkAccessor` with a single method:
 
 ```java
-void overwrite(X chunk)   // inject/replace a chunk in the accessor's view
+void overwrite(WorldChunk chunk)   // inject/replace a chunk in the accessor's view
 ```
 
 ### LocalCachedChunkAccessor
 
-A concrete `OverridableChunkAccessor<WorldChunk>` that caches the chunks of a square area in a flat array, so repeated block reads/writes during an area edit skip the world's chunk lookup. This is what the built-in builder tools and farming systems use for multi-block operations.
+A concrete `OverridableChunkAccessor` that caches the chunks of a square area in a flat array, so repeated block reads/writes during an area edit skip the world's chunk lookup. This is what the built-in builder tools and farming systems use for multi-block operations.
 
 ```java
 // Factories (delegate is usually the World itself)
-static LocalCachedChunkAccessor atWorldCoords(ChunkAccessor<WorldChunk> delegate, int centerX, int centerZ, int blockRadius)
-static LocalCachedChunkAccessor atChunkCoords(ChunkAccessor<WorldChunk> delegate, int chunkX, int chunkZ, int chunkRadius)
-static LocalCachedChunkAccessor atChunk(ChunkAccessor<WorldChunk> delegate, WorldChunk center, int chunkRadius)
+static LocalCachedChunkAccessor atWorldCoords(ChunkAccessor delegate, int centerX, int centerZ, int blockRadius)
+static LocalCachedChunkAccessor atChunkCoords(ChunkAccessor delegate, int chunkX, int chunkZ, int chunkRadius)
+static LocalCachedChunkAccessor atChunk(ChunkAccessor delegate, WorldChunk center, int chunkRadius)
 
 void cacheChunksInRadius()          // pre-populate the cache from the delegate
 void overwrite(WorldChunk chunk)    // place a chunk into its cache slot
@@ -532,6 +549,7 @@ Bit-flag constants for the `int flags` parameter of the `ChunkStore` async loade
 | `SET_TICKING` | 4 | Mark the chunk as ticking once available |
 | `BYPASS_LOADED` | 8 | Internal load-scheduling flag |
 | `POLL_STILL_NEEDED` | 16 | Internal load-scheduling flag |
+| `HIGH_PRIORITY` | 32 | Schedule the load ahead of normal requests (0.6.3+) |
 | `NO_SET_TICKING_SYNC` | `Integer.MIN_VALUE` | Internal: don't set ticking synchronously |
 
 `NO_LOAD | NO_GENERATE` restricts the request to chunks already in memory.
@@ -541,7 +559,7 @@ Bit-flag constants for the `int flags` parameter of the `ChunkStore` async loade
 ## Chunk Columns & Sections
 **Package:** `com.hypixel.hytale.server.core.universe.world.chunk` (and `.section`, `.environment`, `.palette`)
 
-Underneath `WorldChunk`, chunk data lives in the ECS: each chunk column is an entity in the `ChunkStore`, and its `ChunkColumn` component holds references to per-**section** entities (one per 32-block vertical slice) that carry the actual `BlockSection` / `FluidSection` storage. Plugins reach them via the component API:
+Underneath `WorldChunk`, chunk data lives in the ECS: each chunk column is an entity in the `ChunkStore`, and its `ChunkColumn` component holds references to per-**section** entities (one per 32-block vertical slice; each carries a `ChunkSection` component) that hold the actual `BlockSection` / `FluidSection` storage. Plugins reach them via the component API:
 
 ```java
 Store<ChunkStore> chunkStore = world.getChunkStore().getStore();
@@ -564,6 +582,27 @@ Holder<ChunkStore>[] takeSectionHolders()
 void putSectionHolders(Holder<ChunkStore>[] holders)
 ```
 
+### ChunkSection
+
+The identity component on each section entity (0.6.3 reworked it: sections now carry their own keep-alive
+and active timers, and `ChunkStore.supportsCubicSections()` reports whether the world's storage can load
+and unload sections independently of their column).
+
+```java
+static ComponentType<ChunkStore, ChunkSection> getComponentType()
+
+Ref<ChunkStore> getChunkColumnReference()   // back-reference to the owning column entity
+int getX(); int getY(); int getZ()          // section coordinates (y = ChunkUtil.chunkCoordinate(blockY))
+int pollKeepAlive(int decrement)            // same semantics as the WorldChunk timers
+void resetKeepAlive()
+int pollActiveTimer(int decrement)
+void resetActiveTimer()
+```
+
+Related `ChunkStore` entry points (0.6.3+): `supportsCubicSections()`, `hasLoadedSections(long chunkIndex)`,
+`removeSection(Ref<ChunkStore> section, RemoveReason reason)`, and the `SECTION_UNLOAD_RESOURCE` resource type
+that backs section unloading.
+
 ### BlockSection
 
 Palette-compressed block storage for one 32×32×32 section: block ids, filler ids, rotations, ticking-block bookkeeping, and light data. Local coordinates or a packed block index address the same data.
@@ -572,6 +611,7 @@ Palette-compressed block storage for one 32×32×32 section: block ids, filler i
 
 ```java
 static ComponentType<ChunkStore, BlockSection> getComponentType()
+static final int VERSION   // on-disk section format version (6 in 0.6.3)
 
 // Reads
 int get(int x, int y, int z)
@@ -658,7 +698,7 @@ Constants: `EMPTY` (the all-zero instance), `MAX_VALUE` (15 per channel), `CHANN
 |-------|---------|-------------|
 | `EnvironmentChunk` | `...world.chunk.environment` | Chunk-column component storing per-column environment values (`get(x, y, z)`, `set(x, y, z, value)`, `getComponentType()`); columns are run-length `EnvironmentColumn`s |
 | `ShortBytePalette` | `...world.chunk.palette` | Palette-compressed 1024-entry (`LENGTH`, 32×32) short grid — `set`/`get`/`contains`/`optimize`/`copyFrom`; used for per-column data such as the heightmap |
-| `AbstractCachedAccessor` | `...world.chunk` | Base class for systems that cache chunk/section `Ref`s over an area — `getChunk(x, z)`, `getSection(x, y, z)` (used by the block-physics systems) |
+| `AbstractCachedAccessor` | `...world.chunk` | Base class for systems that cache column/section `Ref`s over an area — `getColumn(x, z)`, `getColumnAtBlock(x, z)`, `getSection(x, y, z)`, `getSectionAtBlock(x, y, z)` (0.6.3 renamed `getChunk` → `getColumn`, added the `AtBlock` forms, and the constructor now takes an `AbstractCachedAccessor.Registry`); used by the block-physics systems |
 | `BlockRotationUtil` | `...world.chunk` | Static rotation math: `getRotated(RotationTuple, Axis, Rotation, VariantRotation)`, `getFlipped(RotationTuple, BlockFlipType, Axis)`, `getRotatedFiller(int, RotationTuple)`, `getFlippedFiller(int, Axis)` |
 
 ---
@@ -666,7 +706,12 @@ Constants: `EMPTY` (the all-zero instance), `MAX_VALUE` (15 per channel), `CHANN
 ## ChunkTracker
 **Package:** `com.hypixel.hytale.server.core.modules.entity.player`
 
-Component that manages chunk loading and visibility per player. Controls how quickly chunks are sent to a player and which chunks should be visible.
+Component that manages chunk loading and visibility per player. Controls how quickly chunk data is sent to a player and which chunks should be visible.
+
+> **0.6.3 renamed the whole rate/radius/count API from chunks to sections** — the tracker now streams
+> 32×32×32 *sections*, not whole columns. Every `*Chunks*` accessor below became `*Sections*` (or lost the
+> word entirely for the radii), the constants were renamed and re-scaled ×10, `unloadAll(PlayerRef)` was
+> removed, and section-coordinate `(x, y, z)` overloads were added next to the `long chunkIndex` ones.
 
 ### Getting the Component
 ```java
@@ -677,9 +722,12 @@ ChunkTracker tracker = playerRef.getChunkTracker();
 
 ### Chunk Visibility
 ```java
-boolean isLoaded(long chunkIndex)           // Is chunk loaded for this player?
-boolean shouldBeVisible(long chunkIndex)    // Should chunk be visible?
-ChunkVisibility getChunkVisibility(long chunkIndex)  // Get visibility state
+boolean isLoaded(long chunkIndex)           // Is the column loaded for this player?
+boolean isLoaded(int x, int y, int z)       // ... or a specific section (0.6.3+)
+boolean shouldBeVisible(long chunkIndex)    // Should the column be visible?
+boolean shouldBeVisible(int x, int y, int z)
+ChunkVisibility getChunkVisibility(long chunkIndex)          // Column visibility state
+ChunkVisibility getSectionVisibility(int x, int y, int z)    // Section visibility state (0.6.3+)
 ```
 
 #### ChunkVisibility Enum
@@ -692,57 +740,61 @@ Nested enum defining chunk visibility states for a player.
 | `HOT` | Chunk is actively visible (nearby) |
 | `COLD` | Chunk is visible but not actively updated |
 
-### Chunk Loading Rates
+### Section Loading Rates
 ```java
-int getMaxChunksPerSecond()                 // Max chunks sent per second
-void setMaxChunksPerSecond(int rate)
-void setDefaultMaxChunksPerSecond(PlayerRef ref)  // Reset to default based on connection
+int getMaxSectionsPerSecond()               // Max sections sent per second (was getMaxChunksPerSecond)
+void setMaxSectionsPerSecond(int rate)
+void setDefaultMaxSectionsPerSecond(PlayerRef ref)  // Reset to default based on connection
 
-int getMaxChunksPerTick()                   // Max chunks sent per tick
-void setMaxChunksPerTick(int rate)
+int getMaxSectionsPerTick()                 // Max sections sent per tick (was getMaxChunksPerTick)
+void setMaxSectionsPerTick(int rate)
 ```
 
 ### Load Radius
 ```java
-int getMinLoadedChunksRadius()              // Minimum radius of loaded chunks
-void setMinLoadedChunksRadius(int radius)
+int getMinLoadedRadius()                    // Minimum radius kept loaded (was getMinLoadedChunksRadius)
+void setMinLoadedRadius(int radius)
 
-int getMaxHotLoadedChunksRadius()           // Max radius of hot-loaded chunks
-void setMaxHotLoadedChunksRadius(int radius)
+int getMaxHotLoadedRadius()                 // Max radius of hot-loaded sections (was getMaxHotLoadedChunksRadius)
+void setMaxHotLoadedRadius(int radius)
 ```
 
 ### Statistics
 ```java
-int getLoadedChunksCount()                  // Number of chunks loaded for player
-int getLoadingChunksCount()                 // Number of chunks currently loading
+int getLoadedSectionsCount()                // Sections loaded for the player (was getLoadedChunksCount)
+int getLoadingSectionsCount()               // Sections currently loading (was getLoadingChunksCount)
+void forEachLoadedSection(TriIntConsumer consumer)   // iterate loaded section coordinates (0.6.3+)
 ```
 
 ### Lifecycle
 ```java
-void unloadAll(PlayerRef ref)               // Unload all chunks for player
 void clear()                                // Clear tracker state
-void removeForReload(long chunkIndex)       // Mark chunk for reload
+void removeForReload(long chunkIndex)       // Mark a column for reload
+void removeForReload(int x, int y, int z)   // ... or one section (0.6.3+)
+boolean isReadyForChunks()                  // May the tracker stream sections right now? (cleared by World.addPlayer, set by the player tracker systems once the client is in)
+void setReadyForChunks(boolean ready)
+// unloadAll(PlayerRef) was removed by 0.6.3 — unloading is driven by the tracker's own tick
 ```
 
 ### Constants
 ```java
-static final int MAX_CHUNKS_PER_SECOND       // Default max (remote)
-static final int MAX_CHUNKS_PER_SECOND_LAN   // Max for LAN connections
-static final int MAX_CHUNKS_PER_SECOND_LOCAL // Max for local/singleplayer
-static final int MAX_CHUNKS_PER_TICK
-static final int MIN_LOADED_CHUNKS_RADIUS
-static final int MAX_HOT_LOADED_CHUNKS_RADIUS
+static final int MAX_SECTIONS_PER_SECOND        = 360    // Default max (remote); was MAX_CHUNKS_PER_SECOND = 36
+static final int MAX_SECTIONS_PER_SECOND_LAN    = 1280   // LAN connections;   was MAX_CHUNKS_PER_SECOND_LAN = 128
+static final int MAX_SECTIONS_PER_SECOND_LOCAL  = 2560   // Local/singleplayer; was MAX_CHUNKS_PER_SECOND_LOCAL = 256
+static final int MAX_SECTIONS_PER_TICK          = 40     // was MAX_CHUNKS_PER_TICK = 4
+static final int MIN_LOADED_RADIUS              = 2      // was MIN_LOADED_CHUNKS_RADIUS
+static final int MAX_HOT_LOADED_RADIUS          = 8      // was MAX_HOT_LOADED_CHUNKS_RADIUS
 ```
 
 ### Usage Example
 ```java
-// Increase chunk loading speed for a player
+// Increase chunk streaming speed for a player
 ChunkTracker tracker = playerRef.getChunkTracker();
-tracker.setMaxChunksPerSecond(100);  // Send up to 100 chunks/second
+tracker.setMaxSectionsPerSecond(1000);  // Send up to 1000 sections/second (~100 columns)
 
-// Check how many chunks are loaded
-int loaded = tracker.getLoadedChunksCount();
-playerRef.sendMessage(Message.raw("You have " + loaded + " chunks loaded"));
+// Check how many sections are loaded
+int loaded = tracker.getLoadedSectionsCount();
+playerRef.sendMessage(Message.raw("You have " + loaded + " chunk sections loaded"));
 ```
 
 ---
@@ -817,8 +869,8 @@ Master configuration class containing all gameplay settings for a world. Impleme
 // From World
 GameplayConfig config = world.getGameplayConfig();
 
-// From asset store
-GameplayConfig config = GameplayConfig.getAssetMap().get("default");
+// From asset store (ids are the asset file names, e.g. "Default" — use the constant)
+GameplayConfig config = GameplayConfig.getAssetMap().get(GameplayConfig.DEFAULT_ID);
 ```
 
 #### Key Methods
@@ -845,6 +897,7 @@ boolean getShowItemPickupNotifications()
 int getMaxEnvironmentalNPCSpawns()
 String getCreativePlaySoundSet()
 int getCreativePlaySoundSetIndex()
+String getCreativeEraserInteraction()   // 0.6.3+: interaction id used by the creative eraser tool
 
 // Plugin extensions
 MapKeyMapCodec.TypeMap<Object> getPluginConfig()
@@ -852,8 +905,8 @@ MapKeyMapCodec.TypeMap<Object> getPluginConfig()
 
 #### Constants
 ```java
-static final String DEFAULT_ID;           // Default config ID
-static final GameplayConfig DEFAULT;      // Default config instance
+static final String DEFAULT_ID = "Default";   // Default config ID (matches Server/GameplayConfigs/Default.json)
+static final GameplayConfig DEFAULT;          // Default config instance
 ```
 
 ---
@@ -890,9 +943,9 @@ SleepConfig getSleepConfig()
 
 #### Constants
 ```java
-static final int DEFAULT_TOTAL_DAY_DURATION_SECONDS;
-static final int DEFAULT_DAYTIME_DURATION_SECONDS;
-static final int DEFAULT_NIGHTTIME_DURATION_SECONDS;
+static final int DEFAULT_TOTAL_DAY_DURATION_SECONDS = 2880;
+static final int DEFAULT_DAYTIME_DURATION_SECONDS   = 1728;
+static final int DEFAULT_NIGHTTIME_DURATION_SECONDS = 1151;   // was 1728 before 0.6.3 — nights are now shorter by default
 ```
 
 #### Usage Example
@@ -924,13 +977,21 @@ RespawnController getRespawnController()
 ItemsLossMode getItemsLossMode()
 double getItemsAmountLossPercentage()
 double getItemsDurabilityLossPercentage()
+
+// 0.6.3+: game-mode type to switch the player to on death (null = not set). World.getGameModeTypeOnDeath()
+// returns this when set and otherwise falls back to the server config's Defaults.GameModeTypeOnDeath
+String getGameModeTypeOnDeath()
 ```
 
 #### ItemsLossMode Enum
 
+`DeathConfig.ItemsLossMode` (JSON key `ItemsLossMode`, e.g. `"Configured"` in `Server/GameplayConfigs/Default.json`):
+
 | Value | Description |
 |-------|-------------|
-| (values defined in DeathConfig$ItemsLossMode) | Controls how items are lost on death |
+| `NONE` | Keep everything on death |
+| `ALL` | Drop/lose the whole inventory |
+| `CONFIGURED` | Apply `ItemsAmountLossPercentage` / `ItemsDurabilityLossPercentage` |
 
 #### Usage Example
 ```java
@@ -971,7 +1032,8 @@ world.getWorldConfig().setSpawnProvider(provider);   // universe.world.WorldConf
 
 The interface has several overloads, but the only one you must implement is
 `Transform getSpawnPoint(World, UUID)` — the default `getSpawnPoint(Ref, ComponentAccessor)` and
-`getSpawnPoint(Entity)` overloads resolve the UUID/World for you and delegate to it.
+`getSpawnPoint(Entity)` overloads resolve the UUID/World for you and delegate to it (`getSpawnPoint(Entity)`
+is `@Deprecated(forRemoval=true)`; `getSpawnPoints()` is `@Deprecated` but still abstract).
 
 ```java
 import com.hypixel.hytale.math.vector.Transform;
@@ -1066,6 +1128,13 @@ boolean isYearWithinRange(double min, double max)
 // Setting time (broadcasts the update to clients)
 void setGameTime(Instant gameTime, World world, ComponentAccessor<EntityStore> accessor)
 void setDayTime(double dayTime, World world, ComponentAccessor<EntityStore> accessor)  // 0.0–1.0; rolls forward, never backward
+Instant dayProgressToInstant(double dayProgress)                                        // 0.6.3+: the Instant a 0–1 day fraction maps to today
+
+// Smooth time skips (0.6.3+): animate the clock to targetDayProgress over durationSeconds
+void startDayTimeInterpolation(double targetDayProgress, double durationSeconds, boolean forward,
+                               boolean pauseOnComplete, World world, ComponentAccessor<EntityStore> accessor)
+boolean isInterpolating()
+void cancelInterpolation()
 
 // Moon phase (see MoonPhaseChangeEvent above)
 int getMoonPhase()
@@ -1129,6 +1198,10 @@ Enum defining client-side features that can be enabled or disabled per world.
 | `SafetyRoll` | Safety roll on landing |
 | `DisplayHealthBars` | Show health bars over entities |
 | `DisplayCombatText` | Show combat damage numbers |
+| `CanHideHelmet` | Allow the client's hide-helmet cosmetic toggle (0.6.3+) |
+| `CanHideCuirass` | Allow hiding the cuirass (0.6.3+) |
+| `CanHideGauntlets` | Allow hiding the gauntlets (0.6.3+) |
+| `CanHidePants` | Allow hiding the pants (0.6.3+) |
 
 ### Methods
 ```java
@@ -1171,6 +1244,16 @@ void update(World world, Player player, MarkersCollector collector)
 // Registration (WorldMapManager)
 void addMarkerProvider(String key, WorldMapManager.MarkerProvider provider)
 Map<String, WorldMapManager.MarkerProvider> getMarkerProviders()
+
+// Marker overrides (0.6.3+): per-marker-id tweaks layered over what providers emit.
+// MapMarkerOverride is a record (server.core.universe.world.worldmap.markers):
+//   MapMarkerOverride(UUID id, String icon, Boolean global), or MapMarkerOverride(String icon, Boolean global)
+//   (nullable icon/global = leave that property untouched)
+Map<String, MapMarkerOverride> getMarkerOverridesView()
+boolean addMarkerOverride(String markerId, MapMarkerOverride override)
+boolean removeMarkerOverride(String markerId)
+boolean removeMarkerOverride(String markerId, MapMarkerOverride override)
+void removeAllMarkerOverrides()
 ```
 
 ### MapMarkerBuilder

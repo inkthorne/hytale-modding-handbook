@@ -116,6 +116,11 @@ The manifest must include a `Main` field pointing to the plugin class:
 }
 ```
 
+These are the fields the examples use. The full key set `PluginManifest.CODEC` reads is `Group`, `Name`, `Version`,
+`Description`, `Authors`, `Website`, `Main`, `ServerVersion`, `Dependencies`, `OptionalDependencies`, `LoadBefore`
+(the last three are maps of plugin identifier → semver range), `DisabledByDefault`, `IncludesAssetPack` and
+`SubPlugins` (an array of nested manifests).
+
 If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ```json
@@ -137,8 +142,10 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 > **Changed in Update 5.** `ServerVersion` is now a **semver range**, not a literal build string. It is parsed
 > into a `SemverRange` and checked by *range satisfaction* against the server's own version — the old
-> `String.equals` against a dated `2026.03.26-…` build stamp is gone. Old dated strings are deprecated; use range
-> syntax going forward.
+> `String.equals` against a dated `2026.03.26-…` build stamp is gone. An old dated string still parses, but only
+> as `SemverRange.WILDCARD` (matches anything) with a warning — `Manifest ServerVersion '<v>' is in the pre-semver
+> YYYY.MM.DD-<sha> format. Treated as wildcard for backward compatibility. Update to a SemverRange.` — so it no
+> longer expresses any constraint. Use range syntax going forward.
 
 Any mod with `"IncludesAssetPack": true` should declare the server versions it targets, or the server logs a warning when the pack registers:
 
@@ -154,12 +161,12 @@ Add the `ServerVersion` field as a **semver range**:
   "Name": "My Plugin",
   "Version": "1.0.0",
   "Main": "com.example.MyPlugin",
-  "ServerVersion": "^0.5.0",
+  "ServerVersion": "^0.6.0",
   "IncludesAssetPack": true
 }
 ```
 
-`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.0` on Update 5. Read it with:
+`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.0` on Update 5 and `0.6.3` on the current build. Read it with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
@@ -169,13 +176,15 @@ unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 
 | Value | Matches |
 |-------|---------|
-| `^0.5.0` | Compatible with `0.5.x` (`>=0.5.0 <0.6.0`) — the recommended default |
-| `>=0.5.0 <0.6.0` | Explicit bounded range (equivalent to the caret above) |
-| `0.5.0` | Exactly `0.5.0` — valid, but brittle: won't match a `0.5.1` patch |
+| `^0.6.0` | Compatible with `0.6.x` (`>=0.6.0 <0.7.0`) — the recommended default on the current build |
+| `>=0.6.0 <0.7.0` | Explicit bounded range (equivalent to the caret above) |
+| `0.6.3` | Exactly `0.6.3` — valid, but brittle: won't match a `0.6.4` patch |
 | `*` | Any version (`SemverRange.WILDCARD`) — opts out of the check |
 
 A caret/range means you **no longer have to re-pin on every patch release** — the chief reason the old exact-string
-form was painful. Pin a range that reflects what your plugin actually tolerates.
+form was painful. Pin a range that reflects what your plugin actually tolerates. A caret does **not** survive a
+*minor* bump, though: `^0.5.0` (`>=0.5.0 <0.6.0`) stopped matching when the server moved to `0.6.x`, so every plugin
+still pinned to it now logs the `INCOMPATIBLE` warning below against `0.6.3`. Re-pin on each minor update.
 
 Warnings (all non-fatal):
 - **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues` (`INCOMPATIBLE`).
@@ -264,12 +273,13 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.ui.UIPlugin",
-  "ServerVersion": "^0.5.0",
+  "ServerVersion": "^0.6.0",
   "IncludesAssetPack": true
 }
 ```
 
-(See [ServerVersion](#serverversion-target-server-version) — the example mods target the `^0.5.0` range.)
+(See [ServerVersion](#serverversion-target-server-version) — the example mods pin a caret range on the server's
+current minor version; re-pin it whenever that minor changes.)
 
 ## Examples
 

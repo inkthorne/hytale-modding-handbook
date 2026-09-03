@@ -97,7 +97,7 @@ SimpleInteraction serves as:
 | `Effects` | InteractionEffects | - | Visual and audio effects configuration |
 | `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed modifier during interaction (0.0-1.0) |
 | `ViewDistance` | double | - | View distance modifier |
-| `CancelOnItemChange` | boolean | `false` | Cancel if held item changes |
+| `OnItemChangeBehavior` | string | `Cancel` | What happens when the held item changes: `Cancel`, `Fail`, `Finish`, or `Ignore` (`InteractionItemChangeBehavior`, 0.6.3+). The old boolean `CancelOnItemChange` is still accepted as an alias — `true` → `Cancel`, `false` → `Ignore` — but no shipped asset uses it any more |
 | `Settings` | Map<GameMode, InteractionSettings> | - | Per-gamemode settings |
 | `Rules` | InteractionRules | - | Interaction rules |
 | `Camera` | InteractionCameraSettings | - | Camera keyframes (`FirstPerson`/`ThirdPerson`) played during the interaction — see [Camera Control](camera.md#the-camera-property-keyframe-arrays). Distinct from the [`Camera` interaction type](camera.md#the-camera-interaction-json). |
@@ -127,6 +127,9 @@ The `Effects` object supports these properties:
 | `Trails` | array | Weapon trail effects |
 | `CameraEffect` | string | Camera effect id (shake, zoom, etc.) — references a `Server/Camera/CameraEffect/**` asset; see [Camera Control → Adjacent systems](camera.md#adjacent-camera-systems) |
 | `MovementEffects` | object | Movement modification effects |
+| `HideFirstPersonHeldItem` | boolean | Hide the held item from the local player's own first-person view while the interaction is active; other players still see it. Default `false` (0.6.3+) |
+| `Zoom` | object | `ZoomConfig` driving the client zoom while this step is active — `MagnificationMultiplier`, `MouseSensitivityMultiplier`, `DepthOfField`, `OverlayTexture`, `OverlayFade*`, `InLerp`/`OutLerp`/`TransitionLerp`, `ForcePerspective`, `AllowCameraOrbit`, `LodMultiplier` (0.6.3+) |
+| `PersistZoom` | boolean | Keep the `Zoom` applied for the rest of the chain instead of clearing it when this step ends (0.6.3+) |
 | `StartDelay` | float | Delay before effects begin |
 
 > ⚠️ **The generic `Effects` block has no `WorldParticles` field.** `Particles` above are
@@ -384,6 +387,10 @@ Used for sword swings and wide melee attacks.
 | `Length` | float | Arc length in degrees |
 | `RollOffset` | float | Rotation offset around forward axis |
 | `YawStartOffset` | float | Starting yaw offset in degrees |
+| `PitchOffset` | float | Pitch rotation offset in degrees |
+| `Anchor` | string | Where the selector anchors vertically: `Eyes` (default) follows the model's eye height, `Feet` anchors at ground level (0.6.3+) |
+| `IgnorePitch` | boolean | Ignore the entity's look pitch so the selector stays level with the ground (0.6.3+) |
+| `IgnoreYaw` | boolean | Ignore the entity's look yaw, keeping the selector in a fixed world direction — use `YawStartOffset` to orient it (0.6.3+) |
 
 #### AOECircle (Area of effect)
 
@@ -404,8 +411,16 @@ Used for ground slams and radial attacks.
 > ⚠️ **`AOECircle` is a flat, zero-height disc.** `AOECircleSelector` has only `Range` (radius) +
 > `Offset`, so a ground-level circle misses entities whose model center sits above the impact plane.
 > For vertical reach use **`AOECylinder`** (`AOECylinderSelector extends AOECircleSelector`), which
-> adds a `Height` field — though no shipped asset uses it (only `AOECircle`, `Horizontal`, `Stab`,
-> `Raycast` appear in `Server/`), so it is untested in content despite having a registered codec.
+> adds a `Height` field — though no shipped asset uses it (`Server/` uses `Horizontal` ×369, `Stab` ×76,
+> `AOECircle` ×17, `Raycast` ×3 and one debug `Donut`), so it is untested in content despite having a
+> registered codec.
+>
+> **`Donut` (0.6.3+)** is a ring selector whose radius grows from `MinRadius` to `MaxRadius` over the
+> interaction's `RunTime`, with a constant radial `Width` and vertical `Height` (extending up from the
+> selector position), an `AngleDeg` (360 = full ring; less = an arc centred on the attacker's look
+> direction when the selector starts), `YawOffsetDeg`, and an `Offset`. The only shipped use is
+> `Server/Item/Items/_Debug/Debug_Donut_Selector.json` (`MinRadius 0.5`, `MaxRadius 6`, `Width 1`,
+> `Height 2`, `AngleDeg 120`, `RunTime 0.6`) — an expanding shockwave.
 >
 > ⚠️ **A selector in a *projectile's* `ProjectileHit`/`ProjectileMiss` does NOT sweep a radius** — it
 > resolves only the entity the projectile directly collides with (unlike a melee swing, which sweeps).
@@ -437,6 +452,9 @@ Used for wand spells and targeted abilities.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Offset` | object | Starting point offset from entity position |
+| `Distance` | float | Maximum search distance for the ray |
+| `BlockTag` | string | Tag a block must carry for the ray to count it as a hit |
+| `IgnoreFluids` / `IgnoreEmptyCollisionMaterial` | boolean | Skip fluids / blocks with no collision material |
 
 #### Stab (Thrust attacks)
 
@@ -459,6 +477,8 @@ Used for spear thrusts and lunging attacks.
 |----------|------|-------------|
 | `ExtendLeft` | float | Hitbox extension to the left |
 | `ExtendRight` | float | Hitbox extension to the right |
+
+`Stab` shares `TestLineOfSight`, `ExtendTop`/`ExtendBottom`, `StartDistance`/`EndDistance`, `RollOffset`, `PitchOffset` and a `YawOffset` with `Horizontal`, and gained the same `Anchor` / `IgnorePitch` / `IgnoreYaw` keys in 0.6.3.
 
 ### HitEntityRules
 
@@ -626,12 +646,19 @@ Most weapon attacks reference a shared `DamageEntityParent` via `"Parent"` inste
 | `WorldParticles` | array | Particles spawned at the hit location, each an object with `SystemId` and `Scale` (see note) |
 | `LocalSoundEventId` | string | Sound played for the attacker only |
 | `WorldSoundEventId` | string | Sound played at hit location for all nearby |
+| `PlayerSoundEventId` | string | Sound played to a *player* receiving the damage |
 | `StaminaDrainMultiplier` | float | Multiplier for stamina drain on hit |
+| `ModelParticles` | array | Bone-attached `ModelParticle`s on the victim (`SystemId`, `TargetEntityPart`, `TargetNodeName`, `Scale`, `ClearParticlesOnRemove`) |
+| `CameraEffect` | string | Camera effect asset played for the victim on hit (e.g. `"Impact_Light"` in `Common_Melee_Damage`) |
+| `ViewDistance` | double | View-distance override for the hit particles |
 
-> ⚠️ **Always set `Scale` on particles.** Both `WorldParticle.scale` and `ModelParticle.scale` are
-> primitive `float`s — omit `"Scale"` and the value is `0.0`, which renders the particle
-> **invisibly**. Every explicit vanilla usage sets it (`"Scale": 1` or more); a config that omits it
-> is relying on a zero scale. This applies to the `Particles` array on the generic `Effects` block too.
+> **`Scale` defaults to `1.0`.** As of 0.6.3 both `WorldParticle.scale` and `ModelParticle.scale`
+> initialise to `1.0f`, so omitting `"Scale"` is safe (vanilla omits it widely — e.g. the
+> `Impact_Blade_01` particle in `Weapon_Damage.json`). Explicit values other than `1` still matter
+> (`"Scale": 1` appears where an asset wants to be explicit). `ModelParticle`s (the `Particles` array on
+> the generic `Effects` block, and `ModelParticles` here) also accept `ClearParticlesOnRemove`
+> (0.6.3+): when the owning entity is removed, clear this effect's already-emitted particles instantly
+> instead of letting them finish their lifespan.
 
 ### Knockback Properties
 
@@ -648,7 +675,7 @@ Two `Type` forms appear in real assets — a simple relative form and a `Force`/
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Type` | string | `"Force"` or `"Point"` for directional knockback (omitted for the relative form) |
+| `Type` | string | `"Directional"` (the default when omitted — the relative form, `RelativeX`/`RelativeZ`/`VelocityY`), `"Force"` (`Direction` vector), or `"Point"` (`OffsetX`/`OffsetZ`/`RotateY`/`VelocityY`, pushes away from a point) — see [Knockback Types](combat.md#knockback-types) |
 | `Force` | float | Strength of the knockback impulse |
 | `Direction` | object | `{ "X", "Y", "Z" }` push direction (with `Type: Force`/`Point`) |
 | `RelativeX` / `RelativeZ` / `VelocityY` | float | Relative push offsets and upward velocity (simple form) |
@@ -657,7 +684,7 @@ Two `Type` forms appear in real assets — a simple relative form and a `Force`/
 
 ### EntityStatsOnHit
 
-A top-level array (sibling of `DamageEffects`) that grants stats to the attacker on a successful hit. Each entry has `EntityStatId` and `Amount`:
+A top-level array (sibling of `DamageEffects`) that grants stats to the attacker on a successful hit. Each entry has `EntityStatId` and `Amount`, plus optional `MultipliersPerEntitiesHit` (default `[1.0, 0.6, 0.4, 0.2, 0.1]`, scaling `Amount` by how many entities the swing has already hit) and `MultiplierPerExtraEntityHit` (default `0.05`) — see [Stat Modification on Hit](combat.md#stat-modification-on-hit-json):
 
 ```json
 "EntityStatsOnHit": [
@@ -694,6 +721,9 @@ Applies physics force to entities, used for launches, dashes, and movement effec
 | `AdjustVertical` | boolean | Adjust the vertical component of the force |
 | `WaitForGround` | boolean | Wait until the entity is grounded before applying |
 | `Duration` | float | Duration for sustained forces (optional) |
+| `Forces` | array | Alternative to a single `Direction`/`Force`: a list of `{ "Direction", "Force" }` pairs (used by `Debug_Stick_Parry`) |
+| `VelocityConfig` | object | Air/ground resistance tuning, as on knockback |
+| `UseTargetBlockForDirection` | boolean | Align the direction to the interaction chain's target block; `Direction` and `Forces` are then ignored and only the root settings are used (0.6.3+) |
 
 ### Example: Double Jump
 
@@ -736,7 +766,7 @@ The effect's duration, magnitude, and particles are defined in the effect asset 
 | Property | Type | Description |
 |----------|------|-------------|
 | `EffectId` | string | ID of the effect to apply (e.g. `Stun`, `Root`, `Red_Flash`) |
-| `Entity` | string | Who receives the effect — `Target`, `Self`, `User`, or `Owner` (defaults to the executing entity when omitted) |
+| `Entity` | string | Who receives the effect — `Target`, `User`, or `Owner` (`InteractionTarget`; there is no `Self` — `User` is the entity running the chain). Defaults to the executing entity when omitted |
 
 ### Example: Apply Root on a Wand Hit
 
@@ -868,6 +898,8 @@ Control how the stat is modified:
 |-----------|-------------|
 | `Add` | Add value to current stat (default) |
 | `Set` | Set stat to exact value |
+| `Min` | Lower the stat to the value if it is currently higher (0.6.3+) |
+| `Max` | Raise the stat to the value if it is currently lower (0.6.3+) |
 
 ### ValueType Options
 
@@ -885,7 +917,7 @@ Control whether the value is absolute or percentage-based:
 
 | ValueType | Description |
 |-----------|-------------|
-| (default) | Absolute value |
+| `Absolute` (default) | Absolute value |
 | `Percent` | Percentage of max stat |
 
 ### Example: Grant Signature Energy on Block
@@ -933,6 +965,7 @@ Cancels the current interaction chain on the target entity. Used for stagger eff
 | `Type` | string | Yes | Always `"Interrupt"` |
 | `Entity` | string | Yes | Target entity selector (typically `"Target"`) |
 | `ExcludedTag` | string | No | Tag that makes entities immune to interruption |
+| `RequiredTag` | string | No | Tag the *root interaction* of an active chain must carry to be interrupted; unset = any chain |
 
 ### How Interruption Works
 
@@ -956,8 +989,10 @@ This stops any ongoing:
 | Value | Description |
 |-------|-------------|
 | `"Target"` | The entity being hit (most common for combat) |
-| `"Self"` | The entity performing the interaction |
+| `"User"` | The entity running the interaction chain |
 | `"Owner"` | The entity that owns the current item/projectile |
+
+(`InteractionTarget` has exactly these three values — there is no `"Self"`.)
 
 ### ExcludedTag System
 

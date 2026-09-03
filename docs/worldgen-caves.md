@@ -81,6 +81,10 @@ Server/HytaleGenerator/Density/Plains1_Caves_Mountains.json
 Server/HytaleGenerator/Density/Volcanic1_Caves_Terrain.json
 ```
 
+(`Plains1_Caves_Mountains.json` also exports a `Cave_Snakes_Ceiling` sub-field and
+`Plains1_Caves_Deeproot_Terrain.json` a `Plains1_Mountains_Cave_Deeproot_Snakes` one, so a
+biome can import just the tunnel-shape field rather than the whole cave.)
+
 Each is a self-contained density graph with a root that `ExportAs` a name. Biomes then pull that
 name in. For example `Plains1_Caves_Terrain.json` exports `"Plains1_Caves_Terrain"`, and
 `Biomes/Plains1/Plains1_Oak.json` imports it.
@@ -199,8 +203,11 @@ larger away from them; `Pow` sharpens that into a narrow corridor.
 ## Volcanic example
 
 `Server/HytaleGenerator/Density/Volcanic1_Caves_Terrain.json` shows a different recipe but the same
-mechanics. Its root `Mix` combines a `Constant -1`, a `Sum`, and clamped/inverted noise. The
-carving band here is shaped by a four-point `CurveMapper`:
+mechanics. Its root is again a `Cache` (capacity 3, `ExportAs` `"Volcanic1_Caves_Terrain"`)
+wrapping a `Mix` of three inputs: a `Constant -1`, a `Sum` (of a `CurveMapper`, a
+`Normalizer` over `SimplexNoise2D`, and a `Clamp` over `Inverter`-ed noise), and a
+`CurveMapper` over `BaseHeight` that bounds the depth band. The sheet-like hollows come from
+a four-point `CurveMapper` inside that `Sum`:
 
 ```json
 {

@@ -71,7 +71,7 @@ Many asset types implement this interface to support network transmission:
 
 ```java
 // Example: sending an asset over the network
-ProjectileConfig config = ProjectileConfig.getAssetMap().get("arrow");
+ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset("arrow");
 ProjectileConfig packet = config.toPacket();  // Get network-ready version
 ```
 
@@ -99,26 +99,43 @@ Direction(Direction other)               // Copy constructor
 ```
 
 ### Serialization
+
+As of 0.6.3 the generated protocol types serialize to and from a `java.lang.foreign.MemorySegment`
+(the Java FFM API) rather than a Netty `ByteBuf`. The `ByteBuf`-based `serialize(ByteBuf)` /
+`deserialize(ByteBuf, int)` / `computeBytesConsumed` / `validateStructure` methods — and the
+`protocol.io.ValidationResult` type they returned — were removed by 0.6.3; the replacements are:
+
 ```java
-// Serialize to buffer
-void serialize(ByteBuf buffer)
+// Serialize into a segment at offset; returns the number of bytes written
+int serialize(MemorySegment segment, int offset)
 int computeSize()
 
-// Deserialize from buffer
-static Direction deserialize(ByteBuf buffer, int offset)
-static int computeBytesConsumed(ByteBuf buffer, int offset)
+// Deserialize from a segment (ReadCursor = com.hypixel.hytale.protocol.io.ReadCursor)
+static Direction toObject(MemorySegment segment)
+static Direction toObject(MemorySegment segment, int offset)
+static Direction toObject(MemorySegment segment, int offset, ReadCursor cursor)
 
-// Validation
-static ValidationResult validateStructure(ByteBuf buffer, int offset)
+// Bounds check — throws ProtocolException("...: buffer too small, ...") if the
+// segment holds fewer than FIXED_BLOCK_SIZE bytes past offset
+static void requireBounds(MemorySegment segment, int offset)
+
+// Zero-copy field accessors (read one field without materializing the object)
+static float getYaw(MemorySegment segment)     static float getYaw(MemorySegment segment, int offset)
+static float getPitch(MemorySegment segment)   static float getPitch(MemorySegment segment, int offset)
+static float getRoll(MemorySegment segment)    static float getRoll(MemorySegment segment, int offset)
 ```
+
+Every generated protocol class follows this same shape (`toObject` / `requireBounds` / per-field
+`getX(MemorySegment[, int])` statics); a malformed buffer surfaces as a
+`com.hypixel.hytale.protocol.io.ProtocolException` (see [Gotchas](#gotchas--errors)).
 
 ### Constants
 ```java
-static final int NULLABLE_BIT_FIELD_SIZE;   // Bits for nullable flag
-static final int FIXED_BLOCK_SIZE;          // Fixed serialization size
-static final int VARIABLE_FIELD_COUNT;      // Variable field count
-static final int VARIABLE_BLOCK_START;      // Variable block offset
-static final int MAX_SIZE;                  // Maximum serialized size
+static final int NULLABLE_BIT_FIELD_SIZE = 0;   // Bytes of nullable-flag bitfield (none: all fields required)
+static final int FIXED_BLOCK_SIZE = 12;         // Fixed serialization size (3 floats)
+static final int VARIABLE_FIELD_COUNT = 0;      // Variable-length fields (none)
+static final int VARIABLE_BLOCK_START = 12;     // Variable block offset
+static final int MAX_SIZE = 12;                 // Maximum serialized size
 ```
 
 ### Other Methods
@@ -201,7 +218,7 @@ This enum is commonly used with:
 ## Notes
 
 - Protocol classes are auto-generated from schema definitions
-- ByteBuf is from Netty (io.netty.buffer.ByteBuf)
+- Serialization targets `java.lang.foreign.MemorySegment` (as of 0.6.3; previously Netty's `io.netty.buffer.ByteBuf`) — see [`MemorySegmentUtil`](codecs.md#memorysegmentutil) for the low-level helpers
 - Serialization follows a consistent pattern across all protocol types
 - Direction is distinct from `Vector3f` - it represents rotation, not position/velocity
 
@@ -323,6 +340,7 @@ subclass. Plugins don't extend it, but its methods are what `IPacketHandler` reg
 GenericPacketHandler(ChannelConnection channel, ProtocolVersion protocolVersion)
 
 void registerSubPacketHandler(SubPacketHandler subPacketHandler)
+<T extends SubPacketHandler> T getSubPacketHandler(Class<T> type)  // 0.6.3+: look up a registered sub-handler by class
 void registerHandler(int packetId, Consumer<ToServerPacket> handler)
 void registerNoOpHandlers(int... packetIds)
 final void accept(ToServerPacket packet)  // dispatch on packet.getId()
@@ -363,7 +381,7 @@ static ServerManager get()
 void registerSubPacketHandlers(Function<IPacketHandler, SubPacketHandler> supplier)
 
 // Listeners / binding
-CompletableFuture<Boolean> bind(InetSocketAddress address)
+CompletableFuture<Integer> bind(InetSocketAddress address)   // completes with the bound port (0 = bind failed); returned Boolean before 0.6.3
 boolean unbind(ServerListener listener)
 void unbindAllListeners()
 List<ServerListener> getListeners()
@@ -532,20 +550,39 @@ A core `JavaPlugin` module implements **proximity voice chat** — routing clien
 | `isVoiceEnabled()` / `setVoiceEnabled(boolean)` | Globally toggle voice chat |
 | `isDeadPlayersCanHear()` | Whether dead players still receive voice |
 | `getPlayerState(UUID)` | The `VoicePlayerState` for a player |
+| `getMaxHearingDistance()` / `setMaxHearingDistance(float)` | Proximity cutoff |
+| `isPlayerMuted(UUID)` / `mutePlayer(UUID)` / `unmutePlayer(UUID)` / `getGloballyMutedPlayers()` | Server-side global mute list |
+| `setPlayerVoiceChannel(UUID, String channel)` | (0.6.3+) Put a player in a named voice channel (`null` = back to the default proximity channel); players only hear others in the same channel |
+| `addPlayerVoiceInterceptor(PlayerVoiceInterceptor)` / `(EventPriority, …)` | (0.6.3+) Hook every inbound player voice frame; returns a `Registration` |
+| `openEntityVoice(Ref<EntityStore>)` | (0.6.3+) A `VoiceSpeaker` that emits from an entity's position |
+| `openPositionalVoice(World, Vector3d)` | (0.6.3+) A `PositionalVoiceSpeaker` at a fixed world position (`setPosition(Vector3d)` to move it) |
+| `openDirectVoice(Collection<UUID>)` | (0.6.3+) A `VoiceSpeaker` heard only by the listed players, regardless of distance |
 | `getVoiceRouter()` | The internal router (advanced/internal use) |
 | `scheduleImmediatePositionUpdate(PlayerRef)` | Force a speaker-position refresh for a player |
 
+### Server-originated audio and voice interception (0.6.3+)
+
+`VoiceSpeaker` (`com.hypixel.hytale.server.core.modules.voice.VoiceSpeaker`) is a server-owned voice
+source: `pushOpus(byte[])` streams one Opus frame (≤ `VoiceSpeaker.MAX_OPUS_FRAME_BYTES` = 512
+bytes), `play(List<byte[]>)` queues a whole clip and returns a `ClipPlayback` (`cancel()`,
+`isDone()`, `completion()`), and `close()` tears the speaker down. `PlayerVoiceInterceptor.intercept(PlayerVoiceFrame)`
+sees each frame a player sends before routing: `PlayerVoiceFrame` exposes `speaker()`, `position()`,
+`opus()`, and the routing verbs `drop()`, `deliverByProximity()`, `restrictProximityTo(Set<UUID>)`,
+`excludeListener(UUID)`, `deliverTo(Collection<UUID>)`.
+
 > [!WARNING]
-> Verified against `HytaleServer.jar`, but no inspectable first-party plugin in build-12 uses this module, and audio routing is internal. The toggle/state surface above is real; treat anything below it (router internals) as engine plumbing, not a stable plugin API.
+> Verified against `HytaleServer.jar`, but no inspectable first-party plugin uses this module beyond the engine's own voice command, and audio routing is internal. The toggle/state surface above is real; treat anything below it (router internals) as engine plumbing, not a stable plugin API. (`updatePositionCache(...)` on `VoiceModule` was removed by 0.6.3.)
 
 ---
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are literal message fragments thrown by the build-12 protocol deserializer (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are literal message fragments thrown by the protocol deserializer (verified against `HytaleServer.jar`). As of 0.6.3 every malformed-buffer failure is a `com.hypixel.hytale.protocol.io.ProtocolException` built by one of its static factories, and every message starts with the offending **field name** followed by a colon. (The pre-0.6.3 `Buffer too small: expected at least` / `Buffer overflow reading` messages no longer exist.)
 
-- **`Buffer too small: expected at least`** → deserialization read past the end of the `ByteBuf`; the buffer held fewer bytes than the field required. Fix: validate the buffer length first (`validateStructure` / `computeBytesConsumed`) before reading, and ensure the writer wrote the full payload.
-- **`Buffer overflow reading`** → a length/count field in the buffer claimed more data than is actually present for that field. Fix: ensure the serialized length prefix matches the bytes written, and that reader and writer use the same field order/encoding.
+- **`: buffer too small, need`** → the full message is `<field>: buffer too small, need <N> bytes but only <M> available` (`ProtocolException.bufferTooSmall`): deserialization would read past the end of the `MemorySegment`; the buffer held fewer bytes than the field required. Fix: call the type's `requireBounds(segment, offset)` before reading, and ensure the writer wrote the full `computeSize()` payload.
+- **`is out of bounds (buffer length:`** → `<field>: offset <O> is out of bounds (buffer length: <L>)` (`invalidOffset`); the sibling messages `does not match the canonical layout position` (`nonCanonicalLayout`) and `consumed no bytes` (`nonAdvancingEntry`) mean the same family of fault: a variable-block offset table is inconsistent with the bytes actually present — the length prefixes and the payload disagree. Fix: ensure reader and writer use the same field order/encoding and that every length prefix matches the bytes written.
+- **`exceeds maximum`** → `<field>: array length <A> exceeds maximum <M>` / `string length …` / `dictionary count …` (`arrayTooLong` / `stringTooLong` / `dictionaryTooLarge`, with matching `is below minimum` forms): a collection or string field violates the schema's size bounds. Fix: respect the field's declared min/max (they are what the generated `MAX_SIZE` is computed from).
+- **`: invalid or incomplete VarInt`** (`invalidVarInt`) → a VarInt was truncated. The related `: unknown polymorphic type ID` (`unknownPolymorphicType`), `: duplicate key '` (`duplicateKey`), and `: invalid enum value` messages mean a polymorphic type tag is unknown to this build, a map carried the same key twice, or an enum ordinal is out of range — usually a client/server protocol mismatch. Fix: make sure both sides run the same protocol CRC (see [ProtocolVersion](#protocolversion)).
 - **Symptom:** a custom `NetworkSerializable` round-trips incorrectly or over/under-reads → reader and writer disagree on field order or `MAX_SIZE`. Fix: serialize and deserialize fields in the exact same order, and size the buffer to `MAX_SIZE`.
 
 ---

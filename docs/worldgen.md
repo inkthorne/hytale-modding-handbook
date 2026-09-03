@@ -47,8 +47,10 @@ Server/HytaleGenerator/
 │   └── pull shared fields via Imported
 ├── Density/           shared density graphs (Biome-Map, cave fields)
 ├── Assignments/       prop/prefab placement graphs (imported by biome Props)
-├── Positions/ · PropDistributions/   standalone placement graphs
+├── Positions/ · PropDistributions/ · Props/   standalone placement graphs
 ├── BlockMasks/        block-set placement filters
+├── GraphGenerators/ · GraphPasses/ · GraphContentSuppliers/ · GraphContentPredicates/
+│                      graph-generator assets (roads, rivers, roots — see below)
 └── Settings/          generator runtime settings (Settings.json)
 ```
 
@@ -94,11 +96,18 @@ Server/HytaleGenerator/
 │   └── Plains1/Plains1_Oak_Trees.json ...
 ├── Density/            # Shared density graphs (e.g. the world `Biome-Map`, cave fields)
 ├── BlockMasks/         # Block-set masks
-├── Graphs/             # Standalone example graphs
 ├── Positions/          # Standalone position graphs
 ├── PropDistributions/  # Standalone prop-distribution graphs
+├── Props/              # Standalone prop graphs
+├── GraphGenerators/    # Graph-generator assets (node/edge graphs for roads, rivers, roots …)
+├── GraphPasses/        #   … their passes, content suppliers and content predicates
+├── GraphContentSuppliers/
+├── GraphContentPredicates/
 └── Settings/           # Generator runtime settings (Settings.json)
 ```
+
+(The former `Graphs/` example folder is gone as of 0.6.3; the four `Graph*/` folders and
+`Props/` replaced it, each shipping a single `Example*.json`.)
 
 How the pieces fit together:
 
@@ -208,6 +217,23 @@ maps, prop probability, and tint/environment selection.
 | `CurveMapper` | Remaps a value through a `Curve` (a `Manual` curve of `In`/`Out` `Points`) |
 | `Distance` | Distance-based falloff via a `Curve` |
 
+The tables above cover the types the shipped biomes lean on. The full density vocabulary
+registered by the generator (as of 0.6.3, `DensityAsset.CODEC` registrations in
+`com.hypixel.hytale.builtin.hytalegenerator.assets.AssetManager`) is larger — comparators
+and logic (`Comparator`, `Equal`, `GreaterThan`, `GreaterOrEqual`, `LessThan`,
+`LessOrEqual`, `And`, `Or`, `Not`, `Nor`, `Xor`, `Selector`, `Switch`, `SwitchState`),
+smooth variants (`SmoothMin`, `SmoothMax`, `SmoothClamp`, `SmoothFloor`, `SmoothCeiling`,
+`Floor`, `Ceiling`), more math (`Sqrt`, `Multiplier`, `Amplitude`, `AmplitudeConstant`,
+`Offset`, `OffsetConstant`, `Trig`, `Pipeline`, `MultiMix`), coordinate access
+(`XValue`/`YValue`/`ZValue`, `XOverride`/`ZOverride`, `YSampled`, `Axis`, `Plane`,
+`Rotator`, `Angle`), shapes (`Cube`, `Cuboid`, `Cylinder`, `Ellipsoid`, `Shell`, `Anchor`),
+more noise (`SimplexNoise3D`, `CellNoise3D`, `WhiteNoise`, `GradientWarp`,
+`FastGradientWarp`, `VectorWarp`, `Gradient`, `Slider`), position-driven fields
+(`PositionsCellNoise`, `Positions3D`, `PositionsPinch`, `PositionsTwist`,
+`CellWallDistance`), and graph/biome-aware fields (`Terrain`, `Graph`,
+`DistanceToBiomeEdge`, `DistanceToGraphEdge`). `Cache2D` is a deprecated alias for
+`Cache`. Every node accepts the shared `Inputs`, `Skip`, and `ExportAs` keys.
+
 ### Material providers
 
 A biome's `MaterialProvider` decides which block fills each cell. The top-level type used
@@ -258,15 +284,24 @@ Used inside biome `Props` and in `Assignments/*.json`:
 ```json
 {
   "StatsCheckpoints": [1, 100, 500, 1000],
-  "CustomConcurrency": -1,
-  "BufferCapacityFactor": 0.1,
+  "LowPriorityConcurrency": 0,
+  "NormalPriorityConcurrency": 0,
+  "HighPriorityConcurrency": 0,
+  "BufferCapacityFactor": 0.15,
   "TargetViewDistance": 512,
   "TargetPlayerCount": 3
 }
 ```
 
-These are observable values from the asset; they tune concurrency, buffering, and the
-target view distance / player count used while generating.
+These are the shipped values (codec:
+`com.hypixel.hytale.builtin.hytalegenerator.assets.SettingsAsset`). The three
+`*PriorityConcurrency` keys size the generator's low/normal/high-priority worker pools; a
+value `> 0` is used as-is (capped to the CPU count), while `0` (the shipped value) means
+*auto* — the plugin picks a default per CPU count (`HytaleGenerator.AUTO_CONCURRENCY`).
+The in-game `/worldgen2 concurrency <low> <normal> <high>` command overrides them at
+runtime. `BufferCapacityFactor`, `TargetViewDistance`, and `TargetPlayerCount` size the
+chunk-request buffers. (The single `CustomConcurrency` key documented for 0.5.9 no longer
+exists as of 0.6.3 — it was split into the three priority keys.)
 
 ---
 
@@ -297,7 +332,8 @@ per chunk column (32×32 blocks).
 
 ```java
 CompletableFuture<GeneratedChunk> generate(int seed, long index, int x, int z,
-                                           LongPredicate stillNeeded)
+                                           LongPredicate stillNeeded,
+                                           Long2FloatFunction priority)
 WorldGenTimingsCollector getTimings()          // @Nullable — may return null
 Transform[] getSpawnPoints(int seed)           // @Deprecated
 ISpawnProvider getDefaultSpawnProvider(int seed)  // default method
@@ -306,8 +342,17 @@ void shutdown()                                // default method, no-op
 
 - `index` is the packed chunk index; `x`/`z` are chunk coordinates. `stillNeeded` (may be
   `null`) lets a slow generator skip chunks nobody is waiting on anymore.
+- `priority` (added as of 0.6.3; may be `null`) maps a packed chunk index to a scheduling
+  priority — the `ChunkStore` passes the distance-based column priority of the nearest
+  player tracking that chunk (`-1` for chunks flagged urgent), so a queued generator can
+  serve nearby chunks first. `Float.MAX_VALUE` (`SectionPriority.LOWEST_PRIORITY`) is the
+  "nobody is waiting" value.
 - The default `getDefaultSpawnProvider(int)` wraps `getSpawnPoints(int)` in a
   `FitToHeightMapSpawnProvider`.
+- A sub-interface `IWorldGen.Cubic` (0.6.3+) adds a per-*section* entry point,
+  `generate(int seed, int x, int y, int z, StillNeededSection, SectionPriority)`, returning a
+  `Holder<ChunkStore>` for one 32³ section; the chunk store uses it when the world runs in
+  cubic-section mode (`ChunkStore.supportsCubicSections()`).
 - The world's active generator hangs off the chunk store:
   `world.getChunkStore()` → `ChunkStore.getGenerator()` / `setGenerator(IWorldGen)` /
   `shutdownGenerator()`.
@@ -322,13 +367,14 @@ static final BuilderCodecMapCodec<IWorldGenProvider> CODEC;   // keyed by "Type"
 IWorldGen getGenerator() throws WorldGenLoadException
 ```
 
-Registered `Type` values (build 0.5.9):
+Registered `Type` values (as of 0.6.3):
 
 | `Type` | Provider class | Registered by |
 |--------|----------------|---------------|
 | `Flat` | `FlatWorldGenProvider` | core (`Universe`) |
 | `Void` | `VoidWorldGenProvider` | core (`Universe`) |
 | `Dummy` | `DummyWorldGenProvider` (internal no-op) | core (`Universe`) |
+| `CubicTest` | `CubicTestWorldGenProvider` (0.6.3+; a fixed test platform with scattered prefabs, used by the shipped `Instances/CubicTest`) | core (`Universe`) |
 | `HytaleGenerator` | the node-graph generator documented on this page | `HytaleGenerator` plugin |
 | `Hytale` | `HytaleWorldGenProvider` (fixed named generator) | `WorldGenPlugin` |
 
@@ -375,17 +421,27 @@ Generates empty chunks, optionally applying a `Tint` (color) and an `Environment
 
 ### GeneratedChunk and its buffers
 
-`generate(...)` resolves to a `GeneratedChunk`, a bundle of three write-buffers that the
-server converts into a live chunk:
+`generate(...)` resolves to a `GeneratedChunk`: a block buffer, an entity buffer, and the
+array of per-section `ChunkStore` holders (block-state entities such as chests and signs
+are written straight into those section holders), which the server converts into a live
+chunk:
 
 ```java
-GeneratedChunk(GeneratedBlockChunk, GeneratedBlockStateChunk, GeneratedEntityChunk,
-               Holder<ChunkStore>[] sections)
+GeneratedChunk(GeneratedBlockChunk, GeneratedEntityChunk, Holder<ChunkStore>[] sections)
 GeneratedBlockChunk getBlockChunk()
-GeneratedBlockStateChunk getBlockStateChunk()
 GeneratedEntityChunk getEntityChunk()
-static Holder<ChunkStore>[] makeSections()
+Holder<ChunkStore>[] getSections()
+Holder<ChunkStore> getState(int x, int y, int z)            // @Nullable
+void setState(int x, int y, int z, Holder<ChunkStore> state) // state may be null (= remove)
+Holder<ChunkStore> toWorldChunk(World world)                // builds the live chunk holder
+Holder<ChunkStore> toHolder(World world)                    // alias of toWorldChunk
+static Holder<ChunkStore>[] makeSections()                  // 10 fresh section holders
 ```
+
+(`GeneratedBlockStateChunk` — the separate block-state buffer of 0.5.9, with its
+`toBlockComponentChunk()` — was removed by 0.6.3; `getState`/`setState` moved onto
+`GeneratedChunk` itself and address the `BlockComponentSection` of the matching section
+holder.)
 
 **`GeneratedBlockChunk`** — the block/tint/environment buffer for one column:
 
@@ -400,16 +456,10 @@ void setEnvironment(int x, int y, int z, int environment)
 void setEnvironmentColumn(int x, int z, int environment)
 int getEnvironment(int x, int y, int z)
 int getHeight(int x, int z)
+GeneratedChunkSection getSection(int sectionIndex)   // per-section block buffer
+void removeSection(int sectionIndex)
+EnvironmentChunk getEnvironmentChunk()
 BlockChunk toBlockChunk(Holder<ChunkStore>[] sectionHolders)
-```
-
-**`GeneratedBlockStateChunk`** — attached block-state entities (chests, signs, …),
-keyed by position:
-
-```java
-Holder<ChunkStore> getState(int x, int y, int z)
-void setState(int x, int y, int z, Holder<ChunkStore> state)   // state may be null
-BlockComponentChunk toBlockComponentChunk()
 ```
 
 **`GeneratedEntityChunk`** — entities to spawn with the chunk (e.g. from prefabs):
@@ -419,8 +469,11 @@ void addEntities(Vector3i offset, PrefabRotation rotation,
                  Holder<EntityStore>[] entityHolders, int objectId, int prefabInstanceId)
 void forEachEntity(Consumer<GeneratedEntityChunk.EntityWrapperEntry> consumer)
 List<GeneratedEntityChunk.EntityWrapperEntry> getEntities()
-EntityChunk toEntityChunk()
+void toEntitySections(Holder<ChunkStore>[] sections)   // applies rotation, writes into sections
 ```
+
+(`toEntityChunk()` was removed by 0.6.3 — entities are now written into the per-section
+holders by `toEntitySections`, which `GeneratedChunk.toWorldChunk` calls for you.)
 
 ### WorldGenTimingsCollector
 
@@ -448,6 +501,7 @@ be built (bad config, unknown asset ids):
 WorldGenLoadException(String message)
 WorldGenLoadException(String message, Throwable cause)
 String getTraceMessage()
+String getTraceMessage(String joiner)   // 0.6.3+ (the no-arg form joins with ", ")
 ```
 
 ### WorldGenChunksClearedEvent

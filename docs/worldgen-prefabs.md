@@ -42,15 +42,16 @@ Biome Props[] entry
         ▼
 Assignment graph (ExportAs "<name>")
 └── FieldFunction (noise) -> Delimiter (Min/Max gate) -> Weighted (pick by weight)
-        -> Constant | Union -> Prop:
+        -> Constant -> Prop:
            ├── Prefab   (WeightedPrefabPaths)
            ├── Cluster  (DistanceCurve + WeightedProps)
            ├── Column   (ColumnBlocks)
            ├── Cuboid   (Bounds + Material)
+           ├── Union    (Props[] — several props at one position)
            └── Density  (3D field -> ore veins)
         each prop: Directionality (rotation) + Scanner (vertical placement)
 
-Standalone: Positions/ · PropDistributions/ · BlockMasks/
+Standalone: Positions/ · PropDistributions/ · Props/ · BlockMasks/
 ```
 
 ## Key Classes
@@ -61,7 +62,7 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 | `FieldFunction` | Assignment | Gate placement on a density value via `Min`/`Max` `Delimiters` |
 | `Weighted` | Assignment | Randomly choose one child by `Weight` (`SkipChance` to place nothing) |
 | `Constant` | Assignment | Always yields one `Prop` |
-| `Union` | Assignment | Place several props together |
+| `Union` | Prop | Place several props (`Props[]`) together at one position |
 | `Prefab` | Prop | Place a pre-authored structure (`WeightedPrefabPaths`) |
 | `Cluster` | Prop | Scatter props around an anchor by `DistanceCurve` |
 | `Column` | Prop | Stack blocks at Y offsets (`ColumnBlocks`) |
@@ -110,25 +111,36 @@ entry has:
 | `Runtime` | Integer placement phase/pass. |
 | `Positions` | A positions node (where to attempt placement). |
 | `Assignments` | What to place — usually `{ "Type": "Imported", "Name": "<assignment>" }`. |
+| `PropDistribution` | Alternative to the `Positions`+`Assignments` pair: a single prop-distribution node (see [Positions & PropDistributions](#positions--propdistributions)). |
 
-Real entry (Plains1_Oak placing boulder patches via an imported assignment):
+(Codec: `com.hypixel.hytale.builtin.hytalegenerator.assets.propruntime.PropRuntimeAsset`.)
+
+Real entry (Plains1_Oak placing boulder patches via an imported assignment; the candidate
+grid is wrapped in an `Occurrence` gate whose density field is elided here):
 
 ```json
 {
   "Skip": false,
   "Runtime": 0,
   "Positions": {
-    "Type": "Mesh2D",
-    "PointsY": 0,
-    "PointGenerator": { "Type": "Mesh", "Jitter": 0.4, "ScaleX": 7, "ScaleY": 7, "ScaleZ": 7, "Seed": "A" }
+    "Type": "Occurrence",
+    "Seed": "A",
+    "FieldFunction": { "Type": "Normalizer", "FromMin": -1, "FromMax": 1, "ToMin": -0.7, "ToMax": 1,
+                       "Inputs": [ { "...": "cached ring field, ExportAs Plains1_Oak_Boulder_Patches" } ] },
+    "Positions": {
+      "Type": "Mesh2D",
+      "PointsY": 0,
+      "PointGenerator": { "Type": "Mesh", "Jitter": 0.4, "ScaleX": 7, "ScaleY": 7, "ScaleZ": 7, "Seed": "A" }
+    }
   },
   "Assignments": { "Type": "Imported", "Name": "Plains1_Oak_Boulder_Patches" }
 }
 ```
 
-Position node types seen: `Mesh2D` (with a `Mesh` `PointGenerator`: `Jitter`, `ScaleX/Y/Z`,
-`Seed`), and `Occurrence` (a `FieldFunction` density gate wrapping inner `Positions`, with its own
-`Seed`). `Occurrence` lets a density field decide *whether* a candidate point survives.
+Position node types seen in biomes: `Mesh2D` (with a `Mesh` `PointGenerator`: `Jitter`,
+`ScaleX/Y/Z`, `Seed`), `Occurrence` (a `FieldFunction` density gate wrapping inner `Positions`,
+with its own `Seed`), and `FieldFunction` (`Delimiters` with `Min`/`Max` over a field).
+`Occurrence` lets a density field decide *whether* a candidate point survives.
 
 ---
 
@@ -142,7 +154,12 @@ root/branch types:
 | `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Gate placement on a noise/density value via `Min`/`Max` ranges. |
 | `Weighted` | `WeightedAssignments[]`, `SkipChance`, `Seed` | Randomly choose one child assignment by `Weight`. `SkipChance` is the chance to place nothing. |
 | `Constant` | `Prop` | Always yields one prop. |
-| `Union` | `Props[]` | Place several props together. |
+| `Imported` | `Name` | Pull in an assignment graph exported elsewhere. |
+| `Sandwich` | `Delimiters[]` (`MinY`/`MaxY` → `Assignments`) | Route by the candidate's Y band (registered as of 0.6.3; unused by the shipped files). |
+
+These five are the complete assignment vocabulary (`AssignmentsAsset.CODEC` registrations).
+`Union` is **not** an assignment — it is a prop type (see below); an assignment that places
+several things is a `Constant` whose `Prop` is a `Union`.
 
 `SimplexNoise2D` is the usual `FieldFunction` driver (a `Density`-family node — same parameters as
 in [worldgen-terrain.md](worldgen-terrain.md): `Lacunarity`, `Persistence`, `Octaves`, `Scale`,
@@ -203,7 +220,8 @@ References a pre-authored structure by path, with weighted variants.
 | `LoadEntities` | Whether to spawn the prefab's entities (observed `true`). |
 | `Directionality` | Rotation rule (see below). |
 | `Scanner` | Vertical scan to find the placement Y (see below). |
-| `MoldingDirection` / `MoldingChildren` | Terrain-conforming options (observed `"None"` / `false`). |
+| `BlockMask` | Optional `DontPlace` / `DontReplace` block sets (e.g. `Biomes/Examples/Example_Prop.json` refuses to overwrite `Soil_Dirt`). |
+| `MoldingDirection` / `MoldingChildren` / `MoldingPattern` / `MoldingScanner` | Terrain-conforming options (observed `"None"` / `false`; the pattern/scanner pair is unused by the shipped files). |
 
 ```json
 {
@@ -264,15 +282,32 @@ Stacks one or more blocks at offsets along Y.
 
 ### Cuboid
 
-Fills an axis-aligned box (from `PropDistributions/ExamplePropDistribution.json`):
+Fills an axis-aligned box. From `Biomes/Basic.json`, where it is wrapped in a `Locator`
+prop (`PlacementCap`, `Pattern`, `Scanner`) that finds a stone floor for it:
 
 ```json
 {
   "Type": "Cuboid",
-  "Bounds": { "PointA": { "X": 1, "Y": 1, "Z": 1 }, "PointB": { "X": 0, "Y": 0, "Z": 0 } },
+  "Bounds": { "PointA": { "X": -2, "Y": 0, "Z": -2 }, "PointB": { "X": 3, "Y": 3, "Z": 3 } },
   "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt", "SolidBottomUp": false } }
 }
 ```
+
+### Union
+
+`{ "Type": "Union", "Props": [ ... ] }` places every listed prop at the same accepted
+position — `Plains1_Oak_Trees.json` unions a `Prefab` tree with a `Cluster` of sticks.
+
+### Other prop types
+
+Also registered (as of 0.6.3): `Locator` (`Prop` + `Pattern`/`Scanner`/`PlacementCap` —
+relocate a child prop to a matching surface), `Mask` (`Prop` + `Mask` block mask — e.g.
+`Taiga1_Iron.json` wraps its `Density` ore prop), `Offset` (`Offset` + `Prop`), `Weighted` (`Entries` of `Weight`/`Prop`,
+`Seed`), `Queue` (`Props[]`, first that fits), `StaticRotator` / `RandomRotator`
+(`Rotation` / `Rotations`, `HorizontalRotations`, `Seed`), `Orienter` (`Rotations`,
+`SelectionMode`), `Box` (`Range`, `Material`, `Pattern`, `Scanner`), `Manual` (`Blocks[]` of
+`Position`/`Material`), `DensitySelector` (`Delimiters` over a `Density` choosing a `Prop`),
+`PondFiller` (`FillMaterial`, `BarrierBlockSet`, `Bounds`), `Empty`, and `Imported` (`Name`).
 
 ### Density
 
@@ -308,8 +343,9 @@ Note `Plains1_Iron.json` is itself a top-level `Weighted` assignment whose two `
 Most placeable props share two helpers:
 
 **Directionality** controls rotation. Observed `Type` values: `Random` (with a `Seed`) and
-`Static` (with a fixed `Rotation`, e.g. `0`). It also carries a `Pattern` describing the surface a
-prop may sit on:
+`Static` (with a fixed `Rotation`, e.g. `0`); also registered are `Pattern` (`InitialDirection`,
+`Seed`, and a `NorthPattern`/`SouthPattern`/`EastPattern`/`WestPattern` per facing) and
+`Imported` (`Name`). It also carries a `Pattern` describing the surface a prop may sit on:
 
 ```json
 "Directionality": {
@@ -324,14 +360,15 @@ prop may sit on:
 ```
 
 Pattern `Type`s seen: `Floor`, `Ceiling`, `BlockSet`, `BlockType`, and `Imported` (reusing a named
-pattern such as `Plains1_OakPattern_Floor`). A `BlockSet` lists `Materials` and an `Inclusive`
-flag.
+pattern such as `Plains1_OakPattern_Floor`); also registered: `Wall`, `Surface`, `Cuboid`,
+`Offset`, `Rotator`, `FieldFunction`, `Constant`, and the combinators `And`/`Or`/`Not`. A
+`BlockSet` lists `Materials` and an `Inclusive` flag.
 
 **Scanner** finds the Y to place at by scanning a vertical band:
 
 | Field | Meaning |
 |-------|---------|
-| `Type` | Observed: `ColumnLinear`. |
+| `Type` | Observed: `ColumnLinear` (also registered: `ColumnRandom`, `Linear` — `Axis`, `AscendingOrder`, `Range` — `Random`, `Radial`, `Area`, `Direct`, `Origin`, `Queue`, `Imported`). |
 | `MinY` / `MaxY` | Scan range. |
 | `RelativeToPosition` | Whether the range is relative to the candidate point. |
 | `BaseHeightName` | Reference height: `"Base"` or `"Bedrock"`. |
@@ -342,31 +379,39 @@ flag.
 
 ## Positions & PropDistributions
 
-The `Positions/` and `PropDistributions/` directories hold standalone, reusable graphs (currently
-example files).
+The `Positions/`, `PropDistributions/`, and `Props/` directories hold standalone, reusable graphs.
+As of 0.6.3 each ships only a stub example (`ExamplePositions.json` is a bare `List`,
+`ExamplePropDistribution.json` a bare `Constant`, `ExampleProp.json` a bare `Cuboid`); the
+real composed graphs live inline in biomes.
 
-**Positions** (`Positions/ExamplePositions.json`) build candidate-point sets:
+**Positions** build candidate-point sets by composing a grid with jitter and scale. From
+`Biomes/Basic.json`:
 
 ```json
 {
   "Type": "Scaler",
-  "ExportAs": "testB",
-  "Scale": { "X": 10, "Y": 10, "Z": 10 },
+  "Scale": { "X": 25, "Y": 10, "Z": 25 },
   "Positions": {
-    "Type": "Jitter2d", "Magnitude": 0.4,
+    "Type": "Jitter2d", "Magnitude": 0.7,
     "Positions": { "Type": "TriangularGrid2d" }
   }
 }
 ```
 
-Position node `Type`s seen: `TriangularGrid2d`, `SquareGrid2d`, `Jitter2d` (`Magnitude`),
-`Scaler` (`Scale` `Point3D`), `Offset` (`OffsetX/Y/Z`), plus `Mesh2D`/`Occurrence`/`FieldFunction`
-in biome usage.
+Position node `Type`s: `TriangularGrid2d`, `SquareGrid2d`, `SquareGrid3d`, `Jitter2d` /
+`Jitter3d` (`Magnitude`, `Seed`), `Scaler` (`Scale` vector), `Offset` (`OffsetX/Y/Z` or an
+`Offset` vector), `Union` (`Positions[]` — merge several point sets), `Bound` (`Bounds`),
+`List`, `Mesh2D` / `Mesh3D`, `Occurrence`, `FieldFunction`, `Clusters` (a `Cluster` point set
+scattered by a `Distributor`), `VectorOffset`, `DirectionalJitter`, `BaseHeight` (lift points to a
+named base height, e.g. `BedName: "Water"`), `Anchor`, `SimpleHorizontal`, `Cache`,
+`Framework`, `Graph`, and `Imported`.
 
-**PropDistributions** (`PropDistributions/ExamplePropDistribution.json`) pair positions with
-assignments under a `Union` of `Assigned` entries — each `Assigned` has a `PropDistribution`
-(positions) and an `Assignments` (a `Constant` -> `Prop`). This is the same positions+prop pairing
-as a biome `Props[]` entry, factored out for reuse.
+**PropDistributions** pair positions with assignments. A biome `Props[]` entry may carry a
+`PropDistribution` instead of `Positions`+`Assignments`; `Biomes/Taiga1/Taiga1_River.json` uses a
+`Union` (`PropDistributions[]`) of `Assigned` entries, each with a `PropDistribution` (here a
+`Positions` distribution wrapping a positions graph), an `Assignments` node, and an
+`OverrideAllProps` flag. Registered distribution types: `Constant` (`Positions` + `Prop`),
+`Assigned`, `Positions`, `Union`, `Anchor`, `Graph`, `None`, and `Imported`.
 
 ---
 

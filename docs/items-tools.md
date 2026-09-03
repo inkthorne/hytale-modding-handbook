@@ -53,20 +53,25 @@ Tool item (inherits Tool_<Family>_Crude base)
 
 ## Quick Navigation
 
-| Tool Type | Children | Primary Use | Description |
-|-----------|----------|-------------|-------------|
+| Tool Type | Files | Primary Use | Description |
+|-----------|-------|-------------|-------------|
 | [Pickaxe](#pickaxe) | 10 | Rocks/Ores | Mining stone and ore blocks |
 | [Hatchet](#hatchet) | 10 | Woods | Chopping wood and trees |
 | [Shovel](#shovel) | 5 | Soils | Digging soil and dirt |
-| [Hoe](#hoe) | 3 | Tilling | Converting soil for farming |
+| [Hoe](#hoe) | 4 | Tilling | Converting soil for farming |
 | [Hammer](#hammer) | 2 | Block Cycling | Rotating block variants |
 | [Shears](#shears) | 1 | Shearing | Collecting wool from animals |
-| [Watering Can](#watering-can) | 1 | Watering | Irrigating crops |
-| [Sickle](#sickle) | 2 | Harvesting | Cutting plants and crops |
+| [Watering Can](#watering-can) | 2 | Watering | Irrigating crops (template + item) |
+| [Sickle](#sickle) | 4 | Harvesting | Cutting plants and crops |
 | [Repair Kit](#repair-kit) | 3 | Repair | Restoring item durability |
 | [Capture Crate](#capture-crate) | 1 | Capture | Capturing animals |
-| [Feedbag](#feedbag) | 1 | Feeding | Feeding animals |
-| [Fertilizer](#fertilizer) | 1 | Growing | Accelerating plant growth |
+| [Feedbag](#feedbag) | 1 | Feeding | Attracting livestock |
+| [Fertilizer](#fertilizer) | 2 | Growing | Accelerating plant growth |
+
+("Files" = JSON files in the family's folder as of 0.6.3, excluding the `Pickaxe/_Debug/` break-shape
+test items. `Server/Item/Items/Tool/` also holds a few loose tools outside these families —
+`Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map` — and a
+`Prototype/` folder.)
 
 ---
 
@@ -100,7 +105,10 @@ Defines power and efficiency for different block types. Each tool lists a spec f
 | `Power` | float | Breaking speed multiplier (higher = faster) |
 | `GatherType` | string | Block category this spec applies to |
 | `Quality` | int | Optional gather-quality level for this spec (controls which blocks the tool can break, e.g. higher-tier ore) |
-| `HitSoundLayer` | string | Optional impact sound override (a `SFX_*` event id) |
+| `IsIncorrect` | bool | Optional; marks the spec as the "wrong tool" entry for this gather type |
+| `HitSoundLayer` | string | Optional impact sound override (a `SFX_*` event id), played in addition to the block's own break sound |
+
+(Codec: `com.hypixel.hytale.server.core.asset.type.item.config.ItemToolSpec`; the `Tool` block itself is `ItemTool`.)
 
 ### GatherTypes
 
@@ -150,12 +158,43 @@ Configures durability loss per block set. This example is taken from `Tool_Picka
 
 ### Tool.Speed
 
-Optional speed multiplier for tool animations:
+Optional speed multiplier (a double). Rarely set by stock assets — `Tool_Shears_Basic` is one that does:
 
 ```json
 {
   "Tool": {
-    "Speed": 1.2
+    "Speed": 1.0
+  }
+}
+```
+
+### Other Tool Keys
+
+The full `Tool` (`ItemTool`) codec, as of 0.6.3:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `Specs` | array | Per-gather-type power entries (above) |
+| `Speed` | double | Speed multiplier |
+| `DurabilityLossBlockTypes` | array | Per-block-set durability loss (above) |
+| `HitSoundLayer` | string | Sound played in addition to the block-break sound when hitting a block this tool is designed to break (tool-wide default; a spec's own `HitSoundLayer` is per gather type) |
+| `IncorrectMaterialSoundLayer` | string | Sound played in addition to the block-break sound when hitting a block this tool *cannot* break |
+| `BreakShape` | object | Optional multi-block break shape (0.6.3+): when set, a swing affects every block the shape covers, oriented to the user's view, instead of only the targeted block. Keys: `Id` (e.g. `Box`), `Width`, `Height`, `Depth`, `Centered`, `Offset`, `Orientation` (e.g. `View`) — codec `com.hypixel.hytale.server.core.modules.interaction.breakshape.BreakShape` |
+| `BreakShapeDurabilityMode` | enum | How durability is consumed when a break shape hits several blocks: `PerSwing` (once per swing) or `PerBlock` (once per block broken) — `com.hypixel.hytale.server.core.asset.type.item.config.BreakShapeDurabilityMode` |
+
+`BreakShape` is only used by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.3 assets (excerpt from `Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`):
+
+```json
+{
+  "Tool": {
+    "BreakShape": {
+      "Id": "Box",
+      "Orientation": "View",
+      "Width": 3,
+      "Height": 3,
+      "Depth": 1
+    },
+    "BreakShapeDurabilityMode": "PerSwing"
   }
 }
 ```
@@ -164,16 +203,22 @@ Optional speed multiplier for tool animations:
 
 ## Material Tiers
 
-Tools follow a consistent material progression:
+Pickaxes and hatchets share one material progression (values read from the 0.6.3 `Tool_Pickaxe_*` /
+`Tool_Hatchet_*` files; "inherits" means the variant doesn't set the key and takes the Crude base's
+value). Breaking power is per gather type, never a single number — see each family's scaling table.
 
-| Tier | Quality | ItemLevel | Durability | Power Range |
-|------|---------|-----------|------------|-------------|
-| Crude/Wood | Common | 3-10 | 100-150 | 1.0-1.5 |
-| Copper | Common | 10 | ~150 | 2.0-2.5 |
-| Iron | Uncommon | 20 | 250 | 3.0-3.5 |
-| Cobalt | Rare | 30 | 300 | 4.0-4.5 |
-| Mithril | Rare | 35 | 325 | 4.5-5.0 |
-| Adamantite | Rare | 40 | 400 | 5.0-6.0 |
+| Tier | Quality | ItemLevel (Pickaxe / Hatchet) | MaxDurability |
+|------|---------|-------------------------------|---------------|
+| Wood | Common | inherits (5 / 4) | inherits (150) |
+| Crude | Common | 5 / 4 | 150 |
+| Scrap (pickaxe only) | Uncommon | inherits (5) | 60 |
+| Copper | Common | 12 / 11 | 200 |
+| Iron | Uncommon | 20 / 20 | 250 |
+| Thorium | Rare | 30 / 30 | 325 |
+| Cobalt | Rare | 35 / 35 | 325 |
+| Adamantite | Rare | 40 / 40 | 400 |
+| Mithril | Epic | 50 / 50 | 400 |
+| Onyxium | Epic | inherits (5 / 4) | 450 |
 
 ---
 
@@ -281,18 +326,26 @@ Mining tool optimized for rocks, stone, and ore extraction.
 
 ### Power Scaling by Tier
 
-Verified `Crude` and `Iron` values from the real asset files; intermediate tiers are illustrative.
+`Rocks` spec values from every 0.6.3 `Tool_Pickaxe_*` file ("inherits" = not set by the variant, so the Crude value applies):
 
-| Pickaxe | Quality | ItemLevel | Rocks (Power / Quality) | VolcanicRocks | Durability |
-|---------|---------|-----------|-------------------------|---------------|------------|
-| Crude | Common | 5 | 0.25 / 1 | 0.084 | 150 |
-| Iron | Uncommon | 20 | 0.5 / 3 | 0.17 | 250 |
+| Pickaxe | Quality | ItemLevel | Rocks (Power / Quality) | Durability |
+|---------|---------|-----------|-------------------------|------------|
+| Wood | Common | inherits (5) | 0.1 / 1 | inherits (150) |
+| Crude | Common | 5 | 0.25 / 1 | 150 |
+| Scrap | Uncommon | inherits (5) | 0.1 / 1 | 60 |
+| Copper | Common | 12 | 0.35 / 2 | 200 |
+| Iron | Uncommon | 20 | 0.5 / 3 | 250 |
+| Thorium | Rare | 30 | 0.5 / 4 | 325 |
+| Cobalt | Rare | 35 | 0.5 / 4 | 325 |
+| Adamantite | Rare | 40 | 1 / 5 | 400 |
+| Mithril | Epic | 50 | 1.0 / 6 | 400 |
+| Onyxium | Epic | inherits (5) | 1 / 6 | 450 |
 
-Higher-tier pickaxes raise the `Rocks` spec `Quality` (gating which ore tiers are mineable) and increase individual `Ore*` powers rather than scaling a single number.
+Higher-tier pickaxes raise the `Rocks` spec `Quality` (gating which ore tiers are mineable) and increase individual `Ore*` powers rather than scaling a single number (Iron's `VolcanicRocks` is 0.17 vs Crude's 0.084, for example).
 
 ### All Pickaxe Variants
 
-Tool_Pickaxe_Crude, Tool_Pickaxe_Copper, Tool_Pickaxe_Iron, Tool_Pickaxe_Cobalt, Tool_Pickaxe_Mithril, Tool_Pickaxe_Adamantite, Tool_Pickaxe_Bone, Tool_Pickaxe_Stone, Tool_Pickaxe_Bronze, Tool_Pickaxe_Steel
+Tool_Pickaxe_Crude, Tool_Pickaxe_Wood, Tool_Pickaxe_Scrap, Tool_Pickaxe_Copper, Tool_Pickaxe_Iron, Tool_Pickaxe_Thorium, Tool_Pickaxe_Cobalt, Tool_Pickaxe_Adamantite, Tool_Pickaxe_Mithril, Tool_Pickaxe_Onyxium (plus `_Debug/Debug_Pickaxe_Shaped` and `_Debug/Debug_Pickaxe_Shaped_Cylinder`, the `BreakShape` test items)
 
 ---
 
@@ -386,16 +439,23 @@ The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound o
 
 ### Power Scaling by Tier
 
-Verified `Crude` and `Iron` `Woods` values from the real asset files; higher tiers raise the `Woods` power and add `HitSoundLayer` overrides.
+`Woods` spec power from every 0.6.3 `Tool_Hatchet_*` file; higher tiers raise the `Woods` power (it plateaus at 0.5 from Thorium up) and add `HitSoundLayer` overrides.
 
 | Hatchet | Quality | ItemLevel | Woods | Durability |
 |---------|---------|-----------|-------|------------|
+| Wood | Common | inherits (4) | 0.2 | inherits (150) |
 | Crude | Common | 4 | 0.15 | 150 |
+| Copper | Common | 11 | 0.2 | 200 |
 | Iron | Uncommon | 20 | 0.3 | 250 |
+| Thorium | Rare | 30 | 0.5 | 325 |
+| Cobalt | Rare | 35 | 0.5 | 325 |
+| Adamantite | Rare | 40 | 0.5 | 400 |
+| Mithril | Epic | 50 | 0.5 | 400 |
+| Onyxium | Epic | inherits (4) | 0.5 | 450 |
 
 ### All Hatchet Variants
 
-Tool_Hatchet_Crude, Tool_Hatchet_Copper, Tool_Hatchet_Iron, Tool_Hatchet_Cobalt, Tool_Hatchet_Mithril, Tool_Hatchet_Adamantite, Tool_Hatchet_Bone, Tool_Hatchet_Stone, Tool_Hatchet_Bronze, Tool_Hatchet_Steel
+Tool_Hatchet_Crude, Tool_Hatchet_Wood, Tool_Hatchet_Copper, Tool_Hatchet_Iron, Tool_Hatchet_Thorium, Tool_Hatchet_Cobalt, Tool_Hatchet_Adamantite, Tool_Hatchet_Mithril, Tool_Hatchet_Onyxium. The folder also holds `Tool_Bark_Scraper`, a non-hatchet utility tool.
 
 ---
 
@@ -421,13 +481,15 @@ Digging tool optimized for soil, sand, and dirt blocks.
 |------------|-------|-------------|
 | `Soils` | 0.4 | Primary use - dirt, sand |
 
-(Crude also defines a `SoftBlocks` spec plus low-power specs for the various `Ore*` types.)
+(Crude also defines `SoftBlocks` (1), `Woods` (0.05), `Rocks` (0.05), `Benches` (0.5), `VolcanicRocks` (0.017) and low-power specs for the various `Ore*` types. Its `DurabilityLossOnHit` for the standard block sets is 0.05, not the pickaxe/hatchet 0.25.)
 
 ### Interactions
 
 | Slot | Interaction | Description |
 |------|-------------|-------------|
 | `Primary` | Shovel_Attack | Block breaking dig |
+
+(`Tool_Shovel_Crude` writes the slot in the long form `"Primary": { "Interactions": ["Shovel_Attack"] }` rather than the bare-string form the pickaxe and hatchet use — both are accepted.)
 
 ### Tags
 
@@ -446,7 +508,10 @@ Verified `Crude` and `Iron` `Soils` values from the real asset files. The Iron `
 | Shovel | Quality | ItemLevel | Soils | Durability |
 |--------|---------|-----------|-------|------------|
 | Crude | Common | 3 | 0.4 | 150 |
+| Copper | Common | inherits (3) | 0.2 | 200 |
 | Iron | Uncommon | 20 | 0.5 | 250 |
+| Cobalt | Rare | inherits (3) | 0.5 | 300 |
+| Thorium | Rare | inherits (3) | 0.5 | 350 |
 
 ### All Shovel Variants
 
@@ -477,7 +542,10 @@ Farming tool that converts soil blocks for planting.
 | `Primary` | Hoe_Attack | Melee swing |
 | `Secondary` | Hoe_Till | Till soil block |
 
-The `Hoe_Till` interaction uses `ChangeBlock`, whose `Changes` is a map of source block to result block (excerpt from the real `Hoe_Till` interaction):
+The `Hoe_Till` root interaction (`RootInteractions/Weapons/Hoe/Attacks/Till/Hoe_Till.json`, a 0.233s
+`BlockInteraction` cooldown per game mode) wraps the `Hoe_Till` interaction, which uses `ChangeBlock`.
+Its `Changes` is a map of source block to result block — 16 entries as of 0.6.3, covering the dirt,
+grass, mud, leaves, needles and pathway soil variants (abridged excerpt):
 
 ```json
 {
@@ -486,13 +554,23 @@ The `Hoe_Till` interaction uses `ChangeBlock`, whose `Changes` is a map of sourc
   "RequireNotBroken": true,
   "Changes": {
     "Soil_Dirt": "Soil_Dirt_Tilled",
+    "Soil_Dirt_Dry": "Soil_Dirt_Tilled",
     "Soil_Grass": "Soil_Dirt_Tilled",
-    "Soil_Mud": "Soil_Dirt_Tilled"
+    "Soil_Grass_Full": "Soil_Dirt_Tilled",
+    "Soil_Mud": "Soil_Dirt_Tilled",
+    "Soil_Pathway": "Soil_Dirt_Tilled"
   },
   "WorldSoundEventId": "SFX_Hoe_T1_Till",
+  "Effects": {
+    "ItemAnimationId": "Till",
+    "WorldSoundEventId": "SFX_Tool_T1_Swing",
+    "LocalSoundEventId": "SFX_Hoe_T1_Swing_Down_Local"
+  },
   "Next": {
     "Type": "ModifyInventory",
-    "AdjustHeldItemDurability": -1
+    "AdjustHeldItemDurability": -1,
+    "NotifyOnBreak": true,
+    "NotifyOnBreakMessage": "server.general.repair.itemBroken_Hoe"
   }
 }
 ```
@@ -524,43 +602,69 @@ Utility tool for cycling through block variants and rotations.
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 10 |
-| `PlayerAnimationsId` | Hammer |
-| `MaxDurability` | 200 |
+| `ItemLevel` | 2 |
+| `PlayerAnimationsId` | Pickaxe (the hammer reuses the pickaxe rig) |
+| `MaxDurability` | 100 |
+| `MaxStack` | 1 |
 | `Categories` | Items.Tools |
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Hammer_Primary | Cycle block variant |
-
-Uses `CycleBlockGroup` interaction:
+The hammer has no root interaction; both `Primary` and `Secondary` are the same inline
+`CycleBlockGroup` interaction (from `Tool_Hammer_Crude`):
 
 ```json
 {
-  "Type": "CycleBlockGroup",
-  "BlockSelectorTool": true,
-  "DurabilityLossOnUse": 0.5
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "CycleBlockGroup",
+          "RunTime": 0.1,
+          "Effects": { "ItemAnimationId": "Mine" }
+        }
+      ]
+    },
+    "Secondary": {
+      "Interactions": [
+        {
+          "Type": "CycleBlockGroup",
+          "RunTime": 0.1,
+          "Effects": { "ItemAnimationId": "Mine" }
+        }
+      ]
+    }
+  }
 }
 ```
 
-The `BlockSelectorTool` property enables special block selection UI.
+`CycleBlockGroup` (`CycleBlockGroupInteraction`, a `SimpleBlockInteraction`) attempts to cycle the target
+block through its block set; it adds no keys of its own. The block-selector behaviour is a separate
+**top-level item property**, not an interaction key:
+
+```json
+{
+  "BlockSelectorTool": {
+    "DurabilityLossOnUse": 1.0
+  }
+}
+```
+
+(`BlockSelectorToolData`; `DurabilityLossOnUse` is its only key.)
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Hammer"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Hammer Variants
 
-Tool_Hammer_Crude, Tool_Hammer_Iron
+Tool_Hammer_Crude, Tool_Hammer_Iron (Uncommon, `ItemLevel` 20, `MaxDurability` 500)
 
 ---
 
@@ -570,47 +674,66 @@ Tool_Hammer_Crude, Tool_Hammer_Iron
 
 Tool for shearing wool from animals.
 
-### Base Properties (Tool_Shears)
+The single shears item is `Tool_Shears_Basic` (`Shears/Tool_Shears_Basic.json`).
+
+### Base Properties (Tool_Shears_Basic)
 
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 10 |
+| `ItemLevel` | 16 |
 | `PlayerAnimationsId` | Shears |
-| `MaxDurability` | 100 |
+| `Set` | Tool_Iron |
+| `Tool` | `Specs: [{ Power 1.0, SoftBlocks }]`, `Speed: 1.0` |
 | `Categories` | Items.Tools |
+
+(No `MaxDurability` is set.)
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Shears_Primary | Shear animal |
-
-Uses `ContextualUseNPC` interaction with "Shear" context:
+Both `Primary` and `Secondary` are the same inline `ContextualUseNPC` interaction with the `Shear` context,
+behind a shared 0.2s `Shearing` cooldown; if there is no shearable NPC in front of the player it falls
+back to `Shears_Attack` (a `Chaining` → `Shears_Snip` → `Shears_Block_Break` chain that cuts blocks
+instead). From `Tool_Shears_Basic`:
 
 ```json
 {
-  "Type": "ContextualUseNPC",
-  "Context": "Shear",
-  "Range": 3.0,
-  "DurabilityLossOnUse": 1.0
+  "Primary": {
+    "Cooldown": { "Id": "Shearing", "Cooldown": 0.2 },
+    "Interactions": [
+      {
+        "Type": "ContextualUseNPC",
+        "Context": "Shear",
+        "Effects": {
+          "ItemAnimationId": "Shear",
+          "WaitForAnimationToFinish": true,
+          "WorldSoundEventId": "SFX_Shears_Activate"
+        },
+        "Failed": "Shears_Attack"
+      }
+    ]
+  }
 }
 ```
+
+`ContextualUseNPC` (`com.hypixel.hytale.server.npc.interactions.ContextualUseNPCInteraction`) has a single
+key of its own, `Context`; there is no `Range` or `DurabilityLossOnUse` on it. Which NPCs respond is
+decided on the NPC side — the tamed livestock roles (`Tamed_Sheep`, `Tamed_Chicken`, `Tamed_Skrill`, …)
+declare the `Shear` context.
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Shears"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Shears Variants
 
-Tool_Shears
+Tool_Shears_Basic
 
 ---
 
@@ -645,7 +768,8 @@ A `State` block defines the filled variant. The empty model is the item's base `
         "Secondary": "Watering_Can_Filled_Use"
       },
       "MaxDurability": 50,
-      "DurabilityLossOnDeath": false
+      "DurabilityLossOnDeath": false,
+      "Repairable": false
     }
   }
 }
@@ -653,7 +777,18 @@ A `State` block defines the filled variant. The empty model is the item's base `
 
 ### Fill and Water Interactions
 
-Filling uses the `RefillContainer` interaction type, gated by the source fluid (from the real `Watering_Can_Fill` interaction):
+The empty can's `Secondary` is `Watering_Can_Empty_Use`, the filled state's is `Watering_Can_Filled_Use`.
+Both root interactions go through a crouch `Condition` — crouching places the can as a block
+(`Block_Secondary`), otherwise the chain tries to fill (`Watering_Can_Fill`), and for the filled state
+falls through to watering when there is no fluid to refill from:
+
+```
+Watering_Can_Empty_Use  → Watering_Can_Condition_Place        (Crouching → Block_Secondary, else → Watering_Can_Fill)
+Watering_Can_Filled_Use → Watering_Can_Filled_Condition_Place (Crouching → Block_Secondary, else → Watering_Can_Fill, Failed → Watering_Can_Use_Charge)
+Watering_Can_Use_Charge → Charging: "0" → Watering_Can_Use, "0.5" → Watering_Can_Use_3x3
+```
+
+Filling uses the `RefillContainer` interaction type, gated by the source fluid (from the real `Watering_Can_Fill` interaction; `RefillContainerInteraction` also accepts `TransformFluid` and `Durability`):
 
 ```json
 {
@@ -666,6 +801,7 @@ Filling uses the `RefillContainer` interaction type, gated by the source fluid (
   "Next": {
     "Type": "Simple",
     "Effects": {
+      "ClearAnimationOnFinish": true,
       "ItemAnimationId": "Water",
       "WorldSoundEventId": "SFX_Water_MoveIn"
     },
@@ -674,23 +810,40 @@ Filling uses the `RefillContainer` interaction type, gated by the source fluid (
 }
 ```
 
-Watering crops uses the `UseWateringCan` interaction type (from the real `Watering_Can_Use` interaction):
+Watering crops uses the `UseWateringCan` interaction type
+(`com.hypixel.hytale.builtin.adventure.farming.interactions.UseWateringCanInteraction`; keys `Duration`,
+`RefreshModifiers`, `RadiusX`, `RadiusZ`). From the real `Watering_Can_Use` interaction — a quick tap;
+holding the charge for 0.5s runs `Watering_Can_Use_3x3` instead:
 
 ```json
 {
   "Type": "UseWateringCan",
   "UseLatestTarget": true,
+  "Duration": 86400,
   "RadiusX": 1,
   "RadiusZ": 1,
   "RefreshModifiers": ["Water"],
+  "Effects": {
+    "ItemAnimationId": "Water",
+    "Particles": [
+      { "SystemId": "Watering_Can", "TargetEntityPart": "PrimaryItem", "TargetNodeName": "Can" }
+    ],
+    "WorldSoundEventId": "SFX_Tool_Watering_Can_Water"
+  },
   "Next": {
     "Type": "ModifyInventory",
     "AdjustHeldItemDurability": -1,
     "BrokenItem": "Tool_Watering_Can"
   },
-  "Failed": "Watering_Can_No_Effect"
+  "Failed": "Watering_Can_No_Effect",
+  "RunTime": 0.2,
+  "OnItemChangeBehavior": "Cancel"
 }
 ```
+
+`OnItemChangeBehavior` (`Cancel` / `Fail` / `Finish` / `Ignore`) is the common interaction key that
+replaced the boolean `CancelOnItemChange` by 0.6.3 — it says what happens to an in-flight interaction when
+the held item changes.
 
 ### Recipe
 
@@ -732,92 +885,100 @@ Harvesting tool for cutting plants and crops efficiently.
 | `ItemLevel` | 5 |
 | `PlayerAnimationsId` | Sickle |
 | `MaxDurability` | 100 |
+| `MaxStack` | 1 |
+| `Weapon` | `{}` (empty — lets it swing like a weapon) |
 | `Categories` | Items.Tools |
+
+Crafted at the `Farmingbench` (`RequiredTierLevel` 2). The sickle has **no** `Tool` block — it cuts
+plants through its swing interactions, not through gather-type specs.
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Sickle_Primary | Harvest plants |
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Primary` | Sickle_Attack | Two-swing `Chaining` combo (`Sickle_Swing_Left`, `Sickle_Swing_Right`) |
 
-Optimized for harvesting plant blocks with area effect.
+`Sickle_Attack` is a `Chaining` interaction whose `Next` steps are `Replace` slots (`Swing_Left`,
+`Swing_Right`) defaulting to `Sickle_Swing_Left` / `Sickle_Swing_Right`; the item's `InteractionVars`
+override the per-swing `*_Effect`, `*_Damage` and `*_Selector` variables (area selection lives in the
+selector interactions).
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Sickle"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Sickle Variants
 
-Tool_Sickle_Crude, Tool_Sickle_Iron
+Tool_Sickle_Crude, Tool_Sickle_Copper, Tool_Sickle_Iron, Tool_Sickle_Steel_Rusty
 
 ---
 
 ## Repair Kit
 
-**Location:** `Server/Item/Items/Tool/RepairKit/`
+**Location:** `Server/Item/Items/Tool/Repair_Kit/`
 
 Utility item that opens a repair UI to restore item durability.
 
-### Base Properties (Tool_RepairKit_Basic)
+### Base Properties (Tool_Repair_Kit_Crude)
 
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 10 |
-| `MaxStack` | 1 |
-| `Consumable` | false |
+| `MaxStack` | 25 |
+| `DropOnDeath` | true |
+| `PlayerAnimationsId` | Item |
+| `Set` | Repair_Kit |
+| `InteractionConfig` | `{ "AllEntities": true }` |
 | `Categories` | Items.Tools |
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_RepairKit_Open | Open repair UI |
-
-Uses `OpenCustomUI` interaction:
+Both `Primary` and `Secondary` are the same inline `OpenCustomUI` interaction. The page is a nested
+`Page` object — its `Id` picks the page supplier, and the supplier's own keys sit beside it (from
+`Tool_Repair_Kit_Crude`):
 
 ```json
 {
   "Type": "OpenCustomUI",
-  "PageId": "ItemRepair",
-  "RepairPenalty": 0.1
+  "Page": {
+    "Id": "ItemRepair",
+    "RepairPenalty": 0.2
+  }
 }
 ```
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `PageId` | string | UI page to open |
-| `RepairPenalty` | float | Max durability reduction per repair (10%) |
+| `Page.Id` | string | Page supplier to open (`ItemRepair` → `ItemRepairPageSupplier`) |
+| `Page.RepairPenalty` | double | Max-durability reduction per repair, as a ratio (0.2 = 20%) — a key of `ItemRepairPageSupplier`, not of the interaction |
 
 ### Repair Kit Tiers
 
-| Repair Kit | Quality | RepairPenalty | Description |
-|------------|---------|---------------|-------------|
-| Basic | Common | 0.10 | 10% max durability loss |
-| Advanced | Uncommon | 0.05 | 5% max durability loss |
-| Master | Rare | 0.02 | 2% max durability loss |
+| Repair Kit | Parent | Quality | RepairPenalty |
+|------------|--------|---------|---------------|
+| `Tool_Repair_Kit_Crude` | — | Common | 0.2 |
+| `Tool_Repair_Kit_Iron` | `Tool_Repair_Kit_Crude` | Common (`ItemLevel` 1) | 0.1 |
+| `Tool_Repair_Kit_Rare` | — (standalone; borrows the Thorium pickaxe model) | not set | 0.15 |
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["RepairKit"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Repair Kit Variants
 
-Tool_RepairKit_Basic, Tool_RepairKit_Advanced, Tool_RepairKit_Master
+Tool_Repair_Kit_Crude, Tool_Repair_Kit_Iron, Tool_Repair_Kit_Rare
 
 ---
 
@@ -827,29 +988,38 @@ Tool_RepairKit_Basic, Tool_RepairKit_Advanced, Tool_RepairKit_Master
 
 Utility item for capturing and transporting animals.
 
-### Base Properties (Tool_CaptureCrate)
+### Base Properties (Tool_Capture_Crate)
 
 | Property | Value |
 |----------|-------|
-| `Quality` | Common |
-| `ItemLevel` | 15 |
+| `ItemLevel` | 18 |
 | `MaxStack` | 1 |
-| `Consumable` | true |
-| `Categories` | Items.Tools |
+| `PlayerAnimationsId` | Block |
+
+The crate sets no `Quality`, `Categories` or `Tags`, and is not `Consumable`. Crafted at the
+`Farmingbench` from 4 `Wood_All` and 50 `Ingredient_Life_Essence`.
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_CaptureCrate_Use | Capture animal |
-
-Uses `UseCaptureCrate` interaction (from `Tool_Capture_Crate.json`):
+`Primary` is inline: a 0.05s `Simple` step (plays the `Interact` item animation) whose `Next` is the
+`UseCaptureCrate` interaction (from `Tool_Capture_Crate.json`):
 
 ```json
 {
   "Type": "UseCaptureCrate",
   "AcceptedNpcGroups": ["Capture_Crate"],
-  "FullIcon": "Icons/ItemsGenerated/Tool_Capture_Crate_Full.png"
+  "FullIcon": "Icons/ItemsGenerated/Tool_Capture_Crate_Full.png",
+  "Failed": {
+    "Type": "Simple",
+    "Effects": { "LocalSoundEventId": "SFX_Capture_Crate_Capture_Fail_Local" }
+  },
+  "Next": {
+    "Type": "Simple",
+    "Effects": {
+      "LocalSoundEventId": "SFX_Capture_Crate_Capture_Succeed_Local",
+      "WorldSoundEventId": "SFX_Capture_Crate_Capture_Succeed"
+    }
+  }
 }
 ```
 
@@ -858,21 +1028,15 @@ Uses `UseCaptureCrate` interaction (from `Tool_Capture_Crate.json`):
 | `AcceptedNpcGroups` | array | NPC groups that can be captured |
 | `FullIcon` | string | Icon shown on the crate item once it holds a captured NPC |
 
-There is no separate "filled crate" item id: on capture, the NPC is stored on the crate
-item itself as `CapturedEntity` metadata (`CapturedNPCMetadata`, with `IconPath`,
-`NpcNameKey`, and `FullItemIcon` fields), and capture range comes from the interaction
-chain's targeting, not a `Range` property on this interaction.
+(`UseCaptureCrateInteraction`, `com.hypixel.hytale.builtin.adventure.farming.interactions`; those two are
+its only keys.) There is no separate "filled crate" item id: on capture, the NPC is stored on the crate
+item itself as `CapturedEntity` metadata (`CapturedNPCMetadata`, keyed `CapturedEntity`, with
+`IconPath`, `NpcNameKey`, `FullItemIcon`, `AlarmStore` and `CapturedEntity` fields), and capture range
+comes from the interaction chain's targeting, not a `Range` property on this interaction.
 
 ### Tags
 
-```json
-{
-  "Tags": {
-    "Type": ["Tool"],
-    "Family": ["CaptureCrate"]
-  }
-}
-```
+None — `Tool_Capture_Crate` sets no `Tags` block.
 
 ### All Capture Crate Variants
 
@@ -884,32 +1048,47 @@ Tool_Capture_Crate (the "full" state is the same item carrying `CapturedEntity` 
 
 **Location:** `Server/Item/Items/Tool/Feedbag/`
 
-Farming tool for feeding animals.
+Farming tool for leading livestock around.
 
 ### Base Properties (Tool_Feedbag)
 
 | Property | Value |
 |----------|-------|
 | `Quality` | Common |
-| `ItemLevel` | 5 |
-| `MaxStack` | 1 |
+| `PlayerAnimationsId` | Block |
+| `Tool` | `{}` |
 | `Categories` | Items.Tools |
+
+Sets no `ItemLevel` or `MaxStack`. It carries a `BlockType` block (custom model, `Gathering.Soft`), so it
+can be placed in the world. Crafted at the `Farmingbench` from wheat, vegetables, fruit and life essence.
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Feedbag_Use | Feed animal |
+**None.** `Tool_Feedbag` defines no `Interactions` block at all — there is no "feed" interaction. It works
+from the NPC side: `Template_Livestock` lists it as the attractive item, so livestock follow a player
+holding it (`Template_Livestock.json`):
 
-Uses `ContextualUseNPC` interaction with "Feed" context.
+```json
+{
+  "AttractiveItemSet": {
+    "Value": [ "Tool_Feedbag" ],
+    "Description": "The list of items that are deemed attractive (there's a chance targets holding them will be followed)."
+  },
+  "WeightFollowItem": {
+    "Value": 100,
+    "Description": "The probability the NPC will follow an attractive item when held by a non-hostile target, in percent."
+  }
+}
+```
+
+(Individual roles override the set — `Bison` prefers `Plant_Crop_Cauliflower_Item`.)
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Feedbag"]
+    "Type": ["Tool"]
   }
 }
 ```
@@ -922,42 +1101,69 @@ Tool_Feedbag
 
 ## Fertilizer
 
-**Location:** `Server/Item/Items/Tool/Fertilizer/`
+**Location:** `Server/Item/Items/Tool/Feedbag/` (the fertilizer files live in the Feedbag folder and share
+its `Feedbag.blockymodel` with a different texture)
 
-Farming consumable that accelerates plant growth.
+Farming tool that applies a growth modifier to tilled soil. It is a durability item, not a stack of
+consumables.
 
 ### Base Properties (Tool_Fertilizer)
 
 | Property | Value |
 |----------|-------|
-| `Quality` | Common |
-| `ItemLevel` | 5 |
-| `MaxStack` | 25 |
-| `Consumable` | true |
+| `ItemLevel` | 21 |
+| `MaxStack` | 1 |
+| `MaxDurability` | 5 |
+| `DurabilityLossOnDeath` | false |
+| `Repairable` | false |
+| `PlayerAnimationsId` | Block |
+| `Tool` | `{}` |
 | `Categories` | Items.Tools |
+
+(No `Quality` set. Crafted at the `Farmingbench`, `RequiredTierLevel` 3, from `Ingredient_Poop`,
+`Ingredient_Life_Essence` and vegetables.)
 
 ### Interactions
 
-| Slot | Root Interaction | Description |
-|------|------------------|-------------|
-| `Primary` | Root_Tool_Fertilizer_Use | Apply to crop |
+| Slot | Interaction | Description |
+|------|-------------|-------------|
+| `Secondary` | Fertilizer_Use | Apply to soil (5 uses, one durability each) |
 
-Uses block interaction to advance plant growth stage.
+`Fertilizer_Use` is a `FertilizeSoil` interaction
+(`com.hypixel.hytale.builtin.adventure.farming.interactions.FertilizeSoilInteraction`, a
+`SimpleBlockInteraction`; its one key is `RefreshModifiers`). The full file:
+
+```json
+{
+  "Type": "FertilizeSoil",
+  "RefreshModifiers": ["Fertilizer"],
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1,
+    "BrokenItem": "Empty",
+    "Next": {
+      "Type": "Simple",
+      "RunTime": 0.15,
+      "Effects": { "ItemAnimationId": "Till" }
+    }
+  }
+}
+```
 
 ### Tags
 
 ```json
 {
   "Tags": {
-    "Type": ["Tool"],
-    "Family": ["Fertilizer"]
+    "Type": ["Tool"]
   }
 }
 ```
 
 ### All Fertilizer Variants
 
-Tool_Fertilizer
+Tool_Fertilizer, Tool_Fertilizer_Crystal (`Secondary` = `Fertilizer_Crystal_Use`; crafted at the
+`Alchemybench` from 25 `Crystal_Shards` and `Ingredient_Void_Essence`)
 
 ---
 
@@ -972,10 +1178,23 @@ Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g
   "Type": "UseBlock",
   "Failed": {
     "Type": "BreakBlock",
-    "UseLatestTarget": true
+    "UseLatestTarget": true,
+    "Next": {
+      "Type": "Replace",
+      "Var": "Block_Hit_Camera_Effects",
+      "DefaultOk": true,
+      "DefaultValue": {
+        "Interactions": [
+          { "Type": "Simple", "Effects": { "CameraEffect": "Unarmed_Block_Impact" } }
+        ]
+      }
+    }
   }
 }
 ```
+
+(`Block_Hit_Camera_Effects` is the `InteractionVars` hook the pickaxe uses to swap in its own
+`Pickaxe_Mine_Impact` camera effect.)
 
 ### ChangeBlock Interaction
 
@@ -1018,14 +1237,10 @@ A separate top-level `DurabilityLossOnHit` (a common item property) provides the
 
 ## Sound Sets
 
-| Tool Family | ItemSoundSetId |
-|-------------|----------------|
-| Pickaxe | ISS_Tool_Pickaxe |
-| Hatchet | ISS_Tool_Hatchet |
-| Shovel | ISS_Tool_Shovel |
-| Hoe | ISS_Tool_Hoe |
-| Hammer | ISS_Tool_Hammer |
-| Shears | ISS_Tool_Shears |
+There are no tool-specific item sound sets: every stock tool family (pickaxe, hatchet, shovel, hoe,
+hammer, shears, sickle, watering can, repair kit, feedbag, fertilizer) sets
+`"ItemSoundSetId": "ISS_Weapons_Wood"`. Per-tool audio comes from the interaction effects
+(`SFX_Tool_T1_Swing`, `SFX_Pickaxe_T1_Swing_Down_Local`, …) and the spec-level `HitSoundLayer`.
 
 ---
 
@@ -1060,14 +1275,27 @@ the creative Tools menu is a separate asset (see
         "Type": "Option",
         "Id": "builtin_Shape",
         "Default": "Sphere",
-        "Options": ["Cube", "Sphere", "Cylinder", "Cone"]
+        "Options": ["Cube", "Sphere", "Cylinder", "Cone", "InvertedCone", "Pyramid", "InvertedPyramid", "Dome", "InvertedDome", "Diamond", "Torus"]
+      },
+      {
+        "Type": "Option",
+        "Id": "builtin_Origin",
+        "Default": "Center",
+        "Options": ["Center", "Bottom", "Top", "Lowest", "Highest"]
       }
     ]
   }
 }
 ```
 
-(Excerpt from `EditorTool_Paint.json`.)
+(Abridged from `EditorTool_Paint.json`, which also declares `builtin_Height`, `builtin_RotationFace`,
+`builtin_Thickness`, `builtin_Density` and `builtin_Spacing`. The `builtin_*` ids are the `*_KEY`
+constants on `BuilderTool`.)
+
+`BuilderTool` keys: `Id`, `IsBrush`, `Args`, plus `SurvivalAllowed` (bool, `isSurvivalAllowed()` — whether
+the tool may be used outside Creative; no stock editor tool sets it) and `BrushConfigurationCommand`
+(string). As of 0.6.3 `BuilderTool` is a plain `BuilderCodec` value embedded in the item, not a
+standalone asset — there is no `BuilderTool.getAssetMap()`.
 
 ### Arg Types
 
@@ -1086,6 +1314,10 @@ Every arg entry carries `Type` (the discriminator), `Id`, an optional `Default`,
 | `Option` | `OptionArg` | `String` | `Options` (allowed values) |
 | `BrushShape` | `BrushShapeArg` | `BrushShape` | — |
 | `BrushOrigin` | `BrushOriginArg` | `BrushOrigin` | — |
+
+(Those nine are the names registered on `ToolArg.CODEC` by `BuilderToolsPlugin`. The package also contains
+`BrushAxisArg` and `BrushRotationArg`, but as of 0.6.3 neither is registered under a JSON `Type`, so they
+cannot be declared from an item file.)
 
 ### ToolArg (Base Class)
 

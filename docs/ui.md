@@ -287,8 +287,8 @@ Overlay UIs that appear over the game:
 
 ```java
 WindowManager windows = player.getWindowManager();
-OpenWindow opened = windows.openWindow(new MyWindow(WindowType.Container));
-windows.closeWindow(opened.getId());
+OpenWindow opened = windows.openWindow(ref, new MyWindow(WindowType.Container), store);
+windows.closeWindow(ref, opened.getId(), store);   // ECS params are required on both calls
 ```
 
 ### HUD
@@ -299,6 +299,7 @@ Always-visible interface elements:
 HudManager hud = player.getHudManager();
 hud.setVisibleHudComponents(playerRef, HudComponent.Hotbar, HudComponent.Health);
 hud.hideHudComponents(playerRef, HudComponent.Chat);
+hud.resetVisibleHudComponents(playerRef);   // back to the default set (0.6.3+)
 ```
 
 ---
@@ -335,8 +336,16 @@ EntityUIComponent (abstract JSON asset · NetworkSerializable)
 
 The concrete components are codec-backed JSON assets (each carries a `CODEC`), loaded from the asset store and addressed by string id — the same asset-loading model as other typed assets (see [Codecs](codecs.md)).
 
-> [!QUESTION]
-> The component **classes and asset hierarchy** are verified against `HytaleServer.jar`, but the JSON schema for authoring a `CombatTextUIComponent`/`EntityStatUIComponent` and the exact call to attach one to a live entity are not exercised by any inspectable first-party plugin in build-12 (only `UIComponentList` is lightly referenced). The fields and attach flow are therefore not documented here rather than guessed — extract them from `Assets.zip` against a future build before relying on them.
+**Assets.** They live in `Server/Entity/UI/`; the base game ships two, discriminated by `"Type"` (the codec keys `EntityUIModule` registers: `EntityStat`, `CombatText`, plus the animation-event types `Scale`, `Position`, `Opacity`):
+
+```json
+// Server/Entity/UI/Healthbar.json
+{ "Type": "EntityStat", "EntityStat": "Health", "HitboxOffset": { "X": 0, "Y": -30 } }
+```
+
+`CombatText.json` (`"Type": "CombatText"`) adds `RandomPositionOffsetRange` (`X`/`Y` each `Min`/`Max`), `ViewportMargin`, `Duration`, `HitAngleModifierStrength`, `FontSize`, `TextColor` and an `AnimationEvents` array of `Scale` (`StartScale`/`EndScale`), `Position` (`PositionOffset`) and `Opacity` (`StartOpacity`/`EndOpacity`) events, each with `StartAt`/`EndAt`.
+
+**Attaching.** An entity renders entity UI when it carries a `UIComponentList`. `UIComponentList.update()` fills the list with the index of **every** loaded `EntityUIComponent` asset — it is not a per-entity selection — so the engine's deployable spawner simply does `holder.ensureAndGetComponent(UIComponentList.getComponentType()).update()`; the damage system then queries entities with `Visible` + `UIComponentList` and streams `CombatTextUpdate` packets to viewers.
 
 ---
 

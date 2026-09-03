@@ -798,6 +798,10 @@ public static int hexAlphaStringToRGBAInt(String hex);
 public static String colorToHexString(Color color);           // "#RRGGBB"
 public static String colorToHexAlphaString(ColorAlpha color); // "#RRGGBBAA"
 public static int colorToARGBInt(Color color);
+public static Color argbIntToColor(int argb);                 // inverse of colorToARGBInt (0.6.3+)
+
+// image analysis (0.6.3+): dominant color of an image file as a "#RRGGBB" string
+public static String computeDominantColor(Path imageFile) throws Exception;
 
 // pre-compiled patterns
 public static final Pattern HEX_COLOR_PATTERN;

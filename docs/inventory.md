@@ -11,6 +11,14 @@ seo:
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 
+> ⚠️ **As of 0.6.3 the entire `Inventory` class is `@Deprecated(forRemoval=true)`** — not just its slot setters:
+> every accessor on it (`getHotbar()`, `getCombinedHotbarFirst()`, `getItemInHand()`, `moveItem(...)`, …) carries the
+> annotation, and so does `LivingEntity.getInventory()`'s return type. It still works, but new code should read the
+> per-section **components** instead (see [Inventory sections as components](#inventory-sections-as-components)):
+> `InventoryComponent.Hotbar` / `Storage` / `Armor` / `Utility` / `Tool` / `Backpack`, the static
+> `InventoryComponent.getCombined(...)` for cross-section views, and `InventoryComponent.getItemInHand(...)`.
+> The `ItemContainer` / `ItemStack` / transaction API those components hand back is unchanged and not deprecated.
+
 ## Overview
 
 Implemented in `com.hypixel.hytale.server.core.inventory` and provides:
@@ -51,7 +59,8 @@ Inventory  (player; sectioned)
 
 | Class | Location | Description |
 |-------|----------|-------------|
-| `Inventory` | `server.core.inventory` | Player inventory with multiple sections |
+| `Inventory` | `server.core.inventory` | Player inventory with multiple sections (**deprecated for removal as of 0.6.3**) |
+| `InventoryComponent` | `server.core.inventory` | ECS component base for one inventory section (`Hotbar`, `Storage`, `Armor`, `Utility`, `Tool`, `Backpack`); the current API |
 | `ItemStack` | `server.core.inventory` | A stack of items with count and metadata |
 | `Item` | `server.core.asset.type.item.config` | Item definition/config backing an `ItemStack` |
 | `ItemContainer` | `server.core.inventory.container` | A container of slots; add/remove/move/filter API |
@@ -82,28 +91,36 @@ Inventory  (player; sectioned)
 ## Inventory
 **Package:** `com.hypixel.hytale.server.core.inventory`
 
-Player inventory with multiple sections.
+Player inventory with multiple sections. **The whole class is `@Deprecated(forRemoval=true)` as of 0.6.3** (see the
+banner at the top of this page); the members below still exist and behave as documented, but prefer the
+[component API](#inventory-sections-as-components).
 
 ### Section IDs
+
+The section-id and capacity constants live on **`InventoryComponent`** (not on `Inventory`):
+
 ```java
-static final int HOTBAR_SECTION_ID
-static final int STORAGE_SECTION_ID
-static final int ARMOR_SECTION_ID
-static final int UTILITY_SECTION_ID
-static final int TOOLS_SECTION_ID
-static final int BACKPACK_SECTION_ID
+// com.hypixel.hytale.server.core.inventory.InventoryComponent
+static final int HOTBAR_SECTION_ID   = -1
+static final int STORAGE_SECTION_ID  = -2
+static final int ARMOR_SECTION_ID    = -3
+static final int UTILITY_SECTION_ID  = -5
+static final int TOOLS_SECTION_ID    = -8
+static final int BACKPACK_SECTION_ID = -9
+static final int DUMMY_SECTION_ID    = -10   // 0.6.3+: placeholder section id, never a real container
 ```
 
 ### Default Capacities
 ```java
-static final short DEFAULT_HOTBAR_CAPACITY
-static final short DEFAULT_UTILITY_CAPACITY
-static final short DEFAULT_TOOLS_CAPACITY
+// com.hypixel.hytale.server.core.inventory.InventoryComponent
+static final short DEFAULT_HOTBAR_CAPACITY  = 9
+static final short DEFAULT_UTILITY_CAPACITY = 4
+static final short DEFAULT_TOOLS_CAPACITY   = 23
 static final short DEFAULT_ARMOR_CAPACITY
-static final short DEFAULT_STORAGE_ROWS
-static final short DEFAULT_STORAGE_COLUMNS
-static final short DEFAULT_STORAGE_CAPACITY
-static final byte INACTIVE_SLOT_INDEX
+static final short DEFAULT_STORAGE_ROWS     = 4
+static final short DEFAULT_STORAGE_COLUMNS  = 9
+static final short DEFAULT_STORAGE_CAPACITY = 36
+static final byte  INACTIVE_SLOT_INDEX      = -1
 ```
 
 ### Get Sections
@@ -126,6 +143,41 @@ CombinedItemContainer getCombinedHotbarUtilityConsumableStorage()
 CombinedItemContainer getCombinedBackpackStorageHotbar()
 CombinedItemContainer getCombinedBackpackStorageHotbarFirst()
 CombinedItemContainer getCombinedStorageHotbarBackpack()
+```
+
+### Inventory sections as components
+
+The non-deprecated way to reach a section is through its ECS component. Each section is a subclass of
+`com.hypixel.hytale.server.core.inventory.InventoryComponent` with a static `getComponentType()`:
+`InventoryComponent.Hotbar`, `.Storage`, `.Armor`, `.Utility`, `.Tool`, `.Backpack`. The component wraps the
+section's `ItemContainer`:
+
+```java
+// InventoryComponent (instance)
+ItemContainer getInventory()                                  // the section's container
+void ensureCapacity(short capacity, List<ItemStack> overflow) // grow the section; displaced stacks land in `overflow`
+void markDirty()
+
+// InventoryComponent (static helpers)
+static ComponentType<EntityStore, ? extends InventoryComponent> getComponentTypeById(int sectionId)
+static ItemStack getItemInHand(ComponentAccessor<EntityStore> accessor, Ref<EntityStore> ref)
+static ItemStack getItemInHand(Holder<EntityStore> holder)
+static CombinedItemContainer getCombined(ComponentAccessor<EntityStore> accessor, Ref<EntityStore> ref,
+                                         ComponentType<EntityStore, ? extends InventoryComponent>... sections)
+static CombinedItemContainer getCombined(CommandBuffer<EntityStore> buffer, ArchetypeChunk<EntityStore> chunk, int index,
+                                         ComponentType<EntityStore, ? extends InventoryComponent>... sections)
+```
+
+```java
+import com.hypixel.hytale.server.core.inventory.InventoryComponent;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+
+// Replaces the deprecated player.getInventory().getHotbar():
+InventoryComponent.Hotbar hotbarComp = store.getComponent(ref, InventoryComponent.Hotbar.getComponentType());
+ItemContainer hotbar = hotbarComp.getInventory();
+
+// Replaces the deprecated inventory.getItemInHand():
+ItemStack held = InventoryComponent.getItemInHand(store, ref);
 ```
 
 ### Combined container from an ECS system (clear + grant loadout)
@@ -176,16 +228,17 @@ byte getActiveSlot(int sectionId)
 ItemStack getItemInHand()
 ```
 
-> **All of `Inventory`'s slot *setters* are `@Deprecated(forRemoval=true)` in 0.5.0 — don't use them.**
-> The deprecated, removal-scheduled signatures are:
+> **`Inventory`'s slot *setters* were the first members to go `@Deprecated(forRemoval=true)` (0.5.0); as of 0.6.3 the
+> whole class carries the annotation — don't use them.** The removal-scheduled setter signatures are:
 > ```java
 > @Deprecated(forRemoval=true) void setActiveHotbarSlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
 > @Deprecated(forRemoval=true) void setActiveToolsSlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
 > @Deprecated(forRemoval=true) void setActiveUtilitySlot(Ref<EntityStore>, byte, ComponentAccessor<EntityStore>)
 > @Deprecated(forRemoval=true) static void setActiveSlot(Ref<EntityStore>, int sectionId, byte, ComponentAccessor<EntityStore>)
+> @Deprecated(forRemoval=true) static byte getActiveSlot(Ref<EntityStore>, int sectionId, ComponentAccessor<EntityStore>)
 > ```
 > The static `com.hypixel.hytale.server.core.inventory.InventoryUtils.setActiveSlot(Ref, int, byte, ComponentAccessor)`
-> these delegate to is likewise `@Deprecated(forRemoval=true)`. There are **no `Holder`-based overloads on
+> these delegate to is plain `@Deprecated` (no `forRemoval`) in 0.6.3. There are **no `Holder`-based overloads on
 > `Inventory`** — set the slot through the per-section component instead (below).
 
 #### Setting the active slot (current API)
@@ -195,6 +248,7 @@ The slot setters moved onto the per-section component. `com.hypixel.hytale.serve
 `com.hypixel.hytale.server.core.inventory.ActiveSlotInventoryComponent`, which exposes the non-deprecated setters:
 
 ```java
+// com.hypixel.hytale.server.core.inventory.ActiveSlotInventoryComponent (not Inventory)
 byte getActiveSlot()
 void setActiveSlot(byte slot, Holder<EntityStore> holder, ComponentAccessor<EntityStore> accessor)   // current path
 void setActiveSlot(byte slot, Ref<EntityStore> ref, ComponentAccessor<EntityStore> accessor)
@@ -221,12 +275,22 @@ that the inventory systems handle to re-equip the held item. Do **not** mutate t
 > behavior is not observable from the jar bytecode — the server state is correct, but the client highlight is stale.
 
 ### Item Operations
+
+The move helpers are mostly **static** and take the entity `Ref` + `ComponentAccessor` (they operate on the
+section components, not on the `Inventory` object):
+
 ```java
-void moveItem(int fromSection, int fromSlot, int toSection, int toSlot, int count)
-void smartMoveItem(Ref<EntityStore> ref, int section, int slot, int count, SmartMoveType type, PlayerSettings settings, ComponentAccessor<EntityStore> accessor)
-ListTransaction<MoveTransaction<ItemStackTransaction>> takeAll(int section, PlayerSettings settings)
-ListTransaction<MoveTransaction<ItemStackTransaction>> putAll(int section)
-ListTransaction<MoveTransaction<ItemStackTransaction>> quickStack(int section)
+static void moveItem(Ref<EntityStore> ref, int fromSectionId, int fromSlotId, int quantity,
+                     int toSectionId, int toSlotId, ComponentAccessor<EntityStore> accessor)
+static void smartMoveItem(Ref<EntityStore> ref, int fromSectionId, int fromSlotId, int quantity,
+                          SmartMoveType moveType, PlayerSettings settings, ComponentAccessor<EntityStore> accessor)
+ListTransaction<MoveTransaction<ItemStackTransaction>> takeAll(Ref<EntityStore> ref, int sectionId,
+                          PlayerSettings settings, ComponentAccessor<EntityStore> accessor)
+static ListTransaction<MoveTransaction<ItemStackTransaction>> takeAllWithPriority(Ref<EntityStore> ref,
+                          ItemContainer fromContainer, PlayerSettings settings, ComponentAccessor<EntityStore> accessor)
+ListTransaction<MoveTransaction<ItemStackTransaction>> putAll(int sectionId)
+ListTransaction<MoveTransaction<ItemStackTransaction>> quickStack(Ref<EntityStore> ref, int sectionId,
+                          ComponentAccessor<EntityStore> accessor)
 List<ItemStack> dropAllItemStacks()
 void clear()
 ```
@@ -271,6 +335,7 @@ ItemStack(String itemId)
 ItemStack(String itemId, int quantity)
 ItemStack(String itemId, int quantity, BsonDocument metadata)
 ItemStack(String itemId, int quantity, double durability, double maxDurability, BsonDocument metadata)
+ItemStack(String itemId, int quantity, double durability, double maxDurability, int qualityIndex, BsonDocument metadata)  // 0.6.3+
 ```
 
 ### Item ID Format
@@ -282,7 +347,7 @@ Item IDs match the asset filename without the `.json` extension. They do **not**
 - `Food_Bread` (bread)
 - `Tool_Pickaxe_Iron` (iron pickaxe)
 
-Find valid item IDs in `Assets.zip` under `Assets/Server/Item/Items/`, organized by category.
+Find valid item IDs in `Assets.zip` under `Server/Item/Items/`, organized by category.
 
 ### Validating Item IDs
 
@@ -311,6 +376,10 @@ boolean isValid()
 Item getItem()
 String getBlockKey()
 boolean getOverrideDroppedItemAnimation()
+void setOverrideDroppedItemAnimation(boolean override)   // the one in-place mutator; everything else returns a copy
+
+// 0.6.3+: per-stack quality tier — the stack's override if one was set via withQuality(), else getItem().getQualityIndex()
+int getQualityIndex()
 
 // Resolved display text — the per-stack override if set, else the item's default
 Message getDisplayName()
@@ -328,6 +397,9 @@ ItemStack withRestoredDurability(double amount)
 // State & Quantity
 ItemStack withState(String state)
 ItemStack withQuantity(int quantity)
+
+// Quality (0.6.3+) — override the item's quality tier for this stack only; index into Server/Item/Qualities
+ItemStack withQuality(int qualityIndex)
 
 // Metadata
 ItemStack withMetadata(BsonDocument metadata)
@@ -398,10 +470,12 @@ static boolean isEquivalentType(ItemStack a, ItemStack b)
 static boolean isSameItemType(ItemStack a, ItemStack b)
 ```
 
-### Static Factory
+### Network form
 ```java
-static ItemStack fromPacket(ItemQuantity packet)
+ItemWithAllMetadata toPacket()
 ```
+`ItemStack.fromPacket(ItemQuantity)` was removed by 0.6.3 (the `ItemQuantity` protocol type no longer carries a
+nullable item id); there is no replacement factory — build stacks from an id with the constructors above.
 
 ---
 
@@ -463,7 +537,9 @@ ItemUtility getUtility()      // Utility properties (if utility item)
 
 ### Interactions
 ```java
+// still on Item
 Map<InteractionType, String> getInteractions()
+Map<InteractionType, String> getCarryInteractions()
 Map<String, String> getInteractionVars()
 InteractionConfiguration getInteractionConfig()
 ```
@@ -523,7 +599,8 @@ boolean canAddItemStack(ItemStack item, boolean addAllOrNothing, boolean fullSta
 
 ItemStackTransaction addItemStack(ItemStack item)
 ItemStackTransaction addItemStack(ItemStack item, boolean addAllOrNothing, boolean fullStacks, boolean filter)
-ItemStackTransaction addItemStacks(List<ItemStack> items)
+ListTransaction<ItemStackTransaction> addItemStacks(List<ItemStack> items)
+ListTransaction<ItemStackTransaction> addItemStacks(List<ItemStack> items, boolean addAllOrNothing, boolean fullStacks, boolean filter)
 ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(List<ItemStack> items)
 ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(short startSlot, List<ItemStack> items)
 ListTransaction<ItemStackSlotTransaction> addItemStacksOrdered(List<ItemStack> items, boolean addAllOrNothing, boolean fullStacks)
@@ -539,14 +616,19 @@ ItemStackSlotTransaction removeItemStackFromSlot(short slotIndex, ItemStack item
 
 // By item
 ItemStackTransaction removeItemStack(ItemStack item)
-ItemStackTransaction removeItemStacks(List<ItemStack> items)
+ListTransaction<ItemStackTransaction> removeItemStacks(List<ItemStack> items)
 ```
 
 ### Removing Materials
 ```java
 MaterialSlotTransaction removeMaterialFromSlot(short slotIndex, MaterialQuantity material)
 MaterialTransaction removeMaterial(MaterialQuantity material)
-MaterialTransaction removeMaterials(List<MaterialQuantity> materials)
+ListTransaction<MaterialTransaction> removeMaterials(List<MaterialQuantity> materials)
+boolean canRemoveMaterial(MaterialQuantity material)
+
+// 0.6.3+: how many units of the material this container could give up (honouring slot filters unless filter=false)
+int countRemovableMaterial(MaterialQuantity material)
+int countRemovableMaterial(MaterialQuantity material, boolean filter)
 ```
 
 ### Removing Resources
@@ -866,9 +948,10 @@ container.replaceAll((slot, existing) -> {
 ## MaterialQuantity
 **Package:** `com.hypixel.hytale.server.core.inventory`
 
-Represents a quantity of crafting material.
+Represents a quantity of crafting material. Exactly one of `itemId` / `resourceTypeId` / `tag` identifies the
+material (JSON keys `ItemId`, `ResourceTypeId`, `ItemTag`; plus `Quantity` and `Metadata`).
 
-### Fields
+### Fields (protected — read through the getters)
 ```java
 String itemId
 String resourceTypeId
@@ -876,11 +959,24 @@ String tag
 int tagIndex
 int quantity
 BsonDocument metadata
+Set<String> excludedItemIds
 ```
 
 ### Methods
 ```java
+MaterialQuantity(String itemId, String resourceTypeId, String tag, int quantity, BsonDocument metadata)
+
+String getItemId()
+String getResourceTypeId()
+int getTagIndex()
+int getQuantity()
+BsonDocument getMetadata()
+Set<String> getExcludedItemIds()
+boolean isItemExcluded(String itemId)
+MaterialQuantity withExcludedItemIds(Set<String> excluded)
+
 ItemStack toItemStack()
+static List<ItemStack> toItemStacks(MaterialQuantity[] materials)   // 0.6.3+: bulk form of toItemStack()
 ResourceQuantity toResource()
 MaterialQuantity clone(int newQuantity)
 ```
@@ -926,6 +1022,9 @@ static int testRemoveMaterialFromSlot(ItemContainer container, short slot, Mater
 // Same check, but reports which slots would be drained
 static TestRemoveItemSlotResult getTestRemoveMaterialFromItems(ItemContainer container,
                                        MaterialQuantity material, int testQuantityRemaining, boolean filter)
+
+// 0.6.3+: total units of the material present (what ItemContainer.countRemovableMaterial delegates to)
+static int countMaterialFromItems(ItemContainer container, MaterialQuantity material, boolean filter)
 ```
 
 The `MaterialQuantity` decides the matching mode: by `itemId`, by `resourceTypeId`, or by `tagIndex`.
@@ -1200,10 +1299,11 @@ ItemStack item = new ItemStack("magic_sword", 1)
 ### Access via LivingEntity
 ```java
 LivingEntity entity = ...;
-Inventory inv = entity.getInventory();
-entity.setInventory(newInventory);
-entity.setInventory(newInventory, true);  // with notification
+Inventory inv = entity.getInventory();   // returns the deprecated Inventory (see the banner at the top of the page)
 ```
+
+There is no `setInventory(...)` on `LivingEntity` — sections are replaced by writing the corresponding
+`InventoryComponent` (e.g. `InventoryComponent.Hotbar`) on the entity, not by swapping an `Inventory` object.
 
 ---
 
@@ -1299,10 +1399,11 @@ Specifies crafting bench requirements for a recipe.
 
 ### Fields
 ```java
-BenchType type           // Type of bench required
-String id                // Specific bench ID (optional)
-String[] categories      // Bench categories (optional)
-int requiredTierLevel    // Minimum bench tier level
+BenchType type                // Type of bench required
+String id                     // Specific bench ID (optional)
+String[] categories           // Bench categories (optional)
+int requiredTierLevel         // Minimum bench tier level
+String[] requiredAugmentTags  // 0.6.3+: augment-block tags the bench must carry (JSON `RequiredAugmentTags`; no shipped recipe sets it yet)
 ```
 
 ### Usage
@@ -1697,10 +1798,13 @@ gravity toward its resting state. Not something plugins normally instantiate —
 reusable for custom item-like entities:
 
 ```java
-static void moveOutOfBlock(WorldChunk chunk, Vector3d position, Velocity velocity, Box boundingBox)
+static void moveOutOfBlock(BlockSection section, Vector3d position, Velocity velocity, Box boundingBox)
 static void applyGravity(float dt, Box boundingBox, PhysicsValues physicsValues,
                          Vector3d position, Velocity velocity)
 ```
+
+`moveOutOfBlock` takes a `com.hypixel.hytale.server.core.universe.world.chunk.section.BlockSection` as of 0.6.3
+(it took a `WorldChunk` before — chunk storage was re-cut into per-section components in this build).
 
 > **See also:** [DropItemEvent](#dropitemevent), [InteractivelyPickupItemEvent](#interactivelypickupitemevent)
 
@@ -1713,7 +1817,7 @@ Backtick-quoted error strings below are the literal messages thrown by the build
 - **Symptom:** an item given with the wrong case (e.g. `plant_fruit_apple`) is accepted but renders as a `?` placeholder on the client → item ids are **case-sensitive on the client**, while `getItem()` resolves loosely server-side (so a mis-cased id is not `Item.UNKNOWN`). Fix: use the exact asset-file casing, e.g. `Plant_Fruit_Apple`.
 - **Symptom:** `ItemStack.isValid()` rejects an item you know exists → `isValid()` can reject valid items in some cases. Fix: test `stack.getItem() == Item.UNKNOWN` instead (see [Validating Item IDs](#validating-item-ids)).
 - **Symptom:** items appear not to be added even though there is space → you discarded the transaction result. Fix: check `result.succeeded()` and inspect `result.getRemainder()` rather than assuming success.
-- **`Container must have something to drop!`** → a drop operation was called on an empty container. Fix: guard with `!container.isEmpty()` first.
+- **`Container must have something to drop!`** → an **asset-load validation** failure, not a runtime error: an `ItemDropList` (`com.hypixel.hytale.server.core.asset.type.item.config.ItemDropList` — a `Server/Drops/*.json` loot table, or an inline `DropList` inside a block's `Gathering` / breaking config) declared a drop container with no drops in it. Fix: give the list at least one drop entry, or remove the empty container.
 - **`setSlot(int, ItemStack) is not supported in EmptyItemContainer`** → you mutated the shared empty-container singleton (e.g. a section the entity doesn't have). Fix: operate on a real section/container obtained from the live `Inventory`.
 - **`cannot select an active slot`** → an active-slot setter received a slot that the target section can't make active. Fix: pass a valid in-range slot for that section.
 

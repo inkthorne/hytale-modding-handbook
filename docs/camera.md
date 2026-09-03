@@ -89,7 +89,8 @@ The per-player [`CameraManager`](#cameramanager) component sends exactly this fr
 **Package:** `com.hypixel.hytale.protocol`
 
 A plain mutable struct: no-arg constructor (then assign public fields), a copy constructor, and
-a full 30-arg all-fields constructor. The table lists the **default** each field holds after
+a full all-fields constructor (34 args as of 0.6.3 — it grew four fields, marked below; prefer the
+no-arg form so a future build can't silently shift positional arguments). The table lists the **default** each field holds after
 `new ServerCameraSettings()` — note several differ from the all-zero you might assume (e.g. the
 lerp speeds and `speedModifier` default to `1.0`, `isFirstPerson` to `true`).
 
@@ -106,11 +107,13 @@ lerp speeds and `speedModifier` default to `1.0`, `isFirstPerson` to `true`).
 | `sendMouseMotion` | `boolean` | `false` | Stream mouse motion back to the server; the demo cam sets `true` |
 | `skipCharacterPhysics` | `boolean` | `false` | *(effect inferred)* |
 | `isFirstPerson` | `boolean` | `true` | Presets set `false` |
+| `hideHeldItem` | `boolean` | `false` | 0.6.3+ — hide the held item while the server camera is active *(effect inferred; no preset sets it)* |
 | `movementForceRotationType` | `MovementForceRotationType` | `AttachedToHead` | `AttachedToHead \| CameraRotation \| Custom`; presets use `Custom` |
 | `movementForceRotation` | `Direction` | `null` | Movement frame when type=`Custom` *(effect inferred)* |
 | `attachedToType` | `AttachedToType` | `LocalPlayer` | `LocalPlayer \| EntityId \| None` *(effect inferred)* |
 | `attachedToEntityId` | `int` | `0` | Target entity when `attachedToType=EntityId` *(effect inferred)* |
 | `eyeOffset` | `boolean` | `false` | Presets set `true` *(offsets to eye height — inferred)* |
+| `followAttachedEntity` | `boolean` | `false` | 0.6.3+ — track the attached entity as it moves *(effect inferred; no preset sets it)* |
 | `positionDistanceOffsetType` | `PositionDistanceOffsetType` | `DistanceOffset` | `DistanceOffset \| DistanceOffsetRaycast \| None`; presets use `DistanceOffset` (camera sits `distance` away along rotation; the `Raycast` variant presumably stops at terrain) |
 | `positionOffset` | `Position` | `null` | *(effect inferred)* |
 | `rotationOffset` | `Direction` | `null` | *(effect inferred)* |
@@ -125,6 +128,8 @@ lerp speeds and `speedModifier` default to `1.0`, `isFirstPerson` to `true`).
 | `lookMultiplier` | `Vector2fc` | `null` | *(effect inferred)* |
 | `mouseInputType` | `MouseInputType` | `LookAtTarget` | `LookAtTarget \| LookAtTargetBlock \| LookAtTargetEntity \| LookAtPlane`; presets use `LookAtPlane` (project the cursor onto a plane → click-on-ground targeting) |
 | `planeNormal` | `Vector3fc` | `null` | The `LookAtPlane` plane normal; topdown=`(0,1,0)` (ground), sidescroller=`(0,0,1)` |
+| `baseFov` | `Float` | `null` | 0.6.3+ — override the field of view; `null` keeps the client's setting *(effect inferred)* |
+| `depthOfField` | `DepthOfFieldSettings` | `null` | 0.6.3+ — depth-of-field blur: floats `nearBlurry`, `nearSharp`, `farSharp`, `farBlurry`, `nearBlurMax`, `farBlurMax` (`com.hypixel.hytale.protocol.DepthOfFieldSettings`, all default `0`) *(effect inferred)* |
 
 > [!NOTE]
 > **`rotation` is in radians here.** The camera-packet path assigns a `Direction` directly
@@ -133,7 +138,7 @@ lerp speeds and `speedModifier` default to `1.0`, `isFirstPerson` to `true`).
 > The component order is `(yaw, pitch, roll)`; pitch `−π/2` points the camera straight down.
 
 The nullable vector/`Direction`/`Position` fields (`rotation`, `movementMultiplier`,
-`planeNormal`, the offsets, …) are genuinely optional on the wire — leaving them `null` sends a
+`planeNormal`, the offsets, `baseFov`, `depthOfField`, …) are genuinely optional on the wire — leaving them `null` sends a
 zeroed slot, so only set the ones a given view needs.
 
 ---
@@ -315,7 +320,7 @@ first- and third-person **perspective**. It **cannot** zoom or reposition — th
 [packet path](#the-setservercamera-packet) only.
 
 Real shipped example — `Server/Item/Items/_Debug/Test_Camera_Item.json` (the only asset in 0.5.9
-that uses this interaction type, and it only exercises `ForcePerspective`):
+— still the only one in 0.6.3 — that uses this interaction type, and it only exercises `ForcePerspective`):
 
 ```json
 "Next": {
@@ -351,10 +356,10 @@ It holds two keyframe arrays that animate the camera while the interaction runs:
 ```json
 "Camera": {
   "FirstPerson": [
-    { "Time": 0.1, "Position": [0, 0, 0], "Rotation": [0, 0, 0] }
+    { "Time": 0.1, "Position": { "X": 0, "Y": 0, "Z": 0 }, "Rotation": { "Yaw": 0, "Pitch": 0, "Roll": 0 } }
   ],
   "ThirdPerson": [
-    { "Time": 0.1, "Position": [0, 0, 0], "Rotation": [0, 0, 0] }
+    { "Time": 0.1, "Position": { "X": 0, "Y": 0, "Z": 0 }, "Rotation": { "Yaw": 0, "Pitch": 0, "Roll": 0 } }
   ]
 }
 ```
@@ -364,13 +369,14 @@ Each keyframe (`InteractionCamera`):
 | JSON key | Type | Default | Notes |
 |----------|------|---------|-------|
 | `Time` | float | `0.1` | Seconds; **must be > 0**, and entries in each array must be in strictly increasing `Time` order (validator rejects ties/out-of-order) |
-| `Position` | `Vector3f` | `[0,0,0]` | Camera offset; non-null |
-| `Rotation` | `Direction` | `[0,0,0]` | **In degrees** — the codec multiplies each component by π/180 on load (yaw/pitch/roll). Non-null |
+| `Position` | `Vector3f` | `{X:0,Y:0,Z:0}` | Camera offset as an `{ "X", "Y", "Z" }` object (`Vector3fUtil.CODEC`), **not** an array; non-null |
+| `Rotation` | `Direction` | `{Yaw:0,Pitch:0,Roll:0}` | `{ "Yaw", "Pitch", "Roll" }` object, **in degrees** — the codec multiplies each component by π/180 on load. Non-null |
 
-> **No shipped asset uses these `FirstPerson`/`ThirdPerson` keyframe arrays on an interaction**
-> in 0.5.9 (the `"Camera"` blocks you'll find in `Server/Models/**` are a *different*, model-camera
-> schema with `PositionOffset` / `Yaw` / `Pitch`). The schema above is verified from the codec, but
-> has no in-game example to copy.
+> **One shipped asset uses these keyframe arrays** as of 0.6.3 (none did in 0.5.9):
+> `Server/Item/Interactions/Weapons/Two_Handed_Bow/Debug_Bow_Two_Handed_Ability1.json` puts a single
+> `FirstPerson` keyframe (`Time: 0.3`, `Position: {X:0, Y:-0.7, Z:0}`, no `Rotation`) on its dash
+> interaction. The `"Camera"` blocks you'll find in `Server/Models/**` are a *different*, model-camera
+> schema with `PositionOffset` / `Yaw` / `Pitch`.
 
 ---
 

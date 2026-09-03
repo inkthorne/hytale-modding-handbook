@@ -81,22 +81,22 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 
 **DamageResistance example:**
 
-`DamageResistance` maps each damage type to an array of modifier objects (`{ CalculationType, Amount }`):
+`DamageResistance` maps each damage type to an array of modifier objects (`{ CalculationType, Amount }`). Each entry is a `ResistanceModifier` (`com.hypixel.hytale.server.core.modules.entity.damage.ResistanceModifier`), whose `CalculationType` is **`Percent`** or **`Flat`** — *not* the `Additive`/`Multiplicative` pair used by [`RawStatModifiers`](#rawstatmodifiers) below. (The older `Multiplicative` spelling was replaced by `Percent` by 0.6.3; every shipped `DamageResistance` entry now uses `Percent`.)
 
 ```json
 {
   "DamageResistance": {
     "Fire": [
-      { "Amount": 1.0, "CalculationType": "Multiplicative" }
+      { "Amount": 1.0, "CalculationType": "Percent" }
     ],
     "Physical": [
-      { "CalculationType": "Multiplicative", "Amount": 0.05 }
+      { "CalculationType": "Percent", "Amount": 0.05 }
     ]
   }
 }
 ```
 
-For `Multiplicative`, `Amount` is the fraction of damage removed (1.0 = immune, 0.05 = 5% reduction, 0 = no resistance).
+For `Percent`, `Amount` is the fraction of damage removed (1.0 = immune, 0.05 = 5% reduction, 0 = no resistance — the jar's own doc string: "0.25 equals 25% reduction"). `Flat` subtracts a flat amount of damage instead. The engine sums all `Flat` entries and all `Percent` entries per damage cause (armor and active effects together — `ArmorDamageReduction` in `DamageSystems`) before applying them.
 
 ### Model Transformation
 
@@ -154,7 +154,7 @@ For complex stat changes with calculation control. `RawStatModifiers` maps each 
 |----------|------|-------------|
 | `Amount` | number | Value to apply (for `Multiplicative`, a factor such as `1.15` = +15%) |
 | `CalculationType` | string | How to calculate (`Additive`, `Multiplicative`) |
-| `Target` | string | Which value to target (`Max`, `Current`) |
+| `Target` | string | Which bound to modify: `Max` or `Min` (`Modifier.ModifierTarget`; modifiers never touch the *current* value — see [Stat Modifiers from Java](#stat-modifiers-from-java-modifier--staticmodifier)) |
 
 ```json
 {
@@ -191,12 +191,15 @@ Effects applied when the status effect starts (one-time application):
 | `WorldSoundEventId` | string | Sound played for all nearby entities |
 | `Particles` | array | Particle systems to spawn on the entity |
 | `ScreenEffect` | string | Screen overlay effect for the affected player |
+| `ModelVFXId` | string | Model VFX asset applied to the entity while the effect lasts (e.g. `"Freeze"` in `Status/Freeze.json`, `"Intangible_Dark"` in `Status/Slow.json`) |
+| `KnockbackMultiplier` | float | Scales knockback received while the effect is active (`0` = immune to knockback — `Status/Root.json`) |
 
 **Movement restriction:**
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `MovementEffects.DisableAll` | boolean | Completely disable all movement |
+| `MovementEffects.SpeedMultiplier` | float | Movement-speed multiplier (default `1.0`) — added by 0.6.3 alongside the per-direction `DisableForward`/`DisableBackward`/`DisableLeft`/`DisableRight`/`DisableSprint`/`DisableJump`/`DisableCrouch` flags. No shipped effect uses it yet; vanilla slows still use the top-level `HorizontalSpeedMultiplier` |
 
 **Ability restriction:**
 
@@ -378,7 +381,7 @@ From `Server/Entity/Effects/Immunity/Immunity_Fire.json`:
   "Infinite": true,
   "DamageResistance": {
     "Fire": [
-      { "Amount": 1.0, "CalculationType": "Multiplicative" }
+      { "Amount": 1.0, "CalculationType": "Percent" }
     ]
   }
 }
@@ -517,6 +520,11 @@ Conditions control when regeneration rules apply. Each condition object is keyed
 | `Wielding` | - | Entity is wielding/blocking |
 | `Charging` | - | Entity is charging an interaction |
 | `RegenHealth` | - | Health regeneration is enabled |
+| `HasEffect` | `EffectId` | Entity has the named status effect active |
+| `InFluid` | `FluidIds`, `Tags` | Entity is in one of the listed fluids (by id or tag) |
+| `OutOfCombat` | - | Entity is out of combat |
+| `Environment` | `Environments` | Entity is in one of the listed environments |
+| `LogicCondition` | `Conditions`, `Operator` | Combines nested conditions with a logical operator |
 
 All conditions support an `Inverse` property to negate the check:
 
@@ -534,7 +542,12 @@ For `Stat` conditions:
 | Value | Meaning |
 |-------|---------|
 | `Gte` | Greater than or equal to (>=) |
+| `Gt` | Greater than (>) |
+| `Lte` | Less than or equal to (<=) |
 | `Lt` | Less than (<) |
+| `Equal` | Equal to (=) |
+
+(`StatCondition.StatComparisonType`; vanilla stats only use `Gte` and `Lt`.)
 
 **Stat condition example:**
 
@@ -837,6 +850,8 @@ stats.removeModifier(healthIndex, "MyPlugin_Blessing");  // remove when the buff
 
 Raising `MAX` does not raise the *current* value — follow up with `stats.addStatValue(...)` or `maximizeStatValue(...)` if the buff should also heal. For modifiers driven by equipment/effect recalculation, see `StatModifiersManager` in [entities.md](entities.md#statmodifiersmanager).
 
+As of 0.6.3 `EntityStatMap` also offers `minStatValue(int, float)` / `maxStatValue(int, float)` — clamp the *current* value to at most / at least the given value (returns the resulting value) — and `setStatChangeSuppressed(int, StatChangeDirection, boolean)` / `isStatChangeSuppressed(int, StatChangeDirection)`, where `StatChangeDirection` (`com.hypixel.hytale.server.core.modules.entitystats.StatChangeDirection`) is `RAISE`, `LOWER`, or `BOTH`: value changes in a suppressed direction are dropped by the value-setting methods (e.g. suppress `LOWER` on health to make an entity temporarily unkillable without touching its resistances).
+
 ### EntityStatsModule
 
 **Package:** `com.hypixel.hytale.server.core.modules.entitystats`
@@ -861,7 +876,8 @@ The `resolveEntityStats` helpers are the supported way to turn stat *names* from
 Backtick-quoted error strings below are the literal messages thrown by the build-12 effect/stat subsystem (verified against `HytaleServer.jar`).
 
 - **`Unknown EntityEffect with index`** → an effect was applied/cleared by an id that doesn't resolve to a loaded effect asset (e.g. an `ApplyEffect`/`ClearEntityEffect` `EffectId`/`EntityEffectId` typo). Fix: the id must match an effect file under `Server/Entity/Effects/` exactly (case-sensitive).
-- **Symptom:** a `DamageResistance` of `0` lets full damage through and `1.0` blocks everything (feels inverted) → for `Multiplicative`, `Amount` is the *fraction removed* (`1.0` = immune, `0` = no resistance). Fix: use `Amount` as the removed fraction, not the surviving fraction.
+- **Symptom:** a `DamageResistance` of `0` lets full damage through and `1.0` blocks everything (feels inverted) → for `Percent`, `Amount` is the *fraction removed* (`1.0` = immune, `0` = no resistance). Fix: use `Amount` as the removed fraction, not the surviving fraction.
+- **Symptom:** a `DamageResistance` entry with `"CalculationType": "Multiplicative"` or `"Additive"` fails to load → those are `RawStatModifiers` calculation types; `DamageResistance` entries are `ResistanceModifier`s whose enum is `Flat` / `Percent` (renamed from `Multiplicative` by 0.6.3). Fix: use `Percent` for fractional reduction, `Flat` for a flat subtraction.
 - **Symptom:** a `Multiplicative` `RawStatModifiers` `Amount` of `1.15` doesn't add 15% → for `Multiplicative` the value is a factor (`1.15` ≈ +15%, `1.0` = no change), not an additive bonus. Fix: use `Additive` with the flat delta if you want a plain add.
 - **Symptom:** a stat with `Max: 0` (e.g. Mana) never holds any value → its cap starts at 0 and is meant to be raised by gear/effects granting max. Fix: grant a max-stat modifier rather than only adding current value.
 - **Symptom:** a `Regenerating` rule never ticks → one of its `Conditions` is unmet, and all conditions in the array must be true. Fix: check each `Id` (and any `Inverse`), since e.g. `NoDamageTaken`/`CheckPlayerGameMode` silently gate the whole rule.

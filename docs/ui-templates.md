@@ -116,13 +116,22 @@ file member whose value is an element block, for example in `Common.ui`:
 
 ```
 @TextButton = TextButton {
-    @Anchor = Anchor();
-    @Text = "";
-    Style: ( ...@DefaultTextButtonStyle );
-    Anchor: (...@Anchor, Height: @DefaultButtonHeight);
-    Text: @Text;
+  @Anchor = Anchor();
+  @Sounds = ();
+  Style: (
+    ...@DefaultTextButtonStyle,
+    Sounds: (
+      ...$Sounds.@ButtonsLight,
+      ...@Sounds
+    )
+  );
+  Anchor: (...@Anchor, Height: @DefaultButtonHeight);
+  Padding: (Horizontal: @DefaultButtonPadding);
+  Text: @Text;
 };
 ```
+
+(`@Text` has no default here — the instance must supply it; `@Anchor` and `@Sounds` default to empty.)
 
 ### Syntax
 
@@ -271,21 +280,22 @@ styling values in `Common.ui`. Examples taken from real files:
 ```
 @DefaultLabelStyle = (FontSize: 16, TextColor: #96a9be);          // anonymous object
 
-@SubtitleStyle = LabelStyle(FontSize: 15, RenderUppercase: true, TextColor: #96a9be);
+@SubtitleStyle = LabelStyle(FontSize: 15, RenderUppercase: true, TextColor: #96a9be, RenderBold: true);
 @InputBoxBackground = PatchStyle(TexturePath: "Common/InputBox.png", Border: 16);
 @DefaultTextButtonStyle = TextButtonStyle(
     Default: (Background: @DefaultButtonDefaultBackground, LabelStyle: @DefaultButtonLabelStyle),
     Hovered: (Background: @DefaultButtonHoveredBackground, LabelStyle: @DefaultButtonLabelStyle)
 );
 @DefaultDropdownBoxStyle = DropdownBoxStyle( /* ... */ );
-@ContentPadding = Padding(Full: 17, Top: 8);
+@ContentPaddingFull = 9 + 8;                                       // arithmetic is allowed
+@ContentPadding = Padding(Full: @ContentPaddingFull, Top: 8);
 @TopTabAnchor = Anchor(Width: 82, Height: 62, Right: 5, Bottom: -14);
 ```
 
 Common constructor types seen in `Common.ui` include `LabelStyle`, `PatchStyle`,
-`ButtonStyle`, `TextButtonStyle`, `DropdownBoxStyle`, `SliderStyle`, `ScrollbarStyle`,
-`CheckBoxStyle`, `ColorPickerStyle`, `TabStyleState`, `TabNavigationStyle`,
-`TextTooltipStyle`, `Anchor`, and `Padding`. An anonymous `(...)` object (no type name)
+`ButtonStyle`, `TextButtonStyle`, `InputFieldStyle`, `DropdownBoxStyle`, `FileDropdownBoxStyle`,
+`ColorPickerDropdownBoxStyle`, `SliderStyle`, `ScrollbarStyle`, `CheckBoxStyle`, `ColorPickerStyle`,
+`PopupMenuLayerStyle`, `TabStyleState`, `TabNavigationStyle`, `TextTooltipStyle`, `Anchor`, and `Padding`. An anonymous `(...)` object (no type name)
 is also valid where the type can be inferred from the property it is assigned to.
 
 ### Using Variables
@@ -435,13 +445,18 @@ Label #ButtonLabel {
 
 ### Server-Side Registration
 
-Localization keys are registered server-side. See [Internationalization](i18n.md) for details.
+There is no registration API to call: the server loads translations from `.lang` files in every asset pack's `Server/Languages/<lang>/` folder, and **the file name becomes the key's first segment**. The `%server.customUI.…` keys used by the engine's own pages come from `server.lang`; a plugin ships its own file and uses its own prefix (see [Internationalization → Shipping translations with a plugin](i18n.md#shipping-translations-with-a-plugin)):
 
-```java
-// In your plugin setup
-LocalizationManager localization = server.getLocalizationManager();
-localization.register("server.customUI.welcomeMessage", "Welcome to the server!");
-localization.register("server.customUI.submitButton", "Submit");
+```
+# src/main/resources/Server/Languages/en-US/my_plugin.lang   (needs "IncludesAssetPack": true)
+welcomeMessage = Welcome to the server!
+submitButton = Submit
+```
+
+```
+Label #WelcomeMessage {
+    Text: %my_plugin.welcomeMessage;
+}
 ```
 
 ### Dynamic Text with Placeholders
@@ -455,9 +470,9 @@ cmd.set("#playerName.Text", "Welcome, " + playerName + "!");
 
 ### Best Practices
 
-1. Use descriptive namespace paths: `server.customUI.pageName.elementPurpose`
+1. Use descriptive key paths below your file prefix: `my_plugin.pageName.elementPurpose`
 2. Keep keys consistent across your plugin
-3. Provide fallback text in the registration
+3. Always ship an `en-US` file — it is the server's default/fallback language (`I18nModule.DEFAULT_LANGUAGE`)
 
 ---
 
@@ -725,7 +740,7 @@ eventBuilder.addEventBinding(CustomUIEventBindingType.Activating, "MyButton");
 
 ## Gotchas & Errors
 
-- **Symptom:** a `%namespace.key` displays as the literal key text on the client → the key was never registered server-side. Fix: register it (see [Server-Side Registration](#server-side-registration) and [Internationalization](i18n.md)), and provide fallback text.
+- **Symptom:** a `%namespace.key` displays as the literal key text on the client → no loaded `.lang` file defines that exact key. Fix: check the prefix (`my_plugin.lang` → `my_plugin.<key>`), the file location (`Server/Languages/<lang>/`), and the manifest's `"IncludesAssetPack": true` (see [Server-Side Registration](#server-side-registration) and [Internationalization](i18n.md)).
 - **Symptom:** an event binding or `cmd.set("#Id…")` targets an element that "exists" but never updates → element IDs are **case-sensitive**, so `#myButton` and `#MyButton` are different elements. Fix: match the exact casing used in the `.ui` file (see [ID Requirements](#id-requirements)).
 - **Symptom:** `addEventBinding`/`cmd.set` silently does nothing for an ID you copied from a binding call → command/targeting selectors need the leading `#` (`cmd.set("#MyButton.Text", …)`), but event-binding IDs are passed **without** `#` (`addEventBinding(…, "MyButton")`). Fix: use `#` only in targeting selectors, not in `addEventBinding` IDs.
 

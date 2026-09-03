@@ -75,6 +75,9 @@ Top-level keys the config codec recognizes (capitalization exact):
 | `Backup` | Auto-backup settings |
 | **`Defaults`** | **Default world + game mode for joining players (see below)** |
 | `WorldMap` · `PlayerStorage` · `LogLevels` | World-map, player-storage, and logging config |
+| `RequireJoinPermission` | 0.6.3+: when `true`, only players holding the join permission can connect (bool) |
+| `UniverseResourceStorage` · `BanStorage` | 0.6.3+: storage-provider blocks for universe-level resources and the ban list (`{ "Type": ... }`, like the per-world `ChunkStorage`) |
+| `ConnectionTimeouts` · `RateLimit` · `ModLoadOrder` · `AuthCredentialStore` · `Update` · `FallbackServer` · `DisplayTmpTagsInStrings` | Connection timeouts, packet rate limits, explicit mod load order, auth credential storage, auto-update, fallback server (`Host`/`Port`), and a debug flag for untranslated strings |
 
 > Singleplayer saves omit most server fields (`ServerName`, `MOTD`, `Password`, `MaxPlayers`)
 > and fall back to defaults. Add them when hosting a dedicated server.
@@ -91,6 +94,10 @@ Top-level keys the config codec recognizes (capitalization exact):
 |-----|-------------|
 | `World` | Name of the `universe/worlds/<name>/` folder to spawn players into |
 | `GameMode` | Default game mode (`Adventure` / `Creative`) |
+| `GameModeTypeOnDeath` | 0.6.3+: game-mode type players are switched to when they die — the server-wide *fallback*, used only when the world's gameplay config `Death.GameModeTypeOnDeath` is unset (`World.getGameModeTypeOnDeath()` checks the gameplay value first) |
+| `HardcoreMode` | 0.6.3+: `None`, `PerPlayer`, or `Global` (`server.core.universe.hardcore.HardcoreMode`) — enables the hardcore ruleset, scoped per player or for the whole universe |
+| `HardcoreLives` | 0.6.3+: lives per player/world in hardcore mode (int) |
+| `CrashRecovery` | 0.6.3+: what happens when a world crashes — `{ "Mode": None/Reload/Shutdown, "MaxAttempts", "RetryDelaySeconds", "Fallback": None/Shutdown }` (`MaxAttempts`/`RetryDelaySeconds`/`Fallback` apply to `Reload` only; the same block is accepted per world) |
 
 How it resolves, from `Universe.getDefaultWorld()` (decompiled):
 
@@ -100,7 +107,8 @@ return worldName != null ? getWorld(worldName) : null;   // getWorld lowercases 
 ```
 
 When the `Defaults` block is **absent**, the server falls back to the world literally named
-**`default`** (a hardcoded `"default"` string constant). This is why creative saves — which
+**`default`** (`Defaults.World` is initialised to `"default"` in `HytaleServerConfig.Defaults`; the same
+string is `World.DEFAULT`). This is why creative saves — which
 write no `Defaults` block — spawn you into the `default/` world. **To host a specific world
 (e.g. a flat arena), set `Defaults.World` to that world's folder name.**
 
@@ -141,6 +149,9 @@ Key fields:
 | `GameplayConfig` | Named [GameplayConfig](world.md#gameplayconfig) asset (`Default`, `CreativeHub`, ...) |
 | `IsTicking` / `IsBlockTicking` | Whether the world / its blocks tick |
 | `Plugin` | Per-world plugin config (see [CreativeHub](#the-crossroads-is-the-creativehub-plugin)) |
+| `ChunkStorage` / `ResourceStorage` | `{ "Type": "Hytale" }` — storage-provider selection (see [Programmatic persistence](#programmatic-persistence-plugin-api)) |
+| `DeleteOnRemove` / `DeleteOnUniverseStart` | Delete the world's files when it is removed / on universe boot (bool) |
+| `CrashRecovery` | 0.6.3+: per-world crash-recovery policy, same shape as the server-level `Defaults.CrashRecovery` |
 
 ### WorldGen — binding to a structure
 
@@ -310,8 +321,10 @@ cd /path/to/save-directory
 java -jar /path/to/Server/HytaleServer.jar --assets /path/to/Assets.zip
 ```
 
-Optional flags include `--backup` and `--backup-dir <dir>` for periodic world backups. Players join
-and spawn directly into your authored world.
+Optional flags include `--backup` with `--backup-dir <dir>` (plus `--backup-frequency <min>`,
+`--backup-max-count` and `--backup-archive-max-count`) for periodic world backups, and `--mods <dir,...>`
+for extra mod directories (all from `com.hypixel.hytale.server.core.Options`). Players join and spawn
+directly into your authored world.
 
 ## Updating a world on a running server
 
@@ -330,6 +343,9 @@ console commands:
 | `/world remove <name>` (alias `rm`) | Unload the world from the running universe (does not delete its files unless the world's `DeleteOnRemove` is set). You can't remove the only loaded world, and removing the world named by `Defaults.World` requires reassigning the default first. |
 | `/world load <name>` | Load an on-disk world that isn't currently loaded |
 | `/world add <name> [gen …]` | Create a new world |
+| `/world list` (alias `ls`) | List loaded worlds (`/world` itself has the alias `/worlds`) |
+| `/world setdefault <name>` | Reassign `Defaults.World` on the running server (the step `remove` needs for the default world) |
+| `/world prune` · `/world rocksdb compact` · `/world tps` · `/world perf` | 0.6.3 additions: bulk-remove prunable worlds (each goes through `Universe.removeWorld`), compact a `RocksDb` chunk store, and per-world tick-rate / performance diagnostics |
 
 So the live update loop is:
 
@@ -370,8 +386,8 @@ plugins can persist their own keyed records under `universe/` with a **data stor
 
 A world's `chunks/` data goes through the `IChunkStorageProvider` on its runtime `WorldConfig`
 (`world.getWorldConfig().getChunkStorageProvider()` / `setChunkStorageProvider(...)`). Providers
-are codec-registered by id; the ids `Universe` registers are `Hytale` (default), `IndexedStorage`,
-`RocksDb`, `Migration`, and `Empty`.
+are codec-registered by id; the ids `Universe` registers are `Hytale` (`DefaultChunkStorageProvider`,
+still the `Priority.DEFAULT` choice in 0.6.3), `IndexedStorage`, `RocksDb`, `Migration`, and `Empty`.
 
 ```java
 // IChunkStorageProvider<Data>
@@ -382,12 +398,18 @@ void close(Data data, Store<ChunkStore> store)
 void delete(Data data, Store<ChunkStore> store)
 <OtherData> Data migrateFrom(Store<ChunkStore> store, IChunkStorageProvider<OtherData> from)  // default: copy all chunks over
 boolean isSame(IChunkStorageProvider<?> other)                                                // default
+
+// Crash-recovery hooks (0.6.3+, all default no-ops; paired with the CrashRecovery config)
+IChunkLoader getRecoveryLoader(Store<ChunkStore> store, Path backupPath)
+void beginRecovery(Path file, Path recoveryPath)
+void revertRecovery(Path file, Path recoveryPath)
 ```
 
 | Provider | Id | Use |
 |----------|----|-----|
 | `EmptyChunkStorageProvider` (`INSTANCE`) | `Empty` | Loads nothing, saves nowhere — for worlds that must never touch disk (e.g. throwaway instances) |
 | `MigrationChunkStorageProvider` | `Migration` | Wraps old (`from[]`) and new (`to`) providers: reads fall back through the old formats, writes go to the new one |
+| `RocksDbChunkStorageProvider` | `RocksDb` | 0.6.3+: RocksDB-backed chunk store (this is the provider that sets `ChunkFlag.NEEDS_FORMAT_REWRITE` on old-format chunks). Tunable through `hytale.rocksdb.*` system properties (`stats`, `io_threads`, `min_blob_size`, `blob_cache_size`, `blob_gc_age_cutoff`, `blob_gc_force_threshold`, `blob_compaction_readahead_size`); `/world rocksdb compact` triggers a compaction |
 
 The loader/saver pair a provider hands out is the actual chunk I/O surface:
 
@@ -398,13 +420,17 @@ LongList getIndexes()
 
 // IChunkSaver (extends Closeable)
 CompletableFuture<Void> saveHolder(int x, int z, Holder<ChunkStore> holder)
+CompletableFuture<Void> saveChunkColumn(int x, int z, Store<ChunkStore> store, Ref<ChunkStore> column,
+                                        Executor executor, Runnable onComplete)   // default (0.6.3+): save a live column entity
 CompletableFuture<Void> removeHolder(int x, int z)
 LongList getIndexes()
 void flush()
-void compact(long[] indexes)                               // default
-void pauseBackgroundSaving(ChunkSavingSystems.Data data)   // default
-void resumeBackgroundSaving()                              // default
+CompletableFuture<Void> compact(long[] indexes)                  // default; returned a void before 0.6.3
+void pauseBackgroundSaving(ChunkSavingSystems.Data data)         // default
+CompletableFuture<Void> resumeBackgroundSaving()                 // default; returned a void before 0.6.3
 ```
+
+(`ChunkStore.resumeBackgroundSaving()` changed the same way — it now returns the `CompletableFuture<Void>`.)
 
 ### ChunkSavingSystems
 
@@ -414,11 +440,19 @@ The ECS systems that drain dirty chunks (`markNeedsSaving()`, see [World API](wo
 to the saver. The plugin-facing pieces:
 
 ```java
-static CompletableFuture<Void> saveChunksInWorld(Store<ChunkStore> store)   // flush every chunk that needs saving
+// 0.6.3 added the Executor parameter to both statics (pass the world — World implements Executor)
+static CompletableFuture<Void> saveChunksInWorld(Store<ChunkStore> store, Executor executor)   // flush every chunk that needs saving
+static void saveChunk(Ref<ChunkStore> chunk, ChunkSavingSystems.Data data, boolean report,
+                      Store<ChunkStore> store, Executor completionExecutor)
 
-// ChunkSavingSystems.Data — per-world save-queue resource
+// ChunkSavingSystems.Data — the per-world save-queue *resource* (nested class; these are NOT statics on
+// ChunkSavingSystems). Fetch it with store.getResource(ChunkStore.SAVE_RESOURCE).
+ChunkSavingSystems.Data data = world.getChunkStore().getStore().getResource(ChunkStore.SAVE_RESOURCE);
 CompletableFuture<Void> waitForSavingChunks()
 void clearSaveQueue()
+int getQueueDepth()            // 0.6.3+ metrics (what `/chunk savequeue` prints)
+int getInFlightSaveCount()
+int getMaxInFlightSaves()
 ```
 
 ### Resource storage providers

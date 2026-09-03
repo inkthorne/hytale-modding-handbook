@@ -200,19 +200,18 @@ Basic icon-based clickable button.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
-| `Style` | StateStyle | State-based styling |
-| `Icon` | String | Icon asset path |
+| `Style` | StateStyle | State-based styling; the button's artwork is the per-state `Background` texture |
 | `Visible` | Boolean | Visibility state |
 
-**Example:**
+**Example** (the close-button textures `Common.ui` uses; texture paths resolve relative to the `.ui` file):
 ```
 Button #CloseBtn {
     Anchor: (Width: 32, Height: 32);
     Style: (
-        Default: (Background: (Color: #333333));
-        Hovered: (Background: (Color: #444444));
+        Default: (Background: "Common/ContainerCloseButton.png"),
+        Hovered: (Background: "Common/ContainerCloseButtonHovered.png"),
+        Pressed: (Background: "Common/ContainerCloseButtonPressed.png")
     );
-    Icon: "Common/ContainerCloseButton.png";
 }
 ```
 
@@ -317,7 +316,7 @@ $C = "../Common.ui";
 
 $C.@TextField #TextField1 {
     @Anchor = (Width: 300, Right: 20);
-    PlaceholderText: %server.customUI.inputs.textFieldPlaceholder;
+    PlaceholderText: %server.customUI.uiGallery.inputs.textFieldPlaceholder;
 }
 ```
 
@@ -371,7 +370,7 @@ template (parameter `@Anchor`).
 ```
 $C.@MultilineTextField #MultilineField {
     @Anchor = (Width: 400, Height: 80, Bottom: 8, Left: 0);
-    PlaceholderText: %server.customUI.inputs.multilinePlaceholder;
+    PlaceholderText: %server.customUI.uiGallery.inputs.multilinePlaceholder;
 }
 ```
 
@@ -436,12 +435,17 @@ For fractional/float values use [`FloatSlider`](#floatslider).
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
+| `Value` | Number | Current (integer) value |
+| `Min` / `Max` | Number | Range bounds |
 | `Style` | SliderStyle | Slider styling (supplied by template) |
 
-**Example:**
+**Example** (from the UI gallery):
 ```
 $C.@Slider #VolumeSlider {
-    @Anchor = (Width: 200);
+    @Anchor = (Width: 300, Right: 20);
+    Value: 50;
+    Min: 0;
+    Max: 100;
 }
 ```
 
@@ -455,12 +459,17 @@ template (parameter `@Anchor`).
 | Property | Type | Description |
 |----------|------|-------------|
 | `Anchor` | Anchor | Position and size |
+| `Value` | Number | Current (float) value |
+| `Min` / `Max` | Number | Range bounds |
 | `Style` | SliderStyle | Slider styling (supplied by template) |
 
-**Example:**
+**Example** (from the UI gallery):
 ```
 $C.@FloatSlider #OpacitySlider {
-    @Anchor = (Width: 200);
+    @Anchor = (Width: 300, Right: 20);
+    Value: 0.5;
+    Min: 0.0;
+    Max: 1.0;
 }
 ```
 
@@ -684,7 +693,8 @@ A single tab within a `TabNavigation`.
 | `Icon` | String | Tab icon texture path |
 | `TooltipText` | String / loc key | Hover tooltip |
 
-**Example** (from the UI gallery):
+**Example** (from the UI gallery, `Pages/UIGallery/Categories/NavigationContent.ui` — hence the
+`../../../` texture path: paths resolve relative to the `.ui` file):
 ```
 TabNavigation #TopTabs {
     Anchor: (Height: 66, Left: 2, Right: 0);
@@ -692,13 +702,13 @@ TabNavigation #TopTabs {
     SelectedTab: "Tab1";
 
     TabButton {
-        Icon: "Common/RecipesIcon.png";
-        TooltipText: %server.customUI.navigation.tabOne;
+        Icon: "../../../Common/RecipesIcon.png";
+        TooltipText: %server.customUI.uiGallery.navigation.tabOne;
         Id: "Tab1";
     }
     TabButton {
-        Icon: "Common/RecipesIcon.png";
-        TooltipText: %server.customUI.navigation.tabTwo;
+        Icon: "../../../Common/RecipesIcon.png";
+        TooltipText: %server.customUI.uiGallery.navigation.tabTwo;
         Id: "Tab2";
     }
 }

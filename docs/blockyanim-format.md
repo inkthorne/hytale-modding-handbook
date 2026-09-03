@@ -31,8 +31,8 @@ Blockyanim files define animations for block models, controlling how individual 
         ├── orientation       {x, y, z, w} quaternion
         ├── shapeStretch      {x, y, z} scale
         ├── shapeVisible       boolean (instant switch)
-        └── shapeUvOffset      {u, v}
-            └── keyframes      time + delta + interpolationType (smooth | linear)
+        └── shapeUvOffset      {x, y} texture-pixel offset
+            └── keyframes      time (frame @ 60 FPS) + delta + interpolationType (smooth | linear)
 ```
 
 ## Key Classes
@@ -47,20 +47,32 @@ Blockyanim files define animations for block models, controlling how individual 
 
 ## File Location
 
-Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Approximate distribution under `Common/`:
+Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Distribution of the 6,736 shipped files under `Common/` (0.6.3):
 
-| Location | Share | Typical use |
+| Location | Files | Typical use |
 |----------|-------|-------------|
-| `NPC/` | most | NPC/creature animations |
-| `Characters/` | many | Player and character animations |
-| `Blocks/Animations/` | few | Doors, containers, lights, mechanical blocks |
-| `Items/`, `VFX/`, `Resources/` | a handful | Item and effect animations |
+| `NPC/` | 4,310 | NPC/creature animations |
+| `Characters/` | 2,309 | Player and character animations |
+| `Blocks/` | 77 | Doors, chests, benches, lights, mechanical blocks |
+| `Items/` | 37 | Item animations |
+| `VFX/`, `Resources/` | 3 | Effect animations |
 
-Block animations specifically live under `Common/Blocks/Animations/`, organized into subdirectories by category (e.g., `Doors/`, `Containers/`, `Lights/`).
+The generic block clips live under `Common/Blocks/Animations/`, one folder per block kind: `Door/` (6 — `Door_Open_In`,
+`Door_Open_Out`, `Door_Close_In`, `Door_Close_Out`, `Door_Open_Slide_In`, `Door_Open_Slide_Out`), `Chest/` (`Chest_Open`,
+`Chest_Close`), `Trapdoor/`, `Wardrobe/`, `Coffin/`, `Light/`, `Fire/`, `Candle/`. The remaining block animations sit
+beside their models — `Blocks/Benches/` (20), `Blocks/Decorative_Sets/<Set>/`, `Blocks/Tinkering/Traps/`, etc.
+
+The server validates a block's `CustomModelAnimation` path with `CommonAssetValidator.ANIMATION_ITEM_BLOCK`: it must start
+with `Blocks/`, `Items/`, `Resources/`, `NPC/`, `VFX/` or `Consumable/`, end in `.blockyanim`, and exist in the
+common-asset registry.
 
 ## Frame Rate
 
-Block animations run at **20 frames per second**. All time values in keyframes are specified in frames at this rate.
+Animations run at **60 frames per second**. All time values in keyframes are specified in frames at this rate — the
+server's `BlockyAnimationCache.BlockyAnimation.FRAMES_PER_SECOND` is `60.0`, and its `getDurationMillis()` is
+`duration * 1000 / 60`. (The shipped `Door_Open_Out` clip is `duration: 60` with its swing finished by frame 20 — one
+second total, a third of a second of motion.) `BlockyAnimationCache` is also the *only* thing the server reads from a
+`.blockyanim`: its codec decodes just `duration`; the tracks are consumed by the client.
 
 ## File Structure
 
@@ -85,14 +97,14 @@ Block animations run at **20 frames per second**. All time values in keyframes a
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `formatVersion` | integer | Usually | Schema version, currently `1`. Present in nearly all assets; a few omit it |
-| `duration` | integer | Yes | Total animation length in frames (at 20 FPS) |
-| `holdLastKeyframe` | boolean | No | If `true`, animation holds the final keyframe values when complete. Default is `false` |
+| `formatVersion` | integer | Usually | Schema version, currently `1`. Present in 6,732 of 6,736 shipped files |
+| `duration` | integer | Yes | Total animation length in frames (at 60 FPS). Shipped range 9–600; block clips 21–180 (median 50) |
+| `holdLastKeyframe` | boolean | Yes in practice | If `true`, animation holds the final keyframe values when complete; if `false` it loops. Every shipped file sets it explicitly (5,741 `false`, 995 `true`) — do not rely on a default |
 | `nodeAnimations` | object | Yes | Map of node names to their animation tracks |
 
 ## Node Animations
 
-The `nodeAnimations` object maps node names (as defined in the block's `.blockymodel`) to animation data. Each node can have any combination of the five track types.
+The `nodeAnimations` object maps node names (as defined in the block's `.blockymodel`) to animation data. Each node can use any combination of the five track types — but the editor always writes **all five keys**, with `[]` for unused tracks (every one of the 129,603 shipped node entries lists all five), so do the same.
 
 ### Animation Track Types
 
@@ -102,7 +114,7 @@ The `nodeAnimations` object maps node names (as defined in the block's `.blockym
 | `orientation` | `{"x", "y", "z", "w"}` | Rotates the node using quaternion values |
 | `shapeStretch` | `{"x", "y", "z"}` | Scales the node along each axis |
 | `shapeVisible` | `boolean` | Shows or hides the node |
-| `shapeUvOffset` | `{"u", "v"}` | Offsets texture UV coordinates for scrolling effects |
+| `shapeUvOffset` | `{"x", "y"}` | Offsets the shape's texture-atlas origin in **texture pixels** (e.g. `{"x": 160, "y": 0}` to swap a face to the next sprite); used for mouth/eye sprite swaps and scrolling. The keys are `x`/`y`, **not** `u`/`v` — all 651 shipped keyframes use `x`/`y` |
 
 ## Keyframe Structure
 
@@ -120,9 +132,9 @@ Each track contains an array of keyframes. Keyframe structure varies by track ty
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `time` | integer | Frame number when this keyframe occurs |
+| `time` | integer | Frame number (at 60 FPS) when this keyframe occurs |
 | `delta` | object | The value at this keyframe (format depends on track type) |
-| `interpolationType` | string | How to interpolate to this keyframe |
+| `interpolationType` | string | How to interpolate to this keyframe. Optional — omitted on 936 shipped keyframes (most of them `shapeUvOffset`, which is a sprite swap rather than a blend) |
 
 ### ShapeVisible Keyframes
 
@@ -146,94 +158,16 @@ Visibility keyframes don't use interpolation - they switch instantly.
 
 ### Simple Door Animation
 
-A door that rotates open over 10 frames:
-
-```json
-{
-  "formatVersion": 1,
-  "duration": 10,
-  "holdLastKeyframe": true,
-  "nodeAnimations": {
-    "Door": {
-      "orientation": [
-        {
-          "time": 0,
-          "delta": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-          "interpolationType": "smooth"
-        },
-        {
-          "time": 10,
-          "delta": {"x": 0.0, "y": 0.707, "z": 0.0, "w": 0.707},
-          "interpolationType": "smooth"
-        }
-      ]
-    }
-  }
-}
-```
-
-### Flickering Light
-
-A light that flickers by toggling visibility:
+A door that swings open over 20 frames (⅓ s) and holds:
 
 ```json
 {
   "formatVersion": 1,
   "duration": 20,
-  "holdLastKeyframe": false,
-  "nodeAnimations": {
-    "Flame": {
-      "shapeVisible": [
-        { "time": 0, "delta": true },
-        { "time": 3, "delta": false },
-        { "time": 5, "delta": true },
-        { "time": 12, "delta": false },
-        { "time": 14, "delta": true }
-      ]
-    }
-  }
-}
-```
-
-### UV Scrolling Effect
-
-Animated texture scrolling for water or conveyor effects:
-
-```json
-{
-  "formatVersion": 1,
-  "duration": 40,
-  "holdLastKeyframe": false,
-  "nodeAnimations": {
-    "Surface": {
-      "shapeUvOffset": [
-        {
-          "time": 0,
-          "delta": {"u": 0.0, "v": 0.0},
-          "interpolationType": "linear"
-        },
-        {
-          "time": 40,
-          "delta": {"u": 1.0, "v": 0.0},
-          "interpolationType": "linear"
-        }
-      ]
-    }
-  }
-}
-```
-
-### Chest Opening with Multiple Nodes
-
-A chest with a lid that rotates and hinges that move:
-
-```json
-{
-  "formatVersion": 1,
-  "duration": 8,
   "holdLastKeyframe": true,
   "nodeAnimations": {
-    "Lid": {
+    "Door": {
+      "position": [],
       "orientation": [
         {
           "time": 0,
@@ -241,24 +175,101 @@ A chest with a lid that rotates and hinges that move:
           "interpolationType": "smooth"
         },
         {
-          "time": 8,
-          "delta": {"x": -0.383, "y": 0.0, "z": 0.0, "w": 0.924},
+          "time": 20,
+          "delta": {"x": 0.0, "y": 0.707, "z": 0.0, "w": 0.707},
           "interpolationType": "smooth"
         }
+      ],
+      "shapeStretch": [],
+      "shapeVisible": [],
+      "shapeUvOffset": []
+    }
+  }
+}
+```
+
+The shipped `Blocks/Animations/Door/Door_Open_Out.blockyanim` is the same idea with more keys (`duration: 60`, orientation
+keys at frames 0/10/15/20 for a little overshoot) plus knocker and knob nodes.
+
+### Flickering Light
+
+A light that flickers by toggling visibility (a 60-frame = 1 s loop; the empty tracks are elided here for brevity):
+
+```json
+{
+  "formatVersion": 1,
+  "duration": 60,
+  "holdLastKeyframe": false,
+  "nodeAnimations": {
+    "Flame": {
+      "shapeVisible": [
+        { "time": 0, "delta": true },
+        { "time": 9, "delta": false },
+        { "time": 15, "delta": true },
+        { "time": 36, "delta": false },
+        { "time": 42, "delta": true }
+      ]
+    }
+  }
+}
+```
+
+### UV Offset (Sprite Swap / Scroll)
+
+`shapeUvOffset` shifts where the shape samples its texture, in texture pixels. The shipped assets use it as a sprite
+swap — e.g. the `Mouth` node of `NPC/Intelligent/Kweebec_Sapling/Animations/Default/Alerted.blockyanim` jumps
+between mouth sprites laid out 160 px apart, with no `interpolationType` so each key snaps:
+
+```json
+{
+  "formatVersion": 1,
+  "duration": 60,
+  "holdLastKeyframe": false,
+  "nodeAnimations": {
+    "Mouth": {
+      "shapeUvOffset": [
+        {"time": 0,  "delta": {"x": 0,   "y": 0}},
+        {"time": 10, "delta": {"x": 160, "y": 0}},
+        {"time": 20, "delta": {"x": 140, "y": -20}},
+        {"time": 30, "delta": {"x": 0,   "y": -32}}
+      ]
+    }
+  }
+}
+```
+
+Add `"interpolationType": "linear"` to the keys for a continuous scroll (water, conveyors).
+
+### Chest Opening with Multiple Nodes
+
+A chest whose lid rotates while a button sinks, then pops back — trimmed from the shipped
+`Blocks/Animations/Chest/Chest_Open.blockyanim` (`duration: 35`; position deltas are in model pixels):
+
+```json
+{
+  "formatVersion": 1,
+  "duration": 35,
+  "holdLastKeyframe": true,
+  "nodeAnimations": {
+    "Lid": {
+      "orientation": [
+        {"time": 0,  "delta": {"x": 0, "y": 0, "z": 0, "w": 1}, "interpolationType": "smooth"},
+        {"time": 5,  "delta": {"x": 0, "y": 0, "z": 0, "w": 1}, "interpolationType": "smooth"},
+        {"time": 10, "delta": {"x": 0.043619, "y": 0, "z": 0, "w": 0.999048}, "interpolationType": "smooth"}
       ]
     },
-    "Latch": {
+    "Button": {
       "position": [
-        {
-          "time": 0,
-          "delta": {"x": 0.0, "y": 0.0, "z": 0.0},
-          "interpolationType": "linear"
-        },
-        {
-          "time": 4,
-          "delta": {"x": 0.0, "y": 0.0, "z": -0.0625},
-          "interpolationType": "linear"
-        }
+        {"time": 0,  "delta": {"x": 0, "y": 0, "z": 0},  "interpolationType": "smooth"},
+        {"time": 5,  "delta": {"x": 0, "y": 0, "z": -2}, "interpolationType": "smooth"},
+        {"time": 10, "delta": {"x": 0, "y": 0, "z": -1}, "interpolationType": "smooth"}
+      ]
+    },
+    "Padlock-Shackle-Gap": {
+      "shapeVisible": [
+        {"time": 0,  "delta": true},
+        {"time": 10, "delta": false},
+        {"time": 35, "delta": false}
       ]
     }
   }
@@ -267,16 +278,41 @@ A chest with a lid that rotates and hinges that move:
 
 ## Integration with Blocks
 
-Blocks reference animations through their `CustomModelAnimation` property in the block definition:
+Blocks reference animations through the `CustomModelAnimation` property of their `BlockType`. It can sit directly on
+the `BlockType` (28 shipped blocks — always-on loops such as fires and lights), but the usual place is a **block-state
+definition** under `BlockType.State.Definitions.<State>` (333 shipped uses), so that each state — open, closed — plays
+its own clip. From `Server/Item/Items/Furniture/Desert/Furniture_Desert_Door.json`:
 
 ```json
 {
-  "Parent": "Template_Block",
-  "CustomModelAnimation": "Blocks/Animations/Doors/WoodenDoor_Open"
+  "BlockType": {
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Decorative_Sets/Desert/Door.blockymodel",
+    "State": {
+      "Definitions": {
+        "OpenDoorOut": {
+          "HitboxType": "Door_Open_Out",
+          "InteractionSoundEventId": "SFX_Door_Desert_Open",
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Open_Out.blockyanim"
+        },
+        "CloseDoorOut": {
+          "InteractionSoundEventId": "SFX_Door_Desert_Close",
+          "CustomModelAnimation": "Blocks/Animations/Door/Door_Close_Out.blockyanim"
+        }
+      }
+    }
+  }
 }
 ```
 
-The animation path is relative to `Common/` and omits the `.blockyanim` extension.
+The animation path is relative to `Common/` and **includes** the `.blockyanim` extension — all 367 shipped references
+do, and `CommonAssetValidator.ANIMATION_ITEM_BLOCK` rejects a path without it (`Common Asset '<path>' must have the
+extension blockyanim`).
+
+| `BlockType` key | Type | Description |
+|-----------------|------|-------------|
+| `CustomModelAnimation` | string | Path of the `.blockyanim` to play on the block's `CustomModel` (per state or block-wide) |
+| `CustomModelAnimationSpeed` | float | Playback-speed multiplier; `1` is the authored speed. Validated `0 <= v < 100` (`BlockType.MAX_CUSTOM_MODEL_ANIMATION_SPEED` is `100.0f`). Added as of 0.6.3 (`BlockType.getCustomModelAnimationSpeed()`); no shipped asset sets it yet |
 
 ## Looping Behavior
 
@@ -287,14 +323,16 @@ The animation path is relative to `Common/` and omits the `.blockyanim` extensio
 
 ## Best Practices
 
-1. **Keep durations short** - Most block animations are 5-20 frames (0.25-1 second)
-2. **Use smooth for mechanical motion** - Doors and lids feel more natural with smooth interpolation
+1. **Keep durations short** - Shipped block clips run 21–180 frames (median 50, i.e. ⅓–3 s at 60 FPS); doors and chests finish their motion within the first 20–35 frames and hold
+2. **Use smooth for mechanical motion** - Doors and lids feel more natural with smooth interpolation (429,461 of the shipped keyframes are `smooth`, 18,339 `linear`)
 3. **Match node names exactly** - Node names must match those in the `.blockymodel` file
-4. **Consider reverse animations** - Doors need both open and close animations
-5. **Test at 20 FPS** - Remember the fixed frame rate when timing animations
+4. **Consider reverse animations** - Doors need both open and close animations (the shipped set pairs `Door_Open_Out`/`Door_Close_Out`, `Chest_Open`/`Chest_Close`)
+5. **Time at 60 FPS** - Remember the fixed frame rate when timing animations (60 frames = 1 second)
 
 ## Gotchas & Errors
 
 - **Symptom:** an animation has no visible effect on the model → its node animations name nodes that don't exist in the target `.blockymodel`. Fix: node names must match exactly between the `.blockyanim` and the `.blockymodel`.
-- **Symptom:** timings feel too fast or too slow → keyframe time values are interpreted as frames at a **fixed 20 FPS**, not seconds. Fix: convert seconds to frames (1 second = 20 frames).
-- **Symptom:** a one-shot animation (door, chest) snaps back to its start instead of holding → `holdLastKeyframe` defaults to looping. Fix: set `"holdLastKeyframe": true` for play-once animations; leave it `false` for looping ones.
+- **Symptom:** timings feel too fast or too slow → keyframe time values are interpreted as frames at a **fixed 60 FPS** (`BlockyAnimationCache.BlockyAnimation.FRAMES_PER_SECOND`), not seconds or 20 FPS ticks. Fix: convert seconds to frames (1 second = 60 frames).
+- **Symptom:** a one-shot animation (door, chest) snaps back to its start instead of holding → `holdLastKeyframe` is `false`. Fix: set `"holdLastKeyframe": true` for play-once animations; set it `false` for looping ones (always write it explicitly).
+- **Symptom:** UV animation does nothing → the `shapeUvOffset` deltas were written as `{u, v}`. Fix: the keys are `{x, y}`, in texture pixels.
+- **`Common Asset '<path>' must have the extension blockyanim`** / **`must be within the root: [Blocks/, Items/, Resources/, NPC/, VFX/, Consumable/]`** / **`doesn't exist!`** → the block's `CustomModelAnimation` path failed `CommonAssetValidator.ANIMATION_ITEM_BLOCK`. Fix: include the `.blockyanim` extension, keep the clip under an allowed root, and make sure the file ships in the pack.

@@ -60,7 +60,7 @@ Toasts: NotificationUtil (static senders)
 | `HudManager` | `server.core.entity.entities.player.hud` | Controls HUD visibility and custom HUD |
 | `CustomUIHud` | `server.core.entity.entities.player.hud` | Abstract base for custom HUD overlays |
 | `HotbarManager` | `server.core.entity.entities.player` | Manages player hotbar configurations |
-| `AnchorActionModule` | `server.core.modules.anchoraction` | Routes `{"action": ...}` UI anchor events to string-keyed handlers — `get()`, then `register(String, AnchorActionHandler)` / `register(String, AnchorActionModule.WorldThreadAnchorActionHandler)` / `unregister(String)`; `tryHandle(PlayerRef, String)` dispatches |
+| `AnchorActionModule` | `server.core.modules.anchoraction` | Routes `{"action": ...}` UI anchor events to string-keyed handlers — `get()`, then `register(String, AnchorActionHandler)` / `register(String, AnchorActionModule.WorldThreadAnchorActionHandler)` / `unregister(String)`; `tryHandle(PlayerRef, String)` dispatches. Handlers are `handle(PlayerRef)` and `handle(PlayerRef, Ref<EntityStore>, Store<EntityStore>)` — the trailing `JsonObject` payload parameter both had in 0.5.9 was removed by 0.6.3 |
 | `FileBrowserConfig` | `server.core.ui.browser` | Configuration for the file browser UI |
 | `ServerFileBrowser` | `server.core.ui.browser` | Server-side file browser implementation |
 | `AssetPackSaveBrowser` | `server.core.ui.browser` | Embeddable pick-or-create-asset-pack widget (0.5.7+) |
@@ -340,6 +340,7 @@ Built-in page types.
 | `MachinimaEditor` | Machinima editor page |
 | `ContentCreation` | Content creation tools |
 | `Custom` | Custom plugin-defined page |
+| `Serverside` | Server-driven page slot (engine-internal) |
 
 ```java
 static Page[] values()
@@ -508,16 +509,23 @@ import com.hypixel.hytale.server.core.util.EventTitleUtil;
 // To one player (short form):
 EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor /*boolean*/);
 
-// To one player (full timing control) / to a world:
+// To one player (full timing control) / to a world / to everyone:
 EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);   // floats, in seconds
 EventTitleUtil.showEventTitleToWorld(title, subtitle, isMajor,
-        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, store);
+        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, world);   // World, not Store (0.6.3+)
+EventTitleUtil.showEventTitleToUniverse(title, subtitle, isMajor,
+        EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);
 
 // Clear early:
 EventTitleUtil.hideEventTitleFromPlayer(playerRef, fade);
-EventTitleUtil.hideEventTitleFromWorld(fade, store);
+EventTitleUtil.hideEventTitleFromWorld(fade, world);
 ```
+
+The world forms take a `World` as of 0.6.3 (0.5.9 took a `Store<EntityStore>`): use the `World`
+parameter a command's `execute(...)` hands you, or `store.getExternalData().getWorld()` from inside a
+system. Defaults are exposed as `EventTitleUtil.DEFAULT_ZONE` (`"Void"`), `DEFAULT_DURATION` (`4.0f`)
+and `DEFAULT_FADE_DURATION` (`1.5f`).
 
 `title` (primary) renders large, `subtitle` (secondary) small. `title`/`subtitle` are `Message`
 objects. To drive a **live countdown** without the text pulsing, re-send each second with `fadeIn`/`fadeOut`
@@ -533,7 +541,7 @@ cadence (`1.0f` for a per-second countdown) so each title plays exactly until th
 ```java
 EventTitleUtil.showEventTitleToWorld(
     Message.raw("Next round in " + secondsLeft), subtitle, /*isMajor*/ true,
-    EventTitleUtil.DEFAULT_ZONE, /*duration*/ 1.0f, /*fadeIn*/ 0f, /*fadeOut*/ 0f, store);
+    EventTitleUtil.DEFAULT_ZONE, /*duration*/ 1.0f, /*fadeIn*/ 0f, /*fadeOut*/ 0f, world);
 ```
 
 ---
@@ -879,6 +887,7 @@ void addCustomHud(PlayerRef playerRef, CustomUIHud hud)
 void removeCustomHud(PlayerRef playerRef, String key)
 
 // Reset
+void resetVisibleHudComponents(PlayerRef playerRef)   // default component set only (0.6.3+)
 void resetHud(PlayerRef playerRef)
 void resetUserInterface(PlayerRef playerRef)
 
@@ -917,6 +926,8 @@ Individual HUD components that can be shown or hidden.
 | `Mana` | Mana bar |
 | `Oxygen` | Oxygen/breath bar |
 | `Sleep` | Sleep indicator |
+| `Abilities` | Ability slots (0.6.3+) |
+| `BossBar` | Boss health bar (0.6.3+) |
 
 ```java
 static HudComponent[] values()
@@ -1413,6 +1424,9 @@ boolean enableDirectoryNav()
 boolean enableMultiSelect()
 int maxResults()
 FileListProvider customProvider()
+boolean assetPackMode()                 // browse inside asset packs instead of the file system
+String assetPackSubPath()
+Predicate<Path> terminalDirectoryPredicate()
 ```
 
 ### FileBrowserConfig.Builder
@@ -1424,12 +1438,15 @@ Builder searchInputId(String id)
 Builder currentPathId(String id)
 Builder roots(List<RootEntry> roots)
 Builder allowedExtensions(Set<String> extensions)
+Builder allowedExtensions(String... extensions)
 Builder enableRootSelector(boolean enable)
 Builder enableSearch(boolean enable)
 Builder enableDirectoryNav(boolean enable)
 Builder enableMultiSelect(boolean enable)
 Builder maxResults(int max)
 Builder customProvider(FileListProvider provider)
+Builder assetPackMode(boolean enable, String subPath)
+Builder terminalDirectoryPredicate(Predicate<Path> predicate)
 FileBrowserConfig build()
 ```
 
@@ -1449,9 +1466,14 @@ void buildSearchInput(UICommandBuilder cmdBuilder, UIEventBuilder eventBuilder)
 void buildCurrentPath(UICommandBuilder cmdBuilder)
 void buildFileList(UICommandBuilder cmdBuilder, UIEventBuilder eventBuilder)
 void buildUI(UICommandBuilder cmdBuilder, UIEventBuilder eventBuilder)
+List<FileListProvider.FileEntry> getFileEntries()
 
 // Event Handling
 boolean handleEvent(FileBrowserEventData eventData)
+
+// Asset-pack mode (see FileBrowserConfig.assetPackMode)
+Path resolveAssetPackPath(String relative)
+String getAssetPackCurrentPath()
 
 // Navigation
 Path getRoot()
@@ -1638,6 +1660,9 @@ public static void sendNotification(PacketHandler ph, Message message, Message s
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, String icon, NotificationStyle style);
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item);
 public static void sendNotification(PacketHandler ph, Message message, Message secondary, ItemWithAllMetadata item, NotificationStyle style);
+// Everything at once — icon OR item (pass null for the other) plus a free-form `tag` string
+// forwarded in the Notification packet (0.6.3+):
+public static void sendNotification(PacketHandler ph, Message message, Message secondary, String icon, ItemWithAllMetadata item, NotificationStyle style, String tag);
 ```
 
 `icon` is a `Common/`-relative texture path (the engine uses e.g. `Icons/AssetNotifications/IconCheckmark.png`); passing an `ItemWithAllMetadata` (`itemStack.toPacket()`) shows the item's icon instead.
@@ -1686,10 +1711,10 @@ protected void setup() {
 ## Supporting Classes
 
 ### LocalizableString
-Translatable UI strings with parameter support.
+Translatable UI strings with parameter support: `LocalizableString.fromString(String)` for literal text, `fromMessageId(String)` / `fromMessageId(String, Map<String, String>)` for a translation key with params.
 
 ### DropdownEntryInfo
-Dropdown menu entry configuration.
+Dropdown menu entry configuration — a record `DropdownEntryInfo(LocalizableString label, String value)` (or with a third `LocalizableString tooltip`), with `label()`, `value()`, `tooltip()` accessors and a `RecordCodec` `CODEC`.
 
 ### ItemGridSlot
 Inventory grid slot definition for UI display.

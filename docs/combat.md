@@ -190,7 +190,7 @@ Asset type representing the cause/type of damage. Returned by `Damage.getCause()
 
 Look the cause up by id from the asset map instead of referencing the deprecated static field. The id
 is the asset filename — e.g. `Physical`, `Fall`, `Drowning`, `Projectile`, `Environment`, `Command`,
-`OutOfWorld`, `Suffocation` (plus `Bludgeoning`, `Elemental`, `Fire`, `Ice`, `Poison`, `Slashing`).
+`OutOfWorld`, `Suffocation` (plus `Bludgeoning`, `Elemental`, `Environmental`, `Fire`, `Ice`, `Poison`, `Slashing` — the files under `Server/Entity/Damage/`).
 
 > **Gotcha:** the map is an `IndexedLookupTableAssetMap`, which exposes `getIndex(String)` and
 > `getAsset(int)` but **no `getAsset(String)`** (unlike some other asset maps). Go id → index → cause:
@@ -278,7 +278,7 @@ public class MyDamageSystem extends DamageEventSystem {
             // Check if attacker is a player
             Player attacker = store.getComponent(attackerRef, Player.getComponentType());
             if (attacker != null) {
-                attacker.sendMessage(Message.raw("You hit something for " + event.getAmount() + " damage!"));
+                attacker.getPlayerRef().sendMessage(Message.raw("You hit something for " + event.getAmount() + " damage!"));
             }
         }
     }
@@ -532,11 +532,24 @@ because the engine's death screen and the respawn action are the same object.
 
 The flow, for a player whose `DeathComponent` was just added:
 
-- `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`) runs and, **if
-  `DeathComponent.isShowDeathMenu()` is true**, opens the death screen via
-  `player.getPageManager().openCustomPage(ref, store, new RespawnPage(...))`.
-- **`RespawnPage` *is* the respawn trigger.** Both of its exit paths call `DeathComponent.respawn(...)`:
-  - the **Respawn button** (`handleDataEvent`, action `"Respawn"`), and
+- `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`) runs. As of 0.6.3 it first settles the
+  **hardcore / game-mode-on-death** bookkeeping: `HytaleServerConfig.Defaults` gained
+  `HardcoreMode` (`None` / `PerPlayer` / `Global`), `HardcoreLives` and `GameModeTypeOnDeath`
+  (`DeathConfig` has a per-world `GameModeTypeOnDeath` that overrides the server default); lives are
+  burned per player in the `PlayerLives` component
+  (`com.hypixel.hytale.server.core.modules.entity.component.PlayerLives`) or, for `Global`, in the
+  `HardcoreState` universe resource. Then, **if `DeathComponent.isShowDeathMenu()` is true**, it opens
+  the death screen via `player.getPageManager().openCustomPage(ref, store, page)`, where `page` comes
+  from one of `RespawnPage`'s static factories (the constructor is private since 0.6.3):
+  - `RespawnPage.forRespawn(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, livesRemaining)`
+    — the normal screen (a non-zero `livesRemaining` adds a "lives remaining" note), or
+  - `RespawnPage.forPermadeath(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, permadeathMessage)`
+    — when the personal/pooled life count hits zero and a valid `GameModeTypeOnDeath` exists, the
+    player is moved into that game-mode type (`GameModeTypes.enterOnDeath`) and shown a permadeath
+    variant whose only exit **closes the page without respawning**.
+- **`RespawnPage` *is* the respawn trigger.** Both exit paths of the normal (`forRespawn`) page call
+  `DeathComponent.respawn(...)`:
+  - the **Respawn button** (`handleDataEvent`, action `"Confirm"`), and
   - **`RespawnPage.onDismiss(...)`** — if the entity still has a `DeathComponent`.
 
 Because `PageManager` holds a **single** current page and `openCustomPage(...)` fires the **previous
@@ -549,10 +562,15 @@ own death/respawn page.
 - It **defaults `true`** (hard-coded in the `DeathComponent` constructor).
 - It is **not configurable** — `DeathConfig` has no field for it, and jar-wide **only `DeathComponent`
   itself** calls `setShowDeathMenu`.
-- You would have to set it `false` **before `PlayerDeathScreen` runs** — but **engine systems run
-  before plugin-registered systems, and there is no system-ordering / priority API** (`System`,
-  `RefChangeSystem`, and `QuerySystem` expose no `getOrder`/`priority`/`runsBefore`). By the time your
-  `OnDeathSystem` fires, `RespawnPage` is already open.
+- You would have to set it `false` **before `PlayerDeathScreen` runs**. By default engine systems
+  run before plugin-registered ones, so by the time your `OnDeathSystem` fires `RespawnPage` is
+  already open. There *is* an ordering API, though: `ISystem.getDependencies()` returns a
+  `Set<Dependency<EntityStore>>`, and `ComponentRegistry` topologically sorts every registered system
+  (including `RefChangeSystem`s) by those edges — so an `OnDeathSystem` that overrides it to return
+  `Set.of(new SystemDependency<>(Order.BEFORE, DeathSystems.PlayerDeathScreen.class))`
+  (`com.hypixel.hytale.component.dependency.SystemDependency` / `Order`) is *meant* to run first.
+  This has not been exercised in-game against `PlayerDeathScreen`; treat it as an API-level lead,
+  not a verified recipe.
 
 There is also **no auto-respawn timer** — `DeathComponent.respawn(...)` is only called by `RespawnPage`
 and `PlayerRespawnCommand`, so a dead player waits on the death screen until the button/dismiss. And
@@ -633,7 +651,7 @@ public class HitNotificationSystem extends DamageEventSystem {
 
             if (attacker != null) {
                 float damage = event.getAmount();
-                attacker.sendMessage(Message.raw("Dealt " + damage + " damage!").color("#FF6600"));
+                attacker.getPlayerRef().sendMessage(Message.raw("Dealt " + damage + " damage!").color("#FF6600"));
             }
         }
     }
@@ -679,8 +697,10 @@ Each entry in the `EntityStatsOnHit` array has:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `EntityStatId` | string | The stat to modify |
-| `Amount` | number | Amount to add to the stat |
+| `EntityStatId` | string | The stat to modify (must name a `Server/Entity/Stats/` asset) |
+| `Amount` | number | Base amount for a single-entity hit |
+| `MultipliersPerEntitiesHit` | float[] | Multiplier applied to `Amount` by how many entities the same swing has hit so far (index 0 = first). Default `[1.0, 0.6, 0.4, 0.2, 0.1]`; must be non-empty |
+| `MultiplierPerExtraEntityHit` | number | Multiplier for every entity beyond the array's length. Default `0.05` |
 
 ### Available Stats
 
@@ -746,12 +766,12 @@ Blocking consumes stamina based on the `StaminaCost` property:
 ```json
 "StaminaCost": {
   "CostType": "Damage",
-  "Cost": 0.5
+  "Value": 0.5
 }
 ```
 
-- **CostType: "Damage"** - Stamina cost scales with incoming damage
-- **Cost** - Multiplier (0.5 = consume 0.5 stamina per point of damage blocked)
+- **CostType** — how the stamina loss is computed: `Damage` (`Value` = how much damage one stamina point is worth, so `0.5` drains 2 stamina per point of blocked damage) or `MaxHealthPercentage` (the default; `Value` = the fraction of the blocker's max health one stamina point is worth, default `0.04` = 4%)
+- **Value** — the per-stamina-point worth described above (the key is `Value`, not `Cost`)
 
 ### Granting Stats on Successful Block
 
@@ -845,7 +865,7 @@ When `true`, the interaction ends immediately when the entity is hit.
 
 #### Example: Parry Window
 
-From `Server/Item/Interactions/_Debug/Debug_Stick_Parry.json`:
+From `Server/Item/Interactions/_Debug/Debug_Stick_Parry.json` (abridged — the shipped file also sets `Effects.ItemAnimationId: "Guard"`, a `VelocityConfig` on the force, and a trailing `ResetCooldown` step):
 
 ```json
 {
@@ -968,7 +988,10 @@ From `Server/Item/Interactions/Weapons/Weapon_Damage.json` — `Knockback` sits 
       "RelativeZ": -5,
       "VelocityY": 5
     },
-    "WorldSoundEventId": "SFX_Unarmed_Impact"
+    "WorldSoundEventId": "SFX_Unarmed_Impact",
+    "WorldParticles": [
+      { "SystemId": "Impact_Blade_01" }
+    ]
   }
 }
 ```
@@ -985,13 +1008,15 @@ From `Server/Item/Interactions/Weapons/Weapon_Damage.json` — `Knockback` sits 
 
 ### Knockback Types
 
-The knockback system supports multiple types through different `VelocityConfig` implementations:
+`Knockback` is a `Type`-dispatched codec (`Knockback.CODEC`, a `CodecMapCodec` keyed on `"Type"`) with three subclasses registered by `InteractionModule`. When `Type` is omitted the first registration — `Directional` — is used, which is why the relative form above carries no `Type`:
 
-| Type | Description |
-|------|-------------|
-| `DirectionalKnockback` | Applies knockback in a fixed direction relative to the attacker |
-| `ForceKnockback` | Applies knockback based on force magnitude |
-| `PointKnockback` | Applies knockback away from a specific point (explosions) |
+| `Type` | Class | Type-specific keys |
+|--------|-------|--------------------|
+| `Directional` (default) | `DirectionalKnockback` | `RelativeX`, `RelativeZ`, `VelocityY` — fixed direction relative to the attacker's facing |
+| `Point` | `PointKnockback` | `OffsetX`, `OffsetZ`, `RotateY`, `VelocityY` — push away from a point (explosions, `Bomb_Explode_Stun`) |
+| `Force` | `ForceKnockback` | `Direction` `{ X, Y, Z }` — push along a direction scaled by `Force` (`Common_Melee_Damage`) |
+
+All three share the base keys `Force`, `Duration`, `VelocityType` (a `ChangeVelocityType`; default `Add`, vanilla weapons use `Set`) and `VelocityConfig` (`AirResistance`, `AirResistanceMax`, `GroundResistance`, `GroundResistanceMax`, `Threshold`, `Style`).
 
 ### Knockback Resistance
 
@@ -1045,9 +1070,9 @@ buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback)
 
 Backtick-quoted error strings below are the literal messages thrown by the build-12 combat subsystem (verified against `HytaleServer.jar`).
 
-- **`Invalid DamageCause`** → a key in `DamageCalculator.BaseDamage` (or a `DamageModifiers` map) names a cause that isn't a registered `DamageCause` asset. Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
+- **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entity.damage.DamageCause doesn't exist!`** (logged under `Failed to validate asset!`; this replaced the pre-0.6.3 `Invalid DamageCause` wording) → a key in `DamageCalculator.BaseDamage` names a cause that isn't a `DamageCause` asset — the map keys go through `DamageCause.VALIDATOR_CACHE`'s key validator (`AssetStore.validate`). Fix: use a valid id such as `Physical`, `Fire`, `Ice`, `Slashing`, `Fall`, `Drowning`, `Projectile`, `Environment`, or `Command`.
 - **`Missing default DamageCause assets`** → the default `DamageCause` assets failed to load. Fix: an asset-pack/install problem, not a plugin bug; verify the game install and `Assets.zip`.
-- **`Invalid EntityStatOnHit in EntityStatsOnHit`** → an entry in a damage interaction's `EntityStatsOnHit` array is malformed. Fix: each entry needs a valid `EntityStatId` (e.g. `SignatureEnergy`, `Stamina`, `Health`, `Mana`) and a numeric `Amount`.
+- **`Can't be null!`** on `EntityStatId`, or **`Asset '<id>' of type com.hypixel.hytale.server.core.modules.entitystats.asset.EntityStatType doesn't exist!`** (these replaced the pre-0.6.3 `Invalid EntityStatOnHit in EntityStatsOnHit` wording) → an entry in a damage interaction's `EntityStatsOnHit` array is missing its `EntityStatId` or names a stat with no `Server/Entity/Stats/` asset. A related **`Array can't be empty!`** means `MultipliersPerEntitiesHit` was set to `[]`. Fix: each entry needs a valid `EntityStatId` (e.g. `SignatureEnergy`, `Stamina`, `Health`, `Mana`) and a numeric `Amount`; omit `MultipliersPerEntitiesHit` to keep the default.
 - **Symptom:** a `DamageEventSystem` throws or matches nothing because `getQuery()` returned `null` → unlike `KillFeedEvent` handlers, a damage system needs a real query. Fix: return `DamageDataComponent.getComponentType()` from `getQuery()`.
 - **Symptom:** your damage handler reads the wrong entity as the attacker → the `Damage` event fires on the **victim**. Fix: cast `getSource()` to `Damage.EntitySource` and call `getRef()` for the attacker.
 - **Symptom:** `KnockbackComponent` added via code ignores armor/shield reduction → code-applied knockback bypasses the `ArmorKnockbackReduction`/`WieldingKnockbackReduction` systems. Fix: apply knockback through a damage interaction's `Knockback` config, or compute and add the `modifiers` yourself.

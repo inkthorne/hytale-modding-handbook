@@ -58,6 +58,8 @@ CommandRegistry
 | `EnumArgumentType` | `server.core.command.system.arguments.types` | Argument type for any enum — what `ArgTypes.forEnum` returns |
 | `AssetArgumentType` | `server.core.command.system.arguments.types` | Argument type for any string-keyed JSON asset class |
 | `GeneralCommandException` | `server.core.command.system.exceptions` | Throw with a `Message` to abort a command and message the sender |
+| `CommandManager` | `server.core.command.system` | The engine-side registry/dispatcher (`CommandManager.get()`); owns system commands, resolves and tab-completes input |
+| `CommandCompletion` | `server.core.command.system` | Static tab-completion resolver behind `CommandManager.suggestCompletions` (0.6.3+) |
 
 ## Class Hierarchy
 ```
@@ -68,10 +70,12 @@ AbstractCommand
         └── AbstractTargetPlayerCommand
 
 CommandSender (interface)
-  └── Player (implementation)
+  ├── PlayerRef (player sender — the entity `Player` does NOT implement it)
+  └── ConsoleSender (server.core.console)
 
 CommandOwner (interface)
-  └── PluginBase (implementation)
+  ├── PluginBase (implementation)
+  └── CommandManager (owner of the engine's system commands)
 
 ArgumentType<D> (abstract)
   └── SingleArgumentType<D>
@@ -113,9 +117,15 @@ Most common base class for player-executed commands.
 ### Constructors
 ```java
 AbstractPlayerCommand(String name, String description)
-AbstractPlayerCommand(String name, String description, boolean hidden)
+AbstractPlayerCommand(String name, String description, boolean requiresConfirmation)
 AbstractPlayerCommand(String name)  // no description
 ```
+
+The third-argument boolean on every base-class constructor is `requiresConfirmation`
+(`AbstractCommand(String, String, boolean)`): when `true` the parser refuses to run
+the command unless the caller appends `--confirm` (`ParserContext.isConfirmationSpecified()`),
+and the usage text gains a "requires confirmation" line — the engine uses it for
+destructive commands such as `/npc clean`.
 
 ### Abstract Method to Implement
 ```java
@@ -139,7 +149,7 @@ public class HelloCommand extends AbstractPlayerCommand {
         super("hello", "Sends a friendly greeting");
         // By default each command auto-generates a permission node (here
         // "<group>.<name>.command.hello", from the plugin's manifest) that only
-        // ops hold (the OP group carries the '*' wildcard), so a normal player
+        // ops hold (the hytale:Admin group carries the '*' wildcard), so a normal player
         // gets "no permission". requireNoPermission() opts out of node generation,
         // leaving the command open to everyone. Use requirePermission("...") to
         // gate instead. Must be called before registration.
@@ -194,6 +204,25 @@ protected void setup() {
 
 > **See also:** [Plugin Lifecycle](plugin-lifecycle.md#plugin-lifecycle-api)
 
+### Tab completion (CommandManager / CommandCompletion)
+
+Registration hands the command to the engine's `CommandManager` (`CommandManager.get()`,
+`server.core.command.system`), which is also what serves the client's tab completion.
+As of 0.6.3 that resolver is exposed:
+
+```java
+AbstractCommand resolveCommand(String name)                                   // by name or alias, or null
+List<String> suggestCompletions(CommandSender sender, List<String> words, int wordIndex)
+```
+
+`suggestCompletions` delegates to the static `CommandCompletion.suggest(sender, commands,
+resolver, words, wordIndex)`: word 0 completes command names the sender may run, later
+words walk sub-commands (`AbstractCommand.getSubCommand(name)`), then offer required-arg
+suggestions, `--optional` names (`getOptionalArgument(name)`), or inline `--name=value`
+values — permission-filtered via `hasPermission(sender)` at every step. Plugins normally
+only feed it indirectly, by overriding `ArgumentType.suggest(...)` on custom argument
+types.
+
 ## AbstractCommand Arguments
 **Package:** `com.hypixel.hytale.server.core.command.system`
 
@@ -235,23 +264,40 @@ Message getUsageShort(CommandSender sender, boolean showAliases)  // Get short u
 
 // Permissions
 void requirePermission(String permission)       // Require a permission node
-void requirePermission(PermissionQuery query)   // Same, with a pre-built PermissionQuery (0.6+)
-void requireNoPermission()                      // Opt out of the auto-generated node — open to everyone (0.6+; replaces canGeneratePermission())
-PermissionQuery registerExtendedPermission(String suffix)  // Register + return "<this command's node>.<suffix>" (null if no node) (0.6+)
-void setPermissionGroups(String... groups)      // Assign command to permission group(s)
-void setPermissionGroup(GameMode mode)          // @Deprecated (Update 5) — use setPermissionGroups(String...)
+void requirePermission(PermissionQuery query)   // Same, with a pre-built PermissionQuery (0.6.3+)
+void requireNoPermission()                      // Opt out of the auto-generated node — open to everyone (0.6.3+; replaces canGeneratePermission())
+protected PermissionQuery registerExtendedPermission(String suffix)  // Register + return "<this command's node>.<suffix>" (0.6.3+) — see note below
+protected void setPermissionGroups(String... groups)      // Assign command to permission group(s)
+protected void setPermissionGroup(GameMode mode)          // @Deprecated(forRemoval) (Update 5) — use setPermissionGroups(String...)
 boolean hasPermission(CommandSender sender)     // Check permission
 String getPermission()                          // The node's id, or null when open
-String generatePermissionNode()                 // This command's own segment of the node (name lowercased)
+protected String generatePermissionNode()       // This command's own segment of the node (name lowercased)
 
 // Configuration
-void setUnavailableInSingleplayer(boolean unavailable)  // Mark multiplayer-only
+protected void setUnavailableInSingleplayer(boolean unavailable)  // Mark multiplayer-only
 void setAllowsExtraArguments(boolean allows)    // Allow trailing arguments
 void setOwner(CommandOwner owner)               // Set owning plugin
+void completeRegistration()                     // Called by the registry once; overridable hook (call super first)
+
+// Introspection (0.6.3+ additions marked)
+Map<String, AbstractCommand> getSubCommands()
+AbstractCommand getSubCommand(String name)                  // (0.6.3+) null if none
+Map<String, AbstractOptionalArg<?, ?>> getOptionalArguments()
+AbstractOptionalArg<?, ?> getOptionalArgument(String name)  // (0.6.3+) null if none
+List<RequiredArg<?>> getRequiredArguments()
+boolean hasBeenRegistered()
 
 // Matching
 MatchResult matches(String input, String alias, int depth)  // Check if input matches command
 ```
+
+> **`registerExtendedPermission` timing:** it returns `null` whenever the command's own
+> node is still unset, and that node is only populated by `setOwner()` during registration —
+> so calling it from the constructor always yields `null`. Call it from an override of
+> `completeRegistration()`, **after** `super.completeRegistration()`, exactly as the engine's
+> `AbstractTargetPlayerCommand` (`.other`) and `AbstractTargetPlayersCommand` (`.other`,
+> `.all`) do. `requirePermission(...)` / `requireNoPermission()`, by contrast, must run
+> *before* registration.
 
 > **See also:** [Permissions API](permissions.md#permissionholder)
 
@@ -266,15 +312,15 @@ if (this.permission == null && !this.openToEveryone)            // openToEveryon
     this.permission = PermissionQuery.of(generatePermission());  // e.g. "myorg.myplugin.command.menu"
 ```
 
-The generated node is `<plugin base permission>.command.<name>` for a plugin-owned command, where the base permission is the manifest's `Group.Name` lowercased with spaces replaced by `_` (`PluginBase.getBasePermission()`); sub-commands append their own segment to the parent's node (`....command.perm.reload`), and commands owned by the `CommandManager` itself use `hytale.system.command.<name>`. (`HytalePermissions.fromCommand(name)` → `hytale.command.<name>` still exists as a constant helper, but it is **not** what registration generates.) Since 0.6 the field is a `PermissionQuery` (`server.core.permissions`), a pre-split wrapper around the node id that `PermissionHolder.hasPermission(PermissionQuery)` matches against wildcards; `getPermission()` still returns the plain id string.
+The generated node is `<plugin base permission>.command.<name>` for a plugin-owned command, where the base permission is the manifest's `Group.Name` lowercased with spaces replaced by `_` (`PluginBase.getBasePermission()`); sub-commands append their own segment to the parent's node (`....command.perm.reload`), and commands owned by the `CommandManager` itself use `hytale.system.command.<name>`. (`HytalePermissions.fromCommand(name)` → `hytale.command.<name>` still exists as a constant helper, but it is **not** what registration generates.) As of 0.6.3 the field is a `PermissionQuery` (`server.core.permissions`), a pre-split wrapper around the node id that `PermissionHolder.hasPermission(PermissionQuery)` matches against wildcards; `getPermission()` still returns the plain id string.
 
 So **every command auto-generates a permission node by default**, and `hasPermission(sender)` only passes if the node is `null`, or the sender holds it. A normal player holds nothing, so a freshly written `/menu` replies *"no permission"* until you do one of:
 
 | Option | How | When to use |
 |--------|-----|-------------|
-| **Open the command** | Call `requireNoPermission()` in the constructor (leaves the node `null` and flags the command open → everyone passes; replaces the removed `canGeneratePermission()` override) | Examples / commands meant for all players |
+| **Open the command** | Call `requireNoPermission()` in the constructor (leaves the node `null` and flags the command open → everyone passes; replaces the `canGeneratePermission()` override removed by 0.6.3) | Examples / commands meant for all players |
 | **Explicit node** | Call `requirePermission("ui.menu")` in the constructor, then grant that node | Real permission-gated commands |
-| **Become op** | Run `/op` in-game; the `OP` group carries the `*` wildcard, satisfying every node | Testing/admin |
+| **Become op** | Run `/op` in-game; it adds you to the `hytale:Admin` group, which carries the `*` wildcard, satisfying every node | Testing/admin |
 
 ```java
 public MenuCommand() {
@@ -288,7 +334,7 @@ public MenuCommand() {
 Notes:
 - `/op` (self) is itself gated: it works in local/singleplayer, but a dedicated server requires the `--allow-op` launch arg or your UUID in `permissions.json`.
 - The example plugins all call `requireNoPermission()` so they run without op.
-- `canGeneratePermission()` (the pre-0.6 override-to-`false` opt-out) was **removed in 0.6**; an `@Override` of it now fails to compile ("method does not override or implement a method from a supertype").
+- `canGeneratePermission()` (the 0.5.x override-to-`false` opt-out) was **removed by 0.6.3**; an `@Override` of it now fails to compile ("method does not override or implement a method from a supertype").
 
 ## AbstractAsyncCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
@@ -370,7 +416,7 @@ Base class for commands that operate on a world context.
 ```java
 AbstractWorldCommand(String name)
 AbstractWorldCommand(String name, String description)
-AbstractWorldCommand(String name, String description, boolean allowsExtraArgs)
+AbstractWorldCommand(String name, String description, boolean requiresConfirmation)
 ```
 
 ### Abstract Method to Implement
@@ -391,24 +437,25 @@ that filters by role.)
 
 ```java
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractWorldCommand;
+import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
 import com.hypixel.hytale.component.RemoveReason;
 
 public class KillRoleCommand extends AbstractWorldCommand {
-    private final Argument<String, String> roleArg;
+    private final RequiredArg<String> roleArg;
 
     public KillRoleCommand() {
         super("killrole", "Remove every NPC of the given role");
         roleArg = withRequiredArg("role", "Role name", ArgTypes.STRING);
-        setPermissionGroups(new String[]{ "hytale:ServerEditor" });
+        setPermissionGroups("hytale:ServerEditor");
     }
 
     @Override
     protected void execute(CommandContext ctx, World world, Store<EntityStore> store) {
         String target = ctx.get(roleArg);
         store.forEachEntityParallel(NPCEntity.getComponentType(), (index, chunk, buffer) -> {
-            NPCEntity npc = (NPCEntity) chunk.getComponent(index, NPCEntity.getComponentType());
+            NPCEntity npc = chunk.getComponent(index, NPCEntity.getComponentType());
             if (npc != null && target.equals(npc.getRoleName())) {
                 buffer.removeEntity(chunk.getReferenceTo(index), RemoveReason.REMOVE);
             }
@@ -419,13 +466,14 @@ public class KillRoleCommand extends AbstractWorldCommand {
 
 Key points:
 
-- `store.forEachEntityParallel(componentType, consumer)` walks every entity that
-  has the given component, across archetype chunks in parallel. The consumer
-  (`com.hypixel.hytale.function.consumer.IntBiObjectConsumer`) receives
+- `store.forEachEntityParallel(query, consumer)` walks every entity matching the
+  `Query` — a `ComponentType` *is* a `Query`, so passing `NPCEntity.getComponentType()`
+  selects every entity with that component — across archetype chunks in parallel. The
+  consumer (`com.hypixel.hytale.function.consumer.IntBiObjectConsumer`) receives
   `(int index, ArchetypeChunk, CommandBuffer)`.
-- Inside it, read a component with `chunk.getComponent(index, type)` (it returns
-  a `ComponentAccessor` — cast to the concrete component, which implements that
-  interface), and get the entity's `Ref` with `chunk.getReferenceTo(index)`.
+- Inside it, read a component with `chunk.getComponent(index, type)` (generic on the
+  component type, so no cast is needed), and get the entity's `Ref` with
+  `chunk.getReferenceTo(index)`.
 - Queue structural edits on the `CommandBuffer`, which applies *after* the
   iteration, so removing while iterating is safe:
   `buffer.removeEntity(ref, RemoveReason.REMOVE)`. `RemoveReason`
@@ -443,8 +491,12 @@ Base class for commands that target another player (e.g., admin commands).
 ```java
 AbstractTargetPlayerCommand(String name)
 AbstractTargetPlayerCommand(String name, String description)
-AbstractTargetPlayerCommand(String name, String description, boolean allowsExtraArgs)
+AbstractTargetPlayerCommand(String name, String description, boolean requiresConfirmation)
 ```
+
+Targeting another player additionally requires the derived node `<permission>.other`,
+which the base registers in its `completeRegistration()` override via
+`registerExtendedPermission("other")` (0.6.3+).
 
 ### Abstract Method to Implement
 ```java
@@ -492,6 +544,9 @@ Base for commands that act on a *set* of players. Target selection is built in:
   `<permission>.all`.
 - Passing both `--player` and `--all` is rejected with a target-conflict error.
 
+The `.other` / `.all` nodes are derived in the base's `completeRegistration()` override
+(`registerExtendedPermission("all")` / `("other")`, 0.6.3+), so they exist only when the
+command itself has a node — an open (`requireNoPermission()`) command skips both checks.
 The engine's `/audio music clear` and `/audio music force` use this base.
 
 ### Constructors
@@ -565,7 +620,7 @@ UUID getUuid()        // UUID of sender
 
 ### Implementations
 - `PlayerRef` - the player command sender (implements `CommandSender` + `PermissionHolder`). **Note (Update 5):** `Player` no longer implements `CommandSender`/`PermissionHolder` — use the `PlayerRef` the framework hands you.
-- `ConsoleSender` - server console / command-block sender
+- `ConsoleSender` (`server.core.console`) - the server console sender
 
 ### Usage
 ```java
@@ -573,7 +628,7 @@ CommandSender sender = ctx.sender();
 sender.sendMessage(Message.raw("Hello!"));
 
 if (ctx.isPlayer()) {
-    Player player = ctx.senderAs(Player.class);
+    PlayerRef playerRef = ctx.senderAs(PlayerRef.class);   // senderAs needs a CommandSender subtype
 }
 ```
 
@@ -627,6 +682,8 @@ Message getName()            // Argument name
 String[] getExamples()       // Example values
 int getNumberOfParameters()  // Number of input tokens consumed
 boolean isListArgument()     // Whether this accepts multiple values
+boolean isGreedyString()     // Whether this consumes the rest of the line
+ArgumentType<D> withSharedSuggestions(ArgumentType<?> other)  // Reuse another type's suggestion cache (return type narrowed to ArgumentType<D> in 0.6.3)
 ```
 
 ### SingleArgumentType<D>
@@ -650,6 +707,7 @@ ArgTypes.INTEGER   // Integer
 ArgTypes.FLOAT     // Float
 ArgTypes.DOUBLE    // Double
 ArgTypes.STRING    // String
+ArgTypes.GREEDY_STRING // String consuming the rest of the line (must be the last required arg)
 ArgTypes.UUID      // UUID
 ArgTypes.COLOR     // Color (integer)
 ```
@@ -702,6 +760,18 @@ ArgTypes.BLOCK_MASK        // Block mask for filtering
 ArgTypes.WEIGHTED_BLOCK_TYPE // Block type with weight
 ```
 
+### Provider keys (0.6.3+)
+```java
+ArgTypes.WORLD_GEN_PROVIDER_KEY                 // registered world-generator provider id
+ArgTypes.WORLD_GEN_PROVIDER_KEY_OR_DEFAULT      // same, also accepting "default"
+ArgTypes.WORLD_MAP_PROVIDER_KEY                 // world-map provider id
+ArgTypes.CHUNK_STORAGE_PROVIDER_KEY             // chunk-storage provider id
+ArgTypes.CHUNK_STORAGE_PROVIDER_KEY_OR_DEFAULT  // same, also accepting "default"
+ArgTypes.AUTH_STORE_PROVIDER_KEY                // auth-store provider id
+```
+All are `SingleArgumentType<String>` with tab completion over the registered provider ids;
+they back the `/world create …` and storage/auth admin commands.
+
 ### Enum Helper
 ```java
 // Create argument type for any enum
@@ -711,7 +781,7 @@ ArgTypes.forEnum(String name, Class<E> enumClass)
 ### Usage Example
 ```java
 public class TeleportCommand extends AbstractPlayerCommand {
-    private final Argument<RelativeDoublePosition, RelativeDoublePosition> posArg;
+    private final RequiredArg<RelativeDoublePosition> posArg;
 
     public TeleportCommand() {
         super("tp", "Teleport to a position");
@@ -723,11 +793,16 @@ public class TeleportCommand extends AbstractPlayerCommand {
                           Ref<EntityStore> ref, PlayerRef playerRef, World world) {
         RelativeDoublePosition relPos = ctx.get(posArg);
         Transform current = playerRef.getTransform();
-        Vector3d target = relPos.resolve(current.getPosition());
+        Vector3d target = relPos.getRelativePosition(current.getPosition(), world);
         // Teleport to target
     }
 }
 ```
+
+`withRequiredArg` returns a `RequiredArg<D>` (`server.core.command.system.arguments.system`);
+`withOptionalArg` / `withDefaultArg` / `withFlagArg` return `OptionalArg<D>` / `DefaultArg<D>` /
+`FlagArg`. Declare fields with those concrete types — the shared base is
+`Argument<Arg extends Argument<Arg, D>, D>`, so `Argument<String, String>` is not a valid type.
 
 ### Relative Position Resolution
 
@@ -739,7 +814,7 @@ public class TeleportCommand extends AbstractPlayerCommand {
 **Full resolution pattern:**
 ```java
 public class SpawnCommand extends AbstractPlayerCommand {
-    private final Argument<RelativeDoublePosition, RelativeDoublePosition> posArg;
+    private final RequiredArg<RelativeDoublePosition> posArg;
 
     public SpawnCommand() {
         super("spawn", "Spawn entity at position");
@@ -777,7 +852,7 @@ public class SpawnCommand extends AbstractPlayerCommand {
 public enum Difficulty { EASY, NORMAL, HARD }
 
 public class DifficultyCommand extends AbstractPlayerCommand {
-    private final Argument<Difficulty, Difficulty> diffArg;
+    private final RequiredArg<Difficulty> diffArg;
 
     public DifficultyCommand() {
         super("difficulty", "Set difficulty");
@@ -1018,7 +1093,7 @@ tracker visibility check, with a chat message) and otherwise removes it with
 
 ## Gotchas & Errors
 
-Error strings below are the literal messages thrown by the 0.5.0 command system (verified against `HytaleServer.jar`).
+Error strings below are the literal messages thrown by the 0.6.3 command system (verified against `HytaleServer.jar`).
 
 - **`Registered commands must define a name`** → you constructed a command with a null/empty name. Fix: pass a non-empty name to `super("name", ...)`.
 - **`Cannot create a Required Argument with 0 parameters.`** → a custom `ArgumentType` reports zero input tokens. Fix: make `getNumberOfParameters()` return ≥ 1.

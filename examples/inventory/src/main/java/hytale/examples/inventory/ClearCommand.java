@@ -34,13 +34,9 @@ public class ClearCommand extends AbstractPlayerCommand {
     public ClearCommand() {
         super("inv-clear", "Clear inventory sections");
         sectionArg = withRequiredArg("section", "Section to clear (all/hotbar/storage/armor/utility/tools/backpack)", ArgTypes.STRING);
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See commands example's HelloCommand for details.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See commands example's HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

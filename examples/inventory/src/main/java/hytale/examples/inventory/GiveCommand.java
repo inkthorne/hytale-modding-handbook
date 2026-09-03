@@ -37,13 +37,9 @@ public class GiveCommand extends AbstractPlayerCommand {
         super("give", "Add items to your inventory");
         itemArg = withRequiredArg("item", "Item ID, exact case (e.g., Weapon_Sword_Wood)", ArgTypes.STRING);
         quantityArg = withRequiredArg("quantity", "Number of items", ArgTypes.INTEGER);
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See commands example's HelloCommand for details.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See commands example's HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

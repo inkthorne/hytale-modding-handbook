@@ -877,20 +877,35 @@ Treat it as **read-mostly** for players: the client re-asserts states every move
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.teleport`
 
-Server-initiated teleports are asynchronous for players: the server adds a `Teleport` component (position + rotation — see the built-in teleport flow in [world.md](world.md)); the engine then queues it on **`PendingTeleport`**, sends the packet, and waits for the client to echo the teleport id back before accepting further movement from that position. **`TeleportRecord`** remembers the last completed teleport.
+Server-initiated teleports are asynchronous for players: the server adds a `Teleport` component (position + rotation — see the built-in teleport flow in [world.md](world.md)); the engine's `TeleportSystems` then queues the expected position on the player's **`TeleportAckTracker`** (`PlayerRef.getTeleportAckTracker()`), sends the `ClientTeleport` packet, marks the entity with the **`PendingTeleport`** component, and waits for the client to acknowledge (the packet handler calls `validate(...)` on the tracker) before `completeTeleport` removes `PendingTeleport` and writes a `TeleportRecord` entry. Since 0.6 the bookkeeping lives on the tracker; `PendingTeleport` is a pure marker component.
 
 ### PendingTeleport
 
 | Method | Description |
 |--------|-------------|
 | `static getComponentType()` | Component type for store access |
-| `queueTeleport(Teleport)` | Queue a teleport; returns its id (engine calls this for you) |
-| `validate(int, Position)` | Match a client ack: `Result.OK`, `INVALID_ID`, or `INVALID_POSITION` |
-| `isEmpty()` | No teleports in flight |
-| `getPosition()` | Position of the most recently queued teleport |
-| `MAX_OFFSET` | `0.001` — tolerance used when validating the client's echoed position |
 
-Plugins normally never touch `PendingTeleport` — add a `Teleport` component and let the engine drive. Its main plugin use is a **guard**: `isEmpty() == false` means a teleport is still in flight, so position-based logic (anti-cheat distance checks, region triggers) should hold off.
+No other members (0.6): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. Before 0.6 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); those moved to `TeleportAckTracker`.
+
+### TeleportAckTracker
+
+Per-player (owned by `PlayerRef`, not a component), synchronized:
+
+| Method | Description |
+|--------|-------------|
+| `queueTeleport(Vector3dc)` | Queue an expected position; returns the teleport id (engine calls this for you) |
+| `validate(int, Position)` | Match a client ack against the head of the queue → a `Result` record |
+| `rollback(int)` | Drop a queued teleport by id (used when the send fails) |
+| `isEmpty()` | No teleports in flight |
+| `MAX_OFFSET_SQUARED` | `0.001` — squared position tolerance (plus the client's half-float precision at that magnitude) when validating the echoed position |
+
+`TeleportAckTracker.Result` is a record: `status()` (`TeleportAckTracker.Status.OK`, `INVALID_ID`, or `INVALID_POSITION`), `expectedTeleportId()`, `expectedPosition()`, `ackedPosition()`, `remainingQueueDepth()`. Ids are compared on their low byte (the wire id is a `byte`).
+
+```java
+// Teleport-in-flight guard
+boolean teleporting = store.getComponent(ref, PendingTeleport.getComponentType()) != null
+        || !playerRef.getTeleportAckTracker().isEmpty();
+```
 
 ### TeleportRecord
 

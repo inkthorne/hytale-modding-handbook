@@ -1791,7 +1791,7 @@ public enum BlockTickStrategy {
 }
 ```
 
-A slept/ignored block is re-woken by flagging it again — `BlockChunk.setTicking(x, y, z, true)`, or `BlockChunk.setNeighbourBlocksTicking(x, y, z)` to wake the 3×3×3 neighborhood (this is how block changes re-trigger dormant neighbors, e.g. fluids). `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's systems once the adjacent chunk is available.
+A slept/ignored block is re-woken by flagging it again — `BlockChunk.setTicking(x, y, z, true)` (which delegates to the owning `ChunkSection` and marks it for saving; `isTicking(x, y, z)` reads the flag). The 0.5 `setNeighbourBlocksTicking(x, y, z)` 3×3×3 wake helper was **removed in 0.6** — wake neighbors with individual `setTicking` calls. `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's systems once the adjacent chunk is available.
 
 ### TickProcedure (scheduled ticks)
 
@@ -2307,21 +2307,17 @@ public class ItemRespawnerSystem extends EntityTickingSystem<ChunkStore> {
 
 #### 4b. Resolving the block's world position
 
-`BlockStateInfo` carries a reference to the owning chunk plus the block's packed index within it. Unpack with `ChunkUtil` and offset by the chunk origin:
+`BlockStateInfo` carries a reference to the owning **chunk section** (`getSectionRef()`, a 32×32×32 `ChunkSection`) plus the block's packed section-local index (`getIndex()`). Since 0.6 it resolves the world position for you:
 
 ```java
-Ref<ChunkStore> chunkRef = info.getChunkRef();
-if (!chunkRef.isValid()) return;
-WorldChunk worldChunk = store.getComponent(chunkRef, WorldChunk.getComponentType());
-if (worldChunk == null) return;
-
-int i = info.getIndex();
-int x = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getX(), ChunkUtil.xFromBlockInColumn(i));
-int y = ChunkUtil.yFromBlockInColumn(i);
-int z = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getZ(), ChunkUtil.zFromBlockInColumn(i));
+Vector3i blockPos = new Vector3i();                  // org.joml
+if (!info.fillWorldPos(store, blockPos)) return;     // false: section ref invalid / section unloaded
+int x = blockPos.x, y = blockPos.y, z = blockPos.z;
 
 World world = store.getExternalData().getWorld();   // ChunkStore -> World
 ```
+
+`fillWorldPos(accessor, out)` looks up the `ChunkSection` component through the section ref and does `worldCoordFromLocalCoord(section.getX/Y/Z(), ChunkUtil.xFromIndex/yFromIndex/zFromIndex(index))`; the no-accessor overload `fillWorldPos(out)` uses the ref's own store. (Pre-0.6 the component exposed `getChunkRef()` to the column `WorldChunk` and you unpacked a column index with `ChunkUtil.{x,y,z}FromBlockInColumn` — both are gone.)
 
 ### 5. Spawning an item-entity from the block
 
@@ -2449,8 +2445,8 @@ Because the supplier reads the components off the targeted block's `Ref`, the pa
 |-------|---------|------|
 | `Component<ChunkStore>` | `component` | Interface your block-entity state implements |
 | `ComponentRegistryProxy` | `component` | `getChunkStoreRegistry()`; `registerComponent` / `registerSystem` |
-| `BlockModule.BlockStateInfo` | `server.core.modules.block` | Per-block-entity component holding `getChunkRef()` + `getIndex()` |
-| `ChunkUtil` | `math.util` | `xFromBlockInColumn` / `yFromBlockInColumn` / `zFromBlockInColumn` / `worldCoordFromLocalCoord` |
+| `BlockModule.BlockStateInfo` | `server.core.modules.block` | Per-block-entity component: `getSectionRef()` + `getIndex()`, `fillWorldPos(...)` resolves the world position |
+| `ChunkUtil` | `math.util` | `xFromIndex` / `yFromIndex` / `zFromIndex` (section-local index → 0–31) / `worldCoordFromLocalCoord` |
 | `EntityTickingSystem<ChunkStore>` | `component.system.tick` | Per-tick system over block-entities |
 | `ItemComponent` | `server.core.modules.entity.item` | `generateItemDrop(...)` builds a dropped-item `Holder` |
 | `PersistentRef` | `server.core.entity.reference` | Save-surviving reference to a spawned entity |

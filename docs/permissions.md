@@ -222,15 +222,23 @@ public class AdminCommand extends AbstractPlayerCommand {
 | Method | Use |
 |--------|-----|
 | `requirePermission(String node)` | Gate on a specific permission node |
+| `requirePermission(PermissionQuery query)` | Same, with a pre-built `PermissionQuery` (0.6+) |
+| `requireNoPermission()` | Skip the auto-generated per-command node so everyone can run it (0.6+; replaces the removed `canGeneratePermission()` override) |
+| `registerExtendedPermission(String suffix)` | Register and return `<command node>.<suffix>` as a `PermissionQuery` for finer gating inside the command; `null` if the command has no node (0.6+) |
 | `setPermissionGroups(String... groups)` | Assign the command to permission group(s) — the role-based form |
 | `setPermissionGroup(GameMode)` | **Deprecated** (Update 5) — the old game-mode-keyed form; use `setPermissionGroups(String...)` |
-| `canGeneratePermission()` | Override to `false` to skip the auto-generated per-command node |
 
-If you don't gate explicitly, a command auto-generates a node (`HytalePermissions.fromCommand(name)` →
-`hytale.command.<name>`) that ordinary players (`hytale:Adventurer`) don't hold — so it reads as "no permission"
-until granted (the `hytale:Admin` wildcard `*` is why ops can always run it). Override `canGeneratePermission()` to
-return `false` for a command any player should run. (`CommandUtil.requirePermission(holder, node)` is the static
-check used internally.)
+If you don't gate explicitly, a command auto-generates a node at registration — `<plugin base permission>.command.<name>`,
+where the base permission is the manifest's `Group.Name` lowercased (spaces → `_`; `PluginBase.getBasePermission()`),
+sub-commands append their own segment, and `CommandManager`-owned commands use `hytale.system.command.<name>`. Ordinary
+players (`hytale:Adventurer`) don't hold it, so it reads as "no permission" until granted (the `hytale:Admin` wildcard
+`*` is why ops can always run it). Call `requireNoPermission()` in the constructor for a command any player should run.
+(`HytalePermissions.fromCommand(name)` → `hytale.command.<name>` is a constant helper, not what registration generates.
+`CommandUtil.requirePermission(holder, node)` is the static check used internally.)
+
+Since 0.6 the command's stored permission is a **`PermissionQuery`** (`server.core.permissions`): `PermissionQuery.of(id)`
+pre-splits the node into its wildcard ancestors (`a.*`, `a.b.*`, …) and deny forms (`-a.b.c`) so `hasPermission` can
+match them without re-parsing; `getId()` returns the plain node string.
 
 Players without the required permission won't be able to execute the command.
 
@@ -407,9 +415,9 @@ AccessControlModule.get().registerAccessProvider(uuid ->
 
 Backtick-quoted error strings below are the literal messages thrown by the 0.5.0 server (verified against `HytaleServer.jar`).
 
-- **`Cannot change permissions after a command has already been registered`** → `requirePermission(...)`, `setPermissionGroups(...)`, or another permission setter was called after the command was registered. Fix: call it in the command constructor, before `registerCommand()`.
+- **`Cannot change permissions when a command has already completed registration`** → `requirePermission(...)`, `setPermissionGroups(...)`, or another permission setter was called after the command was registered. Fix: call it in the command constructor, before `registerCommand()`.
 - **Symptom:** `hasPermission("node")` returns `false` for a node nobody has explicitly set → the single-arg overload defaults to `false` when the node is unset. Fix: use `hasPermission("node", true)` when "unset" should mean allowed (see [With Default Value](#with-default-value)).
-- **Symptom:** a freshly registered command replies *"no permission"* for ordinary players even without `requirePermission(...)` → every command auto-generates a node (`hytale.command.<name>`) that the default `hytale:Adventurer` group doesn't hold; only `hytale:Admin` (via the `*` wildcard) does. Fix: override `canGeneratePermission()` to return `false`, or grant the node to a group via `PermissionsModule`. See [Commands: Permission model](commands.md#permission-model-why-a-new-command-says-no-permission).
+- **Symptom:** a freshly registered command replies *"no permission"* for ordinary players even without `requirePermission(...)` → every command auto-generates a node (`<group>.<name>.command.<cmd>`, from the plugin manifest) that the default `hytale:Adventurer` group doesn't hold; only `hytale:Admin` (via the `*` wildcard) does. Fix: call `requireNoPermission()` in the constructor, or grant the node to a group via `PermissionsModule`. See [Commands: Permission model](commands.md#permission-model-why-a-new-command-says-no-permission).
 - **Symptom:** `setPermissionGroup(GameMode)` no longer behaves as expected → it's **deprecated** in Update 5 and permissions are no longer game-mode-keyed. Fix: use `setPermissionGroups(String...)` with group names (e.g. `"hytale:Admin"`).
 - **Symptom:** a registered permission node or group name is silently rejected → it failed validation. Fix: namespace nodes (`myplugin.feature`) and groups (`myplugin:Role`), and pre-check with `PermissionValidation.isValidPermissionNode` / `isValidGroupName`.
 

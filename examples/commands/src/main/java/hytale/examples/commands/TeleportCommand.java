@@ -27,13 +27,9 @@ public class TeleportCommand extends AbstractPlayerCommand {
     public TeleportCommand() {
         super("tp", "Teleport to a position");
         positionArg = withRequiredArg("position", "Target position", ArgTypes.RELATIVE_POSITION);
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See HelloCommand for the full rationale.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

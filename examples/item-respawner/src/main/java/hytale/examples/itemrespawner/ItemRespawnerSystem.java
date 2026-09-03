@@ -9,16 +9,15 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.tick.EntityTickingSystem;
-import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.math.vector.Rotation3f;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.modules.block.BlockModule;
 import com.hypixel.hytale.server.core.modules.entity.item.ItemComponent;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.joml.Vector3d;
+import org.joml.Vector3i;
 
 /**
  * Runs every tick over each placed Item Respawner block and keeps it stocked: if
@@ -70,21 +69,16 @@ public class ItemRespawnerSystem extends EntityTickingSystem<ChunkStore> {
             return;
         }
 
-        // Resolve the block's world coordinates. BlockStateInfo gives a reference
-        // to the owning chunk plus the block's packed index within it; ChunkUtil
-        // unpacks that index, and we offset x/z by the chunk's world origin.
-        Ref<ChunkStore> chunkRef = info.getChunkRef();
-        if (!chunkRef.isValid()) {
+        // Resolve the block's world coordinates. BlockStateInfo references the
+        // owning 32x32x32 chunk section plus the block's packed index within it;
+        // fillWorldPos() unpacks the index and offsets by the section's origin.
+        Vector3i blockPos = new Vector3i();
+        if (!info.fillWorldPos(store, blockPos)) {
             return;
         }
-        WorldChunk worldChunk = store.getComponent(chunkRef, WorldChunk.getComponentType());
-        if (worldChunk == null) {
-            return;
-        }
-        int blockIndex = info.getIndex();
-        int x = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getX(), ChunkUtil.xFromBlockInColumn(blockIndex));
-        int y = ChunkUtil.yFromBlockInColumn(blockIndex);
-        int z = ChunkUtil.worldCoordFromLocalCoord(worldChunk.getZ(), ChunkUtil.zFromBlockInColumn(blockIndex));
+        int x = blockPos.x;
+        int y = blockPos.y;
+        int z = blockPos.z;
 
         World world = store.getExternalData().getWorld();
         EntityStore entityStore = world.getEntityStore();

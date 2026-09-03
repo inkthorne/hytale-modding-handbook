@@ -27,13 +27,9 @@ public class InspectCommand extends AbstractPlayerCommand {
 
     public InspectCommand() {
         super("inspect", "Show inventory contents");
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See commands example's HelloCommand for details.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See commands example's HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

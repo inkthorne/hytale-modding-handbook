@@ -31,13 +31,9 @@ public class HudCommand extends AbstractPlayerCommand {
     public HudCommand() {
         super("hud", "Toggle HUD visibility");
         modeArg = withRequiredArg("mode", "show or hide", ArgTypes.forEnum("mode", Mode.class));
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See commands example's HelloCommand for details.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See commands example's HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

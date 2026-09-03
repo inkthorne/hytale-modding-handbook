@@ -130,22 +130,20 @@ protected abstract void execute(
 
 ### Usage Example
 
-Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.5.0 jar).
+Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.6.3 jar).
 
 ```java
 public class HelloCommand extends AbstractPlayerCommand {
 
     public HelloCommand() {
         super("hello", "Sends a friendly greeting");
-    }
-
-    // By default each command auto-generates a permission node (here "hello")
-    // that only ops hold (the OP group carries the '*' wildcard), so a normal
-    // player gets "no permission". Returning false skips node generation, leaving
-    // the command open to everyone. Use requirePermission("...") to gate instead.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // By default each command auto-generates a permission node (here
+        // "<group>.<name>.command.hello", from the plugin's manifest) that only
+        // ops hold (the OP group carries the '*' wildcard), so a normal player
+        // gets "no permission". requireNoPermission() opts out of node generation,
+        // leaving the command open to everyone. Use requirePermission("...") to
+        // gate instead. Must be called before registration.
+        requireNoPermission();
     }
 
     @Override
@@ -236,12 +234,15 @@ Message getUsageString(CommandSender sender)    // Get usage help
 Message getUsageShort(CommandSender sender, boolean showAliases)  // Get short usage
 
 // Permissions
-void requirePermission(String permission)       // Require permission
+void requirePermission(String permission)       // Require a permission node
+void requirePermission(PermissionQuery query)   // Same, with a pre-built PermissionQuery (0.6+)
+void requireNoPermission()                      // Opt out of the auto-generated node — open to everyone (0.6+; replaces canGeneratePermission())
+PermissionQuery registerExtendedPermission(String suffix)  // Register + return "<this command's node>.<suffix>" (null if no node) (0.6+)
 void setPermissionGroups(String... groups)      // Assign command to permission group(s)
 void setPermissionGroup(GameMode mode)          // @Deprecated (Update 5) — use setPermissionGroups(String...)
 boolean hasPermission(CommandSender sender)     // Check permission
-boolean canGeneratePermission()                 // Check if can auto-generate permission
-String generatePermissionNode()                 // Generate permission node string
+String getPermission()                          // The node's id, or null when open
+String generatePermissionNode()                 // This command's own segment of the node (name lowercased)
 
 // Configuration
 void setUnavailableInSingleplayer(boolean unavailable)  // Mark multiplayer-only
@@ -261,33 +262,33 @@ MatchResult matches(String input, String alias, int depth)  // Check if input ma
 When a command is registered, `setOwner()` runs:
 
 ```java
-if (this.permission == null && canGeneratePermission())   // canGeneratePermission() defaults to true
-    this.permission = generatePermission();                // node = command name lowercased, e.g. "menu"
+if (this.permission == null && !this.openToEveryone)            // openToEveryone is set only by requireNoPermission()
+    this.permission = PermissionQuery.of(generatePermission());  // e.g. "myorg.myplugin.command.menu"
 ```
+
+The generated node is `<plugin base permission>.command.<name>` for a plugin-owned command, where the base permission is the manifest's `Group.Name` lowercased with spaces replaced by `_` (`PluginBase.getBasePermission()`); sub-commands append their own segment to the parent's node (`....command.perm.reload`), and commands owned by the `CommandManager` itself use `hytale.system.command.<name>`. (`HytalePermissions.fromCommand(name)` → `hytale.command.<name>` still exists as a constant helper, but it is **not** what registration generates.) Since 0.6 the field is a `PermissionQuery` (`server.core.permissions`), a pre-split wrapper around the node id that `PermissionHolder.hasPermission(PermissionQuery)` matches against wildcards; `getPermission()` still returns the plain id string.
 
 So **every command auto-generates a permission node by default**, and `hasPermission(sender)` only passes if the node is `null`, or the sender holds it. A normal player holds nothing, so a freshly written `/menu` replies *"no permission"* until you do one of:
 
 | Option | How | When to use |
 |--------|-----|-------------|
-| **Open the command** | Override `canGeneratePermission()` to return `false` (leaves the node `null` → everyone passes) | Examples / commands meant for all players |
+| **Open the command** | Call `requireNoPermission()` in the constructor (leaves the node `null` and flags the command open → everyone passes; replaces the removed `canGeneratePermission()` override) | Examples / commands meant for all players |
 | **Explicit node** | Call `requirePermission("ui.menu")` in the constructor, then grant that node | Real permission-gated commands |
 | **Become op** | Run `/op` in-game; the `OP` group carries the `*` wildcard, satisfying every node | Testing/admin |
 
 ```java
 public MenuCommand() {
     super("menu", "Opens a custom menu");
-}
-
-// Opt out of the auto-generated node so any player can run this command.
-@Override
-protected boolean canGeneratePermission() {
-    return false;
+    // Opt out of the auto-generated node so any player can run this command.
+    // Like requirePermission(...), this must run before registration.
+    requireNoPermission();
 }
 ```
 
 Notes:
 - `/op` (self) is itself gated: it works in local/singleplayer, but a dedicated server requires the `--allow-op` launch arg or your UUID in `permissions.json`.
-- The example plugins all override `canGeneratePermission()` so they run without op.
+- The example plugins all call `requireNoPermission()` so they run without op.
+- `canGeneratePermission()` (the pre-0.6 override-to-`false` opt-out) was **removed in 0.6**; an `@Override` of it now fails to compile ("method does not override or implement a method from a supertype").
 
 ## AbstractAsyncCommand
 **Package:** `com.hypixel.hytale.server.core.command.system.basecommands`
@@ -1024,9 +1025,10 @@ Error strings below are the literal messages thrown by the 0.5.0 command system 
 - **`Cannot register additional required arguments after a greedy string argument`** → a greedy/list string argument consumes the rest of the line, so nothing may follow it. Fix: declare the greedy argument last.
 - **`Cannot add a subcommand with no name`** / **`Cannot have multiple subcommands with the same name`** → `addSubCommand()` got an unnamed or duplicate child. Fix: give each subcommand a unique, non-empty name.
 - **`Cannot re-use subcommands. Only one parent command allowed for each subcommand`** → the same `AbstractCommand` instance was added under two parents. Fix: construct a separate instance per parent.
+- **`Cannot change permissions when a command has already completed registration`** → `requirePermission(...)` / `requireNoPermission()` was called after the command was registered. Fix: call it in the constructor.
 - **`Cannot add new arguments when a command has already completed registration`** → you called `withRequiredArg`/`addAliases`/`requirePermission`/etc. after the command was registered. Fix: declare all arguments, aliases, and permissions in the constructor, before `registerCommand()`. (The same guard exists as `Cannot add aliases…`, `Cannot change permissions…`, `Cannot add new subcommands…`.)
 - **`Unknown owner type, please use PluginBase or CommandManager`** → `setOwner()` received something that is neither a plugin nor the command manager. Fix: register through `getCommandRegistry()` from your `JavaPlugin`.
-- **Symptom:** a freshly registered `/mycommand` replies *"no permission"* for ordinary players → every command auto-generates a permission node that the default `hytale:Adventurer` group doesn't hold (only `hytale:Admin`, via its `*` wildcard, does). Fix: override `canGeneratePermission()` to return `false`, or grant the node to a group (see [Permissions](permissions.md)). See [Permission model](#permission-model-why-a-new-command-says-no-permission).
+- **Symptom:** a freshly registered `/mycommand` replies *"no permission"* for ordinary players → every command auto-generates a permission node that the default `hytale:Adventurer` group doesn't hold (only `hytale:Admin`, via its `*` wildcard, does). Fix: call `requireNoPermission()` in the constructor, or grant the node to a group (see [Permissions](permissions.md)). See [Permission model](#permission-model-why-a-new-command-says-no-permission).
 
 ---
 

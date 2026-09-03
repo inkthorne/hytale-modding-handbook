@@ -33,13 +33,9 @@ public class SortCommand extends AbstractPlayerCommand {
     public SortCommand() {
         super("sort", "Sort storage inventory");
         sortTypeArg = withRequiredArg("type", "Sort type (name/type/rarity)", ArgTypes.STRING);
-    }
-
-    // Skip the auto-generated permission node so any player can run this example
-    // (otherwise it requires op). See commands example's HelloCommand for details.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // Skip the auto-generated permission node so any player can run this example
+        // (otherwise it requires op). See commands example's HelloCommand for details.
+        requireNoPermission();
     }
 
     @Override

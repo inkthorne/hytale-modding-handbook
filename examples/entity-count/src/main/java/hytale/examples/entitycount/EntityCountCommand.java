@@ -44,14 +44,10 @@ public class EntityCountCommand extends AbstractPlayerCommand {
         // Declare a required argument named "mode". Because it is required, the
         // command won't run unless the player provides a valid value.
         modeArg = withRequiredArg("mode", "show or hide", ArgTypes.forEnum("mode", Mode.class));
-    }
-
-    // By default Hytale auto-creates a permission for each command, which means
-    // only operators can run it. Returning false skips that so any player can try
-    // this example. Real plugins usually leave permissions on.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // By default Hytale auto-creates a permission node for each command, which
+        // means only operators can run it. requireNoPermission() skips that so any
+        // player can try this example. Real plugins usually leave permissions on.
+        requireNoPermission();
     }
 
     /**

@@ -81,15 +81,19 @@ public class TeleportCommand extends AbstractPlayerCommand {
 
 ### Opening Commands to Non-Ops
 By default each command auto-generates a permission node that only ops hold, so
-a normal player gets "no permission". Both example commands override
-`canGeneratePermission()` to return `false` so anyone can run them:
+a normal player gets "no permission". Both example commands call
+`requireNoPermission()` in their constructor so anyone can run them:
 ```java
-// By default each command auto-generates a permission node (here "hello")
-// that only ops hold (the OP group carries the '*' wildcard), so a normal
-// player gets "no permission". Returning false skips node generation, leaving
-// the command open to everyone. Use requirePermission("...") to gate instead.
-@Override
-protected boolean canGeneratePermission() {
-    return false;
+public HelloCommand() {
+    super("hello", "Sends a friendly greeting");
+    // By default each command auto-generates a permission node (here
+    // "<group>.<name>.command.hello", from the plugin's manifest) that only
+    // ops hold (the OP group carries the '*' wildcard), so a normal player
+    // gets "no permission". requireNoPermission() opts out of node generation,
+    // leaving the command open to everyone. Use requirePermission("...") to
+    // gate instead. Must be called before registration.
+    requireNoPermission();
 }
 ```
+(Before 0.6 this was an `@Override protected boolean canGeneratePermission() { return false; }`;
+that method was removed in 0.6 and the override no longer compiles.)

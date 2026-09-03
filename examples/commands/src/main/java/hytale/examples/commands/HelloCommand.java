@@ -17,15 +17,13 @@ public class HelloCommand extends AbstractPlayerCommand {
 
     public HelloCommand() {
         super("hello", "Sends a friendly greeting");
-    }
-
-    // By default each command auto-generates a permission node (here "hello")
-    // that only ops hold (the OP group carries the '*' wildcard), so a normal
-    // player gets "no permission". Returning false skips node generation, leaving
-    // the command open to everyone. Use requirePermission("...") to gate instead.
-    @Override
-    protected boolean canGeneratePermission() {
-        return false;
+        // By default each command auto-generates a permission node (here
+        // "<group>.<name>.command.hello", from the plugin's manifest) that only
+        // ops hold (the OP group carries the '*' wildcard), so a normal player
+        // gets "no permission". requireNoPermission() opts out of node generation,
+        // leaving the command open to everyone. Use requirePermission("...") to
+        // gate instead. Must be called before registration.
+        requireNoPermission();
     }
 
     @Override

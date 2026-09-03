@@ -737,11 +737,11 @@ BlockSphereUtil.forEachBlock(cx, cy, cz, 5, count, (x, y, z, ctr) -> {
 `BlockUtil` packs a block position into a single `long` key (handy for maps/sets of block positions):
 
 ```java
-long key = BlockUtil.pack(x, y, z);        // also pack(Vector3i) / packUnchecked(x, y, z)
+long key = BlockUtil.pack(x, y, z);        // also packUnchecked(x, y, z)
 int bx = BlockUtil.unpackX(key);
 int by = BlockUtil.unpackY(key);
 int bz = BlockUtil.unpackZ(key);
-Vector3i pos = BlockUtil.unpack(key);
+Vector3i pos = new Vector3i(bx, by, bz);   // 0.6 removed pack(Vector3i)/unpack(long) — only the per-axis forms remain
 ```
 
 ---

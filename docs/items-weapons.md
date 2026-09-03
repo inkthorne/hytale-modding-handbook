@@ -961,7 +961,7 @@ All weapon damage uses `DamageCalculator` with `BaseDamage`:
 }
 ```
 
-`DamageCalculator` accepts five keys:
+`DamageCalculator` accepts six keys:
 
 | Key | Type | Description |
 |-----|------|-------------|

@@ -51,7 +51,7 @@
           {
             "Type": "Empty",
             "Weight": 0,
-            "$Comment": "Raise this weight to make the snack rarer. Empty = the 'chance for nothing' outcome; only valid inside a Choice/Multiple."
+            "$Comment": "Raise this weight to make the snack rarer. Empty = the 'chance for nothing' outcome; registered like any other type, so it is legal anywhere a container is, but only useful inside a Choice/Multiple."
           }
         ]
       }

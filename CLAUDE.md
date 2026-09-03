@@ -132,7 +132,7 @@ Also worth doing when that code is next touched: give the gotcha-string matcher 
 
 ### Plugin Structure
 - Plugins extend `JavaPlugin` and override `setup()` to register commands
-- Each plugin requires a `manifest.json` in `src/main/resources/` with `Group`, `Name`, and `Main` fields (PascalCase)
+- Each plugin requires a `manifest.json` in `src/main/resources/` with `Group`, `Name`, and `Main` fields (PascalCase). Only `Name` is actually enforced — it is the sole key carrying `Validators.nonNull()` in `PluginManifest.CODEC` — but `Main` is what names the entry-point class, so a plugin without it loads as content only. That is precisely what the two packs are: no `Main`, and the manifest at the pack root rather than under `src/main/resources/`, since there is no Gradle build to place it.
 - Plugins with UI assets need `"IncludesAssetPack": true` in manifest
 
 ### Command System

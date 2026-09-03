@@ -2,22 +2,23 @@
 # verify-docs.sh.
 #
 # The check flags a doc not tagged "Java API" that names >= 2 distinct
-# com.hypixel.* classes, on the theory that it is mis-tagged. That heuristic
-# cannot tell "this page documents a Java API" from "this page cites the codec
-# class backing a JSON key" — and the second is exactly the cross-reference a
-# reader of a JSON-format page wants.
+# com.hypixel.* classes, on the theory that it is mis-tagged. An entry here
+# asserts the opposite: the page's class references are citations (the codec
+# behind a documented JSON key) and the page documents no Java API surface of
+# its own, so its non-Java tag is correct.
 #
-# Format: doc.md  # justification. Audited 2026-09-03 against the 0.6.3 jar:
-# every entry below was opened and every one of its class references confirmed
-# to be a citation in prose or a table cell, with no Java signatures, method
-# tables or API surface documented on the page. Broadening the Doc type tag
-# instead would be a false claim about the page and would mis-group it in
-# 01-index.md's "By Documentation Type" section.
+# Format: doc.md  # justification.
 #
-# Re-audit an entry if the page gains genuine Java API content, and delete it
-# rather than carrying it forward.
+# AUDIT METHOD — do not repeat the 2026-09-03 mistake. That audit inspected the
+# classes the check's own regex matched and concluded from those two strings
+# that the page had no Java surface. It was wrong on three of four pages: the
+# regex requires a fully-qualified name ending in a capitalized segment, so it
+# never sees a "**Package:**" line (lowercase tail), a bare interface name, or a
+# method in a ```java fence or a table cell. universe-saves.md scored 2 on the
+# heuristic while carrying 7 package sections and 10 java fences. Audit the
+# PAGE, not the regex's matches: count "**Package:**" headings, ```java fences
+# and "| Method |" tables before adding an entry here.
+#
+# Audited 2026-09-03 against the 0.6.3 jar by that method.
 
-items-tools.md       # cites the codec (ItemToolSpec) and interaction classes behind documented JSON keys
-universe-saves.md    # names HytaleServerConfig / Options as the classes backing config.json fields
-worldgen.md          # cites AssetManager / SettingsAsset as the codecs behind the JSON, one in a code comment
-worldgen-biomes.md   # cites BiomeAsset / WeatherForecast as the codecs behind the documented biome JSON
+worldgen-biomes.md   # 0 package sections, 0 method tables; its single java fence is a 4-signature WeatherForecast citation supporting the biome JSON

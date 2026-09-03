@@ -7,7 +7,7 @@ seo:
 
 # World Generation
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.9**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.5.9**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as
@@ -519,7 +519,7 @@ worldgen.
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 world-generator loader (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the world-generator loader (verified against `HytaleServer.jar`).
 
 - **`Invalid world gen name:`** → a world generator was registered/referenced with an empty or malformed name. Fix: use a valid generator name.
 - **`World gen path must be within a trusted directory:`** → a generator's resource path points outside the allowed roots. Fix: keep generator assets under the trusted `Server/HytaleGenerator/` tree.

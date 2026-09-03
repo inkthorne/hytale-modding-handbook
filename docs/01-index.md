@@ -69,7 +69,7 @@ _Documents Java classes/methods — verify with `javap` against `HytaleServer.ja
 ### JSON asset format
 _Documents on-disk JSON asset file formats — verify against the extracted `Assets.zip`._
 
-[Audio System](audio.md)  [Biome System](worldgen-biomes.md)  [Block Animation Format (.blockyanim)](blockyanim-format.md)  [Block Items](items-blocks.md)  [Block Model Format (.blockymodel)](blockymodel-format.md)  [Caves](worldgen-caves.md)  [Combat & Effects Interactions](interactions-combat.md)  [Combo System Interactions](interactions-combo.md)  [Consumable Items](items-consumables.md)  [Control Flow Interactions](interactions-flow.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Entity & World Interactions](interactions-world.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefab Categories](prefabs-categories.md)  [Props & Structure Placement](worldgen-prefabs.md)  [Terrain Density Graphs](worldgen-terrain.md)  [Tool Items](items-tools.md)  [Weapon Items](items-weapons.md)  [Universes & Save Format](universe-saves.md)  [World Generation](worldgen.md)  [World Structures (Zones)](worldgen-zones.md)
+[Biome System](worldgen-biomes.md)  [Block Animation Format (.blockyanim)](blockyanim-format.md)  [Block Items](items-blocks.md)  [Block Model Format (.blockymodel)](blockymodel-format.md)  [Caves](worldgen-caves.md)  [Combat & Effects Interactions](interactions-combat.md)  [Combo System Interactions](interactions-combo.md)  [Consumable Items](items-consumables.md)  [Control Flow Interactions](interactions-flow.md)  [Entity & World Interactions](interactions-world.md)  [Prefab Categories](prefabs-categories.md)  [Props & Structure Placement](worldgen-prefabs.md)  [Terrain Density Graphs](worldgen-terrain.md)  [Weapon Items](items-weapons.md)  [World Structures (Zones)](worldgen-zones.md)
 
 ### UI DSL
 _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
@@ -79,7 +79,12 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Prefabs API](prefabs.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)
+[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
+
+### Java API + Save / config file format
+_Covers both a Java API and an on-disk save/config file format._
+
+[Universe & Saves](universe-saves.md)
 
 ### Guides & Overviews
 

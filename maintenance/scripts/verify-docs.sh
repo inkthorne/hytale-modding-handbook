@@ -263,20 +263,25 @@ if os.path.exists(sl):
     for line in open(sl):
         line=line.split("#",1)[0].strip()
         if line: skip.add(line)
-checked=0; skipped=0
+scanned=0; candidates=0; used=set()
 for p in sorted(glob.glob("docs/*.md")):
     bn=os.path.basename(p); txt=open(p).read()
+    scanned+=1
     m=type_re.search(txt)
     if not m:
         untagged.append(bn); continue
     typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
     classes=set(cls_re.findall(txt))
     if "Java API" in typ or len(classes) < 2: continue
-    checked+=1
+    candidates+=1
     if bn in skip:
-        skipped+=1; continue
+        used.add(bn); continue
     mismatch.append((bn,typ,len(classes)))
-print(f"DENOM {checked} {skipped}")
+# A skip entry that no longer matches a candidate is dead calibration: the page
+# was renamed, retagged, or dropped below the threshold. Report it rather than
+# letting it sit ready to re-suppress if the file ever returns.
+for stale in sorted(skip - used): print(f"STALESKIP {stale}")
+print(f"DENOM {scanned} {candidates} {len(used)}")
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
 for bn,typ,n in mismatch: print(f"MISMATCH {bn} [{typ}] references {n} distinct com.hypixel.* classes")
@@ -285,15 +290,19 @@ PY
 echo "$OUT" | awk '/^COUNT/{printf "  %-4s %s\n",$2,substr($0,index($0,$3))}'
 U="$(echo "$OUT" | grep -c '^UNTAGGED' || true)"
 MM="$(echo "$OUT" | grep -c '^MISMATCH' || true)"
-DEN="$(echo "$OUT" | awk '/^DENOM/{print $2}')"
-SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $3}')"
+SCANNED="$(echo "$OUT" | awk '/^DENOM/{print $2}')"
+DEN="$(echo "$OUT" | awk '/^DENOM/{print $3}')"
+SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $4}')"
+SS="$(echo "$OUT" | grep -c '^STALESKIP' || true)"
 [ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
+EXAMINED=$(( ${DEN:-0} - ${SKIPPED:-0} ))
 if [ "$MM" -eq 0 ]; then
-  pass "no JSON/DSL-tagged doc references Java classes (${DEN:-0} candidate(s) checked, ${SKIPPED:-0} audited-skip)"
+  pass "no JSON/DSL-tagged doc references Java classes (${SCANNED:-0} doc(s) scanned, $EXAMINED of ${DEN:-0} candidate(s) examined, ${SKIPPED:-0} audited-skip)"
 else
   warn "$MM of ${DEN:-0} candidate doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
   echo "$OUT" | grep '^MISMATCH' | sed 's/^MISMATCH/      /'
 fi
+[ "$SS" -eq 0 ] || { warn "$SS stale doctype-skiplist entr(ies) — page renamed, retagged, or no longer a candidate:"; echo "$OUT" | grep '^STALESKIP' | sed 's/^STALESKIP/      /'; }
 
 # =====================================================================
 section "[ADVISORY] Gotcha error strings trace to the jar"

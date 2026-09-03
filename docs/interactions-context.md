@@ -22,7 +22,7 @@ When an interaction runs, `InteractionContext` carries:
 - **Entity references** - The owning entity, executing entity, and targets
 - **Item state** - The held item being used
 - **Meta store** - Key-value data like hit locations and targets (`DynamicMetaStore`)
-- **InteractionVars** - Item-defined variables for customization (a `Map<String, String>`)
+- **InteractionVars** - Item-defined variable → `RootInteraction` bindings (a `Map<String, String>`)
 - **Flow control** - Labels and jump capabilities
 - **Chain management** - Current chain and entry tracking
 
@@ -39,7 +39,7 @@ InteractionContext (passed to every operation tick)
 ├── Item state (getHeldItem / getHeldItemSlot / getOriginalItemType)
 ├── Meta store (DynamicMetaStore via getMetaStore)
 │   └── MetaKey<T> keys (standard keys defined on Interaction)
-├── InteractionVars (item-defined Map<String, String>)
+├── InteractionVars (item-defined Map<varName, RootInteraction id>)
 ├── Flow control (jump(Label) / operation counter / labels)
 └── Chain management
     ├── InteractionChain (getChain) + fork(...)
@@ -83,9 +83,10 @@ public class InteractionContext {
     Item getOriginalItemType();             // Item config when chain started
 
     // Meta store (dynamic data)
-    DynamicMetaStore<InteractionContext> getMetaStore();
+    DynamicMetaStore<InteractionContext> getMetaStore();     // context-scoped keys
+    DynamicMetaStore<Interaction> getInstanceStore();        // per-entry keys (e.g. TIME_SHIFT)
 
-    // InteractionVars (item-defined variables, a plain String->String map)
+    // InteractionVars (item-defined var -> RootInteraction id; may be null)
     Map<String, String> getInteractionVars();
     void setInteractionVarsGetter(Function<InteractionContext, Map<String, String>> getter);
 
@@ -104,6 +105,7 @@ public class InteractionContext {
     InteractionChain getChain();
     InteractionEntry getEntry();
     InteractionContext duplicate();
+    void execute(RootInteraction root);      // run a root interaction in this context
     // fork(...) overloads return InteractionChain and take args, e.g.:
     InteractionChain fork(InteractionType type, InteractionContext ctx,
                           RootInteraction root, boolean flag);
@@ -237,8 +239,13 @@ The meta store is a key-value map for passing data between operations. Standard 
 | `TARGET_BLOCK_TYPE` | `BlockType` | Block targeting | 0.6.3+. Resolved `BlockType` of the targeted block |
 | `TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Block targeting | 0.6.3+. Rotation index of the targeted block |
 | `TARGET_SLOT` | `Integer` | Inventory ops | Target inventory slot |
-| `TIME_SHIFT` | `Float` | Timing ops | Time offset |
 | `DAMAGE` | `Damage` | Damage ops | Damage calculation result |
+
+> **`TIME_SHIFT` is not a context key.** `Interaction.TIME_SHIFT` (`MetaKey<Float>`) is
+> registered on `Interaction.META_REGISTRY`, not `CONTEXT_META_REGISTRY`, so it lives in the
+> per-entry store returned by `context.getInstanceStore()`
+> (`DynamicMetaStore<Interaction>`) — the framework writes the leftover run time there when an
+> interaction overruns. Reading it from `getMetaStore()` compiles but resolves the wrong slot.
 
 ### Reading Meta Values
 
@@ -314,8 +321,11 @@ The `Interaction` class defines standard keys used by built-in operations:
 | `Interaction.TARGET_BLOCK_TYPE` | `BlockType` | Block targeting | 0.6.3+ |
 | `Interaction.TARGET_BLOCK_ROTATION_INDEX` | `Integer` | Block targeting | 0.6.3+ |
 | `Interaction.TARGET_SLOT` | `Integer` | Inventory ops | Target inventory slot |
-| `Interaction.TIME_SHIFT` | `Float` | Timing ops | Time offset |
 | `Interaction.DAMAGE` | `Damage` | Damage ops | Damage calculation result |
+
+One further key, `Interaction.TIME_SHIFT` (`MetaKey<Float>`), is registered on
+`Interaction.META_REGISTRY` instead and therefore belongs to `context.getInstanceStore()`, not
+the context store above.
 
 #### Custom Meta Keys
 
@@ -368,65 +378,83 @@ public class ApplyDamageOp implements Operation {
 
 ## InteractionVars
 
-`InteractionVars` are item-defined variables that customize interaction behavior. They allow a single interaction definition to behave differently based on the item using it.
+`InteractionVars` are per-item **bindings from a variable name to a `RootInteraction`**. A shared
+chain leaves a hole — a `Replace` step naming a variable — and each item fills that hole with its
+own root interaction, so one chain definition can serve every weapon that reuses it.
+
+They are **not** loose tuning values: every value must resolve to a `RootInteraction`
+(`Item.InteractionVars` is read with `RootInteraction.CHILD_ASSET_CODEC` and validated against
+the `RootInteraction` asset store).
 
 ### Accessing InteractionVars
 
-`getInteractionVars()` returns a plain `Map<String, String>` — there are no typed
-accessors. Parse values yourself:
+`getInteractionVars()` returns a plain `Map<String, String>` of *variable name → root-interaction
+id*, and it can be `null`. By default it is the map of the item the chain started with
+(`getOriginalItemType().getInteractionVars()`); `setInteractionVarsGetter(...)` swaps in another
+source — NPC combat actions use this so an ability supplies its own vars.
 
 ```java
 @Override
 public void tick(..., InteractionContext context, ...) {
     Map<String, String> vars = context.getInteractionVars();
+    String rootId = vars == null ? null : vars.get("Staff_Cast_Summon_Launch");
 
-    // Values are strings; parse and apply defaults manually
-    float damage = vars.containsKey("Damage")
-        ? Float.parseFloat(vars.get("Damage")) : 10.0f;
-    String effectId = vars.getOrDefault("EffectId", "none");
-    int count = vars.containsKey("HitCount")
-        ? Integer.parseInt(vars.get("HitCount")) : 1;
+    if (rootId != null) {
+        RootInteraction root = RootInteraction.getRootInteractionOrUnknown(rootId);
+        context.execute(root);
+    }
 }
 ```
+
+### Who reads them: the `Replace` interaction
+
+`Replace` (`...interaction.config.none.ReplaceInteraction`) is the only interaction that consults
+the map — *"Runs the interaction defined by the interaction variables if defined."*
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `Var` | string | Required. Name looked up in the item's `InteractionVars` |
+| `DefaultValue` | RootInteraction | Used when the variable is absent — an id **or** an inline definition |
+| `DefaultOk` | boolean | When `true`, falling back to `DefaultValue` is expected; otherwise a missing variable is logged at `SEVERE` (`Missing replacement interactions for interaction: …`) |
+
+If neither the variable nor `DefaultValue` resolves, the step ends as `InteractionState.Failed`.
+
+```json
+{
+  "Type": "Replace",
+  "Var": "Fireball_Impact_2",
+  "DefaultOk": true,
+  "DefaultValue": {
+    "Interactions": ["Weapon_Stick_Fire_Impact_Base"]
+  }
+}
+```
+
+(from `Server/ProjectileConfigs/Weapons/Stick/Projectile_Config_Fireball_Charged_2.json`)
 
 ### Item Definition with InteractionVars
 
-Items define vars in their JSON:
+Each value is either an id or an **inline `RootInteraction`** — which is how per-item tuning is
+actually expressed: inherit a shared interaction with `Parent`, then override its fields.
 
 ```json
 {
-  "Type": "Item",
   "InteractionVars": {
-    "Damage": 25.0,
-    "EffectId": "Burn",
-    "HitCount": 3
+    "Staff_Cast_Summon_Launch": "Staff_Cast_Launch",
+    "Staff_Cast_Summon_Effect": "Staff_Cast_Effect",
+    "Staff_Cast_Summon_Cost": {
+      "Interactions": [
+        { "Parent": "Staff_Cast_Cost", "StatModifiers": { "Mana": -50 } }
+      ]
+    }
   }
 }
 ```
 
-### Common InteractionVars Patterns
+(condensed from `Server/Item/Items/Weapon/Staff/Weapon_Staff_Frost.json`)
 
-Weapon damage scaling:
-```json
-{
-  "InteractionVars": {
-    "Damage": 15,
-    "DamageStat": "Vigor",
-    "KnockbackForce": 800
-  }
-}
-```
-
-Ability customization:
-```json
-{
-  "InteractionVars": {
-    "ProjectileSpeed": 50,
-    "ProjectileCount": 3,
-    "SpreadAngle": 15
-  }
-}
-```
+Common shipped variable names are chain-slot names, not settings: `Staff_Cast_Summon_Launch`,
+`Spear_Swing_Left_Damage`, `Guard_Wield`, `Item_Throw_Projectile`, `SpawnNPC_Entity`.
 
 See [items.md](items.md) for full `InteractionVars` documentation.
 
@@ -551,11 +579,6 @@ public class ApplyBurnOp implements Operation {
             return;
         }
 
-        // Get burn duration from item's InteractionVars (a String->String map)
-        Map<String, String> vars = context.getInteractionVars();
-        float burnDuration = vars.containsKey("BurnDuration")
-            ? Float.parseFloat(vars.get("BurnDuration")) : 5.0f;
-
         // Apply burn effect to target (e.g. EffectControllerComponent.addEffect(...) via
         // context.getCommandBuffer(); see interactions-combat.md#applyeffect)
         // ...
@@ -612,7 +635,8 @@ public class CheckCriticalHitOp implements Operation {
 - **Symptom:** you can't construct your own `MetaKey<T>` → `MetaKey` has a package-private constructor and no `create(...)` factory. Fix: register the key once on `Interaction.CONTEXT_META_REGISTRY.registerMetaObject(ctx -> initialValue)` (see [Custom Meta Keys](#custom-meta-keys)), or carry item-driven values via `InteractionVars`.
 - **Symptom:** `tick(..., LivingEntity entity, ...)` doesn't override anything → neither `Operation.tick` nor `Interaction.tick` takes a `LivingEntity`; the signature is `tick(Ref<EntityStore>, boolean, float, InteractionType, InteractionContext, CooldownHandler)`. Fix: drop the parameter and resolve components from `ref` through `context.getCommandBuffer()`.
 - **Symptom:** a meta read returns `null` mid-chain → meta values are only present if an earlier operation set them, and a skipped/branched-past operation never runs. Fix: null-check every `getMetaObject(...)` result before use (e.g. `TARGET_ENTITY` is unset until a `Selector` runs).
-- **Symptom:** `getInteractionVars()` values come back as the wrong type → it returns a plain `Map<String, String>`; there are no typed accessors. Fix: parse manually (`Float.parseFloat`, `Integer.parseInt`) and supply your own defaults.
+- **Symptom:** an `InteractionVars` entry like `"Damage": 25.0` fails validation, or `getInteractionVars()` never returns the number you put there → the map is *variable name → `RootInteraction` id*, not a bag of tuning values; `Item.InteractionVars` is read with `RootInteraction.CHILD_ASSET_CODEC` and every value is validated against the RootInteraction asset store. Fix: bind the variable to a root interaction (an id, or an inline definition with `Parent` plus overrides) and put the numbers inside that interaction.
+- **Symptom:** `getInteractionVars()` throws `NullPointerException` → it returns `null` when the chain has no originating item (`getOriginalItemType()` is null) and no custom getter was installed. Fix: null-check the map before `get(...)`.
 - **Symptom:** `ItemStack.getItemType()` / `getCount()` won't compile → there is no `ItemType` class; the accessors are `getItem()` (the `Item` config), `getItemId()` and `getQuantity()`. `getOriginalItemType()` likewise returns an `Item` — compare it with `getHeldItem().getItem()` when detecting item swaps (or just set `OnItemChangeBehavior`).
 
 ---

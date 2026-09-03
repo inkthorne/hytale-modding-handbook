@@ -53,7 +53,7 @@ Operation System
 | `OperationsBuilder` | `server.core.modules.interaction.interaction.operation` | Builds operation sequences with label-based flow control |
 | `Label` | `interaction.operation` | Jump target within an operation sequence |
 | `Collector` | `interaction.config.data` | Visitor receiving callbacks during `walk()` traversal (`ListCollector`, `SingleCollector`, `TreeCollector` live here too) |
-| `CollectorTag` | `interaction.config.data` | Identifies which branch is visited (`SerialTag`, `ParallelTag`, ...; `StringTag` is the generic one) |
+| `CollectorTag` | `interaction.config.data` | Identifies which branch is visited. `StringTag` is the generic implementation and lives here too; the indexed tags are nested classes on the interaction that emits them (see [CollectorTag](#collectortag)) |
 | `WaitForDataFrom` | `protocol` | Enum controlling client/server execution sync |
 
 ---
@@ -83,19 +83,25 @@ public interface Operation {
     // Determines client/server sync behavior
     WaitForDataFrom getWaitForDataFrom();
 
-    // Returns conflict resolution rules (default: InteractionRules.DEFAULT_RULES)
-    default InteractionRules getRules();
+    // Returns conflict resolution rules (default: null — "no rules of my own")
+    @Nullable default InteractionRules getRules();
 
-    // Tag-based metadata for the operation (default: empty)
+    // Tag-based metadata for the operation (default: Int2ObjectMaps.emptyMap())
     default Int2ObjectMap<IntSet> getTags();
 
-    // For wrapped/decorated operations (default: null; see Operation.NestedOperation)
+    // Unwraps decorators (default: follows Operation.NestedOperation.inner()
+    // until a non-nested operation is reached, so a plain operation returns itself)
     default Operation getInnerOperation();
 }
 ```
 
 There is **no** `LivingEntity` parameter — resolve components from `ref` through
 `context.getCommandBuffer()`. Only `tick`, `simulateTick` and `getWaitForDataFrom` are abstract.
+
+> **Gotcha:** the two easy-to-guess defaults are both wrong. `getRules()` defaults to `null`,
+> **not** `InteractionRules.DEFAULT_RULES`; and `getInnerOperation()` defaults to *unwrapping*
+> (`while (op instanceof NestedOperation) op = op.inner();`), so it returns `this` for an
+> ordinary operation and never `null`. Override either only if you mean to change that.
 
 ### tick() vs simulateTick()
 
@@ -206,15 +212,20 @@ InteractionManager.walkInteraction(collector, context, tag, interactionId)
 
 ### CollectorTag
 
-Tags identify which branch is being visited in container interactions:
+Tags identify which branch is being visited in container interactions. Only `CollectorTag.ROOT`
+and `StringTag` (`interaction.config.data`) are generic; the indexed tags are **nested classes on
+the interaction that emits them**, and two of them are package-private, so a plugin can compare
+tags via `equals`/`toString` but cannot name their types:
 
-| Interaction Type | Tag | Example |
-|-----------------|-----|---------|
-| `Serial` | `SerialTag.of(index)` | `SerialTag.of(0)`, `SerialTag.of(1)` |
-| `Parallel` | `ParallelTag.of(index)` | `ParallelTag.of(0)` |
-| `Chaining` | `ChainingTag.of(index)` | `ChainingTag.of(2)` |
-| `Charging` | `ChargingTag.of(level)` | `ChargingTag.of(0.5f)` |
-| `FirstClick` | `StringTag.of(name)` | `FirstClickInteraction.TAG_CLICK`, `FirstClickInteraction.TAG_HELD` |
+| Interaction Type | Tag | Declared on | Visibility |
+|-----------------|-----|-------------|------------|
+| `Serial` | `SerialTag.of(int index)` | `SerialInteraction` (`config.none`) | package-private |
+| `Parallel` | `ParallelTag.of(int index)` | `ParallelInteraction` (`config.none`) | package-private |
+| `Chaining` | `ChainingTag.of(int index)` | `ChainingInteraction` (`config.client`) | `public final` |
+| `Charging` | `ChargingTag.of(float seconds)` | `ChargingInteraction` (`config.client`) | `public final` (`getSeconds()` returns `double`) |
+| `FirstClick` | `StringTag.of(String)` | `config.data` | `public`; the instances are `FirstClickInteraction.TAG_CLICK` / `TAG_HELD` |
+
+The root of every traversal is tagged `CollectorTag.ROOT`.
 
 ### Implementation Patterns
 
@@ -381,39 +392,54 @@ When an interaction chain starts, the system:
 
 ### Compilation Example
 
-A `Serial` interaction containing two children compiles like this:
+`Interaction.compile` defaults to `builder.addOperation(this)` — a leaf interaction *is* its own
+operation. Containers override it. `Serial` simply inlines its children in order:
 
 ```java
-// Serial with children A, B
+// SerialInteraction
 @Override
 public void compile(OperationsBuilder builder) {
-    childA.compile(builder);  // Add A's operations
-    childB.compile(builder);  // Add B's operations
+    for (String id : this.interactions) {
+        Interaction.getInteractionOrUnknown(id).compile(builder);
+    }
 }
 // Result: [A-ops..., B-ops...]
 ```
 
-A `Parallel` interaction is more complex, using labels to coordinate:
+`FirstClick` is the shipped example of label-based branching — it registers itself with a
+`failedLabel` it can jump to at runtime, then resolves both arms:
 
 ```java
-// Parallel with children A, B
+// FirstClickInteraction (condensed)
 @Override
 public void compile(OperationsBuilder builder) {
-    Label aEnd = builder.createUnresolvedLabel();
-    Label bEnd = builder.createUnresolvedLabel();
+    if (this.click == null && this.held == null) {
+        builder.addOperation(this);      // nothing to branch to
+        return;
+    }
+    Label failedLabel = builder.createUnresolvedLabel();
+    Label endLabel = builder.createUnresolvedLabel();
 
-    // A's operations (jump to aEnd when done)
-    childA.compile(builder);
-    builder.jump(aEnd);
-
-    // B's operations
-    childB.compile(builder);
-    builder.resolveLabel(bEnd);
-
-    builder.resolveLabel(aEnd);
-    // Continue after both complete
+    builder.addOperation(this, failedLabel);        // this op may jump to failedLabel
+    if (this.click != null) {
+        Interaction.getInteractionOrUnknown(this.click).compile(builder);
+    }
+    if (this.held != null) {
+        builder.jump(endLabel);                     // skip the held arm
+    }
+    builder.resolveLabel(failedLabel);
+    if (this.held != null) {
+        Interaction.getInteractionOrUnknown(this.held).compile(builder);
+    }
+    builder.resolveLabel(endLabel);
 }
 ```
+
+> **Not every container compiles to operations.** `Parallel` does **not** override `compile()`
+> and uses no labels: it is a single operation whose `tick0` runs its first entry with
+> `context.execute(RootInteraction.getRootInteractionOrUnknown(interactions[0]))` and forks the
+> rest with `context.fork(context.duplicate(), root, true)`, then finishes. Its `Interactions`
+> are `RootInteraction` ids (minimum two), not `Interaction` ids like `Serial`'s.
 
 ---
 
@@ -490,19 +516,11 @@ public class MyCustomOp implements Operation {
         return WaitForDataFrom.None;  // No sync needed
     }
 
+    // getRules(), getTags() and getInnerOperation() have usable defaults —
+    // override getRules() only to declare conflict rules of your own:
     @Override
     public InteractionRules getRules() {
         return InteractionRules.DEFAULT_RULES;
-    }
-
-    @Override
-    public Int2ObjectMap<IntSet> getTags() {
-        return Int2ObjectMaps.emptyMap();
-    }
-
-    @Override
-    public Operation getInnerOperation() {
-        return null;  // Not wrapping another operation
     }
 }
 ```

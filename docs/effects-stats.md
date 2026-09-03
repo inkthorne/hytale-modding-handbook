@@ -67,10 +67,16 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 |----------|------|-------------|
 | `Duration` | float | Effect duration in seconds |
 | `Infinite` | boolean | Effect persists until manually removed |
-| `OverlapBehavior` | string | `Overwrite` (replace existing), `Extend` (add duration) |
+| `OverlapBehavior` | string | `Overwrite` (replace existing), `Extend` (add duration), or `Ignore` (keep the existing application) |
 | `Debuff` | boolean | Marks as negative effect (for cleanse mechanics) |
 | `StatusEffectIcon` | string | UI icon path for effect display |
-| `RemovalBehavior` | string | How effect is removed (e.g., `Duration`) |
+| `RemovalBehavior` | string | `Complete`, `Infinite`, or `Duration` |
+| `Name` | string | Localization key for the effect's UI name (a key, not literal text) |
+| `DeathMessageKey` | string | Localization key used on the death screen when this effect kills a player (`Locale` is the deprecated predecessor) |
+| `ApplyConditions` | array | [Conditions](#condition-types) that must **all** hold for the effect to stay active; if any fails the effect is removed |
+| `ModelOverride` | object | Replaces the entity's model while active — `Model`, `Texture`, `AnimationSets` (see `Status/Root.json`). Distinct from `ModelChange`, which names another creature model |
+| `WorldRemovalSoundEventId` · `LocalRemovalSoundEventId` | string | Sounds played when the effect ends (nearby / affected entity only) |
+| `DamageCalculator` · `DamageEffects` | object | Damage-over-time calculator and the effects played when it ticks |
 
 ### Damage Immunity & Resistance
 
@@ -81,7 +87,7 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 
 **DamageResistance example:**
 
-`DamageResistance` maps each damage type to an array of modifier objects (`{ CalculationType, Amount }`). Each entry is a `ResistanceModifier` (`com.hypixel.hytale.server.core.modules.entity.damage.ResistanceModifier`), whose `CalculationType` is **`Percent`** or **`Flat`** — *not* the `Additive`/`Multiplicative` pair used by [`RawStatModifiers`](#rawstatmodifiers) below. (The older `Multiplicative` spelling was replaced by `Percent` by 0.6.3; every shipped `DamageResistance` entry now uses `Percent`.)
+`DamageResistance` maps each damage cause (a file under `Server/Entity/Damage/` — `Fire`, `Physical`, `Poison`, …) to an array of modifier objects (`{ CalculationType, Amount }`). Each entry is a `ResistanceModifier` (`com.hypixel.hytale.server.core.modules.entity.damage.ResistanceModifier`), whose `CalculationType` is **`Percent`** or **`Flat`** — *not* the `Additive`/`Multiplicative` pair used by [`RawStatModifiers`](#rawstatmodifiers) below. (Those are the only two values the enum has ever had in the versions this handbook has covered; across the whole of `Server/`, 237 shipped entries use `Percent` and 12 use `Flat`.)
 
 ```json
 {
@@ -129,7 +135,7 @@ For basic stat changes with optional percentage-based values:
 | Property | Type | Description |
 |----------|------|-------------|
 | `StatModifiers` | object | Map of stat names to modification values |
-| `ValueType` | string | `"Percent"` for percentage-based, omit for absolute |
+| `ValueType` | string | `Percent` or `Absolute` (the default). The jar's own note: "When using `ValueType.Absolute`, '100' matches the max value" |
 
 ```json
 {
@@ -189,7 +195,9 @@ Effects applied when the status effect starts (one-time application):
 | `HorizontalSpeedMultiplier` | float | Movement speed modifier (0.0-1.0) |
 | `LocalSoundEventId` | string | Sound played for the affected entity only |
 | `WorldSoundEventId` | string | Sound played for all nearby entities |
-| `Particles` | array | Particle systems to spawn on the entity |
+| `Particles` | array | `ModelParticle[]` attached to the entity model — each entry takes `SystemId`, optional `TargetEntityPart` / `TargetNodeName` (the model node to attach to), `Color`, `Scale`, `PositionOffset`, `RotationOffset`, `DetachedFromModel`, `ClearParticlesOnRemove`. There is no `Bone` key |
+| `FirstPersonParticles` | array | Same `ModelParticle[]` schema, shown only in the affected player's first-person view |
+| `EntityAnimationId` | string | Animation played on the entity while the effect is applied |
 | `ScreenEffect` | string | Screen overlay effect for the affected player |
 | `ModelVFXId` | string | Model VFX asset applied to the entity while the effect lasts (e.g. `"Freeze"` in `Status/Freeze.json`, `"Intangible_Dark"` in `Status/Slow.json`) |
 | `KnockbackMultiplier` | float | Scales knockback received while the effect is active (`0` = immune to knockback — `Status/Root.json`) |
@@ -199,31 +207,37 @@ Effects applied when the status effect starts (one-time application):
 | Property | Type | Description |
 |----------|------|-------------|
 | `MovementEffects.DisableAll` | boolean | Completely disable all movement |
-| `MovementEffects.SpeedMultiplier` | float | Movement-speed multiplier (default `1.0`) — added by 0.6.3 alongside the per-direction `DisableForward`/`DisableBackward`/`DisableLeft`/`DisableRight`/`DisableSprint`/`DisableJump`/`DisableCrouch` flags. No shipped effect uses it yet; vanilla slows still use the top-level `HorizontalSpeedMultiplier` |
+| `MovementEffects.DisableForward` · `DisableBackward` · `DisableLeft` · `DisableRight` · `DisableSprint` · `DisableJump` · `DisableCrouch` | boolean | Per-direction/per-action movement locks (all present since 0.5.9) |
+| `MovementEffects.SpeedMultiplier` | float | Movement-speed multiplier, default `1.0` — **new in 0.6.3** (the only field added to `MovementEffects`). No shipped effect sets it; vanilla slows still use the top-level `HorizontalSpeedMultiplier` |
 
 **Ability restriction:**
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `AbilityEffects.Disabled` | array | List of abilities to disable (`Primary`, `Secondary`) |
+| `AbilityEffects.Disabled` | array | Set of `InteractionType` names to disable while the effect is active — any of `Primary`, `Secondary`, `Ability1`–`Ability3`, `Use`, `Dodge`, `Wielding`, … (the full `com.hypixel.hytale.protocol.InteractionType` enum) |
 
-**Example (Stun Effect):**
+**Example (`Server/Entity/Effects/Status/Stun.json`):**
 
 ```json
 {
-  "Duration": 2,
-  "Debuff": true,
+  "Duration": 10,
   "ApplicationEffects": {
+    "EntityBottomTint": "#ffa93f",
+    "EntityTopTint": "#da72ff",
+    "ScreenEffect": "ScreenEffects/Snow.png",
+    "Particles": [
+      {
+        "SystemId": "Stunned",
+        "TargetEntityPart": "Entity",
+        "TargetNodeName": "Head"
+      }
+    ],
     "MovementEffects": {
       "DisableAll": true
     },
     "AbilityEffects": {
-      "Disabled": ["Primary", "Secondary"]
-    },
-    "WorldSoundEventId": "SFX_Stun_Apply",
-    "Particles": [
-      { "SystemId": "Stun_Stars", "Bone": "Head" }
-    ]
+      "Disabled": ["Primary", "Secondary", "Ability1", "Ability3"]
+    }
   }
 }
 ```
@@ -232,12 +246,17 @@ Effects applied when the status effect starts (one-time application):
 
 ### StatModifierEffects
 
-Effects triggered each time stat modifiers tick:
+Effects triggered each time stat modifiers tick — *"Effects to play when stat modifiers are applied
+and updated."* The value is a `DamageEffects` block (the same schema `DamageEffects` uses), so all of
+its keys are available:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `WorldParticles` | array | Particles spawned on stat tick |
-| `WorldSoundEventId` | string | Sound played on stat tick |
+| `WorldParticles` | array | `WorldParticle[]` spawned in the world on stat tick — `SystemId`, `Color`, `Scale`, `PositionOffset`, `RotationOffset` |
+| `ModelParticles` | array | `ModelParticle[]` attached to the entity model instead (same schema as `ApplicationEffects.Particles`) |
+| `WorldSoundEventId` · `LocalSoundEventId` · `PlayerSoundEventId` | string | Sound played on stat tick, for nearby entities / the affected entity / the affected player |
+| `ViewDistance` | float | Range within which the world effects are sent |
+| `Knockback` · `CameraEffect` · `StaminaDrainMultiplier` | — | Inherited from `DamageEffects`; unused by shipped stat-modifier effects |
 
 **Example (Regeneration with visual feedback):**
 
@@ -458,7 +477,9 @@ Stat definitions configure how entity stats behave - their bounds, regeneration 
 | `Min` | number | Minimum allowed value (can be negative) |
 | `Max` | number | Maximum allowed value |
 | `Shared` | boolean | Whether stat value is visible to other players |
-| `ResetType` | string | How stat resets (e.g., `MaxValue` to reset to max) |
+| `ResetType` | string | How the stat resets on respawn: `MaxValue` or `InitialValue` (`protocol.EntityStatResetBehavior`) |
+| `IgnoreInvulnerability` | boolean | By default a *negative* `Regenerating` amount is skipped while the entity carries `Invulnerable`; set this to let the drain apply anyway (`EntityStatsSystems`) |
+| `HideFromTooltip` | boolean | Sent to the client on `EntityStatType`; no server-side consumer — it only suppresses the stat in the client's tooltip |
 
 **Basic stat definition:**
 
@@ -484,8 +505,9 @@ The `Regenerating` array defines automatic stat recovery/drain rules. Each entry
 | `Interval` | float | Seconds between regeneration ticks |
 | `Amount` | number | Amount to change per tick (negative for drain) |
 | `RegenType` | string | `Additive` (flat amount) or `Percentage` (percent of max) |
-| `ClampAtZero` | boolean | Stop regeneration when stat reaches zero |
+| `ClampAtZero` | boolean | *"Prevents this regenerating value from taking the stat value below zero."* |
 | `Conditions` | array | Conditions that must be met for this regen to apply |
+| `Modifiers` | array | Conditional **multipliers** on `Amount`. Each entry is `{ "Conditions": [...], "Amount": <factor> }`; when its conditions all hold the tick amount is multiplied by `Amount`, otherwise by `1.0` (`RegeneratingValue` applies every entry in turn) |
 
 **Simple regeneration:**
 
@@ -547,7 +569,8 @@ For `Stat` conditions:
 | `Lt` | Less than (<) |
 | `Equal` | Equal to (=) |
 
-(`StatCondition.StatComparisonType`; vanilla stats only use `Gte` and `Lt`.)
+(`StatCondition.StatComparisonType`; **`Gte` is the default** when `Comparison` is omitted — as in the
+first `Stat` condition of `Stamina.json` below. Vanilla stats only ever use `Gte` and `Lt`.)
 
 **Stat condition example:**
 
@@ -568,8 +591,10 @@ Trigger interactions when stat reaches its minimum or maximum value.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `TriggerAtZero` | boolean | Whether to trigger when stat hits zero |
-| `Interactions` | object | Interactions to run when triggered |
+| `TriggerAtZero` | boolean | *"Indicates that the effects should trigger when the stat reaches zero"* |
+| `Interactions` | object \| string | A `RootInteraction` — read with `RootInteraction.CHILD_ASSET_CODEC`, so it accepts either a root-interaction **id** or an **inline definition** (the nested `"Interactions": [...]` array below is the inline form) |
+| `SoundEventId` | string | Sound played when the bound is hit |
+| `Particles` | array | `ModelParticle[]` spawned on the entity when the bound is hit |
 
 **Example (death on zero health):**
 
@@ -827,7 +852,10 @@ new StaticModifier(Modifier.ModifierTarget target,        // MIN or MAX
 | `getAmount()` | The operand |
 | `apply(float)` | `ADDITIVE`: `value + amount`; `MULTIPLICATIVE`: `value * amount` |
 
-`CalculationType.createKey(String)` builds a calculation-scoped modifier key from a base name — the engine uses it (e.g. armor registers under `createKey("Armor")`) so that an additive and a multiplicative modifier from the same source don't overwrite each other.
+`createKey(String)` is an **instance** method on `CalculationType` that builds a calculation-scoped
+modifier key from a base name — `StatModifiersManager` calls
+`calculationType.createKey("Armor")` and `calculationType.createKey("Effect")` so that an additive
+and a multiplicative modifier from the same source don't overwrite each other.
 
 ### Attaching modifiers to an entity
 
@@ -873,11 +901,11 @@ The `resolveEntityStats` helpers are the supported way to turn stat *names* from
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the build-12 effect/stat subsystem (verified against `HytaleServer.jar`).
+Backtick-quoted error strings below are the literal messages thrown by the effect/stat subsystem (verified against `HytaleServer.jar`).
 
-- **`Unknown EntityEffect with index`** → an effect was applied/cleared by an id that doesn't resolve to a loaded effect asset (e.g. an `ApplyEffect`/`ClearEntityEffect` `EffectId`/`EntityEffectId` typo). Fix: the id must match an effect file under `Server/Entity/Effects/` exactly (case-sensitive).
+- **`Unknown EntityEffect with index "<n>"`** (`IllegalArgumentException` from `EffectControllerComponent.removeEffect`) → an effect was **cleared/removed** by an index that doesn't resolve to a loaded effect asset (e.g. a `ClearEntityEffect` `EntityEffectId` typo). Fix: the id must match an effect file under `Server/Entity/Effects/` exactly (case-sensitive).
 - **Symptom:** a `DamageResistance` of `0` lets full damage through and `1.0` blocks everything (feels inverted) → for `Percent`, `Amount` is the *fraction removed* (`1.0` = immune, `0` = no resistance). Fix: use `Amount` as the removed fraction, not the surviving fraction.
-- **Symptom:** a `DamageResistance` entry with `"CalculationType": "Multiplicative"` or `"Additive"` fails to load → those are `RawStatModifiers` calculation types; `DamageResistance` entries are `ResistanceModifier`s whose enum is `Flat` / `Percent` (renamed from `Multiplicative` by 0.6.3). Fix: use `Percent` for fractional reduction, `Flat` for a flat subtraction.
+- **Symptom:** a `DamageResistance` entry with `"CalculationType": "Multiplicative"` or `"Additive"` fails to load → those are `RawStatModifiers` calculation types; `DamageResistance` entries are `ResistanceModifier`s whose enum is only `Flat` / `Percent`. Fix: use `Percent` for fractional reduction, `Flat` for a flat subtraction.
 - **Symptom:** a `Multiplicative` `RawStatModifiers` `Amount` of `1.15` doesn't add 15% → for `Multiplicative` the value is a factor (`1.15` ≈ +15%, `1.0` = no change), not an additive bonus. Fix: use `Additive` with the flat delta if you want a plain add.
 - **Symptom:** a stat with `Max: 0` (e.g. Mana) never holds any value → its cap starts at 0 and is meant to be raised by gear/effects granting max. Fix: grant a max-stat modifier rather than only adding current value.
 - **Symptom:** a `Regenerating` rule never ticks → one of its `Conditions` is unmet, and all conditions in the array must be true. Fix: check each `Id` (and any `Inverse`), since e.g. `NoDamageTaken`/`CheckPlayerGameMode` silently gate the whole rule.

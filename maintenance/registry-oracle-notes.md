@@ -421,6 +421,19 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
   `ObjectivePlugin.java`'s own import list, never a glob on the simple name; a bare
   glob also returns the `protocol.` twin (a MemorySegment DTO with no codec) ahead
   of the server class for every type that has one.
+- **Why the table below prefixes ten class names.** Ten of the 44 have an
+  ambiguous simple name; each carries a `com.hypixel.hytale.protocol.` twin.
+  Checked all ten: **every twin has zero `KeyedCodec` and zero `BuilderCodec`**,
+  so globbing the simple name does not error — it silently yields **0 keys**. That
+  is the dangerous shape here, because 23 of the 44 rows legitimately say 0 own
+  keys, and a wrong-file zero is indistinguishable by inspection from a right one.
+  Both tools used on this tail made exactly this class of mistake (registry
+  ambiguity on one side, the simple-name glob on the other), which is why the
+  disambiguation lives in the column a row-by-row reader consumes rather than in
+  this bullet. `StartObjective` carries `objectives.interactions.`; the other nine
+  carry `config.client.` or `config.none.`, both relative to
+  `com.hypixel.hytale.server.core.modules.interaction.interaction.`. An unprefixed
+  class name in that column is unambiguous in the tree — verified, not assumed.
 - **`.appendInherited(...)` declares a key on *this* codec** — "Inherited" names the
   builder's self-type generic, not a parent's key. A parser matching only
   `.append(` scores 0 keys for roughly a third of these types while looking clean.
@@ -450,7 +463,7 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
 | `adventure.md` | `OpenTreasureContainer` | `OpenTreasureContainerInteraction` | 0 | — | row |
 | `blocks.md` | `AugmentCondition` | `AugmentConditionInteraction` | 2 | RequiredAugmentTags | **section** |
 | `camera.md` | `CameraShake` | `CameraShakeInteraction` | 1 | CameraEffect | row |
-| `interactions-flow.md` | `IncrementCooldown` | `IncrementCooldownInteraction` | 5 | — | **section** |
+| `interactions-flow.md` | `IncrementCooldown` | `config.client.IncrementCooldownInteraction` | 5 | — | **section** |
 | `interactions-flow.md` | `RunOnBlockTypes` | `RunOnBlockTypesInteraction` | 4 | Range,BlockSets,MaxCount,Interactions | **section** |
 | `interactions-flow.md` | `StatsConditionWithModifier` | `StatsConditionWithModifierInteraction` | 1 | InteractionModifierId | row |
 | `interactions-world.md` | `AddItem` | `AddItemInteraction` | 2 | ItemId | **section** |
@@ -458,18 +471,18 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
 | `interactions-world.md` | `CarryDroppedBlock` | `CarryDroppedBlockInteraction` | 0 | — | row |
 | `interactions-world.md` | `CarryPlaceBlock` | `CarryPlaceBlockInteraction` | 0 | — | row |
 | `interactions-world.md` | `DestroyBlock` | `DestroyBlockInteraction` | 0 | — | row |
-| `interactions-world.md` | `DragEraseBlock` | `DragEraseBlockInteraction` | 0 | — | row |
-| `interactions-world.md` | `ExtrudePlaceBlock` | `ExtrudePlaceBlockInteraction` | 0 | — | row |
-| `interactions-world.md` | `PickBlock` | `PickBlockInteraction` | 0 | — | row |
-| `interactions-world.md` | `SurfaceDrawPlaceBlock` | `SurfaceDrawPlaceBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `DragEraseBlock` | `config.client.DragEraseBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `ExtrudePlaceBlock` | `config.client.ExtrudePlaceBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `PickBlock` | `config.client.PickBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `SurfaceDrawPlaceBlock` | `config.client.SurfaceDrawPlaceBlockInteraction` | 0 | — | row |
 | `inventory.md` | `IncreaseBackpackCapacity` | `IncreaseBackpackCapacityInteraction` | 2 | — | **section** |
-| `inventory.md` | `ChangeActiveSlot` | `ChangeActiveSlotInteraction` | 1 | — | row |
+| `inventory.md` | `ChangeActiveSlot` | `config.none.ChangeActiveSlotInteraction` | 1 | — | row |
 | `inventory.md` | `OpenItemStackContainer` | `OpenItemStackContainerInteraction` | 0 | — | row |
 | `items-blocks.md` | `ChangeFarmingStage` | `ChangeFarmingStageInteraction` | 4 | — | **section** |
 | `items-blocks.md` | `UseCoop` | `UseCoopInteraction` | 0 | — | row |
 | `items-crafting.md` | `OpenBenchPage` | `OpenBenchPageInteraction` | 1 | Page | row |
 | `items-crafting.md` | `OpenProcessingBench` | `OpenProcessingBenchInteraction` | 0 | — | row |
-| `items-tools.md` | `BuilderTool` | `BuilderToolInteraction` | 0 | — | row |
+| `items-tools.md` | `BuilderTool` | `config.none.BuilderToolInteraction` | 0 | — | row |
 | `items-tools.md` | `PickupItem` | `PickupItemInteraction` | 0 | — | row |
 | `items-tools.md` | `PrefabSelectionInteraction` | `PrefabSelectionInteraction` | 0 | — | row |
 | `items.md` | `CheckUniqueItemUsage` | `CheckUniqueItemUsageInteraction` | 0 | — | row |
@@ -477,8 +490,8 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
 | `npc-spawning.md` | `TriggerSpawnMarkers` | `TriggerSpawnMarkersInteraction` | 3 | — | **section** |
 | `npc-spawning.md` | `UseNPC` | `UseNPCInteraction` | 0 | — | row |
 | `player.md` | `CanBreakRespawnPoint` | `CanBreakRespawnPointInteraction` | 0 | — | row |
-| `player.md` | `ToggleGlider` | `ToggleGliderInteraction` | 0 | — | row |
-| `trigger-volumes.md` | `RunRootInteraction` | `RunRootInteraction` | 1 | RootInteraction | row |
+| `player.md` | `ToggleGlider` | `config.client.ToggleGliderInteraction` | 0 | — | row |
+| `trigger-volumes.md` | `RunRootInteraction` | `config.none.RunRootInteraction` | 1 | RootInteraction | row |
 | `world.md` | `ShowEventTitle` | `ShowEventTitleInteraction` | 8 | Target,PrimaryTitle | **section** |
 | `world.md` | `TeleportInstance` | `TeleportInstanceInteraction` | 8 | InstanceName,OriginSource | **section** |
 | `world.md` | `RevealMapMarkersInView` | `RevealMapMarkersInViewInteraction` | 6 | — | **section** |

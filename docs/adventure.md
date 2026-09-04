@@ -670,18 +670,55 @@ the **Player** to the named instance, creating it if required." Extends
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `InstanceName` | string | — | **Required** (`Validators.nonNull()`), and validated by `InstanceValidator`, so an unknown instance fails at load |
-| `InstanceKey` | string | *random* | Names the created world. Codec doc: "Random if not provided" — so omitting it makes each use a **fresh** instance, and supplying it makes repeat uses share one |
+| `InstanceKey` | string | — | Chooses **where the instance's identity is stored**, not whether it persists — see below. Set it and identity is a global world name shared by every block using that key; omit it and identity lives on the triggering block |
 | `OriginSource` | enum | `ENTITY` | **Required** (`Validators.nonNull()`) despite having a default. `ENTITY` takes the return position from the interacting entity, `BLOCK` from the targeted block. Those two are the whole enum |
-| `PositionOffset` | vec3 | — | Offset applied to the return point, "used to prevent repeated interactions when returning from the instance" |
+| `PositionOffset` | vec3 | — | Offset applied to the return point, "used to prevent repeated interactions when returning from the instance". **Effectively required when `OriginSource` is `ENTITY`** — see below |
 | `Rotation` | rotation | — | Rotation to set on the player when they return |
 | `PersonalReturnPoint` | boolean | `false` | Give this player their own return point at the current location, overriding the world's |
-| `CloseOnBlockRemove` | boolean | **`true`** | Delete the instance when the portal block is removed. The one boolean here defaulting true |
+| `CloseOnBlockRemove` | boolean | **`true`** | Delete the instance when the portal block is removed. The one boolean here defaulting true — and **it only has an effect when `InstanceKey` is omitted**, since it is written onto the block's `InstanceBlock` component and that component only exists on the keyless branch — the shipped test asset sets it alongside an `InstanceKey`, where it does nothing |
 | `RemoveBlockAfter` | double | `-1` | Seconds to wait before removing the block that triggered the interaction; negative disables it |
 
-> **Gotcha — `RemoveBlockAfter` exists because a chain cannot outlive the teleport.** The codec says
-> so outright: it is "needed instead of using another interaction due to all interactions being
-> stopped once teleporting to another world". Anything you would normally hang off `Next` to clean
-> up the portal block never runs, so the cleanup had to become a key on this interaction.
+Behavior notes:
+
+- **`InstanceKey` decides where identity lives, and both shipped assets take one branch each.** With
+  a key, the instance is looked up by that global world name, so every block naming the same key
+  shares one instance — `Server/Item/Interactions/Tests/TeleportInstance.json` uses
+  `"InstanceKey": "Persistent"`. Without one, an `InstanceBlock` component is created on the
+  triggering block, the created world's UUID is written into it and the block is marked for saving,
+  so **that block returns to its own instance on every later use** — which is what
+  `Forgotten_Temple_Portal_Enter.json` relies on for a dungeon portal you can re-enter. Neither
+  branch is "a fresh instance each time".
+- **Omitting `InstanceKey` requires a target block.** That branch opens with a bare `return` when
+  there is none — no `Failed` state, no message — so a keyless `TeleportInstance` fired with nothing
+  targeted does nothing at all.
+- **`OriginSource: BLOCK` throws rather than failing.** With no target block it raises
+  `Can't use OriginSource.BLOCK without a target block`, and an unloaded chunk raises
+  `Missing chunk` — exceptions out of `firstRun`, not an `InteractionState.Failed` a chain can
+  branch on. The one shipped `Block` use is a block interaction and therefore always has a target,
+  so it does not exercise either throw; both are read from the source alone.
+- **`PositionOffset` is dereferenced without a null check on the `ENTITY` path.** The `BLOCK` branch
+  guards it (`positionOffset != null ? … : new Vector3d()`); the `ENTITY` branch, which is the
+  default, calls `getPosition().add(this.positionOffset)` on a field with no initialiser. How often
+  that runs depends on `PersonalReturnPoint`: the return point is built once when the instance is
+  created, but with `PersonalReturnPoint` set it is **also built on every later use**, including
+  every re-entry into an instance that already exists. The one shipped asset on this path,
+  `Forgotten_Temple_Portal_Enter.json`, carries all three conditions at once — it omits
+  `OriginSource` (so the `ENTITY` default), sets `PersonalReturnPoint`, and writes `PositionOffset`
+  as `{0,0,0}`, which is what you write when omitting it is not an option. (The other shipped use
+  sets `"OriginSource": "Block"`, so it takes the guarded branch and says nothing about this one.)
+  Treat the key as required whenever `OriginSource` is `ENTITY`.
+
+> **Gotcha — `RemoveBlockAfter` cleans up outside the interaction chain, which is why it is a key at
+> all.** The codec's stated reason is that "all interactions being stopped once teleporting to
+> another world" makes a `Next` unsuitable. What is checkable without taking that on faith is the
+> mechanism: for a positive value the removal is scheduled on a `CompletableFuture` completing on a
+> timeout and then running `thenRunAsync(…, world)` on the world executor, entirely outside the
+> chain — and it re-checks that the block is unchanged before removing it. `0` is **not** "disabled":
+> it removes the block immediately, inline. Only a negative value disables it, and `-1` is the
+> default — so unlike [`TriggerSpawnMarkers`'](npc-spawning.md#triggerspawnmarkers) `Count`, where
+> the surprising value is also the default and you meet it by omission, this one has to be written
+> deliberately. The only shipped value is `RemoveBlockAfter: 5`, on the test interaction, so the
+> timed branch has a shipped example and the immediate one has none.
 
 Two shipped uses: `Forgotten_Temple_Portal_Enter.json` and a test interaction.
 
@@ -698,9 +735,18 @@ Sends the player to a **permanent** world rather than an instance, creating it i
 | `WorldGenType` | string | World generator to use when creating it (e.g. `Flat`, `Hytale`). **Mutually exclusive with `InstanceTemplate`** |
 | `InstanceTemplate` | string | Instance asset to use as the template instead. **Mutually exclusive with `WorldGenType`** |
 
-The mutual exclusion is stated in both codec descriptions but is **not** enforced by a validator, so
-an asset setting both passes load. Three shipped uses, all under `Server/Item/Items/Portal/`:
-`Hub_Portal_Default.json`, `Hub_Portal_Flat.json` and `Hub_Portal_Zone3_Taiga1.json`.
+The mutual exclusion is stated in both codec descriptions and enforced by no validator, so an asset
+setting both loads — and the resolution is not arbitrary: **`InstanceTemplate` wins and
+`WorldGenType` is silently ignored**, because the branch tests the template first and only falls
+through to `addWorld(worldName, worldGenType, null)` when it is absent.
+
+**Both keys only ever matter at first creation.** The whole creation path runs only when
+`Universe.getWorld(WorldName)` returns null; once that world exists the player is simply sent to it
+and neither key is read again. So changing `WorldGenType` on a portal that has already been used has
+no effect.
+
+Three shipped uses, all under `Server/Item/Items/Portal/`: `Hub_Portal_Default.json`,
+`Hub_Portal_Flat.json` and `Hub_Portal_Zone3_Taiga1.json`.
 
 ### Teleporter
 
@@ -716,7 +762,11 @@ The rune-teleporter pad: warps an entity to the destination its block entity hol
 | `ClearOutY` | double | `2.5` | The same along the Y axis. Validated `>= 0` |
 
 None of the three is required. The two clear-out distances are what stop a player who arrives on top
-of another teleporter from being bounced straight onward; setting both to `0` re-enables that loop.
+of another teleporter from being bounced straight onward: arriving adds a `UsedTeleporter` component
+and the interaction refuses while it is present, and `ClearUsedTeleporterSystem` removes it once the
+entity has moved further than *either* threshold (a strict `>`, so exceeding one is enough). Setting
+both to `0` does not fully re-enable the loop — it reduces the guard to the system's separate 100 ms
+global teleporter cooldown, which is checked before the distances are.
 Its one shipped use runs from `CollisionEnter`, not `Use`:
 
 ```json

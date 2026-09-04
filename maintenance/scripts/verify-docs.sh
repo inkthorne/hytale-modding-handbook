@@ -117,7 +117,7 @@ else
 fi
 
 # =====================================================================
-section "[HARD] Intra-doc anchor links resolve"
+section "[HARD] Anchor links resolve (cross-doc: target file honoured)"
 OUT="$(python3 - <<'PY'
 import re, glob, os
 from collections import defaultdict

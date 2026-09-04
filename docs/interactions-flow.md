@@ -69,13 +69,16 @@ Control Flow
 | [StatsCondition](#statscondition) | Branch based on entity stat values |
 | [EffectCondition](#effectcondition) | Branch based on active status effects |
 | [BlockCondition](#blockcondition) | Branch based on block type/state |
+| [AugmentCondition](#augmentcondition) | Branch on augment tags granted around the target block |
 | [CooldownCondition](#cooldowncondition) | Branch based on cooldown completion |
 | [TriggerCooldown](#triggercooldown) | Start a cooldown timer |
 | [ResetCooldown](#resetcooldown) | Reset a cooldown timer |
+| [IncrementCooldown](#incrementcooldown) | Adjust a cooldown that is already running |
 | [MovementCondition](#movementcondition) | Direction-based input branching |
 | [PlacementCountCondition](#placementcountcondition) | Branch based on block placement count |
 | [Repeat](#repeat) | Loop execution of interactions |
 | [Replace](#replace) | Variable substitution for templates |
+| [RunOnBlockTypes](#runonblocktypes) | Fork a chain onto each matching block in range |
 | [Target Selectors](#target-selectors) | AOE, raycast, and stab targeting |
 
 ---
@@ -1651,6 +1654,45 @@ Succeed if the target matches any of several block types:
 
 ---
 
+## AugmentCondition
+
+**Package:** `com.hypixel.hytale.builtin.augmentblocks.AugmentConditionInteraction`
+
+Passes while every named augment tag is granted by augment blocks around the **target block**. Codec
+doc: "An interaction that is successful while every required tag is granted by augment blocks around
+the target block." Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction), and
+registered by `AugmentBlocksPlugin` rather than `InteractionModule`, so it exists only when that
+plugin is loaded.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `RequiredAugmentTags` | string[] | — | **Required** (`Validators.nonNull()`). Every tag listed must be granted by an augment block in range |
+| `Radius` | double | `100.0` | Sphere radius, centred on the target block, within which augment blocks are collected |
+
+This is the interaction-side twin of the bench mechanism: the tags come from `AugmentBlock`
+block-entity components (`GrantsAugmentTags`, see
+[items-blocks.md](items-blocks.md#block-entity-components)), the same source a crafting recipe's
+`RequiredAugmentTags` reads through
+[BenchRequirement](items-crafting.md#benchrequirement). No shipped asset uses this
+interaction type.
+
+- **It needs a target block.** With no `targetBlock` in the context the check returns false and the
+  interaction ends `Failed`, so this is a block-targeting condition even though it is an *instant*
+  interaction rather than a block one.
+- **`Radius` defaults to 100 blocks**, which is not a neighbourhood — it is effectively "anywhere in
+  the loaded area". Set it deliberately.
+
+> **Gotcha — the key is required to write, but an empty array passes wherever there is a target
+> block.** `Validators.nonNull()` makes `RequiredAugmentTags` mandatory, and
+> `AugmentBlocksUtils.requirementsMet` returns true immediately when the array is empty, before
+> collecting anything. So `"RequiredAugmentTags": []` never fails on a targeted block, and it looks
+> exactly like a configured condition. It is not unconditional, though: with no target block at all
+> the check fails first, and nothing structurally supplies one — see the bullet above. The bench side behaves
+> the same way — [items-crafting.md](items-crafting.md#benchrequirement) records that an empty or
+> absent array always passes — so this is the subsystem's convention rather than a slip here.
+
+---
+
 ## CooldownCondition
 
 **Package:** `config/client/CooldownConditionInteraction`
@@ -2028,6 +2070,57 @@ A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-
 
 - [CooldownCondition](#cooldowncondition) - Check if cooldown has elapsed
 - [TriggerCooldown](#triggercooldown) - Start a cooldown timer
+
+---
+
+## IncrementCooldown
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.IncrementCooldownInteraction`
+
+Adjusts a cooldown that is already running, rather than starting or clearing one — the fourth member
+of the cooldown group alongside [CooldownCondition](#cooldowncondition),
+[TriggerCooldown](#triggercooldown) and [ResetCooldown](#resetcooldown). Codec doc: "Increase the
+given cooldown." Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Id` | string | *the chain's root cooldown* | Which cooldown to adjust. Omit it and the id comes from the root interaction's own `Cooldown` block |
+| `Time` | float | `0` | Seconds added to the cooldown's remaining time |
+| `Charge` | int | `0` | Number of spent charges to replenish |
+| `ChargeTime` | float | `0` | Seconds added to the wait for the next charge. Negated at decode — see below for why, and for the two cases where it does nothing |
+| `InterruptRecharge` | boolean | `false` | Passed to the charge replenish, deciding whether an in-progress recharge is interrupted |
+
+**None of the five is required**, and each of the three numeric ones is skipped when it is zero, so
+an `IncrementCooldown` with no properties resolves a cooldown id and then does nothing to it. No
+shipped asset uses this type.
+
+- **The cooldown must already exist.** `processCooldown` looks the id up on the `CooldownHandler`
+  and returns silently when there is none, so this cannot be used to create one — pair it with
+  [TriggerCooldown](#triggercooldown), which does.
+- **The interaction always finishes.** `firstRun` sets `InteractionState.Finished` unconditionally,
+  before and regardless of whether the cooldown was found, so a `Failed` branch never fires here
+  even when nothing happened.
+- It also generates a client packet carrying all five values — including the already-negated
+  `chargeTime`, so client and server agree and the negation is not a desync.
+
+**Why `ChargeTime` is negated at decode.** The codec's `afterDecode` runs
+`chargeTime = -chargeTime` before the value is ever used, which looks like a sign bug and is not.
+The two timers in `CooldownHandler.Cooldown` run in opposite directions: `remainingCooldown` counts
+*down* (`remainingCooldown -= dt`), while `chargeTimer` counts *up* as elapsed progress
+(`chargeTimer += dt`, and a charge is granted when it reaches the current `charges[chargeCount]`).
+`ChargeTime` is expressed the way the key reads — seconds added to the **wait** — so it has to be
+subtracted from progress to lengthen that wait. `"ChargeTime": 2` therefore pushes the next charge
+*two seconds further away*, which is what the codec's description ("The amount of time to increase
+the current charge time by") means. `Time` and `Charge` are not negated; the inversion exists only
+because `chargeTime` and the field it feeds measure opposite things.
+
+> **Gotcha — `ChargeTime` does nothing at all on most cooldowns.** `increaseChargeTime` returns
+> immediately when the cooldown is already at maximum charges, and again when the cooldown defines
+> one charge or fewer. A cooldown without a real multi-charge configuration therefore ignores the
+> key completely — no error, no log, and the interaction still reports `Finished`. Since
+> `IncrementCooldown` has no shipped uses and no shipped asset writes `ChargeTime` at all, there is
+> no working example to compare against: check the target cooldown's charge list before assuming
+> the key does anything.
 
 ---
 
@@ -2557,6 +2650,62 @@ Create a generic consume template that items can customize:
 ```
 
 Items referencing this template provide their own `Effect` variable to inject custom behavior (healing, buffs, etc.) without duplicating the consume logic.
+
+---
+
+## RunOnBlockTypes
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.RunOnBlockTypesInteraction`
+
+Finds matching blocks around the interacting entity and forks a chain onto each one. Codec doc:
+"Searches for matching block types within a radius and runs interactions on each found block up to a
+configured maximum number of blocks." Extends `SimpleInteraction`, and unlike most block-facing types
+it searches from the **entity's** position rather than a targeted block.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Range` | int | Spherical search radius. Validated `greaterThan(0)` |
+| `BlockSets` | string[] | `BlockSet` ids to match. Validated non-empty, and late-validated against the loaded `BlockSet` assets |
+| `MaxCount` | int | Maximum block positions to act on. Validated `greaterThan(0)` |
+| `Interactions` | interaction | The chain to run per matched block — inline or a root-interaction reference. Late-validated against the `RootInteraction` assets |
+
+**All four are required, and all four by the same mechanism**: a `true` third argument to
+`KeyedCodec`. Three of them *also* carry validators, but those constrain the value, not its
+presence — none is a `Validators.nonNull()`, which is the other way a key becomes required (compare
+[SendBeacon's `Message`](npc-roles.md#sendbeacon); `SpawnNPC`'s `Weight` carries both forms at once).
+There is therefore no useful "minimal" form of this interaction: every key must be written.
+
+Two of the four are also the **raw** `KeyedCodec` form rather than the parameterised one —
+`new KeyedCodec("Interactions", RootInteraction.CHILD_ASSET_CODEC, true)` and the array-codec
+`BlockSets` — the same shape `CustomConnectedBlockTemplateAsset`'s `Shapes` has, which a pattern
+expecting `KeyedCodec<T>` skips silently.
+
+Its one shipped use is the Rekindle Embers spellbook, which raises undead from bone blocks around
+the caster (`Server/Item/Items/Weapon/Spellbook/Weapon_Spellbook_Rekindle_Embers.json`, abridged —
+the forked chain continues into a full `SpawnNPC`):
+
+```json
+{
+  "Type": "RunOnBlockTypes",
+  "BlockSets": [ "Necromancy_Bones" ],
+  "MaxCount": 5,
+  "Range": 5,
+  "Interactions": {
+    "Interactions": [
+      { "Type": "Serial", "Interactions": [ { "Type": "SpawnNPC" } ] }
+    ]
+  }
+}
+```
+
+Note the inline form of `Interactions`: an object with its own `Interactions` array, i.e. a
+root-interaction body written in place rather than referenced by id.
+
+- **`MaxCount` selects at random, not by distance.** The matched positions are reservoir-sampled down
+  to `MaxCount`, so a value below the number of matches picks an arbitrary subset each run.
+- **Each fork carries its own block position and is validated independently at the tick it runs** —
+  the codec says so — so a block that becomes invalid between the search and its fork simply fails
+  that fork rather than the whole interaction.
 
 ---
 

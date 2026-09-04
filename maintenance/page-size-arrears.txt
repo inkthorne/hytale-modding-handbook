@@ -21,7 +21,21 @@ blocks.md
 #   onward (~1,100).
 
 interactions-flow.md
-#   seam: not yet recorded.
+#   seam: the cooldown cluster — `## CooldownCondition`, `## TriggerCooldown`,
+#   `## ResetCooldown`, `## IncrementCooldown` — contiguous, in that order (no
+#   size here, per this file's own rule). They are the only four types on the
+#   page that act on the CooldownHandler rather than on the chain, they already
+#   cross-reference each other from their "Related Interactions" lists, and the
+#   cut leaves the conditions and the control-flow types where they are.
+#   ANCHOR COST — 8 incoming cross-doc links from exactly two files:
+#   interactions.md (7 — the four registry rows, the type list at :112, and two
+#   on :881, where one line links #cooldowncondition twice) and 01-index.md:112.
+#   No other page links into the cluster. The 8 was produced by RUNNING the line
+#   below, not by writing it: the first version of this grep returned 3 through a
+#   bad alternation, so re-derive rather than trust the count.
+#     grep -rho 'interactions-flow\.md#\(cooldowncondition\|triggercooldown\|resetcooldown\|incrementcooldown\)' docs/ | wc -l
+#   Recorded 2026-09-04 while adding IncrementCooldown, because growing a page
+#   whose seam is unrecorded is how an arrear goes quiet.
 
 ui-api.md
 #   seam: not yet recorded.
@@ -45,6 +59,11 @@ world.md
 #   NAME COLLISION — the events page cannot be called world-events.md; that is
 #   an unrelated subsystem (builtin.adventure.worldevents). The overlap is the
 #   phrase only, verified.
+#   TAG TRAVELS WITH THE REMAINDER — world.md was retagged
+#   `Java API + JSON asset format` on 2026-09-04 when `### RevealMapMarkersInView`
+#   (a JSON key table) landed under `## World Map Markers`. That section stays in
+#   the remainder, so the remainder keeps the combined tag and the two split-off
+#   pages take `Java API`. Do not let the split silently drop it.
 
 prefabs.md
 #   seam: `## Prefab File Format` through `## Integration Points` (~343).

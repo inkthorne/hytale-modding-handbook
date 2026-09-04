@@ -54,6 +54,7 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [adventure.md](adventure.md) | Adventure gameplay features including instance discovery, zone discovery, treasure chest opening, and world map tracking. |
 | [world-events.md](world-events.md) | Scripted world-event timelines (0.6.3+) — stage/fork assets under `Server/WorldEvent`, their conditions, actions and context keys, and the Java API for starting and observing them. |
 | [encounters.md](encounters.md) | Encounter Manager (0.6.3+) — multi-NPC encounters scripted as `Server/EncounterManager` JSON with encounter-scoped boss-bar, music, role-change and world-event-signal components. |
+| [mounts.md](mounts.md) | Mounts and seating — riding NPCs, sitting on block seats and driving minecarts; the `Mount`/`Seating`/`SpawnMinecart` interactions, `BlockMountAPI`, the rider/mount component pair, the NPC `Mount` action and the `/mount` commands. |
 | [asset-editor.md](asset-editor.md) | Asset editor events for button activation, asset creation, client disconnects, and autocomplete/dataset requests. |
 | [i18n.md](i18n.md) | Localization system with GenerateDefaultLanguageEvent for registering plugin translations during server startup. |
 | [singleplayer.md](singleplayer.md) | Singleplayer-specific functionality with SingleplayerRequestAccessEvent for handling local server access requests. |
@@ -83,7 +84,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
+[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
 
 ### Java API + Save / config file format
 _Covers both a Java API and an on-disk save/config file format._
@@ -306,6 +307,7 @@ JSON asset types used in Hytale's data-driven systems.
 **Adventure** - Adventure gameplay features
 - adventure.md - Instance discovery, treasure chests
 - world-events.md - Scripted world-event timelines: stages, forks, conditions, actions and context keys
+- mounts.md - Riding NPCs, block seats and minecarts; BlockMountAPI and the mount component pair
 
 **Data** - Serialization
 - codecs.md - Data encoding/decoding

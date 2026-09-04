@@ -15,6 +15,12 @@
 # To ADD an entry: the page is over the threshold and you are deferring the
 # split. To REMOVE one: the split landed, or the page dropped under. The gate
 # warns in both directions, so neither can go quiet.
+#
+# world.md was removed 2026-09-04: the split landed as world-chunks.md and
+# world-lifecycle-events.md. Its recorded anchor inventory was re-derived from
+# the tree before cutting rather than trusted — the note's line numbers had
+# already gone stale, and the events seam cost an intra-page link, not a
+# cross-doc one.
 
 blocks.md
 #   seam: the connected-block sections (~380 lines), and `## Java API Reference`
@@ -42,31 +48,6 @@ ui-api.md
 
 inventory.md
 #   seam: `## Crafting System` onward (~600).
-
-world.md
-#   seam: two contiguous cuts — `## WorldChunk` through `## ChunkTracker` (625
-#   lines, the chunk API), and `## World Events` + `## Chunk Events` (260 lines,
-#   1488-1747). Leaves ~875.
-#   `## Chunk Events` goes with `## World Events`, NOT with the chunk API: they
-#   are adjacent, both document universe.world.events/.events.ecs, and both are
-#   event catalogs where the chunk sections are class reference.
-#   ANCHOR COST — the chunk seam is the expensive half. Five other pages point
-#   into it at #worldchunk (universe-saves.md:446, collision.md:174,
-#   prefabs.md:200, fluids.md:232, blocks.md:120), plus world.md:134 ->
-#   #getchunkflags whose source stays behind. The events seam costs one line,
-#   world.md:1102 -> #world-events. world.md:411 -> #chunk-accessors SURVIVES
-#   and must not be "fixed": both endpoints move together.
-#   NAME COLLISION — the events page cannot be called world-events.md; that is
-#   an unrelated subsystem (builtin.adventure.worldevents). The overlap is the
-#   phrase only, verified.
-#   TAG TRAVELS WITH THE REMAINDER — world.md was retagged
-#   `Java API + JSON asset format` on 2026-09-04 when `### RevealMapMarkersInView`
-#   (a JSON key table) landed under `## World Map Markers`. That section stays in
-#   the remainder, so the remainder keeps the combined tag and the two split-off
-#   pages take `Java API`. Do not let the split silently drop it. Read the tag
-#   narrowly, though: this page is 75 java fences against 1 json fence, and the
-#   JSON half rests on that single six-key table. It does not promise broad JSON
-#   coverage, which is why the page carries no **Assets:** field.
 
 prefabs.md
 #   seam: `## Prefab File Format` through `## Integration Points` (~343).

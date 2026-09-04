@@ -229,7 +229,7 @@ if (collision.fluid != null && collision.fluid != Fluid.EMPTY) {
 }
 ```
 
-> **See also:** [World API](world.md#worldchunk)
+> **See also:** [World API](world-chunks.md#worldchunk)
 
 ## Usage with CollisionConfig
 

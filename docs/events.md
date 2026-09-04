@@ -13,7 +13,7 @@ This document covers the core event system. A compiling end-to-end demo of both 
 
 - **Player events** → [player.md](player.md) (includes ChangeGameModeEvent, CraftRecipeEvent)
 - **Block events** → [blocks.md](blocks.md)
-- **World/Chunk events** → [world.md](world.md)
+- **World/Chunk events** → [world-lifecycle-events.md](world-lifecycle-events.md)
 - **Entity events** → [entities.md](entities.md) (includes LivingEntityUseBlockEvent)
 - **Combat/Damage events** → [combat.md](combat.md)
 - **NPC/Sensor events** → [npc.md](npc.md)

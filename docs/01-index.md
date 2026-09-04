@@ -28,7 +28,9 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [commands.md](commands.md) | Details the command system for creating player commands with arguments, permissions, subcommands, and built-in argument types. |
 | [entities.md](entities.md) | Covers the entity system including Player and Entity classes, entity stats, velocity management, and interaction chains. |
 | [player.md](player.md) | Describes player-specific functionality including messaging, permissions, connect/disconnect events, and interaction events. |
-| [world.md](world.md) | Comprehensive world management API covering the World class, chunks, chunk tracking, configuration, and lifecycle events. |
+| [world.md](world.md) | The runtime World object, its configuration classes, world time, game flags, and world map markers. |
+| [world-chunks.md](world-chunks.md) | The per-chunk Java API split out of world.md: WorldChunk, chunk accessors, columns and sections, block-write settings flags, and ChunkTracker. |
+| [world-lifecycle-events.md](world-lifecycle-events.md) | The Java event classes fired for world and chunk lifecycle — creation, loading, removal, saving, unloading. Not the JSON World Event feature; that is world-events.md. |
 | [universe-saves.md](universe-saves.md) | Save / universe format for dedicated servers: per-world config.json, binding a world to a WorldStructure, the Defaults.World spawn selection, IsPvpEnabled, and the CreativeHub crossroads. |
 | [events.md](events.md) | Core event system documentation covering registration methods, event priorities, keyed vs non-keyed events, and ECS patterns. |
 | [components.md](components.md) | Entity Component System (ECS) documentation including Store, Ref, queries, CommandBuffer, and ticking systems. |
@@ -72,7 +74,7 @@ Docs are tagged with a `**Doc type:**` line. This groups them by what they docum
 ### Java API
 _Documents Java classes/methods — verify with `javap` against `HytaleServer.jar`._
 
-[Adventure API](adventure.md)  [Asset Editor Events API](asset-editor.md)  [Assets API](assets.md)  [Codecs API](codecs.md)  [Collision API](collision.md)  [Commands API](commands.md)  [Components (ECS) API](components.md)  [Entities API](entities.md)  [Events API](events.md)  [Fluids API](fluids.md)  [InteractionContext](interactions-context.md)  [Inventory API](inventory.md)  [Localization (i18n) API](i18n.md)  [Math / Vector API](math.md)  [NPC API](npc.md)  [Networking API](networking.md)  [Operation System](interactions-operations.md)  [Permissions API](permissions.md)  [Player API](player.md)  [Plugin Lifecycle API](plugin-lifecycle.md)  [Projectiles API](projectiles.md)  [Singleplayer API](singleplayer.md)  [Tasks API](tasks.md)  [UI Java API](ui-api.md)  [World API](world.md)
+[Adventure API](adventure.md)  [Asset Editor Events API](asset-editor.md)  [Assets API](assets.md)  [Codecs API](codecs.md)  [Collision API](collision.md)  [Commands API](commands.md)  [Components (ECS) API](components.md)  [Entities API](entities.md)  [Events API](events.md)  [Fluids API](fluids.md)  [InteractionContext](interactions-context.md)  [Inventory API](inventory.md)  [Localization (i18n) API](i18n.md)  [Math / Vector API](math.md)  [NPC API](npc.md)  [Networking API](networking.md)  [Operation System](interactions-operations.md)  [Permissions API](permissions.md)  [Player API](player.md)  [Plugin Lifecycle API](plugin-lifecycle.md)  [Projectiles API](projectiles.md)  [Singleplayer API](singleplayer.md)  [Tasks API](tasks.md)  [UI Java API](ui-api.md)  [World API](world.md)  [World Chunks](world-chunks.md)  [World & Chunk Lifecycle Events](world-lifecycle-events.md)
 
 ### JSON asset format
 _Documents on-disk JSON asset file formats — verify against the extracted `Assets.zip`._
@@ -170,7 +172,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PlayerConnectEvent](player.md), [PlayerDisconnectEvent](player.md), [PlayerInteractEvent](player.md), [InteractionType](player.md), [Message](player.md), [FormattedMessage](player.md), [GameMode](player.md), [ChangeGameModeEvent](player.md), [HiddenPlayersManager](player.md)
 
 **World & Chunks**
-[World](world.md), [WorldChunk](world.md), [ChunkTracker](world.md), [ChunkVisibility](world.md), [ChunkFlag](world.md), [WorldEvent](world.md), [AddWorldEvent](world.md), [ChunkEvent](world.md), [ChunkSaveEvent](world.md), [ChunkPreLoadProcessEvent](world.md), [MoonPhaseChangeEvent](world.md), [GameplayConfig](world.md), [WorldConfig](world.md), [DeathConfig](world.md), [ClientFeature](world.md)
+[World](world.md), [GameplayConfig](world.md), [WorldConfig](world.md), [DeathConfig](world.md), [ClientFeature](world.md), [WorldChunk](world-chunks.md), [ChunkTracker](world-chunks.md), [ChunkVisibility](world-chunks.md), [ChunkFlag](world-chunks.md), [WorldEvent](world-lifecycle-events.md), [AddWorldEvent](world-lifecycle-events.md), [ChunkEvent](world-lifecycle-events.md), [ChunkSaveEvent](world-lifecycle-events.md), [ChunkPreLoadProcessEvent](world-lifecycle-events.md), [MoonPhaseChangeEvent](world-lifecycle-events.md)
 
 **Event System**
 [EventRegistry](events.md), [EventRegistration](events.md), [EventPriority](events.md), [EntityEventSystem](events.md), [IBaseEvent](events.md), [IEvent](events.md), [IAsyncEvent](events.md), [ICancellable](events.md), [EcsEvent](events.md), [CancellableEcsEvent](events.md), [ICancellableEcsEvent](events.md)
@@ -270,7 +272,9 @@ JSON asset types used in Hytale's data-driven systems.
 - commands.md - Slash commands
 - entities.md - Players, entities, stats, velocity, and entity events
 - player.md - Player events, messaging, and spectator mode
-- world.md - World access, world events, chunk events, and game flags (universe-scoped persistent state)
+- world.md - World access, configuration, world time, and game flags (universe-scoped persistent state)
+- world-chunks.md - Per-chunk API: WorldChunk, accessors, block-write settings flags, and ChunkTracker
+- world-lifecycle-events.md - World and chunk lifecycle event classes (distinct from the world-events.md timeline feature)
 - universe-saves.md - Save/universe format, universe resources, dedicated-server config, and binding worlds to structures
 - events.md - Core event system patterns
 - components.md - ECS system

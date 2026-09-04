@@ -117,7 +117,7 @@ Java runtime
 | `BlockMaterial` | `protocol` | Enum of physical material type (Empty / Solid) |
 | `Rotation` | `server.core.asset.type.blocktype.config` | Enum of 90-degree rotation increments |
 | `RotationTuple` | `server.core.asset.type.blocktype.config` | Record of yaw/pitch/roll; used for placement rotation |
-| `WorldChunk` | `server.core.universe.world.chunk` | Block read/write access (see [world.md](world.md#worldchunk)) |
+| `WorldChunk` | `server.core.universe.world.chunk` | Block read/write access (see [world.md](world-chunks.md#worldchunk)) |
 | `PlaceBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is placed (cancellable) |
 | `BreakBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is broken (cancellable) |
 | `DamageBlockEvent` | `server.core.event.events.ecs` | ECS event fired during mining progress (cancellable) |

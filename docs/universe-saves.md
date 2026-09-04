@@ -443,7 +443,7 @@ CompletableFuture<Void> resumeBackgroundSaving()                 // default; ret
 
 **Package:** `com.hypixel.hytale.server.core.universe.world.storage.component`
 
-The ECS systems that drain dirty chunks (`markNeedsSaving()`, see [World API](world.md#worldchunk))
+The ECS systems that drain dirty chunks (`markNeedsSaving()`, see [World API](world-chunks.md#worldchunk))
 to the saver. The plugin-facing pieces:
 
 ```java
@@ -660,7 +660,8 @@ format changes run through).
 
 ## Related Documentation
 
-- [World API](world.md) — the runtime `World` object, chunks, and gameplay config
+- [World API](world.md) — the runtime `World` object and gameplay config
+- [World Chunks](world-chunks.md) — the per-chunk API those saves reload
 - [World Structures (Zones)](worldgen-zones.md) — the `WorldStructure` files `WorldGen` references
 - [World Generation Overview](worldgen.md) — the generator and asset layout
 - [Combat API](combat.md) — damage events; PvP is gated by `IsPvpEnabled` here

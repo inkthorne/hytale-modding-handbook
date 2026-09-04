@@ -197,7 +197,7 @@ BlockSelection house = store.getServerPrefab("buildings/house");
 house.place(commandSender, world);
 ```
 
-> **See also:** [World API](world.md#worldchunk)
+> **See also:** [World API](world-chunks.md#worldchunk)
 
 ---
 
@@ -1526,7 +1526,8 @@ Backtick-quoted error strings below are the literal messages thrown by the prefa
 - [Prefab Categories](prefabs-categories.md) - Full taxonomy of all ~7,800 prefab files
 - [Drop System](drops.md) - Loot table configuration for containers
 - [SpawnPrefab Interaction](interactions-world.md#spawnprefab) - Spawning prefabs via interactions
-- [World API](world.md) - World and chunk operations
+- [World API](world.md) - World operations
+- [World Chunks](world-chunks.md) - Chunk operations
 - [Block System](blocks.md) - Block types and properties
 
 ---

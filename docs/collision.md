@@ -171,7 +171,7 @@ static boolean isBelowMovementThreshold(Vector3d movement)
 CollisionModuleConfig getConfig()
 ```
 
-> **See also:** [World API](world.md#worldchunk)
+> **See also:** [World API](world-chunks.md#worldchunk)
 
 ```java
 // Find intersections with blocks

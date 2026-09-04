@@ -902,8 +902,8 @@ Behavior (from `com.hypixel.hytale.builtin.adventure.farming.FarmingUtil.harvest
 >
 > | Bad key | What happens | Cost |
 > |---|---|---|
-> | `StartingStageSet` not present in `Stages` | drops given, `return false` — **the block is never touched** (`:245-246`) | **repeatable**: the crop is still there and still harvestable, so the same block pays out again on every use |
-> | `StageSetAfterHarvest` missing from `Stages` **or present but empty** | drops given, block set to `EMPTY`, `return false` (`:251-254`) | one-shot: the crop is destroyed |
+> | `StartingStageSet` not present in `Stages` | drops given, `return false` — **the block is never touched** (`:245-247`) | **repeatable**: the crop is still there and still harvestable, so the same block pays out again on every use |
+> | `StageSetAfterHarvest` missing from `Stages` **or present but empty** | drops given, block set to `EMPTY`, `return false` (`:251-255`) | one-shot: the crop is destroyed |
 >
 > Both end the interaction `Failed`, so a `Failed` branch fires while the player keeps the loot.
 > The first is the dangerous one — it is an item-duplication loop rather than a lost crop — and

@@ -281,3 +281,28 @@ from one that examined nothing.
 This is not hypothetical — it is how the six keys quoted in the `HarvestCrop`, `Bed` and
 `LearnRecipe` sections were nearly recorded as missing. All six resolve once the prefix is
 stripped.
+
+## 10. Absence of a signal is not a pass — and the invariant applies to us, not only to gates
+
+CLAUDE.md invariant 6 says a check must report a denominator, because a run that narrates only
+findings cannot be told apart from one that examined nothing. Everything in that invariant is
+written about the *gates*. Four times in the 2026-09-03 pass the same failure came from the
+people and tools reading the gates instead:
+
+| What looked like a pass | What it actually was |
+|---|---|
+| Class references stayed at **227** across 208 added lines naming seven jar classes | the `**Package:**` headings were written without the `com.hypixel.hytale.` prefix `verify-docs.sh:69` requires, so the gate matched none of them (§6) |
+| A `server.lang` lookup returning zero unresolved keys | the keys drop the `server.` namespace, so nothing could ever match (§9) |
+| "The verify run is still in the javap pass" | it had never started. `until ! pgrep -f 'verify-docs.sh'` matches the waiting shell's **own** command line, so the waiter blocked forever and the log was never created. `pgrep -c javap` was 0 throughout |
+| "0 FAIL, 0 WARN" reported off a real log that contained a WARN | the log is ANSI-coloured. `grep -E '^  WARN'` cannot match `  \x1b[33mWARN\x1b[0m …`, so the pattern returned 0 on every run regardless of content |
+
+The last one is the sharpest, because the pattern had been used across seven runs and was right
+six times by luck — every one of those logs genuinely had no warning. A check that cannot fail
+looks exactly like a check that passes, and it will accumulate a record of correct answers until
+the first time it matters.
+
+**Practical rules.** Strip escapes before matching a verify log
+(`sed 's/\x1b\[[0-9;]*m//g'`), and prefer the summary line the script itself prints over a grep
+you wrote. Never gate one run on `pgrep` for a name your own command line contains — use the
+completion notification. And when a count does not move after a change that should have moved
+it, treat the unchanged number as the finding rather than as confirmation.

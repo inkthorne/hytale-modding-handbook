@@ -19,6 +19,15 @@
 # PAGE, not the regex's matches: count "**Package:**" headings, ```java fences
 # and "| Method |" tables before adding an entry here.
 #
+# A non-zero "**Package:**" count does NOT by itself disqualify an entry, but it
+# raises the bar: the entry must say why that heading is a provenance citation
+# (naming the class that implements a documented JSON "Type") rather than the
+# start of an API section. The test is what follows it — a package line above a
+# JSON property table and JSON examples is a citation; one above signatures, a
+# method table or a ```java fence is an API section, and the page should be
+# retagged instead.
+#
 # Audited 2026-09-03 against the 0.6.3 jar by that method.
 
 worldgen-biomes.md   # 0 package sections, 0 method tables; its single java fence is a 4-signature WeatherForecast citation supporting the biome JSON
+items-blocks.md      # 1 package section but 0 java fences, 0 method tables; the package line is provenance for the JSON "Type": "HarvestCrop", above a JSON property table and two JSON examples. Its 2 classes (HarvestCropInteraction, FarmingUtil) are cited only to source the behaviour and the two drop-loss paths; the page documents no Java signature, method or constructor.

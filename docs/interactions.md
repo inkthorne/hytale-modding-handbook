@@ -80,7 +80,7 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 71 are documented and 53 are not. For the complete list — and to
+registered `Type` values, of which 72 are documented and 52 are not. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -138,8 +138,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 71
-documented and 53 not. A row count is itself a closure claim, so re-derive it after a game update
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 72
+documented and 52 not. A row count is itself a closure claim, so re-derive it after a game update
 rather than trusting this line; the two greps that produce it are given below.
 
 A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
@@ -264,7 +264,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `SpawnDeployableAtLocation` | `DeployablesPlugin` | — *not yet documented* |
 | `SpawnDeployableFromRaycast` | `DeployablesPlugin` | — *not yet documented* |
 | `SpawnMinecart` | `MountPlugin` | — *not yet documented* |
-| `SpawnNPC` | `NPCPlugin` | — *not yet documented* |
+| `SpawnNPC` | `NPCPlugin` | [npc-roles.md](npc-roles.md#spawnnpc-interaction) |
 | `SpawnPrefab` | `InteractionModule` | [interactions-world.md](interactions-world.md#spawnprefab) |
 | `SpawnTriggerVolume` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |

@@ -1484,6 +1484,90 @@ through `CompanionBlockSpawnerRecipe.getAssetMap()`.
 
 ---
 
+## SpawnNPC Interaction
+
+**Package:** `com.hypixel.hytale.server.npc.interactions.SpawnNPCInteraction` · registered by
+`NPCPlugin`
+
+Spawns NPCs from an interaction chain — the egg-spawner items, the Scarak eggsack burst, and the
+spellbook all use it. Codec doc: "Spawns an NPC on the block that is being interacted with."
+Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction), so the spawn is
+positioned relative to the **targeted block**, not the interacting entity.
+
+**None of its 14 keys is required** — neither by a `true` third argument nor by
+`Validators.nonNull()`. That is deliberate rather than lax: `EntityId` can be omitted because
+`WeightedEntityIds` supplies the role instead. Several keys are still validated at load, so
+"optional" does not mean "unconstrained".
+
+| Property | Type | Default | Description / load-time validation |
+|----------|------|---------|-------------------------------------|
+| `EntityId` | string | — | Role id of the NPC to spawn. Validated by `NPCRoleValidator`, so a bad id fails at load even though the key is optional |
+| `WeightedEntityIds` | array | — | Weighted roles; one entry is picked per spawn roll. **Supersedes `EntityId`** when present. Entry shape below |
+| `SpawnOffset` | vec3 | `0,0,0` | Offset from the block's centre, rotated by the block's rotation |
+| `SpawnYawOffset` | float | `0` | Yaw offset added to the block's yaw. **In degrees** — see the gotcha below |
+| `SpawnChance` | float | `1.0` | Probability the spawn happens at all |
+| `AlternateSpawnMaxSearchDistance` | int | `0` | On `FAIL_INVALID_POSITION`, try adjacent columns along the horizontal cardinal axis toward the player, up to this many block steps. `0` disables. Distance is along that axis only, not a Euclidean radius. Validated `min(0)` |
+| `SpawnCount` | int[2] | `[1,1]` | `[min, max]` spawns per trigger; with `WeightedEntityIds` it is the number of *rolls*. Validated: exactly 2 entries, each in `1..100`, weakly monotonic — so `[5,2]` fails at load |
+| `DistanceRange` | double[2] | `[0,0]` | `[min, max]` random horizontal scatter per NPC. Validated: exactly 2 entries, each `>= 0`, weakly monotonic |
+| `SpawnState` | string | — | Optional state to set on the spawned NPC |
+| `SpawnSubState` | string | — | Optional sub-state; **only used when `SpawnState` is also set** |
+| `SpawnVelocity` | double | `0` | Random horizontal velocity magnitude in a random XZ direction. `0` disables |
+| `AllowMidAirSpawn` | boolean | `false` | Still validates physical space but skips the ground-seeking column search on failure — for NPCs emerging from hanging blocks |
+| `CenterHitboxOnPosition` | boolean | `false` | Centre the collision box on the computed position rather than placing its feet there |
+| `RequireFullCubeClearance` | boolean | **`true`** | When true every non-air block blocks the spawn. When false only full-cube blocks do, letting NPCs emerge past ropes, plants and cocoons. The only boolean here defaulting true |
+
+### WeightedEntityIds entries
+
+Each entry is a `WeightedNPCSpawn` with **three** keys, and it is the clearest example in the
+codebase of requiredness arriving in two different forms within one chain:
+
+| Property | Type | Required by | Description |
+|----------|------|-------------|-------------|
+| `Id` | string | `Validators.nonNull()` **only** | Role id of the NPC. Also validated by `NPCRoleValidator` |
+| `Weight` | double | **both** a `true` third argument to `KeyedCodec` *and* `Validators.nonNull()` | Relative weight against the sum of all weights. Validated `greaterThan(0.0)` |
+| `CountRange` | int[2] | not required | `[min, max]` of *this* entry to spawn when picked. Validated: 2 entries, each `1..100`, weakly monotonic |
+
+Both forms have to be read: a key can be required by the codec's third argument, by a
+`Validators.nonNull()` that attaches *after* `append(...)` closes, or — as `Weight` shows — by
+both at once.
+
+The simplest shipped use pins one role and lifts it half a block off the target
+(`Server/Item/Items/EggSpawner/Egg_Spawner_Trork.json`):
+
+```json
+{
+  "Type": "SpawnNPC",
+  "EntityId": "Trork_Warrior",
+  "SpawnOffset": { "X": 0, "Y": 0.5, "Z": 0 }
+}
+```
+
+`Server/Item/Interactions/SpawnNPC/` ships a reusable chain built from
+[`Replace`](interactions-flow.md#replace) slots, so an item customises the spawn through
+`InteractionVars` rather than by redefining the interaction — `SpawnNPC_BlockCondition` (default:
+no block restriction; a `Water_Source`/`Water` variant ships alongside), `SpawnNPC_Effects`
+(default: a `Throw` animation) and `SpawnNPC_Entity`, which the chain's own comment marks as the
+one an item **must** provide. The chain ends in a `ModifyInventory` that consumes one item.
+
+Behavior notes:
+
+- **Spawn position** is `blockCentre + rotate(SpawnOffset, blockRotation) + blockPosition`, and
+  rotation is the block's yaw plus `SpawnYawOffset`. A block with no rotation still contributes
+  its centre, so `SpawnOffset` of `0,0,0` spawns inside the block.
+- **`SpawnCount` means rolls, not NPCs, once `WeightedEntityIds` is set.** Each roll picks one
+  entry and then spawns that entry's own `CountRange`, so `SpawnCount` `[2,2]` against entries
+  with `CountRange` `[3,3]` yields six NPCs, not two.
+
+> **Gotcha — `SpawnYawOffset` is in degrees, and the engine's own codec documentation says
+> radians.** The implementation applies `Math.toRadians(spawnYawOffset)` before adding it to the
+> block's yaw, so the value is degrees; the codec's description string ("The yaw rotation offset
+> in radians…") is wrong, and it is the string an asset editor would surface. The shipped
+> `Block_Scarack_Eggsacks_Burst.json` passes `"SpawnYawOffset": 180` to face the spawned louse
+> away from the block, which only makes sense as degrees. Trusting the codec doc puts the NPC out
+> by a factor of about 57.
+
+---
+
 ## Testing roles in-game
 
 The `com.hypixel.hytale.server.npc.commands` package provides console commands for spawning, removing, and debugging NPCs while iterating on a role. (For the broader command system see [commands.md](commands.md).)

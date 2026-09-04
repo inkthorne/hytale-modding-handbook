@@ -188,6 +188,21 @@ In all three cases a name-based checker finds documentation and marks the type c
 when what is documented is a different thing wearing the same string. The oracle must bind
 a name to the registry it is being checked for, not merely find the name.
 
+The same collision corrupts **shipped-asset usage counts**, which is how it did real damage
+here: `"Type": "CameraShake"` matches 49 assets, every one of them a `CameraEffect` asset under
+`Server/Camera/CameraEffect/`, because `CameraPlugin` registers that string on `CameraEffect.CODEC`
+(line 43) and on `Interaction.CODEC` (line 44). As an *interaction* it has zero uses. A count
+mined by grepping `"Type": "<name>"` across the asset tree is only meaningful once each hit is
+attributed to the registry its file belongs to. Of the 53 undocumented interaction types, **7**
+carry a name registered on another codec and need that treatment: `CameraShake`, `ExitInstance`,
+`Portal`, `RunRootInteraction`, `ShowEventTitle`, `StartObjective`, `Teleporter`.
+
+> **Derive that set from resolved registrations, never from literal counts.** Counting
+> occurrences of a name's string literal looks like a cheap proxy and silently drops the worst
+> case: `CameraShake` has **zero** string literals of its own name anywhere in the jar, because
+> both of its registrations go through the constant `CODEC_CAMERA_SHAKE`. A literal-count method
+> therefore misses the very name that motivates the check.
+
 ## 5. Parse codec chains structurally, or get a confident wrong answer
 
 Two extractors written during this pass were wrong in ways that produced plausible output
@@ -239,3 +254,30 @@ not out of scope, and not to be rediscovered as a surprise by the next coverage 
 numbers repeated headings `-1`, `-2`. A separately written slugger that strips underscores
 reports `items-blocks.md#block_secondary-interaction` as broken when it resolves fine.
 Re-use the function in `verify-docs.sh` rather than reimplementing it.
+
+## 9. `server.lang` keys drop the `server.` namespace
+
+CLAUDE.md lists giving the gotcha-string matcher a second corpus
+(`Server/Languages/en-US/server.lang`) as worth doing when that code is next touched. One
+detail decides whether that works, and getting it wrong looks exactly like a clean run.
+
+Documented strings are written with the namespace, as the jar uses them —
+`Message.translation("server.modules.learnrecipe.alreadyKnown")`. The `.lang` file does **not**
+carry it: the file *is* `server.lang`, so its keys start one segment in, and the format is
+`key = value` rather than JSON.
+
+```
+modules.learnrecipe.alreadyKnown = You already know the recipe for "{name}"!
+interactions.didNotMount = Unknown mount error: {state}
+```
+
+`grep -c '^server\.' Server/Languages/en-US/server.lang` returns **0** — not one key carries the
+prefix. A matcher that looks up the documented key verbatim finds nothing, every time, and
+reports zero unresolved strings. Strip the leading `server.` before lookup — and treat a
+whole-corpus zero-match rate as a bug in the matcher rather than a pass, per CLAUDE.md
+invariant 6: a check that reports only findings, with no denominator, cannot be told apart
+from one that examined nothing.
+
+This is not hypothetical — it is how the six keys quoted in the `HarvestCrop`, `Bed` and
+`LearnRecipe` sections were nearly recorded as missing. All six resolve once the prefix is
+stripped.

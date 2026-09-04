@@ -1004,7 +1004,7 @@ One bound respawn point (a bed/waystone-style anchor): `getBlockPosition()` (`Ve
 
 ### Bed Interaction
 
-**Package:** `builtin.beds.interactions.BedInteraction` · registered by `BedsPlugin`
+**Package:** `com.hypixel.hytale.builtin.beds.interactions.BedInteraction` · registered by `BedsPlugin`
 
 The interaction that creates and uses the respawn points above. Codec doc: "Interact with a bed
 block, ostensibly to sleep in it." Extends
@@ -1048,7 +1048,7 @@ Behavior (from the decompiled source) branches on **who owns the block**:
 - **Unowned, and the player is at the cap** — `RespawnConfig.getMaxRespawnPointsPerPlayer()` —
   opens `SelectOverrideRespawnPointPage` to pick one to replace.
 - **Unowned, under the cap** — opens `SetNameRespawnPointPage` to name the new point.
-- **Owned by this player** — no UI: the player mounts the bed via `BlockMountAPI.mountOnBlock`
+- **Owned by this player** — no UI: the player mounts the bed via `com.hypixel.hytale.builtin.mounts.BlockMountAPI.mountOnBlock`
   and gains a `PlayerSomnolence` component in the `NoddingOff` state, which is what starts the
   sleep/time-skip flow (its sounds are the `SleepConfig` in
   [audio.md](audio.md#sleep-sounds)). A failed mount sends the

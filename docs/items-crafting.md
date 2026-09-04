@@ -897,7 +897,7 @@ Some recipes require a minimum bench tier:
 
 ## Learning Recipes (LearnRecipe)
 
-**Package:** `builtin.crafting.interaction.LearnRecipeInteraction` · registered by
+**Package:** `com.hypixel.hytale.builtin.crafting.interaction.LearnRecipeInteraction` · registered by
 `CraftingPlugin`
 
 Recipes a player has learned live in their profile as a set of item ids —

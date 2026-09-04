@@ -837,7 +837,7 @@ Stage entry fields: `Type` (`BlockType`/`BlockState`/`Prefab`/`Spread`), `Block`
 
 ### HarvestCrop Interaction
 
-**Package:** `builtin.adventure.farming.interactions.HarvestCropInteraction` · registered by
+**Package:** `com.hypixel.hytale.builtin.adventure.farming.interactions.HarvestCropInteraction` · registered by
 `FarmingPlugin`
 
 The interaction that reads the `Farming` config above. Codec doc: "Harvests the resources from
@@ -882,7 +882,7 @@ and paying for the harvest with it (verbatim from
 }
 ```
 
-Behavior (from `FarmingUtil.harvest`, which the interaction delegates to):
+Behavior (from `com.hypixel.hytale.builtin.adventure.farming.FarmingUtil.harvest`, which the interaction delegates to):
 
 - **Two prerequisites, both of which end the interaction `Failed`.** The target `BlockType` must
   declare `Gathering.Harvest` (a `HarvestingDropType` — see [drops.md](drops.md)), and the
@@ -896,11 +896,20 @@ Behavior (from `FarmingUtil.harvest`, which the interaction delegates to):
   `+1`, and its last-tick time reset to now. A `FarmingBlock` component is created if the block
   did not already have one. This is the replant-in-place path that makes a crop re-grow.
 
-> **Gotcha — a `StageSetAfterHarvest` naming a stage set that does not exist destroys the
-> block.** The lookup happens *after* the drops are given, and on a miss the code removes the
-> block and returns failure — so the player keeps the drops, the crop is gone, and the chain
-> takes its `Failed` branch. A typo in a stage-set name is therefore silent at load time and
-> destructive at harvest time.
+> **Gotcha — the drops are paid before the stage config is validated, so a bad stage-set name
+> costs items either way.** In the replant branch, `giveDrops` runs at `FarmingUtil.java:243`,
+> *before* either stage-set lookup. Two different names can be wrong, and they fail differently:
+>
+> | Bad key | What happens | Cost |
+> |---|---|---|
+> | `StartingStageSet` not present in `Stages` | drops given, `return false` — **the block is never touched** (`:245-246`) | **repeatable**: the crop is still there and still harvestable, so the same block pays out again on every use |
+> | `StageSetAfterHarvest` missing from `Stages` **or present but empty** | drops given, block set to `EMPTY`, `return false` (`:251-254`) | one-shot: the crop is destroyed |
+>
+> Both end the interaction `Failed`, so a `Failed` branch fires while the player keeps the loot.
+> The first is the dangerous one — it is an item-duplication loop rather than a lost crop — and
+> note the second triggers on an *empty* stage array too, not only a missing key. Neither is
+> caught at load time: `Stages` keys are plain map entries with no cross-validation against
+> `StartingStageSet` or `StageSetAfterHarvest`.
 
 ---
 

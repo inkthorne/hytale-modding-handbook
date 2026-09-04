@@ -80,7 +80,7 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 80 are documented and 44 are not. For the complete list — and to
+registered `Type` values, of which 81 are documented and 43 are not. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -138,8 +138,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 80
-documented and 44 not. A row count is itself a closure claim, so re-derive it after a game update
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 81
+documented and 43 not. A row count is itself a closure claim, so re-derive it after a game update
 rather than trusting this line; the two greps that produce it are given below.
 
 A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
@@ -277,7 +277,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `TeleportInstance` | `InstancesPlugin` | — *not yet documented* |
 | `ToggleGlider` | `InteractionModule` | — *not yet documented* |
 | `TriggerCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#triggercooldown) |
-| `TriggerSpawnMarkers` | `SpawningPlugin` | — *not yet documented* |
+| `TriggerSpawnMarkers` | `SpawningPlugin` | [npc-spawning.md](npc-spawning.md#triggerspawnmarkers) |
 | `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
 | `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
 | `UseCoop` | `FarmingPlugin` | — *not yet documented* |

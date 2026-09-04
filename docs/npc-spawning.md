@@ -1,6 +1,6 @@
 ---
 title: "NPC Spawning"
-description: "How Hytale spawns NPCs — spawn beacons under Server/NPC/Spawn/Beacons, companion block spawners, and the SpawnNPC interaction with its weighted roles, scatter and clearance rules."
+description: "How Hytale spawns NPCs — spawn beacons under Server/NPC/Spawn/Beacons, companion block spawners, manual spawn markers fired by TriggerSpawnMarkers, and the SpawnNPC interaction with its weighted roles, scatter and clearance rules."
 seo:
   type: TechArticle
 ---
@@ -9,7 +9,7 @@ seo:
 
 **Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.3**
 
-Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Three ways NPCs enter the world: **spawn beacons** (ambient, environment-filtered), **companion block spawners** (a block that keeps an NPC alive nearby) and the **`SpawnNPC` interaction** (an item or block chain spawning on demand). Role definitions themselves stay in [npc-roles.md](npc-roles.md).
+Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Four ways NPCs enter the world: **spawn beacons** (ambient, environment-filtered), **companion block spawners** (a block that keeps an NPC alive nearby), **manual spawn markers** (a placed marker that stays inert until an interaction fires it) and the **`SpawnNPC` interaction** (an item or block chain spawning on demand). Role definitions themselves stay in [npc-roles.md](npc-roles.md).
 
 ## Spawn Beacons
 
@@ -323,3 +323,74 @@ Behavior notes:
 > that use the key — `Block_Scarack_Eggsacks_Burst.json` and `Block_Coffin_Open.json` — pass
 > `"SpawnYawOffset": 180` to face the spawned NPC away from the block, and 2 of 2 uses only make
 > sense as degrees. Trusting the codec doc puts the NPC out by a factor of about 57.
+
+---
+
+## Manual Spawn Markers
+
+Spawn markers are the fourth spawn source: assets under `Server/NPC/Spawn/Markers/`, placed by
+worldgen and prefabs, each carrying a weighted `NPCs` list. Most re-arm on their own timer. A marker
+that sets **`"ManualTrigger": true`** never does — it sits inert until something fires it, and
+`TriggerSpawnMarkers` is what fires it. **Nine of the shipped markers are manual**:
+`Skeleton_Knight_Manual`, `Spirit_Root_Manual`, `Trork_Chieftain_Backup`,
+`Outlander_Marauder_Backup`, `Welcome_Animal`, `Test_Boss_Marker`, `Test_Manual_Marker`,
+`Test_Objective_Spawn_Marker` and `Test_Skeleton_Stones`.
+
+The marker asset itself
+(`com.hypixel.hytale.server.spawning.assets.spawnmarker.config.SpawnMarker`) is not otherwise
+documented in this handbook — `ManualTrigger` is described here only because it is the key that
+decides whether the interaction can see a marker at all.
+
+### TriggerSpawnMarkers
+
+**Package:** `com.hypixel.hytale.server.spawning.interactions.TriggerSpawnMarkersInteraction` ·
+registered by `SpawningPlugin`
+
+Fires manual spawn markers around the **entity running the interaction**. It extends
+[SimpleInstantInteraction](interactions.md#simpleinstantinteraction) and reads
+`context.getEntity()`, so the search is a sphere centred on that entity's own position — unlike
+[`SpawnNPC`](#spawnnpc-interaction), nothing here is relative to a targeted block.
+
+| Property | Type | Default | Description / load-time validation |
+|----------|------|---------|-------------------------------------|
+| `MarkerType` | string | — | Marker asset id to fire, validated against the `SpawnMarker` asset map so a bad id fails at load. **Omit it to fire every manual marker in range**, whatever its type |
+| `Range` | double | `10.0` | Search radius in blocks. Validated `greaterThan(0.0)` |
+| `Count` | int | `0` | Maximum number of markers to fire. Validated `greaterThanOrEqual(0)` |
+
+**None of the three is required** — neither by a `true` third argument to `KeyedCodec` nor by
+`Validators.nonNull()`. The defaults are a live configuration, not a degenerate one: with no keys at
+all the interaction fires every manual marker within 10 blocks.
+
+All three shipped uses are summon chains that run the interaction as the tail of a
+[`Serial`](interactions-flow.md#serial) chain behind an animation:
+
+```json
+{
+  "Type": "TriggerSpawnMarkers",
+  "MarkerType": "Spirit_Root_Manual",
+  "Range": 30
+}
+```
+
+`Hedera_Summon.json` and `Skeleton_Burnt_Praetorian_Summon.json` each pin one `MarkerType` at
+`Range` 30; the debug item `Test_Spawn_Marker_Trigger.json` sets `Range` only, so it fires whatever
+manual markers happen to be nearby.
+
+Behavior notes:
+
+- **A marker is eligible only if all three tests pass**: `ManualTrigger` is true, its centre is
+  within `Range` (compared as squared distance, so `Range` is exact), and its id equals `MarkerType`
+  when that key is set. The coarse spatial query widens to `(int) Range + 1` first and the exact
+  test then narrows it back, so a fractional `Range` is not quietly rounded up.
+- **`Count` picks at random, not by distance.** Above zero, the eligible markers are reservoir-sampled
+  down to `Count`, so `Count: 1` inside a cluster of five fires an arbitrary one of them rather than
+  the closest.
+- **A marker that already has live NPCs will not re-fire.** `SpawnMarkerEntity.trigger()` returns
+  false while its spawn count is above zero, so repeatedly using a summon item does not stack more
+  NPCs onto the same marker — it re-arms only as the ones it spawned are removed.
+
+> **Gotcha — `"Count": 0` means *all* markers, not *no* markers.** Zero is the default and the
+> "unlimited" sentinel at once: the implementation branches on `count == 0` into a loop over every
+> eligible marker, and only the `count > 0` branch samples a subset. Writing `"Count": 0` to disable
+> a trigger does the opposite of what it reads like, and the validator (`greaterThanOrEqual(0)`)
+> accepts it without comment. There is no value that fires nothing; omit the interaction instead.

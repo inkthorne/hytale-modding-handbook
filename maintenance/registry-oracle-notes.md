@@ -230,6 +230,27 @@ rather than errors — the failure mode CLAUDE.md invariant 7 describes:
 Requiredness has two forms and both must be read: a `true` third argument to `KeyedCodec`,
 and `Validators.nonNull()` attaching to the builder *after* `append(...)` has closed.
 
+**The `true`-third-argument trap is symmetric, and the false-positive half is the dangerous
+one.** CLAUDE.md invariant 7 warns that stopping before the third argument loses a key's
+requiredness. The mirror image manufactures it: an inner constructor's trailing `true`
+attributed to the outer `KeyedCodec`. These two are visually identical —
+
+```java
+new KeyedCodec("Shapes", new MapCodec<…>, true)                                  // 3 args: REQUIRED
+new KeyedCodec("ProjectileSpawnOffsets",
+        new MapCodec<Vector3d, Object2ObjectOpenHashMap>(codec, ctor::new, true)) // 2 args: NOT required
+```
+
+— and both are *raw* `KeyedCodec`, so the generic gives no signal either. Telling them apart
+needs an argument splitter that tracks `<>` as well as `()`: `MapCodec<Vector3d,
+Object2ObjectOpenHashMap>` contains a top-level-looking comma inside its type parameters, and a
+splitter that ignores angle brackets reports three arguments for the second form and calls a
+non-required key required. Both a reviewer and this author's first splitter made exactly that
+error on `DeployableTurretConfig.ProjectileSpawnOffsets` before angle-bracket handling was added.
+
+A false "required" is worse than a false "optional": it tells a modder to write a key the engine
+does not want, and nothing in the corpus will contradict it.
+
 ## 6. Prefer a phrasing that names a real symbol over prose stating the same fact
 
 `docs/interactions.md` had to say which types are always available. Two phrasings carry the
@@ -311,6 +332,13 @@ The last one is the sharpest, because the pattern had been used across seven run
 six times by luck — every one of those logs genuinely had no warning. A check that cannot fail
 looks exactly like a check that passes, and it will accumulate a record of correct answers until
 the first time it matters.
+
+**A tool's track record is not evidence about the call you are making now.** `keys.py` reads
+only `argv[1]`; passed six files it parsed one and returned well-formed output for that one,
+which nearly recorded the four `DeployableConfig` subtypes as having no keys of their own when
+`Turret` has 19 and `Aoe` has 12. It had been correct on every previous use — because every
+previous use happened to pass a single file. A history of right answers is evidence only about
+the calls whose inputs were shaped the way the tool assumes, and says nothing about this one.
 
 **The general rule.** A check you wrote is not trustworthy until it has been run against an
 input you *know* it must flag. The ANSI case was not a check that missed something — it was one

@@ -887,6 +887,12 @@ So a blocking `[PlayAnimation, Timeout 0.6, Attack, PlayAnimation, SetFlag]` run
 
 ## Registering custom core components (Java)
 
+> **Looking for the built-in `Mount` core component?** It is documented with the rest of the
+> mount system in [mounts.md](mounts.md#mount-npc-action). Note the name is overloaded three
+> ways in `MountPlugin.setup()` alone — an NPC core component, an ECS component name, and an
+> interaction `Type` — so `"Type": "Mount"` means different things in a role's `Instructions`
+> than it does in an item's interaction chain. Both shapes are shown side by side there.
+
 The behavior building blocks referenced by `Type` in role JSON — `BodyMotion`, `HeadMotion`, `Sensor`, `Action`, `EntityFilter` — are concrete Java classes, each with a `Builder*` companion that acts as its JSON codec. A plugin can **register its own** and reference it from role JSON by `Type`, exactly like a built-in.
 
 The core NPC plugin is itself a `JavaPlugin` with a static accessor and a registration method:

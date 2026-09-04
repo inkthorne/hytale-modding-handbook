@@ -97,6 +97,40 @@ through it: `ChoiceInteraction` gains `GiveItem` (`ShopPlugin.java:44`) on top o
 > the same failure as matching a documented name across the whole corpus instead of within its
 > section.
 
+### Three corrections to §1, from the phase-(b) miner (2026-09-04)
+
+The miner reproduces §1's headline figures exactly — `Interaction.CODEC` at 124
+names from 89 first-form and 35 second-form registrations across 21 second-form
+statements, and all ten cells of the field table. Three things in §1 need
+amending, and the first two are the kind §1 predicted about itself.
+
+**The field table counts STATEMENTS, not registrations.** Its "via
+`getCodecRegistry`" column reads 44 for `CODEC`; the miner counts 60 *registrations*
+in 44 *statements*. Both are right and the distinction is the whole point of the
+second form — §1 says so itself for `Interaction.CODEC` ("21 sites, 35 names") but
+the table does not carry the word. Read that column as sites.
+
+**The nineteen second-form-only registries are twenty-two.** Missing are
+`Memory.CODEC`, `EventCondition.TYPE_CODEC` and `EventCondition.Config.TYPE_CODEC` —
+all three have zero first-form registrations and belong in the list. They are
+precisely the three §2 goes on to discuss as open or indirected, so the omission
+looks like a scope slip between the two sections rather than a measurement error.
+§1 warned that "an enumeration here would itself be a closure claim and would rot
+the same way", and it did, in the same document, within a day.
+
+**The "18 sites" of `register(Class, "Name", codec)` mixes two kinds of registry.**
+Twelve are codec registrations, and they are exactly what §1 says — every
+`GameplayConfig.PLUGIN_CODEC` and `WorldConfig.PLUGIN_CODEC` site. The rest are the
+"asset-editor event registry", which is
+`getEventRegistry().register(AssetEditorActivateButtonEvent.class, "EquipItem", handler)`
+and six siblings in `AssetSpecificFunctionality.java`: the same *argument shape*,
+but an event-handler registry with no codec and no `"Type"` vocabulary. For a
+`"Type"`-oracle denominator the figure is **12**. Argument shape alone does not
+identify a codec registry; the anchor does.
+
+Regression baselines from that run, which cannot validate the miner and exist only
+to make drift visible: 98 registries, 754 registrations, 10 with an open verdict.
+
 ## 2. Some registries are not statically enumerable — the gate needs a third outcome
 
 `MemoriesPlugin.java:137`:

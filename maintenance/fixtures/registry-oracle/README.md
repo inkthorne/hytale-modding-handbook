@@ -38,3 +38,21 @@ confidently wrong. Each defeated some plausible parser:
 Add a case here whenever a parse turns out to have been confidently wrong. Per
 CLAUDE.md invariant 8, correct a fixture in a commit that says which parse was
 wrong and why — never silently edit it to match the parser.
+
+## `registries.json`
+
+Fixture for `maintenance/scripts/registry_miner.py` (phase b). Run it with:
+
+    python3 maintenance/scripts/check-registry-fixture.py [-v]
+
+**The file separates two kinds of figure, and only one can validate the miner.**
+`independent` figures were derived by hand in `registry-oracle-notes.md` §1–§2
+*before* this miner existed, so reproducing them is evidence — 26 checks, covering
+`Interaction.CODEC`'s 124 names across both registration forms, all ten cells of
+the field table, and the three verdicts including §2's false-positive guard.
+`measured` figures came from the miner itself and are regression baselines only:
+checking a miner against its own output proves nothing, which is invariant 7's
+circularity in another costume.
+
+The miner reproduced every independent figure on the run that created this
+fixture, and in doing so found three amendments to §1 — recorded there, not here.

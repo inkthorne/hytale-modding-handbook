@@ -33,3 +33,5 @@ com/
 
 # Research notes (personal)
 research/
+__pycache__/
+*.pyc

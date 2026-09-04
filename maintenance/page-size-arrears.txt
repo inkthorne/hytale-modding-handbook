@@ -63,7 +63,10 @@ world.md
 #   `Java API + JSON asset format` on 2026-09-04 when `### RevealMapMarkersInView`
 #   (a JSON key table) landed under `## World Map Markers`. That section stays in
 #   the remainder, so the remainder keeps the combined tag and the two split-off
-#   pages take `Java API`. Do not let the split silently drop it.
+#   pages take `Java API`. Do not let the split silently drop it. Read the tag
+#   narrowly, though: this page is 75 java fences against 1 json fence, and the
+#   JSON half rests on that single six-key table. It does not promise broad JSON
+#   coverage, which is why the page carries no **Assets:** field.
 
 prefabs.md
 #   seam: `## Prefab File Format` through `## Integration Points` (~343).

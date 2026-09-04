@@ -1476,7 +1476,12 @@ scans once, in a 30° cone, out to 128 blocks. No shipped asset uses the type.
   scan, the interval also bounds how long the interaction takes to stop.
 - **`ConditionGrace` exists for a specific failure.** Raise it above the windup of whatever
   interaction this runs beside, or that windup ends the run before the conditions ever begin to
-  hold. `0` ends the run at the first scan where they do not hold.
+  hold. `0` ends the run at the first scan where they do not hold. The grace applies only until the
+  conditions **first** hold: after that a later failure ends the run immediately, however much of
+  the grace period is left.
+- **It reads the *owning* entity, not the interacting one**, and ends `Failed` when that is null or
+  is not a player — so this is player-only, and on an item chain it is the holder that is scanned.
+  Same distinction [`SendBeacon`](npc-roles.md#sendbeacon) draws.
 
 Revealing is per player, which is why the particles are too.
 

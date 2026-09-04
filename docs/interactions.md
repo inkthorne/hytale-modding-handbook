@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 11 are documented in
-their registry rows themselves, and 31 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 12 are documented in
+their registry rows themselves, and 30 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,7 +140,7 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 11 are documented in their registry rows themselves, and 31 are
+written section on another page, 12 are documented in their registry rows themselves, and 30 are
 not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -155,11 +155,12 @@ The **Documented** cell has three states, and its first character tells you whic
 - **`— *not yet documented*`** — neither, yet.
 
 A bare mention in a list, or a name that appears only inside an example, is *not* documentation and
-earns neither a link nor a prose cell. Three names are documented in this corpus as something
-*other* than an interaction and are still marked `—`: `RunRootInteraction` and `ShowEventTitle` are also
-[trigger-volume effect types](trigger-volumes.md#built-in-effect-types) with those same names, and
+earns neither a link nor a prose cell. Two names are documented in this corpus as something
+*other* than an interaction and are still marked `—`: `ShowEventTitle` is also a
+[trigger-volume effect type](trigger-volumes.md#built-in-effect-types) with that same name, and
 `BuilderTool` is also an item property ([items-tools.md](items-tools.md#builder-tool-args)). Same
-string, different registry — the documented one is not the interaction.
+string, different registry — the documented one is not the interaction. As each such row fills, the
+warning moves into that row's own cell and the name leaves this list.
 
 **Registered by** names the module or plugin whose `setup()` registers the type. `Interaction.CODEC`
 is shared, so a type exists only when its owner is loaded. The 76 rows whose owner is listed in
@@ -260,7 +261,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `ResetCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#resetcooldown) |
 | `RevealMapMarkersInView` | `InteractionModule` | — *not yet documented* |
 | `RunOnBlockTypes` | `InteractionModule` | — *not yet documented* |
-| `RunRootInteraction` | `InteractionModule` | — *not yet documented* |
+| `RunRootInteraction` | `InteractionModule` | Runs a named root interaction, and **does not wait for it**: `firstRun` sets its own state to `Finished` first and then executes the root, so a surrounding chain continues immediately rather than on the root's completion. One key, `RootInteraction` (a root-interaction id, required by `Validators.nonNull()` and late-validated against the `RootInteraction` assets); at runtime an id that still does not resolve yields `RootInteraction.getRootInteractionOrUnknown`'s placeholder rather than an error. No shipped asset uses the type — the only occurrences of the string under `Assets.zip` are `.lang` entries. **Not the trigger-volume effect of the same name** ([trigger-volumes.md](trigger-volumes.md#built-in-effect-types)), which shares the `RootInteraction` key but adds `InteractionType` and `EquipSlot`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.RunRootInteraction` |
 | `Seating` | `MountPlugin` | [mounts.md](mounts.md#seating-interaction) |
 | `Selector` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#selector) |
 | `SendBeacon` | `NPCPlugin` | [npc-roles.md](npc-roles.md#sendbeacon) |

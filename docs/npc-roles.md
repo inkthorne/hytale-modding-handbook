@@ -64,7 +64,7 @@ The NPC system is organized into several directories:
 | `Server/NPC/Attitude/` | Relationship definitions between NPC groups |
 | `Server/NPC/Groups/` | NPC group collections for spawning |
 | `Server/NPC/Flocks/` | Flock size configurations |
-| `Server/NPC/Spawn/` | Spawn configuration — `Beacons/` (ambient spawning), `Markers/` (worldgen / prefab spawn markers), `World/`, `Suppression/`, `CompanionBlockSpawners/` ([companion block spawners](#companion-block-spawners)) |
+| `Server/NPC/Spawn/` | Spawn configuration — `Beacons/` (ambient spawning), `Markers/` (worldgen / prefab spawn markers), `World/`, `Suppression/`, `CompanionBlockSpawners/` ([companion block spawners](npc-spawning.md#companion-block-spawners)) |
 | `Server/NPC/Balancing/` | Combat Action Evaluator (CAE) files |
 | `Server/NPC/DecisionMaking/` | AI decision conditions |
 
@@ -174,7 +174,7 @@ A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field;
 | Key | Purpose |
 |-----|---------|
 | `_CombatConfig` | The CAE asset for this role (the top-level, non-`Modify` spelling of the same field is `CombatConfig`). |
-| `_InteractionVars` | Interaction-var overrides (top-level spelling: `InteractionVars`) — see [Melee attacks without a CAE](#melee-attacks-without-a-cae). |
+| `_InteractionVars` | Interaction-var overrides (top-level spelling: `InteractionVars`) — see [Melee attacks without a CAE](npc-combat.md#melee-attacks-without-a-cae). |
 | `_ExportStates` | Maps a referenced component's states onto this role's states. Must be a JSON array; illegal inside `_ForwardedModifiers`. |
 | `_InterfaceParameters` | Parameters passed to the referenced construct's interface. |
 | `_ForwardedModifiers` | Modifiers forwarded down to nested references. |
@@ -687,7 +687,7 @@ Two collectors ship:
 
 | `Type` | Class | Purpose |
 |--------|-------|---------|
-| `CombatTargets` | `builtin.npccombatactionevaluator.corecomponents.CombatTargetCollector` | *"processes matched friendly and hostile targets and adds them to the NPC's short-term combat memory"* — the feed behind the [CAE](#combat-action-evaluator-cae)'s `KnownTargetCount` / target memory. Attached to the shared detection components (`Component_Sensor_Standard_Detection`, `…_Sight*`, `…_Sound*`, `…_Scent_By_Attitude`), so every role referencing those inherits it. |
+| `CombatTargets` | `builtin.npccombatactionevaluator.corecomponents.CombatTargetCollector` | *"processes matched friendly and hostile targets and adds them to the NPC's short-term combat memory"* — the feed behind the [CAE](npc-combat.md#combat-action-evaluator-cae)'s `KnownTargetCount` / target memory. Attached to the shared detection components (`Component_Sensor_Standard_Detection`, `…_Sight*`, `…_Sound*`, `…_Scent_By_Attitude`), so every role referencing those inherits it. |
 | `EncounterMembers` | `builtin.encountermanager.npc.EncounterMemberCollector` | Collects the matches into an encounter's member set — see [encounters.md](encounters.md). |
 
 A collector is a first-class registered category (`NPCPlugin` registers a `BuilderFactory` for `ISensorEntityCollector` keyed on `Type`), so a plugin can add its own: the builder extends `BuilderBase<ISensorEntityCollector>` and its `category()` returns `ISensorEntityCollector.class` — register it with the same [`registerCoreComponentType`](#registering-custom-core-components-java) call used for sensors and motions.
@@ -782,7 +782,7 @@ Vanilla reference: `Server/NPC/Roles/_Core/Tests/Test_Random_Instruction.json` (
 
 ### The `Attack` action
 
-The `Attack` action (`com.hypixel.hytale.server.npc.corecomponents.combat.ActionAttack`, builder `…combat.builders.BuilderActionAttack`) fires a configured attack interaction. It is the action behind the `Attack` row in the [Actions table](#actions), and is the swing in the [melee-without-a-CAE](#melee-attacks-without-a-cae) path.
+The `Attack` action (`com.hypixel.hytale.server.npc.corecomponents.combat.ActionAttack`, builder `…combat.builders.BuilderActionAttack`) fires a configured attack interaction. It is the action behind the `Attack` row in the [Actions table](#actions), and is the swing in the [melee-without-a-CAE](npc-combat.md#melee-attacks-without-a-cae) path.
 
 JSON params (from `BuilderActionAttack`):
 
@@ -979,7 +979,7 @@ There is no single "which way does my NPC face?" setting — **body facing is re
 
 So motions split two ways: **face the target** (set an explicit yaw — `MaintainDistance` ends `computeSteering` with `setYaw(targetYaw)`, `WanderInCircle`/`BodyMotionWanderBase` set the walk heading) vs **face travel** (set none — `Flee` (`BodyMotionMoveAway`) and the base pathing motions fall through to the movement-direction default). `Seek` (`BodyMotionFind`) is the hybrid: while it is actually pathing it sets no yaw, but when its path is throttled or deferred it calls `lookAtTarget`, which sets both yaw and pitch onto the target. **Takeaway:** to face the movement direction, set no yaw; to face elsewhere (strafe-and-stare), set `out.setYaw(...)`.
 
-**`HeadMotion` is a separate channel, but not purely cosmetic.** A head motion (`Watch`, `Aim`) writes the head steering, and the controller will *blend the body toward the head* — but only when the body motion left yaw **unset** (`if (!bodySteering.hasYaw())`) **and** the head exceeds the model's camera yaw range (default ±45°). So a head motion can drag the body around on a travel-facing motion, but it **cannot** override a motion that set its own yaw, and small head turns (within ±45°) never move the body. (This is why a melee NPC running `HeadMotion: Aim` over a yaw-setting motion still [whiffs](#melee-hits-are-directional-swept-arcs--npcs-can-miss) — the head turns, the body doesn't.)
+**`HeadMotion` is a separate channel, but not purely cosmetic.** A head motion (`Watch`, `Aim`) writes the head steering, and the controller will *blend the body toward the head* — but only when the body motion left yaw **unset** (`if (!bodySteering.hasYaw())`) **and** the head exceeds the model's camera yaw range (default ±45°). So a head motion can drag the body around on a travel-facing motion, but it **cannot** override a motion that set its own yaw, and small head turns (within ±45°) never move the body. (This is why a melee NPC running `HeadMotion: Aim` over a yaw-setting motion still [whiffs](npc-combat.md#melee-hits-are-directional-swept-arcs--npcs-can-miss) — the head turns, the body doesn't.)
 
 **Reusable technique — subclass a motion, override only the yaw.** Engine `BodyMotion`s and their builders are `public`/non-final with a `(builder, support)` constructor and a `public computeSteering`, so you can subclass one, defer to `super` for all its movement logic, and rewrite *just* the facing. This gives "this motion's movement, different facing" without reimplementing it:
 
@@ -1001,7 +1001,7 @@ public class MyMaintainDistance extends BodyMotionMaintainDistance {   // distin
 }
 ```
 
-The builder mirror `extends BuilderBodyMotionMaintainDistance`; its `readConfig` calls `super.readConfig(data)` then reads the extra field — do **not** also call `readCommonConfig` (the framework already applies the common Enabled/Once config). Register it like any custom motion: `NPCPlugin.get().registerCoreComponentType("MyMaintainDistance", MyBuilderMaintainDistance::new)`. This is also a cleaner fix for the [melee-facing problem](#melee-hits-are-directional-swept-arcs--npcs-can-miss) than a `Seek` windup when you want a strafing motion to still face where it moves.
+The builder mirror `extends BuilderBodyMotionMaintainDistance`; its `readConfig` calls `super.readConfig(data)` then reads the extra field — do **not** also call `readCommonConfig` (the framework already applies the common Enabled/Once config). Register it like any custom motion: `NPCPlugin.get().registerCoreComponentType("MyMaintainDistance", MyBuilderMaintainDistance::new)`. This is also a cleaner fix for the [melee-facing problem](npc-combat.md#melee-hits-are-directional-swept-arcs--npcs-can-miss) than a `Seek` windup when you want a strafing motion to still face where it moves.
 
 ### Inline behavior with a Generic role
 
@@ -1228,7 +1228,7 @@ Remove a member's `FlockMembership` — `store.tryRemoveComponent(ref, FlockMemb
 
 On any flock member's death, `FlockDeathSystems.EntityDeath` removes its `FlockMembership` (unless `role.isCorpseStaysInFlock()`), which triggers leader re-election — `EntityGroup.testMembers(canBecomeLeader)`, gated on `Role.isCanLeadFlock()` — or dissolve. An `INTERIM_LEADER` state covers a leader being temporarily unavailable (e.g. its chunk is unloaded). **So reusing the engine flock gives you succession and cleanup for free** — a strong reason to prefer it over a custom grouping.
 
-Once a pack is formed, propagate the aggro target to every member (including ones that never sensed it) via [Marked targets](#marked-targets-lockedtarget-and-the-target-sensor); to serialize who actually swings, see [Serializing a flock swarm](#serializing-a-flock-swarm--native-take-turns-cant-hard-gate-it).
+Once a pack is formed, propagate the aggro target to every member (including ones that never sensed it) via [Marked targets](#marked-targets-lockedtarget-and-the-target-sensor); to serialize who actually swings, see [Serializing a flock swarm](npc-combat.md#serializing-a-flock-swarm--native-take-turns-cant-hard-gate-it).
 
 ### Gotcha — a brand-new flock reports 0 members for the rest of the tick
 
@@ -1260,318 +1260,12 @@ A flock **entity** has `Flock` / `EntityGroup` / `UUIDComponent` but **no** `Flo
 
 ---
 
-## Spawn Beacons
+## Spawning
 
-Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/NPC/Spawn/Beacons/`. A beacon is a plain object (no `Type` wrapper). NPC entries in the `NPCs` array reference roles by an `Id` field, not `Role`.
-
-### Beacon Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Environments` | Array | Biome/environment filters (e.g. `Env_Zone1_Caves_Volcanic_T1`) |
-| `MinDistanceFromPlayer` | Number | Minimum player distance for spawning |
-| `MaxSpawnedNPCs` | Number | Maximum concurrent spawns |
-| `ConcurrentSpawnsRange` | Array | `[min, max]` NPCs spawned per cycle |
-| `SpawnAfterGameTimeRange` | Array | `[min, max]` game-time durations before spawning (e.g. `PT20M`) |
-| `NPCSpawnState` | String | State the NPC starts in when spawned |
-| `SpawnRadius` | Number | Spawn area radius |
-| `BeaconRadius` | Number | Beacon activation radius |
-| `NPCs` | Array | NPC spawn entries — per entry `Id`, `Weight`, and optional `SpawnBlockSet`, `Flock`, `MovementModes`, `SpawnFluidTag`, `EnableSafeSpawning` (`RoleSpawnParameters`) |
-| `LightRanges` | Object | Light level requirements (`Light: [min, max]`) |
-| `Weight` | Number | Per-entry spawn weight |
-| `TargetDistanceFromPlayer` | Number | Preferred distance from the player to place the spawn |
-| `NPCIdleDespawnTime` | Number | Seconds an idle spawned NPC survives before despawning |
-| `BeaconVacantDespawnGameTime` | String | ISO-8601 game-time duration a vacant beacon keeps its NPCs (e.g. `PT15M`) |
-| `TargetSlot` | String | Marked-target slot to pre-fill on the spawned NPC (see [Marked targets](#marked-targets-lockedtarget-and-the-target-sensor)) |
-
-### Beacon Example
-
-**Example: `Spawn/Beacons/Zone1/Zone1_Cave_Tier1/Zone1_Cave_Volcanic_T1_Goblin.json`** (abridged — the shipped file also sets `NPCIdleDespawnTime`, `BeaconVacantDespawnGameTime` and `TargetDistanceFromPlayer`)
-
-```json
-{
-    "Environments": [ "Env_Zone1_Caves_Volcanic_T1" ],
-    "MinDistanceFromPlayer": 15,
-    "MaxSpawnedNPCs": 2,
-    "ConcurrentSpawnsRange": [ 1, 2 ],
-    "SpawnAfterGameTimeRange": [ "PT20M", "PT60M" ],
-    "BeaconRadius": 70,
-    "SpawnRadius": 50,
-    "NPCs": [
-        { "Weight": 75, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Scrapper" },
-        { "Weight": 15, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Lobber" },
-        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Hermit" },
-        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Miner" }
-    ],
-    "LightRanges": {
-        "Light": [ 0, 7 ]
-    }
-}
-```
-
-A minimal beacon can also start an NPC in a chosen state:
-
-```json
-{
-    "Environments": [],
-    "NPCs": [
-        { "Weight": 1, "Id": "Edible_Goblin_Scrapper" }
-    ],
-    "SpawnAfterGameTimeRange": [ "PT5M", "PT10M" ],
-    "NPCSpawnState": "Seek"
-}
-```
-
-### Zone-Based Organization
-
-Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories and a handful of loose beacons (`Edible_*`, `Goblin_Duke_Phase_*`) at the top level:
-
-```
-Server/NPC/Spawn/Beacons/
-├── Zone1/
-│   ├── Zone1_Cave_Tier1/
-│   ├── Zone1_Cave_Tier2/
-│   └── ...
-├── Zone2/
-├── Zone3/
-├── Zone4/
-├── Portals/
-└── Tests/
-```
+Spawn beacons, companion block spawners and the `SpawnNPC` interaction moved to their own page
+in the 2026-09-04 split — see [NPC Spawning](npc-spawning.md).
 
 ---
-
-## Companion Block Spawners
-
-A spawn beacon spawns NPCs from the *environment*. A **companion block spawner** spawns one
-from a *player-built structure*: place a designated block, surround it with the blocks a
-recipe asks for, and an NPC moves in and stays as long as the setup survives. New in 0.6.3
-(`com.hypixel.hytale.builtin.companionblockspawner`).
-
-The codec's own description is the clearest statement of the contract:
-
-> *"A configuration that spawns a companion NPC when a spawner block and all of its required
-> surrounding blocks are present within a radius. Requirement blocks are claimed exclusively
-> (two spawners can't share one). While the setup holds, the referenced spawn marker keeps the
-> companion alive (re-spawning it on death); breaking the setup despawns it."*
-
-### The recipe asset
-
-**Location:** `Server/NPC/Spawn/CompanionBlockSpawners/<Id>.json`
-(`CompanionBlockSpawnerRecipe`, loaded after `SpawnMarker`, `BlockSet`, `BlockType` and `Item`)
-
-**`Server/NPC/Spawn/CompanionBlockSpawners/Debug_Companion_Spawner.json`** — one of the two
-shipped examples, verbatim:
-
-```json
-{
-  "SpawnerBlockTypeKey": "Debug_Companion_Block_Spawner",
-  "Radius": 6.0,
-  "RequiredBlocks": [
-    {
-      "MatchBy": "Tag",
-      "Value": "Bed",
-      "Count": 1
-    }
-  ],
-  "SpawnMarker": "Debug_Companion_Kweebec"
-}
-```
-
-`Debug_Companion_Spawner_Explicit.json` is the same recipe with
-`"MatchBy": "BlockId", "Value": "Debug_Companion_Block_Spawner_Requirement"` — the two files
-exist to exercise both match modes.
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `SpawnerBlockTypeKey` | string | **Required, validated.** Block type key of the block that hosts the companion |
-| `Radius` | number | **> 0.** Search radius in blocks for the required blocks (default `1.0`) |
-| `RequiredBlocks` | array | **Required, non-empty.** The requirement blocks and their counts |
-| `SpawnMarker` | string | **Required, validated.** Id of a `Server/NPC/Spawn/Markers/` asset defining the companion |
-
-Each `RequiredBlocks` entry — *"A required block - how it is matched (MatchBy) and the value
-to match (Value) - plus the minimum count of it within the recipe radius."*
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `MatchBy` | enum | **Required.** `BlockId` (exact block type key) or `Tag` (block tag) |
-| `Value` | string | The block key, or a tag such as `"Bed"` / `"Family=Crude"` |
-| `Count` | integer | **> 0.** Minimum matching blocks within `Radius` (default `1`) |
-
-The four top-level keys are inheritable, so a family of recipes can share a `Parent` template
-the way items do (see [items.md](items.md#inheritance-system)).
-
-The referenced marker is an ordinary spawn-marker asset —
-`Server/NPC/Spawn/Markers/Debug_Companion_Kweebec.json` is just:
-
-```json
-{
-  "NPCs": [
-    { "Name": "Temple_Kweebec_Static", "Weight": 1, "RealtimeRespawnTime": 30 }
-  ],
-  "RealtimeRespawn": true,
-  "DeactivationDistance": 48
-}
-```
-
-### How it resolves
-
-1. **Index.** On start (and whenever recipes, or block types, load or unload)
-   `CompanionBlockSpawnerRecipeCompendium` rebuilds: it validates every recipe, expands each
-   `Tag` entry to the concrete block keys carrying that tag, and drops any recipe whose spawner
-   block, required block or spawn marker does not resolve — logging the reason at `SEVERE`.
-2. **Component injection.** The plugin then *injects* a `CompanionBlockSpawnerBlock`
-   chunk-store component into the `BlockType` of every participating key — the spawner blocks
-   **and** the ingredient blocks. **You do not add anything to the block JSON**; naming a block
-   in a recipe is what makes it a block entity.
-3. **Evaluation.** `CompanionBlockSpawnerSystems.AddOrRemove` reacts to those block entities
-   appearing and disappearing, and `ReconcileTick` re-checks each active spawner roughly every
-   30 s (jittered ±25 %). Candidates are found through a KD-tree
-   (`CompanionBlockSpawnerSpatialSystem`) keyed on block position.
-4. **Claiming.** When every `RequiredBlocks` entry is satisfied, the matching blocks are
-   claimed by writing the spawner's position into their `ClaimedByBlock` field. Blocks already
-   claimed by another spawner are invisible to this one — that is the "claimed exclusively"
-   rule.
-5. **Marker placement.** `CompanionBlockSpawnerSupport.createMarker` picks a weighted
-   configuration from the marker, resolves its NPC role, and searches outward for a spawnable
-   tile — rings 1–4 around the spawner, preferring 2 blocks below through the spawner's own
-   level before trying 1 block above. It then creates a `SpawnMarkerEntity` carrying a
-   `CompanionSpawnerMarkerReference` back to the spawner block, and the normal spawn-marker
-   machinery takes over from there.
-6. **Teardown.** Breaking the spawner (or enough of the requirement blocks) clears every claim,
-   removes the marker, and removes the companions the marker spawned. A `MarkerHeartbeat`
-   entity system sweeps up orphaned markers whose origin block is gone or now points at a
-   different marker.
-
-### Java surface
-
-```java
-// com.hypixel.hytale.builtin.companionblockspawner
-static CompanionBlockSpawnerPlugin CompanionBlockSpawnerPlugin.get()
-
-// config.CompanionBlockSpawnerRecipe
-static DefaultAssetMap<String, CompanionBlockSpawnerRecipe> getAssetMap()
-String getId()
-String getSpawnerBlockTypeKey()
-double getRadius()
-CompanionBlockSpawnerRecipe.RequiredBlock[] getRequiredBlocks()
-String getSpawnMarker()
-
-// CompanionBlockSpawnerBlock  (Component<ChunkStore>, on the spawner and ingredient blocks)
-static ComponentType<ChunkStore, CompanionBlockSpawnerBlock> getComponentType()
-PersistentRef getMarkerRef()
-boolean hasMarker()
-Vector3i getClaimedByBlock()
-
-// CompanionSpawnerMarkerReference  (Component<EntityStore>, on the marker entity)
-static ComponentType<EntityStore, CompanionSpawnerMarkerReference> getComponentType()
-Vector3i getSpawnerPosition()
-```
-
-`CompanionBlockSpawnerRecipeCompendium` exposes `getEntryKeySets(recipe)`, `getMaxRadius()`
-and `isEmpty()` publicly; the compendium instance itself is package-private, so read recipes
-through `CompanionBlockSpawnerRecipe.getAssetMap()`.
-
-> **Gotchas**
-> - **The spawner block needs no JSON changes.** `Server/Item/Items/_Debug/Debug_Companion_Block_Spawner.json`
->   is a plain crate — no `BlockEntity`, no flags. The recipe naming it is the whole opt-in.
-> - **A recipe with an unresolvable reference is dropped silently from the player's view.**
->   It is logged at `SEVERE` and simply never spawns anything; check the server log rather than
->   assuming the mechanic is broken.
-> - **Ingredient blocks are consumed exclusively.** Two spawners cannot share one bed. A second
->   spawner in range of the same requirement blocks will never activate until the first one is
->   broken.
-> - **World config still gates the spawn.** If the world has `SpawningNPC` or
->   `SpawnMarkersEnabled` off, the marker is created but no companion appears; the module logs
->   this explicitly at `FINE`.
-> - **The marker needs a free tile within 4 blocks.** If `SpawningContext` finds nowhere
->   spawnable in rings 1–4 (and within −2/+1 blocks of the spawner's height), no marker is
->   created and the spawner stays inactive.
-
----
-
-## SpawnNPC Interaction
-
-**Package:** `com.hypixel.hytale.server.npc.interactions.SpawnNPCInteraction` · registered by
-`NPCPlugin`
-
-Spawns NPCs from an interaction chain — the egg-spawner items, the Scarak eggsack burst, and the
-spellbook all use it. Codec doc: "Spawns an NPC on the block that is being interacted with."
-Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction), so the spawn is
-positioned relative to the **targeted block**, not the interacting entity.
-
-**None of its 14 keys is required** — neither by a `true` third argument nor by
-`Validators.nonNull()`. That is deliberate rather than lax: `EntityId` can be omitted because
-`WeightedEntityIds` supplies the role instead. Several keys are still validated at load, so
-"optional" does not mean "unconstrained".
-
-| Property | Type | Default | Description / load-time validation |
-|----------|------|---------|-------------------------------------|
-| `EntityId` | string | — | Role id of the NPC to spawn. Validated by `NPCRoleValidator`, so a bad id fails at load even though the key is optional |
-| `WeightedEntityIds` | array | — | Weighted roles; one entry is picked per spawn roll. **Supersedes `EntityId`** when present. Entry shape below |
-| `SpawnOffset` | vec3 | `0,0,0` | Offset from the block's centre, rotated by the block's rotation |
-| `SpawnYawOffset` | float | `0` | Yaw offset added to the block's yaw. **In degrees** — see the gotcha below |
-| `SpawnChance` | float | `1.0` | Probability the spawn happens at all |
-| `AlternateSpawnMaxSearchDistance` | int | `0` | On `FAIL_INVALID_POSITION`, try adjacent columns along the horizontal cardinal axis toward the player, up to this many block steps. `0` disables. Distance is along that axis only, not a Euclidean radius. Validated `min(0)` |
-| `SpawnCount` | int[2] | `[1,1]` | `[min, max]` spawns per trigger; with `WeightedEntityIds` it is the number of *rolls*. Validated: exactly 2 entries, each in `1..100`, weakly monotonic — so `[5,2]` fails at load |
-| `DistanceRange` | double[2] | `[0,0]` | `[min, max]` random horizontal scatter per NPC. Validated: exactly 2 entries, each `>= 0`, weakly monotonic |
-| `SpawnState` | string | — | Optional state to set on the spawned NPC |
-| `SpawnSubState` | string | — | Optional sub-state; **only used when `SpawnState` is also set** |
-| `SpawnVelocity` | double | `0` | Random horizontal velocity magnitude in a random XZ direction. `0` disables |
-| `AllowMidAirSpawn` | boolean | `false` | Still validates physical space but skips the ground-seeking column search on failure — for NPCs emerging from hanging blocks |
-| `CenterHitboxOnPosition` | boolean | `false` | Centre the collision box on the computed position rather than placing its feet there |
-| `RequireFullCubeClearance` | boolean | **`true`** | When true every non-air block blocks the spawn. When false only full-cube blocks do, letting NPCs emerge past ropes, plants and cocoons. The only boolean here defaulting true |
-
-### WeightedEntityIds entries
-
-Each entry is a `WeightedNPCSpawn` with **three** keys, and it is the clearest example in the
-codebase of requiredness arriving in two different forms within one chain:
-
-| Property | Type | Required by | Description |
-|----------|------|-------------|-------------|
-| `Id` | string | `Validators.nonNull()` **only** | Role id of the NPC. Also validated by `NPCRoleValidator` |
-| `Weight` | double | **both** a `true` third argument to `KeyedCodec` *and* `Validators.nonNull()` | Relative weight against the sum of all weights. Validated `greaterThan(0.0)` |
-| `CountRange` | int[2] | not required | `[min, max]` of *this* entry to spawn when picked. Validated: 2 entries, each `1..100`, weakly monotonic |
-
-Both forms have to be read: a key can be required by the codec's third argument, by a
-`Validators.nonNull()` that attaches *after* `append(...)` closes, or — as `Weight` shows — by
-both at once.
-
-The simplest shipped use pins one role and lifts it half a block off the target
-(`Server/Item/Items/EggSpawner/Egg_Spawner_Trork.json`):
-
-```json
-{
-  "Type": "SpawnNPC",
-  "EntityId": "Trork_Warrior",
-  "SpawnOffset": { "X": 0, "Y": 0.5, "Z": 0 }
-}
-```
-
-`Server/Item/Interactions/SpawnNPC/` ships a reusable chain built from
-[`Replace`](interactions-flow.md#replace) slots, so an item customises the spawn through
-`InteractionVars` rather than by redefining the interaction — `SpawnNPC_BlockCondition` (default:
-no block restriction; a `Water_Source`/`Water` variant ships alongside), `SpawnNPC_Effects`
-(default: a `Throw` animation) and `SpawnNPC_Entity`, which the chain's own comment marks as the
-one an item **must** provide. The chain ends in a `ModifyInventory` that consumes one item.
-
-Behavior notes:
-
-- **Spawn position** is `blockCentre + rotate(SpawnOffset, blockRotation) + blockPosition`, and
-  rotation is the block's yaw plus `SpawnYawOffset`. A block with no rotation still contributes
-  its centre, so `SpawnOffset` of `0,0,0` spawns inside the block.
-- **`SpawnCount` means rolls, not NPCs, once `WeightedEntityIds` is set.** The codec says so
-  itself — "With `WeightedEntityIds` this is the number of weighted rolls (each roll spawns the
-  picked entry's own `CountRange`)". So `SpawnCount` `[2,2]` against entries with `CountRange`
-  `[3,3]` yields six NPCs, not two.
-
-> **Gotcha — `SpawnYawOffset` is in degrees, and the engine's own codec documentation says
-> radians.** The implementation applies `Math.toRadians(spawnYawOffset)` before adding it to the
-> block's yaw, so the value is degrees; the codec's description string ("The yaw rotation offset
-> in radians…") is wrong, and it is the string an asset editor would surface. Both shipped assets
-> that use the key — `Block_Scarack_Eggsacks_Burst.json` and `Block_Coffin_Open.json` — pass
-> `"SpawnYawOffset": 180` to face the spawned NPC away from the block, and 2 of 2 uses only make
-> sense as degrees. Trusting the codec doc puts the NPC out by a factor of about 57.
 
 ---
 
@@ -1656,220 +1350,12 @@ Genuinely useful flags (all from `RoleDebugFlags`):
 
 ---
 
-## Melee attacks without a CAE
+## Combat
 
-Hytale has **two** NPC melee paths, and the choice matters:
-
-- The **[CAE](#combat-action-evaluator-cae)** path (`_CombatConfig: CAE_…`, with `Ability` assets) — for intelligent, multi-ability combatants like Goblins.
-- A far lighter **interaction-var chain** that vanilla animals use (livestock, undead chicken) — no CAE, no `Ability` assets, just a single scripted swing on an otherwise non-combat creature. This is what the rest of this section documents.
-
-To give a creature the lightweight melee:
-
-- Set a role field **`"Attack": "<RootInteraction>"`** (e.g. `Root_NPC_Attack_Melee`) — also settable inline on the `Attack` action.
-- Run a **[`Type: "Attack"` action](#the-attack-action)** inside the role's `Instructions` (typically inside an [`ActionsBlocking`](#actionlist-blocking-semantics-multi-tick-sequences) windup sequence) to perform the swing.
-- Customize damage / animation / hit-geometry purely by overriding **named interaction vars** under the role's **`InteractionVars`** — spelled **`_InteractionVars`** inside a `Variant`'s `Modify` (next subsection) — no CAE.
-
-Neutral animals ship with this machinery **off by default**: `Template_Animal_Neutral` exposes `Attack` (default `""`) and `AttackWhenStartled` (default `false`) and has a dormant "startled" retaliation in its `Flee` state. Set `AttackWhenStartled: true` plus an `Attack` interaction to enable it. The cleanest "give a creature a bite" exemplar is `Server/NPC/Roles/Undead/Chicken_Undead.json` (a `Template_Predator` variant that sets `"Attack": "Root_NPC_Attack_Melee"` and overrides the start anim + damage). The instruction pattern itself lives in `Template_Predator.json`: a target-in-`AttackDistance` + line-of-sight gate, `HeadMotion: Aim`, `ActionsBlocking`, then `Timeout (pre-delay) → Attack → Timeout (post-delay)`.
-
-### The interaction-var chain
-
-`Attack: "Root_NPC_Attack_Melee"` walks a chain of interactions (under `Server/Item/…/NPCs/`), each of which `Replace`s a **named var** with a default you can override at the role level:
-
-| Interaction | Sets var | Default | Overriding it customizes |
-|---|---|---|---|
-| `RootInteractions/NPCs/Root_NPC_Attack_Melee` | `Melee_Start` | `NPC_Attack_Melee_Simple` | the whole start (anim set + timing) |
-| `Interactions/NPCs/NPC_Attack_Melee_Simple` | `Melee_Selector` | `NPC_Attack_Selector_Left` | the **hit geometry** (see below) |
-| `Interactions/NPCs/NPC_Attack_Selector_Left` (`HitEntity`) | `Melee_Damage` | `NPC_Attack_Melee_Damage` | **damage + DamageEffects** |
-| `Interactions/NPCs/NPC_Attack_Melee_Damage` | — (`Parent: DamageEntityParent`) | — | base: `DamageCalculator` (Physical 5) + `DamageEffects` (knockback, `WorldSoundEventId`, `WorldParticles`) |
-
-A role overrides any link by declaring the var in its interaction-vars block. The selector's `HitEntity` does `{"Type":"Replace","Var":"Melee_Damage","DefaultValue":{…}}`, so a role-level `Melee_Damage` wins (vanilla `Chicken_Undead` notes in its override: *"When NPC overrides the InteractionVars, this info in Template not applicable anymore"*).
-
-> **⚠️ The key name differs by role type.** `BuilderRole` reads **`InteractionVars`** at a role's top level — that is what the templates use (`Template_Animal_Neutral`, `Template_Predator`, `Template_Livestock`, `Template_Intelligent`, …), and it is what a `Generic` role uses. Inside a **`Variant`'s `Modify`** the same block is spelled **`_InteractionVars`** with the leading underscore, the same convention as `_CombatConfig`; every shipped variant that customises its bite (`Cow.json`, `Chicken_Undead.json`, ~94 files) uses `_InteractionVars`. Using the wrong one for the role type silently does nothing, or drops the role.
-
-Example — lighten the bite to 2 physical, keep the default start/selector (shown as a `Variant` would write it):
-
-```json
-"_InteractionVars": {
-  "Melee_Damage": {
-    "Interactions": [
-      { "Parent": "NPC_Attack_Melee_Damage",
-        "DamageCalculator": { "Type": "Absolute", "BaseDamage": { "Physical": 2 }, "RandomPercentageModifier": 0.1 } }
-    ]
-  }
-}
-```
-
-> This `Replace` / `Var` / `DefaultValue` override-by-name mechanism is general to interactions — see [Interactions](interactions.md). The damage interaction itself is documented in [Combat](combat.md).
-
-### Melee hits are directional swept arcs — NPCs can miss
-
-`NPC_Attack_Selector_Left.json` is a `Type: Selector` whose geometry is a **humanoid sword-swing arc**:
-
-```json
-"Selector": {
-  "Id": "Horizontal", "Direction": "ToLeft", "TestLineOfSight": true,
-  "ExtendTop": 0.5, "ExtendBottom": 0.5, "StartDistance": 0.1, "EndDistance": 3.5,
-  "Length": 30, "RollOffset": 0, "YawStartOffset": -15
-}
-```
-
-It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough: a head motion only blends the *body* when the active motion set no yaw and the head exceeds the camera yaw limit (see [Facing](#facing-orientation-is-emergent-from-the-active-motion)), so over a yaw-setting attack motion it turns the head only. It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
-
-So "why does my NPC sometimes not connect?" has a real mechanical answer: melee is a swept directional hitbox, not a homing hit. Two fixes:
-
-- **Rotate the body onto the target before the swing.** Add a `Seek` body-motion + a longer windup (`Timeout`) so the NPC turns onto the target *before* `Attack` fires. (Coming out of a circling/orbit motion an NPC faces its *tangential* heading ~90° off the target; turning ~90° took ≈0.6 s of windup in testing — 0.35 s under-rotated and missed.)
-- **Widen the arc.** Override `Melee_Selector` with a larger `Length`, a forward-centered `YawStartOffset`, and bigger `ExtendTop`/`ExtendBottom`.
-
-### Serializing a flock swarm — native take-turns can't hard-gate it
-
-The flock "take-turns" pattern (`Component_Instruction_Combat_Flock_Take_Turns`) passes an attack "baton" via flock beacons (`Message_Attack`) carrying a `Retreat` flag and a turn timer. But it only *influences positioning* — it does **not** hard-gate the attack:
-
-- `Template_Predator`'s combat-attack instruction is gated only on "target within `AttackDistance` + line-of-sight." It does **not** check the take-turns `Retreat` flag.
-- So `Component_Instruction_Combat_Flock_Take_Turns` only *moves* non-attackers out toward the combat-turn distance; any member still in range still swings. Against a stationary, surrounded player you therefore get **multiple simultaneous attackers** regardless.
-- `CombatTurnAttackWeight` is a **percent chance to attack per turn** (per its own parameter description), **not** a count of attackers — despite some field descriptions miscalling it a count.
-
-To truly serialize a swarm down to one attacker, gate the **attack decision itself** in a custom `Type: "Generic"` role (a `Variant`'s `Modify` cannot carry `Instructions` — see the [Variants gotcha](#variants)) on a shared signal. The cleanest signal is a [custom token sensor](#registering-a-custom-sensor) that is true for exactly one flock member at a time: gate the attack branch via `And[Player, <token>]`, and let non-holders fall through to a `MaintainDistance` hold branch.
-
-Practical combat-role lessons (all confirmed in-game):
-
-- **Gate the attack on actual bite/attack range, not just on "it's my turn."** Otherwise the turn-holder swings at air while still out of range and wastes its turn — add an inner short-range `Player` gate so it approaches first.
-- **Hold position through the swing before transitioning** (e.g. to a retreat). A [`Type: "Attack"` action](#the-attack-action) only *starts* the interaction chain; damage lands partway through it. Use an [`ActionsBlocking`](#actionlist-blocking-semantics-multi-tick-sequences) sequence like `[Attack, Timeout ~0.45s, <transition>]` to stay in range and facing until the hit lands — otherwise the NPC moves away mid-swing and whiffs.
-- **For one action per turn, prefer a per-NPC [`Flag`](#flags-setflag--flag)** (`SetFlag` / `Flag`) over relying on an attack-pause cooldown, especially when you also want to change behavior *after* the action.
+The two NPC melee paths and the Combat Action Evaluator moved to their own page in the
+2026-09-04 split — see [NPC Combat](npc-combat.md).
 
 ---
-
-## Combat Action Evaluator (CAE)
-
-The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the Goblin Scrapper variant above). For the lighter, non-CAE animal melee path, see [Melee attacks without a CAE](#melee-attacks-without-a-cae).
-
-### CAE Structure
-
-A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evaluation logic in a nested `CombatActionEvaluator` object. That object holds:
-
-- `RunConditions`: conditions that gate whether the evaluator runs at all.
-- `MinRunUtility` / `MinActionUtility`: utility thresholds.
-- `AvailableActions`: an object keyed by action name. Each action has a `Type` (commonly `Ability`), a `Target`, an `Ability` reference, an `AttackDistanceRange`, a `PostExecuteDistanceRange` (the distance to hold *after* the action), optional `Description`/`InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
-- `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` (`Attacks`, `MaxRange`, `Timeout`, `CooldownRange`, optional `Randomise` and `InteractionVars`) and an `Actions` list of available action names.
-
-```json
-{
-    "Type": "CombatActionEvaluator",
-    "TargetMemoryDuration": 5,
-    "CombatActionEvaluator": {
-        "RunConditions": [
-            {
-                "Type": "TimeSinceLastUsed",
-                "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 5 ] }
-            },
-            { "Type": "Randomiser", "MinValue": 0.9, "MaxValue": 1 }
-        ],
-        "MinRunUtility": 0.5,
-        "MinActionUtility": 0.01,
-        "AvailableActions": {
-            "Melee": {
-                "Type": "Ability",
-                "WeaponSlot": 0,
-                "SubState": "Default",
-                "Ability": "Goblin_Scrapper_Attack",
-                "Target": "Hostile",
-                "AttackDistanceRange": [ 2.5, 2.5 ],
-                "Conditions": [
-                    {
-                        "Type": "TimeSinceLastUsed",
-                        "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 1 ] }
-                    }
-                ]
-            },
-            "Ranged": {
-                "Type": "Ability",
-                "WeaponSlot": 0,
-                "SubState": "Ranged",
-                "Ability": "Goblin_Scrapper_Rubble_Throw",
-                "Target": "Hostile",
-                "AttackDistanceRange": [ 15, 15 ],
-                "Conditions": [
-                    {
-                        "Type": "TargetDistance",
-                        "Curve": { "ResponseCurve": "SimpleLogistic", "XRange": [ 0, 15 ] }
-                    }
-                ]
-            }
-        },
-        "ActionSets": {
-            "Default": {
-                "BasicAttacks": {
-                    "Attacks": [ "Goblin_Scrapper_Attack" ],
-                    "MaxRange": 2.5,
-                    "Timeout": 0.5,
-                    "CooldownRange": [ 0.001, 0.001 ]
-                },
-                "Actions": [ "SwingDown", "Ranged" ]
-            }
-        }
-    }
-}
-```
-
-### Response Curves
-
-A condition maps its raw input to a 0–1 utility through a `Curve`. **The `Curve` field has two different shapes depending on the condition's base class** — getting this wrong is the usual cause of a CAE failing to load:
-
-| Base class | Conditions | `Curve` shape |
-|---|---|---|
-| `ScaledCurveCondition` | `TimeSinceLastUsed`, `TargetDistance`, `NearbyCount`, `TimeOfDay`, `OwnStatAbsolute`, `TargetStatAbsolute`, `RecentSustainedDamage`, `TotalSustainedDamage`, `KnownTargetCount` | an **object** — the input is un-normalised, so the curve carries the scaling. |
-| `CurveCondition` | `OwnStatPercent`, `TargetStatPercent` | a **plain string** naming a response-curve asset — the input is already 0–1. |
-| `SimpleCondition` / `Condition` | `HasTarget`, `IsInState`, `LineOfSight`, `TargetMovementState`, `SelfHasEffect`, `TargetHasEffect`, `Randomiser` | no `Curve` at all. |
-
-```json
-"Conditions": [
-    { "Type": "TargetDistance",  "Curve": { "ResponseCurve": "SimpleLogistic", "XRange": [ 0, 15 ] } },
-    { "Type": "OwnStatPercent",  "Stat": "Health", "Curve": "ReverseLinear" }
-]
-```
-
-The object form is a `ScaledResponseCurve`, whose own `Type` selects between two implementations (the default may be omitted):
-
-| `Type` | Class | Keys |
-|--------|-------|------|
-| *(omitted)* / `Default` | `ScaledXResponseCurve` | `ResponseCurve` (asset id) + `XRange` `[min, max]` — rescales x into the named curve. |
-| `Switch` | `ScaledSwitchResponseCurve` | `SwitchPoint`, `InitialState` (y before it), `FinalState` (y at/after it) — a step function. Used by 22 shipped CAEs, not just tests. |
-
-`ResponseCurve` values are **assets** under `Server/ResponseCurves/`, so the set is extensible. Each asset picks one of three families — `Exponential` (`Slope`, `Exponent`, `HorizontalShift`, `VerticalShift`), `Logistic` (`Ceiling`, `RateOfChange`, `HorizontalShift`, `VerticalShift`) or `SineWave` (`Amplitude`, `Frequency`, `HorizontalShift`, `VerticalShift`). Those that ship:
-
-| Response Curve | Family | Shape |
-|----------------|--------|-------|
-| `Linear` | Exponential | `y = x` (slope 1, exponent 1) |
-| `ReverseLinear` | Exponential | `y = 1 − x` (slope −1, x-shift 1) |
-| `Quadratic` / `TestExponential` | Exponential | `y = x²` — slow start, fast finish |
-| `InverseExponential` | Exponential | exponent `0.28` — a *root* curve: rises fast, then flattens (**not** a falloff) |
-| `ConstantMidpoint` | Exponential | slope `0`, y-shift `0.5` — constant `0.5` |
-| `SimpleLogistic` / `TestLogistic` | Logistic | ascending S-curve centred at `0.5` |
-| `SimpleDescendingLogistic` | Logistic | descending S-curve centred at `0.5` |
-| `LateRise` | Logistic | stays near 0, rises sharply at `0.8` |
-| `LateFalloff` | Logistic | stays near 1, drops sharply at `0.8` |
-| `SimpleParabola` | SineWave | half sine over the range — peaks mid-range, 0 at both ends |
-
-### Condition Types
-
-Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. Common types:
-
-| Condition Type | Description |
-|----------------|-------------|
-| `TimeSinceLastUsed` | Time elapsed since the action last ran |
-| `TargetDistance` | Distance to the current target |
-| `Randomiser` | Random value between `MinValue` and `MaxValue` |
-| `OwnStatPercent` / `OwnStatAbsolute` | NPC's own stat as a percentage / absolute value |
-| `TargetStatPercent` / `TargetStatAbsolute` | Target's stat as a percentage / absolute value |
-| `RecentSustainedDamage` / `TotalSustainedDamage` | Damage taken recently / in total |
-| `NearbyCount` / `KnownTargetCount` | Counts of nearby / remembered entities |
-| `HasTarget` | Whether a target exists at all |
-| `IsInState` | Whether the NPC is in a given state |
-| `LineOfSight` | Whether the target is in line of sight |
-| `TimeOfDay` | Current world time |
-| `TargetMovementState` | Target's movement state |
-| `SelfHasEffect` / `TargetHasEffect` | Entity-effect presence on self / target |
-
-The first three groups come from `Condition.CODEC` in `server.npc.decisionmaker`; `RecentSustainedDamage`, `TotalSustainedDamage` and `KnownTargetCount` are registered by `NPCCombatActionEvaluatorPlugin` and therefore only exist where the CAE plugin is loaded.
 
 ---
 

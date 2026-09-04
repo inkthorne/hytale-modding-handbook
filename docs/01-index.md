@@ -56,6 +56,8 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [encounters.md](encounters.md) | Encounter Manager (0.6.3+) — multi-NPC encounters scripted as `Server/EncounterManager` JSON with encounter-scoped boss-bar, music, role-change and world-event-signal components. |
 | [mounts.md](mounts.md) | Mounts and seating — riding NPCs, sitting on block seats and driving minecarts; the `Mount`/`Seating`/`SpawnMinecart` interactions, `BlockMountAPI`, the rider/mount component pair, the NPC `Mount` action and the `/mount` commands. |
 | [deployables.md](deployables.md) | Player-placed deployables — turrets, AoE totems and traps; the `DeployableConfig` registry (`Trap`, `TrapSpawner`, `Aoe`, `Turret`), the three `SpawnDeployable*` interactions, and the owner/projectile components. |
+| [npc-spawning.md](npc-spawning.md) | How NPCs enter the world — spawn beacons under `Server/NPC/Spawn/Beacons`, companion block spawners, and the `SpawnNPC` interaction with its weighted roles, scatter and clearance rules. |
+| [npc-combat.md](npc-combat.md) | How NPCs fight — the two melee paths (instruction-driven attacks without a Combat Action Evaluator, and CAE-driven combat) and the CAE's action selection, ranges and cooldowns. |
 | [asset-editor.md](asset-editor.md) | Asset editor events for button activation, asset creation, client disconnects, and autocomplete/dataset requests. |
 | [i18n.md](i18n.md) | Localization system with GenerateDefaultLanguageEvent for registering plugin translations during server startup. |
 | [singleplayer.md](singleplayer.md) | Singleplayer-specific functionality with SingleplayerRequestAccessEvent for handling local server access requests. |
@@ -85,7 +87,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
+[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [NPC Combat](npc-combat.md)  [NPC Spawning](npc-spawning.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
 
 ### Java API + Save / config file format
 _Covers both a Java API and an on-disk save/config file format._
@@ -128,7 +130,7 @@ JSON asset types used in Hytale's data-driven systems.
 [Connected block templates](blocks.md#connected-block-templates), [Patterned rule sets](blocks.md#patterned-connected-block-rule-sets), [Pattern entries](blocks.md#pattern-entries), [Rules](blocks.md#rules), [Shapes](blocks.md#shapes)
 
 **NPCs - Spawning**
-[Spawn Beacons](npc-roles.md#spawn-beacons), [Companion Block Spawners](npc-roles.md#companion-block-spawners), [The recipe asset](npc-roles.md#the-recipe-asset)
+[Spawn Beacons](npc-spawning.md#spawn-beacons), [Companion Block Spawners](npc-spawning.md#companion-block-spawners), [The recipe asset](npc-spawning.md#the-recipe-asset)
 
 **World Events**
 [WorldEventAsset](world-events.md#serverworldeventeventidjson--worldeventasset), [StageAsset](world-events.md#serverworldeventstageidjson--stageasset), [Conditions](world-events.md#conditions), [Spawners](world-events.md#spawners-locationconditioncontent), [Actions](world-events.md#actions), [Context keys](world-events.md#context-keys)
@@ -243,7 +245,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PatternedConnectedBlockRuleSet](blocks.md#patterned-connected-block-rule-sets), [PatternedConnectedBlockRuleSetAsset](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockPatternConfig](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockFaceTags](blocks.md#patterned-connected-block-rule-sets), [BlockAnimationModule](blocks.md#per-block-animation-speed), [BlockAnimationSection](blocks.md#per-block-animation-speed)
 
 **Companion Block Spawners**
-[CompanionBlockSpawnerPlugin](npc-roles.md#companion-block-spawners), [CompanionBlockSpawnerBlock](npc-roles.md#companion-block-spawners), [CompanionBlockSpawnerRecipe](npc-roles.md#companion-block-spawners), [CompanionSpawnerMarkerReference](npc-roles.md#companion-block-spawners)
+[CompanionBlockSpawnerPlugin](npc-spawning.md#companion-block-spawners), [CompanionBlockSpawnerBlock](npc-spawning.md#companion-block-spawners), [CompanionBlockSpawnerRecipe](npc-spawning.md#companion-block-spawners), [CompanionSpawnerMarkerReference](npc-spawning.md#companion-block-spawners)
 
 **World Events**
 [WorldEventsPlugin](world-events.md), [WorldEventAsset](world-events.md), [StageAsset](world-events.md), [WorldEvent](world-events.md), [WorldEventManager](world-events.md), [WorldEventStorage](world-events.md), [GlobalWorldEventManager](world-events.md), [WorldEventRecord](world-events.md), [WorldEventsConfig](world-events.md), [EventCondition](world-events.md), [EventAction](world-events.md), [ContextKey](world-events.md), [ContextMap](world-events.md), [EventEndEcsEvent](world-events.md), [WorldEventSignal](world-events.md), [TrackedEntityComponent](world-events.md), [TrackedBlockComponent](world-events.md), [ConditionManager](world-events.md)
@@ -310,6 +312,8 @@ JSON asset types used in Hytale's data-driven systems.
 - world-events.md - Scripted world-event timelines: stages, forks, conditions, actions and context keys
 - mounts.md - Riding NPCs, block seats and minecarts; BlockMountAPI and the mount component pair
 - deployables.md - Turrets, AoE totems and traps; the DeployableConfig registry and the SpawnDeployable interactions
+- npc-spawning.md - Spawn beacons, companion block spawners and the SpawnNPC interaction
+- npc-combat.md - The two NPC melee paths and the Combat Action Evaluator
 
 **Data** - Serialization
 - codecs.md - Data encoding/decoding

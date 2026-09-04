@@ -80,7 +80,7 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 72 are documented and 52 are not. For the complete list — and to
+registered `Type` values, of which 74 are documented and 50 are not. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -138,8 +138,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 72
-documented and 52 not. A row count is itself a closure claim, so re-derive it after a game update
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 74
+documented and 50 not. A row count is itself a closure claim, so re-derive it after a game update
 rather than trusting this line; the two greps that produce it are given below.
 
 A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
@@ -198,7 +198,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `Door` | `InteractionModule` | [interactions-world.md](interactions-world.md#door) |
 | `DragEraseBlock` | `InteractionModule` | — *not yet documented* |
 | `DragPlaceBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
-| `DurabilityCondition` | `InteractionModule` | — *not yet documented* |
+| `DurabilityCondition` | `InteractionModule` | [items-weapons.md](items-weapons.md#durabilitycondition-interaction) |
 | `EffectCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#effectcondition) |
 | `EquipItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#equipitem) |
 | `EventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
@@ -281,7 +281,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
 | `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
 | `UseCoop` | `FarmingPlugin` | — *not yet documented* |
-| `UseEntity` | `InteractionModule` | — *not yet documented* |
+| `UseEntity` | `InteractionModule` | [items-weapons.md](items-weapons.md#useentity-interaction) |
 | `UseNPC` | `NPCPlugin` | — *not yet documented* |
 | `UseWateringCan` | `FarmingPlugin` | [items-tools.md](items-tools.md#watering-can) |
 | `Wielding` | `InteractionModule` | [interactions-world.md](interactions-world.md#wieldinginteraction) |

@@ -31,3 +31,4 @@
 
 worldgen-biomes.md   # 0 package sections, 0 method tables; its single java fence is a 4-signature WeatherForecast citation supporting the biome JSON
 items-blocks.md      # 1 package section but 0 java fences, 0 method tables; the package line is provenance for the JSON "Type": "HarvestCrop", above a JSON property table and two JSON examples. Its 2 classes (HarvestCropInteraction, FarmingUtil) are cited only to source the behaviour and the two drop-loss paths; the page documents no Java signature, method or constructor.
+items-weapons.md     # 2 package sections but 0 java fences, 0 method tables; both are provenance for JSON "Type" values (DurabilityCondition, UseEntity), each above a JSON property table or JSON example. Cited only to source the gating behaviour (unbreakable items short-circuit) and the unarmed use-ladder; the page documents no Java signature, method or constructor.

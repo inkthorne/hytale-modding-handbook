@@ -1554,17 +1554,18 @@ Behavior notes:
 - **Spawn position** is `blockCentre + rotate(SpawnOffset, blockRotation) + blockPosition`, and
   rotation is the block's yaw plus `SpawnYawOffset`. A block with no rotation still contributes
   its centre, so `SpawnOffset` of `0,0,0` spawns inside the block.
-- **`SpawnCount` means rolls, not NPCs, once `WeightedEntityIds` is set.** Each roll picks one
-  entry and then spawns that entry's own `CountRange`, so `SpawnCount` `[2,2]` against entries
-  with `CountRange` `[3,3]` yields six NPCs, not two.
+- **`SpawnCount` means rolls, not NPCs, once `WeightedEntityIds` is set.** The codec says so
+  itself — "With `WeightedEntityIds` this is the number of weighted rolls (each roll spawns the
+  picked entry's own `CountRange`)". So `SpawnCount` `[2,2]` against entries with `CountRange`
+  `[3,3]` yields six NPCs, not two.
 
 > **Gotcha — `SpawnYawOffset` is in degrees, and the engine's own codec documentation says
 > radians.** The implementation applies `Math.toRadians(spawnYawOffset)` before adding it to the
 > block's yaw, so the value is degrees; the codec's description string ("The yaw rotation offset
-> in radians…") is wrong, and it is the string an asset editor would surface. The shipped
-> `Block_Scarack_Eggsacks_Burst.json` passes `"SpawnYawOffset": 180` to face the spawned louse
-> away from the block, which only makes sense as degrees. Trusting the codec doc puts the NPC out
-> by a factor of about 57.
+> in radians…") is wrong, and it is the string an asset editor would surface. Both shipped assets
+> that use the key — `Block_Scarack_Eggsacks_Burst.json` and `Block_Coffin_Open.json` — pass
+> `"SpawnYawOffset": 180` to face the spawned NPC away from the block, and 2 of 2 uses only make
+> sense as degrees. Trusting the codec doc puts the NPC out by a factor of about 57.
 
 ---
 

@@ -947,6 +947,81 @@ The crossbow consumes `Weapon_Arrow_Crude` items from inventory (Adventure mode 
 
 ## Common Weapon Patterns
 
+### DurabilityCondition Interaction
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.DurabilityConditionInteraction`
+
+Gates an interaction chain on the **held item's** durability. Codec doc: "Gates the interaction
+chain on the held item's durability." Extends `SimpleInstantInteraction`. Documented here rather
+than with the other conditions because all eight shipped uses are weapon chains — the crossbow
+and shortbow reload and signature paths, plus the shared `Common_StatAmmoReload_Entry`.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Threshold` | float | `0` | Value compared against. Interpreted per `ValueType` |
+| `ValueType` | string | `Absolute` | `Absolute` (raw durability) or `Percent` (`durability / maxDurability * 100`) |
+| `Operator` | string | `LessOrEqual` | `LessThan`, `LessOrEqual`, `GreaterThan`, `GreaterOrEqual`, `Equal`, `NotEqual` |
+
+None of the three is required; the defaults mean a bare `{ "Type": "DurabilityCondition" }`
+succeeds only while durability is `<= 0`.
+
+The shared reload entry gates on the weapon not being broken before it will start reloading
+(verbatim from `Server/Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_Entry.json`):
+
+```json
+{
+  "Type": "DurabilityCondition",
+  "Threshold": 0,
+  "Operator": "GreaterThan"
+}
+```
+
+Behavior (from the decompiled source):
+
+- On a failed comparison the interaction sets `InteractionState.Failed`, so the chain takes its
+  `Failed` branch — which is how the bows fall through to their `No_Ammo_Effects` slot.
+- **With no held item it fails**; a null stack is treated as not matching, not as zero durability.
+- **An unbreakable item always passes**, whatever `Threshold` and `Operator` say — `isUnbreakable()`
+  short-circuits the comparison before any arithmetic. A creative-mode or unbreakable weapon
+  therefore never takes the `Failed` branch, which is worth knowing when testing a reload chain.
+- Under `Percent`, a `MaxDurability` of `0` yields a computed value of `0` rather than a division
+  by zero — so an item with no durability configured reads as 0%.
+
+### UseEntity Interaction
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.UseEntityInteraction`
+
+Codec doc: "Attempts to use the target entity, executing interactions on it if any." Extends
+`SimpleInstantInteraction` and **takes no properties**:
+
+```json
+{
+  "Type": "UseEntity"
+}
+```
+
+It is the entity half of the unarmed interact chain — bare-hand `Use` tries the targeted block
+first and falls through to the entity (from `Server/Item/Unarmed/Interactions/Empty.json`):
+
+```json
+{
+  "Type": "UseBlock",
+  "Failed": {
+    "Type": "UseEntity",
+    "Failed": { "Type": "BreakBlock", "Harvest": true }
+  }
+}
+```
+
+That three-step ladder — block, then entity, then break — is the whole of what an empty hand does
+on `Use`, and each step's `Failed` is what advances it.
+
+> **Counting note.** Four shipped assets contain `"Type": "UseEntity"`, but only two are this
+> interaction. The other two are under `Server/Objective/Objectives/` and are `UseEntity`
+> **objective tasks** — a separate registry that happens to share the string. See the
+> [interaction registry](interactions.md#complete-type-registry) for why a `"Type"` value is only
+> meaningful against the registry its file belongs to.
+
 ### Damage Calculator
 
 All weapon damage uses `DamageCalculator` with `BaseDamage`:

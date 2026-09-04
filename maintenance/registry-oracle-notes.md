@@ -193,9 +193,20 @@ here: `"Type": "CameraShake"` matches 49 assets, every one of them a `CameraEffe
 `Server/Camera/CameraEffect/`, because `CameraPlugin` registers that string on `CameraEffect.CODEC`
 (line 43) and on `Interaction.CODEC` (line 44). As an *interaction* it has zero uses. A count
 mined by grepping `"Type": "<name>"` across the asset tree is only meaningful once each hit is
-attributed to the registry its file belongs to. Of the 53 undocumented interaction types, **7**
+attributed to the registry its file belongs to. Of the 53 undocumented interaction types, **8**
 carry a name registered on another codec and need that treatment: `CameraShake`, `ExitInstance`,
-`Portal`, `RunRootInteraction`, `ShowEventTitle`, `StartObjective`, `Teleporter`.
+`Portal`, `RunRootInteraction`, `ShowEventTitle`, `StartObjective`, `Teleporter`, `UseEntity`.
+
+> **The ambiguity check must fold in the *indirected* registries of §2(b), or it under-reports.**
+> A first pass built the set from resolved registrations only and returned 7 — missing
+> `UseEntity`, which is an `Interaction.CODEC` type *and* an `ObjectiveTask` registered through
+> `ObjectivePlugin.registerTask(id, …)`. Because that registrar takes its id as a parameter, the
+> name never appears at a registration site and no resolved-registration sweep can see it. Two of
+> `UseEntity`'s four `"Type": "UseEntity"` assets are objectives
+> (`Server/Objective/Objectives/`), not interactions, so its true interaction usage is **2**.
+> `UseBlock` collides the same way but is already documented. The indirected registrars to expand
+> are `registerTask`, `registerCompletion`, `registerEffectType`, `registerConditionType` and
+> `registerRuleType`.
 
 > **Derive that set from resolved registrations, never from literal counts.** Counting
 > occurrences of a name's string literal looks like a cheap proxy and silently drops the worst
@@ -300,6 +311,21 @@ The last one is the sharpest, because the pattern had been used across seven run
 six times by luck — every one of those logs genuinely had no warning. A check that cannot fail
 looks exactly like a check that passes, and it will accumulate a record of correct answers until
 the first time it matters.
+
+**The general rule.** A check you wrote is not trustworthy until it has been run against an
+input you *know* it must flag. The ANSI case was not a check that missed something — it was one
+**structurally incapable of firing**, and that is indistinguishable from a clean result until you
+feed it a known positive. Until then the first thing it ever tells you truthfully is a lie you
+have already acted on.
+
+**Validating the check is not enough — validate the input too.** The escape-stripped matcher
+above was demonstrated to fire on a known-positive log, and then reported "0 WARN/FAIL" on an
+83-byte file containing only `./maintenance/scripts/verify-docs.sh: No such file or directory`.
+The run had died on a wrong working directory; the answer was true and worthless. **Assert the
+log is a log** before reading it for warnings — require the summary line the script always
+prints (`All hard checks passed` / `hard check(s) FAILED`) and treat its absence as "no result",
+never as "no problems". A detector that cannot distinguish a clean run from a crashed one has
+just moved the blind spot rather than closed it.
 
 **Practical rules.** Strip escapes before matching a verify log
 (`sed 's/\x1b\[[0-9;]*m//g'`), and prefer the summary line the script itself prints over a grep

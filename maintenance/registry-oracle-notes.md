@@ -864,3 +864,25 @@ it will already be reading, adjacent to the keys they belong to. A defaults chec
 is close to a by-product of the parse rather than new work — probably the cheapest
 thing to bolt onto that gate, and it closes half of this pair. The citation half
 has no obvious automation and stays a reading discipline.
+
+### A correction that was filed where nothing reads it
+
+`79075d7`'s commit message claimed the `TriggerSpawnMarkers` findings were "all
+read from the implementation rather than from the codec's own key descriptions".
+That is false for `Count`: the codec documents it as "Max number of spawn markers
+to activate. Set to 0 to activate all spawn markers", so implementation and codec
+doc agree, and it is **not** a codec-doc-vs-reality find of the `SpawnYawOffset`
+kind. The gotcha still earns its place — a JSON author never sees that string —
+but it must not be cited as evidence that a codec description was wrong.
+
+The reason this paragraph exists rather than the correction simply being made: it
+was originally attached to that commit with `git notes`. That put it in
+`refs/notes/commits` — a ref no clone fetches by default, no gate reads, no page
+renders, and no grep of the working tree finds. The fact was correct and it was
+invisible. It reached the repo only when the choice was questioned.
+
+CLAUDE.md invariant 8 now carries the rule: a review finding is fixed by a
+follow-up commit, never by touching the reviewed commit. The generalisation worth
+keeping is narrower than "don't rewrite history" — **a fact worth correcting is
+worth committing**, because the working tree is the only surface anything in this
+project actually reads.

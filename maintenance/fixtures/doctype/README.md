@@ -58,3 +58,31 @@ from a page that never had two FQCNs. `FELL` reports that transition by name, so
 every escape of D's, H's or I's shape is a number someone can look at whether or
 not the blacklist ever learns its cause. It would have surfaced all three
 without any of the six fixes.
+
+## The FELL pages are brittle, and the tempting fix is the wrong one
+
+A page named by `FELL` sits at exactly the threshold with all of its FQCNs
+excluded, so it passes *only* because provenance exclusion fires. Both current
+entries are in that state:
+
+| Page | FQCNs | Tag |
+|---|---|---|
+| `items-blocks.md` | `FarmingUtil`, `HarvestCropInteraction` | `JSON asset format` |
+| `items-weapons.md` | `UseEntityInteraction`, `DurabilityConditionInteraction` | `JSON asset format` |
+
+Adding **any** ```java fence or `| Method` / `| Methods` / `| Signature` table
+anywhere on such a page trips the D backstop, restores both citations, and the
+page warns. Measured, not reasoned: appending a four-line `| Method | Returns |`
+table to a copy of `items-weapons.md` turns `FELL items-weapons.md` into
+`MISMATCH items-weapons.md`.
+
+That is the rule working. A page with real Java surface is not a JSON page with
+citations, and the correct response is to **retag it** `Java API + JSON asset
+format` — not to add a skip-list entry. The skip list is the residual for
+citations the rule cannot classify; a method table is not that. The failure will
+arrive as a WARN naming the page, and the entry is the tempting wrong fix.
+
+Corollary for new subsystem pages: a page carrying genuine Java API (components,
+method tables, fences) should be tagged `Java API + …` from the start, which
+short-circuits the check before provenance is ever consulted. Do not land a
+Java-heavy subsystem on an existing JSON-tagged page.

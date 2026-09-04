@@ -360,3 +360,110 @@ just moved the blind spot rather than closed it.
 you wrote. Never gate one run on `pgrep` for a name your own command line contains — use the
 completion notification. And when a count does not move after a change that should have moved
 it, treat the unchanged number as the finding rather than as confirmation.
+
+## 11. Brief: the 44 interaction types still undocumented (handoff, 2026-09-04)
+
+Written so a fresh session does not re-derive these counts with a fresh parser
+and fresh mistakes. **Every number below came from a splitter that tracks `<>` as
+well as `()`** — see §5 for why that matters — and each chain self-checked
+`appends == keys found`; all 44 passed. Registry state when this was written:
+124 registered types, 80 documented, 44 remaining.
+
+### Method (ruled by hytale-supervisor, D1/D3)
+
+- **Page-first.** Work one target page at a time, writing its rows *and* its
+  sections together, one commit per page. Not row-first: it avoids two passes
+  over the same rows and keeps each commit self-contained.
+- **Section-vs-row rule.** A type earns its own section only if it has **two or
+  more keys of its own** beyond the base interaction, or a real gotcha worth a
+  paragraph. Otherwise document it *in the registry row itself* — a one-line
+  description plus the FQCN, which closes the "not yet documented" cell honestly
+  and makes the class gate-checkable, since `interactions.md` is tagged
+  `Java API + JSON asset format` and FQCNs there are checked.
+- **New sections use fully-qualified `**Package:**` headings.** The short form is
+  invisible to `verify-docs.sh:69` — that is how the class-reference count sat
+  frozen at 227 across 208 added lines. The 40 existing `config/none/X` path-style
+  headings on the `interactions-*` pages stay as they are; converting them is a
+  separate decision that was ruled against.
+- **A page carrying real Java surface gets `Java API + JSON asset format`**, which
+  short-circuits the doctype check before provenance runs. Do not land Java
+  surface on a JSON-tagged page — see the brittleness note in
+  `maintenance/fixtures/doctype/README.md`.
+- **After each page:** repoint its registry rows, update *both* stated counts in
+  `interactions.md` (the index lede and the registry preamble), re-derive them
+  from the rendered table rather than decrementing, regenerate `llms.txt` if a
+  page was added, and run the checker.
+
+### Cautions specific to this tail
+
+- **Eight of the 44 carry a name registered on another codec**, so any usage
+  count mined by grepping `"Type": "<name>"` across assets is meaningless until
+  each hit is attributed to the registry its file belongs to (§4). The eight are
+  `CameraShake`, `ExitInstance`, `Portal`, `RunRootInteraction`, `ShowEventTitle`,
+  `StartObjective`, `Teleporter`, `UseEntity` (already documented).
+- **That same collision corrupted this brief's first draft.** A class resolver
+  that took the first `register(…, X.class)` match regardless of registry mapped
+  `ShowEventTitle` → `ShowEventTitleEffect` (7 keys, the *TriggerEffect*),
+  `RunRootInteraction` → `RunRootInteractionEffect` (3), and `CameraShake` →
+  `CameraShakeEffect` (2). The table below was rebuilt with resolution scoped to
+  `Interaction.CODEC` in both registration forms; the corrected figures are 8, 1
+  and 1. Any tool used against this tail must be registry-scoped, not name-scoped.
+- **`CameraShake` gets a row, not a section**, and the row should say explicitly
+  that the string is registered on both `CameraEffect.CODEC` and
+  `Interaction.CODEC`, and that the interaction has **zero** shipped uses — all
+  49 `"Type": "CameraShake"` assets are `CameraEffect` assets. Recording that is
+  the point; "collides" alone will read as a typo.
+
+### The 44
+
+| Target page | `Type` | Implementing class | Own keys | Required | Verdict |
+|---|---|---|---|---|---|
+| `adventure.md` | `SetMemoriesCapacity` | `SetMemoriesCapacityInteraction` | 1 | — | row |
+| `adventure.md` | `StartObjective` | `StartObjectiveInteraction` | 1 | — | row |
+| `adventure.md` | `DestroyTreasureCondition` | `DestroyTreasureConditionInteraction` | 0 | — | row |
+| `adventure.md` | `OpenTreasureContainer` | `OpenTreasureContainerInteraction` | 0 | — | row |
+| `blocks.md` | `AugmentCondition` | `AugmentConditionInteraction` | 2 | RequiredAugmentTags | **section** |
+| `camera.md` | `CameraShake` | `CameraShakeInteraction` | 1 | CameraEffect | row |
+| `interactions-flow.md` | `IncrementCooldown` | `IncrementCooldownInteraction` | 5 | — | **section** |
+| `interactions-flow.md` | `RunOnBlockTypes` | `RunOnBlockTypesInteraction` | 4 | Range,BlockSets,MaxCount,Interactions | **section** |
+| `interactions-flow.md` | `StatsConditionWithModifier` | `StatsConditionWithModifierInteraction` | 1 | InteractionModifierId | row |
+| `interactions-world.md` | `AddItem` | `AddItemInteraction` | 2 | ItemId | **section** |
+| `interactions-world.md` | `CarryBlock` | `CarryBlockInteraction` | 1 | — | row |
+| `interactions-world.md` | `CarryDroppedBlock` | `CarryDroppedBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `CarryPlaceBlock` | `CarryPlaceBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `DestroyBlock` | `DestroyBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `DragEraseBlock` | `DragEraseBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `ExtrudePlaceBlock` | `ExtrudePlaceBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `PickBlock` | `PickBlockInteraction` | 0 | — | row |
+| `interactions-world.md` | `SurfaceDrawPlaceBlock` | `SurfaceDrawPlaceBlockInteraction` | 0 | — | row |
+| `inventory.md` | `IncreaseBackpackCapacity` | `IncreaseBackpackCapacityInteraction` | 2 | — | **section** |
+| `inventory.md` | `ChangeActiveSlot` | `ChangeActiveSlotInteraction` | 1 | — | row |
+| `inventory.md` | `OpenItemStackContainer` | `OpenItemStackContainerInteraction` | 0 | — | row |
+| `items-blocks.md` | `ChangeFarmingStage` | `ChangeFarmingStageInteraction` | 4 | — | **section** |
+| `items-blocks.md` | `UseCoop` | `UseCoopInteraction` | 0 | — | row |
+| `items-crafting.md` | `OpenBenchPage` | `OpenBenchPageInteraction` | 1 | Page | row |
+| `items-crafting.md` | `OpenProcessingBench` | `OpenProcessingBenchInteraction` | 0 | — | row |
+| `items-tools.md` | `BuilderTool` | `BuilderToolInteraction` | 0 | — | row |
+| `items-tools.md` | `PickupItem` | `PickupItemInteraction` | 0 | — | row |
+| `items-tools.md` | `PrefabSelectionInteraction` | `PrefabSelectionInteraction` | 0 | — | row |
+| `items.md` | `CheckUniqueItemUsage` | `CheckUniqueItemUsageInteraction` | 0 | — | row |
+| `npc-spawning.md` | `SendBeacon` | `SendBeaconInteraction` | 4 | Message | **section** |
+| `npc-spawning.md` | `TriggerSpawnMarkers` | `TriggerSpawnMarkersInteraction` | 3 | — | **section** |
+| `npc-spawning.md` | `UseNPC` | `UseNPCInteraction` | 0 | — | row |
+| `player.md` | `CanBreakRespawnPoint` | `CanBreakRespawnPointInteraction` | 0 | — | row |
+| `player.md` | `ToggleGlider` | `ToggleGliderInteraction` | 0 | — | row |
+| `trigger-volumes.md` | `RunRootInteraction` | `RunRootInteraction` | 1 | RootInteraction | row |
+| `world.md` | `ShowEventTitle` | `ShowEventTitleInteraction` | 8 | Target,PrimaryTitle | **section** |
+| `world.md` | `TeleportInstance` | `TeleportInstanceInteraction` | 8 | InstanceName,OriginSource | **section** |
+| `world.md` | `RevealMapMarkersInView` | `RevealMapMarkersInViewInteraction` | 6 | — | **section** |
+| `world.md` | `HubPortal` | `HubPortalInteraction` | 3 | WorldName | **section** |
+| `world.md` | `Teleporter` | `TeleporterInteraction` | 3 | — | **section** |
+| `world.md` | `ExitInstance` | `ExitInstanceInteraction` | 0 | — | row |
+| `world.md` | `Portal` | `EnterPortalInteraction` | 0 | — | row |
+| `world.md` | `PortalReturn` | `ReturnPortalInteraction` | 0 | — | row |
+| `world.md` | `TeleportConfigInstance` | `TeleportConfigInstanceInteraction` | 0 | — | row |
+
+Counts: **13 sections, 31 rows.** Target-page assignments are a starting
+judgment, not a ruling — move a type if the page it acts on is a better home than
+the plugin that registers it, which is how `DurabilityCondition` ended up in
+`items-weapons.md` rather than with the other conditions.

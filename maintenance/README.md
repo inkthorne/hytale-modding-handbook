@@ -18,6 +18,11 @@ plugin development, you can ignore this directory.
   + desktop notification + `~/.cache/hytale-update-pending` marker on
   divergence — the maintainer runs it from a weekly systemd user timer). See
   [CLAUDE.md](../CLAUDE.md#verifying-documentation).
+- **[registry-oracle-notes.md](./registry-oracle-notes.md)** — constraints the queued
+  registration/type-value oracle (gate 1) has to satisfy, with the evidence for each: the
+  two registration forms and the 28% under-count from mining only the first, registries
+  that are not statically enumerable and therefore need an "open — not checkable" verdict,
+  and the parsing traps that produce confident wrong answers rather than errors.
 - **[baseline/](./baseline/)** — a snapshot of the game build the docs were
   fact-checked against, used to detect which assets changed after an update. See
   [baseline/README.md](./baseline/README.md).

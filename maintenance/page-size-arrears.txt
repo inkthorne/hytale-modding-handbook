@@ -16,6 +16,18 @@
 # split. To REMOVE one: the split landed, or the page dropped under. The gate
 # warns in both directions, so neither can go quiet.
 #
+# WHAT A SEAM NOTE MUST RECORD, learned from the world.md split (2026-09-04):
+# an anchor inventory is necessary and NOT sufficient. The anchor gate checks
+# only `#anchor` links, so a bare `[World API](world.md)` pointing at content
+# that moved fails nothing and no gate ever reports it. That split broke six
+# such links — events.md's domain-pointer list, 01-index.md's class-to-page
+# index (ten classes sent to a page that no longer documented them), plus
+# universe-saves.md, prefabs.md and two index enumerations. So a seam note needs
+# BOTH: `grep -rno '(<page>\.md#[a-z0-9-]*)' docs/` for the anchors, and
+# `grep -rn '](<page>\.md)' docs/` for the bare links, each re-derived at cut
+# time rather than trusted. Check too for content stranded by topic rather than
+# by link — that split left a chunk-section entry in the remainder's Gotchas.
+#
 # world.md was removed 2026-09-04: the split landed as world-chunks.md and
 # world-lifecycle-events.md. Its recorded anchor inventory was re-derived from
 # the tree before cutting rather than trusted — the note's line numbers had

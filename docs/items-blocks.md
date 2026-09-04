@@ -913,6 +913,68 @@ Behavior (from `com.hypixel.hytale.builtin.adventure.farming.FarmingUtil.harvest
 
 ---
 
+### ChangeFarmingStage Interaction
+
+**Package:** `com.hypixel.hytale.builtin.adventure.farming.interactions.ChangeFarmingStageInteraction` ·
+registered by `FarmingPlugin`
+
+Sets the stage of a farmable block directly, rather than harvesting it. Codec doc: "Changes the
+farming stage of the target block." Extends
+[SimpleBlockInteraction](interactions.md#simpleblockinteraction), so it acts on the targeted block.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Increase` | int | *unset* | Add this many stages to the current one. **Takes priority over `Decrease` and `Stage`** |
+| `Decrease` | int | *unset* | Subtract this many stages. **Takes priority over `Stage`** |
+| `Stage` | int | `-1` | Absolute stage index to set. A negative value — including the default — means the **last** stage of the set |
+| `StageSet` | string | *the block's `StartingStageSet`* | Stage set to switch to. When omitted the block keeps its current set |
+
+**None of the four is required**, and the defaults are not inert: with no properties at all the
+interaction jumps the block to the final stage of its current set. `Increase` and `Decrease` are
+nullable boxed integers internally, so "not written" is distinguishable from `0` — writing
+`"Increase": 0` selects the increase branch and re-applies the current stage, which is not the same
+as omitting the key.
+
+Both shipped uses are tools, and they use different branches. `Tool_Growth_Potion.json` is a
+developer tool that carries two variants in `InteractionVars`:
+
+```json
+{
+  "Type": "ChangeFarmingStage",
+  "Increase": 1,
+  "Effects": { "ItemAnimationId": "Till" },
+  "RunTime": 0.15
+}
+```
+
+`Tool_Trap_Bait.json` uses the absolute form to move a trap into a different stage set entirely,
+which is the clearest evidence that this interaction is not crop-only:
+
+```json
+{
+  "Type": "ChangeFarmingStage",
+  "Stage": 0,
+  "StageSet": "Baited",
+  "Effects": { "ItemAnimationId": "Till" }
+}
+```
+
+Behavior (from the decompiled source):
+
+- **The target must have a `Farming` config with a non-empty stage list**, and the named `StageSet`
+  must exist in it. Every failure path — unloaded section, no block type, no farming config, unknown
+  stage set — ends the interaction `Failed` and logs a `[ChangeFarmingStage] FAILED: …` warning, so
+  unlike [HarvestCrop](#harvestcrop-interaction) these failures are traceable in the server log.
+- **A missing `FarmingBlock` component is created**, starting at the final stage of the resolved set,
+  so the interaction works on a farmable block that has never grown.
+- **The resulting index is clamped** into `0 .. stages.length - 1`, so `"Increase": 99` saturates at
+  the last stage rather than failing.
+- Applying a stage also resets `executions` to `0`, increments `generation`, and stamps the current
+  game time as the last tick — the same bookkeeping [HarvestCrop](#harvestcrop-interaction) does on
+  its replant path.
+
+---
+
 ## Basic Blocks
 
 Simple cube blocks for building.

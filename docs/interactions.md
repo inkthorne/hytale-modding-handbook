@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 15 are documented in
-their registry rows themselves, and 27 are not yet documented. For the complete list — and to
+registered `Type` values, of which 83 have a written section on another page, 16 are documented in
+their registry rows themselves, and 25 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -139,8 +139,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 15 are documented in their registry rows themselves, and 27 are
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 83 have a
+written section on another page, 16 are documented in their registry rows themselves, and 25 are
 not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -191,7 +191,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `Chaining` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#chaininginteraction) |
 | `ChangeActiveSlot` | `InteractionModule` | — *not yet documented* |
 | `ChangeBlock` | `InteractionModule` | [items-tools.md](items-tools.md#changeblock-interaction) |
-| `ChangeFarmingStage` | `FarmingPlugin` | — *not yet documented* |
+| `ChangeFarmingStage` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#changefarmingstage-interaction) |
 | `ChangeStat` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
 | `ChangeState` | `InteractionModule` | [interactions-world.md](interactions-world.md#changestate) |
 | `ChangeStatWithModifier` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
@@ -291,7 +291,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `TriggerSpawnMarkers` | `SpawningPlugin` | [npc-spawning.md](npc-spawning.md#triggerspawnmarkers) |
 | `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
 | `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
-| `UseCoop` | `FarmingPlugin` | — *not yet documented* |
+| `UseCoop` | `FarmingPlugin` | Harvests a chicken coop's accumulated produce into the interacting player's inventory (hotbar first) and then flips the block's interaction state to `Produce_Ready` or `default` depending on whether any produce is left. No keys of its own. It needs a `CoopBlock` block-entity component and **creates one on demand** when the block type declares it, so a coop that has never been used still works; every other failure — unloaded section, unknown block type, a block type that does not declare `CoopBlock` — ends the interaction `Failed`. One shipped use, `Server/Item/Items/Coops/Coop_Chicken.json`. `com.hypixel.hytale.builtin.adventure.farming.interactions.UseCoopInteraction` |
 | `UseEntity` | `InteractionModule` | [items-weapons.md](items-weapons.md#useentity-interaction) |
 | `UseNPC` | `NPCPlugin` | The right-click-an-NPC interaction — it reserves the target NPC for the user, and fails unless the user is a player and the target is an in-range, unreserved `NPCEntity` willing to interact. No keys of its own. **No shipped asset names it**, and it is registered on `Interaction.CODEC` like any other type so a mod still may: `NPCPlugin` loads a code-built instance under the id `*UseNPC`, and `RoleBuilderSystem` binds that id to every NPC's `Use` slot, so nothing shipped needs to write it. `com.hypixel.hytale.server.npc.interactions.UseNPCInteraction` |
 | `UseWateringCan` | `FarmingPlugin` | [items-tools.md](items-tools.md#watering-can) |

@@ -72,6 +72,11 @@ for key in ind['closed_despite_nonliteral_arg0']['examples']:
     check(f"closed despite non-literal arg0: {key.rsplit('.',2)[-2]}.{key.rsplit('.',1)[-1]}",
           r.verdict if r else 'MISSING', 'closed')
 
+check("open registry count", sum(1 for r in regs.values() if r.verdict == 'open'),
+      ind['open_registry_count']['value'])
+amb = [(r.key, s) for r in regs.values() for s in r.sites if s.kind == 'ambiguous']
+check("register calls with two top-level literals", len(amb), 0)
+
 # --- regression baselines (cannot validate, only detect drift) --------------
 drift = []
 if len(regs) != meas['registries']:

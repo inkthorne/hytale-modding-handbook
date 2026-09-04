@@ -11,7 +11,7 @@ Exit 0 when every type matches on key count, key names and required-set.
 """
 import json, os, pathlib, sys, argparse
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from codec_parser import parse_chain, find_source
+from codec_parser import parse_chain, find_source, file_coverage
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--src', default=os.path.expanduser('~/.cache/hytale-jar/src'))
@@ -69,6 +69,8 @@ for typ, exp in sorted(types.items()):
         problems.append(f"required {got_req} != {exp_req}")
     if not ch.consistent:
         problems.append(f"self-check appends={ch.appends} adds={ch.adds} keys={len(ch.keys)}")
+    if not ch.covered:
+        problems.append(f"coverage gap {ch.coverage_gap} within its own fragment")
     if problems:
         bad += 1; fails.append((typ, '; '.join(problems)))
     else:
@@ -94,10 +96,16 @@ for case in traps['cases']:
     problems = []
     if len(ch.keys) != case['expect_keys']:
         problems.append(f"keys {len(ch.keys)} != {case['expect_keys']}")
-    if got_req != sorted(case['expect_required']):
+    if 'expect_required' in case and got_req != sorted(case['expect_required']):
         problems.append(f"required {got_req} != {sorted(case['expect_required'])}")
-    if got_raw != sorted(case['expect_raw']):
+    if 'expect_raw' in case and got_raw != sorted(case['expect_raw']):
         problems.append(f"raw {got_raw} != {sorted(case['expect_raw'])}")
+    if 'expect_builder' in case and ch.builder_field != case['expect_builder']:
+        problems.append(f"builder field {ch.builder_field} != {case['expect_builder']}")
+    if 'expect_has_key' in case and case['expect_has_key'] not in [k.name for k in ch.keys]:
+        problems.append(f"key {case['expect_has_key']!r} missing")
+    if case.get('expect_covered') and not ch.covered:
+        problems.append(f"coverage gap {ch.coverage_gap} (file declares {ch.declared_in_file})")
     if not ch.consistent:
         problems.append(f"self-check appends={ch.appends} adds={ch.adds} keys={len(ch.keys)}")
     if problems:
@@ -106,6 +114,49 @@ for case in traps['cases']:
         t_ok += 1
         if a.verbose:
             print(f"  ok  trap: {case['label']}")
+
+# --- corpus coverage: the denominator the fixture alone cannot provide --------
+# 44 interaction types are 44 samples of ONE shape. A green fixture says nothing
+# about the other shapes in the corpus, which is how a parser that read ZERO keys
+# from Item (59 of them, the most-documented asset type here) reported clean.
+# So sweep every class that has a builder chain AND at least one `new KeyedCodec`,
+# and count the ones we read nothing from.
+import re
+BASELINE_BLIND = 23      # classes yielding 0 keys while declaring some (build-26)
+BASELINE_NOFIELD = 21    # classes whose codec field is not named plainly CODEC
+blind = nofield = swept = uncovered = filegap = 0
+for jp in root.rglob('*.java'):
+    src = jp.read_text(errors='replace')
+    if 'BuilderCodec.builder' not in src and 'AssetBuilderCodec' not in src:
+        continue
+    if not re.search(r'new\s+KeyedCodec', src):
+        continue
+    swept += 1
+    c = parse_chain(src)
+    if c is None:
+        nofield += 1
+    elif not c.keys:
+        blind += 1
+    elif not c.covered:
+        uncovered += 1
+    got, dec = file_coverage(src)
+    if got < dec:
+        filegap += 1
+if swept == 0:
+    # Same discipline as the README gate: a sweep that examined nothing is a broken
+    # check, not a clean corpus. Without this, an empty ~/.cache/hytale-jar/src
+    # gives swept=0, blind=0, 0 <= baseline, and a green run.
+    bad += 1
+    fails.append(("corpus sweep", "examined 0 classes — treating as a broken check, not a clean run"))
+print(f"\nCORPUS  {swept} class(es) swept: {blind} read as zero keys while declaring some "
+      f"(baseline {BASELINE_BLIND}), {nofield} with no field named CODEC (baseline {BASELINE_NOFIELD}), "
+      f"{uncovered} chain(s) short of their own fragment, {filegap} file(s) with an unread codec")
+if uncovered:
+    bad += 1
+    fails.append(("corpus coverage", f"{uncovered} chain(s) read fewer keys than their own parsed fragment declares"))
+if blind > BASELINE_BLIND:
+    bad += 1
+    fails.append(("corpus blind spots", f"{blind} > baseline {BASELINE_BLIND} — the parser lost coverage"))
 
 print(f"\nFIXTURE {len(types)} type(s): {ok} reproduced, {bad} mismatched, "
       f"{unresolved} source(s) not found")

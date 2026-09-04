@@ -54,7 +54,7 @@ class Site:
     form: int                 # 1 = X.FIELD.register(...), 2 = getCodecRegistry(X.FIELD)
     name: str | None          # resolved id, when statically knowable
     id_expr: str = ''         # the raw argument, when not
-    kind: str = 'literal'     # literal | constant | indirect | runtime
+    kind: str = 'literal'     # literal | constant | indirect | runtime | ambiguous
     arg_index: int = 0        # WHICH argument carried the id (§1: not always 0)
     stmt: int = 0             # offset of the enclosing statement, so sites != names
 
@@ -73,7 +73,12 @@ class Registry:
     def open_sites(self): return [s for s in self.sites if s.name is None]
     @property
     def verdict(self):
-        """§2: three outcomes. Collapsing 'open' into either other is the danger."""
+        """§2: three outcomes — but only TWO are decidable from the source alone.
+
+        'closed' vs 'open' is what a miner can know; whether a closed registry is
+        *fully documented* needs the doc side and arrives in phase (c). Do not read
+        this as implementing the third verdict.
+        """
         return 'open' if self.open_sites else 'closed'
     def forms(self):
         """Registration COUNTS, not statements — §1 distinguishes them
@@ -178,6 +183,12 @@ def _pick_name(args: list[str], consts: dict[str, str]):
     NOT necessarily argument one (§1: `register(Class, "Name", codec)` at 18 sites), and
     the search must span every position (§2's false-positive guard:
     `register(Priority.DEFAULT, "Name", …)` is closed, not open)."""
+    lits = [i for i, a in enumerate(args) if _LITERAL.match(a.strip())]
+    if len(lits) > 1:
+        # Build-26 has none: of 754 register calls, 738 carry exactly one top-level
+        # string literal and 16 carry zero. That is luck, not design — with two, the
+        # first-literal rule would silently pick the wrong argument. Report instead.
+        return None, 'ambiguous', args[lits[0]].strip(), -1
     for i, a in enumerate(args):
         a = a.strip()
         lit = _LITERAL.match(a)

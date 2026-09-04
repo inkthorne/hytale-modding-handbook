@@ -52,11 +52,14 @@
         "com.hypixel.hytale.server.core.universe.playerdata.PlayerStorageProvider.CODEC",
         "com.hypixel.hytale.server.core.modules.accesscontrol.provider.BanStorageProvider.CODEC"
       ]
+    },
+    "open_registry_count": {
+      "value": 10,
+      "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent."
     }
   },
   "measured": {
     "source": "measured",
-    "registries": 98,
     "registrations": 754,
     "second_form_only": [
       "com.hypixel.hytale.builtin.adventure.farming.config.stages.spread.SpreadGrowthBehaviour.CODEC",
@@ -83,6 +86,7 @@
       "com.hypixel.hytale.server.core.universe.world.WorldConfig.PLUGIN_CODEC"
     ],
     "id_not_in_argument_zero": 28,
-    "register_class_name_codec_sites": 12
+    "register_class_name_codec_sites": 12,
+    "registries": 98
   }
 }

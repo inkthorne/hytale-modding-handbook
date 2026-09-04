@@ -108,13 +108,49 @@ class Key:
 class Chain:
     cls: str
     keys: list[Key] = field(default_factory=list)
-    appends: int = 0
+    appends: int = 0      # .append / .appendInherited groups
+    addfields: int = 0    # .addField groups — these do NOT terminate in .add()
     adds: int = 0
     parent: str | None = None
+    declared_in_file: int = 0   # `new KeyedCodec` across the WHOLE file
+    declared_in_scope: int = 0  # `new KeyedCodec` within the fragment actually parsed
+    builder_field: str | None = None
+
     @property
     def consistent(self) -> bool:
-        """Self-check from §11: appends == adds == keys, per chain."""
-        return self.appends == self.adds == len(self.keys)
+        """§11's self-check: appends == adds == keys.
+
+        NOT a coverage check, and it must never be read as one. All three counts
+        come from the same scan, so when the scan finds nothing they are all 0 and
+        the check agrees with itself. Measured on build-26: of 88 classes this
+        parser failed to read, this predicate endorsed 85. Use `covered`.
+
+        It is also SHAPE-SPECIFIC, which §11 could not see from 44 samples of one
+        shape: `.addField(...)` declares a key with NO terminating `.add()`, so
+        `appends == adds` holds for the append family alone. Item mixes both in one
+        chain — 57 appends + 1 addField in the declaration, 1 append 700 lines below
+        it — and SpawnMarkerEntity is addField only (8 keys, zero adds).
+        """
+        return (len(self.keys) == self.appends + self.addfields
+                and self.adds == self.appends)
+
+    @property
+    def covered(self) -> bool:
+        """Did this chain read every key ITS OWN fragment declares?
+
+        The denominator still comes from outside the scan — that is the point, and
+        the only way to catch a scan that found nothing — but it is now scoped to
+        the fragment parsed. Scoping it to the whole FILE reported 97 correct chains
+        as uncovered, every one of them a file holding more than one codec: on
+        `SpawnNPCInteraction` the nested `WeightedNPCSpawn` adds 3 keys the outer
+        chain never claimed, so a perfect 14-key parse scored 14/17. Use
+        `file_coverage()` for the file-level question.
+        """
+        return len(self.keys) >= self.declared_in_scope
+
+    @property
+    def coverage_gap(self) -> int:
+        return max(0, self.declared_in_scope - len(self.keys))
 
 
 # NOTE: the field is not always called CODEC (registry-oracle-notes.md §1 records
@@ -127,33 +163,32 @@ _CODEC_DECL = re.compile(r'\b(?:public|protected|private)?\s*static\s+final\s+'
 _KEYED = re.compile(r'new\s+KeyedCodec\s*(<)?')
 
 
-def parse_chain(src: str, codec_field: str = 'CODEC') -> Chain | None:
-    m = None
-    for cand in _CODEC_DECL.finditer(src):
-        if cand.group(1) == codec_field and cand.group(1).endswith('CODEC'):
-            m = cand; break
-    if not m:
-        return None
-    # the whole initialiser, to its terminating ';' at depth 0
-    i, depth, n = m.end(), 0, len(src)
-    while i < n:
-        c = src[i]
-        if c in OPEN:
-            i = _scan(src, i); continue
-        if c == ';' and depth == 0:
-            break
-        i += 1
-    stmt = src[m.end():i]
+def _through_add(src: str, pos: int) -> int:
+    """Extend to just past the `.add()` that terminates an append group.
 
-    ch = Chain(cls=codec_field)
-    pm = re.search(r'BuilderCodec\.builder\s*\(', stmt)
-    if pm:
-        args = _split_args(stmt[pm.end()-1+1:_scan(stmt, pm.end()-1)-1])
-        if len(args) >= 3:
-            ch.parent = args[2].strip()
+    Without this the fragment stops at the append's closing paren and its `.add()`
+    is never counted, so `adds == appends` fails by exactly the number of appends
+    made outside the declaration."""
+    j = pos
+    while j < len(src):
+        if src[j] in OPEN:
+            if src.startswith('.add(', j - 4):
+                return _scan(src, j)
+            j = _scan(src, j); continue
+        if src[j] == ';':
+            return j
+        j += 1
+    return pos
 
-    for am in re.finditer(r'\.(appendInherited|append)\s*\(', stmt):
-        ch.appends += 1
+
+def _collect(stmt: str) -> Chain:
+    """Scan one text fragment for append/appendInherited/addField groups."""
+    out = Chain(cls='')
+    for am in re.finditer(r'\.(appendInherited|append|addField)\s*\(', stmt):
+        if am.group(1) == 'addField':
+            out.addfields += 1
+        else:
+            out.appends += 1
         opener = am.end() - 1
         close = _scan(stmt, opener)                     # end of append( ... )
         body = stmt[opener+1:close-1]
@@ -163,19 +198,101 @@ def parse_chain(src: str, codec_field: str = 'CODEC') -> Chain | None:
             continue
         key.inherited = am.group(1) == 'appendInherited'
         # attachments region: from the append's close to ITS `.add()` at depth 0
-        j, d = close, 0
+        j = close
         while j < len(stmt):
-            c = stmt[j]
-            if c in OPEN:
-                if stmt.startswith('.add(', j - 4) and d == 0:
+            if stmt[j] in OPEN:
+                if stmt.startswith('.add(', j - 4):
                     break
                 j = _scan(stmt, j); continue
             j += 1
         tail = stmt[close:j]
         if 'Validators.nonNull()' in tail:
             key.required_by_validator = True
-        ch.keys.append(key)
-    ch.adds = len(re.findall(r'\.add\(\s*\)', stmt))
+        out.keys.append(key)
+    out.adds = len(re.findall(r'\.add\(\s*\)', stmt))
+    return out
+
+
+def parse_chain(src: str, codec_field: str = 'CODEC', occurrence: int = 0) -> Chain | None:
+    m = None
+    seen = 0
+    for cand in _CODEC_DECL.finditer(src):
+        if cand.group(1) == codec_field and cand.group(1).endswith('CODEC'):
+            if seen == occurrence:
+                m = cand; break
+            seen += 1
+    if not m:
+        # Explicit non-CODEC field (a `*_BUILDER`): its declared type is
+        # `AssetBuilderCodec.Builder<...>`, which the codec-typed pattern above
+        # cannot match, so look the field up by name alone.
+        fm = re.search(r'\bstatic\s+final\s+[\w.]+(?:<.*?>)?\s+' + re.escape(codec_field) + r'\s*=', src, re.S)
+        if not fm:
+            return None
+        m = fm
+    # the whole initialiser, to its terminating ';' at depth 0
+    i, n = m.end(), len(src)
+    while i < n:
+        c = src[i]
+        if c in OPEN:
+            i = _scan(src, i); continue
+        if c == ';':
+            break
+        i += 1
+    stmt = src[m.end():i]
+
+    # A chain is often built on a separate `*_BUILDER` field and only `.build()`-ed
+    # into the public codec: `Item.CODEC = CODEC_BUILDER.build()` carries 58 keys
+    # that a scan of the CODEC statement alone reports as zero — on the corpus's
+    # most-documented asset type. Follow the field, then also collect appends made
+    # on it ELSEWHERE in the file (Item.java:1007 adds `State` far below the
+    # declaration), because statement-scoped parsing is an assumption, not a rule.
+    builder = None
+    bm = re.match(r'\s*([A-Za-z_]\w*)\s*\.\s*build\s*\(\s*\)\s*$', stmt)
+    if bm:
+        builder = bm.group(1)
+        inner = parse_chain(src, builder)
+        if inner is not None:
+            # Skip appends inside the builder's OWN declaration (already parsed) and
+            # take every other one in the file. Filtering on "after the CODEC
+            # declaration" instead would silently drop appends made BETWEEN the two
+            # declarations; build-26 has none, but an unexercised shape assumption is
+            # what produced both of this parser's earlier bugs.
+            bd = re.search(r'\bstatic\s+final\s+[\w.]+(?:<.*?>)?\s+' + re.escape(builder) + r'\s*=', src, re.S)
+            b_start = bd.start() if bd else 0
+            b_end = b_start
+            while b_end < len(src):
+                if src[b_end] in OPEN:
+                    b_end = _scan(src, b_end); continue
+                if src[b_end] == ';':
+                    break
+                b_end += 1
+            extra = ''.join(
+                src[mm.start():_through_add(src, _scan(src, src.index('(', mm.end() - 1)))]
+                for mm in re.finditer(re.escape(builder) + r'\s*\.\s*(?:appendInherited|append|addField)\s*\(', src)
+                if not (b_start <= mm.start() < b_end))
+            if extra:
+                inner2 = _collect(extra)
+                inner.keys.extend(inner2.keys)
+                inner.appends += inner2.appends
+                inner.addfields += inner2.addfields
+                inner.adds += inner2.adds
+            inner.cls = codec_field
+            inner.builder_field = builder
+            inner.declared_in_file = len(re.findall(r'new\s+KeyedCodec', src))
+            inner.declared_in_scope += len(re.findall(r'new\s+KeyedCodec', extra))
+            return inner
+
+    ch = Chain(cls=codec_field,
+               declared_in_file=len(re.findall(r'new\s+KeyedCodec', src)),
+               declared_in_scope=len(re.findall(r'new\s+KeyedCodec', stmt)))
+    pm = re.search(r'BuilderCodec\.builder\s*\(', stmt)
+    if pm:
+        args = _split_args(stmt[pm.end()-1+1:_scan(stmt, pm.end()-1)-1])
+        if len(args) >= 3:
+            ch.parent = args[2].strip()
+
+    got = _collect(stmt)
+    ch.keys, ch.appends, ch.addfields, ch.adds = got.keys, got.appends, got.addfields, got.adds
     return ch
 
 
@@ -210,6 +327,52 @@ def _read_keyedcodec(arg: str) -> Key | None:
     return k
 
 
+def all_chains(src: str) -> list[Chain]:
+    """Every codec declaration in a file, including repeated field names.
+
+    102 files declare the same field name more than once — nested classes each
+    carrying their own `CODEC` (`InventoryComponent` has 7). Returning only the
+    first is a worse silence than returning nothing, because `codec_fields()`
+    faithfully reports `['CODEC', 'CODEC']` and there was no way to address the
+    second.
+    """
+    out, counts = [], {}
+    for name in codec_fields(src):
+        idx = counts.get(name, 0)
+        counts[name] = idx + 1
+        ch = parse_chain(src, name, idx)
+        if ch is not None:
+            out.append(ch)
+    return out
+
+
+def file_coverage(src: str) -> tuple[int, int]:
+    """(keys read across every chain, `new KeyedCodec` declared in the file)."""
+    return (sum(len(c.keys) for c in all_chains(src)),
+            len(re.findall(r'new\s+KeyedCodec', src)))
+
+
+def codec_fields(src: str) -> list[str]:
+    """Every codec-typed SHOUTY field in a file.
+
+    `parse_chain` defaults to a field named plainly `CODEC`; 21 classes in build-26
+    declare their codec as `MESSAGE_CODEC`, `PLAYER_SKIN_CODEC`, `TAGS_CODEC` and
+    the like, and for those the default returns None. That is correct behaviour and
+    a bad silence, so callers can enumerate instead of guessing.
+    """
+    return [m.group(1) for m in _CODEC_DECL.finditer(src)]
+
+
 def find_source(fqcn: str, root: pathlib.Path) -> pathlib.Path | None:
-    p = root / (fqcn.replace('.', '/') + '.java')
-    return p if p.exists() else None
+    """Resolve a FQCN to a file, tolerating NESTED types.
+
+    `EventLocation.Config` is one file, not a `Config.java` inside an
+    `EventLocation/` directory — mapping every dot to a separator returns None for
+    every nested class in the corpus.
+    """
+    parts = fqcn.split('.')
+    for cut in range(len(parts), 0, -1):
+        p = root / ('/'.join(parts[:cut]) + '.java')
+        if p.exists():
+            return p
+    return None

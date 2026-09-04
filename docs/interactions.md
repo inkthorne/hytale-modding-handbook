@@ -76,7 +76,13 @@ Interaction System
 | [Control Flow](interactions-flow.md) | `interactions-flow.md` | Serial, parallel, conditions, targeting |
 | [Entity & World](interactions-world.md) | `interactions-world.md` | Spawning, inventory, blocks, wielding |
 
-### All Interactions by Category
+### Interaction Documentation Index
+
+A curated reading path through the types that have a written section, grouped by the page that
+covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
+registered `Type` values, of which 68 are documented and 56 are not. For the complete list — and to
+tell "undocumented" apart from "does not exist" — see
+[Complete Type Registry](#complete-type-registry) below.
 
 **Combo Systems** ([interactions-combo.md](interactions-combo.md))
 - [ChainingInteraction](interactions-combo.md#chaininginteraction) - Sequential combo chains with timing windows
@@ -129,6 +135,173 @@ Interaction System
 - [SetGameFlag](world.md#game-flags) - Write a universe-wide named integer flag
 - [GameFlagCondition](world.md#game-flags) - Succeed while a game flag is at (or at least) a level
 - [SpectateControl](player.md#spectatecontrol-interaction) - Cycle a spectator's follow camera, or detach it to free cam
+
+### Complete Type Registry
+
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 68
+documented and 56 not. A row count is itself a closure claim, so re-derive it after a game update
+rather than trusting this line; the two greps that produce it are given below.
+
+A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
+both. A bare mention in a list, or a name that appears only inside an example, is *not* documentation
+and is marked `—` here. Three names are documented in this corpus as something *other* than an
+interaction and are still marked `—`: `RunRootInteraction` and `ShowEventTitle` are also
+[trigger-volume effect types](trigger-volumes.md#built-in-effect-types) with those same names, and
+`BuilderTool` is also an item property ([items-tools.md](items-tools.md#builder-tool-args)). Same
+string, different registry — the documented one is not the interaction.
+
+**Registered by** names the module or plugin whose `setup()` registers the type. `Interaction.CODEC`
+is shared, so a type exists only when its owner is loaded. The 76 rows whose owner is listed in
+`Constants.CORE_PLUGINS` (`server/core/Constants.java:65`) are always present — that is
+`InteractionModule` (75 rows) plus `ProjectileModule` (`Projectile`). The remaining 48 rows come from
+19 bundled plugins and are absent whenever their plugin is not loaded. Test membership against
+`CORE_PLUGINS` rather than against the owner's name: `ProjectileModule` and `NPCPlugin` are both
+engine code, but only the first is core, so `Projectile` is always available while `SpawnNPC`,
+`UseNPC`, `ContextualUseNPC` and `SendBeacon` are not.
+
+| `Type` | Registered by | Documented |
+|---|---|---|
+| `AddItem` | `InteractionModule` | — *not yet documented* |
+| `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
+| `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
+| `AugmentCondition` | `AugmentBlocksPlugin` | — *not yet documented* |
+| `Bed` | `BedsPlugin` | — *not yet documented* |
+| `BlockCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#blockcondition) |
+| `BreakBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#breakblock) |
+| `BuilderTool` | `InteractionModule` | — *not yet documented* |
+| `Camera` | `InteractionModule` | [camera.md](camera.md#the-camera-interaction-json) |
+| `CameraShake` | `CameraPlugin` | — *not yet documented* |
+| `CanBreakRespawnPoint` | `ObjectivePlugin` | — *not yet documented* |
+| `CancelChain` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#cancelchaininteraction) |
+| `CarryBlock` | `InteractionModule` | — *not yet documented* |
+| `CarryDroppedBlock` | `InteractionModule` | — *not yet documented* |
+| `CarryPlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `ChainFlag` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#chainflaginteraction) |
+| `Chaining` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#chaininginteraction) |
+| `ChangeActiveSlot` | `InteractionModule` | — *not yet documented* |
+| `ChangeBlock` | `InteractionModule` | [items-tools.md](items-tools.md#changeblock-interaction) |
+| `ChangeFarmingStage` | `FarmingPlugin` | — *not yet documented* |
+| `ChangeStat` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
+| `ChangeState` | `InteractionModule` | [interactions-world.md](interactions-world.md#changestate) |
+| `ChangeStatWithModifier` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
+| `Charging` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#charginginteraction) |
+| `CheckUniqueItemUsage` | `InteractionModule` | — *not yet documented* |
+| `ClearEntityEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#clearentityeffect) |
+| `Condition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#condition) |
+| `ContextualUseNPC` | `NPCPlugin` | [items-tools.md](items-tools.md#shears) |
+| `CooldownCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#cooldowncondition) |
+| `CycleBlockGroup` | `InteractionModule` | [items-tools.md](items-tools.md#hammer) |
+| `DamageEntity` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#damageentity) |
+| `DestroyBlock` | `InteractionModule` | — *not yet documented* |
+| `DestroyTaggedVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
+| `DestroyTreasureCondition` | `ObjectivePlugin` | — *not yet documented* |
+| `Door` | `InteractionModule` | [interactions-world.md](interactions-world.md#door) |
+| `DragEraseBlock` | `InteractionModule` | — *not yet documented* |
+| `DragPlaceBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
+| `DurabilityCondition` | `InteractionModule` | — *not yet documented* |
+| `EffectCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#effectcondition) |
+| `EquipItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#equipitem) |
+| `EventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
+| `EventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
+| `ExitInstance` | `InstancesPlugin` | — *not yet documented* |
+| `Explode` | `InteractionModule` | [interactions-world.md](interactions-world.md#explode) |
+| `ExtrudePlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `FertilizeSoil` | `FarmingPlugin` | [items-tools.md](items-tools.md#fertilizer) |
+| `FirstClick` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#firstclickinteraction) |
+| `GameFlagCondition` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
+| `GlobalEventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
+| `GlobalEventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
+| `HarvestCrop` | `FarmingPlugin` | — *not yet documented* |
+| `HubPortal` | `CreativeHubPlugin` | — *not yet documented* |
+| `IncreaseBackpackCapacity` | `InteractionModule` | — *not yet documented* |
+| `IncrementCooldown` | `InteractionModule` | — *not yet documented* |
+| `Interrupt` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#interruptinteraction) |
+| `LaunchPad` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchpadinteraction) |
+| `LaunchProjectile` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchprojectile) |
+| `LearnRecipe` | `CraftingPlugin` | — *not yet documented* |
+| `MemoriesCondition` | `MemoriesPlugin` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
+| `ModifyIntervalConditionInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
+| `ModifyInventory` | `InteractionModule` | [interactions-world.md](interactions-world.md#modifyinventory) |
+| `Mount` | `MountPlugin` | — *not yet documented* |
+| `MovementCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#movementcondition) |
+| `OpenBenchPage` | `CraftingPlugin` | — *not yet documented* |
+| `OpenContainer` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencontainer) |
+| `OpenCustomUI` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencustomui) |
+| `OpenItemStackContainer` | `InteractionModule` | — *not yet documented* |
+| `OpenPage` | `InteractionModule` | [interactions-world.md](interactions-world.md#ui-interactions) |
+| `OpenProcessingBench` | `CraftingPlugin` | — *not yet documented* |
+| `OpenTreasureContainer` | `ObjectivePlugin` | — *not yet documented* |
+| `Parallel` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#parallel) |
+| `PickBlock` | `InteractionModule` | — *not yet documented* |
+| `PickupItem` | `BuilderToolsPlugin` | — *not yet documented* |
+| `PlaceBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#placeblock) |
+| `PlaceFluid` | `InteractionModule` | [interactions-world.md](interactions-world.md#placefluid) |
+| `PlacementCountCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
+| `PlaceModeSelect` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
+| `Portal` | `PortalsPlugin` | — *not yet documented* |
+| `PortalReturn` | `PortalsPlugin` | — *not yet documented* |
+| `PrefabSelectionInteraction` | `BuilderToolsPlugin` | — *not yet documented* |
+| `Projectile` | `ProjectileModule` | [projectiles.md](projectiles.md#projectileinteraction) |
+| `RefillContainer` | `InteractionModule` | [items-tools.md](items-tools.md#watering-can) |
+| `RemoveEntity` | `InteractionModule` | [interactions-world.md](interactions-world.md#removeentity) |
+| `Repeat` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#repeat) |
+| `Replace` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#replace) |
+| `ResetCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#resetcooldown) |
+| `RevealMapMarkersInView` | `InteractionModule` | — *not yet documented* |
+| `RunOnBlockTypes` | `InteractionModule` | — *not yet documented* |
+| `RunRootInteraction` | `InteractionModule` | — *not yet documented* |
+| `Seating` | `MountPlugin` | — *not yet documented* |
+| `Selector` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#selector) |
+| `SendBeacon` | `NPCPlugin` | — *not yet documented* |
+| `SendMessage` | `InteractionModule` | [interactions-world.md](interactions-world.md#sendmessage) |
+| `Serial` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#serial) |
+| `SetGameFlag` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
+| `SetMemoriesCapacity` | `MemoriesPlugin` | — *not yet documented* |
+| `ShowEventTitle` | `InteractionModule` | — *not yet documented* |
+| `SignalNearbyVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
+| `Simple` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#simpleinteraction) |
+| `SpawnDeployableAtHitLocation` | `DeployablesPlugin` | — *not yet documented* |
+| `SpawnDeployableAtLocation` | `DeployablesPlugin` | — *not yet documented* |
+| `SpawnDeployableFromRaycast` | `DeployablesPlugin` | — *not yet documented* |
+| `SpawnMinecart` | `MountPlugin` | — *not yet documented* |
+| `SpawnNPC` | `NPCPlugin` | — *not yet documented* |
+| `SpawnPrefab` | `InteractionModule` | [interactions-world.md](interactions-world.md#spawnprefab) |
+| `SpawnTriggerVolume` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
+| `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |
+| `StartObjective` | `ObjectivePlugin` | — *not yet documented* |
+| `StatsCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#statscondition) |
+| `StatsConditionWithModifier` | `InteractionModule` | — *not yet documented* |
+| `SurfaceDrawPlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `TeleportConfigInstance` | `InstancesPlugin` | — *not yet documented* |
+| `Teleporter` | `TeleporterPlugin` | — *not yet documented* |
+| `TeleportInstance` | `InstancesPlugin` | — *not yet documented* |
+| `ToggleGlider` | `InteractionModule` | — *not yet documented* |
+| `TriggerCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#triggercooldown) |
+| `TriggerSpawnMarkers` | `SpawningPlugin` | — *not yet documented* |
+| `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
+| `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
+| `UseCoop` | `FarmingPlugin` | — *not yet documented* |
+| `UseEntity` | `InteractionModule` | — *not yet documented* |
+| `UseNPC` | `NPCPlugin` | — *not yet documented* |
+| `UseWateringCan` | `FarmingPlugin` | [items-tools.md](items-tools.md#watering-can) |
+| `Wielding` | `InteractionModule` | [interactions-world.md](interactions-world.md#wieldinginteraction) |
+
+Both registration forms are load-bearing when re-deriving this table. Most types are registered
+directly:
+
+```
+grep -rn 'Interaction\.CODEC\.register("' ~/.cache/hytale-jar/src     # 89 names
+```
+
+but 35 more reach the same codec through the plugin's registry handle, where the receiver is not
+`Interaction.CODEC`, the calls chain (one line in `WorldEventsPlugin` registers seven), and one id is
+a constant rather than a literal (`CameraPlugin`'s `CODEC_CAMERA_SHAKE` is `"CameraShake"`):
+
+```
+grep -rn 'getCodecRegistry(Interaction\.CODEC)' ~/.cache/hytale-jar/src   # 21 sites, 35 names
+```
+
+A sweep that matches only the first form silently under-reports the vocabulary by 28%.
 
 ---
 
@@ -492,9 +665,9 @@ ComponentType<EntityStore, CarriedBlock> getCarriedBlockComponentType()         
 ResourceType<EntityStore, CarriedBlockSystems.QueueResource> getCarriedBlockQueueResourceType()
 ```
 
-Built-in `Type` strings added by 0.6.3 (not yet documented on these pages): `DragPlaceBlock`, `ExtrudePlaceBlock`, `SurfaceDrawPlaceBlock`, `DragEraseBlock`, `PlaceModeSelect`, `CarryBlock`, `CarryPlaceBlock`, `CarryDroppedBlock`, `RevealMapMarkersInView`, `ShowEventTitle`. `InteractionModule` also registers `SpectateControl` — documented with the rest of spectator mode in [player.md](player.md#spectatecontrol-interaction).
+`InteractionModule` registers 75 of the 124 `Type` strings. `SpectateControl` is documented with the rest of spectator mode in [player.md](player.md#spectatecontrol-interaction); for which of the other 74 have a written section, see the [Complete Type Registry](#complete-type-registry).
 
-**Types registered by other plugins.** `Interaction.CODEC` is shared, so bundled plugins add their own `Type` strings in *their* `setup()`, and those types only exist when that plugin is loaded. `Hytale:GameFlags` contributes `SetGameFlag` and `GameFlagCondition` — see [world.md → Game Flags](world.md#game-flags).
+**Types registered by other plugins.** `Interaction.CODEC` is shared, so bundled plugins add their own `Type` strings in *their* `setup()`, and those types only exist when that plugin is loaded. Twenty other modules and plugins contribute the remaining 49 types — `Hytale:GameFlags` adds `SetGameFlag` and `GameFlagCondition` (see [world.md → Game Flags](world.md#game-flags)), and the registry table names the rest against their registering plugin.
 
 #### Static Fields
 

@@ -210,6 +210,30 @@ for f in sorted(glob.glob("docs/*.md")):
             scan_fragment(line, refs)              # real code: always scan
         elif fence_lang is None:
             if NEG.search(line):                   # prose negative example: skip line
+                # This suppression list is also, unused, a detector. A line the
+                # NEG guard drops is a line asserting a symbol does NOT exist —
+                # the only evidence in the corpus that runs real -> documented,
+                # the direction nothing else here checks. Inverting it (assert
+                # the ref does not resolve, instead of skipping it) needs no new
+                # machinery: ~7 `Receiver.member` denials on 6 lines, plus ~4
+                # bare-class denials checkable as "no com.hypixel.* declares this
+                # simple name". All verified holding against build-26.
+                #
+                # Two hard requirements if anyone builds it:
+                #   * Match EXACTLY, against a receiver resolved to its own javap
+                #     block. 43% of the denied names are near-misses of real
+                #     members ON THE SAME CLASS -- Codec.BOOL vs BOOLEAN, INT vs
+                #     INTEGER/INT_ARRAY, BuilderCodec.getDefault vs
+                #     getDefaultValue. That is structural, not bad luck: a denial
+                #     earns its place on a page precisely BECAUSE the wrong name
+                #     is plausible. Substring or fuzzy matching therefore fails on
+                #     exactly the claims worth checking, and fails by accusing a
+                #     correct page.
+                #   * Skip a line whose denial is scoped by prose rather than by
+                #     the code span. "there is no `LivingEntity` parameter" denies
+                #     a parameter while naming a real class; npc-roles.md denies a
+                #     concept beside a symbol that does resolve. No resolver reaches
+                #     these -- they are correct pages a naive gate would flag.
                 continue
             for span in inline.findall(line):      # only inline `...` in prose
                 scan_fragment(span, refs)

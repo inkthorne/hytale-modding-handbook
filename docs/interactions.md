@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 12 are documented in
-their registry rows themselves, and 30 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 15 are documented in
+their registry rows themselves, and 27 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,7 +140,7 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 12 are documented in their registry rows themselves, and 30 are
+written section on another page, 15 are documented in their registry rows themselves, and 27 are
 not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -155,10 +155,9 @@ The **Documented** cell has three states, and its first character tells you whic
 - **`— *not yet documented*`** — neither, yet.
 
 A bare mention in a list, or a name that appears only inside an example, is *not* documentation and
-earns neither a link nor a prose cell. Two names are documented in this corpus as something
-*other* than an interaction and are still marked `—`: `ShowEventTitle` is also a
-[trigger-volume effect type](trigger-volumes.md#built-in-effect-types) with that same name, and
-`BuilderTool` is also an item property ([items-tools.md](items-tools.md#builder-tool-args)). Same
+earns neither a link nor a prose cell. One name is still documented in this corpus as something
+*other* than an interaction and is still marked `—`: `ShowEventTitle` is also a
+[trigger-volume effect type](trigger-volumes.md#built-in-effect-types) with that same name. Same
 string, different registry — the documented one is not the interaction. As each such row fills, the
 warning moves into that row's own cell and the name leaves this list.
 
@@ -180,7 +179,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `Bed` | `BedsPlugin` | [player.md](player.md#bed-interaction) |
 | `BlockCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#blockcondition) |
 | `BreakBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#breakblock) |
-| `BuilderTool` | `InteractionModule` | — *not yet documented* |
+| `BuilderTool` | `InteractionModule` | Runs the builder tool held by the player, and is a **pass-through to the client**: it declares `WaitForDataFrom.Client` and `needsRemoteSync()`, and its `tick0` copies the client's interaction state onto the server's, so the server mirrors an outcome the client decides. No keys of its own — which tool it runs, and that tool's parameters, come from the item's separate `BuilderTool` **property** ([items-tools.md](items-tools.md#builder-tool-args)), a different registry with the same name. One shipped use, the root interaction `Server/Item/RootInteractions/Tools/Builder_Tool.json`, which wraps it in a 0.05s click-bypassing cooldown. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.BuilderToolInteraction` |
 | `Camera` | `InteractionModule` | [camera.md](camera.md#the-camera-interaction-json) |
 | `CameraShake` | `CameraPlugin` | Sends one `CameraEffect` asset's shake to the interacting player. One key, `CameraEffect` (a `CameraEffect` asset id, required by `Validators.nonNull()` and validated against the asset map, so a bad id fails at load). It does nothing at all for a non-player entity — `firstRun` returns without setting a failed state when there is no `PlayerRef`. **The string is registered on two codecs**: `CameraEffect.CODEC` as well as `Interaction.CODEC`, and all **49** shipped `"Type": "CameraShake"` assets are `CameraEffect` assets under `Server/Camera/CameraEffect/` — the interaction has **zero** shipped uses, so a usage count mined by grepping the string measures the other registry entirely. `com.hypixel.hytale.builtin.adventure.camera.interaction.CameraShakeInteraction` |
 | `CanBreakRespawnPoint` | `ObjectivePlugin` | Succeeds unless the target block carries a `RespawnBlock` component owned by a **different** player; an unowned point, or one the interacting player owns, passes. It also passes when the block has no block entity or no `RespawnBlock` at all, so it only ever blocks someone else's claimed respawn point. Ownership is read from the **owning** entity's `UUIDComponent`, not the interacting one. No keys of its own. Its one shipped use is the head of `Server/Item/RootInteractions/Block/Check_Can_Break_Respawn.json`, whose `Next` chain swings and then runs `BreakBlock` — the root the bed in [player.md](player.md#bed-interaction) wires onto `Primary`. `com.hypixel.hytale.builtin.adventure.objectives.interactions.CanBreakRespawnPointInteraction` |
@@ -245,14 +244,14 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `OpenTreasureContainer` | `ObjectivePlugin` | Opens the targeted treasure chest's container window and marks the chest opened, which is what later lets `DestroyTreasureCondition` (this table) pass. It fires [TreasureChestOpeningEvent](adventure.md#treasurechestopeningevent) only when the chest carries an objective UUID, so a chest placed outside an objective opens silently. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.OpenTreasureContainerInteraction` |
 | `Parallel` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#parallel) |
 | `PickBlock` | `InteractionModule` | — *not yet documented* |
-| `PickupItem` | `BuilderToolsPlugin` | — *not yet documented* |
+| `PickupItem` | `BuilderToolsPlugin` | Picks the targeted item entity up into the player's inventory, spawning the pickup effect and leaving any remainder that did not fit on the entity. **This is not ordinary walk-over pickup**: no shipped asset names it, and `BuilderToolsPlugin` instead loads a code-built instance under the id `*PickupItem` which `EntitySettingsSnapshot.applyPickupState` binds to an item entity's `Use` slot when a builder marks that entity pickable — the same call adds `Interactable`, drops `PreventPickup`, and sets the `server.interactionHints.pickup` hint. No keys of its own. `com.hypixel.hytale.builtin.buildertools.interactions.PickupItemInteraction` |
 | `PlaceBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#placeblock) |
 | `PlaceFluid` | `InteractionModule` | [interactions-world.md](interactions-world.md#placefluid) |
 | `PlacementCountCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
 | `PlaceModeSelect` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
 | `Portal` | `PortalsPlugin` | — *not yet documented* |
 | `PortalReturn` | `PortalsPlugin` | — *not yet documented* |
-| `PrefabSelectionInteraction` | `BuilderToolsPlugin` | — *not yet documented* |
+| `PrefabSelectionInteraction` | `BuilderToolsPlugin` | Selects a prefab in the prefab editor, and is the one registered name that carries the `Interaction` suffix — the `Type` string really is `PrefabSelectionInteraction`. It requires an active prefab edit session (otherwise it messages `server.commands.editprefab.notInEditSession`) and branches on the slot it was run from: `Secondary` picks the loaded prefab whose horizontal centre is nearest the player, while any other slot picks the one whose bounding box contains the block the player is looking at. No keys of its own. One shipped use, `Server/Item/Items/EditorTool/EditorTool_PrefabEditing_SelectPrefab.json`, which runs it from both `Primary` and `Secondary`. `com.hypixel.hytale.builtin.buildertools.prefabeditor.PrefabSelectionInteraction` |
 | `Projectile` | `ProjectileModule` | [projectiles.md](projectiles.md#projectileinteraction) |
 | `RefillContainer` | `InteractionModule` | [items-tools.md](items-tools.md#watering-can) |
 | `RemoveEntity` | `InteractionModule` | [interactions-world.md](interactions-world.md#removeentity) |

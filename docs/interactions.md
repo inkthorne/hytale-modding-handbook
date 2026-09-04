@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 7 are documented in
-their registry rows themselves, and 35 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 8 are documented in
+their registry rows themselves, and 34 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,7 +140,7 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 7 are documented in their registry rows themselves, and 35 are not
+written section on another page, 8 are documented in their registry rows themselves, and 34 are not
 yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -196,7 +196,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `ChangeState` | `InteractionModule` | [interactions-world.md](interactions-world.md#changestate) |
 | `ChangeStatWithModifier` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
 | `Charging` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#charginginteraction) |
-| `CheckUniqueItemUsage` | `InteractionModule` | — *not yet documented* |
+| `CheckUniqueItemUsage` | `InteractionModule` | A condition **with a side effect**: it fails if the interacting player has already used an item with this item id, and otherwise records the usage on their `UniqueItemUsagesComponent` and succeeds — so running it is what consumes the one allowed use, and the record is permanent and per-item-id, not per-item-stack. A repeat use also sends the player the `server.commands.checkUniqueItemUsage.uniqueItemAlreadyUsed` notification. No keys of its own, and no shipped asset uses it. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.CheckUniqueItemUsageInteraction` |
 | `ClearEntityEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#clearentityeffect) |
 | `Condition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#condition) |
 | `ContextualUseNPC` | `NPCPlugin` | [items-tools.md](items-tools.md#shears) |

@@ -80,7 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 81 are documented and 43 are not. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 1 is documented in
+its registry row itself, and 41 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -138,14 +139,24 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 81
-documented and 43 not. A row count is itself a closure claim, so re-derive it after a game update
-rather than trusting this line; the two greps that produce it are given below.
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
+written section on another page, 1 is documented in its registry row itself, and 41 are not yet
+documented. A row count is itself a closure claim, and so is each of those three figures, so
+re-derive them after a game update rather than trusting this line; the greps that produce them are
+given below.
 
-A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
-both. A bare mention in a list, or a name that appears only inside an example, is *not* documentation
-and is marked `—` here. Three names are documented in this corpus as something *other* than an
-interaction and are still marked `—`: `RunRootInteraction` and `ShowEventTitle` are also
+The **Documented** cell has three states, and its first character tells you which:
+
+- **A link** — some page carries a section describing what the type does as an interaction, its JSON
+  keys, or both.
+- **Prose** — the type has fewer than two keys of its own and no gotcha needing a paragraph, so
+  *this row is its documentation*: one line, its own keys with their requiredness, and the
+  fully-qualified class last. There is no section to link to and none is owed.
+- **`— *not yet documented*`** — neither, yet.
+
+A bare mention in a list, or a name that appears only inside an example, is *not* documentation and
+earns neither a link nor a prose cell. Three names are documented in this corpus as something
+*other* than an interaction and are still marked `—`: `RunRootInteraction` and `ShowEventTitle` are also
 [trigger-volume effect types](trigger-volumes.md#built-in-effect-types) with those same names, and
 `BuilderTool` is also an item property ([items-tools.md](items-tools.md#builder-tool-args)). Same
 string, different registry — the documented one is not the interaction.
@@ -252,7 +263,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `RunRootInteraction` | `InteractionModule` | — *not yet documented* |
 | `Seating` | `MountPlugin` | [mounts.md](mounts.md#seating-interaction) |
 | `Selector` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#selector) |
-| `SendBeacon` | `NPCPlugin` | — *not yet documented* |
+| `SendBeacon` | `NPCPlugin` | [npc-roles.md](npc-roles.md#sendbeacon) |
 | `SendMessage` | `InteractionModule` | [interactions-world.md](interactions-world.md#sendmessage) |
 | `Serial` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#serial) |
 | `SetGameFlag` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
@@ -282,7 +293,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
 | `UseCoop` | `FarmingPlugin` | — *not yet documented* |
 | `UseEntity` | `InteractionModule` | [items-weapons.md](items-weapons.md#useentity-interaction) |
-| `UseNPC` | `NPCPlugin` | — *not yet documented* |
+| `UseNPC` | `NPCPlugin` | The right-click-an-NPC interaction — it reserves the target NPC for the user, and fails unless the user is a player and the target is an in-range, unreserved `NPCEntity` willing to interact. No keys of its own. **Never written as a `"Type"` in an asset**: `NPCPlugin` loads a code-built instance under the id `*UseNPC`, and `RoleBuilderSystem` binds that id to every NPC's `Use` slot, so no shipped asset names it. `com.hypixel.hytale.server.npc.interactions.UseNPCInteraction` |
 | `UseWateringCan` | `FarmingPlugin` | [items-tools.md](items-tools.md#watering-can) |
 | `Wielding` | `InteractionModule` | [interactions-world.md](interactions-world.md#wieldinginteraction) |
 
@@ -302,6 +313,21 @@ grep -rn 'getCodecRegistry(Interaction\.CODEC)' ~/.cache/hytale-jar/src   # 21 s
 ```
 
 A sweep that matches only the first form silently under-reports the vocabulary by 28%.
+
+The three **Documented**-state figures come from the rendered table, classified by the cell's first
+character — which is why a prose cell that needs to point at another page puts the link *after* the
+description, never first. **Scope the greps to this section**: other three-column tables on this page
+match the same row shape, so an unscoped sweep silently counts their rows as row-documented ones.
+
+```
+sec() { awk '/^### Complete Type Registry/,/^## /' docs/interactions.md; }
+sec | grep -cE '^\| `[^`]+` \| `[^`]+` \|'                          # 124 rows
+sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| \['                        # section-documented
+sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| [^[|—]'                    # row-documented
+sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| — \*not yet documented\*'  # remaining
+```
+
+The three must sum to the row count; if they do not, a cell has drifted out of all three states.
 
 ---
 

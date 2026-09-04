@@ -1,6 +1,6 @@
 ---
 title: "NPC Roles"
-description: "Define Hytale NPC roles in JSON — abstract Template and concrete Variant roles, a Parameters/Compute system, attitude definitions between groups, and groups and flocks for spawning, plus driving the engine flock and marked combat targets from Java at runtime."
+description: "Define Hytale NPC roles in JSON — abstract Template and concrete Variant roles, a Parameters/Compute system, attitude definitions between groups, and groups and flocks for spawning, plus beacon messaging with SendBeacon and driving the engine flock and marked combat targets from Java at runtime."
 seo:
   type: TechArticle
 ---
@@ -1141,6 +1141,77 @@ The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and *
 ```
 
 Plain role names (without a wildcard) match a single role, while a name ending in `*` matches every role sharing that prefix.
+
+---
+
+## Beacon messaging
+
+Groups are also how a beacon message is addressed. Beacons here are **not** the spawn beacons of
+[npc-spawning.md](npc-spawning.md#spawn-beacons) — same word, unrelated subsystem. A beacon message
+is a short-lived string posted onto nearby NPCs, which their `Beacon` sensors and actions then react
+to; the receiving side is the `Beacon` sensor listed under
+[Sensors](#sensors), and encounter managers can register as receivers too (see
+[encounters.md](encounters.md#runtime-and-placement)). `SendBeacon` is the sending side.
+
+### SendBeacon
+
+**Package:** `com.hypixel.hytale.server.npc.interactions.SendBeaconInteraction` · registered by
+`NPCPlugin`
+
+Codec doc: "Broadcasts a beacon message to nearby NPCs and encounter managers listening for it."
+Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Default | Description / load-time validation |
+|----------|------|---------|-------------------------------------|
+| `Message` | string | — | **Required** (`Validators.nonNull()`). The message key. Only receivers listening for this exact key react; it is a free-form string, not an asset id, so nothing validates it at load |
+| `Range` | double | `64.0` | Broadcast radius in blocks |
+| `ExpirationTime` | double | `1.0` | Seconds the message stays live on each receiver. `-1` is infinite |
+| `TargetGroups` | string[] | — | [NPC group](#groups) names to restrict delivery to. Omit to reach every listener in range |
+
+`Message` is the one required key — and it is required by a `Validators.nonNull()` attached after
+`append(...)` closes, not by a `true` third argument to `KeyedCodec`. Both forms mean required; see
+[SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) for a key that carries
+both at once.
+
+The one shipped use is the debug item `Server/Item/Items/_Debug/Debug_Beacon_Horn.json`, which
+sends two different keys from its two interaction slots:
+
+```json
+{
+  "Type": "SendBeacon",
+  "Message": "Test",
+  "Range": 40.0
+}
+```
+
+Its `Secondary` slot sends `"EncounterPing"` at the same range — the key an encounter manager
+listens for, which is what the `EncounterBeaconGroup` group exists to address.
+
+Behavior notes:
+
+- **The broadcast originates from the owning entity, not the interacting one.** The interaction
+  reads `context.getOwningEntity()` and fails outright when that is null or has no
+  `TransformComponent`, so an item held by a player broadcasts from the player.
+- **The sender is excluded from its own broadcast**, and the sender is what receivers get as the
+  message's target entity. That is the mechanism behind "come to me": a receiving NPC reads the
+  posted message and finds the broadcaster on the other end of it.
+- **A receiver must carry `BeaconSupport`** — i.e. be an NPC whose role actually uses beacons.
+  Everything else in range is skipped, players included, so `SendBeacon` cannot be used to message
+  a player.
+
+> **Gotcha — an unknown `TargetGroups` name is a load-time crash, not a silent miss.** The names are
+> resolved to group indices in the codec's `afterDecode`, and a name that is not a shipped
+> `Server/NPC/Groups/` file throws `IllegalArgumentException: Unknown npc group! <name>`. That fires
+> while the asset is being decoded, so the failure surfaces as a broken asset at startup rather than
+> as a beacon nobody hears.
+
+> **Gotcha — `"TargetGroups": ["Self"]` delivers to nobody.** The `Self` group resolves to the
+> `$self` sentinel role rather than to a real role, and the caller supplies a sender role index of
+> `-1`, hardcoded. The `$self` shortcut needs the candidate's role index to equal the sender's, and
+> `-1` never equals a real one — players resolve to index `0`, NPCs to their own role index — so the
+> check falls through to a plain tag test that the `$self` sentinel can never satisfy. `Self` is a
+> shipped group and reads like the obvious way to make a role signal its own kind; through
+> `SendBeacon` it is silently empty. Name the role's real group instead.
 
 ---
 

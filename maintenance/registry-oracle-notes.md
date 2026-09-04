@@ -554,3 +554,48 @@ written parser — and reconciled. All 44 counts and required-sets agree.
 > raised in review as a pre-existing wrong-key claim on a documented page; it is not
 > one. Checking it meant reading both classes rather than assuming the shared name
 > implied a shared shape, which is the §4 discipline applied to a review finding.
+
+### Progress and rulings applied while writing the tail (2026-09-04)
+
+**The section-vs-row rule renders as (A), ruled by hytale-supervisor.** A row-verdict type is
+documented *inside* `interactions.md`'s registry cell — description first, own keys with
+requiredness, fully-qualified class last — and its target page is **not** edited. The target-page
+column stays live only for grouping commits and for recording where a section would go if the type
+is ever promoted. The argument that settles it is gate-checkability: the FQCN is verified because
+`interactions.md` is tagged `Java API + JSON asset format`, and 12 of the 31 row-verdict types
+target JSON-tagged pages where a FQCN must not land. One exception: if a target page already
+enumerates the interactions its subsystem registers, omitting the type from that list would be a
+false closure claim on that page — add the bare name to the existing list, and do not create such a
+list where none exists.
+
+The registry preamble now states this as a three-state contract keyed on the cell's first character
+(link / prose / `— *not yet documented*`), which is why a prose cell that must point elsewhere puts
+its link **after** the description.
+
+**The re-derivation greps must be scoped to the registry section.** The obvious unscoped forms are
+wrong: other three-column tables on `interactions.md` match the same row shape, and an unscoped
+row-documented sweep returned **27** against a true value of **1**. The section-documented and
+`not yet documented` counts happened to agree unscoped, which is exactly the shape invariant 6
+warns about — two of three figures right by luck reads as a working method. The page now carries an
+`awk`-scoped form, plus the check that the three states sum to the row count.
+
+**Page re-assignments made against the §11 table** (which invites them):
+
+- `SendBeacon` moved `npc-spawning.md` → **`npc-roles.md`**. The §11 assignment followed the
+  registering plugin, but the page it landed on documents *spawn* beacons — an unrelated subsystem
+  that merely shares the word. Putting a message-broadcast interaction under a heading three
+  sections below `## Spawn Beacons` would have manufactured exactly the collision §4 exists to
+  prevent. `npc-roles.md` already documents the receiving half (the `Beacon` sensor, and
+  `NPCGroup`, which `TargetGroups` addresses), so the section sits beside what it needs.
+- `TriggerSpawnMarkers` stayed on `npc-spawning.md`, but the page needed a fourth spawn source
+  first: nothing documented manual spawn markers, and the interaction is unusable without them.
+
+**Two findings the tail turned up that are worth keeping even if the rows change:**
+
+- `SendBeacon`'s `"TargetGroups": ["Self"]` delivers to nobody. `SendBeaconInteraction` passes a
+  hardcoded sender role index of `-1` into `WorldSupport.isGroupMember`, and the `$self` shortcut
+  there needs the candidate's role index to equal the sender's. `Self` is a shipped group
+  (`Server/NPC/Groups/Self.json`), so this is a plausible thing to write and it fails silently.
+- `TriggerSpawnMarkers`'s `"Count": 0` fires *all* markers. Zero is both the default and the
+  unlimited sentinel, and `greaterThanOrEqual(0)` accepts it, so the value that reads like "disable
+  this" does the opposite.

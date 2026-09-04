@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 8 are documented in
-their registry rows themselves, and 34 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 10 are documented in
+their registry rows themselves, and 32 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,8 +140,8 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 8 are documented in their registry rows themselves, and 34 are not
-yet documented. A row count is itself a closure claim, and so is each of those three figures, so
+written section on another page, 10 are documented in their registry rows themselves, and 32 are
+not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
 
@@ -182,7 +182,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `BuilderTool` | `InteractionModule` | — *not yet documented* |
 | `Camera` | `InteractionModule` | [camera.md](camera.md#the-camera-interaction-json) |
 | `CameraShake` | `CameraPlugin` | — *not yet documented* |
-| `CanBreakRespawnPoint` | `ObjectivePlugin` | — *not yet documented* |
+| `CanBreakRespawnPoint` | `ObjectivePlugin` | Succeeds unless the target block carries a `RespawnBlock` component owned by a **different** player; an unowned point, or one the interacting player owns, passes. It also passes when the block has no block entity or no `RespawnBlock` at all, so it only ever blocks someone else's claimed respawn point. Ownership is read from the **owning** entity's `UUIDComponent`, not the interacting one. No keys of its own. Its one shipped use is the head of `Server/Item/RootInteractions/Block/Check_Can_Break_Respawn.json`, whose `Next` chain swings and then runs `BreakBlock` — the root the bed in [player.md](player.md#bed-interaction) wires onto `Primary`. `com.hypixel.hytale.builtin.adventure.objectives.interactions.CanBreakRespawnPointInteraction` |
 | `CancelChain` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#cancelchaininteraction) |
 | `CarryBlock` | `InteractionModule` | — *not yet documented* |
 | `CarryDroppedBlock` | `InteractionModule` | — *not yet documented* |
@@ -286,7 +286,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `TeleportConfigInstance` | `InstancesPlugin` | — *not yet documented* |
 | `Teleporter` | `TeleporterPlugin` | — *not yet documented* |
 | `TeleportInstance` | `InstancesPlugin` | — *not yet documented* |
-| `ToggleGlider` | `InteractionModule` | — *not yet documented* |
+| `ToggleGlider` | `InteractionModule` | Toggles glider movement for the player. No keys of its own, and **no server-side behaviour at all**: `firstRun` is empty and the class exists to emit a protocol `ToggleGliderInteraction` from `generatePacket()`, which is why it lives in the `config.client` package — the client performs the toggle. One shipped use, `Server/Item/Items/Glider/Template_Glider.json`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ToggleGliderInteraction` |
 | `TriggerCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#triggercooldown) |
 | `TriggerSpawnMarkers` | `SpawningPlugin` | [npc-spawning.md](npc-spawning.md#triggerspawnmarkers) |
 | `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |

@@ -1148,10 +1148,14 @@ Plain role names (without a wildcard) match a single role, while a name ending i
 
 Groups are also how a beacon message is addressed. Beacons here are **not** the spawn beacons of
 [npc-spawning.md](npc-spawning.md#spawn-beacons) — same word, unrelated subsystem. A beacon message
-is a short-lived string posted onto nearby NPCs, which their `Beacon` sensors and actions then react
-to; the receiving side is the `Beacon` sensor listed under
-[Sensors](#sensors), and encounter managers can register as receivers too (see
-[encounters.md](encounters.md#runtime-and-placement)). `SendBeacon` is the sending side.
+is a short-lived string posted onto nearby NPCs. The two halves are separate core components: the
+**`Beacon` sensor** ([Sensors](#sensors)) receives, reading the messages posted on its own
+`BeaconSupport`, while the **`Beacon` action** ([Actions](#actions)) sends — and encounter managers
+can register as receivers too (see [encounters.md](encounters.md#runtime-and-placement)). So there
+are **two senders**: that action, sending from inside a role's own behaviour, and `SendBeacon` below,
+an interaction sending from whatever runs an interaction chain. Both call the same
+`BeaconBroadcast.broadcast`, and the two arguments they pass differently are the whole of this
+section's gotchas.
 
 ### SendBeacon
 
@@ -1168,10 +1172,9 @@ Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
 | `ExpirationTime` | double | `1.0` | Seconds the message stays live on each receiver. `-1` is infinite |
 | `TargetGroups` | string[] | — | [NPC group](#groups) names to restrict delivery to. Omit to reach every listener in range |
 
-`Message` is the one required key — and it is required by a `Validators.nonNull()` attached after
-`append(...)` closes, not by a `true` third argument to `KeyedCodec`. Both forms mean required; see
-[SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) for a key that carries
-both at once.
+`Message`'s requiredness comes from a validator attached after `append(...)` closes rather than from
+a `true` third argument to `KeyedCodec`; both forms mean required, and
+[SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) has a key with both.
 
 The one shipped use is the debug item `Server/Item/Items/_Debug/Debug_Beacon_Horn.json`, which
 sends two different keys from its two interaction slots:
@@ -1184,8 +1187,13 @@ sends two different keys from its two interaction slots:
 }
 ```
 
-Its `Secondary` slot sends `"EncounterPing"` at the same range — the key an encounter manager
-listens for, which is what the `EncounterBeaconGroup` group exists to address.
+Its `Secondary` slot sends `"EncounterPing"` at the same range. In the shipped encounter example that
+key runs the other way: `Example_Beacon_Sender.json` is the encounter manager *sending* it with a
+`Beacon` action addressed to `"TargetGroups": ["EncounterBeaconGroup"]`, and
+`Example_Beacon_Receiver.json` picks it up with a `Beacon` sensor. `EncounterBeaconGroup` is
+therefore a group of *receivers* (`Example_Beacon_Receiver`, `Example_Boss`,
+`Example_Macro_Slot_Boss_Variant`) — the horn addresses no group at all and reaches them only by
+broadcasting globally.
 
 Behavior notes:
 
@@ -1198,6 +1206,8 @@ Behavior notes:
 - **A receiver must carry `BeaconSupport`** — i.e. be an NPC whose role actually uses beacons.
   Everything else in range is skipped, players included, so `SendBeacon` cannot be used to message
   a player.
+- **Omitting `TargetGroups` reaches everyone in range only here.** `SendBeacon` passes `allowGlobal`
+  as `true`; the `Beacon` action passes `false`, so an empty `TargetGroups` there reaches *nobody*.
 
 > **Gotcha — an unknown `TargetGroups` name is a load-time crash, not a silent miss.** The names are
 > resolved to group indices in the codec's `afterDecode`, and a name that is not a shipped
@@ -1205,13 +1215,17 @@ Behavior notes:
 > while the asset is being decoded, so the failure surfaces as a broken asset at startup rather than
 > as a beacon nobody hears.
 
-> **Gotcha — `"TargetGroups": ["Self"]` delivers to nobody.** The `Self` group resolves to the
-> `$self` sentinel role rather than to a real role, and the caller supplies a sender role index of
-> `-1`, hardcoded. The `$self` shortcut needs the candidate's role index to equal the sender's, and
-> `-1` never equals a real one — players resolve to index `0`, NPCs to their own role index — so the
-> check falls through to a plain tag test that the `$self` sentinel can never satisfy. `Self` is a
-> shipped group and reads like the obvious way to make a role signal its own kind; through
-> `SendBeacon` it is silently empty. Name the role's real group instead.
+> **Gotcha — `"TargetGroups": ["Self"]` works from the `Beacon` action and delivers to nobody from
+> `SendBeacon`.** `Self` is a shipped group whose only entry is the `$self` sentinel, and
+> `isGroupMember` honours that sentinel through one shortcut: the candidate's role index must equal
+> the **sender's** role index. The `Beacon` action passes the sending NPC's real role index, so
+> there `["Self"]` means "NPCs sharing my role" — `Template_Goblin_Scavenger.json` relies on it to
+> squabble only with other scavengers, and four `Test_Kweebec_Playing.json` instructions do the same.
+> `SendBeacon` passes `-1`, hardcoded. No candidate ever resolves to `-1` — players resolve to index
+> `0` and NPCs to their own role index — so the shortcut cannot fire and the check falls through to a
+> plain tag test that the `$self` sentinel can never satisfy. Copying a working `["Self"]` out of a
+> role into an item's `SendBeacon` therefore produces a beacon nobody hears, with no error anywhere.
+> Name the role's real group instead.
 
 ---
 

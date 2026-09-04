@@ -599,3 +599,44 @@ warns about — two of three figures right by luck reads as a working method. Th
 - `TriggerSpawnMarkers`'s `"Count": 0` fires *all* markers. Zero is both the default and the
   unlimited sentinel, and `greaterThanOrEqual(0)` accepts it, so the value that reads like "disable
   this" does the opposite.
+
+### What hytale-reviewer's pass corrected, and the habit behind each miss
+
+Kept here because both misses are reproducible mistakes, not one-off slips.
+
+**A "no shipped asset does X" line is only as good as the grep's subject.** The
+`SendBeacon` `Self` gotcha originally read as "`Self` is a trap", justified by a
+grep scoped to *`SendBeacon`'s* uses (one debug item) while the claim it supported
+was about *`TargetGroups`* generally. 41 shipped assets use `TargetGroups`, and
+`["Self"]` appears in two of them — `Test_Kweebec_Playing.json` (×4) and the
+production role `Template_Goblin_Scavenger.json` — through the **`Beacon` action**,
+where it works. `ActionBeacon` passes `executionSupport.getRoleIndex()` and
+`allowGlobal = false`; `SendBeaconInteraction` passes `-1` and `true`. Same
+`BeaconBroadcast.broadcast`, two arguments swapped, opposite behaviour for both an
+empty `TargetGroups` and `["Self"]`. The corrected gotcha is strictly better — it
+has a positive control instead of resting on absence — which is the argument for
+the habit: **scope the grep to the subject of the sentence, not to the type you
+happen to be writing about.**
+
+**"Never written as a `Type`" overstates, and it is invariant 7's dangerous
+direction.** `Interaction.CODEC.register("UseNPC", …)` is live, so a mod may write
+the type; what is true is that no *shipped* asset names it. In a table whose whole
+job is saying which `Type` values are legal, "never written" reads as "not
+writable" — a fabricated prohibition that no asset can contradict. The form to use
+is **"No shipped asset names it"**, and it applies to every code-built-root type in
+this tail (`UseNPC`, `OpenBenchPage`, `PickupItem`), each of which still needs its
+own asset grep rather than an inherited assumption.
+
+Two smaller corrections worth not repeating: the `Beacon` **action** sends and the
+**sensor** receives (an earlier lede had actions reacting), and a three-state count
+whose states are exhaustive **cannot** be validated by checking that it sums to the
+row count — the sum is invariant under exactly the state move every tail edit makes.
+Re-derive all three; never derive two and subtract.
+
+**Page-size note.** `npc-roles.md` sits at **1,496** after the beacon section — four
+lines under the gate. The next section landing there will trip it. The natural seam
+is `## Beacon messaging` itself: `BeaconSupport`, `MessageSupport`, `EventSupport`
+and `NPCMessage` are a real `components/messaging/` subsystem and none of them is
+documented, so the cut would be to a new page rather than a rearrangement. It is not
+recorded in `page-size-arrears.txt`, because that file is for pages already over the
+line and listing an under-threshold page trips the gate the other way.

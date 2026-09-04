@@ -294,7 +294,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `UseCaptureCrate` | `FarmingPlugin` | [items-tools.md](items-tools.md#capture-crate) |
 | `UseCoop` | `FarmingPlugin` | — *not yet documented* |
 | `UseEntity` | `InteractionModule` | [items-weapons.md](items-weapons.md#useentity-interaction) |
-| `UseNPC` | `NPCPlugin` | The right-click-an-NPC interaction — it reserves the target NPC for the user, and fails unless the user is a player and the target is an in-range, unreserved `NPCEntity` willing to interact. No keys of its own. **Never written as a `"Type"` in an asset**: `NPCPlugin` loads a code-built instance under the id `*UseNPC`, and `RoleBuilderSystem` binds that id to every NPC's `Use` slot, so no shipped asset names it. `com.hypixel.hytale.server.npc.interactions.UseNPCInteraction` |
+| `UseNPC` | `NPCPlugin` | The right-click-an-NPC interaction — it reserves the target NPC for the user, and fails unless the user is a player and the target is an in-range, unreserved `NPCEntity` willing to interact. No keys of its own. **No shipped asset names it**, and it is registered on `Interaction.CODEC` like any other type so a mod still may: `NPCPlugin` loads a code-built instance under the id `*UseNPC`, and `RoleBuilderSystem` binds that id to every NPC's `Use` slot, so nothing shipped needs to write it. `com.hypixel.hytale.server.npc.interactions.UseNPCInteraction` |
 | `UseWateringCan` | `FarmingPlugin` | [items-tools.md](items-tools.md#watering-can) |
 | `Wielding` | `InteractionModule` | [interactions-world.md](interactions-world.md#wieldinginteraction) |
 
@@ -321,14 +321,17 @@ description, never first. **Scope the greps to this section**: other three-colum
 match the same row shape, so an unscoped sweep silently counts their rows as row-documented ones.
 
 ```
-sec() { awk '/^### Complete Type Registry/,/^## /' docs/interactions.md; }
+sec() { awk '/^### Complete Type Registry/{f=1;next} f&&/^#{1,3} /{exit} f' docs/interactions.md; }
 sec | grep -cE '^\| `[^`]+` \| `[^`]+` \|'                          # 124 rows
 sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| \['                        # section-documented
 sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| [^[|—]'                    # row-documented
 sec | grep -cE '^\| `[^`]+` \| `[^`]+` \| — \*not yet documented\*'  # remaining
 ```
 
-The three must sum to the row count; if they do not, a cell has drifted out of all three states.
+Re-derive all three, never two and a subtraction. They necessarily sum to the row count even when a
+cell is in the wrong state, because the states are exhaustive — the sum stays 124 across exactly the
+move (undocumented → prose) that every edit here makes, so it confirms nothing about whether the
+stated figures are current.
 
 ---
 

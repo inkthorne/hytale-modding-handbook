@@ -361,8 +361,8 @@ Fires manual spawn markers around the **entity running the interaction**. It ext
 `Validators.nonNull()`. The defaults are a live configuration, not a degenerate one: with no keys at
 all the interaction fires every manual marker within 10 blocks.
 
-All three shipped uses are summon chains that run the interaction as the tail of a
-[`Serial`](interactions-flow.md#serial) chain behind an animation:
+Two of the three shipped uses are summon chains that run the interaction from inside a
+[`Serial`](interactions-flow.md#serial) block behind an animation:
 
 ```json
 {
@@ -373,8 +373,9 @@ All three shipped uses are summon chains that run the interaction as the tail of
 ```
 
 `Hedera_Summon.json` and `Skeleton_Burnt_Praetorian_Summon.json` each pin one `MarkerType` at
-`Range` 30; the debug item `Test_Spawn_Marker_Trigger.json` sets `Range` only, so it fires whatever
-manual markers happen to be nearby.
+`Range` 30. The third, the debug item `Test_Spawn_Marker_Trigger.json`, is not a chain at all — it
+runs the interaction straight from `Primary` and sets `Range` only, so it fires whatever manual
+markers happen to be nearby.
 
 Behavior notes:
 

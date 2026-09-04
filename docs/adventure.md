@@ -1,13 +1,13 @@
 ---
 title: "Adventure API"
-description: "Build Hytale adventure content in Java — ECS events for instance and zone discovery, adventure objectives, and world-instance integration."
+description: "Build Hytale adventure content — ECS events for instance and zone discovery, adventure objectives, portal-world assets, and the JSON portal and instance interactions (TeleportInstance, HubPortal, Teleporter)."
 seo:
   type: TechArticle
 ---
 
 # Adventure API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.3**
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 
@@ -642,6 +642,92 @@ if (key != null) {
 ```
 
 ---
+
+## Portal and instance interactions
+
+The JSON `Type` values that move a player between worlds. The portal *assets* above describe a
+destination; these describe the act of going there, and are written inside an item or block's
+`Interactions` block. Three carry keys of their own and are documented below; four more —
+`ExitInstance`, `Portal`, `PortalReturn` and `TeleportConfigInstance` — have none, and are
+documented in their rows of the
+[Complete Type Registry](interactions.md#complete-type-registry).
+
+Two of the names collide with other registries and the collision is easy to trip over.
+`Server/Item/Items/Electrum/Portal/Teleporter.json` carries both senses of `Teleporter` in one file:
+a `BlockEntity.Components.Teleporter` block-entity component **and** a
+`"Type": "Teleporter"` interaction on `CollisionEnter`. And the two
+`Server/GameplayConfigs/` files that mention `ExitInstance` are not using this interaction at all —
+there it is a `Death.RespawnController` type. Attribute a grep hit to a registry before counting it.
+
+### TeleportInstance
+
+**Package:** `com.hypixel.hytale.builtin.instances.interactions.TeleportInstanceInteraction`
+
+Sends the player into a named **instance**, creating it if it does not exist. Codec doc: "Teleports
+the **Player** to the named instance, creating it if required." Extends
+[SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `InstanceName` | string | — | **Required** (`Validators.nonNull()`), and validated by `InstanceValidator`, so an unknown instance fails at load |
+| `InstanceKey` | string | *random* | Names the created world. Codec doc: "Random if not provided" — so omitting it makes each use a **fresh** instance, and supplying it makes repeat uses share one |
+| `OriginSource` | enum | `ENTITY` | **Required** (`Validators.nonNull()`) despite having a default. `ENTITY` takes the return position from the interacting entity, `BLOCK` from the targeted block. Those two are the whole enum |
+| `PositionOffset` | vec3 | — | Offset applied to the return point, "used to prevent repeated interactions when returning from the instance" |
+| `Rotation` | rotation | — | Rotation to set on the player when they return |
+| `PersonalReturnPoint` | boolean | `false` | Give this player their own return point at the current location, overriding the world's |
+| `CloseOnBlockRemove` | boolean | **`true`** | Delete the instance when the portal block is removed. The one boolean here defaulting true |
+| `RemoveBlockAfter` | double | `-1` | Seconds to wait before removing the block that triggered the interaction; negative disables it |
+
+> **Gotcha — `RemoveBlockAfter` exists because a chain cannot outlive the teleport.** The codec says
+> so outright: it is "needed instead of using another interaction due to all interactions being
+> stopped once teleporting to another world". Anything you would normally hang off `Next` to clean
+> up the portal block never runs, so the cleanup had to become a key on this interaction.
+
+Two shipped uses: `Forgotten_Temple_Portal_Enter.json` and a test interaction.
+
+### HubPortal
+
+**Package:** `com.hypixel.hytale.builtin.creativehub.interactions.HubPortalInteraction`
+
+Sends the player to a **permanent** world rather than an instance, creating it if required. Extends
+[SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `WorldName` | string | **Required** (`Validators.nonNull()`). The permanent world to teleport to |
+| `WorldGenType` | string | World generator to use when creating it (e.g. `Flat`, `Hytale`). **Mutually exclusive with `InstanceTemplate`** |
+| `InstanceTemplate` | string | Instance asset to use as the template instead. **Mutually exclusive with `WorldGenType`** |
+
+The mutual exclusion is stated in both codec descriptions but is **not** enforced by a validator, so
+an asset setting both passes load. Three shipped uses, all under `Server/Item/Items/Portal/`:
+`Hub_Portal_Default.json`, `Hub_Portal_Flat.json` and `Hub_Portal_Zone3_Taiga1.json`.
+
+### Teleporter
+
+**Package:** `com.hypixel.hytale.builtin.adventure.teleporter.interaction.server.TeleporterInteraction`
+
+The rune-teleporter pad: warps an entity to the destination its block entity holds. Extends
+[SimpleBlockInteraction](interactions.md#simpleblockinteraction).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Particle` | string | — | Particle played on the entity when it teleports |
+| `ClearOutXZ` | double | `1.3` | How far the entity must move on the XZ plane after arriving before another teleporter will accept it. Validated `>= 0` |
+| `ClearOutY` | double | `2.5` | The same along the Y axis. Validated `>= 0` |
+
+None of the three is required. The two clear-out distances are what stop a player who arrives on top
+of another teleporter from being bounced straight onward; setting both to `0` re-enables that loop.
+Its one shipped use runs from `CollisionEnter`, not `Use`:
+
+```json
+{
+  "Type": "Teleporter",
+  "Particle": "Teleport"
+}
+```
+
+---
+
 
 ## AdventureMetadata
 

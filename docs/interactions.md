@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 1 is documented in
-its registry row itself, and 41 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 5 are documented in
+their registry rows themselves, and 37 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,8 +140,8 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 1 is documented in its registry row itself, and 41 are not yet
-documented. A row count is itself a closure claim, and so is each of those three figures, so
+written section on another page, 5 are documented in their registry rows themselves, and 37 are not
+yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
 
@@ -205,7 +205,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `DamageEntity` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#damageentity) |
 | `DestroyBlock` | `InteractionModule` | — *not yet documented* |
 | `DestroyTaggedVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
-| `DestroyTreasureCondition` | `ObjectivePlugin` | — *not yet documented* |
+| `DestroyTreasureCondition` | `ObjectivePlugin` | Succeeds only once the target treasure chest has been **opened** — `TreasureChestBlock.canDestroy` returns nothing but that chest's `opened` flag — so it is the gate that keeps an unlooted objective chest unbreakable. Passes trivially when the target block has no block entity or no `TreasureChestBlock` on it. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.DestroyTreasureConditionInteraction` |
 | `Door` | `InteractionModule` | [interactions-world.md](interactions-world.md#door) |
 | `DragEraseBlock` | `InteractionModule` | — *not yet documented* |
 | `DragPlaceBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
@@ -241,7 +241,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `OpenItemStackContainer` | `InteractionModule` | — *not yet documented* |
 | `OpenPage` | `InteractionModule` | [interactions-world.md](interactions-world.md#ui-interactions) |
 | `OpenProcessingBench` | `CraftingPlugin` | — *not yet documented* |
-| `OpenTreasureContainer` | `ObjectivePlugin` | — *not yet documented* |
+| `OpenTreasureContainer` | `ObjectivePlugin` | Opens the targeted treasure chest's container window and marks the chest opened, which is what later lets `DestroyTreasureCondition` (this table) pass. It fires [TreasureChestOpeningEvent](adventure.md#treasurechestopeningevent) only when the chest carries an objective UUID, so a chest placed outside an objective opens silently. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.OpenTreasureContainerInteraction` |
 | `Parallel` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#parallel) |
 | `PickBlock` | `InteractionModule` | — *not yet documented* |
 | `PickupItem` | `BuilderToolsPlugin` | — *not yet documented* |
@@ -267,7 +267,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `SendMessage` | `InteractionModule` | [interactions-world.md](interactions-world.md#sendmessage) |
 | `Serial` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#serial) |
 | `SetGameFlag` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
-| `SetMemoriesCapacity` | `MemoriesPlugin` | — *not yet documented* |
+| `SetMemoriesCapacity` | `MemoriesPlugin` | Raises a player's memory capacity to `Capacity`, and **fails when that value is not higher than the current one** — it can only ever increase, so the same item cannot be used twice. Crossing from zero also unlocks the memories feature for that player (an `UpdateMemoriesFeatureStatus` packet plus a notification). One key: `Capacity` (int, not required). One shipped use, `Server/Item/Items/Bench/Bench_Memories.json`. `com.hypixel.hytale.builtin.adventure.memories.interactions.SetMemoriesCapacityInteraction` |
 | `ShowEventTitle` | `InteractionModule` | — *not yet documented* |
 | `SignalNearbyVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `Simple` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#simpleinteraction) |
@@ -279,7 +279,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `SpawnPrefab` | `InteractionModule` | [interactions-world.md](interactions-world.md#spawnprefab) |
 | `SpawnTriggerVolume` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |
-| `StartObjective` | `ObjectivePlugin` | — *not yet documented* |
+| `StartObjective` | `ObjectivePlugin` | Starts the objective described by its one key, `Setup` (an `ObjectiveTypeSetup` — shipped assets write `{ "Type": "Objective", "ObjectiveId": … }` — required by `Validators.nonNull()`). Starting stamps the new objective's UUID into the **held item stack's** metadata, and a later use of that same stack adds the player to the existing objective instead of starting another. `com.hypixel.hytale.builtin.adventure.objectives.interactions.StartObjectiveInteraction` — note that `com.hypixel.hytale.builtin.adventure.objectiveshop.StartObjectiveInteraction` shares the simple name, is registered on `ChoiceInteraction.CODEC` with a different single key, and is **not** this type |
 | `StatsCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#statscondition) |
 | `StatsConditionWithModifier` | `InteractionModule` | — *not yet documented* |
 | `SurfaceDrawPlaceBlock` | `InteractionModule` | — *not yet documented* |

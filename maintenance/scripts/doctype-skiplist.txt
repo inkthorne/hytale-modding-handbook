@@ -9,15 +9,32 @@
 #
 # Format: doc.md  # justification.
 #
-# AUDIT METHOD — do not repeat the 2026-09-03 mistake. That audit inspected the
-# classes the check's own regex matched and concluded from those two strings
-# that the page had no Java surface. It was wrong on three of four pages: the
-# regex requires a fully-qualified name ending in a capitalized segment, so it
-# never sees a "**Package:**" line (lowercase tail), a bare interface name, or a
-# method in a ```java fence or a table cell. universe-saves.md scored 2 on the
-# heuristic while carrying 7 package sections and 10 java fences. Audit the
-# PAGE, not the regex's matches: count "**Package:**" headings, ```java fences
-# and "| Method |" tables before adding an entry here.
+# WHAT THE CHECK NOW UNDERSTANDS (2026-09-04). The check excludes a class cited
+# on a "**Package:**" line whose section carries POSITIVE evidence of being JSON
+# documentation (a ```json fence or a Property/Key/Field table) and no Java
+# surface (no ```java fence, no "| Method" table) — and only when every
+# occurrence of that class on the page is such a citation. It reports how many
+# citations it excluded, on how many pages, so a rule that silently stops firing
+# is visible as a zero rather than as a pass. That is the audit method below,
+# encoded.
+#
+# SO THIS LIST IS NOW THE RESIDUAL: citations the rule cannot classify, because
+# they sit in prose or in a fence rather than on a "**Package:**" line. It is no
+# longer where routine JSON-documents-a-Type pages go; those need no entry.
+#
+# AUDIT METHOD — unchanged, and still required before adding an entry. Do not
+# repeat the 2026-09-03 mistake: that audit inspected the classes the check's own
+# regex matched and concluded from those two strings that the page had no Java
+# surface. It was wrong on three of four pages, because a regex requiring a
+# fully-qualified name ending in a capitalized segment never sees a bare
+# interface name or a method in a ```java fence or a table cell.
+# universe-saves.md scored 2 on the heuristic while carrying 7 package sections
+# and 10 java fences. Audit the PAGE, not the regex's matches: count
+# "**Package:**" headings, ```java fences and "| Method |" tables.
+#
+# The retag test still governs: a package line above a JSON property table is a
+# citation; a package line above signatures, a method table or a java fence is an
+# API section, and the page should be retagged rather than skipped.
 #
 # A non-zero "**Package:**" count does NOT by itself disqualify an entry, but it
 # raises the bar: the entry must say why that heading is a provenance citation
@@ -27,8 +44,6 @@
 # method table or a ```java fence is an API section, and the page should be
 # retagged instead.
 #
-# Audited 2026-09-03 against the 0.6.3 jar by that method.
+# Audited 2026-09-03; rule added and entries re-derived 2026-09-04, 0.6.3 jar.
 
 worldgen-biomes.md   # 0 package sections, 0 method tables; its single java fence is a 4-signature WeatherForecast citation supporting the biome JSON
-items-blocks.md      # 1 package section but 0 java fences, 0 method tables; the package line is provenance for the JSON "Type": "HarvestCrop", above a JSON property table and two JSON examples. Its 2 classes (HarvestCropInteraction, FarmingUtil) are cited only to source the behaviour and the two drop-loss paths; the page documents no Java signature, method or constructor.
-items-weapons.md     # 2 package sections but 0 java fences, 0 method tables; both are provenance for JSON "Type" values (DurabilityCondition, UseEntity), each above a JSON property table or JSON example. Cited only to source the gating behaviour (unbreakable items short-circuit) and the unarmed use-ladder; the page documents no Java signature, method or constructor.

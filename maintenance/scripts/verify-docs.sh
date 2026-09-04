@@ -259,15 +259,74 @@ untagged=[]; mismatch=[]; counts={}; multi=[]
 type_re=re.compile(r'^\*\*Doc type:\*\*\s*([^\n·]+?)(?:\s*·|\n)', re.M)
 tag_line_re=re.compile(r'^\*\*Doc type:\*\*', re.M)
 cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
-# Calibration skip-list: pages that legitimately cite backing codec classes
-# from a non-Java tag. See maintenance/scripts/doctype-skiplist.txt.
+# Provenance exclusion. A section documenting a JSON "Type" cites the class that
+# implements it on a **Package:** line; that is a citation, not an API surface.
+# Exclusion requires POSITIVE evidence of JSON documentation, not merely the
+# absence of Java — absence alone is how a check turns into a silent pass.
+#
+# Four scoping rules, each added because a fixture defeated the version without
+# it (fixtures D-G, 2026-09-04):
+#   D  page-level backstop: any ```java fence or | Method / | Signature table
+#      ANYWHERE on the page disqualifies the whole page. Java surface written
+#      with simple names in a section that has no **Package:** line is otherwise
+#      invisible to both the section scan and the FQCN recurrence test.
+#   E  a citation's section may contain no fence other than ```json — strictly
+#      stronger than "no ```java", and it covers bare signature fences, the
+#      blind spot CLAUDE.md queues as gate 2.
+#   F  positive evidence is a ```json fence or a | Property / | Key table.
+#      | Field is NOT accepted: it appears 33 times in the corpus and is
+#      genuinely ambiguous between a JSON field and a Java one.
+#   G  the simple name of an excluded class may not appear inside any non-json
+#      fence on the page; the FQCN test alone cannot see how Java is written.
+head_re=re.compile(r'^(#{1,6})\s', re.M)
+pkg_re=re.compile(r'^\*\*Package:\*\*.*$', re.M)
+json_re=re.compile(r'^```json', re.M)
+ptab_re=re.compile(r'^\|\s*(?:Property|Key)\s*\|', re.M)
+java_re=re.compile(r'^```java', re.M | re.I)
+mtab_re=re.compile(r'^\|\s*(?:Methods?|Signatures?)\s*\|', re.M)
+fence_re=re.compile(r'^```(\w*)', re.M)
+def _tag(s): return s.lower()
+def _sections(txt):
+    hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)]
+    for i,(pos,lvl) in enumerate(hs):
+        end=len(txt)
+        for pos2,lvl2 in hs[i+1:]:
+            if lvl2<=lvl: end=pos2; break
+        yield pos,end
+def _openers(body):
+    return [_tag(m.group(1)) for i,m in enumerate(fence_re.finditer(body)) if i%2==0]
+def _nonjson_fence_text(txt):
+    out=[]; f=[(m.start(), m.end(), m.group(1)) for m in fence_re.finditer(txt)]
+    for i in range(0,len(f)-1,2):
+        if _tag(f[i][2])!='json': out.append(txt[f[i][1]:f[i+1][0]])
+    return "\n".join(out)
+def provenance(txt):
+    if java_re.search(txt) or mtab_re.search(txt): return set()      # D
+    prov=set(); spans=[]
+    for s,e in _sections(txt):
+        body=txt[s:e]
+        for pm in pkg_re.finditer(body):
+            cs=set(cls_re.findall(pm.group(0)))
+            if not cs: continue
+            if not (json_re.search(body) or ptab_re.search(body)): continue   # F
+            if any(tag!='json' for tag in _openers(body)): continue           # E
+            prov|=cs; spans.append((s+pm.start(), s+pm.end()))
+    if not prov: return set()
+    masked=list(txt)
+    for a,b in spans:
+        for i in range(a,b): masked[i]=' '
+    outside=set(cls_re.findall(''.join(masked)))
+    nonjson=_nonjson_fence_text(txt)                                          # G
+    return {c for c in prov - outside if c.rsplit('.',1)[-1] not in nonjson}
+# Calibration skip-list: the residual — citations in prose or fences that the
+# provenance rule above cannot classify. See maintenance/scripts/doctype-skiplist.txt.
 skip=set()
 sl="maintenance/scripts/doctype-skiplist.txt"
 if os.path.exists(sl):
     for line in open(sl):
         line=line.split("#",1)[0].strip()
         if line: skip.add(line)
-scanned=0; candidates=0; used=set()
+scanned=0; candidates=0; used=set(); prov_cites=0; prov_pages=set(); fell=[]
 for p in sorted(glob.glob("docs/*.md")):
     bn=os.path.basename(p); txt=open(p).read()
     scanned+=1
@@ -282,7 +341,20 @@ for p in sorted(glob.glob("docs/*.md")):
     if n_tags > 1: multi.append((bn,n_tags))
     typ=m.group(1).strip(); counts[typ]=counts.get(typ,0)+1
     classes=set(cls_re.findall(txt))
-    if "Java API" in typ or len(classes) < 2: continue
+    if "Java API" in typ: continue
+    # Only computed for non-Java pages, so the reported count is exclusions that
+    # actually changed an outcome rather than incidental matches elsewhere.
+    prov=provenance(txt)
+    if prov:
+        prov_cites+=len(prov); prov_pages.add(bn)
+        # A page that drops from candidate to non-candidate *because* of exclusion is
+        # otherwise indistinguishable from one that never had two FQCNs. The backstop
+        # above is a blacklist of Java-surface signals and cannot be closed by
+        # enumeration; reporting this transition makes every escape a number someone
+        # can look at, whether or not the blacklist ever learns its cause.
+        if len(classes) >= 2 and len(classes - prov) < 2: fell.append(bn)
+        classes-=prov
+    if len(classes) < 2: continue
     candidates+=1
     if bn in skip:
         used.add(bn); continue
@@ -291,7 +363,8 @@ for p in sorted(glob.glob("docs/*.md")):
 # was renamed, retagged, or dropped below the threshold. Report it rather than
 # letting it sit ready to re-suppress if the file ever returns.
 for stale in sorted(skip - used): print(f"STALESKIP {stale}")
-print(f"DENOM {scanned} {candidates} {len(used)}")
+print(f"DENOM {scanned} {candidates} {len(used)} {prov_cites} {len(prov_pages)} {len(fell)}")
+for b in fell: print(f"FELL {b}")
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
 for bn,n in multi: print(f"MULTITAG {bn} carries {n} **Doc type:** lines; only the first is read")
@@ -304,14 +377,17 @@ MM="$(echo "$OUT" | grep -c '^MISMATCH' || true)"
 SCANNED="$(echo "$OUT" | awk '/^DENOM/{print $2}')"
 DEN="$(echo "$OUT" | awk '/^DENOM/{print $3}')"
 SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $4}')"
+PROVC="$(echo "$OUT" | awk '/^DENOM/{print $5}')"
+PROVP="$(echo "$OUT" | awk '/^DENOM/{print $6}')"
+FELL="$(echo "$OUT" | awk '/^DENOM/{print $7}')"
 SS="$(echo "$OUT" | grep -c '^STALESKIP' || true)"
 MT="$(echo "$OUT" | grep -c '^MULTITAG' || true)"
 [ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
 EXAMINED=$(( ${DEN:-0} - ${SKIPPED:-0} ))
 if [ "$MM" -eq 0 ]; then
-  pass "no JSON/DSL-tagged doc references Java classes (${SCANNED:-0} doc(s) scanned, $EXAMINED of ${DEN:-0} candidate(s) examined, ${SKIPPED:-0} audited-skip)"
+  pass "no JSON/DSL-tagged doc references Java classes (${SCANNED:-0} doc(s) scanned, $EXAMINED of ${DEN:-0} candidate(s) examined, ${SKIPPED:-0} audited-skip, ${PROVC:-0} Package-line citation(s) on ${PROVP:-0} page(s) treated as provenance, ${FELL:-0} page(s) fell below threshold because of it)"
 else
-  warn "$MM of ${DEN:-0} candidate doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs):"
+  warn "$MM of ${DEN:-0} candidate doc(s) tagged non-Java but reference com.hypixel.* classes (review tag or refs; ${PROVC:-0} Package-line citation(s) on ${PROVP:-0} page(s) already treated as provenance):"
   echo "$OUT" | grep '^MISMATCH' | sed 's/^MISMATCH/      /'
 fi
 [ "$MT" -eq 0 ] || { warn "$MT doc(s) carry more than one **Doc type:** line (only the first is read):"; echo "$OUT" | grep '^MULTITAG' | sed 's/^MULTITAG/      /'; }

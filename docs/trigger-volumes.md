@@ -168,12 +168,15 @@ equivalent for:
 | `FadeInDuration` | `FadeInDurationS` |
 | `FadeOutDuration` | `FadeOutDurationS` |
 
-> **Gotcha — copying the effect block on this page into an interaction half-works.** The four shared
-> keys transfer, so the title still appears; the three `…Duration` keys are silently dropped as
-> unknown and the interaction runs on its defaults, which are `0` for all three. A title that shows
-> for no time and never fades is the visible symptom, and nothing names the keys that went missing.
-> The reverse direction fails the same way. This is not the usual "same string, different registry"
-> collision — here the *keys* nearly match too, which is what makes the mistake survive a read-over.
+> **Gotcha — copying the effect block on this page into an interaction *works*, by coincidence, until
+> someone changes a timing value.** The four shared keys transfer. The three `…Duration` keys are
+> silently dropped as unknown, and the interaction falls back to its own defaults — which are `4.0`,
+> `1.5` and `1.5`, exactly the values the shipped effect block writes. So the title appears and
+> behaves correctly, and nothing indicates that three keys were discarded. The failure surfaces later
+> and somewhere else: an author edits `Duration` on what is now an interaction, sees no change, and
+> has no reason to suspect the key name. The reverse direction fails the same way. This is not the
+> usual "same string, different registry" collision — here the *keys* nearly match, and so do the
+> defaults.
 
 **Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.ShowEventTitleInteraction`
 
@@ -182,14 +185,14 @@ Codec doc: "Shows an event title to the players of one world or of the whole uni
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `Target` | enum | — | **Required** (`Validators.nonNull()`). `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
+| `Target` | enum | `World` | **Required** (`Validators.nonNull()`) *despite having a default* — the field initialises to `World`, but the key must still be written. `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
 | `PrimaryTitle` | message | — | **Required** (`Validators.nonNull()`). The main line |
 | `SecondaryTitle` | message | *empty* | The line below it; omit for a one-line title |
 | `IsMajor` | boolean | `false` | Whether the client presents this as a major event rather than a minor one |
 | `Icon` | string | — | Icon shown beside the title; omit for none |
-| `DurationS` | float | `0` | Seconds on screen **after** the fade in. Validated `>= 0` |
-| `FadeInDurationS` | float | `0` | Seconds to fade in. Validated `>= 0` |
-| `FadeOutDurationS` | float | `0` | Seconds to fade out. Validated `>= 0` |
+| `DurationS` | float | `4.0` | Seconds on screen **after** the fade in. Validated `>= 0` |
+| `FadeInDurationS` | float | `1.5` | Seconds to fade in. Validated `>= 0` |
+| `FadeOutDurationS` | float | `1.5` | Seconds to fade out. Validated `>= 0` |
 
 **No shipped asset uses the interaction**, so the table above rests on its codec alone. The single
 file in `Assets.zip` carrying `"Type": "ShowEventTitle"` is

@@ -927,13 +927,20 @@ farming stage of the target block." Extends
 | `Increase` | int | *unset* | Add this many stages to the current one. **Takes priority over `Decrease` and `Stage`** |
 | `Decrease` | int | *unset* | Subtract this many stages. **Takes priority over `Stage`** |
 | `Stage` | int | `-1` | Absolute stage index to set. A negative value — including the default — means the **last** stage of the set |
-| `StageSet` | string | *the block's `StartingStageSet`* | Stage set to switch to. When omitted the block keeps its current set |
+| `StageSet` | string | *the block's current stage set* | Stage set to switch to. When omitted the block keeps the set it is already in — **not** its `StartingStageSet`, though the load-time-shaped precheck below uses that one |
 
 **None of the four is required**, and the defaults are not inert: with no properties at all the
-interaction jumps the block to the final stage of its current set. `Increase` and `Decrease` are
-nullable boxed integers internally, so "not written" is distinguishable from `0` — writing
-`"Increase": 0` selects the increase branch and re-applies the current stage, which is not the same
-as omitting the key.
+interaction jumps the block to the final stage of its current set. That follows from `Stage`'s field
+default of `-1` — the codec's own description does say "Use -1 for the final stage", so the surprise
+is the default, not a disagreement between doc and code.
+
+`Increase` and `Decrease` are nullable boxed integers internally while `Stage` is a primitive, so the
+branch is chosen on null-vs-set rather than zero-vs-set: writing `"Increase": 0` takes the increase
+branch and re-applies the *current* stage, where omitting the key would jump to the last one. **That
+distinction is only observable on a block that already carries a `FarmingBlock` sitting below its
+final stage** — on a block being touched for the first time the component is created at the final
+stage (below), so there `"Increase": 0` and no keys at all do the same thing, and `"Decrease": 1`
+lands one below the end rather than one below wherever the player thought it was.
 
 Both shipped uses are tools, and they use different branches. `Tool_Growth_Potion.json` is a
 developer tool that carries two variants in `InteractionVars`:
@@ -965,6 +972,12 @@ Behavior (from the decompiled source):
   must exist in it. Every failure path — unloaded section, no block type, no farming config, unknown
   stage set — ends the interaction `Failed` and logs a `[ChangeFarmingStage] FAILED: …` warning, so
   unlike [HarvestCrop](#harvestcrop-interaction) these failures are traceable in the server log.
+- **The stage set is resolved twice, against two different fallbacks, and only the second one is
+  applied.** The early check validates `StageSet` or, when it is omitted, the config's
+  `StartingStageSet`; the set actually applied is `StageSet` or the block's *current* set. A block
+  sitting in a later set therefore fails the precheck — with
+  `stages is null or empty for stageSet=<StartingStageSet>` naming a set the interaction was never
+  going to use — whenever the config's starting set is itself empty or absent.
 - **A missing `FarmingBlock` component is created**, starting at the final stage of the resolved set,
   so the interaction works on a farmable block that has never grown.
 - **The resulting index is clamped** into `0 .. stages.length - 1`, so `"Increase": 99` saturates at

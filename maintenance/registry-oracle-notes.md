@@ -408,6 +408,32 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
   `CameraShakeEffect` (2). The table below was rebuilt with resolution scoped to
   `Interaction.CODEC` in both registration forms; the corrected figures are 8, 1
   and 1. Any tool used against this tail must be registry-scoped, not name-scoped.
+- **Registry-scoping is necessary but not sufficient — resolve the FQN from the
+  registering file's imports.** Scoping to `Interaction.CODEC` gives you the right
+  registration and therefore the right class *simple name*; it does not say which
+  **file** declares it. Two classes are named `StartObjectiveInteraction`:
+  `builtin/adventure/objectives/interactions/` (on `Interaction.CODEC`, one key
+  `Setup`, required) and `builtin/adventure/objectiveshop/` (on
+  `ChoiceInteraction.CODEC`, one key `ObjectiveId`, not required). **Both declare
+  exactly one key**, so a count cross-check agrees while the key name and its
+  requiredness are both wrong — which is how the row below was wrong until
+  hytale-reviewer's independent parse caught it. Take the FQN from
+  `ObjectivePlugin.java`'s own import list, never a glob on the simple name; a bare
+  glob also returns the `protocol.` twin (a MemorySegment DTO with no codec) ahead
+  of the server class for every type that has one.
+- **`.appendInherited(...)` declares a key on *this* codec** — "Inherited" names the
+  builder's self-type generic, not a parent's key. A parser matching only
+  `.append(` scores 0 keys for roughly a third of these types while looking clean.
+  Self-check `appends == adds == keys` per chain; it catches that and the
+  wrong-file resolution both.
+- **Three types have 0 *own* keys but a non-trivial parent.** `DragEraseBlock`,
+  `ExtrudePlaceBlock` and `SurfaceDrawPlaceBlock` inherit `DragPlaceBlockInteraction.CODEC`
+  (5 keys, `ForkInteractions` required), and `DragPlaceBlock` is already documented
+  in `items-blocks.md`. A bare row saying "0 keys" reads as "takes no keys", which is
+  false — point those three rows at the `DragPlaceBlock` material. Same shape for
+  `StatsConditionWithModifier` over `StatsConditionBaseInteraction`.
+  `ChangeActiveSlot`'s parent is `Interaction.ABSTRACT_CODEC`, not one of the three
+  `Simple*` bases, so do not let its row claim base-interaction keys.
 - **`CameraShake` gets a row, not a section**, and the row should say explicitly
   that the string is registered on both `CameraEffect.CODEC` and
   `Interaction.CODEC`, and that the interaction has **zero** shipped uses — all
@@ -419,7 +445,7 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
 | Target page | `Type` | Implementing class | Own keys | Required | Verdict |
 |---|---|---|---|---|---|
 | `adventure.md` | `SetMemoriesCapacity` | `SetMemoriesCapacityInteraction` | 1 | — | row |
-| `adventure.md` | `StartObjective` | `StartObjectiveInteraction` | 1 | — | row |
+| `adventure.md` | `StartObjective` | `objectives.interactions.StartObjectiveInteraction` | 1 | `Setup` | row |
 | `adventure.md` | `DestroyTreasureCondition` | `DestroyTreasureConditionInteraction` | 0 | — | row |
 | `adventure.md` | `OpenTreasureContainer` | `OpenTreasureContainerInteraction` | 0 | — | row |
 | `blocks.md` | `AugmentCondition` | `AugmentConditionInteraction` | 2 | RequiredAugmentTags | **section** |
@@ -467,3 +493,40 @@ Counts: **13 sections, 31 rows.** Target-page assignments are a starting
 judgment, not a ruling — move a type if the page it acts on is a better home than
 the plugin that registers it, which is how `DurabilityCondition` ended up in
 `items-weapons.md` rather than with the other conditions.
+
+### Key names for the 21 types that declare any (* = required)
+
+Independently derived twice — once here, once by hytale-reviewer with a separately
+written parser — and reconciled. All 44 counts and required-sets agree.
+
+| `Type` | Keys |
+|---|---|
+| `AddItem` | `ItemId`*, `Quantity` |
+| `AugmentCondition` | `RequiredAugmentTags`*, `Radius` |
+| `CameraShake` | `CameraEffect`* |
+| `CarryBlock` | `EntityEffectId` |
+| `ChangeActiveSlot` | `TargetSlot` |
+| `ChangeFarmingStage` | `Stage`, `Increase`, `Decrease`, `StageSet` |
+| `HubPortal` | `WorldName`*, `WorldGenType`, `InstanceTemplate` |
+| `IncreaseBackpackCapacity` | `From`, `Capacity` |
+| `IncrementCooldown` | `Id`, `Time`, `ChargeTime`, `Charge`, `InterruptRecharge` |
+| `OpenBenchPage` | `Page`* |
+| `RevealMapMarkersInView` | `FieldOfView`, `MaxDistance`, `ScanInterval`, `RunWhile`, `ConditionGrace`, `RevealParticles` |
+| `RunOnBlockTypes` | `Range`*, `BlockSets`*, `MaxCount`*, `Interactions`* |
+| `RunRootInteraction` | `RootInteraction`* |
+| `SendBeacon` | `Message`*, `Range`, `ExpirationTime`, `TargetGroups` |
+| `SetMemoriesCapacity` | `Capacity` |
+| `ShowEventTitle` | `Target`*, `PrimaryTitle`*, `SecondaryTitle`, `IsMajor`, `Icon`, `DurationS`, `FadeInDurationS`, `FadeOutDurationS` |
+| `StartObjective` | `Setup`* |
+| `StatsConditionWithModifier` | `InteractionModifierId`* |
+| `TeleportInstance` | `InstanceName`*, `InstanceKey`, `PositionOffset`, `Rotation`, `OriginSource`*, `PersonalReturnPoint`, `CloseOnBlockRemove`, `RemoveBlockAfter` |
+| `Teleporter` | `Particle`, `ClearOutXZ`, `ClearOutY` |
+| `TriggerSpawnMarkers` | `MarkerType`, `Range`, `Count` |
+
+> **`ShowEventTitle`'s `…S` suffixes are the interaction's, and are not a defect in
+> `trigger-volumes.md`.** That page documents the *`TriggerEffect`* of the same name,
+> whose keys are `Duration` / `FadeInDuration` / `FadeOutDuration` with no suffix —
+> `ShowEventTitleEffect` and `ShowEventTitleInteraction` genuinely differ. This was
+> raised in review as a pre-existing wrong-key claim on a documented page; it is not
+> one. Checking it meant reading both classes rather than assuming the shared name
+> implied a shared shape, which is the §4 discipline applied to a review finding.

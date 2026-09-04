@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 82 have a written section on another page, 5 are documented in
-their registry rows themselves, and 37 are not yet documented. For the complete list — and to
+registered `Type` values, of which 82 have a written section on another page, 7 are documented in
+their registry rows themselves, and 35 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -140,7 +140,7 @@ tell "undocumented" apart from "does not exist" — see
 ### Complete Type Registry
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 82 have a
-written section on another page, 5 are documented in their registry rows themselves, and 37 are not
+written section on another page, 7 are documented in their registry rows themselves, and 35 are not
 yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -235,12 +235,12 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `ModifyInventory` | `InteractionModule` | [interactions-world.md](interactions-world.md#modifyinventory) |
 | `Mount` | `MountPlugin` | [mounts.md](mounts.md#mount-interaction) |
 | `MovementCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#movementcondition) |
-| `OpenBenchPage` | `CraftingPlugin` | — *not yet documented* |
+| `OpenBenchPage` | `CraftingPlugin` | Opens a crafting bench window on the interacting player. One key, `Page` (required by `Validators.nonNull()`), selecting one of `OpenBenchPageInteraction.PageType`'s three constants — `SIMPLE_CRAFTING`, `DIAGRAM_CRAFTING`, `STRUCTURAL_CRAFTING` — which pick a `SimpleCraftingWindow`, `DiagramCraftingWindow` or `StructuralCraftingWindow`. **No shipped asset writes this type**: `CraftingPlugin` builds three instances with the ids `*Simple_Crafting_Default`, `*Diagram_Crafting_Default` and `*Structural_Crafting_Default` and binds them through `Bench.registerRootInteraction` to the `Crafting`, `DiagramCrafting` and `StructuralCrafting` bench types, so a bench of those types opens without naming any interaction. `com.hypixel.hytale.builtin.crafting.interaction.OpenBenchPageInteraction` |
 | `OpenContainer` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencontainer) |
 | `OpenCustomUI` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencustomui) |
 | `OpenItemStackContainer` | `InteractionModule` | — *not yet documented* |
 | `OpenPage` | `InteractionModule` | [interactions-world.md](interactions-world.md#ui-interactions) |
-| `OpenProcessingBench` | `CraftingPlugin` | — *not yet documented* |
+| `OpenProcessingBench` | `CraftingPlugin` | Opens the processing-bench window on the interacting player. No keys of its own. It is the **fourth** `BenchType`'s route and the asymmetric one: `Processing` is the one bench type `Bench.registerRootInteraction` is never called for, so `Bench.getRootInteraction()` returns null for it and a processing bench must name the interaction itself — all four shipped ones (`Bench_Furnace`, `Bench_Campfire`, `Bench_Tannery`, `Bench_Salvage`) set `"Interactions": { "Use": "Open_Processing_Bench" }`. `com.hypixel.hytale.builtin.crafting.interaction.OpenProcessingBenchInteraction` |
 | `OpenTreasureContainer` | `ObjectivePlugin` | Opens the targeted treasure chest's container window and marks the chest opened, which is what later lets `DestroyTreasureCondition` (this table) pass. It fires [TreasureChestOpeningEvent](adventure.md#treasurechestopeningevent) only when the chest carries an objective UUID, so a chest placed outside an objective opens silently. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.OpenTreasureContainerInteraction` |
 | `Parallel` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#parallel) |
 | `PickBlock` | `InteractionModule` | — *not yet documented* |

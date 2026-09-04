@@ -751,3 +751,116 @@ the material had "no positive control"; that is true of the *interaction*, which
 uses, and false of the *effect*, which is among the better-corroborated types on its page. A blanket
 "nothing corroborates this" over a section documenting two twins understates one and overstates the
 other.
+
+### Defaults are a claim, and a wrong one can invent a symptom
+
+Two defects reached `main` in the tail's last four commits, both caught by
+hytale-reviewer, and both were **defaults** rather than behaviour.
+
+**`ShowEventTitleInteraction`'s three `…DurationS` keys were documented as
+defaulting to `0`.** They default to `4.0`, `1.5` and `1.5`. The page then built a
+gotcha on the wrong figure — "a title that shows for no time and never fades" —
+which is a symptom that does not exist, and would have sent a reader debugging a
+fade that was working. The true defaults make the warning *stronger*: the shipped
+trigger-volume effect block writes `Duration` `4.0`, `FadeInDuration` `1.5`,
+`FadeOutDuration` `1.5`, which are exactly the interaction's three defaults. So
+copying that block into an interaction silently drops three keys and substitutes
+identical values — it works, and keeps working until someone edits a timing value
+and finds it has no effect. **A wrong default is not a small error when a gotcha
+is derived from it: it manufactures a false failure mode with a confident
+description attached.**
+
+**And a default is the one thing in a key table with no gate behind it.**
+`check-symbols.py` binds names, the snippet gate compiles units, the fields check
+confirms a documented key exists — none of them reads a *value*. That is the
+structural reason both of this round's defects were defaults while every mechanism
+claim in the same batch was caught: the mechanism claims had a reviewer *and* a
+decompiler to argue with, and the defaults had neither. "Re-read the field
+initialisers" is therefore a cheap standing check on any key table, not a lesson
+about these two keys.
+
+**`TeleportInstance`'s `InstanceKey` was documented as deciding whether the
+instance is fresh.** It decides *where the identity is stored*. With a key, the
+instance is a global world name shared by every block using it. Without one, an
+`InstanceBlock` component is created on the triggering block, the world UUID is
+written into it and the block is marked for saving — so that block returns to its
+own instance every later use. Neither branch is "a fresh instance each time". The
+two shipped assets are one per branch, and were sitting there the whole time: a
+dungeon portal you must be able to re-enter (no key) and a test that sets
+`"InstanceKey": "Persistent"`.
+
+The generalisable part: **a codec description that explains a key's *value*
+("Random if not provided") does not explain its *effect*.** The value really is
+random; the inference that randomness means non-persistence was mine, and the
+branch immediately below the key's read contradicted it. Read the branch the key
+selects, not only the description of what goes in it.
+
+Two smaller ones from the same review, both the good direction:
+
+- An unfalsifiable-by-asset negative ("nothing enforces the mutual exclusion, so
+  an asset setting both loads") is worth one more step: the branch says which one
+  *wins*. `HubPortal` resolves `InstanceTemplate` first, so `WorldGenType` is
+  silently ignored. That converts a negative nothing can contradict into a
+  positive anyone can check — the same move that fixed the `PickupItem` row.
+- An inference stated as mechanism should be traced to the guard that implements
+  it. "Zeroing both clear-out distances re-enables teleporter bouncing" was right
+  about the distances and wrong about the conclusion: `ClearUsedTeleporterSystem`
+  checks a separate 100 ms global cooldown *before* the distances, so zeroing them
+  reduces the guard rather than removing it.
+
+**A postscript on the same `PositionOffset` bullet, because the correction was
+corrected.** The first fix added a qualifier — "only reached when the instance is
+being created" — which was itself wrong, and wrong in the direction that
+*understates* exposure. `makeReturnPoint` has three call sites, not the two on the
+creation paths: the third is inside `getPersonalReturnPoint`, which both teleport
+branches call, including the one where the instance already exists. So with
+`PersonalReturnPoint` set the unguarded dereference runs on **every** use, and
+both shipped assets set it. The lesson is narrow and worth stating plainly:
+**counting a method's call sites is not the same as reading the two you already
+found.** A `grep -n` for the method name would have shown three in one line, and
+the qualifier was written from the two that were already on screen.
+
+**Then the evidence for the fix needed the same treatment.** The corrected bullet
+first cited "both shipped assets set `PersonalReturnPoint`" — a true sentence that
+does not support the claim, because one of the two sets `"OriginSource": "Block"`
+and therefore takes the branch that *guards* the null. An asset only corroborates
+a path it actually takes. The right citation is the single asset carrying all
+three conditions at once (`Forgotten_Temple_Portal_Enter.json`: no `OriginSource`
+so the `ENTITY` default, `PersonalReturnPoint` set, `PositionOffset` written as
+`{0,0,0}`) — one asset that exercises the path beats two that merely mention the
+key. Check which branch a cited asset takes before counting it as evidence, which
+is §4's registry-attribution discipline applied one level down, to branches within
+a single type.
+
+### The two unautomated elements of a key table
+
+The defaults defect and the citation defect have one explanation, and stating it
+turns two scars into a known gap.
+
+**Every gate in this corpus checks a *claim*, and neither of these is one.**
+`check-symbols.py` binds a name to a class. The snippet gate compiles a unit. The
+fields check confirms a documented key exists. The asset-path advisory resolves a
+path. None of them reads a **value**, so a default written as `0` when the field
+initialises to `4.0` passes forever. And none of them reads a **warrant** — that
+the asset a sentence cites actually exercises the path the sentence is about — so
+"both shipped assets set `PersonalReturnPoint`" passes forever too, being a true
+statement wrongly attached.
+
+Defaults and citations are therefore the two elements of a documented key table
+with no automation behind them at all, which is why both of this batch's surviving
+defects were one or the other while every mechanism claim in the same batch was
+caught. Two cheap manual checks cover the corpus's actual blind spot, and unlike
+the three queued gates neither waits on a parser:
+
+1. **Re-read the field initialisers** before writing a Default column. The value
+   is in the class body, a few lines below the codec chain that was just parsed.
+2. **Check that a cited asset takes the path** the sentence describes, not merely
+   that it mentions the key. An asset only corroborates a branch it actually
+   enters.
+
+**And the first of those is nearly free once queued gate 1 exists.** That gate has
+to parse codec chains to count keys; field initialisers sit in the same class body
+it will already be reading, adjacent to the keys they belong to. A defaults check
+is close to a by-product of the parse rather than new work — probably the cheapest
+thing to bolt onto that gate, and it closes half of this pair. The citation half
+has no obvious automation and stays a reading discipline.

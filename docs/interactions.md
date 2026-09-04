@@ -141,8 +141,9 @@ tell "undocumented" apart from "does not exist" — see
 
 Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 93 have a
 written section on another page and 31 are documented in their registry rows themselves. **None is
-undocumented** — as of 2026-09-04 every registered `Type` is covered, so a `—` appearing here again
-means a game update added a type. A row count is itself a closure claim, and so is each of those three figures, so
+undocumented** — as of 2026-09-04 every registered `Type` is covered. A `—` appearing here again
+means some type is undocumented: usually a game update adding one, but an edit that drops a link or
+a prose cell produces the same state. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
 

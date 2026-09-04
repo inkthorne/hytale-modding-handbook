@@ -144,6 +144,78 @@ The `Type` value selects the effect. These are the names registered by the built
 
 `Origin` keys take an `EffectOrigin`: `VOLUME_ORIGIN`, `ENTITY`, `EVENT`, or `WORLD_ABSOLUTE` (0.6.3+).
 
+### The `ShowEventTitle` interaction is a different type with the same name
+
+`Interaction.CODEC` also registers a `ShowEventTitle`, and it is **not** the effect in the table
+above. The two classes are
+`com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.ShowEventTitleInteraction`
+and the `ShowEventTitleEffect` behind this page's row; they differ in their key names, so an asset
+written for one will not decode as the other. It is documented here rather than beside the other
+interactions precisely because this is where the confusion happens.
+
+**The key sets nearly match, which is worse than differing.** Four of the eight names are shared
+verbatim; three differ only by a trailing `S`; and the interaction adds one the effect has no
+equivalent for:
+
+| Effect (`ShowEventTitleEffect`) | Interaction (`ShowEventTitleInteraction`) |
+|---|---|
+| — | `Target` |
+| `PrimaryTitle` | `PrimaryTitle` |
+| `SecondaryTitle` | `SecondaryTitle` |
+| `IsMajor` | `IsMajor` |
+| `Icon` | `Icon` |
+| `Duration` | `DurationS` |
+| `FadeInDuration` | `FadeInDurationS` |
+| `FadeOutDuration` | `FadeOutDurationS` |
+
+> **Gotcha — copying the effect block on this page into an interaction half-works.** The four shared
+> keys transfer, so the title still appears; the three `…Duration` keys are silently dropped as
+> unknown and the interaction runs on its defaults, which are `0` for all three. A title that shows
+> for no time and never fades is the visible symptom, and nothing names the keys that went missing.
+> The reverse direction fails the same way. This is not the usual "same string, different registry"
+> collision — here the *keys* nearly match too, which is what makes the mistake survive a read-over.
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.ShowEventTitleInteraction`
+
+Codec doc: "Shows an event title to the players of one world or of the whole universe." Extends
+[SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Target` | enum | — | **Required** (`Validators.nonNull()`). `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
+| `PrimaryTitle` | message | — | **Required** (`Validators.nonNull()`). The main line |
+| `SecondaryTitle` | message | *empty* | The line below it; omit for a one-line title |
+| `IsMajor` | boolean | `false` | Whether the client presents this as a major event rather than a minor one |
+| `Icon` | string | — | Icon shown beside the title; omit for none |
+| `DurationS` | float | `0` | Seconds on screen **after** the fade in. Validated `>= 0` |
+| `FadeInDurationS` | float | `0` | Seconds to fade in. Validated `>= 0` |
+| `FadeOutDurationS` | float | `0` | Seconds to fade out. Validated `>= 0` |
+
+**No shipped asset uses the interaction**, so the table above rests on its codec alone. The single
+file in `Assets.zip` carrying `"Type": "ShowEventTitle"` is
+`Server/Prefabs/Testing/VolumeShowcase/Trigger_Volume_Showcase.prefab.json` — a trigger-volume
+prefab, so it is the *effect*, and it writes all seven of the effect's keys.
+
+The **effect** is in the opposite position: it has two independent confirmations of its key set. That
+prefab is one; the other is `Server/Languages/*/server.lang`, whose
+`customUI.triggerVolumeEffectEditor.field.ShowEventTitle.<Key>` entries enumerate exactly those seven
+names for the in-game effect editor, in all five shipped language files. That pattern generalises —
+a `customUI.<editor>.field.<Type>.<Key>` block is a shipped key-set oracle for any type with an
+editor UI — and here it agrees with the codec.
+
+**Three things in the jar answer to this name**, so a lookup by simple name has three candidates:
+`Interaction.CODEC.register("ShowEventTitle", …)` in `InteractionModule`,
+`TriggerEffect.CODEC.register("ShowEventTitle", …)` in `TriggerVolumesPlugin`, and a to-client
+protocol packet class also called `ShowEventTitle`. Only the first two are `"Type"` values.
+
+One more trap for anyone mining these keys: the interaction's `PrimaryTitle` and `SecondaryTitle`
+are declared with the **raw** `KeyedCodec` form rather than the parameterised one, so a pattern
+matching `KeyedCodec<T>` sees six of its eight keys and misses both title fields.
+
+> **Gotcha — `Target` is required and `Universe` is not scoped to anything.** There is no radius,
+> no player filter and no volume: `Universe` reaches every player of every live world on the server.
+> The narrower option is `World`, and it is still every player in that world.
+
 ## Conditions
 
 Conditions gate an asset's effects: list them under `Conditions`, and the effects run only if every condition's

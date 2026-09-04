@@ -681,3 +681,73 @@ were separately traceable to real code. Read every resolution of a key, not the
 first one; and where two disagree, the seam between them is usually a real defect
 worth its own bullet (here: a block in a later stage set fails the precheck naming
 a set the interaction was never going to use).
+
+### The `ChargeTime` near-miss: stopping at a find rather than at an answer
+
+`IncrementCooldown`'s codec runs `chargeTime = -chargeTime` in `afterDecode`. Read
+against the codec's own description — "the amount of time to increase the current
+charge time by" — that looks exactly like the `SpawnYawOffset` shape: doc says one
+thing, code silently does the other. It was written up that way, claiming a
+positive `ChargeTime` makes the next charge arrive *sooner*. It makes it arrive
+**later**, and hytale-reviewer caught it before the commit landed.
+
+The missing step was one call further on, in `CooldownHandler.Cooldown`, and it is
+a **sign convention rather than a fact**: `chargeTimer += dt` with a charge granted
+at `chargeTimer >= chargeTimeMax`, so `chargeTimer` is elapsed progress counting
+*up*, while `remainingCooldown -= dt` two lines below counts *down*. Two timers,
+one class, opposite senses. Subtracting from progress lengthens the wait, so the
+negation is the implementation reconciling a key expressed as "seconds added to the
+wait" with a field that stores progress already made. The codec description is
+correct, and the negation is why.
+
+Three things worth carrying forward:
+
+- **A find is a worse place to stop than a puzzle.** An `afterDecode` that negates
+  a value announces itself as a discovery, and that is precisely what ended the
+  read early. The §5 rule says parse the chain to its `.add()`; this is its
+  runtime twin — parse through to what the field *means*, not to where the value
+  stops moving.
+- **Check the sign convention of any field a documented key feeds.** A wrong fact
+  usually contradicts something; a wrong sign convention produces a fluent,
+  confident, exactly-backwards paragraph.
+- **Zero shipped uses removes the only other check.** `IncrementCooldown` has none,
+  and `"ChargeTime"` appears in no shipped asset at all, so nothing but a second
+  reader was ever going to catch this. Treat "no positive control exists" as a
+  reason to slow down rather than as licence, and say so on the page: the section
+  now tells the reader to check the target cooldown's charge list, because
+  `increaseChargeTime` returns early both at max charges and at one charge or
+  fewer — so on most cooldowns the key does nothing, silently, while the
+  interaction still reports `Finished`.
+
+Related, from the same pass: a preamble sentence claiming "four names are
+registered on a second codec" was caught before the checker ran. §11 records eight
+collisions. A count in prose is a closure claim; where the real set is recorded
+elsewhere, point at it instead of restating its size.
+
+### Two attribution lessons from closing the tail
+
+**Directory is not always the discriminator.** §4's worked case, `CameraShake`, splits cleanly:
+all 49 hits sit under `Server/Camera/CameraEffect/`, so a directory-scoped grep is correct there and
+"scope the grep to the directory" reads like the general fix. It is not. `ExitInstance` gets four
+hits, of which two are the interaction (under `Server/Item/Items/`) and two are a
+`Death.RespawnController` type in `Server/GameplayConfigs/Portal.json` and `Default_Instance.json`.
+The thing that separates them is the **parent key path**, not the directory; a directory-scoped grep
+happens to be right today only because no `RespawnController` currently sits under `Server/Item/`.
+Attribute a hit by the key path it hangs from, and treat a directory that appears to separate two
+registries as a coincidence until checked.
+
+**`server.lang` is a shipped key-set oracle, and it is free.** CLAUDE.md records that the
+gotcha-string advisory greps the jar only, so `Server/Languages/*/server.lang` is checked by nothing.
+It nonetheless carries, for any type with an in-game editor UI, a block of the form
+`customUI.<editor>.field.<Type>.<Key>` — one entry per codec key. For `ShowEventTitleEffect` those
+entries enumerate exactly the seven keys its codec declares, in all five shipped language files, and
+the one shipped prefab writes all seven: two independent confirmations of a key set, from outside the
+jar. Worth running against any type being documented from a codec alone, and worth remembering that a
+control which agrees is still a result — this one caught nothing, which is what a passing check looks
+like.
+
+The same check corrected a claim in the other direction. The `ShowEventTitle` section originally said
+the material had "no positive control"; that is true of the *interaction*, which has zero shipped
+uses, and false of the *effect*, which is among the better-corroborated types on its page. A blanket
+"nothing corroborates this" over a section documenting two twins understates one and overstates the
+other.

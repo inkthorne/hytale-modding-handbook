@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 85 have a written section on another page, 26 are documented in
-their registry rows themselves, and 13 are not yet documented. For the complete list — and to
+registered `Type` values, of which 93 have a written section on another page and 31 are documented in
+their registry rows themselves. None is undocumented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -139,9 +139,10 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 85 have a
-written section on another page, 26 are documented in their registry rows themselves, and 13 are
-not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 93 have a
+written section on another page and 31 are documented in their registry rows themselves. **None is
+undocumented** — as of 2026-09-04 every registered `Type` is covered, so a `—` appearing here again
+means a game update added a type. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
 
@@ -152,14 +153,14 @@ The **Documented** cell has three states, and its first character tells you whic
 - **Prose** — the type has fewer than two keys of its own and no gotcha needing a paragraph, so
   *this row is its documentation*: one line, its own keys with their requiredness, and the
   fully-qualified class last. There is no section to link to and none is owed.
-- **`— *not yet documented*`** — neither, yet.
+- **`— *not yet documented*`** — neither, yet. No row is in this state today.
 
 A bare mention in a list, or a name that appears only inside an example, is *not* documentation and
-earns neither a link nor a prose cell. One name is still documented in this corpus as something
-*other* than an interaction and is still marked `—`: `ShowEventTitle` is also a
-[trigger-volume effect type](trigger-volumes.md#built-in-effect-types) with that same name. Same
-string, different registry — the documented one is not the interaction. As each such row fills, the
-warning moves into that row's own cell and the name leaves this list.
+earns neither a link nor a prose cell. Several of these names are *also* registered elsewhere — on
+another codec, as a block-entity component, or as an item property — and where that is so the row
+says it in its own cell rather than in a list here, because the row is where someone counting usages
+of that string will be standing. Treat any `"Type": "<name>"` grep as needing attribution to a
+registry before it means anything; `maintenance/registry-oracle-notes.md` §4 has the worked cases.
 
 **Registered by** names the module or plugin whose `setup()` registers the type. `Interaction.CODEC`
 is shared, so a type exists only when its owner is loaded. The 76 rows whose owner is listed in
@@ -175,7 +176,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `AddItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#additem) |
 | `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
 | `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
-| `AugmentCondition` | `AugmentBlocksPlugin` | — *not yet documented* |
+| `AugmentCondition` | `AugmentBlocksPlugin` | [interactions-flow.md](interactions-flow.md#augmentcondition) |
 | `Bed` | `BedsPlugin` | [player.md](player.md#bed-interaction) |
 | `BlockCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#blockcondition) |
 | `BreakBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#breakblock) |
@@ -214,7 +215,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `EquipItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#equipitem) |
 | `EventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `EventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
-| `ExitInstance` | `InstancesPlugin` | — *not yet documented* |
+| `ExitInstance` | `InstancesPlugin` | Sends the entity out of the instance it is in, to its set return point. Codec doc: "Teleports the **Entity** out of the current **Instance** and places them at their return point" — note *entity*, not player, where its `TeleportInstance` sibling says player. No keys of its own; the return point was recorded on the way in. Two shipped uses (`Forgotten_Temple_Portal_Exit.json`, `Leave_Instance.json`). **Two further files name the string and are a different registry**: `Server/GameplayConfigs/Portal.json` and `Default_Instance.json` use it as a `Death.RespawnController` type, so a name-scoped grep reports four against a true two. Note the discriminator here is a **parent key path**, not a directory — unlike `CameraShake`, which splits cleanly on `Server/Camera/CameraEffect/`, scoping this grep to a directory only happens to work while no `RespawnController` sits under `Server/Item/`. `com.hypixel.hytale.builtin.instances.interactions.ExitInstanceInteraction` |
 | `Explode` | `InteractionModule` | [interactions-world.md](interactions-world.md#explode) |
 | `ExtrudePlaceBlock` | `InteractionModule` | Extrudes the targeted block face while the click is held, placing one layer per depth step and erasing the streamed layers again when the gesture pulls back. Zero keys **of its own**, which does not mean it takes none: it extends `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragPlaceBlockInteraction`, whose five keys it inherits — `ForkInteractions` (required), `MaxBlocksPerTick` (`4`), `MaxBlocksPerGesture` (`512`), `ValidateForkPositions` (`true`) and `MaxForkPositionViolations` (`8`). See [items-blocks.md](items-blocks.md#block_secondary-interaction) for the `PlaceModeSelect` chain that dispatches to these. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ExtrudePlaceBlockInteraction` |
 | `FertilizeSoil` | `FarmingPlugin` | [items-tools.md](items-tools.md#fertilizer) |
@@ -223,9 +224,9 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `GlobalEventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `GlobalEventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `HarvestCrop` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#harvestcrop-interaction) |
-| `HubPortal` | `CreativeHubPlugin` | — *not yet documented* |
+| `HubPortal` | `CreativeHubPlugin` | [adventure.md](adventure.md#hubportal) |
 | `IncreaseBackpackCapacity` | `InteractionModule` | [interactions-world.md](interactions-world.md#increasebackpackcapacity) |
-| `IncrementCooldown` | `InteractionModule` | — *not yet documented* |
+| `IncrementCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#incrementcooldown) |
 | `Interrupt` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#interruptinteraction) |
 | `LaunchPad` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchpadinteraction) |
 | `LaunchProjectile` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchprojectile) |
@@ -249,8 +250,8 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `PlaceFluid` | `InteractionModule` | [interactions-world.md](interactions-world.md#placefluid) |
 | `PlacementCountCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
 | `PlaceModeSelect` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
-| `Portal` | `PortalsPlugin` | — *not yet documented* |
-| `PortalReturn` | `PortalsPlugin` | — *not yet documented* |
+| `Portal` | `PortalsPlugin` | Enters the portal block being interacted with — the class is `EnterPortalInteraction`, so the registered name and the class name do not match, and a search for `PortalInteraction` finds nothing. No keys of its own: the destination comes from the portal block's own configuration, not from the interaction. One shipped use, `Server/Item/Items/Portal/Portal_Device.json`. `com.hypixel.hytale.builtin.portals.interactions.EnterPortalInteraction` |
+| `PortalReturn` | `PortalsPlugin` | The return leg of [`Portal`](#complete-type-registry) — class `ReturnPortalInteraction`, again not matching the registered name. No keys of its own. One shipped use, `Server/Item/Items/Portal/Portal_Return.json`. `com.hypixel.hytale.builtin.portals.interactions.ReturnPortalInteraction` |
 | `PrefabSelectionInteraction` | `BuilderToolsPlugin` | Selects a prefab in the prefab editor, and is the one registered name that carries the `Interaction` suffix — the `Type` string really is `PrefabSelectionInteraction`. It requires an active prefab edit session (otherwise it messages `server.commands.editprefab.notInEditSession`) and branches on the slot it was run from: `Secondary` picks the loaded prefab whose horizontal centre is nearest the player, while any other slot picks the one whose bounding box contains the block the player is looking at. No keys of its own. One shipped use, `Server/Item/Items/EditorTool/EditorTool_PrefabEditing_SelectPrefab.json`, which runs it from both `Primary` and `Secondary`. `com.hypixel.hytale.builtin.buildertools.prefabeditor.PrefabSelectionInteraction` |
 | `Projectile` | `ProjectileModule` | [projectiles.md](projectiles.md#projectileinteraction) |
 | `RefillContainer` | `InteractionModule` | [items-tools.md](items-tools.md#watering-can) |
@@ -258,8 +259,8 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `Repeat` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#repeat) |
 | `Replace` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#replace) |
 | `ResetCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#resetcooldown) |
-| `RevealMapMarkersInView` | `InteractionModule` | — *not yet documented* |
-| `RunOnBlockTypes` | `InteractionModule` | — *not yet documented* |
+| `RevealMapMarkersInView` | `InteractionModule` | [world.md](world.md#revealmapmarkersinview) |
+| `RunOnBlockTypes` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#runonblocktypes) |
 | `RunRootInteraction` | `InteractionModule` | Runs a named root interaction, and **does not wait for it**: `firstRun` sets its own state to `Finished` first and then executes the root, so a surrounding chain continues immediately rather than on the root's completion. One key, `RootInteraction` (a root-interaction id, required by `Validators.nonNull()` and late-validated against the `RootInteraction` assets); at runtime an id that still does not resolve yields `RootInteraction.getRootInteractionOrUnknown`'s placeholder rather than an error. No shipped asset uses the type — the only occurrences of the string under `Assets.zip` are `.lang` entries. **Not the trigger-volume effect of the same name** ([trigger-volumes.md](trigger-volumes.md#built-in-effect-types)), which shares the `RootInteraction` key but adds `InteractionType` and `EquipSlot`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.RunRootInteraction` |
 | `Seating` | `MountPlugin` | [mounts.md](mounts.md#seating-interaction) |
 | `Selector` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#selector) |
@@ -268,7 +269,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `Serial` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#serial) |
 | `SetGameFlag` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
 | `SetMemoriesCapacity` | `MemoriesPlugin` | Raises a player's memory capacity to `Capacity`, and **fails when that value is not higher than the current one** — it can only ever increase, so the same item cannot be used twice. Crossing from zero also unlocks the memories feature for that player (an `UpdateMemoriesFeatureStatus` packet plus a notification). One key: `Capacity` (int, not required). One shipped use, `Server/Item/Items/Bench/Bench_Memories.json`. `com.hypixel.hytale.builtin.adventure.memories.interactions.SetMemoriesCapacityInteraction` |
-| `ShowEventTitle` | `InteractionModule` | — *not yet documented* |
+| `ShowEventTitle` | `InteractionModule` | [trigger-volumes.md](trigger-volumes.md#the-showeventtitle-interaction-is-a-different-type-with-the-same-name) |
 | `SignalNearbyVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `Simple` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#simpleinteraction) |
 | `SpawnDeployableAtHitLocation` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
@@ -281,11 +282,11 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |
 | `StartObjective` | `ObjectivePlugin` | Starts the objective described by its one key, `Setup` (an `ObjectiveTypeSetup` — shipped assets write `{ "Type": "Objective", "ObjectiveId": … }` — required by `Validators.nonNull()`). Starting stamps the new objective's UUID into the **held item stack's** metadata, and a later use of that same stack adds the player to the existing objective instead of starting another. `com.hypixel.hytale.builtin.adventure.objectives.interactions.StartObjectiveInteraction` — note that `com.hypixel.hytale.builtin.adventure.objectiveshop.StartObjectiveInteraction` shares the simple name, is registered on `ChoiceInteraction.CODEC` with a different single key, and is **not** this type |
 | `StatsCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#statscondition) |
-| `StatsConditionWithModifier` | `InteractionModule` | — *not yet documented* |
+| `StatsConditionWithModifier` | `InteractionModule` | The armour-discounted variant of [`StatsCondition`](interactions-flow.md#statscondition), whose keys (`Costs`, `LessThan`, `ValueType`, `Lenient`) it inherits from their shared `StatsConditionBaseInteraction` base. Its one own key, `InteractionModifierId`, is **required** (`Validators.nonNull()`) and is `ItemArmor.InteractionModifierId`, an enum with exactly **one** constant, `Dodge` — which both shipped uses (`Server/Item/Interactions/Dodge/Dodge_Left.json` and `Dodge_Right.json`) write. That closure claim belongs to the enum rather than to this type: `ChangeStatWithModifier`'s identically-named key reads the same enum, so a second constant in a future build falsifies both rows at once. The difference from `StatsCondition` is that each cost is first reduced by the flat and multiplier modifiers carried by the armour the player has **equipped** — the lookup runs over the armour container only — so the same `Costs` passes for a better-equipped player. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.StatsConditionWithModifierInteraction` |
 | `SurfaceDrawPlaceBlock` | `InteractionModule` | Draws blocks along a plane while the click is held. Zero keys **of its own**, which does not mean it takes none: it extends `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragPlaceBlockInteraction`, whose five keys it inherits — `ForkInteractions` (required), `MaxBlocksPerTick` (`4`), `MaxBlocksPerGesture` (`512`), `ValidateForkPositions` (`true`) and `MaxForkPositionViolations` (`8`). See [items-blocks.md](items-blocks.md#block_secondary-interaction) for the `PlaceModeSelect` chain that dispatches to these. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.SurfaceDrawPlaceBlockInteraction` |
-| `TeleportConfigInstance` | `InstancesPlugin` | — *not yet documented* |
-| `Teleporter` | `TeleporterPlugin` | — *not yet documented* |
-| `TeleportInstance` | `InstancesPlugin` | — *not yet documented* |
+| `TeleportConfigInstance` | `InstancesPlugin` | The UI-configured form of [TeleportInstance](adventure.md#teleportinstance): same destination behaviour, but **no keys of its own** because the instance, offset and rotation are set through an in-game UI and stored on the block rather than written in the asset. The codec says so directly — "This is configured via a UI instead of inside the interaction. This interaction just executes that set configuration." One shipped use, `Server/Item/Items/Portal/Instance_Gateway.json`. `com.hypixel.hytale.builtin.instances.interactions.TeleportConfigInstanceInteraction` |
+| `Teleporter` | `TeleporterPlugin` | [adventure.md](adventure.md#teleporter) |
+| `TeleportInstance` | `InstancesPlugin` | [adventure.md](adventure.md#teleportinstance) |
 | `ToggleGlider` | `InteractionModule` | Toggles glider movement for the player. No keys of its own, and **no server-side behaviour at all**: `firstRun` is empty and the class exists to emit a protocol `ToggleGliderInteraction` from `generatePacket()`, which is why it lives in the `config.client` package — the client performs the toggle. One shipped use, `Server/Item/Items/Glider/Template_Glider.json`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ToggleGliderInteraction` |
 | `TriggerCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#triggercooldown) |
 | `TriggerSpawnMarkers` | `SpawningPlugin` | [npc-spawning.md](npc-spawning.md#triggerspawnmarkers) |

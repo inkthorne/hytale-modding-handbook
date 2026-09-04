@@ -396,6 +396,17 @@ well as `()`** — see §5 for why that matters — and each chain self-checked
 
 ### Cautions specific to this tail
 
+- **Two target pages are within one large slice of the split threshold.**
+  `interactions-world.md` (1,378, and tied with `world.md` for the most tail rows
+  at 9) and `items-tools.md` (1,427, 3 rows) are both under 1,500 now and could
+  cross while this tail is written. `verify-docs.sh` measures every page against
+  `maintenance/page-size-arrears.txt` on each run, so **check the page-size gate's
+  output after each page commit rather than at the end** — a WARN there is
+  same-day actionable under invariant 1, and catching the crossing on the commit
+  that caused it is far cheaper than splitting a page you have just finished
+  writing. `world.md` is already over and already listed: decide its split before
+  writing into it, not after.
+
 - **Eight of the 44 carry a name registered on another codec**, so any usage
   count mined by grepping `"Type": "<name>"` across assets is meaningless until
   each hit is attributed to the registry its file belongs to (§4). The eight are

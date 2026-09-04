@@ -149,6 +149,71 @@ if [ "$BAD" -eq 0 ]; then pass "all anchor links resolve"; else
 fi
 
 # =====================================================================
+# Nothing measured page sizes before 2026-09-04, so invariant 5's arrears list
+# was only ever checked when a human chose to measure — and three pages went
+# over the line unlisted that way (npc-roles.md, then world.md and prefabs.md).
+# Re-reading the list cannot find an omission: the omission is what is missing
+# from the thing being read. This gate does the measuring on every run.
+section "[HARD] Page-size arrears list is current"
+OUT="$(python3 - <<'PY'
+import glob, os, re
+THRESHOLD = 1500
+LIST = "maintenance/page-size-arrears.txt"
+
+if not os.path.exists(LIST):
+    print(f"FATAL list file missing: {LIST}"); print("PARSED 0"); print("MEASURED 0"); raise SystemExit
+
+entries = []
+for line in open(LIST):
+    line = line.split("#", 1)[0].strip()
+    if line:
+        entries.append(line)
+
+sizes = {}
+for f in sorted(glob.glob("docs/*.md")):
+    bn = os.path.basename(f)
+    with open(f) as fh:
+        sizes[bn] = sum(1 for _ in fh)
+
+listed = set(entries)
+over = {b for b, n in sizes.items() if n > THRESHOLD}
+
+for b in sorted(over - listed):
+    print(f"UNLISTED {b} {sizes[b]}")
+for b in sorted(listed - over):
+    if b not in sizes:
+        print(f"MISSING {b}")
+    else:
+        print(f"UNDER {b} {sizes[b]}")
+for b in sorted(listed & over):
+    print(f"OK {b} {sizes[b]}")
+
+print(f"PARSED {len(entries)}")
+print(f"MEASURED {len(sizes)}")
+PY
+)"
+PS_PARSED="$(echo "$OUT"  | awk '/^PARSED/{print $2}')"
+PS_MEASURED="$(echo "$OUT" | awk '/^MEASURED/{print $2}')"
+PS_BAD="$(echo "$OUT" | grep -cE '^(UNLISTED|UNDER|MISSING) ')"
+if echo "$OUT" | grep -q '^FATAL'; then
+  fail "$(echo "$OUT" | sed -n 's/^FATAL //p')"
+elif [ "${PS_PARSED:-0}" -eq 0 ]; then
+  # A parser that finds nothing reports zero unlisted pages forever. That is a
+  # broken checker, not a clean corpus, so it fails rather than passing quietly.
+  fail "arrears list parsed 0 entries (empty or unreadable: maintenance/page-size-arrears.txt) — treating as a broken check, not a clean run"
+else
+  echo "$OUT" | grep '^OK ' | awk '{printf "        listed: %-26s %s lines\n", $2, $3}'
+  if [ "$PS_BAD" -eq 0 ]; then
+    pass "arrears list current ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold ${PS_THRESHOLD:-1500})"
+  else
+    warn "$PS_BAD arrears discrepanc(y/ies) ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold 1500):"
+    echo "$OUT" | sed -n 's/^UNLISTED \(.*\) \(.*\)$/      over the line and UNLISTED: \1 (\2 lines) — split it, or add it to maintenance\/page-size-arrears.txt/p'
+    echo "$OUT" | sed -n 's/^UNDER \(.*\) \(.*\)$/      listed but now UNDER: \1 (\2 lines) — remove it from maintenance\/page-size-arrears.txt/p'
+    echo "$OUT" | sed -n 's/^MISSING \(.*\)$/      listed but no such page: \1 — stale entry/p'
+  fi
+fi
+
+# =====================================================================
 section "[ADVISORY] Referenced asset files exist"
 # High-signal media references (.blockymodel/.blockyanim/.png/.ogg under
 # Common/Server). JSON paths are skipped — many are illustrative examples.

@@ -7,7 +7,7 @@ seo:
 
 # World API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Verified against 0.6.3**
 
 Covers the runtime `World` object, its chunks, per-player chunk tracking, gameplay configuration, and the world/chunk lifecycle events plugins can observe.
 
@@ -1447,6 +1447,38 @@ public class ArenaMarkerProvider implements WorldMapManager.MarkerProvider {
 // Register per world, e.g. from a StartWorldEvent handler (see World Events below):
 world.getWorldMapManager().addMarkerProvider("arena", new ArenaMarkerProvider());
 ```
+
+### RevealMapMarkersInView
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.RevealMapMarkersInViewInteraction`
+
+The JSON interaction side of the marker system: a `Type` value written in an item's `Interactions`
+block that reveals discoverable markers the player is looking at. Codec doc: "Reveals the
+discoverable world map markers that sit inside the view cone of the player." Extends
+`SimpleInteraction`, and it keeps scanning while it runs rather than firing once.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `FieldOfView` | float | `30.0` | Full cone angle **in degrees**; a marker matches within half this angle of the look direction. Validated `> 0` and `<= 360` |
+| `MaxDistance` | double | `128.0` | Maximum distance in blocks from the player's eye. Validated `> 0` |
+| `ScanInterval` | float | `0.25` | Seconds between scans; the first runs immediately and `0` scans every tick. Validated `0..60` |
+| `RunWhile` | condition[] | — | Conditions that must all hold for scanning to continue. Omit it, or give an empty list, to **scan once** |
+| `ConditionGrace` | float | `1.0` | Seconds the `RunWhile` conditions have to start holding. Does nothing without `RunWhile`. Validated `0..60` |
+| `RevealParticles` | particle[] | — | Particles spawned on a revealed marker's block, seen only by the player who revealed it |
+
+**None of the six is required**, so the interaction is usable with no properties at all — that form
+scans once, in a 30° cone, out to 128 blocks. No shipped asset uses the type.
+
+- **`MaxDistance` is not an occlusion test.** The codec says so: a marker behind terrain is still
+  found. Distance and angle are the only filters.
+- **`ScanInterval` is a cost knob as much as a timing one.** One scan tests every marker in the
+  world, so a short interval on a marker-heavy world is expensive — and because the run ends *on* a
+  scan, the interval also bounds how long the interaction takes to stop.
+- **`ConditionGrace` exists for a specific failure.** Raise it above the windup of whatever
+  interaction this runs beside, or that windup ends the run before the conditions ever begin to
+  hold. `0` ends the run at the first scan where they do not hold.
+
+Revealing is per player, which is why the particles are too.
 
 ---
 

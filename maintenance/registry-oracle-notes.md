@@ -640,3 +640,44 @@ and `NPCMessage` are a real `components/messaging/` subsystem and none of them i
 documented, so the cut would be to a new page rather than a rearrangement. It is not
 recorded in `page-size-arrears.txt`, because that file is for pages already over the
 line and listing an under-threshold page trips the gate the other way.
+
+### Three failure shapes from the second review round
+
+**A negative in a row must be shown, not inferred from the positive.** The
+`PickupItem` row said "this is not ordinary walk-over pickup" on the strength of
+having found the one thing that *does* bind it. That is the same asymmetry as the
+`Self` error one round earlier, and reviewer closed it by finding the other side:
+walk-over pickup is `PlayerItemEntityPickupSystem`, whose query is
+`Query.and(ItemComponent, TransformComponent, not(Interactable), not(PickupItemComponent),
+not(PreventPickup), not(PropComponent))` — and `applyPickupState(true)`, the only
+binder of `*PickupItem`, is exactly what **adds** `Interactable`. So the two paths
+are not merely distinct, they are mutually exclusive by ECS query, and
+`applyPickupState(false)` adds `PreventPickup` rather than restoring walk-over
+pickup. **Finding the mechanism turns a hedge into a stronger claim than the hedge
+was**, which is the argument for always spending the extra grep.
+
+Two nearby name traps on that one: `PickupItemComponent` / `PickupItemSystem` are
+the cosmetic fly-to-player lerp, not pickup logic; and the hook a modder actually
+wants for "run a chain when a player walks over this item" is the item asset's own
+`InteractionType.Pickup` entry, which `PlayerItemEntityPickupSystem` runs in place
+of giving the item.
+
+**A field default is invisible to the codec, and a table's Default column has to
+say which one it is reporting.** Two `ChangeFarmingStage` claims rested on
+`targetStage`'s *field* initialiser of `-1` with no codec default — true, but it
+is not the kind of finding a codec-doc-vs-reality read produces, and it must not
+be filed as one (the codec's description does say "Use -1 for the final stage").
+The related trap is requiredness's cousin: `Increase`/`Decrease` are nullable
+boxed `Integer` while `Stage` is a primitive `int`, so the branch is selected on
+null-vs-set, and `"Increase": 0` is not the same as omitting the key.
+
+**A key can be resolved twice against different fallbacks, and a Default column
+can be right about one and wrong about the other.** `ChangeFarmingStage` resolves
+`StageSet` first as `StageSet ?: config.getStartingStageSet()` — used only for an
+early validity check — and then as `StageSet ?: farmingBlock.getCurrentStageSet()`,
+which is the one applied. The row's Default cell named the first and its
+description named the second, so the row contradicted itself while both halves
+were separately traceable to real code. Read every resolution of a key, not the
+first one; and where two disagree, the seam between them is usually a real defect
+worth its own bullet (here: a block in a later stage set fails the precheck naming
+a set the interaction was never going to use).

@@ -7,7 +7,7 @@ seo:
 
 # Entity & World Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.3**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -315,6 +315,46 @@ See [UI API - Registering Pages for OpenCustomUI](ui-api.md#registering-pages-fo
 
 ## Inventory Interactions
 
+### AddItem
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.AddItemInteraction`
+
+Puts a fixed item stack into the interacting entity's inventory (codec doc: "Adds an item to the users
+inventory."). Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction), so it runs from
+a block-targeting chain even though what it changes is the user's inventory. The stack goes into the
+combined hotbar-first container, so it fills the hotbar before the backpack.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ItemId` | string | — | **Required** by `Validators.nonNull()`, and separately validated against the item asset map, so a bad id fails at load. Declared with `append`, not `appendInherited` |
+| `Quantity` | int | `0` | How many to add |
+
+```json
+{
+  "Type": "AddItem",
+  "ItemId": "Food_Hearty_Snack",
+  "Quantity": 1
+}
+```
+
+No shipped asset uses this type, so everything above comes from the codec and
+`AddItemInteraction.interactWithBlock` rather than from an example.
+
+> **Gotcha — omitting `Quantity` makes the interaction a silent no-op.** `Quantity` is not required
+> and its default is `0`, and the first thing `interactWithBlock` does is `return` when
+> `quantity <= 0`. It returns without setting `InteractionState.Failed`, so the base class still
+> reports the interaction as finished: the chain continues down `Next`, not `Failed`, and nothing is
+> logged. An `AddItem` written with only an `ItemId` — which reads like "give one of these" — gives
+> nothing, and no gate catches it because `ItemId` is the key that is validated.
+
+> **Gotcha — on a full inventory the items are silently lost.** `addItemStack` returns an
+> `ItemStackTransaction` carrying whatever did not fit, and `AddItem` discards it: there is no
+> remainder handling, nothing is dropped on the ground, and no failure state is set. A player with a
+> full hotbar and backpack runs the interaction, sees the chain continue down `Next`, and receives
+> some or none of the stack with nothing to distinguish that from success. This is the worse of the
+> two gotchas — the missing `Quantity` at least gives nothing consistently — and, like it, no shipped
+> asset can contradict it, because none uses the type.
+
 ### EquipItem
 
 **Package:** `config/server/EquipItemInteraction`
@@ -370,6 +410,49 @@ Adjusts the quantity of the currently held item. Used to consume items on use (e
 > `Next`. Note the cost can recur deeper in the tree (e.g. the Flame Crystal Staff consumes essence
 > in each `Weapon_Stick_Fire_Projectile_Charged_*` node, not at the entry), so grep the whole chain
 > before assuming a weapon is free.
+
+### IncreaseBackpackCapacity
+
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.IncreaseBackpackCapacityInteraction`
+
+Resizes the player's backpack, gated on what its capacity already is. Codec doc: "Set the player's
+backpack capacity to a target value, gated on the player's current capacity matching the configured
+`From` value (so upgrades must be used in order)." Extends
+[SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `From` | short | `0` | The capacity the player must currently have. The upgrade is rejected when it does not match exactly. Validated `min(0)` |
+| `Capacity` | short | `1` | The capacity to set. Validated `min(1)`; the codec's description adds that it must be greater than `From`, but nothing enforces that at load |
+
+**Neither key is required**, and the defaults describe a real upgrade (0 → 1) rather than a no-op,
+so an `IncreaseBackpackCapacity` written with no properties resizes an unopened backpack to a single
+slot.
+
+The three shipped upgrades form the intended ladder, each naming the previous rung as its `From`
+(`Server/Item/Items/Upgrade/Upgrade_Backpack_1.json` and its 2 and 3 siblings, which set the same
+interaction on both `Primary` and `Secondary`):
+
+```json
+{
+  "Type": "IncreaseBackpackCapacity",
+  "From": 9,
+  "Capacity": 18
+}
+```
+
+Behavior notes:
+
+- **The gate is equality, not a minimum.** A player at 18 cannot use the 0 → 9 upgrade *or* skip to a
+  later one; only the rung whose `From` matches exactly applies. That is what makes the three
+  upgrades order-locked without any of them knowing about the others.
+- **Failure is reported to the player, with two different messages**, and the interaction ends
+  `Failed` either way: `server.commands.inventory.backpack.usePreviousUpgrade` when the player has
+  not reached this rung, and `server.commands.inventory.backpack.upgradeNotApplied` when they are
+  already at or past the target capacity.
+- **One held item is consumed on success**, and only on success, so a rejected upgrade is not spent.
+- The player is told the new size through
+  `server.commands.inventory.backpack.size`.
 
 ---
 

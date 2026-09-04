@@ -80,8 +80,8 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 83 have a written section on another page, 16 are documented in
-their registry rows themselves, and 25 are not yet documented. For the complete list — and to
+registered `Type` values, of which 85 have a written section on another page, 26 are documented in
+their registry rows themselves, and 13 are not yet documented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -139,8 +139,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 83 have a
-written section on another page, 16 are documented in their registry rows themselves, and 25 are
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 85 have a
+written section on another page, 26 are documented in their registry rows themselves, and 13 are
 not yet documented. A row count is itself a closure claim, and so is each of those three figures, so
 re-derive them after a game update rather than trusting this line; the greps that produce them are
 given below.
@@ -172,7 +172,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 
 | `Type` | Registered by | Documented |
 |---|---|---|
-| `AddItem` | `InteractionModule` | — *not yet documented* |
+| `AddItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#additem) |
 | `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
 | `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
 | `AugmentCondition` | `AugmentBlocksPlugin` | — *not yet documented* |
@@ -184,12 +184,12 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `CameraShake` | `CameraPlugin` | Sends one `CameraEffect` asset's shake to the interacting player. One key, `CameraEffect` (a `CameraEffect` asset id, required by `Validators.nonNull()` and validated against the asset map, so a bad id fails at load). It does nothing at all for a non-player entity — `firstRun` returns without setting a failed state when there is no `PlayerRef`. **The string is registered on two codecs**: `CameraEffect.CODEC` as well as `Interaction.CODEC`, and all **49** shipped `"Type": "CameraShake"` assets are `CameraEffect` assets under `Server/Camera/CameraEffect/` — the interaction has **zero** shipped uses, so a usage count mined by grepping the string measures the other registry entirely. `com.hypixel.hytale.builtin.adventure.camera.interaction.CameraShakeInteraction` |
 | `CanBreakRespawnPoint` | `ObjectivePlugin` | Succeeds unless the target block carries a `RespawnBlock` component owned by a **different** player; an unowned point, or one the interacting player owns, passes. It also passes when the block has no block entity or no `RespawnBlock` at all, so it only ever blocks someone else's claimed respawn point. Ownership is read from the **owning** entity's `UUIDComponent`, not the interacting one. No keys of its own. Its one shipped use is the head of `Server/Item/RootInteractions/Block/Check_Can_Break_Respawn.json`, whose `Next` chain swings and then runs `BreakBlock` — the root the bed in [player.md](player.md#bed-interaction) wires onto `Primary`. `com.hypixel.hytale.builtin.adventure.objectives.interactions.CanBreakRespawnPointInteraction` |
 | `CancelChain` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#cancelchaininteraction) |
-| `CarryBlock` | `InteractionModule` | — *not yet documented* |
-| `CarryDroppedBlock` | `InteractionModule` | — *not yet documented* |
-| `CarryPlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `CarryBlock` | `InteractionModule` | Picks the targeted block up onto the interacting entity as a `CarriedBlock` component and then breaks the block. **The block entity travels with it** — `BlockEntity.takeBlockEntity` moves the component data into the carried state — so a container carried this way keeps its contents. One key, `EntityEffectId` (an `EntityEffect`, inline or by reference, late-validated, not required), played on the carrier while it holds the block. No shipped asset uses the type. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.CarryBlockInteraction` |
+| `CarryDroppedBlock` | `InteractionModule` | Takes the carried block off the targeted **entity** and onto the interacting one, cloning the `CarriedBlock` component and removing the source entity. It drops whatever the user was already carrying first, so it is a swap rather than a stack, and it fails when the target is absent or is not carrying anything. No keys of its own. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.CarryDroppedBlockInteraction` |
+| `CarryPlaceBlock` | `InteractionModule` | Puts the carried block back into the world, restoring the block-entity data `CarryBlock` took with it. Client-driven: `WaitForDataFrom.Client` plus `needsRemoteSync()`, and it reuses the protocol `PlaceBlockInteraction` packet with `blockId` `-1` and `removeItemInHand` `false`, so nothing is consumed from the hand. It also clears the client's block rotation on the first tick, so a carried block is always placed unrotated. No keys of its own. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.CarryPlaceBlockInteraction` |
 | `ChainFlag` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#chainflaginteraction) |
 | `Chaining` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#chaininginteraction) |
-| `ChangeActiveSlot` | `InteractionModule` | — *not yet documented* |
+| `ChangeActiveSlot` | `InteractionModule` | Switches the player's active hotbar slot. One key, `TargetSlot` (int, validated `range(0, 8)` so the nine hotbar slots, **not required**) — omit it and the slot comes from the interaction context instead, which is what four of the five shipped uses do; only an NPC equipping a second sword pins `"TargetSlot": 1`. Note it extends `Interaction` through `Interaction.ABSTRACT_CODEC` rather than one of the `Simple*` bases, so it does **not** carry the base-interaction keys the other rows here inherit, and it declares `WaitForDataFrom.None`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.ChangeActiveSlotInteraction` |
 | `ChangeBlock` | `InteractionModule` | [items-tools.md](items-tools.md#changeblock-interaction) |
 | `ChangeFarmingStage` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#changefarmingstage-interaction) |
 | `ChangeStat` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#changestat) |
@@ -203,11 +203,11 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `CooldownCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#cooldowncondition) |
 | `CycleBlockGroup` | `InteractionModule` | [items-tools.md](items-tools.md#hammer) |
 | `DamageEntity` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#damageentity) |
-| `DestroyBlock` | `InteractionModule` | — *not yet documented* |
+| `DestroyBlock` | `InteractionModule` | Breaks the target block outright, with no tool, drop or hardness handling to configure. It is distance-validated like a normal break, and **credits the break to the owning entity when there is one**, falling back to the interacting entity — so a projectile or trap breaking a block is attributed to whoever fired it. No keys of its own; three shipped uses. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DestroyBlockInteraction` |
 | `DestroyTaggedVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `DestroyTreasureCondition` | `ObjectivePlugin` | Succeeds only once the target treasure chest has been **opened** — `TreasureChestBlock.canDestroy` returns nothing but that chest's `opened` flag — so it is the gate that keeps an unlooted objective chest unbreakable. Passes trivially when the target block has no block entity or no `TreasureChestBlock` on it. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.DestroyTreasureConditionInteraction` |
 | `Door` | `InteractionModule` | [interactions-world.md](interactions-world.md#door) |
-| `DragEraseBlock` | `InteractionModule` | — *not yet documented* |
+| `DragEraseBlock` | `InteractionModule` | Erases blocks along a held drag, speeding up the longer the input is held. Zero keys **of its own**, which does not mean it takes none: it extends `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragPlaceBlockInteraction`, whose five keys it inherits — `ForkInteractions` (required), `MaxBlocksPerTick` (`4`), `MaxBlocksPerGesture` (`512`), `ValidateForkPositions` (`true`) and `MaxForkPositionViolations` (`8`). See [items-blocks.md](items-blocks.md#block_secondary-interaction) for the `PlaceModeSelect` chain that dispatches to these. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragEraseBlockInteraction` |
 | `DragPlaceBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |
 | `DurabilityCondition` | `InteractionModule` | [items-weapons.md](items-weapons.md#durabilitycondition-interaction) |
 | `EffectCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#effectcondition) |
@@ -216,7 +216,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `EventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `ExitInstance` | `InstancesPlugin` | — *not yet documented* |
 | `Explode` | `InteractionModule` | [interactions-world.md](interactions-world.md#explode) |
-| `ExtrudePlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `ExtrudePlaceBlock` | `InteractionModule` | Extrudes the targeted block face while the click is held, placing one layer per depth step and erasing the streamed layers again when the gesture pulls back. Zero keys **of its own**, which does not mean it takes none: it extends `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragPlaceBlockInteraction`, whose five keys it inherits — `ForkInteractions` (required), `MaxBlocksPerTick` (`4`), `MaxBlocksPerGesture` (`512`), `ValidateForkPositions` (`true`) and `MaxForkPositionViolations` (`8`). See [items-blocks.md](items-blocks.md#block_secondary-interaction) for the `PlaceModeSelect` chain that dispatches to these. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ExtrudePlaceBlockInteraction` |
 | `FertilizeSoil` | `FarmingPlugin` | [items-tools.md](items-tools.md#fertilizer) |
 | `FirstClick` | `InteractionModule` | [interactions-combo.md](interactions-combo.md#firstclickinteraction) |
 | `GameFlagCondition` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
@@ -224,7 +224,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `GlobalEventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `HarvestCrop` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#harvestcrop-interaction) |
 | `HubPortal` | `CreativeHubPlugin` | — *not yet documented* |
-| `IncreaseBackpackCapacity` | `InteractionModule` | — *not yet documented* |
+| `IncreaseBackpackCapacity` | `InteractionModule` | [interactions-world.md](interactions-world.md#increasebackpackcapacity) |
 | `IncrementCooldown` | `InteractionModule` | — *not yet documented* |
 | `Interrupt` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#interruptinteraction) |
 | `LaunchPad` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchpadinteraction) |
@@ -238,13 +238,13 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `OpenBenchPage` | `CraftingPlugin` | Opens a crafting bench window on the interacting player. One key, `Page` (required by `Validators.nonNull()`), selecting one of `OpenBenchPageInteraction.PageType`'s three constants — `SIMPLE_CRAFTING`, `DIAGRAM_CRAFTING`, `STRUCTURAL_CRAFTING` — which pick a `SimpleCraftingWindow`, `DiagramCraftingWindow` or `StructuralCraftingWindow`. **No shipped asset writes this type**: `CraftingPlugin` builds three instances with the ids `*Simple_Crafting_Default`, `*Diagram_Crafting_Default` and `*Structural_Crafting_Default` and binds them through `Bench.registerRootInteraction` to the `Crafting`, `DiagramCrafting` and `StructuralCrafting` bench types, so a bench of those types opens without naming any interaction. `com.hypixel.hytale.builtin.crafting.interaction.OpenBenchPageInteraction` |
 | `OpenContainer` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencontainer) |
 | `OpenCustomUI` | `InteractionModule` | [interactions-world.md](interactions-world.md#opencustomui) |
-| `OpenItemStackContainer` | `InteractionModule` | — *not yet documented* |
+| `OpenItemStackContainer` | `InteractionModule` | Opens the container carried *inside the held item* — a bag or pouch — as a bench page. No keys of its own: which slots exist comes from the item's own `ItemStackContainerConfig`, and the container is created on the stack on first use. It gives up silently rather than failing when the user is not a player, already has a custom page open, or is holding nothing. One shipped use, `Server/Item/Items/Utility/Utility_Bag_Seed.json`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenItemStackContainerInteraction` |
 | `OpenPage` | `InteractionModule` | [interactions-world.md](interactions-world.md#ui-interactions) |
 | `OpenProcessingBench` | `CraftingPlugin` | Opens the processing-bench window on the interacting player. No keys of its own. It is the **fourth** `BenchType`'s route and the asymmetric one: `Processing` is the one bench type `Bench.registerRootInteraction` is never called for, so `Bench.getRootInteraction()` returns null for it and a processing bench must name the interaction itself — all four shipped ones (`Bench_Furnace`, `Bench_Campfire`, `Bench_Tannery`, `Bench_Salvage`) set `"Interactions": { "Use": "Open_Processing_Bench" }`. `com.hypixel.hytale.builtin.crafting.interaction.OpenProcessingBenchInteraction` |
 | `OpenTreasureContainer` | `ObjectivePlugin` | Opens the targeted treasure chest's container window and marks the chest opened, which is what later lets `DestroyTreasureCondition` (this table) pass. It fires [TreasureChestOpeningEvent](adventure.md#treasurechestopeningevent) only when the chest carries an objective UUID, so a chest placed outside an objective opens silently. No keys of its own. `com.hypixel.hytale.builtin.adventure.objectives.interactions.OpenTreasureContainerInteraction` |
 | `Parallel` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#parallel) |
-| `PickBlock` | `InteractionModule` | — *not yet documented* |
-| `PickupItem` | `BuilderToolsPlugin` | Picks the targeted item entity up into the player's inventory, spawning the pickup effect and leaving any remainder that did not fit on the entity. **This is not ordinary walk-over pickup**: no shipped asset names it, and `BuilderToolsPlugin` instead loads a code-built instance under the id `*PickupItem` which `EntitySettingsSnapshot.applyPickupState` binds to an item entity's `Use` slot when a builder marks that entity pickable — the same call adds `Interactable`, drops `PreventPickup`, and sets the `server.interactionHints.pickup` hint. No keys of its own. `com.hypixel.hytale.builtin.buildertools.interactions.PickupItemInteraction` |
+| `PickBlock` | `InteractionModule` | Performs a block pick — moves the targeted block into the user's hand if they have it in their inventory or are in creative. **Entirely client-side on the server's part**: both server callbacks are empty, and the class exists to declare `WaitForDataFrom.Client` and `needsRemoteSync()` and to emit the protocol `PickBlockInteraction`. No keys of its own. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.PickBlockInteraction` |
+| `PickupItem` | `BuilderToolsPlugin` | Picks the targeted item entity up into the player's inventory, leaving any partial remainder on the entity — and, when *nothing* fits, returning with no state change and no `Failed`. **It is not ordinary walk-over pickup; it is mutually exclusive with it.** Walk-over pickup is the ECS system `com.hypixel.hytale.server.core.modules.entity.player.PlayerItemEntityPickupSystem`, whose query excludes any item entity carrying `Interactable` — and `EntitySettingsSnapshot.applyPickupState`, the only thing that binds this interaction (under the code-built id `*PickupItem`; no shipped asset names it), is exactly what *adds* `Interactable`. Turning the interaction path on therefore removes the entity from walk-over pickup by query, and turning it off adds `PreventPickup` rather than handing pickup back. If what you want is to run a chain when a player walks over an item, the hook is the item asset's own `InteractionType.Pickup` entry, which `PlayerItemEntityPickupSystem` runs in place of giving the item — not this type. No keys of its own. `com.hypixel.hytale.builtin.buildertools.interactions.PickupItemInteraction` |
 | `PlaceBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#placeblock) |
 | `PlaceFluid` | `InteractionModule` | [interactions-world.md](interactions-world.md#placefluid) |
 | `PlacementCountCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
@@ -282,7 +282,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `StartObjective` | `ObjectivePlugin` | Starts the objective described by its one key, `Setup` (an `ObjectiveTypeSetup` — shipped assets write `{ "Type": "Objective", "ObjectiveId": … }` — required by `Validators.nonNull()`). Starting stamps the new objective's UUID into the **held item stack's** metadata, and a later use of that same stack adds the player to the existing objective instead of starting another. `com.hypixel.hytale.builtin.adventure.objectives.interactions.StartObjectiveInteraction` — note that `com.hypixel.hytale.builtin.adventure.objectiveshop.StartObjectiveInteraction` shares the simple name, is registered on `ChoiceInteraction.CODEC` with a different single key, and is **not** this type |
 | `StatsCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#statscondition) |
 | `StatsConditionWithModifier` | `InteractionModule` | — *not yet documented* |
-| `SurfaceDrawPlaceBlock` | `InteractionModule` | — *not yet documented* |
+| `SurfaceDrawPlaceBlock` | `InteractionModule` | Draws blocks along a plane while the click is held. Zero keys **of its own**, which does not mean it takes none: it extends `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.DragPlaceBlockInteraction`, whose five keys it inherits — `ForkInteractions` (required), `MaxBlocksPerTick` (`4`), `MaxBlocksPerGesture` (`512`), `ValidateForkPositions` (`true`) and `MaxForkPositionViolations` (`8`). See [items-blocks.md](items-blocks.md#block_secondary-interaction) for the `PlaceModeSelect` chain that dispatches to these. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.SurfaceDrawPlaceBlockInteraction` |
 | `TeleportConfigInstance` | `InstancesPlugin` | — *not yet documented* |
 | `Teleporter` | `TeleporterPlugin` | — *not yet documented* |
 | `TeleportInstance` | `InstancesPlugin` | — *not yet documented* |

@@ -895,6 +895,80 @@ Some recipes require a minimum bench tier:
 
 ---
 
+## Learning Recipes (LearnRecipe)
+
+**Package:** `builtin.crafting.interaction.LearnRecipeInteraction` · registered by
+`CraftingPlugin`
+
+Recipes a player has learned live in their profile as a set of item ids —
+`PlayerConfigData.getKnownRecipes()` / `setKnownRecipes(Set<String>)`, see
+[player.md](player.md#persistent-player-data-playerconfigdata). `LearnRecipe` is the interaction
+that adds to that set, and it is how the shipped recipe-scroll items work. Codec doc: "Causes
+the user to learn the given recipe."
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `ItemId` | string | The id of the item whose recipe is learned. Optional — see the resolution order below |
+
+**`ItemId` is resolved from the held item first, and only then from the interaction.** The
+interaction reads the key `ItemId` out of the *held item stack's metadata*
+(`LearnRecipeInteraction.ITEM_ID`, a public `KeyedCodec<String>`); if that is absent it falls
+back to the `ItemId` written on the interaction. That is what lets one generic scroll item and
+many fixed ones share a single interaction type.
+
+Both shapes ship. `Server/Item/Items/Recipe/Recipe_Page.json` is the generic scroll — no
+`ItemId`, so the id must come from the stack's metadata:
+
+```json
+{
+  "Interactions": {
+    "Primary": {
+      "Interactions": [
+        {
+          "Type": "LearnRecipe",
+          "Next": { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 }
+        }
+      ]
+    }
+  }
+}
+```
+
+The 13 fixed recipe items pin the id instead, and bind it to *both* input slots so either click
+works (from `Server/Item/Items/Recipe/Food/Recipe_Food_Pie_Apple.json`):
+
+```json
+{
+  "ItemId": "Food_Pie_Apple",
+  "Type": "LearnRecipe",
+  "Next": { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 }
+}
+```
+
+Note the consumption is **not** part of `LearnRecipe` — the scroll is spent by the chained
+`ModifyInventory`, on the `Next` branch. Since `Next` runs only on success, a recipe the player
+already knows is not consumed.
+
+Behavior (from the decompiled source):
+
+- Requires a player. On a non-player entity it logs at `INFO` and ends `Failed`.
+- With no id from either source, sends `server.modules.learnrecipe.noIdSet` and ends `Failed`.
+- Delegates to `CraftingPlugin.learnRecipe(ref, itemId, componentAccessor)`, which returns
+  whether the recipe was newly learned. On `true` it sends
+  `server.modules.learnrecipe.success` with the item's display name as the `name` parameter; on
+  `false` it sends `server.modules.learnrecipe.alreadyKnown` and ends **`Failed`**.
+- An id naming no real item still learns — the message just renders `?` for the name, because
+  the display name comes from `Item.getAssetMap().getAsset(itemId)` and a miss falls back to
+  `Message.raw("?")`. There is no validator on `ItemId`, so a typo is silent at load time.
+- Runs server-side (`WaitForDataFrom.Server`).
+
+> **"Already known" is a failure, not a no-op.** Because the alreadyKnown path sets
+> `InteractionState.Failed`, a chain that puts cleanup on `Next` will skip it, and any `Failed`
+> branch you supply *will* fire on a duplicate scroll. That is what keeps the shipped scrolls
+> from being consumed twice — rely on it rather than adding your own guard.
+
+---
+
 ## API Reference
 
 ### CraftingRecipe

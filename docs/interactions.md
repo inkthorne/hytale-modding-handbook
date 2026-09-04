@@ -80,7 +80,7 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
-registered `Type` values, of which 68 are documented and 56 are not. For the complete list — and to
+registered `Type` values, of which 71 are documented and 53 are not. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
 
@@ -138,8 +138,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 68
-documented and 56 not. A row count is itself a closure claim, so re-derive it after a game update
+Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows, 71
+documented and 53 not. A row count is itself a closure claim, so re-derive it after a game update
 rather than trusting this line; the two greps that produce it are given below.
 
 A type is linked only where a page describes **what it does as an interaction**, its JSON keys, or
@@ -165,7 +165,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
 | `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
 | `AugmentCondition` | `AugmentBlocksPlugin` | — *not yet documented* |
-| `Bed` | `BedsPlugin` | — *not yet documented* |
+| `Bed` | `BedsPlugin` | [player.md](player.md#bed-interaction) |
 | `BlockCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#blockcondition) |
 | `BreakBlock` | `InteractionModule` | [interactions-world.md](interactions-world.md#breakblock) |
 | `BuilderTool` | `InteractionModule` | — *not yet documented* |
@@ -211,14 +211,14 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `GameFlagCondition` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
 | `GlobalEventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `GlobalEventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
-| `HarvestCrop` | `FarmingPlugin` | — *not yet documented* |
+| `HarvestCrop` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#harvestcrop-interaction) |
 | `HubPortal` | `CreativeHubPlugin` | — *not yet documented* |
 | `IncreaseBackpackCapacity` | `InteractionModule` | — *not yet documented* |
 | `IncrementCooldown` | `InteractionModule` | — *not yet documented* |
 | `Interrupt` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#interruptinteraction) |
 | `LaunchPad` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchpadinteraction) |
 | `LaunchProjectile` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchprojectile) |
-| `LearnRecipe` | `CraftingPlugin` | — *not yet documented* |
+| `LearnRecipe` | `CraftingPlugin` | [items-crafting.md](items-crafting.md#learning-recipes-learnrecipe) |
 | `MemoriesCondition` | `MemoriesPlugin` | [interactions-flow.md](interactions-flow.md#placementcountcondition) |
 | `ModifyIntervalConditionInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `ModifyInventory` | `InteractionModule` | [interactions-world.md](interactions-world.md#modifyinventory) |

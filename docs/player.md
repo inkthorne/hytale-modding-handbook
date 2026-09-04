@@ -1002,6 +1002,67 @@ Per-world slice of the profile, from `getPerWorldData(worldName)`:
 
 One bound respawn point (a bed/waystone-style anchor): `getBlockPosition()` (`Vector3i` of the anchor block), `getRespawnPosition()` (`Vector3d` where the player actually appears), `getName()` / `setName(String)`. Constructed as `new PlayerRespawnPointData(blockPos, respawnPos, name)`. These are what `Player.getRespawnPosition(...)` resolves against.
 
+### Bed Interaction
+
+**Package:** `builtin.beds.interactions.BedInteraction` · registered by `BedsPlugin`
+
+The interaction that creates and uses the respawn points above. Codec doc: "Interact with a bed
+block, ostensibly to sleep in it." Extends
+[SimpleBlockInteraction](interactions.md#simpleblockinteraction) and **takes no properties** —
+its whole codec is the inherited one:
+
+```json
+{
+  "Type": "Bed"
+}
+```
+
+All 15 shipped beds wire it the same way, from the block's own `Use` slot (from
+`Server/Item/Items/Furniture/Kweebec/Furniture_Kweebec_Bed.json`):
+
+```json
+{
+  "BlockType": {
+    "Beds": [ { "Offset": { "X": -0.1, "Y": 0.4, "Z": 0.7 }, "Yaw": 0 } ],
+    "Interactions": {
+      "Use": { "Interactions": [ { "Type": "Bed" } ] },
+      "Primary": "Check_Can_Break_Respawn"
+    },
+    "BlockEntity": { "Components": { "RespawnBlock": {} } }
+  }
+}
+```
+
+Three pieces have to be present for the interaction to do anything useful, and they are
+separate: the `Bed` interaction on `Use`, a `RespawnBlock`
+[block-entity component](items-blocks.md#block-entity-components) to hold the owner, and a `Beds`
+[mount point](blocks.md#blockmountpoint) for the player to lie on. The interaction creates the
+`RespawnBlock` component on demand if the block does not already have one, so a bed that lacks
+it still works — but a bed with no `Beds` entry claims a respawn point and then fails to mount.
+
+Behavior (from the decompiled source) branches on **who owns the block**:
+
+- **Unowned, and the player has a nearby saved point** — opens `OverrideNearbyRespawnPointPage`,
+  offering to move an existing point rather than add another. "Nearby" is
+  `RespawnConfig.getRadiusLimitRespawnPoint()`.
+- **Unowned, and the player is at the cap** — `RespawnConfig.getMaxRespawnPointsPerPlayer()` —
+  opens `SelectOverrideRespawnPointPage` to pick one to replace.
+- **Unowned, under the cap** — opens `SetNameRespawnPointPage` to name the new point.
+- **Owned by this player** — no UI: the player mounts the bed via `BlockMountAPI.mountOnBlock`
+  and gains a `PlayerSomnolence` component in the `NoddingOff` state, which is what starts the
+  sleep/time-skip flow (its sounds are the `SleepConfig` in
+  [audio.md](audio.md#sleep-sounds)). A failed mount sends the
+  `server.interactions.didNotMount` message with the failure state as a parameter.
+- **Owned by someone else** — sends `server.customUI.respawnPointClaimed` and stops.
+
+Only players can use it: the interaction returns immediately if the interacting entity has no
+`Player`, `PlayerRef` or `UUIDComponent`, without failing the chain.
+
+> Note the interaction is a *player-data* operation, not a block-state one — the respawn points
+> live in `PlayerConfigData.getPerWorldData(world).getRespawnPoints()`, while the block only
+> stores the owner UUID. Breaking the bed does not prune the player's saved point; that is what
+> the `Primary` slot's separate `Check_Can_Break_Respawn` chain is for.
+
 ---
 
 ## Container Windows

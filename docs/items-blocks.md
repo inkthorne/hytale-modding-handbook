@@ -835,6 +835,73 @@ Stage entry fields: `Type` (`BlockType`/`BlockState`/`Prefab`/`Spread`), `Block`
 > `ActiveGrowthModifiers` names a `GrowthModifierAsset` under `Server/Farming/Modifiers/`
 > — see [Farming Config Classes](blocks.md#farming-config-classes).
 
+### HarvestCrop Interaction
+
+**Package:** `builtin.adventure.farming.interactions.HarvestCropInteraction` · registered by
+`FarmingPlugin`
+
+The interaction that reads the `Farming` config above. Codec doc: "Harvests the resources from
+the target farmable block." Extends
+[SimpleBlockInteraction](interactions.md#simpleblockinteraction), so it acts on the block the
+client is targeting. It is the most-used of the farming interaction types — 25 shipped assets.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `RequireNotBroken` | boolean | `false` | Codec doc: "If true, the interaction will fail if the held item is broken (durability = 0)." |
+
+Two shapes ship. A crop block harvests itself from its own `Use` chain, with no properties —
+this is the bare-hand pick, and the 22 crop blocks all look like this (from
+`Plant_Crop_Wheat_Block_Eternal.json`):
+
+```json
+{
+  "InteractionHint": "server.interactionHints.harvest",
+  "Interactions": {
+    "Use": {
+      "Interactions": [
+        { "Type": "HarvestCrop" }
+      ]
+    }
+  }
+}
+```
+
+The sickle drives the same interaction from a swing's `HitBlock` branch, guarding on durability
+and paying for the harvest with it (verbatim from
+`Server/Item/Interactions/Weapons/Sickle/Attacks/Swing_Right/Sickle_Swing_Right_Selector.json`):
+
+```json
+{
+  "Type": "HarvestCrop",
+  "RequireNotBroken": true,
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1
+  },
+  "Failed": "Block_Break_Adventure"
+}
+```
+
+Behavior (from `FarmingUtil.harvest`, which the interaction delegates to):
+
+- **Two prerequisites, both of which end the interaction `Failed`.** The target `BlockType` must
+  declare `Gathering.Harvest` (a `HarvestingDropType` — see [drops.md](drops.md)), and the
+  world's `WorldConfig.isBlockGatheringAllowed()` must be true. Neither produces a message; the
+  chain simply takes its `Failed` branch, which is why the sickle supplies one.
+- **Without a `StageSetAfterHarvest`** — including any block that is not farmable at all — the
+  drops are given and **the block is removed** (set to empty). This is the path a one-shot
+  gatherable takes.
+- **With a `StageSetAfterHarvest`**, the drops are given and the block stays, switching to that
+  stage set: its `FarmingBlock` component gets growth progress `0`, executions `0`, generation
+  `+1`, and its last-tick time reset to now. A `FarmingBlock` component is created if the block
+  did not already have one. This is the replant-in-place path that makes a crop re-grow.
+
+> **Gotcha — a `StageSetAfterHarvest` naming a stage set that does not exist destroys the
+> block.** The lookup happens *after* the drops are given, and on a miss the code removes the
+> block and returns failure — so the player keeps the drops, the crop is gone, and the chain
+> takes its `Failed` branch. A typo in a stage-set name is therefore silent at load time and
+> destructive at harvest time.
+
 ---
 
 ## Basic Blocks

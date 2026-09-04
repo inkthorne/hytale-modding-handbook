@@ -4,6 +4,9 @@ A Hytale server-plugin & asset API reference, with the descriptions, gotchas, an
 
 ## Documentation
 
+Every page under `docs/` is listed below; `verify-docs.sh` fails when one is not.
+[Full index](./docs/01-index.md) · [Repo structure](./docs/02-structure.md)
+
 The [docs/](./docs/) directory contains comprehensive API documentation:
 
 ### Getting Started
@@ -28,6 +31,12 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 
 ### World & Environment
 - [World](./docs/world.md) - World management
+- [World Chunks](./docs/world-chunks.md) - Per-chunk API, accessors, and ChunkTracker
+- [World & Chunk Lifecycle Events](./docs/world-lifecycle-events.md) - Engine events for world and chunk lifecycle
+- [World Events](./docs/world-events.md) - Scripted world-event timelines (0.6.3+)
+- [Universes & Saves](./docs/universe-saves.md) - Save format, universe resources, dedicated-server config
+- [Trigger Volumes](./docs/trigger-volumes.md) - Scripted encounters as JSON effect assets
+- [Camera](./docs/camera.md) - Server-controlled camera and camera effects
 - [Blocks](./docs/blocks.md) - Block states and custom blocks
 - [Fluids](./docs/fluids.md) - Fluid systems
 - [Prefabs](./docs/prefabs.md) - Structure templates
@@ -39,6 +48,11 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Player](./docs/player.md) - Player API
 - [NPC](./docs/npc.md) - NPC and AI systems
 - [NPC Roles](./docs/npc-roles.md) - NPC role templates and behaviors
+- [NPC Spawning](./docs/npc-spawning.md) - Spawn beacons, companion spawners, manual markers
+- [NPC Combat](./docs/npc-combat.md) - Melee attacks and the Combat Action Evaluator
+- [Encounters](./docs/encounters.md) - Encounter managers and their core components
+- [Mounts](./docs/mounts.md) - Mount subsystem
+- [Deployables](./docs/deployables.md) - Deployable subsystem
 - [Drops](./docs/drops.md) - Drop system and loot tables
 - [Projectiles](./docs/projectiles.md) - Projectile configuration
 
@@ -74,6 +88,8 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 ### Assets & Events
 - [Assets](./docs/assets.md) - Asset registry
 - [Asset Editor](./docs/asset-editor.md) - Editor events
+- [Blockymodel Format](./docs/blockymodel-format.md) - Model file format
+- [Blockyanim Format](./docs/blockyanim-format.md) - Animation file format
 - [Audio](./docs/audio.md) - Audio system
 - [Events](./docs/events.md) - Event system overview
 - [Adventure](./docs/adventure.md) - Adventure gameplay events

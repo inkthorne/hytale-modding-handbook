@@ -149,6 +149,46 @@ if [ "$BAD" -eq 0 ]; then pass "all anchor links resolve"; else
 fi
 
 # =====================================================================
+# README.md is the repo's only exhaustive human-facing page list, and nothing
+# measured it. Every page split ever performed here left its new pages out —
+# npc-spawning.md and npc-combat.md from the 2026-09-04 npc-roles split, then
+# world-chunks.md and world-lifecycle-events.md from the world.md one — plus
+# substantive pages that simply drifted out (camera, encounters, mounts,
+# trigger-volumes, universe-saves, world-events). 16 of 71 were absent when this
+# gate was written. Same reasoning as the arrears list: re-reading README cannot
+# reveal an omission, because the omission is what is missing from what you read.
+# docs/index.md is exempt — a curated "Popular references" landing page, not an
+# index of everything.
+section "[HARD] Every docs page is listed in README.md"
+OUT="$(python3 - <<'RMPY'
+import glob, os, re
+EXEMPT = {"index.md"}
+readme = open("README.md").read()
+# Match the explicit link path, not a bare filename: "index.md" is a SUBSTRING of
+# "01-index.md", so a substring test reports a page as listed when it is not.
+linked = set(re.findall(r'\]\(\./docs/([A-Za-z0-9._-]+\.md)\)', readme))
+pages = sorted(os.path.basename(f) for f in glob.glob("docs/*.md"))
+for b in pages:
+    if b not in linked and b not in EXEMPT:
+        print(f"MISSING {b}")
+print(f"PAGES {len(pages)}")
+print(f"LISTED {len([b for b in pages if b in linked])}")
+print(f"EXEMPT {len([b for b in pages if b in EXEMPT])}")
+RMPY
+)"
+RM_PAGES="$(echo "$OUT"  | awk '/^PAGES/{print $2}')"
+RM_LISTED="$(echo "$OUT" | awk '/^LISTED/{print $2}')"
+RM_EXEMPT="$(echo "$OUT" | awk '/^EXEMPT/{print $2}')"
+RM_BAD="$(echo "$OUT" | grep -c '^MISSING ' || true)"
+if [ "${RM_PAGES:-0}" -eq 0 ]; then
+  fail "README page check scanned 0 docs pages — treating as a broken check, not a clean run"
+elif [ "$RM_BAD" -eq 0 ]; then
+  pass "all docs pages listed in README ($RM_LISTED of $RM_PAGES linked, $RM_EXEMPT exempt)"
+else
+  fail "$RM_BAD docs page(s) absent from README.md ($RM_LISTED of $RM_PAGES linked, $RM_EXEMPT exempt):"
+  echo "$OUT" | sed -n 's/^MISSING /      not linked from README: /p'
+fi
+
 # Nothing measured page sizes before 2026-09-04, so invariant 5's arrears list
 # was only ever checked when a human chose to measure — and three pages went
 # over the line unlisted that way (npc-roles.md, then world.md and prefabs.md).

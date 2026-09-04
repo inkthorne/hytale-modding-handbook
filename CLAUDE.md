@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a complete reference for Hytale server plugin development containing:
-- **docs/**: Comprehensive API documentation (65 markdown files)
+- **docs/**: Comprehensive API documentation. The page count is deliberately not written here — `verify-docs.sh` prints the live figure (`N page(s) measured`) on every run, and this line carried "65" for long enough to outlast three new pages.
 - **examples/**: Standalone, runnable mods — six Gradle plugin projects plus two no-code asset packs
 
 Refer to `docs/00-overview.md` for guidance when implementing Java code for plugins.
@@ -78,7 +78,7 @@ Like the assets cache, the script **wipes the cache first** so classes removed/r
 
 The `docs/` were fact-checked against game **0.6.3** (build-26) — `HytaleServer.jar`'s `Implementation-Version` is `0.6.3` (API docs via `javap` on the jar and the decompiled source cache; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them.
 
-The 0.5.9 → 0.6.3 pass was the largest since the handbook began: 1,334 `com.hypixel.*` classes added, 143 removed, 1,790 changed, plus ~1,700 `Server/` and ~780 `Common/` assets drifted. Every one of the 65 pages was re-verified page-by-page, and the per-page evidence is in the commit history rather than here. Structural breaks worth knowing: the NPC core-component API was decomposed so every sensor/action/motion/instruction callback now takes `ExecutionSupport` instead of `Role` (and the failure mode is *silent* for a concrete override without `@Override`); protocol serialization moved from Netty `ByteBuf` to `java.lang.foreign.MemorySegment` across 413 packets; `Inventory` is deprecated wholesale for `InventoryComponent`; `AbstractCommand.canGeneratePermission()` was replaced by `requireNoPermission()`; the 76 `hytalegenerator.density.nodes` classes were replaced by `hytalegenerator.assets.density`; and two new subsystems arrived with their own pages (`docs/world-events.md`, `docs/encounters.md`).
+The 0.5.9 → 0.6.3 pass was the largest since the handbook began: 1,334 `com.hypixel.*` classes added, 143 removed, 1,790 changed, plus ~1,700 `Server/` and ~780 `Common/` assets drifted. Every one of the 65 pages that existed at the time was re-verified page-by-page, and the per-page evidence is in the commit history rather than here. Structural breaks worth knowing: the NPC core-component API was decomposed so every sensor/action/motion/instruction callback now takes `ExecutionSupport` instead of `Role` (and the failure mode is *silent* for a concrete override without `@Override`); protocol serialization moved from Netty `ByteBuf` to `java.lang.foreign.MemorySegment` across 413 packets; `Inventory` is deprecated wholesale for `InventoryComponent`; `AbstractCommand.canGeneratePermission()` was replaced by `requireNoPermission()`; the 76 `hytalegenerator.density.nodes` classes were replaced by `hytalegenerator.assets.density`; and two new subsystems arrived with their own pages (`docs/world-events.md`, `docs/encounters.md`).
 
 **What that pass revealed about the gates, which matters more than the delta.** Most of what it corrected was not 0.6.3 drift at all — it was pre-existing error that every green run had missed, in four places no checker looks:
 

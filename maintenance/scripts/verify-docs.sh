@@ -190,10 +190,12 @@ for b in sorted(listed & over):
 
 print(f"PARSED {len(entries)}")
 print(f"MEASURED {len(sizes)}")
+print(f"THRESHOLD {THRESHOLD}")
 PY
 )"
 PS_PARSED="$(echo "$OUT"  | awk '/^PARSED/{print $2}')"
 PS_MEASURED="$(echo "$OUT" | awk '/^MEASURED/{print $2}')"
+PS_THRESHOLD="$(echo "$OUT" | awk '/^THRESHOLD/{print $2}')"
 PS_BAD="$(echo "$OUT" | grep -cE '^(UNLISTED|UNDER|MISSING) ')"
 if echo "$OUT" | grep -q '^FATAL'; then
   fail "$(echo "$OUT" | sed -n 's/^FATAL //p')"
@@ -204,9 +206,9 @@ elif [ "${PS_PARSED:-0}" -eq 0 ]; then
 else
   echo "$OUT" | grep '^OK ' | awk '{printf "        listed: %-26s %s lines\n", $2, $3}'
   if [ "$PS_BAD" -eq 0 ]; then
-    pass "arrears list current ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold ${PS_THRESHOLD:-1500})"
+    pass "arrears list current ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold $PS_THRESHOLD)"
   else
-    warn "$PS_BAD arrears discrepanc(y/ies) ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold 1500):"
+    warn "$PS_BAD arrears discrepanc(y/ies) ($PS_MEASURED page(s) measured, $PS_PARSED entr(y/ies) parsed, threshold $PS_THRESHOLD):"
     echo "$OUT" | sed -n 's/^UNLISTED \(.*\) \(.*\)$/      over the line and UNLISTED: \1 (\2 lines) — split it, or add it to maintenance\/page-size-arrears.txt/p'
     echo "$OUT" | sed -n 's/^UNDER \(.*\) \(.*\)$/      listed but now UNDER: \1 (\2 lines) — remove it from maintenance\/page-size-arrears.txt/p'
     echo "$OUT" | sed -n 's/^MISSING \(.*\)$/      listed but no such page: \1 — stale entry/p'

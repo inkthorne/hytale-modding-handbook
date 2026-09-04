@@ -1,0 +1,52 @@
+{
+  "note": "Cases CLAUDE.md invariant 7 and registry-oracle-notes.md \u00a711 name as the known ways to be confidently wrong. Each defeated some plausible parser.",
+  "build": "0.6.3 (build-26)",
+  "cases": [
+    {
+      "label": "raw KeyedCodec + true THIRD ARGUMENT = required",
+      "path": "com/hypixel/hytale/server/core/universe/world/connectedblocks/CustomConnectedBlockTemplateAsset.java",
+      "why": "`new KeyedCodec(\"Shapes\", new MapCodec<...>(...), true)` - raw, so a pattern expecting KeyedCodec<T> skips it and undercounts; and required by the third argument, so stopping at the first balanced paren keeps the key but loses its requiredness. Its four keys include exactly one required.",
+      "expect_keys": 4,
+      "expect_required": [
+        "Shapes"
+      ],
+      "expect_raw": [
+        "Shapes"
+      ]
+    },
+    {
+      "label": "raw KeyedCodec + true INSIDE the inner constructor = NOT required",
+      "path": "com/hypixel/hytale/server/core/universe/world/connectedblocks/ConnectedBlockPatternRule.java",
+      "why": "Same key NAME `Shapes`, also raw, but `new KeyedCodec(\"Shapes\", new SetCodec<...>(..., true))` - two arguments, the true inside the inner constructor. Attributing it to the outer codec manufactures a requirement, and invariant 7 calls that the dangerous direction: a fabricated *required* can never be contradicted by a shipped asset.",
+      "expect_keys": 7,
+      "expect_required": [
+        "IncludeOrExclude"
+      ],
+      "expect_raw": [
+        "Shapes"
+      ]
+    },
+    {
+      "label": "requiredness by Validators.nonNull() attached AFTER append(...) closes",
+      "path": "com/hypixel/hytale/common/plugin/PluginManifest.java",
+      "why": "CLAUDE.md: `Name` is the sole key carrying Validators.nonNull(). Parsing to the first balanced paren reports NO required keys at all, because the validator attaches on the builder two calls further along, before .add().",
+      "expect_keys": 13,
+      "expect_required": [
+        "Name"
+      ],
+      "expect_raw": [
+        "Dependencies",
+        "OptionalDependencies",
+        "LoadBefore"
+      ]
+    },
+    {
+      "label": "same simple name, different file, different key and requiredness",
+      "path": "com/hypixel/hytale/builtin/adventure/objectiveshop/StartObjectiveInteraction.java",
+      "why": "The twin of the `StartObjective` interaction in the 44. Both declare exactly ONE key, so a count cross-check agrees while the key name and its requiredness are both wrong: this one is `ObjectiveId`, not required; the registered interaction is `Setup`, required.",
+      "expect_keys": 1,
+      "expect_required": [],
+      "expect_raw": []
+    }
+  ]
+}

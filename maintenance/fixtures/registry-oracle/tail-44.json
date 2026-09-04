@@ -1,0 +1,497 @@
+{
+  "source": "registry-oracle-notes.md \u00a711, derived independently twice and reconciled",
+  "build": "0.6.3 (build-26)",
+  "types": {
+    "AddItem": {
+      "class": "AddItemInteraction",
+      "own_keys": 2,
+      "required": [
+        "ItemId"
+      ],
+      "verdict": "section",
+      "target_page": "interactions-world.md",
+      "keys": [
+        "ItemId",
+        "Quantity"
+      ],
+      "required_from_key_table": [
+        "ItemId"
+      ]
+    },
+    "AugmentCondition": {
+      "class": "AugmentConditionInteraction",
+      "own_keys": 2,
+      "required": [
+        "RequiredAugmentTags"
+      ],
+      "verdict": "section",
+      "target_page": "blocks.md",
+      "keys": [
+        "RequiredAugmentTags",
+        "Radius"
+      ],
+      "required_from_key_table": [
+        "RequiredAugmentTags"
+      ]
+    },
+    "BuilderTool": {
+      "class": "config.none.BuilderToolInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items-tools.md"
+    },
+    "CameraShake": {
+      "class": "CameraShakeInteraction",
+      "own_keys": 1,
+      "required": [
+        "CameraEffect"
+      ],
+      "verdict": "row",
+      "target_page": "camera.md",
+      "keys": [
+        "CameraEffect"
+      ],
+      "required_from_key_table": [
+        "CameraEffect"
+      ]
+    },
+    "CanBreakRespawnPoint": {
+      "class": "CanBreakRespawnPointInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "player.md"
+    },
+    "CarryBlock": {
+      "class": "CarryBlockInteraction",
+      "own_keys": 1,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md",
+      "keys": [
+        "EntityEffectId"
+      ],
+      "required_from_key_table": []
+    },
+    "CarryDroppedBlock": {
+      "class": "CarryDroppedBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "CarryPlaceBlock": {
+      "class": "CarryPlaceBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "ChangeActiveSlot": {
+      "class": "config.none.ChangeActiveSlotInteraction",
+      "own_keys": 1,
+      "required": [],
+      "verdict": "row",
+      "target_page": "inventory.md",
+      "keys": [
+        "TargetSlot"
+      ],
+      "required_from_key_table": []
+    },
+    "ChangeFarmingStage": {
+      "class": "ChangeFarmingStageInteraction",
+      "own_keys": 4,
+      "required": [],
+      "verdict": "section",
+      "target_page": "items-blocks.md",
+      "keys": [
+        "Stage",
+        "Increase",
+        "Decrease",
+        "StageSet"
+      ],
+      "required_from_key_table": []
+    },
+    "CheckUniqueItemUsage": {
+      "class": "CheckUniqueItemUsageInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items.md"
+    },
+    "DestroyBlock": {
+      "class": "DestroyBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "DestroyTreasureCondition": {
+      "class": "DestroyTreasureConditionInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "adventure.md"
+    },
+    "DragEraseBlock": {
+      "class": "config.client.DragEraseBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "ExitInstance": {
+      "class": "ExitInstanceInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "world.md"
+    },
+    "ExtrudePlaceBlock": {
+      "class": "config.client.ExtrudePlaceBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "HubPortal": {
+      "class": "HubPortalInteraction",
+      "own_keys": 3,
+      "required": [
+        "WorldName"
+      ],
+      "verdict": "section",
+      "target_page": "world.md",
+      "keys": [
+        "WorldName",
+        "WorldGenType",
+        "InstanceTemplate"
+      ],
+      "required_from_key_table": [
+        "WorldName"
+      ]
+    },
+    "IncreaseBackpackCapacity": {
+      "class": "IncreaseBackpackCapacityInteraction",
+      "own_keys": 2,
+      "required": [],
+      "verdict": "section",
+      "target_page": "inventory.md",
+      "keys": [
+        "From",
+        "Capacity"
+      ],
+      "required_from_key_table": []
+    },
+    "IncrementCooldown": {
+      "class": "config.client.IncrementCooldownInteraction",
+      "own_keys": 5,
+      "required": [],
+      "verdict": "section",
+      "target_page": "interactions-flow.md",
+      "keys": [
+        "Id",
+        "Time",
+        "ChargeTime",
+        "Charge",
+        "InterruptRecharge"
+      ],
+      "required_from_key_table": []
+    },
+    "OpenBenchPage": {
+      "class": "OpenBenchPageInteraction",
+      "own_keys": 1,
+      "required": [
+        "Page"
+      ],
+      "verdict": "row",
+      "target_page": "items-crafting.md",
+      "keys": [
+        "Page"
+      ],
+      "required_from_key_table": [
+        "Page"
+      ]
+    },
+    "OpenItemStackContainer": {
+      "class": "OpenItemStackContainerInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "inventory.md"
+    },
+    "OpenProcessingBench": {
+      "class": "OpenProcessingBenchInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items-crafting.md"
+    },
+    "OpenTreasureContainer": {
+      "class": "OpenTreasureContainerInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "adventure.md"
+    },
+    "PickBlock": {
+      "class": "config.client.PickBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "PickupItem": {
+      "class": "PickupItemInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items-tools.md"
+    },
+    "Portal": {
+      "class": "EnterPortalInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "world.md"
+    },
+    "PortalReturn": {
+      "class": "ReturnPortalInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "world.md"
+    },
+    "PrefabSelectionInteraction": {
+      "class": "PrefabSelectionInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items-tools.md"
+    },
+    "RevealMapMarkersInView": {
+      "class": "RevealMapMarkersInViewInteraction",
+      "own_keys": 6,
+      "required": [],
+      "verdict": "section",
+      "target_page": "world.md",
+      "keys": [
+        "FieldOfView",
+        "MaxDistance",
+        "ScanInterval",
+        "RunWhile",
+        "ConditionGrace",
+        "RevealParticles"
+      ],
+      "required_from_key_table": []
+    },
+    "RunOnBlockTypes": {
+      "class": "RunOnBlockTypesInteraction",
+      "own_keys": 4,
+      "required": [
+        "Range",
+        "BlockSets",
+        "MaxCount",
+        "Interactions"
+      ],
+      "verdict": "section",
+      "target_page": "interactions-flow.md",
+      "keys": [
+        "Range",
+        "BlockSets",
+        "MaxCount",
+        "Interactions"
+      ],
+      "required_from_key_table": [
+        "Range",
+        "BlockSets",
+        "MaxCount",
+        "Interactions"
+      ]
+    },
+    "RunRootInteraction": {
+      "class": "config.none.RunRootInteraction",
+      "own_keys": 1,
+      "required": [
+        "RootInteraction"
+      ],
+      "verdict": "row",
+      "target_page": "trigger-volumes.md",
+      "keys": [
+        "RootInteraction"
+      ],
+      "required_from_key_table": [
+        "RootInteraction"
+      ]
+    },
+    "SendBeacon": {
+      "class": "SendBeaconInteraction",
+      "own_keys": 4,
+      "required": [
+        "Message"
+      ],
+      "verdict": "section",
+      "target_page": "npc-spawning.md",
+      "keys": [
+        "Message",
+        "Range",
+        "ExpirationTime",
+        "TargetGroups"
+      ],
+      "required_from_key_table": [
+        "Message"
+      ]
+    },
+    "SetMemoriesCapacity": {
+      "class": "SetMemoriesCapacityInteraction",
+      "own_keys": 1,
+      "required": [],
+      "verdict": "row",
+      "target_page": "adventure.md",
+      "keys": [
+        "Capacity"
+      ],
+      "required_from_key_table": []
+    },
+    "ShowEventTitle": {
+      "class": "ShowEventTitleInteraction",
+      "own_keys": 8,
+      "required": [
+        "Target",
+        "PrimaryTitle"
+      ],
+      "verdict": "section",
+      "target_page": "world.md",
+      "keys": [
+        "Target",
+        "PrimaryTitle",
+        "SecondaryTitle",
+        "IsMajor",
+        "Icon",
+        "DurationS",
+        "FadeInDurationS",
+        "FadeOutDurationS"
+      ],
+      "required_from_key_table": [
+        "Target",
+        "PrimaryTitle"
+      ]
+    },
+    "StartObjective": {
+      "class": "objectives.interactions.StartObjectiveInteraction",
+      "own_keys": 1,
+      "required": [
+        "Setup"
+      ],
+      "verdict": "row",
+      "target_page": "adventure.md",
+      "keys": [
+        "Setup"
+      ],
+      "required_from_key_table": [
+        "Setup"
+      ]
+    },
+    "StatsConditionWithModifier": {
+      "class": "StatsConditionWithModifierInteraction",
+      "own_keys": 1,
+      "required": [
+        "InteractionModifierId"
+      ],
+      "verdict": "row",
+      "target_page": "interactions-flow.md",
+      "keys": [
+        "InteractionModifierId"
+      ],
+      "required_from_key_table": [
+        "InteractionModifierId"
+      ]
+    },
+    "SurfaceDrawPlaceBlock": {
+      "class": "config.client.SurfaceDrawPlaceBlockInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "interactions-world.md"
+    },
+    "TeleportConfigInstance": {
+      "class": "TeleportConfigInstanceInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "world.md"
+    },
+    "TeleportInstance": {
+      "class": "TeleportInstanceInteraction",
+      "own_keys": 8,
+      "required": [
+        "InstanceName",
+        "OriginSource"
+      ],
+      "verdict": "section",
+      "target_page": "world.md",
+      "keys": [
+        "InstanceName",
+        "InstanceKey",
+        "PositionOffset",
+        "Rotation",
+        "OriginSource",
+        "PersonalReturnPoint",
+        "CloseOnBlockRemove",
+        "RemoveBlockAfter"
+      ],
+      "required_from_key_table": [
+        "InstanceName",
+        "OriginSource"
+      ]
+    },
+    "Teleporter": {
+      "class": "TeleporterInteraction",
+      "own_keys": 3,
+      "required": [],
+      "verdict": "section",
+      "target_page": "world.md",
+      "keys": [
+        "Particle",
+        "ClearOutXZ",
+        "ClearOutY"
+      ],
+      "required_from_key_table": []
+    },
+    "ToggleGlider": {
+      "class": "config.client.ToggleGliderInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "player.md"
+    },
+    "TriggerSpawnMarkers": {
+      "class": "TriggerSpawnMarkersInteraction",
+      "own_keys": 3,
+      "required": [],
+      "verdict": "section",
+      "target_page": "npc-spawning.md",
+      "keys": [
+        "MarkerType",
+        "Range",
+        "Count"
+      ],
+      "required_from_key_table": []
+    },
+    "UseCoop": {
+      "class": "UseCoopInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "items-blocks.md"
+    },
+    "UseNPC": {
+      "class": "UseNPCInteraction",
+      "own_keys": 0,
+      "required": [],
+      "verdict": "row",
+      "target_page": "npc-spawning.md"
+    }
+  }
+}

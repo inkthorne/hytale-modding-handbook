@@ -836,14 +836,6 @@ whose states are exhaustive **cannot** be validated by checking that it sums to 
 row count — the sum is invariant under exactly the state move every tail edit makes.
 Re-derive all three; never derive two and subtract.
 
-**Page-size note.** `npc-roles.md` sits at **1,496** after the beacon section — four
-lines under the gate. The next section landing there will trip it. The natural seam
-is `## Beacon messaging` itself: `BeaconSupport`, `MessageSupport`, `EventSupport`
-and `NPCMessage` are a real `components/messaging/` subsystem and none of them is
-documented, so the cut would be to a new page rather than a rearrangement. It is not
-recorded in `page-size-arrears.txt`, because that file is for pages already over the
-line and listing an under-threshold page trips the gate the other way.
-
 ### Three failure shapes from the second review round
 
 **A negative in a row must be shown, not inferred from the positive.** The
@@ -1090,621 +1082,146 @@ keeping is narrower than "don't rewrite history" — **a fact worth correcting i
 worth committing**, because the working tree is the only surface anything in this
 project actually reads.
 
-## 12. Phase (c) is unscoped, and the obvious scoping was measured before it was rejected
+## 12. Phase (c) is unscoped, and the obvious scoping is unsound
 
-`check-type-values.py` (queued gate 1, phase c, landed 2026-09-04) checks that a
-documented `"Type"` value is a registered name **somewhere**. It does not check
-that the name is legal in the **slot** it appears in. That is a real gap — §4 lists
-eight names registered on two different codecs, and §1's fourth correction adds 15
-core-component names registered in more than one category — so the gate catches
-*invention* and is blind to *misattribution*.
+`check-type-values.py` checks that a documented `"Type"` is a registered name
+**somewhere**, not that it is legal in the **slot** it appears in. So it catches
+*invention* and is blind to *misattribution* — §4 lists eight names registered on
+two codecs, and §1 adds 15 core-component names registered in more than one
+category.
 
-**Do not read the numbers below as an argument that scoping is nearly done.** They
-are here because the next person to look at this will reach for the same binding,
-find an encouraging figure, and ship it.
+**Do not read the figures as scoping being nearly done.** Mining
+`new KeyedCodec("<Key>", <X>.CODEC)` corpus-wide gives 165 JSON keys binding to at
+least one type-discriminated codec and 156 binding to exactly one. That 156 looks
+like a gate. One counterexample kills it:
 
-Scoping needs a map from the enclosing JSON key to the codec that decodes its
-value. The obvious construction is to mine `new KeyedCodec("<Key>", <X>.CODEC)`
-corpus-wide and keep the keys that bind to exactly one type-discriminated codec.
-Measured on build-26: **165** JSON keys bind to at least one, and **156** bind to
-exactly one. That 156 looks like a gate.
-
-It is not. "Exactly one" is an artefact of the match window, not a fact about the
-corpus, and one counterexample is enough to see why:
-
-| Key | Binds "uniquely" to | Whose whole vocabulary is | But the docs use it for |
+| Key | Binds "uniquely" to | Whose vocabulary is | But the docs use it for |
 |---|---|---|---|
-| `Interactions` | `ChoiceInteraction.CODEC` | `GiveItem`, `StartObjective` | `RootInteraction` — `ChangeStat`, `ApplyEffect`, `ClearEntityEffect`, … |
+| `Interactions` | `ChoiceInteraction.CODEC` | `GiveItem`, `StartObjective` | `RootInteraction` — `ChangeStat`, `ApplyEffect`, … |
 
-A gate built on that binding would hard-fail `docs/effects-stats.md`, which is
-correct. And the slots that most need scoping — `Sensor`, `BodyMotion`,
-`Instructions`, `MotionControllerList` — bind to **nothing at all**, because §1's
-third registration form has no `KeyedCodec` anywhere near it.
+A gate on that binding hard-fails `docs/effects-stats.md`, which is correct. The
+slots that most need scoping — `Sensor`, `BodyMotion`, `Instructions`,
+`MotionControllerList` — bind to nothing at all, because §1's third registration
+form has no `KeyedCodec` near it.
 
-**The safe subset cannot be carved out either, and this is the load-bearing
-point.** The instrument that would identify "the keys that bind unambiguously" is
-the same corpus-wide name match that called `Interactions` unambiguous. So the
-subset's safety is unverified *by construction*, not merely unverified yet — the
-selection and the error share a cause. Note also which way each version fails: the
-unscoped gate produces false negatives, which are stated openly in the checker, in
-`CLAUDE.md` and here; a scoped gate on a bad binding produces false *positives* on
-correct pages, which under invariant 1 either blocks runs or breeds skiplist
-entries justified by the checker's own binding — invariant 7's trap, arriving
-through the door the gate was built to avoid.
+**The safe subset cannot be carved out, and this is the load-bearing point.** The
+instrument that would identify "keys that bind unambiguously" is the same
+corpus-wide name match that called `Interactions` unambiguous, so the subset's
+safety is unverified *by construction* — selection and error share a cause. Note
+the asymmetry too: the unscoped gate yields false negatives, stated openly; a
+scoped gate on a bad binding yields false *positives* on correct pages, which
+under invariant 1 breeds skiplist entries justified by the checker's own binding.
 
-What a sound binding would need: parse the **enclosing codec's chain** and read the
-codec argument the key actually declares, rather than matching key names across the
-corpus. That is §3's lesson — match within the documenting scope, never globally —
-arriving from a third direction, after §3 itself and after §4's name collisions.
-The whole-chain parser that phase (a) built is the prerequisite, so this is
-buildable; it is arrears, not a dead end.
+A sound binding parses the **enclosing codec's chain** and reads the codec argument
+the key declares. That is §3 arriving from a third direction. Arrears, not a dead
+end — but removed from the queue on 2026-09-05 with the rest of gate 1.
 
-One thing to state whenever this gate's green line is quoted: `CLAUDE.md` cites a
-fabricated `"Type": "Wall"` as the defect that motivated the whole oracle, and
-**this gate would have passed it**. `Wall` is registered on `PatternAsset.CODEC`
-*and* appears as a `"Type"` **seven times across two shipped assets**
-(`HytaleGenerator/Assignments/Plains1/Plains1_Oak_Vines.json` ×4,
-`HytaleGenerator/Biomes/Experimental/Zone4.json` ×3), so it passes for two
-independent reasons and would survive the loss of either oracle. The fabrication
-there was misattribution.
+**Whenever this gate's green line is quoted:** CLAUDE.md cites a fabricated
+`"Type": "Wall"` as the motivating defect and **this gate would have passed it** —
+`Wall` is registered on `PatternAsset.CODEC` *and* occurs 7 times across 2 shipped
+assets, so it passes for two independent reasons.
 
-> Two files, seven occurrences — worth writing both, because the review that
-> produced this paragraph rendered it as "7 shipped assets" and so did the first
-> draft here. Whichever figure you quote, say which of the two it counts.
-
-### The tab hazard, measured corpus-wide
-
-The separator in those two files is a **tab**, and that is not a local oddity. Any
-hand-written scan of the asset tree for `"Type"` values must use a whitespace
-class, not a literal space. Measured on build-26, `"Type"\s*:\s*"…"` against
-`"Type" *: *"…"`:
-
-| | `\s*` | space-only | lost |
-|---|---|---|---|
-| distinct values | 566 | 454 | **112** |
-| occurrences | 53,919 | 41,400 | 12,519 |
-
-> **Start with the near-miss, because it is the whole lesson in one line.** While
-> checking how far this hazard reached, I wrote a pattern anchored on
-> `"Type"\t`. It matched **zero files**, and zero reads as *the hazard is
-> narrower than we thought*. It matches zero because the tab is after the
-> **colon** — `"Type":\t"…"` — and `before` is empty in all 12,519 occurrences,
-> so there is no `"Type" :\t` variant for it to find either. A check written to
-> verify a claim about *patterns that silently match nothing* silently matched
-> nothing, and came one keystroke from being filed as evidence of absence.
-
-**There are four separator dialects, and each has a known extent.** Measured by
-capturing the whitespace either side of the colon in every `"Type"` in the asset
-tree — a complete partition, since the four sum to the 53,919 that `\s*` matches:
-
-| Between key and `:` | Between `:` and value | occurrences | files | where |
-|---|---|---|---|---|
-| — | one space | 41,215 | 16,484 | everywhere (the mainstream) |
-| — | **tab** | 12,519 | 222 | `HytaleGenerator/` — Assignments 118, Biomes 75, Density 18, WorldStructures 14 |
-| — | — | 143 | 69 | mostly `World/Default/` |
-| **space** | one space | 42 | 14 | `HytaleGenerator/WorldStructures/` only |
-
-A fourth dialect neither measuring pass mentioned is `"Type":"…"` with no
-whitespace at all, in 69 files. Both comparison patterns below admit it — mine
-because `*` allows zero, the review's because `?` does — which is luck rather
-than design, and the specific luck is worth naming: **both were written to be
-lenient about *a* space, and leniency about a space silently implies leniency
-about *zero* spaces.** Neither of us decided that; `?` and `*` decided it. An
-entry that depends on undecided leniency breaks the day someone tightens a regex
-for an unrelated reason.
-
-So a pattern's figure is a function of **which dialects it admits**, and the
-dialects are per-file rather than per-line: **16,634 files use exactly one and
-only 75 mix** (99.55% pure). That is what makes a space-only scan fail in one
-clean block instead of degrading gently — it drops dialect 2 entire, and dialect
-2 is the world generator.
-
-> **"Directory-scoped" invites an assumption that one directory breaks.** The
-> mixing is directory-scoped too: of the 75 mixed files, 58 are `World/Default/`
-> (dialects 1+3), 14 `WorldStructures/`, 2 `EncounterManager/Examples/`, 1
-> `NPC/Roles/`. So a reader who concludes "this directory is uniform, I can scan
-> it with a literal" is right almost everywhere and wrong in `World/Default`.
-
-The comparison figure therefore moves with how you write the pattern, and that
-is the point rather than an untidiness. Two passes measuring "the same thing"
-produced:
-
-| Comparison pattern | distinct | matched | lost | files disagreeing with `\s*` |
-|---|---|---|---|---|
-| `"Type": ?"` | 452 | 41,358 | 12,561 | 231 |
-| `"Type" *: *"` | 454 | 41,400 | 12,519 | 222 |
-
-Both derive cleanly and neither is wrong; they are different questions wearing
-the same label. The nine-file gap is **derivable, not merely explicable**, and it
-is this rule stated in the smallest possible case. Dialect 4 never occurs pure —
-all 14 of its files are mixed, all under `WorldStructures/`:
-
-| files | dialects present | first pattern | second pattern | gap? |
-|---|---|---|---|---|
-| 9 | 1 + 4 | misses 4 | catches 4 | **yes** |
-| 5 | 1 + 2 + 4 | misses 2 | misses 2 | no |
-
-The 9/5 split is therefore not a property of the files' contents so much as of
-which dialect each pattern happens to admit.
-
-**So: quote the regex beside any figure a regex produced, and say what the count
-counts.** The `\s*` reference figure — 566 — is the only one of the three that is
-a property of the corpus rather than of the question asked about it.
-
-**The 222 files where the two disagree are entirely under
-`Server/HytaleGenerator/`** — Assignments, Biomes, Density, WorldStructures.
-Nothing outside that subtree is tab-separated. So the failure mode is much
-sharper than "some values get missed": a space-only scan loses **the whole
-world-generator vocabulary and nothing else** — `Abs`, `Clamp`, `Constant`,
-`CellNoise2D`, `Amplitude`, `ColumnRandom`, `AlwaysTrueCondition` and ~105 more.
-A re-derivation written that way comes back clean everywhere except the generator
-pages, where it manufactures a hundred fabrication findings at once, every one of
-them a real value. That is an *easier* trap than a subtle one, because the check
-looks like it is working.
-
-**This is prospective, not load-bearing.** Of the 20 documented values that
-resolve only via the asset oracle, **zero** are in the tab-only set, and zero
-documented values would be wrongly flagged by a space-only asset scan. Today's
-green run does not depend on the whitespace class. The hazard is aimed entirely
-at whoever next writes an asset scan by hand — including at a reviewer
-re-deriving this gate's own figures, which is how it was found.
+**Recorded weakness, prospective.** Any hand-written scan of the asset tree for
+`"Type"` must use a whitespace class, not a literal space: `"Type"\s*:\s*"…"`
+finds 566 distinct values, `"Type" *: *"…"` finds 454. The 112 lost are the entire
+world-generator vocabulary — the tab dialect lives only under
+`Server/HytaleGenerator/` (222 files) — so a space-only re-derivation comes back
+clean everywhere except the generator pages, where it manufactures a hundred
+findings at once, every one a real value. Not load-bearing today: zero of the 20
+values resolving only via the asset oracle are tab-only.
 
 ## 13. The inherited-scope guard, audited from both sides (2026-09-05)
 
-`section_binder.bind_all` binds a docs section to the codec class it documents, and
-reports four classes: **direct** (a `**Package:**` line, an FQCN, or a path-style
-heading), **inherited-accepted**, **inherited-rejected**, **unbound**. A subsection
-inherits its ancestor's binding only if every top-level key it names — key-table
-first column, JSON-fence root keys — exists on that class's chain with parents
-walked. One unknown key rejects it and the rejection records the key.
+`section_binder.bind_all` binds a docs section to the codec class it documents and
+reports four classes. A subsection inherits its ancestor's binding only if every
+top-level key it names — key-table first column, JSON-fence root keys — exists on
+that class's chain with parents walked; one unknown key rejects it and the
+rejection records the key.
 
 Build-26: **139 direct, 52 inherited-accepted, 86 inherited-rejected, 2859
 unbound, 3136 seen** (the four sum exactly).
 
-### The input sets step 5 and scoped (c) are built against
-
-Measured after the guard, and these are the denominators, not the section counts.
-A table or fence is *usable* by a check if its section is direct-bound or
-inherited-accepted:
-
 | | total | direct | inherited-accepted | usable |
 |---|---|---|---|---|
-| key tables **with** a Default column | 60 | 5 | 8 | 21% |
-| key tables without one | 253 | 20 | 7 | 10% |
-| json fences containing a `"Type"` | 412 | 32 | 38 | 16% |
+| key tables **with** a Default column | 62 | 13 | 21 | 55% |
+| key tables without one | 253 | 20 | 7 | 11% |
+| json fences containing a `"Type"` | 438 | 26 | 16 | 10% |
 
-(Measured at 52 accepted; the fractions move a little with the parent-walk fixes
-below and should be re-printed before either check ships.) Position-only
-inheritance would have offered 68% and 50% — the guard refuses most of that, which
-is the guard working. **The honest figure for the defaults check is ~13 of 60, not
-41 of 60**, and it is the figure to quote when that check reports coverage.
+Position-only inheritance would have offered far more; the guard refuses most of
+it, which is the guard working.
 
-### Step 5's input set, and a disagreement worth keeping
+**The rejections are correct refusals.** They sit in `§Examples` / `§Structure`
+subsections whose fences root a *different* type — `interactions-flow.md`'s
+`§Examples` under `StatsConditionInteraction` opens `{"Type": "Serial", ...}`.
+Getting there took three parent-walk fixes, all recorded in `defaults_probe`'s
+docstring: the parent's **field name** is part of the address
+(`Interaction.ABSTRACT_CODEC`, not `.CODEC`); simple names **collide**, so resolve
+sibling-directory-first; and `BuilderCodec.abstractBuilder` puts the parent in
+argument **one** where `builder` puts it in two.
 
-Counted at `03eb030`, two passes, and they do not agree:
+**The accepted sample audits clean.** 20 of 52 sampled (`random.seed(11)`), 20/20
+correctly attributed. The discriminator exemption carried 38 of the 52
+acceptances and **all 49 exempted occurrences were `Type`**; the risky `Id`
+exemption is used **zero** times, so the per-codec refinement is deferred rather
+than skipped.
 
-| | sections with a Default-column table | usable | in neither binder set |
-|---|---|---|---|
-| review pass | 42 on 20 pages | 13 (direct only) | 11 |
-| this pass | 53 on 19 pages | 13 (direct **+ inherited-accepted**) | 0 |
+**A section's identity is `(page, index)`, never `(page, title)`.**
+`interactions-flow.md` has five `#### Core Properties` under five different
+ancestors. Keyed on the title they collapse onto the last one's class — which the
+first audit of this guard did, and which a later consumer reproduced exactly
+because the library still offered an ambiguous key. Every record carries `index`.
 
-**Both land on 13 and they are different thirteens.** The review's are all
-`§ClassName` sections — direct bindings. This pass's include `#### Core Properties`
-subsections that inherit, and exclude some the review counted. So `13` is a
-coincidence, not a corroboration, and quoting it without the predicate would have
-read as two independent confirmations of one number. That is the third member of
-the family this document keeps recording: a figure needs its **unit** (7
-occurrences, not 7 assets), its **pattern** (which "space-only" regex), and its
-**predicate** (which sections, bound how) — and the review added a fourth, the
-**revision** it was measured against, after its own "0 of 87 closure claims in a
-bound section" became "5 of 87" at `03eb030` because binder rule 2 landed in
-between. Both of those are correct; they measure different code.
+## 14. Step 5, the defaults check (2026-09-05)
 
-**The `11 in neither set` was resolved and it was not an extraction disagreement.**
-Both passes find **0**; the extractions agree on every page. The review's earlier
-membership set was built from `bound` ∪ `unbound` only, and the binder at
-`03eb030` has four buckets — the 11 "unclassifiable" sections were sections bound
-**by inheritance**. A two-bucket predicate applied to a four-bucket result, from a
-model of the code that was one commit stale: not a wrong count, a count of the
-wrong thing. The predicate was wrong *because* the revision was.
+`check-defaults.py` is a HARD gate: a documented `Default` cell must be the value
+the field holds when the key is absent. Nothing read that column before —
+`check-symbols.py` skips JSON key paths and the fields check confirms
+*documented → real* for NAMES only.
 
-> **The two failures point in opposite directions and neither is settled by
-> comparing numbers.** Two figures that AGREE from different predicates read as
-> independent confirmation and are not — the two 13s above. Two figures that
-> DISAGREE from different predicates read as a data conflict and are not — the 11
-> and the 0. Only comparing what produced them settles either.
-
-Still open, and smaller: the two passes count **42** and **53** Default-column
-sections respectively. That is a table-detection difference, not a binding or
-extraction one — this pass accepts a first column headed `Key`, `Property`,
-`Field` **or** `Name`, and any header beginning `Default`. Settle it when step 5
-quotes its denominator, and quote the predicate with it.
-
-**Whatever it settles at, step 5 must print its own coverage** — 13 of 42, or 13 of
-53 — the way the binder prints 139 of 3136 and the snippet gate prints 5 of 1093.
-Discovering it afterwards is what this section exists to prevent.
-
-### The rejections are correct refusals — but only after three fixes
-
-The first audit pass read the rejections by failing key, on the hypothesis that
-base-interaction keys were failing because the parent walk could not reach them.
-That was right, and it took three fixes:
-
-1. **The parent's field name is part of the address.** `chain.parent` is
-   `Interaction.ABSTRACT_CODEC`, not `Interaction.CODEC`, and `Interaction.CODEC`
-   is an `AssetCodecMapCodec` with no keys at all.
-2. **Simple names collide.** Two files are named `SimpleInteraction.java`
-   (`protocol` and `interaction.config`), so a unique-filename lookup refused and
-   the walk stopped at hop 0 — 15 rejections blamed `Next`, a key
-   `SimpleInteraction` declares. Resolve sibling-directory first, then up the
-   package tree, and only then accept a unique tree-wide match.
-3. **`BuilderCodec.abstractBuilder` puts the parent in argument ONE**, where
-   `BuilderCodec.builder` puts it in argument two. A phase-(a) parser defect, not a
-   binder one: 96 chains use `abstractBuilder` against 1516 plain builders, which
-   looks negligible and is the opposite, because every one of the 96 is a **base
-   class** — precisely the links other chains inherit through.
-
-`Next` 15 → 13 → gone; accepted 40 → 44 → **52**.
-
-What remains is genuine. The residual rejections are led by `Interactions` (15),
-`default` (6), `ItemAnimationId` (5), and every one checked was absent from the
-ancestor's full ancestry. The shape is consistent and worth knowing: they sit in
-`§Examples` / `§Structure` / `§Usage Patterns` subsections whose fences show a
-**composed** shape whose root is a different type. `interactions-flow.md`'s
-`§Examples` under `StatsConditionInteraction` opens `{"Type": "Serial",
-"Interactions": [...]}` — a `Serial`, not a `StatsCondition`. The guard refused a
-real misattribution.
-
-### The accepted sample: 20 of 20 correct, and the exemption costs nothing today
-
-Sampled 20 of the 52 accepted (seeded, `random.seed(11)`) and read each against its
-ancestor's declared keys. **20 of 20 correctly attributed**; no misattribution in
-the sample. Fingerprint sizes: min 1 key, median 4, max 18.
-
-**The discriminator exemption is used, and only in its safe form.** 38 of the 52
-acceptances depended on an exempted key, and **all 49 exempted occurrences were
-`Type`**. The mined set is `Type` (38 declarations), `component`, `Id` and `type` —
-and `Id` is the one that worried us, because it is a common key name and a global
-exemption for it would silently accept a sibling's table. It is used **zero** times.
-So the per-codec refinement is not needed yet; the figure to re-check if it ever is:
-`exempted` on each `Inherited` record names which keys carried the acceptance, so
-the cost of the fallback is measurable rather than assumed.
-
-> **The audit instrument was wrong first.** The initial pass reconstructed each
-> section's fingerprint by keying bodies on `(page, title)` — and
-> `interactions-flow.md` has five different `#### Core Properties` subsections, so
-> they collapsed and five distinct ancestors all showed the *last* one's keys. The
-> binder itself was correct; only the audit was not. Fixed by recording the
-> fingerprint on the `Inherited` record at bind time rather than reconstructing it,
-> which is the same rule as reading a gate's own denominator instead of recounting
-> its inputs.
-
-
-## 14. Step 5, the defaults check: what it covers and what it refuses (2026-09-05)
-
-`check-defaults.py` is a HARD gate in `verify-docs.sh`. A documented `Default` cell
-must be the value the field holds when the key is absent. Nothing read that column
-before: `check-symbols.py` skips JSON key paths, and the fields check confirms
-*documented-key → real* for NAMES and never for values, so a default that changed
-in a new build read exactly like one that had not.
-
-### The denominator question §13 left open is settled, and neither earlier answer was it
-
-§13 recorded two passes counting **42** Default-column sections on 20 pages and
-**53** on 19, and left the difference to be settled here. Settled, with the
-predicate written out this time:
-
-> A **key table** is a markdown table whose header row carries a column headed
-> `Key`, `Property`, `Field` or `Name` — **or a phrase whose last word is one of
-> those**, because `camera.md` heads two of them `JSON key`. It is a
-> **Default-column** key table if any header cell begins with `Default`. Build-26:
-> 61 read exactly `Default` and one reads `Default (shipped `Default.json`)`.
-
-On that predicate, build-26 has **62 Default-column key tables, 358 data rows, on 19
-pages** — 61 headed plainly `Default` and one `Default (shipped \`Default.json\`)`,
-a composition the gate prints on every run rather than recording here, for the
-reason the paragraph after next gives.
-
-**The trailing-word half of that predicate came from counting the population
-twice.** The first version required an exact header match and found 60; a review
-pass with an independent extraction found 62. Reconciling them found four tables
-with a `Default` column and no exactly-matching key header — `camera.md`'s two
-`| JSON key | … | Default | …|` tables, which the gate should have had and did not,
-plus two the exact predicate correctly excluded: `npc-combat.md`'s
-`| Interaction | Sets var | Default |`, whose first column is a type name, and
-`interactions-flow.md`'s `| DefaultOk | Variable Missing | Result |`, which has no
-Default column at all and is claimed only by a predicate keyed on the word
-`Default` alone. So the widening is narrow on purpose, and the two-count
-disagreement was worth more than either count.
-
-**Then both predicates returned 62 and that agreement was also a coincidence.**
-Diffed per page rather than compared as totals, the two 62s differ on two pages and
-the differences cancel exactly:
-
-| page | exact-`Default`-cell predicate | the gate |
-|---|---|---|
-| `npc-combat.md` | 1 | **0** — `\| Interaction \| Sets var \| Default \|`, whose first column is a type name, correctly refused |
-| `adventure.md` | 2 | **3** — a header spelled `Default (shipped \`Default.json\`)`, which an exact `\| Default \|` cell match cannot see |
-
-Two errors of opposite sign in the other predicate. Had only the `JSON key` hole
-been fixed, both passes would have agreed at **61** and been wrong about which
-tables. This is the same lesson as the two 13s, occurring *inside the
-reconciliation of* that lesson one round later, and it is the first instance where
-both counts were right and the sets were not — so the rule earns its sharpest form:
-**reconcile populations, never totals.** A per-page diff is one command and it is
-the only thing that settled either round.
-
-**And a figure describing this predicate went stale inside the commit that widened
-it.** `default_tables`'s docstring read "59 plain `Default` headers and one
-`Default (shipped ...)`" while the live composition was 61 and 1 — in the one
-sentence a reader would use to judge whether the rule behaves. The gate now
-**prints** every non-plain spelling it finds instead of describing the composition
-in a comment, which is the same repair as CLAUDE.md's page count and the doc-type
-check's `65 doc(s)`.
-
-**Neither 42 nor 53 is reproducible from the predicate either pass recorded**, and
-the honest thing is to leave that as it stands rather than pick the flattering
-explanation. What *is* reproducible is one contribution to the spread, measured
-directly by holding the population fixed and varying only the section key:
-
-| section identity | Default tables | direct | inherited-accepted |
-|---|---|---|---|
-| `(page, index)` | 60 | 13 | **21** |
-| `(page, title)` | 60 | 13 | **26** |
-
-Five tables change bucket, and the five are `interactions-flow.md`'s five
-`#### Core Properties`. §13 recorded that collapse as a defect of the *audit
-instrument*; it was also a defect of the **library**, which handed every consumer a
-result whose only natural key was ambiguous. `Bound`, `Inherited` and `Unbound` now
-carry `index`, the heading's ordinal within its page, and the binder fixture asserts
-that same-titled sections bind to different classes *and* are distinguishable.
-
-That is the fourth qualifier of §13's family arriving in a new place. Unit, pattern,
-predicate, revision — and now the **key**: two counts of one population, from one
-instrument, one revision apart in nothing but how a row is identified.
-
-### The three denominators the gate prints, and why they are three
+**The predicate, written out because two earlier passes counted this population
+differently and neither said how.** A **key table** is a markdown table whose
+header row carries a column headed `Key`, `Property`, `Field` or `Name` — or a
+phrase whose last word is one of those, since `camera.md` heads two `JSON key`. It
+is a **Default-column** key table if any header cell begins with `Default`. The
+gate prints the spelling composition rather than recording it here.
 
 ```
-62 Default-column key table(s) on 19 page(s); 34 in a bound section
-   (13 direct, 21 inherited-accepted)
-358 row(s) in those tables; 161 in a bound section (57 direct,
-   104 inherited-accepted), 197 outside the check
-of those 161: 84 comparable (84 agree, 0 disagree), 71 state no literal,
-   6 unresolved, 0 state no key
-of those 84 comparable: 39 match a written initialiser, 45 match the
-   type's implicit zero
+62 Default-column key table(s) on 19 page(s); 34 in a bound section (13 direct, 21 inherited-accepted)
+358 row(s) in those tables; 161 in a bound section (57 direct, 104 inherited-accepted), 197 outside the check
+of those 161: 84 comparable (84 agree, 0 disagree), 71 state no literal, 6 unresolved, 0 state no key
+of those 84 comparable: 39 match a written initialiser, 45 match the type's implicit zero
 ```
 
-A row is comparable only when three independent things hold, and each strips out a
-different part of the corpus:
+Three independent conditions narrow it: the section binds (34 of 62 tables), the
+cell states a backticked literal (90 of 161 rows), the key's setter names exactly
+one field (84 of 90). **By rows the binding split is 57 direct against 104
+inherited-accepted, so two-thirds of this gate's evidence rests on §13's
+fingerprint guard** — quote the row figure, not the table figure, when its warrant
+is at issue.
 
-1. **its section binds** — 34 tables of 62, **161 rows of 358**;
-2. **its Default cell states a backticked literal** — 90 rows of 161 (71 state an em
-   dash, italic prose or a bold marker, which claim something other than a value);
-3. **the key's setter names exactly one field** — 84 of those 90.
+**It ships hard on a measured zero, in two directions.** Across three runs the
+instrument reported 14, then 8, then 0 disagreements and **all 22 of the first two
+were its own** — an enum-tail rule that read `1.3` as `3`; the bare marker
+`Required` read as a value; boxes read as primitives (`private Boolean jumping`
+defaults to `null`, and this alone accused five correct rows); JSON quotes compared
+as value. The docs were correct every time. And the zero is not vacuous: corrupt
+every documented literal and all 84 comparable rows flip to disagree, so none is
+passing because the comparison is empty there. That is a fixture case.
 
-**The row denominator is stated on both sides of the boundary, and that took a
-review to notice.** The first version reported `161 row(s) in those bound tables`
-and no figure for the rest, so a reader saw 161/84 and could not tell that **197 of
-358 Default rows — over half — sit in unbound tables and are outside the check
-entirely.** The *table* denominator narrowed and said so; the *row* denominator
-stopped at the boundary. That is the third passing-path defect in this gate and the
-only one that is not a dropped row: it is a row that never enters.
+**The key→field map is read, not guessed** — the append group's second argument is
+the setter. `ClearOutXZ` sets `clearoutXZ`, `DisplayName` sets `displayNameKey`, so
+a casing rule gets the first and invents the second. Three setter shapes name no
+single field (a lambda assigning two, a method reference, a body that calls) and
+all three return **with a reason** and are counted. A transform is not a refusal:
+`o.chargeTime = -s` changes the decode, not what the field holds when the key is
+absent.
 
-**Two-thirds of the evidence rests on the fingerprint guard.** By tables the split
-reads 13 direct against 21 inherited-accepted; by rows — which is what the check
-actually counts — it is **57 against 104, so 65% of in-gate rows are bound by
-inheritance**, not by a `**Package:**` line. Quote the row figure, not the table
-figure, whenever this gate's warrant is at issue: it leans harder on §13's
-20-of-52 acceptance audit than the table ratio suggests.
-
-Printing the narrowing is the whole point. The snippet gate's green line read as
-corpus coverage for a year while compiling 5 of 1091 blocks.
-
-Two more filters run *inside* the row count and both are reported with their reason,
-because a filter whose output is never counted is an unaudited skip list —
-`check-symbols.py` reduced 2811 raw hits to the 750 it reports through eight of
-them, one eating 283 alone. Build-26: 0 rows filtered either way, which is worth
-saying out loud — the counter reading zero is what makes the filters auditable, and
-a filter reported only when it fires is indistinguishable from one that never runs.
-
-**Measured exposure, stated rather than assumed.** The table regex is line-anchored,
-so a table indented inside a list item would not be seen — the same shape as the
-fence anchor that silently skipped every indented ```json fence. Counted both ways
-on build-26: line-anchored 60, indent-tolerant 60. No indented Default table exists
-today, so the anchor costs nothing *now*; the printed denominator is what would show
-it if one ever did.
-
-### The instrument was wrong three times and the docs were never wrong
-
-This is the figure that decided the gate ships **hard** rather than behind a warning:
-across three runs it reported 14, then 8, then 0 disagreements, and **all 22 were
-its own**.
-
-| run | reported | cause | actually |
-|---|---|---|---|
-| prototype | 14 | an enum-tail rule that ran on numbers, so `1.3` → `3`; a literal-detector that read the bare marker `Required` as a value | docs correct |
-| first real run | 8 | `Boolean`/`Integer` treated as their primitives, so `null` → `false`/`0`; JSON quotes compared as part of the value | docs correct |
-| now | 0 | — | 84 of 84 agree |
-
-**And the zero is not vacuous, which is a measurement rather than an argument.**
-Corrupt every documented literal the gate reads — suffix it, so the corrupted value
-can collide with no real one — and re-run against the real corpus: **84 comparable,
-0 agree, 84 disagree.** Not one row agrees with a wrong value, so no row is passing
-because the comparison is empty there. That property is now a fixture case, because
-no per-case assertion covers it: each case says a *particular* comparison lands the
-right way, and none of them says the comparisons are doing work at all.
-
-(A first version of the corruption offset numbers by 7 and hit an accidental
-agreement — a fixture field initialised to `9.0` against a documented `2.0`. An
-accidental agreement reads as the property failing. A suffix cannot collide.)
-
-**How much is each agreement worth?** By the default's *origin*: 39 match a written
-initialiser, 45 match the type's implicit zero. The corruption test proves the 45
-are real comparisons — a doc claiming `5` for an uninitialised `int` fails — but
-"the doc states the zero and the field has no initialiser" is weaker evidence than
-an exact match against a written value, and the gate prints the split rather than
-leaving a reader to derive it. Note the predicate: this is by **origin**, not by
-documented value; counting `true`/`false` cells instead answers a different question
-and gives a different number.
-
-**Which rule decided each of the 84 agreements**, since the loosest one is the thing
-a future reader will want to tighten:
-
-| rule | n | what |
-|---|---|---|
-| exact string equality | 76 | |
-| numeric | 4 | `0`/`0.0` ×3, `-1`/`-1.0` ×1 |
-| case-folded | 4 | `User`/`USER` ×4 |
-
-All four case-folded comparisons are the `InteractionTarget` split the fallback was
-written for. "The loosest thing in the file" and "used on four rows, all of them the
-named case" are very different statements to someone deciding whether to remove it.
-
-Two of those deserve keeping as facts about the *subject*, not only about the tool:
-
-- **A box is not its primitive.** `ConditionInteraction` declares
-  `private Boolean jumping;` — five movement-state keys whose absent-value is `null`
-  and whose documented default is `null`. Only primitives have a zero. Reading the
-  boxes as primitives accuses five correct rows at once.
-- **A value cell in these docs is JSON.** `` `"Absolute"` `` is how the page writes
-  a value that appears in a JSON fence; the quotes are the format's. Comparing them
-  against `ValueType.Absolute` manufactures a disagreement per quoted cell.
-
-And one about enum spelling that was already known and now has a second use: the
-comparison is case-insensitive on purpose. `InteractionTarget` is `{User, Owner,
-Target}` in `protocol` and `{USER, OWNER, TARGET}` in `server`, `EnumStyle.detect`
-renders both to the same JSON, and `EffectConditionInteraction.entityTarget`
-initialises to `Target.USER` against a documented `` `"User"` ``.
-
-### What the probe refuses, and why refusing is the design
-
-The key→field map is **read, not guessed**: the append group's second argument is
-the setter, `(o, s) -> { o.field = s; }`. A casing rule was never an option —
-`ClearOutXZ` sets `clearoutXZ` and `DisplayName` sets `displayNameKey`, so a rule
-that gets the first invents the second.
-
-Three setter shapes name no single field, and all three are returned **with a
-reason** rather than dropped: a lambda assigning two fields (2 rows), a method
-reference (2), and a body that calls rather than assigns (2). A transform is *not*
-a refusal — `o.chargeTime = -s` decodes the key differently but does not change what
-the field holds when the key is absent, so one assignment to one field is enough
-whatever the right-hand side.
-
-`_fields` counts brace depth and accepts declarations at class-body depth only. A
-local variable inside a method matches a field declaration exactly;
-`RevealMapMarkersInViewInteraction` has `float f = scanState.nextScanTime …` in a
-method body, and without the depth guard a method-local value is reported as a codec
-default.
-
-### The eighth instance, in the file whose docstring lists the first seven
-
-`defaults_probe`'s contract is explicit: *every key it cannot resolve comes back
-with a reason and is counted, never dropped and never guessed at.* The refusals
-honoured that. **The parent walk did not** — `hops()` hit `if parent is None:
-return` and dropped the rest of the ancestry with no reason and no counter.
-
-```
-hop-chain lengths: {1: 65, 2: 21, 3: 11, 4: 35, 5: 1}   (limit 8, never approached)
-walks that stopped while chain.parent still named a parent: 11
-```
-
-Ten named `SimpleBlockInteraction.CODEC`, one named `ABSTRACT_CODEC`. Two of the
-eleven — `ChangeFarmingStage` and `HarvestCrop` — are among the **13 direct-bound
-Default tables**, so this was inside the gate's own input set, not at its margin.
-
-**Nothing wrong shipped, and that is the whole difficulty of the shape.**
-`0 state no key` held throughout: no documented row named a key that lived only on
-a truncated ancestor. What existed was a key set silently smaller than the probe
-claimed, and a `0` that reads as *every documented key was found* when part of what
-it meant was *we never looked past hop 1*. A true count over a quietly narrowed
-population — the same defect as a per-file `covered` denominator and a floor summed
-across runners, one layer in.
-
-How much smaller, on four of the eleven:
-
-| class | own keys | reachable after the fix |
-|---|---|---|
-| `HarvestCropInteraction` | 1 | 14 |
-| `TeleporterInteraction` | 3 | 16 |
-| `ChangeFarmingStageInteraction` | 4 | 17 |
-| `SpawnNPCInteraction` | 14 | 27 |
-
-**Two causes, two fixes, and the evidence for the first was in the file all along.**
-
-1. **An ambiguous simple name with no reachable directory.** Two
-   `SimpleBlockInteraction.java` exist (`protocol` and `…interaction.config.client`)
-   and the children sit under `builtin/adventure/…`, an ancestor of neither, so
-   sibling-first-then-upward cannot reach the right one and a unique-filename
-   lookup correctly refuses. The disambiguation was written down in the child as an
-   explicit single-type **import** — the same imports-first resolution
-   `registry_miner._resolve_type` already does and the one Java itself performs.
-   `_resolve_receiver` now reads it first.
-2. **A parent with no receiver is a field on the same class.** `chain.parent` of
-   `ABSTRACT_CODEC` has no dot; `partition` made a class name of it and the walk
-   went looking for `ABSTRACT_CODEC.java`. `SimpleCondition`'s `BASE_CODEC` is the
-   same shape. Re-parse the same file with that field name instead.
-
-After both: **hop lengths `{1: 54, 2: 21, 3: 12, 4: 45, 5: 1}`, truncations 0**, and
-every figure the gate prints is unchanged — which is the confirmation that no answer
-was ever wrong, only under-evidenced.
-
-**The collision recurs at every hop, and the import rule is per-file rather than
-per-walk — which the one-hop finding did not imply.** `ChangeFarmingStage`'s whole
-ancestry crosses three ambiguous names, each with exactly two copies in the tree:
-
-```
-ChangeFarmingStageInteraction  (1 copy)
-  -> config/client/SimpleBlockInteraction   2 copies, named by the CHILD's import
-  -> config/SimpleInteraction               2 copies, named by SimpleBlockInteraction's import
-  -> config/Interaction                     2 copies, named by SimpleInteraction's import
-```
-
-`protocol/` shadows `config/` at every level, which makes this chain about as
-adversarial as the tree offers. Every hop is disambiguated by the imports of the
-file that *names* it, not by the leaf's — that is the correct Java semantics, and
-it falls out of passing `text` from the current hop rather than threading the
-original file through.
-
-**The cheap version of this fix does not fail loudly. It fails partially, which is
-worse.** `ChangeFarmingStageInteraction` imports neither `SimpleInteraction` nor
-`Interaction` — a subclass has no reason to name its grandparent, and it has 32
-imports naming none of them. So threading the *leaf's* import list through the walk
-resolves hop 1, then has nothing to resolve hops 2 and 3 with, falls back to the
-ambiguous-refusal path, and truncates at hop 2 instead of hop 1. The truncation
-count drops from 11 to something smaller and non-zero, and that reads as **progress**
-rather than as a half-built fix. The only figure that distinguishes the two is the
-one that reaches zero.
-
-Passing the current hop's text is not an optimisation over threading the leaf's. It
-is the difference between asking *what does this file name?* and *what did the file
-I started from name?* — two different questions that happen to agree at depth 1,
-which is why a one-hop fixture cannot tell them apart. The same distinction showed
-up in a reviewer's check within the same round, and in the same direction.
-
-Every early return in `hops()` now appends a `Truncation` and the gate prints them
-beside the other reasons. The depth limit routes through the same channel although
-nothing exceeds five hops: an unmeasured guard that has never fired is exactly the
-one that is wrong the first time it does.
-
-> **This was found by walking every bound class, not by reading the file** — and it
-> would not have been found by reading. `if parent is None: return` looks like
-> ordinary defensive code, and the docstring three lines above it says the
-> collision is handled. It is [[audit-the-passing-path]]'s own thesis applied to the
-> file that quotes it: the defect sits where nothing is reported.
-
-**And the fixture for it was wrong first, which is the sub-lesson.** The corpus
-wrote `BuilderCodec.abstractBuilder(Base.class, Base::new)` — a shape that occurs in
-**none** of build-26's 96 `abstractBuilder` call sites, which take `(Class)` or
-`(Class, ParentCodec)`. The parser read `Base::new` as a receiver-less parent, the
-new receiver-less branch absorbed it, and every case passed. A fixture modelling a
-shape the corpus does not contain tests the wrong thing *and hides the branch it was
-written to exercise*. Check a synthetic corpus against the real one before trusting
-what it proves.
-
-### Where this leaves the sequence
-
-Steps 3 (negative closure) and 6 (cardinality) are untouched, and the
-`blocks.md` split (3,150 lines) is still the outstanding page-size arrear —
-the supervisor's order put it after step 5, so it is next.
+**Every early return in the parent walk records a `Truncation`.** It did not at
+first, and 11 bound classes — two inside the 13 direct-bound tables — silently
+walked one hop: `HarvestCropInteraction` reported a 1-key ancestry where there are
+14. Nothing wrong shipped (`0 state no key` held), which is what makes the shape
+hard: a true count over a quietly narrowed population. The import rule that fixed
+it is **per-hop, not per-walk** — `ChangeFarmingStage`'s ancestry crosses three
+consecutive 2-copy names and the leaf imports neither grandparent, so resolving
+everything against the leaf's imports fixes hop 1, truncates at hop 2, and reads as
+progress.

@@ -1279,6 +1279,37 @@ inheritance would have offered 68% and 50% — the guard refuses most of that, w
 is the guard working. **The honest figure for the defaults check is ~13 of 60, not
 41 of 60**, and it is the figure to quote when that check reports coverage.
 
+### Step 5's input set, and a disagreement worth keeping
+
+Counted at `03eb030`, two passes, and they do not agree:
+
+| | sections with a Default-column table | usable | in neither binder set |
+|---|---|---|---|
+| review pass | 42 on 20 pages | 13 (direct only) | 11 |
+| this pass | 53 on 19 pages | 13 (direct **+ inherited-accepted**) | 0 |
+
+**Both land on 13 and they are different thirteens.** The review's are all
+`§ClassName` sections — direct bindings. This pass's include `#### Core Properties`
+subsections that inherit, and exclude some the review counted. So `13` is a
+coincidence, not a corroboration, and quoting it without the predicate would have
+read as two independent confirmations of one number. That is the third member of
+the family this document keeps recording: a figure needs its **unit** (7
+occurrences, not 7 assets), its **pattern** (which "space-only" regex), and its
+**predicate** (which sections, bound how) — and the review added a fourth, the
+**revision** it was measured against, after its own "0 of 87 closure claims in a
+bound section" became "5 of 87" at `03eb030` because binder rule 2 landed in
+between. Both of those are correct; they measure different code.
+
+The `11 in neither set` does not reproduce here — this pass finds **0**, meaning
+every Default-table section resolves to one of the four binder classes. That is a
+disagreement about section extraction rather than about binding, and it is
+unresolved: worth settling before step 5 quotes a denominator, because a section
+that neither pass can classify is a section the check would silently skip.
+
+**Whatever it settles at, step 5 must print its own coverage** — 13 of 42, or 13 of
+53 — the way the binder prints 139 of 3136 and the snippet gate prints 5 of 1093.
+Discovering it afterwards is what this section exists to prevent.
+
 ### The rejections are correct refusals — but only after three fixes
 
 The first audit pass read the rejections by failing key, on the hypothesis that

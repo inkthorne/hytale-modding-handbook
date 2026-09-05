@@ -19,7 +19,7 @@ false-positive control, and neither is optional.
 Usage: python3 maintenance/scripts/check-defaults-fixture.py [-v]
 """
 from __future__ import annotations
-import argparse, os, pathlib, subprocess, sys, tempfile
+import argparse, contextlib, importlib.util, io, os, pathlib, re, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 FIX = HERE.parents[0] / 'fixtures' / 'defaults'
@@ -42,7 +42,7 @@ checks = 0
 
 # Floors. A fixture that can silently run no cases is the defect it exists to
 # catch; MIN_* is asserted at the bottom against the count actually executed.
-MIN_CASES = 49
+MIN_CASES = 61
 
 
 def check(label, thunk, want):
@@ -93,7 +93,7 @@ def expect_raises(label, fn, wanted_substr):
 # labels that must go red. An exact set, not "at least one": a mutation that
 # reddens more cases than expected means a case is asserting something other than
 # what its label says.
-MIN_MUTATIONS = 10
+MIN_MUTATIONS = 14
 
 PROBE, GATE = 'defaults_probe.py', 'check-defaults.py'
 
@@ -114,7 +114,7 @@ MUTATIONS = {
          'a boxed Integer with no initialiser is null, not zero',
          'the primitive and its box are not the same default',
          'it reports exactly the three planted disagreements',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too'}),
 
     'a JSON-quoted cell keeps its quotes (three more of the eight)': (
         PROBE, """    if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
@@ -122,7 +122,7 @@ MUTATIONS = {
         {'a JSON-quoted literal drops the quotes, which are syntax not value',
          'an empty JSON string is still a literal, and it is empty',
          'it reports exactly the three planted disagreements',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too'}),
 
     'a bare word is read as a literal (the `Required` accusation)': (
         PROBE, """    m = re.fullmatch(r'`([^`]*)`', c)
@@ -135,7 +135,8 @@ MUTATIONS = {
          'a bare word is not a literal — `Required` is a marker, not a value',
          'bold prose is not a literal',
          'it reports exactly the three planted disagreements',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too',
+         'it says how much of the evidence is an implicit zero'}),
 
     # THE DEFECT THAT MADE THE PROTOTYPE REPORT 14 DISAGREEMENTS. The dotted-name
     # rule ran first and its character class admitted digits, so `1.3` was read as
@@ -150,7 +151,7 @@ MUTATIONS = {
         {'a literal initialiser is the default',
          'a float suffix is not part of the value',
          'it reports exactly the three planted disagreements',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too'}),
 
     'a two-field setter guesses the first instead of refusing': (
         PROBE, """    if len(hits) > 1:
@@ -160,15 +161,19 @@ MUTATIONS = {
         {'a setter assigning two fields is refused, with a reason',
          'a refusal still names the key it refused',
          'it reports exactly the three planted disagreements',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too',
+         'it says how much of the evidence is an implicit zero'}),
 
     "the parent's codec FIELD NAME is dropped from the address": (
-        PROBE, "    yield from hops(parent, src, fld or 'CODEC', _depth + 1)",
-        "    yield from hops(parent, src, 'CODEC', _depth + 1)",
+        PROBE, "hops(parent, src, fld or 'CODEC', _depth + 1, truncations)",
+        "hops(parent, src, 'CODEC', _depth + 1, truncations)",
         {'the probe reports every key it saw, resolved or not',
          'a key declared on the parent chain resolves',
          'the record says which class declared the field',
-         'it prints the row-level coverage too'}),
+         'it prints the row-level breakdown too',
+         'it says how much of the evidence is an implicit zero',
+         "an ambiguous parent resolves through the child's import",
+         'and it resolves to the RIGHT one of the two'}),
 
     'SKIP returns 0 instead of 2 (the empty PASS, in this gate)': (
         GATE, '            return 2', '            return 0',
@@ -183,6 +188,36 @@ MUTATIONS = {
         {'a corpus that binds but states no defaults SKIPs with exit 2, never PASS',
          "every SKIP line is indented where the caller's filter can see it"}),
 
+    'the non-plain header spellings stop being printed': (
+        GATE, """        if spelling.strip().lower() != 'default':""",
+        """        if False:""",
+        {'it prints every Default header spelling that is not plain'}),
+
+    'the walk stops silently again (the eighth instance)': (
+        PROBE, """        stop('ambiguous simple name and no import names it'
+             if n > 1 else 'no source file for the parent class')
+        return""",
+        """        return""",
+        {'an unresolvable parent truncates the walk WITH a reason',
+         'the gate reports a truncated ancestry in its INFO block'}),
+
+    "the child's import is no longer consulted for an ambiguous parent": (
+        PROBE, """    if text is not None:
+        for static_imp, imp in IMPORT.findall(text):""",
+        """    if False:
+        for static_imp, imp in IMPORT.findall(text or ''):""",
+        {"an ambiguous parent resolves through the child's import",
+         'and it resolves to the RIGHT one of the two',
+         'a walk that completes records no truncation',
+         'an unresolvable parent truncates the walk WITH a reason'}),
+
+    'a receiver-less parent is read as a class name again': (
+        PROBE, """    if not fld:""", """    if False:""",
+        {'a receiver-less parent is another field on the same class',
+         "and both fields' keys carry their own defaults",
+         'a walk that completes records no truncation',
+         'an unresolvable parent truncates the walk WITH a reason'}),
+
     'a filtered row is dropped instead of counted': (
         GATE, """                    if max(ki, di) >= len(cells):
                         bucket['row states no key'] += 1
@@ -191,20 +226,18 @@ MUTATIONS = {
         """                    if max(ki, di) >= len(cells):
                         rows -= 1
                         continue""",
-        {'it prints the row-level coverage too',
+        {'it prints the row-level breakdown too',
+         'it prints the row coverage, INCLUDING the rows outside the check',
          'every filtered row is counted, with the reason it was filtered'}),
 
-    'the denominator counts only what it could check': (
-        GATE, """                tables += 1
-                pages_with_tables.add(page.name)
+    'the ROW denominator counts only what it could check': (
+        GATE, """                all_rows += len(table_rows)
                 if here is None:
                     continue""",
         """                if here is None:
                     continue
-                tables += 1
-                pages_with_tables.add(page.name)""",
-        {'it prints what it scanned, not only what it found',
-         "an unbound section's Default table is COUNTED and not checked"}),
+                all_rows += len(table_rows)""",
+        {'it prints the row coverage, INCLUDING the rows outside the check'}),
 }
 
 
@@ -288,6 +321,56 @@ expect_raises('floor: an empty source tree is not a clean probe',
               'not found')
 
 W = dp.probe('defpkg.Widget', src)
+
+# ---- the WALK must report where it stopped ----------------------------------
+# `defaults_probe`'s own contract: every key it cannot resolve comes back with a
+# reason and is counted. The refusals honour that; `hops()` did not — it hit
+# `if parent is None: return` and dropped the rest of the ancestry with no reason
+# and no counter. Eleven of the gate's bound classes were doing that, two of them
+# inside the 13 direct-bound Default tables. It is the eighth appearance of the
+# sentence, in the file whose docstring lists the first seven, and it was found by
+# walking every bound class rather than by reading: the line looks like ordinary
+# defensive code and the docstring three lines above it says the collision is
+# handled.
+# Crash-safe, like every other setup call in this file: a mutation that breaks the
+# walk must produce FAIL lines, not an exception that a harness reading only
+# `^  FAIL` scores as "no reds".
+_trunc: list = []
+try:
+    _FAR = dp.probe('defpkg.other.Far', src, truncations=_trunc)
+    _CHARGED = dp.probe('defpkg.Charged', src, truncations=_trunc)
+    dp.probe('defpkg.Orphaned', src, truncations=_trunc)
+    _walk_setup = None
+except Exception as e:                          # noqa: BLE001
+    _FAR = _CHARGED = {}
+    _walk_setup = f'{type(e).__name__}: {e}'
+check('the walk cases could be set up at all', lambda: _walk_setup, None)
+
+# A: the ambiguous simple name, disambiguated by the child's own import. `Base.java`
+# exists twice and `Far` lives under neither directory, so no upward walk reaches
+# it — but `import defpkg.Base;` is written down in the child, which is the same
+# imports-first resolution registry_miner._resolve_type already does.
+check('an ambiguous parent resolves through the child\'s import',
+      lambda: sorted(_FAR), ['Depth', 'Distance'])
+check('and it resolves to the RIGHT one of the two',
+      lambda: (_FAR['Depth'].declared_on, _FAR['Depth'].value),
+      ('defpkg.core.Anchor', '9'))
+
+# B: `chain.parent` with no receiver is a codec field on the SAME class, not a
+# class named `ABSTRACT_CODEC`.
+check('a receiver-less parent is another field on the same class',
+      lambda: sorted(_CHARGED), ['Amps', 'Volts'])
+check('and both fields\' keys carry their own defaults',
+      lambda: (_CHARGED['Amps'].value, _CHARGED['Volts'].value), ('13', '240'))
+
+# C: genuinely unresolvable. The walk stops — and SAYS SO.
+check('an unresolvable parent truncates the walk WITH a reason',
+      lambda: [(t.fqcn.split('.')[-1], t.parent, t.reason) for t in _trunc],
+      [('Orphaned', 'Ghost.CODEC', 'no source file for the parent class')])
+check('a walk that completes records no truncation',
+      lambda: [t for t in _trunc if 'Far' in t.fqcn or 'Charged' in t.fqcn], [])
+check('the truncation channel is optional, and probe still works without it',
+      lambda: sorted(dp.probe('defpkg.Orphaned', src)), ['Own'])
 
 
 def val(key):
@@ -427,11 +510,18 @@ check('a finding names the field it read, not just the key',
 # fixture precisely BECAUSE the fence had stopped being scanned.
 check('it prints what it scanned, not only what it found',
       lambda: next((l.strip() for l in _out.split('\n') if 'Default-column' in l), ''),
-      'INFO  4 Default-column key table(s) on 1 page(s); 2 in a bound section '
-      '(1 direct, 1 inherited-accepted)')
-check('it prints the row-level coverage too',
+      'INFO  5 Default-column key table(s) on 1 page(s); 3 in a bound section '
+      '(2 direct, 1 inherited-accepted)')
+# Rows in UNBOUND tables are counted too, and stated. Reporting only the rows the
+# gate can reach makes a green line read as corpus coverage; on the real corpus
+# 197 of 358 Default rows sit outside the check, which 161/84 alone never says.
+check('it prints the row coverage, INCLUDING the rows outside the check',
       lambda: next((l.strip() for l in _out.split('\n') if 'row(s) in those' in l), ''),
-      'INFO  23 row(s) in those bound tables; 14 comparable (11 agree, 3 disagree), '
+      'INFO  26 row(s) in those tables; 24 in a bound section (21 direct, '
+      '3 inherited-accepted), 2 outside the check')
+check('it prints the row-level breakdown too',
+      lambda: next((l.strip() for l in _out.split('\n') if 'of those' in l), ''),
+      'INFO  of those 24: 15 comparable (12 agree, 3 disagree), '
       '2 state no literal, 4 unresolved, 3 state no key')
 # A ROW A FILTER DROPS IS STILL A ROW. Two filters here reject a row before it can
 # be compared — a ragged row and a key cell that is not an identifier — and an
@@ -448,8 +538,28 @@ def _scanned_vs_bound():
     return (int(line.split()[1]), int(line.split('table(s) on')[1].split(';')[1].split()[0]))
 
 
+# The COMPOSITION of the population, printed rather than described. This exact
+# sentence went stale as a docstring figure within one commit of the predicate
+# being widened — "59 plain `Default` headers" against a live 61.
+check('it prints every Default header spelling that is not plain',
+      lambda: sorted(l.strip() for l in _out.split('\n') if 'header spelling' in l),
+      ['INFO    header spelling other than a plain "Default": '
+       "'Default (as shipped)' x1"])
+
+# The gate must SURFACE a truncated walk, not merely record one in the library. No
+# finding depends on it — that is exactly why it needs its own case.
+check('the gate reports a truncated ancestry in its INFO block',
+      lambda: sorted(l.strip() for l in _out.split('\n') if 'ancestry truncated' in l),
+      ['INFO    ancestry truncated: Ghost.CODEC '
+       '(no source file for the parent class) x1'])
+
+check('it says how much of the evidence is an implicit zero',
+      lambda: next((l.strip() for l in _out.split('\n') if 'comparable:' in l), ''),
+      "INFO  of those 15 comparable: 9 match a written initialiser, "
+      "6 match the type's implicit zero")
+
 check('an unbound section\'s Default table is COUNTED and not checked',
-      lambda: (_scanned_vs_bound(), '999.0' in _out), ((4, 2), False))
+      lambda: (_scanned_vs_bound(), '999.0' in _out), ((5, 3), False))
 # A skip must not share an exit code with a pass: check-type-values.py returned 0
 # on a missing cache and the caller rendered a bare `PASS` with no message.
 check('a missing source tree SKIPs with exit 2, never 0',
@@ -469,6 +579,53 @@ check('a corpus that binds but states no defaults SKIPs with exit 2, never PASS'
 # findings out with `grep -E '^  (FAIL|SKIP)'`, so a SKIP printed at column 0
 # renders as a FAIL with an empty body — which is how a stale-skiplist-only run of
 # the sibling gate once printed a header naming the wrong problem over no lines.
+# ---- the whole-gate property no per-case assertion covers --------------------
+# Every case above says a PARTICULAR comparison lands the right way. None of them
+# says the comparisons are doing work at all — 84 rows could agree because the
+# documented side is empty there, and the gate would look identical. So: corrupt
+# every documented literal and require that EVERY comparable row flips to
+# disagree. A row that still agrees with a corrupted value was never being
+# compared. Suggested by review after it ran this against the real corpus (84 of
+# 84 flipped), which is the measurement the hard-fail decision actually rests on.
+def _corruption_flips_every_row():
+    spec = importlib.util.spec_from_file_location('_cd', FROM / 'check-defaults.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    real = mod.dp.doc_value
+
+    def corrupt(cell):
+        # A SUFFIX, not an offset. `+7` on the numeric ones can land on the real
+        # value by accident — it did, on a fixture field initialised to `9.0`
+        # against a documented `2.0` — and an accidental agreement reads as the
+        # property failing. Suffixing cannot collide: the result parses as no
+        # number and equals no constant.
+        v = real(cell)
+        return None if v is None else v + '_corrupted'
+
+    argv = sys.argv
+    out = io.StringIO()
+    mod.dp.doc_value = corrupt
+    try:
+        sys.argv = ['check-defaults.py', '--docs', str(docs), '--src', str(src)]
+        with contextlib.redirect_stdout(out):
+            mod.main()
+    finally:
+        mod.dp.doc_value = real
+        sys.argv = argv
+    m = re.search(r'(\d+) comparable \((\d+) agree, (\d+) disagree\)', out.getvalue())
+    if m is None:
+        return 'no comparable line'
+    comparable, agree, disagree = (int(g) for g in m.groups())
+    # The PROPERTY, not the arithmetic. Pinning the count here makes the case
+    # redden whenever any unrelated change moves the corpus's comparable total,
+    # and a case that reddens for reasons other than its label is how an expected
+    # red set stops meaning anything.
+    return (agree, disagree == comparable, comparable > 0)
+
+
+check('corrupting every documented literal flips EVERY comparable row',
+      _corruption_flips_every_row, (0, True, True))
+
 check('every SKIP line is indented where the caller\'s filter can see it',
       lambda: [l[:6] for l in subprocess.run(
           [sys.executable, str(FROM / 'check-defaults.py'),

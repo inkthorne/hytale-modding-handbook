@@ -64,6 +64,26 @@ class ProbeFloor(Exception):
 
 
 @dataclass
+class Truncation:
+    """A parent walk that stopped before the ancestry ran out, and why.
+
+    THE WALK IS SUBJECT TO THIS FILE'S OWN CONTRACT and for one release it was
+    not. `hops` hit `if parent is None: return` and dropped the remaining
+    ancestry with no reason and no counter — eleven of the gate's bound classes
+    on build-26, two of them inside the 13 direct-bound Default tables. Nothing
+    wrong shipped: `0 state no key` held, so no documented row named a key that
+    only lived on a truncated ancestor. What shipped was a key set silently
+    smaller than the probe claimed, and a `0` that read as "every documented key
+    was found" when part of what it meant was "we never looked past hop 1".
+    That is a true count over a quietly narrowed population, which is the same
+    defect as a per-file `covered` denominator and a summed floor, one layer in.
+    """
+    fqcn: str
+    parent: str
+    reason: str
+
+
+@dataclass
 class Default:
     key: str
     field: str | None = None
@@ -115,15 +135,36 @@ def _fqcn(path: pathlib.Path, src: pathlib.Path) -> str:
     return str(path.relative_to(src)).replace('/', '.')[:-len('.java')]
 
 
-def _resolve_receiver(recv: str, near: pathlib.Path,
-                      src: pathlib.Path) -> pathlib.Path | None:
-    """Sibling directory first, then up the package tree, then a unique tree match.
+IMPORT = re.compile(r'^\s*import\s+static\s+([\w.]+)\s*;|^\s*import\s+([\w.]+)\s*;', re.M)
+
+
+def _resolve_receiver(recv: str, near: pathlib.Path, src: pathlib.Path,
+                      text: str | None = None) -> pathlib.Path | None:
+    """The child's own import first, then sibling directory, then up the package
+    tree, then a unique tree-wide match.
 
     Simple names collide — two `SimpleInteraction.java` exist in the real tree —
     and a unique-filename lookup refuses, stopping the walk at hop 0. The binder
     learned this by auditing 15 rejections that all blamed a key the parent
     declares (registry-oracle-notes.md §13).
+
+    THE IMPORT COMES FIRST, and it is what the directory rules cannot do. Ten of
+    the gate's classes name `SimpleBlockInteraction.CODEC` as their parent; two
+    files carry that name (`protocol` and `…interaction.config.client`) and the
+    children live under `builtin/adventure/…`, an ancestor of neither, so no
+    directory walk can reach the right one. The disambiguating evidence was
+    sitting in the child file the whole time as an explicit single-type import —
+    the same imports-first resolution `registry_miner._resolve_type` does, and
+    the resolution Java itself performs. Reading it is a hop the corpus can make
+    rather than a guess.
     """
+    if text is not None:
+        for static_imp, imp in IMPORT.findall(text):
+            fq = imp or static_imp
+            if fq.rsplit('.', 1)[-1] == recv:
+                hit = find_source(fq, src)
+                if hit is not None:
+                    return hit
     d = near.parent
     while str(d).startswith(str(src)):
         cand = d / f'{recv}.java'
@@ -140,29 +181,53 @@ def _resolve_receiver(recv: str, near: pathlib.Path,
 
 
 def hops(path: pathlib.Path, src: pathlib.Path, codec_field: str = 'CODEC',
-         _depth: int = 0):
+         _depth: int = 0, truncations: list | None = None):
     """Yield (path, text, chain) for a class and every ancestor of its chain.
 
     The parent's FIELD NAME is part of the address: `chain.parent` is
     `Interaction.ABSTRACT_CODEC`, and `Interaction.CODEC` is a map codec with no
     keys at all, so a walk that keeps the receiver and re-parses `CODEC` arrives
     at the wrong codec or none.
+
+    EVERY EARLY RETURN APPENDS A `Truncation`. There is no bare `return` past the
+    first hop: a walk that stops short narrows the key set without narrowing any
+    figure that says so, and `truncations` is how a caller can print the
+    difference. The depth limit routes through the same channel even though
+    nothing on build-26 exceeds five hops — an unmeasured guard that has never
+    fired is exactly the one that is wrong the first time it does.
     """
-    if _depth >= 8:
-        return
     text = path.read_text(errors='replace')
     chain = parse_chain(text, codec_field=codec_field)
     yield path, text, chain
     if chain is None or not chain.parent:
         return
-    recv, _, fld = chain.parent.partition('.')
-    parent = _resolve_receiver(recv, path, src)
-    if parent is None:
+
+    def stop(reason):
+        if truncations is not None:
+            truncations.append(Truncation(_fqcn(path, src), chain.parent, reason))
+
+    if _depth >= 8:
+        stop(f'walk hit the {8}-hop depth limit')
         return
-    yield from hops(parent, src, fld or 'CODEC', _depth + 1)
+    recv, _, fld = chain.parent.partition('.')
+    if not fld:
+        # A parent with NO receiver is another codec field on THIS class, not a
+        # class named `ABSTRACT_CODEC`. `partition` turns it into a class name and
+        # the walk goes looking for a file that cannot exist — one class on
+        # build-26, and a mis-parse rather than an ambiguity.
+        yield from hops(path, src, recv, _depth + 1, truncations)
+        return
+    parent = _resolve_receiver(recv, path, src, text)
+    if parent is None:
+        n = len(list(src.rglob(f'{recv}.java')))
+        stop('ambiguous simple name and no import names it'
+             if n > 1 else 'no source file for the parent class')
+        return
+    yield from hops(parent, src, fld or 'CODEC', _depth + 1, truncations)
 
 
-def probe(fqcn: str, src: pathlib.Path) -> dict[str, Default]:
+def probe(fqcn: str, src: pathlib.Path,
+          truncations: list | None = None) -> dict[str, Default]:
     """Every key on `fqcn`'s chain and its ancestors', with its default or a reason.
 
     Raises rather than returning an empty dict when the tree is absent: "0 keys,
@@ -175,7 +240,7 @@ def probe(fqcn: str, src: pathlib.Path) -> dict[str, Default]:
         raise ProbeFloor(f'no source file found for {fqcn} under {src} — '
                          f'class not found in the source tree')
 
-    chain_hops = list(hops(path, src))
+    chain_hops = list(hops(path, src, truncations=truncations))
     field_scopes = [(_fqcn(p, src), _fields(t)) for p, t, _ in chain_hops]
 
     out: dict[str, Default] = {}
@@ -250,7 +315,22 @@ def doc_value(cell: str) -> str | None:
 
 
 def agrees(documented: str, actual: str) -> bool:
-    """Whether a documented literal and a resolved default are the same value."""
+    """Whether a documented literal and a resolved default are the same value.
+
+    Three rules, and the loosest one is measurably confined to the case it was
+    written for. Which rule decided each of build-26's 84 agreements:
+
+        76  exact string equality
+         4  numeric        '0'/'0.0' x3, '-1'/'-1.0' x1
+         4  case-folded    'User'/'USER' x4
+
+    All four case-folded comparisons are the `InteractionTarget` split —
+    `{User, Owner, Target}` in `protocol` against `{USER, OWNER, TARGET}` in
+    `server`, which `EnumStyle.detect` renders to the same JSON. The fallback is
+    the loosest thing in this file and it fires on four rows, all of them the named
+    case; that is a very different statement from "the loosest thing in this file"
+    to a future reader deciding whether to tighten it.
+    """
     if documented == actual:
         return True
     try:

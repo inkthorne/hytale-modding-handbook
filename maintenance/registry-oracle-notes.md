@@ -1395,13 +1395,52 @@ in a new build read exactly like one that had not.
 predicate written out this time:
 
 > A **key table** is a markdown table whose header row carries a column headed
-> `Key`, `Property`, `Field` or `Name`. It is a **Default-column** key table if any
-> header cell begins with `Default`. Build-26: 59 read exactly `Default` and one
-> reads `Default (shipped `Default.json`)`.
+> `Key`, `Property`, `Field` or `Name` — **or a phrase whose last word is one of
+> those**, because `camera.md` heads two of them `JSON key`. It is a
+> **Default-column** key table if any header cell begins with `Default`. Build-26:
+> 61 read exactly `Default` and one reads `Default (shipped `Default.json`)`.
 
-On that predicate, build-26 has **60 Default-column key tables, 351 data rows, in 40
-sections, on 19 pages** — confirmed by a second scan sharing no code with the first
-(line-based, no `section_binder`, its own table regex): same 60, same 19, 351 rows.
+On that predicate, build-26 has **62 Default-column key tables, 358 data rows, on 19
+pages** — 61 headed plainly `Default` and one `Default (shipped \`Default.json\`)`,
+a composition the gate prints on every run rather than recording here, for the
+reason the paragraph after next gives.
+
+**The trailing-word half of that predicate came from counting the population
+twice.** The first version required an exact header match and found 60; a review
+pass with an independent extraction found 62. Reconciling them found four tables
+with a `Default` column and no exactly-matching key header — `camera.md`'s two
+`| JSON key | … | Default | …|` tables, which the gate should have had and did not,
+plus two the exact predicate correctly excluded: `npc-combat.md`'s
+`| Interaction | Sets var | Default |`, whose first column is a type name, and
+`interactions-flow.md`'s `| DefaultOk | Variable Missing | Result |`, which has no
+Default column at all and is claimed only by a predicate keyed on the word
+`Default` alone. So the widening is narrow on purpose, and the two-count
+disagreement was worth more than either count.
+
+**Then both predicates returned 62 and that agreement was also a coincidence.**
+Diffed per page rather than compared as totals, the two 62s differ on two pages and
+the differences cancel exactly:
+
+| page | exact-`Default`-cell predicate | the gate |
+|---|---|---|
+| `npc-combat.md` | 1 | **0** — `\| Interaction \| Sets var \| Default \|`, whose first column is a type name, correctly refused |
+| `adventure.md` | 2 | **3** — a header spelled `Default (shipped \`Default.json\`)`, which an exact `\| Default \|` cell match cannot see |
+
+Two errors of opposite sign in the other predicate. Had only the `JSON key` hole
+been fixed, both passes would have agreed at **61** and been wrong about which
+tables. This is the same lesson as the two 13s, occurring *inside the
+reconciliation of* that lesson one round later, and it is the first instance where
+both counts were right and the sets were not — so the rule earns its sharpest form:
+**reconcile populations, never totals.** A per-page diff is one command and it is
+the only thing that settled either round.
+
+**And a figure describing this predicate went stale inside the commit that widened
+it.** `default_tables`'s docstring read "59 plain `Default` headers and one
+`Default (shipped ...)`" while the live composition was 61 and 1 — in the one
+sentence a reader would use to judge whether the rule behaves. The gate now
+**prints** every non-plain spelling it finds instead of describing the composition
+in a comment, which is the same repair as CLAUDE.md's page count and the doc-type
+check's `65 doc(s)`.
 
 **Neither 42 nor 53 is reproducible from the predicate either pass recorded**, and
 the honest thing is to leave that as it stands rather than pick the flattering
@@ -1427,19 +1466,38 @@ instrument, one revision apart in nothing but how a row is identified.
 ### The three denominators the gate prints, and why they are three
 
 ```
-60 Default-column key table(s) on 19 page(s); 34 in a bound section
+62 Default-column key table(s) on 19 page(s); 34 in a bound section
    (13 direct, 21 inherited-accepted)
-161 row(s) in those bound tables; 84 comparable (84 agree, 0 disagree),
-   71 state no literal, 6 unresolved
+358 row(s) in those tables; 161 in a bound section (57 direct,
+   104 inherited-accepted), 197 outside the check
+of those 161: 84 comparable (84 agree, 0 disagree), 71 state no literal,
+   6 unresolved, 0 state no key
+of those 84 comparable: 39 match a written initialiser, 45 match the
+   type's implicit zero
 ```
 
 A row is comparable only when three independent things hold, and each strips out a
 different part of the corpus:
 
-1. **its section binds** — 34 tables of 60;
+1. **its section binds** — 34 tables of 62, **161 rows of 358**;
 2. **its Default cell states a backticked literal** — 90 rows of 161 (71 state an em
    dash, italic prose or a bold marker, which claim something other than a value);
 3. **the key's setter names exactly one field** — 84 of those 90.
+
+**The row denominator is stated on both sides of the boundary, and that took a
+review to notice.** The first version reported `161 row(s) in those bound tables`
+and no figure for the rest, so a reader saw 161/84 and could not tell that **197 of
+358 Default rows — over half — sit in unbound tables and are outside the check
+entirely.** The *table* denominator narrowed and said so; the *row* denominator
+stopped at the boundary. That is the third passing-path defect in this gate and the
+only one that is not a dropped row: it is a row that never enters.
+
+**Two-thirds of the evidence rests on the fingerprint guard.** By tables the split
+reads 13 direct against 21 inherited-accepted; by rows — which is what the check
+actually counts — it is **57 against 104, so 65% of in-gate rows are bound by
+inheritance**, not by a `**Package:**` line. Quote the row figure, not the table
+figure, whenever this gate's warrant is at issue: it leans harder on §13's
+20-of-52 acceptance audit than the table ratio suggests.
 
 Printing the narrowing is the whole point. The snippet gate's green line read as
 corpus coverage for a year while compiling 5 of 1091 blocks.
@@ -1447,8 +1505,9 @@ corpus coverage for a year while compiling 5 of 1091 blocks.
 Two more filters run *inside* the row count and both are reported with their reason,
 because a filter whose output is never counted is an unaudited skip list —
 `check-symbols.py` reduced 2811 raw hits to the 750 it reports through eight of
-them, one eating 283 alone. Build-26: 2 rows whose key cell is not a plain
-identifier (a prose catch-all row, a dotted path) and 0 ragged rows.
+them, one eating 283 alone. Build-26: 0 rows filtered either way, which is worth
+saying out loud — the counter reading zero is what makes the filters auditable, and
+a filter reported only when it fires is indistinguishable from one that never runs.
 
 **Measured exposure, stated rather than assumed.** The table regex is line-anchored,
 so a table indented inside a list item would not be seen — the same shape as the
@@ -1468,6 +1527,40 @@ its own**.
 | prototype | 14 | an enum-tail rule that ran on numbers, so `1.3` → `3`; a literal-detector that read the bare marker `Required` as a value | docs correct |
 | first real run | 8 | `Boolean`/`Integer` treated as their primitives, so `null` → `false`/`0`; JSON quotes compared as part of the value | docs correct |
 | now | 0 | — | 84 of 84 agree |
+
+**And the zero is not vacuous, which is a measurement rather than an argument.**
+Corrupt every documented literal the gate reads — suffix it, so the corrupted value
+can collide with no real one — and re-run against the real corpus: **84 comparable,
+0 agree, 84 disagree.** Not one row agrees with a wrong value, so no row is passing
+because the comparison is empty there. That property is now a fixture case, because
+no per-case assertion covers it: each case says a *particular* comparison lands the
+right way, and none of them says the comparisons are doing work at all.
+
+(A first version of the corruption offset numbers by 7 and hit an accidental
+agreement — a fixture field initialised to `9.0` against a documented `2.0`. An
+accidental agreement reads as the property failing. A suffix cannot collide.)
+
+**How much is each agreement worth?** By the default's *origin*: 39 match a written
+initialiser, 45 match the type's implicit zero. The corruption test proves the 45
+are real comparisons — a doc claiming `5` for an uninitialised `int` fails — but
+"the doc states the zero and the field has no initialiser" is weaker evidence than
+an exact match against a written value, and the gate prints the split rather than
+leaving a reader to derive it. Note the predicate: this is by **origin**, not by
+documented value; counting `true`/`false` cells instead answers a different question
+and gives a different number.
+
+**Which rule decided each of the 84 agreements**, since the loosest one is the thing
+a future reader will want to tighten:
+
+| rule | n | what |
+|---|---|---|
+| exact string equality | 76 | |
+| numeric | 4 | `0`/`0.0` ×3, `-1`/`-1.0` ×1 |
+| case-folded | 4 | `User`/`USER` ×4 |
+
+All four case-folded comparisons are the `InteractionTarget` split the fallback was
+written for. "The loosest thing in the file" and "used on four rows, all of them the
+named case" are very different statements to someone deciding whether to remove it.
 
 Two of those deserve keeping as facts about the *subject*, not only about the tool:
 
@@ -1504,6 +1597,111 @@ local variable inside a method matches a field declaration exactly;
 `RevealMapMarkersInViewInteraction` has `float f = scanState.nextScanTime …` in a
 method body, and without the depth guard a method-local value is reported as a codec
 default.
+
+### The eighth instance, in the file whose docstring lists the first seven
+
+`defaults_probe`'s contract is explicit: *every key it cannot resolve comes back
+with a reason and is counted, never dropped and never guessed at.* The refusals
+honoured that. **The parent walk did not** — `hops()` hit `if parent is None:
+return` and dropped the rest of the ancestry with no reason and no counter.
+
+```
+hop-chain lengths: {1: 65, 2: 21, 3: 11, 4: 35, 5: 1}   (limit 8, never approached)
+walks that stopped while chain.parent still named a parent: 11
+```
+
+Ten named `SimpleBlockInteraction.CODEC`, one named `ABSTRACT_CODEC`. Two of the
+eleven — `ChangeFarmingStage` and `HarvestCrop` — are among the **13 direct-bound
+Default tables**, so this was inside the gate's own input set, not at its margin.
+
+**Nothing wrong shipped, and that is the whole difficulty of the shape.**
+`0 state no key` held throughout: no documented row named a key that lived only on
+a truncated ancestor. What existed was a key set silently smaller than the probe
+claimed, and a `0` that reads as *every documented key was found* when part of what
+it meant was *we never looked past hop 1*. A true count over a quietly narrowed
+population — the same defect as a per-file `covered` denominator and a floor summed
+across runners, one layer in.
+
+How much smaller, on four of the eleven:
+
+| class | own keys | reachable after the fix |
+|---|---|---|
+| `HarvestCropInteraction` | 1 | 14 |
+| `TeleporterInteraction` | 3 | 16 |
+| `ChangeFarmingStageInteraction` | 4 | 17 |
+| `SpawnNPCInteraction` | 14 | 27 |
+
+**Two causes, two fixes, and the evidence for the first was in the file all along.**
+
+1. **An ambiguous simple name with no reachable directory.** Two
+   `SimpleBlockInteraction.java` exist (`protocol` and `…interaction.config.client`)
+   and the children sit under `builtin/adventure/…`, an ancestor of neither, so
+   sibling-first-then-upward cannot reach the right one and a unique-filename
+   lookup correctly refuses. The disambiguation was written down in the child as an
+   explicit single-type **import** — the same imports-first resolution
+   `registry_miner._resolve_type` already does and the one Java itself performs.
+   `_resolve_receiver` now reads it first.
+2. **A parent with no receiver is a field on the same class.** `chain.parent` of
+   `ABSTRACT_CODEC` has no dot; `partition` made a class name of it and the walk
+   went looking for `ABSTRACT_CODEC.java`. `SimpleCondition`'s `BASE_CODEC` is the
+   same shape. Re-parse the same file with that field name instead.
+
+After both: **hop lengths `{1: 54, 2: 21, 3: 12, 4: 45, 5: 1}`, truncations 0**, and
+every figure the gate prints is unchanged — which is the confirmation that no answer
+was ever wrong, only under-evidenced.
+
+**The collision recurs at every hop, and the import rule is per-file rather than
+per-walk — which the one-hop finding did not imply.** `ChangeFarmingStage`'s whole
+ancestry crosses three ambiguous names, each with exactly two copies in the tree:
+
+```
+ChangeFarmingStageInteraction  (1 copy)
+  -> config/client/SimpleBlockInteraction   2 copies, named by the CHILD's import
+  -> config/SimpleInteraction               2 copies, named by SimpleBlockInteraction's import
+  -> config/Interaction                     2 copies, named by SimpleInteraction's import
+```
+
+`protocol/` shadows `config/` at every level, which makes this chain about as
+adversarial as the tree offers. Every hop is disambiguated by the imports of the
+file that *names* it, not by the leaf's — that is the correct Java semantics, and
+it falls out of passing `text` from the current hop rather than threading the
+original file through.
+
+**The cheap version of this fix does not fail loudly. It fails partially, which is
+worse.** `ChangeFarmingStageInteraction` imports neither `SimpleInteraction` nor
+`Interaction` — a subclass has no reason to name its grandparent, and it has 32
+imports naming none of them. So threading the *leaf's* import list through the walk
+resolves hop 1, then has nothing to resolve hops 2 and 3 with, falls back to the
+ambiguous-refusal path, and truncates at hop 2 instead of hop 1. The truncation
+count drops from 11 to something smaller and non-zero, and that reads as **progress**
+rather than as a half-built fix. The only figure that distinguishes the two is the
+one that reaches zero.
+
+Passing the current hop's text is not an optimisation over threading the leaf's. It
+is the difference between asking *what does this file name?* and *what did the file
+I started from name?* — two different questions that happen to agree at depth 1,
+which is why a one-hop fixture cannot tell them apart. The same distinction showed
+up in a reviewer's check within the same round, and in the same direction.
+
+Every early return in `hops()` now appends a `Truncation` and the gate prints them
+beside the other reasons. The depth limit routes through the same channel although
+nothing exceeds five hops: an unmeasured guard that has never fired is exactly the
+one that is wrong the first time it does.
+
+> **This was found by walking every bound class, not by reading the file** — and it
+> would not have been found by reading. `if parent is None: return` looks like
+> ordinary defensive code, and the docstring three lines above it says the
+> collision is handled. It is [[audit-the-passing-path]]'s own thesis applied to the
+> file that quotes it: the defect sits where nothing is reported.
+
+**And the fixture for it was wrong first, which is the sub-lesson.** The corpus
+wrote `BuilderCodec.abstractBuilder(Base.class, Base::new)` — a shape that occurs in
+**none** of build-26's 96 `abstractBuilder` call sites, which take `(Class)` or
+`(Class, ParentCodec)`. The parser read `Base::new` as a receiver-less parent, the
+new receiver-less branch absorbed it, and every case passed. A fixture modelling a
+shape the corpus does not contain tests the wrong thing *and hides the branch it was
+written to exercise*. Check a synthetic corpus against the real one before trusting
+what it proves.
 
 ### Where this leaves the sequence
 

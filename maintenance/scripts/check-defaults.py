@@ -42,6 +42,21 @@ REPO = HERE.parents[1]
 KEY_HEADERS = ('key', 'property', 'field', 'name')
 
 
+def _is_key_header(h: str) -> bool:
+    """Does this header name a column of key names?
+
+    The trailing-word rule is not decoration. `camera.md` heads two Default-column
+    tables `JSON key`, and an exact-match predicate skipped both — found by a
+    reviewer whose independent extraction counted 62 tables against this gate's 60,
+    which is the entire value of counting a population twice from two directions.
+    It stays narrow at the other end: `interactions-flow.md` has a
+    `| DefaultOk | Variable Missing | Result |` table whose FIRST cell begins with
+    `Default`, and a predicate keyed on the Default column alone claims it.
+    """
+    h = h.strip().lower()
+    return h in KEY_HEADERS or h.rsplit(' ', 1)[-1] in KEY_HEADERS
+
+
 def default_tables(body: str):
     """Yield (key_col, default_col, header, rows) for each Default-column key table.
 
@@ -53,7 +68,7 @@ def default_tables(body: str):
     """
     for m in sb.TABLE.finditer(body):
         hdr = [c.strip().strip('*`') for c in m.group(1).split('|')]
-        ki = next((i for i, h in enumerate(hdr) if h.lower() in KEY_HEADERS), None)
+        ki = next((i for i, h in enumerate(hdr) if _is_key_header(h)), None)
         di = next((i for i, h in enumerate(hdr) if h.lower().startswith('default')), None)
         if ki is None or di is None:
             continue
@@ -102,12 +117,16 @@ def main() -> int:
     for i in r.inherited_accepted:
         usable[(i.page, i.index)] = (i.fqcn, 'inherited')
 
-    tables = tables_bound = rows = 0
+    tables = tables_bound = rows = all_rows = 0
+    spellings = collections.Counter()
     pages_with_tables: set[str] = set()
     by_binding = collections.Counter()
+    rows_by_binding = collections.Counter()
     bucket = collections.Counter()
     unresolved = collections.Counter()
     noncell = collections.Counter()
+    origins = collections.Counter()
+    truncated: list = []
     findings: list[tuple[str, str, str, str, str, str]] = []
     probes: dict[str, dict[str, dp.Default]] = {}
 
@@ -116,15 +135,27 @@ def main() -> int:
             here = usable.get((page.name, idx))
             for ki, di, _hdr, table_rows in default_tables(body):
                 tables += 1
+                spellings[_hdr[di]] += 1
                 pages_with_tables.add(page.name)
+                # ROWS IN UNBOUND TABLES ARE COUNTED TOO. Reporting only the rows
+                # the gate can reach makes a green line read as corpus coverage —
+                # the exact misreading the snippet gate's "all 5 complete
+                # snippet(s) compile" produced for a year. The table denominator
+                # narrowed and said so; the ROW denominator stopped at the
+                # boundary, so a reader saw 161/84 and could not tell that over
+                # half of the corpus's Default rows are outside the check.
+                # Raised by review, and it is the third passing-path defect in
+                # this gate: not a dropped row, a row that never enters.
+                all_rows += len(table_rows)
                 if here is None:
                     continue
                 fqcn, how = here
                 tables_bound += 1
                 by_binding[how] += 1
+                rows_by_binding[how] += len(table_rows)
                 if fqcn not in probes:
                     try:
-                        probes[fqcn] = dp.probe(fqcn, src)
+                        probes[fqcn] = dp.probe(fqcn, src, truncations=truncated)
                     except dp.ProbeFloor:
                         # An empty dict here would report every row as "key is on
                         # no chain", which is a wrong reason rather than a missing
@@ -163,6 +194,7 @@ def main() -> int:
                         bucket['unresolved'] += 1
                         unresolved[d.reason or 'no reason recorded'] += 1
                         continue
+                    origins[d.origin] += 1
                     if dp.agrees(documented, d.value):
                         bucket['agree'] += 1
                         if a.verbose:
@@ -195,11 +227,42 @@ def main() -> int:
     print(f'  INFO  {tables} Default-column key table(s) on {len(pages_with_tables)} page(s); '
           f'{tables_bound} in a bound section '
           f'({by_binding["direct"]} direct, {by_binding["inherited"]} inherited-accepted)')
-    print(f'  INFO  {rows} row(s) in those bound tables; {checked} comparable '
+    # The composition of the population, printed rather than described, so that
+    # widening the predicate cannot leave a stale figure behind. Only the
+    # non-plain spellings, because listing `Default x61` every run is noise and a
+    # line nobody reads is the same as no line.
+    for spelling, n in sorted(spellings.items()):
+        if spelling.strip().lower() != 'default':
+            print(f'  INFO    header spelling other than a plain "Default": '
+                  f'{spelling!r} x{n}')
+    print(f'  INFO  {all_rows} row(s) in those tables; {rows} in a bound section '
+          f'({rows_by_binding["direct"]} direct, '
+          f'{rows_by_binding["inherited"]} inherited-accepted), '
+          f'{all_rows - rows} outside the check')
+    print(f'  INFO  of those {rows}: {checked} comparable '
           f'({bucket["agree"]} agree, {bucket["disagree"]} disagree), '
           f'{bucket["cell states no literal"]} state no literal, '
           f'{bucket["unresolved"]} unresolved, '
           f'{bucket["row states no key"]} state no key')
+    # WHAT THE COMPARABLE ROWS ACTUALLY COMPARE. Roughly half are "the doc states
+    # the type's zero and the field has no initialiser", which is a real comparison
+    # — a doc claiming `5` for an uninitialised int fails — but it is weaker
+    # evidence than a written initialiser matched exactly, and a reader deciding
+    # how much the zero is worth should not have to derive the split. Raised by
+    # review. The predicate is the DEFAULT'S ORIGIN, not the documented value:
+    # counting `true`/`false` cells instead gives a different number for a
+    # different question.
+    print(f'  INFO  of those {checked} comparable: '
+          f'{origins["initialiser"]} match a written initialiser, '
+          f'{origins["java-zero"]} match the type\'s implicit zero')
+    # A WALK THAT STOPPED SHORT IS REPORTED, even though no finding depends on
+    # one. `0 state no key` is a true count, and over a silently narrowed key set
+    # it reads as "every documented key was found" when part of what it means is
+    # "we never looked past hop 1" — eleven bound classes were in that state, two
+    # inside the 13 direct-bound tables, and no figure said so.
+    trunc = collections.Counter(f'{t.parent} ({t.reason})' for t in truncated)
+    for what, n in sorted(trunc.items(), key=lambda kv: -kv[1]):
+        print(f'  INFO    ancestry truncated: {what} x{n}')
     for reason, n in sorted(unresolved.items(), key=lambda kv: -kv[1]):
         print(f'  INFO    unresolved: {reason} x{n}')
     for reason, n in sorted(noncell.items(), key=lambda kv: -kv[1]):

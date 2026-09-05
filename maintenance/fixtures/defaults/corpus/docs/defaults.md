@@ -51,8 +51,15 @@ and its table contributes no rows. It exists so that "tables in a bound section"
 not the same number as "tables scanned" — a coverage figure that cannot differ from
 its own denominator is not measuring anything.
 
-| Key | Type | Default |
-|-----|------|---------|
+Its Default header is also **not spelled plainly**, which is the second thing this
+section is for: `adventure.md` heads one `Default (shipped \`Default.json\`)`, and a
+predicate matching an exact `| Default |` cell cannot see it. The gate prints every
+non-plain spelling it finds rather than describing the composition in a comment —
+that comment said "59 plain headers" for as long as it took a predicate widening to
+make it 61.
+
+| Key | Type | Default (as shipped) |
+|-----|------|----------------------|
 | `x` | int | `4` |
 
 ### Loose
@@ -64,3 +71,18 @@ this ratio.
 | Key | Type | Default |
 |-----|------|---------|
 | `Radius` | double | `999.0` |
+
+### Orphaned
+
+**Package:** `defpkg`
+
+Its chain names a parent that exists nowhere in the tree, so the walk stops one hop
+in. Nothing here produces a *finding* — the one documented key is on its own chain
+— and that is the point: the gate must report the truncated ancestry anyway. A walk
+that stops short narrows the key set without narrowing any figure that says so, and
+`0 state no key` over a quietly shortened ancestry reads as "every documented key
+was found" when part of what it means is "we never looked past hop 1".
+
+| Key | Type | Default |
+|-----|------|---------|
+| `Own` | int | `5` |

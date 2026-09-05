@@ -178,26 +178,51 @@ def discriminators(src: pathlib.Path) -> set[str]:
     return out
 
 
-def chain_key_names(chain, src: pathlib.Path, _depth: int = 0) -> set[str]:
+def chain_key_names(chain, src: pathlib.Path, near: pathlib.Path | None = None,
+                    _depth: int = 0) -> set[str]:
     """Every key on a chain INCLUDING its parents'. A subsection's table routinely
     documents inherited keys, so a fingerprint that stopped at the declared chain
-    would reject correct sections — the safe direction, but uselessly."""
+    would reject correct sections — the safe direction, but uselessly.
+
+    Two things the walk must get right, both found by auditing rejections rather
+    than by reading:
+
+    THE PARENT'S FIELD NAME IS PART OF THE ADDRESS. `chain.parent` is a receiver
+    AND a field — `Interaction.ABSTRACT_CODEC`, not `Interaction.CODEC` — and
+    Interaction.CODEC is an AssetCodecMapCodec with no keys at all. Keeping the
+    receiver and re-parsing the default field walks to the wrong codec, or none.
+
+    THE RECEIVER IS A SIMPLE NAME AND SIMPLE NAMES COLLIDE. Two files are called
+    SimpleInteraction.java — `protocol` and `interaction.config` — so a
+    unique-filename lookup refuses and the walk stops at hop 0, which is why 15
+    rejections blamed `Next`, a key SimpleInteraction declares. Resolve relative to
+    the CHILD's own directory first, then up its package, and only then accept a
+    unique tree-wide match. `near` carries the child's file for that reason.
+    """
     names = {getattr(k, 'name', str(k)) for k in chain.keys}
-    if chain.parent and _depth < 8:
-        recv = chain.parent.split('.')[0]
-        # `chain.parent` is a receiver like `Widget.CODEC`, and the chain does not
-        # carry its own package, so a bare find_source misses every parent that is
-        # not at the tree root. Fall back to a filename search — ambiguity is
-        # possible in principle and would show up as an over-permissive
-        # fingerprint, which the ordered sample audit covers.
+    if not chain.parent or _depth >= 8:
+        return names
+    recv, _, fld = chain.parent.partition('.')
+    fld = fld or 'CODEC'
+    pp = None
+    if near is not None:                      # sibling, then up the package tree
+        d = near.parent
+        while pp is None and str(d).startswith(str(src)):
+            cand = d / f'{recv}.java'
+            pp = cand if cand.exists() else None
+            if d == src:
+                break
+            d = d.parent
+    if pp is None:
         pp = find_source(recv, src)
-        if pp is None:
-            cands = list(src.rglob(f'{recv}.java'))
-            pp = cands[0] if len(cands) == 1 else None
-        if pp is not None:
-            parent = parse_chain(pp.read_text(errors='replace'))
-            if parent is not None:
-                names |= chain_key_names(parent, src, _depth + 1)
+    if pp is None:
+        cands = list(src.rglob(f'{recv}.java'))
+        pp = cands[0] if len(cands) == 1 else None
+    if pp is None:
+        return names
+    parent = parse_chain(pp.read_text(errors='replace'), codec_field=fld)
+    if parent is not None:
+        names |= chain_key_names(parent, src, pp, _depth + 1)
     return names
 
 
@@ -295,7 +320,7 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                     continue
                 r.bound.append(Bound(page.name, title, fqcn, chain))
                 scope.append((level, title, fqcn,
-                              chain_key_names(chain, src), chain))
+                              chain_key_names(chain, src, path), chain))
                 continue
             # An FQCN Package line names the class itself; the heading is not
             # consulted at all for these.
@@ -314,7 +339,7 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                     continue
                 r.bound.append(Bound(page.name, title, fqcn, chain))
                 scope.append((level, title, fqcn,
-                              chain_key_names(chain, src), chain))
+                              chain_key_names(chain, src, path), chain))
                 continue
             cm = CLASSNAME.search(title)
             if cm is None:
@@ -347,7 +372,7 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                 continue
             r.bound.append(Bound(page.name, title, fqcn, chain))
             scope.append((level, title, fqcn,
-                          chain_key_names(chain, src), chain))
+                          chain_key_names(chain, src, path), chain))
 
     if r.seen == 0:
         raise BindFloor(

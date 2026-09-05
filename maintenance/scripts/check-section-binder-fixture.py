@@ -116,8 +116,8 @@ except Exception as e:                          # noqa: BLE001
     print( '        Every case below depends on this call; none of them ran.')
     print(f'\nFIXTURE {checks} check(s): setup failed before the assertions')
     sys.exit(1)
-check('sections seen', lambda: r.seen, 19)
-check('sections bound', lambda: len(r.bound), 5)
+check('sections seen', lambda: r.seen, 21)
+check('sections bound', lambda: len(r.bound), 6)
 check('sections unbound', lambda: len(r.unbound), 10)
 # The sum invariant now has FOUR terms. Every section lands in exactly one class,
 # so a section that silently falls out of the classification is a failure rather
@@ -152,7 +152,7 @@ check('a package directory with no .java does not resolve',
 
 # ---- the binding itself -----------------------------------------------------
 check('bound section names', lambda: sorted(b.section for b in r.bound),
-      ['Gadget', 'Learning Widgets', 'Nested', 'SubWidget', 'Widget'])
+      ['Derived', 'Gadget', 'Learning Widgets', 'Nested', 'SubWidget', 'Widget'])
 # 28 real sections put an FQCN on the Package line. Binding on the heading gives
 # `binderpkg.Gadget.Learning` — the heading heuristic must not run at all here.
 # 40 real sections on the interactions-* pages are path-style, and all 40 resolve.
@@ -163,7 +163,8 @@ check('bound section names', lambda: sorted(b.section for b in r.bound),
 # exist on the ancestor, so the guard fails toward refusing rather than accusing.
 check('a subsection whose keys all exist on the ancestor is ACCEPTED',
       lambda: sorted(b.section for b in r.inherited_accepted),
-      ['SubWidget Properties', 'Widget Discriminated', 'Widget Properties'])
+      ['Derived Properties', 'SubWidget Properties', 'Widget Discriminated',
+       'Widget Properties'])
 check('a subsection naming a foreign key is REJECTED, not bound',
       lambda: [(x.section, x.failing_key) for x in r.inherited_rejected],
       [('Widget Examples', 'Colour')])
@@ -171,7 +172,7 @@ check('an accepted inherited binding carries the ANCESTOR fqcn',
       lambda: next(b.fqcn for b in r.inherited_accepted
                    if b.section == 'Widget Properties'), 'binderpkg.Widget')
 check('inheritance does not inflate the DIRECT count',
-      lambda: len(r.bound), 5)
+      lambda: len(r.bound), 6)
 
 # A subsection's table routinely documents keys inherited from a parent codec.
 # An inherited binding with nothing to confirm it is binding by POSITION, which is
@@ -183,6 +184,16 @@ check('the fingerprint walks parent chains',
       lambda: [b.fqcn for b in r.inherited_accepted
                if b.section == 'SubWidget Properties'], ['binderpkg.SubWidget'])
 # A sibling heading ends the scope: `#### Orphan Details` must not reach SubWidget.
+# Two SimpleInteraction.java exist in the real tree, so a unique-filename lookup
+# refuses and the walk stops at hop 0. The decoy binderpkg/decoy/Widget.java
+# reproduces that; resolution must prefer the sibling package.
+check('an ambiguous parent simple name still resolves, sibling-first',
+      lambda: [b.fqcn for b in r.inherited_accepted
+               if b.section == 'SubWidget Properties'], ['binderpkg.SubWidget'])
+# Interaction.ABSTRACT_CODEC is the real case for this one.
+check('a parent whose codec field is not CODEC is walked',
+      lambda: [b.fqcn for b in r.inherited_accepted
+               if b.section == 'Derived Properties'], ['binderpkg.Derived'])
 check('a sibling heading ends the inherited scope',
       lambda: [u.reason for u in r.unbound if u.section == 'Orphan Details'],
       ['no Package line'])

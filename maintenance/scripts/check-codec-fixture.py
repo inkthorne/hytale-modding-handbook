@@ -94,6 +94,8 @@ for case in traps['cases']:
     got_req = sorted(k.name for k in ch.keys if k.required)
     got_raw = sorted(k.name for k in ch.keys if k.raw_keyedcodec)
     problems = []
+    if 'expect_parent' in case and (ch.parent or None) != case['expect_parent']:
+        problems.append(f"parent {ch.parent!r} != {case['expect_parent']!r}")
     if len(ch.keys) != case['expect_keys']:
         problems.append(f"keys {len(ch.keys)} != {case['expect_keys']}")
     if 'expect_required' in case and got_req != sorted(case['expect_required']):

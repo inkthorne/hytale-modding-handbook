@@ -285,11 +285,24 @@ def parse_chain(src: str, codec_field: str = 'CODEC', occurrence: int = 0) -> Ch
     ch = Chain(cls=codec_field,
                declared_in_file=len(re.findall(r'new\s+KeyedCodec', src)),
                declared_in_scope=len(re.findall(r'new\s+KeyedCodec', stmt)))
-    pm = re.search(r'BuilderCodec\.builder\s*\(', stmt)
-    if pm:
+    # The parent's POSITION depends on which builder opened the chain, and reading
+    # only `builder(...)`'s third argument severs the link for every abstract base:
+    #   BuilderCodec.builder(X.class, X::new, Parent.CODEC)   -> parent is arg 2
+    #   BuilderCodec.abstractBuilder(X.class, Parent.CODEC)   -> parent is arg 1
+    # 96 chains use abstractBuilder against 1516 plain builders, which looks
+    # negligible and is not: every one is a BASE class, so those 96 links are
+    # exactly the ones other chains inherit through. Found by auditing why 15
+    # inherited-scope bindings were rejected on `Next`, a key SimpleInteraction
+    # declares that the parent walk could not reach.
+    for pat, idx in ((r'BuilderCodec\.abstractBuilder\s*\(', 1),
+                     (r'BuilderCodec\.builder\s*\(', 2)):
+        pm = re.search(pat, stmt)
+        if not pm:
+            continue
         args = _split_args(stmt[pm.end()-1+1:_scan(stmt, pm.end()-1)-1])
-        if len(args) >= 3:
-            ch.parent = args[2].strip()
+        if len(args) > idx:
+            ch.parent = args[idx].strip()
+        break
 
     got = _collect(stmt)
     ch.keys, ch.appends, ch.addfields, ch.adds = got.keys, got.appends, got.addfields, got.adds

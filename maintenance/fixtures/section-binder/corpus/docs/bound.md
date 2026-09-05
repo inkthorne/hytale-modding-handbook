@@ -114,3 +114,19 @@ inherit `SubWidget` on the strength of a key it shares.
 | Key | Type |
 |-----|------|
 | `Extra` | int |
+
+### Derived
+
+**Package:** `binderpkg`
+
+Its parent codec field is `ABSTRACT_CODEC`, not `CODEC`.
+
+#### Derived Properties
+
+Uses `Inherited`, which lives on the parent's **non-`CODEC`** field. A walk that
+keeps the receiver and drops the field name never finds it.
+
+| Key | Type | Default |
+|-----|------|---------|
+| `Own` | int | `0` |
+| `Inherited` | string | — |

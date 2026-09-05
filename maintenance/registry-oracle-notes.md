@@ -1379,3 +1379,134 @@ the cost of the fallback is measurable rather than assumed.
 > which is the same rule as reading a gate's own denominator instead of recounting
 > its inputs.
 
+
+## 14. Step 5, the defaults check: what it covers and what it refuses (2026-09-05)
+
+`check-defaults.py` is a HARD gate in `verify-docs.sh`. A documented `Default` cell
+must be the value the field holds when the key is absent. Nothing read that column
+before: `check-symbols.py` skips JSON key paths, and the fields check confirms
+*documented-key → real* for NAMES and never for values, so a default that changed
+in a new build read exactly like one that had not.
+
+### The denominator question §13 left open is settled, and neither earlier answer was it
+
+§13 recorded two passes counting **42** Default-column sections on 20 pages and
+**53** on 19, and left the difference to be settled here. Settled, with the
+predicate written out this time:
+
+> A **key table** is a markdown table whose header row carries a column headed
+> `Key`, `Property`, `Field` or `Name`. It is a **Default-column** key table if any
+> header cell begins with `Default`. Build-26: 59 read exactly `Default` and one
+> reads `Default (shipped `Default.json`)`.
+
+On that predicate, build-26 has **60 Default-column key tables, 351 data rows, in 40
+sections, on 19 pages** — confirmed by a second scan sharing no code with the first
+(line-based, no `section_binder`, its own table regex): same 60, same 19, 351 rows.
+
+**Neither 42 nor 53 is reproducible from the predicate either pass recorded**, and
+the honest thing is to leave that as it stands rather than pick the flattering
+explanation. What *is* reproducible is one contribution to the spread, measured
+directly by holding the population fixed and varying only the section key:
+
+| section identity | Default tables | direct | inherited-accepted |
+|---|---|---|---|
+| `(page, index)` | 60 | 13 | **21** |
+| `(page, title)` | 60 | 13 | **26** |
+
+Five tables change bucket, and the five are `interactions-flow.md`'s five
+`#### Core Properties`. §13 recorded that collapse as a defect of the *audit
+instrument*; it was also a defect of the **library**, which handed every consumer a
+result whose only natural key was ambiguous. `Bound`, `Inherited` and `Unbound` now
+carry `index`, the heading's ordinal within its page, and the binder fixture asserts
+that same-titled sections bind to different classes *and* are distinguishable.
+
+That is the fourth qualifier of §13's family arriving in a new place. Unit, pattern,
+predicate, revision — and now the **key**: two counts of one population, from one
+instrument, one revision apart in nothing but how a row is identified.
+
+### The three denominators the gate prints, and why they are three
+
+```
+60 Default-column key table(s) on 19 page(s); 34 in a bound section
+   (13 direct, 21 inherited-accepted)
+161 row(s) in those bound tables; 84 comparable (84 agree, 0 disagree),
+   71 state no literal, 6 unresolved
+```
+
+A row is comparable only when three independent things hold, and each strips out a
+different part of the corpus:
+
+1. **its section binds** — 34 tables of 60;
+2. **its Default cell states a backticked literal** — 90 rows of 161 (71 state an em
+   dash, italic prose or a bold marker, which claim something other than a value);
+3. **the key's setter names exactly one field** — 84 of those 90.
+
+Printing the narrowing is the whole point. The snippet gate's green line read as
+corpus coverage for a year while compiling 5 of 1091 blocks.
+
+Two more filters run *inside* the row count and both are reported with their reason,
+because a filter whose output is never counted is an unaudited skip list —
+`check-symbols.py` reduced 2811 raw hits to the 750 it reports through eight of
+them, one eating 283 alone. Build-26: 2 rows whose key cell is not a plain
+identifier (a prose catch-all row, a dotted path) and 0 ragged rows.
+
+**Measured exposure, stated rather than assumed.** The table regex is line-anchored,
+so a table indented inside a list item would not be seen — the same shape as the
+fence anchor that silently skipped every indented ```json fence. Counted both ways
+on build-26: line-anchored 60, indent-tolerant 60. No indented Default table exists
+today, so the anchor costs nothing *now*; the printed denominator is what would show
+it if one ever did.
+
+### The instrument was wrong three times and the docs were never wrong
+
+This is the figure that decided the gate ships **hard** rather than behind a warning:
+across three runs it reported 14, then 8, then 0 disagreements, and **all 22 were
+its own**.
+
+| run | reported | cause | actually |
+|---|---|---|---|
+| prototype | 14 | an enum-tail rule that ran on numbers, so `1.3` → `3`; a literal-detector that read the bare marker `Required` as a value | docs correct |
+| first real run | 8 | `Boolean`/`Integer` treated as their primitives, so `null` → `false`/`0`; JSON quotes compared as part of the value | docs correct |
+| now | 0 | — | 84 of 84 agree |
+
+Two of those deserve keeping as facts about the *subject*, not only about the tool:
+
+- **A box is not its primitive.** `ConditionInteraction` declares
+  `private Boolean jumping;` — five movement-state keys whose absent-value is `null`
+  and whose documented default is `null`. Only primitives have a zero. Reading the
+  boxes as primitives accuses five correct rows at once.
+- **A value cell in these docs is JSON.** `` `"Absolute"` `` is how the page writes
+  a value that appears in a JSON fence; the quotes are the format's. Comparing them
+  against `ValueType.Absolute` manufactures a disagreement per quoted cell.
+
+And one about enum spelling that was already known and now has a second use: the
+comparison is case-insensitive on purpose. `InteractionTarget` is `{User, Owner,
+Target}` in `protocol` and `{USER, OWNER, TARGET}` in `server`, `EnumStyle.detect`
+renders both to the same JSON, and `EffectConditionInteraction.entityTarget`
+initialises to `Target.USER` against a documented `` `"User"` ``.
+
+### What the probe refuses, and why refusing is the design
+
+The key→field map is **read, not guessed**: the append group's second argument is
+the setter, `(o, s) -> { o.field = s; }`. A casing rule was never an option —
+`ClearOutXZ` sets `clearoutXZ` and `DisplayName` sets `displayNameKey`, so a rule
+that gets the first invents the second.
+
+Three setter shapes name no single field, and all three are returned **with a
+reason** rather than dropped: a lambda assigning two fields (2 rows), a method
+reference (2), and a body that calls rather than assigns (2). A transform is *not*
+a refusal — `o.chargeTime = -s` decodes the key differently but does not change what
+the field holds when the key is absent, so one assignment to one field is enough
+whatever the right-hand side.
+
+`_fields` counts brace depth and accepts declarations at class-body depth only. A
+local variable inside a method matches a field declaration exactly;
+`RevealMapMarkersInViewInteraction` has `float f = scanState.nextScanTime …` in a
+method body, and without the depth guard a method-local value is reported as a codec
+default.
+
+### Where this leaves the sequence
+
+Steps 3 (negative closure) and 6 (cardinality) are untouched, and the
+`blocks.md` split (3,150 lines) is still the outstanding page-size arrear —
+the supervisor's order put it after step 5, so it is next.

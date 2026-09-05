@@ -815,13 +815,18 @@ section "[HARD] The gates' own fixtures pass"
 #
 # Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
 # included rather than deferred behind a flag.
-# The third runner is a literal below rather than an entry here because it carries
-# an argument, and word-splitting this variable would turn `--mutations` into a
-# fourth "runner". That is also why FIX_RAN cannot currently reach 0 — the loop
-# always executes at least once — but the floor below does not rely on that
-# accident, because folding the literal in is the obvious tidy-up and would remove
-# it. Same floor as MIN_MUTATIONS in check-type-values-fixture.py.
-FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py check-section-binder-fixture.py"
+# Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
+# One runner per LINE, because two of them carry an argument and word-splitting a
+# space-separated variable turns `--mutations` into a runner of its own. Reading
+# lines also removes an accident the previous form relied on: with the arg-carrying
+# runners as literals in the `for`, the loop always executed at least once, so
+# FIX_RAN could not reach 0 and its floor below was untestable. Folding them in was
+# the obvious tidy-up and would have removed that guarantee silently.
+FIXTURE_RUNNERS='check-codec-fixture.py
+check-registry-fixture.py
+check-section-binder-fixture.py
+check-type-values-fixture.py --mutations
+check-defaults-fixture.py --mutations'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
 # including a traceback's `  File "..."` lines. Harmless then (a traceback arrives
@@ -829,7 +834,8 @@ FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py check-section-
 # its name said, in a section about figures meaning what they claim.
 FIX_SUMMARY='^(CORPUS|FIXTURE|TRAPS|INDEPENDENT|BASELINE|MUTATIONS)\b'
 FIX_OK=1; FIX_RAN=0; FIX_NAMES=""
-for R in $FIXTURE_RUNNERS "check-type-values-fixture.py --mutations"; do
+while IFS= read -r R; do
+  [ -n "$R" ] || continue
   # shellcheck disable=SC2086
   OUT="$(python3 maintenance/scripts/$R 2>&1)"; RC=$?
   FIX_RAN=$(( FIX_RAN + 1 ))
@@ -852,15 +858,17 @@ for R in $FIXTURE_RUNNERS "check-type-values-fixture.py --mutations"; do
   else
     printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|MUTATIONS)\b' | sed 's/^/        /'
   fi
-done
+done <<< "$FIXTURE_RUNNERS"
 # The count is DERIVED from the loop. It used to read "all 3" as a literal while the
-# loop was driven by $FIXTURE_RUNNERS plus one more, so a fourth runner would have
-# been reported as three — a count that does not come from what it counts, which is
-# the thing this gate has spent six commits removing everywhere else.
+# loop was driven by $FIXTURE_RUNNERS plus a runner named outside it, so a fourth
+# would have been reported as three — a count that does not come from what it
+# counts, which is the thing this gate has spent six commits removing everywhere
+# else. It has since gone 3 -> 4 -> 5 and the line moved each time, which is the
+# only evidence that it is derived and not merely correct.
 if [ "$FIX_RAN" -eq 0 ]; then
   fail "no fixture runners were invoked — \"all 0 gate fixtures pass\" is a claim about nothing"
 elif [ "$FIX_OK" -eq 1 ]; then
-  # Both the count AND the names come from the loop. Adding a fourth runner used to
+  # Both the count AND the names come from the loop. Adding a runner used to
   # print "all 4 gate fixtures pass (codec chains, registry oracle, type values)" —
   # the number derived and the list beside it still naming three, which is the same
   # defect one field over and was visible only because the derived count moved.
@@ -906,6 +914,41 @@ else
     echo "$OUT" | grep -E '^  (FAIL|SKIP)|^        ' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /; s/^        /    /'
   else
     fail "stale skiplist entr(y/ies) above — no fabricated values, but the exemption list no longer matches the corpus"
+  fi
+fi
+
+# =====================================================================
+section "[HARD] Every documented Default is the value the field holds"
+# Queued gate 1, step 5. A `| Key | Type | Default |` table is the most falsifiable
+# thing on a JSON page and nothing read the Default column: check-symbols.py skips
+# JSON key paths, and the fields check confirms documented-key -> real for NAMES and
+# never for values. So a default that changed in a new build read exactly like one
+# that had not.
+#
+# It prints THREE denominators and they are not the same number: Default-column
+# tables scanned, how many of those sit in a bound section, and how many rows of
+# those are actually comparable. On build-26 that is 60 -> 34 -> 84 comparable rows
+# of 161, and printing the narrowing is the point — the snippet gate's green line
+# read as corpus coverage for a year while compiling 5 of 1091 blocks.
+#
+# The source cache is guarded here as well as in the checker, for the reason the
+# block above records: a skip encoded as success plus an output filter that cannot
+# see the skip renders as a bare `PASS` with no message.
+if [ ! -d "$SRC_CACHE" ]; then
+  warn "skipped (no decompiled source cache at $SRC_CACHE — build-jar-cache.sh)"
+else
+  OUT="$(python3 maintenance/scripts/check-defaults.py --src "$SRC_CACHE")"
+  RC=$?
+  echo "$OUT" | grep -E '^  INFO'
+  while IFS= read -r line; do
+    [ -n "$line" ] && warn "${line#  WARN  }"
+  done <<< "$(echo "$OUT" | grep -E '^  WARN' || true)"
+  if [ "$RC" -eq 0 ]; then
+    pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+  else
+    fail "check-defaults.py reported:"
+    echo "$OUT" | grep -E '^  (FAIL|SKIP)|^        ' \
+      | sed 's/^  FAIL  /    /; s/^  SKIP  /    /; s/^        /    /'
   fi
 fi
 

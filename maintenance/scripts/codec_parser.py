@@ -99,6 +99,7 @@ class Key:
     required_by_validator: bool = False  # Validators.nonNull() after append(...)
     raw_keyedcodec: bool = False         # `new KeyedCodec(` with no <T>
     inherited: bool = False              # declared via appendInherited
+    setter: str = ''                     # the append group's 2nd argument, verbatim
     @property
     def required(self) -> bool:
         return self.required_by_arg or self.required_by_validator
@@ -197,6 +198,14 @@ def _collect(stmt: str) -> Chain:
         if key is None:
             continue
         key.inherited = am.group(1) == 'appendInherited'
+        # The setter is the group's SECOND argument, and it is the only written
+        # record of which FIELD a key sets. The names differ often enough that a
+        # casing rule is not an option: `ClearOutXZ` sets `clearoutXZ` and
+        # `DisplayName` sets `displayNameKey`. Stored verbatim; defaults_probe
+        # decides what it can read out of it and refuses the rest.
+        args = _split_args(body) if body.strip() else []
+        if len(args) > 1:
+            key.setter = args[1].strip()
         # attachments region: from the append's close to ITS `.add()` at depth 0
         j = close
         while j < len(stmt):

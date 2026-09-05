@@ -80,6 +80,7 @@ PATH_STYLE = re.compile(r'^[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+$')
 @dataclass
 class Bound:
     page: str
+    index: int               # heading ordinal within the page — the section's identity
     section: str
     fqcn: str
     chain: object            # codec_parser.Chain
@@ -89,6 +90,7 @@ class Bound:
 class Inherited:
     """A subsection bound through an ancestor, with the fingerprint that decided it."""
     page: str
+    index: int
     section: str
     ancestor: str
     fqcn: str
@@ -101,6 +103,7 @@ class Inherited:
 @dataclass
 class Unbound:
     page: str
+    index: int
     section: str
     reason: str
     detail: str = ''
@@ -133,10 +136,19 @@ class BindFloor(Exception):
 
 
 def _sections(text: str):
-    """Yield (title, package_or_None, level, body) for every heading in a page.
+    """Yield (index, title, package_or_None, level, body) for every heading in a page.
 
     `body` runs to the next heading of ANY level, so a section's fingerprint is its
     own content and never a child's.
+
+    `index` is the heading's ordinal within the page and it is the section's
+    IDENTITY. Titles are not unique — `interactions-flow.md` carries five
+    `#### Core Properties` under five different ancestors — so a consumer keying
+    results on `(page, title)` collapses them and attributes every one to the
+    last. That is not a hypothetical: it is what the first audit of the inherited
+    guard did, reporting one section's keys for five (registry-oracle-notes.md
+    §13). The binder was right and the consumer could not tell, which makes an
+    ambiguous result key this library's defect rather than the caller's.
     """
     lines = text.split('\n')
     ms = list(HEADING.finditer(text))
@@ -146,7 +158,7 @@ def _sections(text: str):
         window = '\n'.join(lines[start:start + PACKAGE_GAP_LINES])
         pm = PACKAGE.search(window)
         end = ms[i + 1].start() if i + 1 < len(ms) else len(text)
-        yield title, (pm.group(1) if pm else None), len(m.group(1)), text[m.end():end]
+        yield i, title, (pm.group(1) if pm else None), len(m.group(1)), text[m.end():end]
 
 
 # A key table's first column and a JSON fence's root object are the section's own
@@ -280,7 +292,7 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
     for page in sorted(docs.glob('*.md')):
         text = page.read_text(errors='replace')
         scope: list[tuple] = []          # (level, title, fqcn, key names, chain)
-        for title, pkg, level, body in _sections(text):
+        for idx, title, pkg, level, body in _sections(text):
             r.seen += 1
             # A `####` under a bound `###` may inherit; a sibling or higher heading
             # ends the scope. A section with its OWN binding never inherits.
@@ -294,17 +306,17 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                                 if k not in anc_names and k not in discrim), None)
                     if keys and bad is None:
                         r.inherited_accepted.append(Inherited(
-                            page.name, title, anc_title, anc_fqcn,
+                            page.name, idx, title, anc_title, anc_fqcn,
                             chain=anc_chain, keys=tuple(keys),
                             exempted=tuple(k for k in keys
                                            if k in discrim and k not in anc_names)))
                         continue
                     if bad is not None:
                         r.inherited_rejected.append(Inherited(
-                            page.name, title, anc_title, anc_fqcn, failing_key=bad,
+                            page.name, idx, title, anc_title, anc_fqcn, failing_key=bad,
                             keys=tuple(keys)))
                         continue
-                r.unbound.append(Unbound(page.name, title, 'no Package line'))
+                r.unbound.append(Unbound(page.name, idx, title, 'no Package line'))
                 continue
             # Rule 2: a path-style value, resolved under the caller's root. Tried
             # before the FQCN rule because a path contains no dots and would
@@ -315,15 +327,15 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                 fqcn = f'{path_style_root}.' + pkg.replace('/', '.')
                 path = find_source(fqcn, src)
                 if path is None:
-                    r.unbound.append(Unbound(page.name, title,
+                    r.unbound.append(Unbound(page.name, idx, title,
                                              'no source file for the class', fqcn))
                     continue
                 chain = parse_chain(path.read_text(errors='replace'))
                 if chain is None:
-                    r.unbound.append(Unbound(page.name, title,
+                    r.unbound.append(Unbound(page.name, idx, title,
                                              'class declares no codec chain', fqcn))
                     continue
-                r.bound.append(Bound(page.name, title, fqcn, chain))
+                r.bound.append(Bound(page.name, idx, title, fqcn, chain))
                 scope.append((level, title, fqcn,
                               chain_key_names(chain, src, path), chain))
                 continue
@@ -334,21 +346,21 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                 fqcn = pkg
                 path = find_source(fqcn, src)
                 if path is None:
-                    r.unbound.append(Unbound(page.name, title,
+                    r.unbound.append(Unbound(page.name, idx, title,
                                              'no source file for the class', fqcn))
                     continue
                 chain = parse_chain(path.read_text(errors='replace'))
                 if chain is None:
-                    r.unbound.append(Unbound(page.name, title,
+                    r.unbound.append(Unbound(page.name, idx, title,
                                              'class declares no codec chain', fqcn))
                     continue
-                r.bound.append(Bound(page.name, title, fqcn, chain))
+                r.bound.append(Bound(page.name, idx, title, fqcn, chain))
                 scope.append((level, title, fqcn,
                               chain_key_names(chain, src, path), chain))
                 continue
             cm = CLASSNAME.search(title)
             if cm is None:
-                r.unbound.append(Unbound(page.name, title, 'heading names no class'))
+                r.unbound.append(Unbound(page.name, idx, title, 'heading names no class'))
                 continue
             cls = cm.group(1)
             if pkg not in pkg_dirs:
@@ -356,13 +368,13 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                 # names no package in the tree. Distinguished from "the class is
                 # missing" because they call for different repairs — one is a doc
                 # that under-specifies, the other a doc that names a dead class.
-                r.unbound.append(Unbound(page.name, title,
+                r.unbound.append(Unbound(page.name, idx, title,
                                          'package does not resolve', pkg))
                 continue
             fqcn = f'{pkg}.{cls}'
             path = find_source(fqcn, src)
             if path is None:
-                r.unbound.append(Unbound(page.name, title,
+                r.unbound.append(Unbound(page.name, idx, title,
                                          'no source file for the class', fqcn))
                 continue
             chain = parse_chain(path.read_text(errors='replace'))
@@ -372,10 +384,10 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                 # a system or an event, not a codec. Counted, not crashed on — an
                 # earlier version passed the None straight into Bound and the first
                 # such section would have taken the binder down.
-                r.unbound.append(Unbound(page.name, title,
+                r.unbound.append(Unbound(page.name, idx, title,
                                          'class declares no codec chain', fqcn))
                 continue
-            r.bound.append(Bound(page.name, title, fqcn, chain))
+            r.bound.append(Bound(page.name, idx, title, fqcn, chain))
             scope.append((level, title, fqcn,
                           chain_key_names(chain, src, path), chain))
 

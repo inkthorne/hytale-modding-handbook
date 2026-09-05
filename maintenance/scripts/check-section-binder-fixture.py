@@ -17,7 +17,7 @@ floor is what ends up unverified.
 Usage: python3 maintenance/scripts/check-section-binder-fixture.py [-v]
 """
 from __future__ import annotations
-import argparse, pathlib, sys, tempfile
+import argparse, collections, pathlib, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 FIX = HERE.parents[0] / 'fixtures' / 'section-binder'
@@ -116,7 +116,7 @@ except Exception as e:                          # noqa: BLE001
     print( '        Every case below depends on this call; none of them ran.')
     print(f'\nFIXTURE {checks} check(s): setup failed before the assertions')
     sys.exit(1)
-check('sections seen', lambda: r.seen, 21)
+check('sections seen', lambda: r.seen, 23)
 check('sections bound', lambda: len(r.bound), 6)
 check('sections unbound', lambda: len(r.unbound), 10)
 # The sum invariant now has FOUR terms. Every section lands in exactly one class,
@@ -163,8 +163,8 @@ check('bound section names', lambda: sorted(b.section for b in r.bound),
 # exist on the ancestor, so the guard fails toward refusing rather than accusing.
 check('a subsection whose keys all exist on the ancestor is ACCEPTED',
       lambda: sorted(b.section for b in r.inherited_accepted),
-      ['Derived Properties', 'SubWidget Properties', 'Widget Discriminated',
-       'Widget Properties'])
+      ['Core Properties', 'Core Properties', 'Derived Properties',
+       'SubWidget Properties', 'Widget Discriminated', 'Widget Properties'])
 check('a subsection naming a foreign key is REJECTED, not bound',
       lambda: [(x.section, x.failing_key) for x in r.inherited_rejected],
       [('Widget Examples', 'Colour')])
@@ -216,6 +216,30 @@ check('Gadget hands back its parsed chain (1 key)',
 check('a multi-word heading binds on its first class token',
       lambda: [u.detail for u in r.unbound if u.section == 'Sprinkler Component'],
       ['binderpkg.Sprinkler'])
+
+# ---- a section's identity is its POSITION, not its title --------------------
+# `(page, title)` is not a key. interactions-flow.md has five `#### Core
+# Properties` under five different ancestors; the audit instrument for the
+# inherited guard keyed on it, collapsed all five, and reported the last one's
+# keys for every one of them (registry-oracle-notes.md §13). The binder was
+# correct and the consumer could not tell it apart, which makes this the
+# library's defect and not the consumer's. Every record therefore carries the
+# ordinal of its heading within its page.
+_core = [i for i in r.inherited_accepted if i.section == 'Core Properties']
+check('two same-titled sections on one page bind to different classes',
+      lambda: sorted(i.fqcn for i in _core),
+      ['binderpkg.Derived', 'binderpkg.SubWidget'])
+check('same-titled sections carry distinct indexes',
+      lambda: len({i.index for i in _core}), 2)
+check('an index is unique within its page across all four buckets',
+      lambda: sorted(collections.Counter(
+          (rec.page, rec.index)
+          for rec in (r.bound + r.inherited_accepted
+                      + r.inherited_rejected + r.unbound)).values()),
+      [1] * r.seen)
+check('an index is the heading ordinal, so the first section on a page is 0',
+      lambda: min(rec.index for rec in (r.bound + r.inherited_accepted
+                  + r.inherited_rejected + r.unbound) if rec.page == 'bound.md'), 0)
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

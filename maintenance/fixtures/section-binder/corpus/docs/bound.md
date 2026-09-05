@@ -101,6 +101,15 @@ routinely documents inherited keys.
 | `Extra` | int | `0` |
 | `Name` | string | — |
 
+#### Core Properties
+
+The FIRST of two subsections on this page that share a title. It inherits
+`SubWidget` and is accepted on `Extra`.
+
+| Key | Type | Default |
+|-----|------|---------|
+| `Extra` | int | `0` |
+
 ### Orphan
 
 No `**Package:**` line, so this section is unbound — and being a **sibling** of the
@@ -130,3 +139,17 @@ keeps the receiver and drops the field name never finds it.
 |-----|------|---------|
 | `Own` | int | `0` |
 | `Inherited` | string | — |
+
+#### Core Properties
+
+The SECOND subsection titled `Core Properties` on this page, under a **different**
+ancestor. `interactions-flow.md` carries five of these and they bind to five
+different classes, so a consumer keying results on `(page, title)` collapses them
+and attributes every one to the last. That is not hypothetical: it is the bug the
+first audit of the inherited guard shipped with, recorded in
+registry-oracle-notes.md §13. The binder must hand back something that tells them
+apart.
+
+| Key | Type | Default |
+|-----|------|---------|
+| `Own` | int | `0` |

@@ -1300,11 +1300,25 @@ occurrences, not 7 assets), its **pattern** (which "space-only" regex), and its
 bound section" became "5 of 87" at `03eb030` because binder rule 2 landed in
 between. Both of those are correct; they measure different code.
 
-The `11 in neither set` does not reproduce here — this pass finds **0**, meaning
-every Default-table section resolves to one of the four binder classes. That is a
-disagreement about section extraction rather than about binding, and it is
-unresolved: worth settling before step 5 quotes a denominator, because a section
-that neither pass can classify is a section the check would silently skip.
+**The `11 in neither set` was resolved and it was not an extraction disagreement.**
+Both passes find **0**; the extractions agree on every page. The review's earlier
+membership set was built from `bound` ∪ `unbound` only, and the binder at
+`03eb030` has four buckets — the 11 "unclassifiable" sections were sections bound
+**by inheritance**. A two-bucket predicate applied to a four-bucket result, from a
+model of the code that was one commit stale: not a wrong count, a count of the
+wrong thing. The predicate was wrong *because* the revision was.
+
+> **The two failures point in opposite directions and neither is settled by
+> comparing numbers.** Two figures that AGREE from different predicates read as
+> independent confirmation and are not — the two 13s above. Two figures that
+> DISAGREE from different predicates read as a data conflict and are not — the 11
+> and the 0. Only comparing what produced them settles either.
+
+Still open, and smaller: the two passes count **42** and **53** Default-column
+sections respectively. That is a table-detection difference, not a binding or
+extraction one — this pass accepts a first column headed `Key`, `Property`,
+`Field` **or** `Name`, and any header beginning `Default`. Settle it when step 5
+quotes its denominator, and quote the predicate with it.
 
 **Whatever it settles at, step 5 must print its own coverage** — 13 of 42, or 13 of
 53 — the way the binder prints 139 of 3136 and the snippet gate prints 5 of 1093.

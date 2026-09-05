@@ -160,10 +160,38 @@ statement to anchor on. Every `"Type"` on `docs/npc-roles.md` and `docs/npc-comb
 draws on this form.
 
 The category is readable statically without executing anything: every implementation
-is `public [final] Class<X> category()`, so the *return type* is the answer, and 191
+is `public [final] Class<X> category()`, so the *return type* is the answer, and **188**
 of the 194 sites reach it by inheritance from a `Builder*Base`. Resolution is
 two hops — `BuilderSensorKill::new` → `BuilderSensorKill.java` → `extends
 BuilderSensorBase` → `Class<Sensor> category()`.
+
+The other **six** declare `category()` in their own file, and they are worth naming
+because each is a point where one resolution route disagrees with another:
+`BuilderBodyMotionSequence`, `BuilderHeadMotionSequence`, `BuilderBodyMotionTimer`,
+`BuilderHeadMotionTimer`, `BuilderCombatTargetCollector`,
+`BuilderEncounterMemberCollector`. The four Sequence/Timer builders override
+locally *because* their names are multi-category; the two collectors are the two
+the naming convention cannot bucket. (`5639eb1`'s message said 191 here. That is
+the *convention route's* total, 194 − 3 constant-named, borrowed across from the
+paragraph below it — two unrelated denominators, the same shape of error as the
+`MinValueEffects` finding in numeric form. The fixture recorded 191 correctly, as
+`by_name_convention.total`, and never claimed it for inheritance.)
+
+> **A single `extends` is enough, and following `implements` too would be the
+> regression.** The obvious alternative oracle — the type argument of
+> `implements Builder<X>` — resolves all 194 and returns the type variable `T`
+> for 189 of them, because the decompiled hierarchy puts `implements Builder<T>`
+> on the generic bases. `category()`'s return type is the only static evidence.
+> The sharp edge is that `Builder.java` itself declares `public Class<T>
+> category();`, and a naive `_resolve_type` turns `T` into a plausible-looking
+> `…npc.asset.builder.T`, which is **not** the `<category-unresolved>` bucket and
+> so slips past the guard built for exactly this. Nothing reaches it today only
+> because the walk follows `extends` and `Builder` is reached only through
+> `implements` — an unstated traversal-order property protecting a 194-site
+> resolver. The resolver therefore now requires a captured category name to
+> resolve to a real source file, so the protection is deliberate rather than
+> emergent and survives whoever later decides the walk "should also follow
+> interfaces".
 
 It cost a wrong answer within the hour of being missed, which is why it is written
 here rather than only in the code. `docs/effects-stats.md` documented
@@ -195,6 +223,29 @@ followed by a body.
 Regression baselines from that run, which cannot validate the miner and exist only
 to make drift visible: 105 registries, 948 registrations, 10 with an open verdict.
 (98 / 754 before form 3 was added; all seven new registries are closed.)
+
+Three further properties of the resolution hold on build-26 and are pinned at zero
+in the fixture, because each fails by substituting a **plausible** category rather
+than by admitting it cannot resolve — the one direction `<category-unresolved>`
+cannot catch, since there is nothing to put in the bucket: no file in a resolution
+chain declares two `Class<X> category()` methods (the match is whole-file
+first-wins), no `extends` first-match names a class other than its own file's, and
+none of the 194 builder simple names is ambiguous tree-wide (244 names are, so the
+simple-name fallback is one collision away from mattering).
+
+> **Where this landed in the history, which the commit subjects get wrong.** The
+> form-3 miner, its fixture, its runner and this section were all committed in
+> **`969b4da`**, whose subject is `docs: follow-up to 872f007 — a false closure
+> claim…`; **`5639eb1`**, whose subject announces the third registration form,
+> contains only the constant-resolution paragraph above. A `git add -A` run to
+> inspect status left everything staged, and the next `git add <two docs files>
+> && git commit` swept it all in. `git log --stat` and a bisect for "when did
+> form 3 land?" both answer `969b4da`. Recorded here rather than in `refs/notes`
+> because invariant 8's own argument is that a note is invisible to every gate,
+> page and grep — and because `5639eb1`'s message *asserts* content it does not
+> contain, which is a claim, and claims get a follow-up commit. This is the
+> `commit-subject-scopes-the-audit-trail` failure repeating with a new trigger:
+> not parallel agents this time, just a status check that staged the tree.
 
 ## 2. Some registries are not statically enumerable — the gate needs a third outcome
 

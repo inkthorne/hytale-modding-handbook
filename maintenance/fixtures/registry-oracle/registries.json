@@ -108,7 +108,29 @@
      "Sensor"
     ]
    },
-   "probes_why": "`Kill` is the one that mattered: effects-stats.md documented `\"Type\": \"Kill\"` as an INTERACTION, and a forms-1-and-2 miner reports it registered nowhere \u2014 which reads as 'invented' when the truth is \u00a74 collision, a real name in a different registry. `Orbit` is the control: npc-roles.md uses it twice and captions it both times as a custom BodyMotion, so it must resolve to NOTHING or the caption is wrong. `Timer` is the reason the vocabulary has to stay partitioned: it is a legal `Type` in three slots and an unscoped membership test would pass it in all seven."
+   "probes_why": "`Kill` is the one that mattered: effects-stats.md documented `\"Type\": \"Kill\"` as an INTERACTION, and a forms-1-and-2 miner reports it registered nowhere \u2014 which reads as 'invented' when the truth is \u00a74 collision, a real name in a different registry. `Orbit` is the control: npc-roles.md uses it twice and captions it both times as a custom BodyMotion, so it must resolve to NOTHING or the caption is wrong. `Timer` is the reason the vocabulary has to stay partitioned: it is a legal `Type` in three slots and an unscoped membership test would pass it in all seven. Two of the 15 do double duty and should not be trimmed out of this fixture. `Path` is BOTH a constant-named site (FACTORY_CLASS_TRANSIENT_PATH at NPCPlugin:821 BodyMotion and :824 Sensor) AND multi-category, so a literal-only sweep loses the name and with it the fact that it spans two slots \u2014 the failure that matters for scoping rather than for the count. `Attitude` is the single name the naming-convention route mis-buckets (BuilderSensorEntityPrioritiserAttitude reads as Sensor) AND multi-category, so the reconciliation arithmetic below is doing real work on exactly the datum phase (c)'s scoping rests on.",
+   "resolved_by_inheritance": 188,
+   "resolved_by_own_declaration": 6,
+   "own_declaration_builders": [
+    "BuilderBodyMotionSequence",
+    "BuilderHeadMotionSequence",
+    "BuilderBodyMotionTimer",
+    "BuilderHeadMotionTimer",
+    "BuilderCombatTargetCollector",
+    "BuilderEncounterMemberCollector"
+   ],
+   "own_declaration_why": "Not noise: the four Sequence/Timer builders override category() locally precisely BECAUSE their names are multi-category (Sequence in Action/BodyMotion/HeadMotion, Timer in BodyMotion/HeadMotion/Sensor), and the two collectors are the two the naming convention cannot bucket. Every one of the six is a site where one resolution route disagrees with another.",
+   "zero_pins": {
+    "why": "Each of these fails by substituting a PLAUSIBLE category rather than by admitting it cannot resolve \u2014 the direction <category-unresolved> cannot protect against, because there is nothing to put in the bucket. Measured by registry_miner.core_component_diagnostics().",
+    "files_with_two_category_declarations": 0,
+    "files_with_two_category_declarations_why": "_CATEGORY.search is a whole-file FIRST match, so a second Class<X> category() in the same file (an inner class, a second builder) wins or loses by textual order with nothing said about it.",
+    "extends_first_match_not_own_class": 0,
+    "extends_first_match_not_own_class_why": "_EXTENDS.search has the same whole-file first-match exposure: a nested or second class declared before the file's own would redirect the walk.",
+    "builder_simple_names_ambiguous_in_tree": 0,
+    "builder_simple_names_ambiguous_in_tree_why": "_category_of falls back from the resolved FQCN to a bare simple-name lookup. 244 simple names are ambiguous tree-wide, so that fallback is one collision away from silently resolving the wrong class; 0 of the 194 builders hit it.",
+    "category_returning_a_type_variable": 0,
+    "category_returning_a_type_variable_why": "Builder.java declares `public Class<T> category();` \u2014 a type VARIABLE. _resolve_type turns `T` into a plausible FQCN that is NOT <category-unresolved>, so the guard built for this would not fire. Nothing reaches it only because the walk follows `extends` and Builder is reached only through `implements` \u2014 an unstated traversal-order property protecting a 194-site resolver, and 'also follow interfaces' is the obvious future hardening that would break it. _category_of now requires the captured name to resolve to a real source file, which makes the protection deliberate."
+   }
   }
  },
  "measured": {

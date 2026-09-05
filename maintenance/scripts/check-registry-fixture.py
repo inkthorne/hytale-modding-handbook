@@ -101,6 +101,54 @@ check("core-component categories unresolved",
 conv = c3['by_name_convention']
 check("convention total + constants == call sites",
       conv['total'] + c3['constant_named'], c3['call_sites'])
+diag = rm.core_component_diagnostics(root)
+z = c3['zero_pins']
+for k in ('files_with_two_category_declarations',
+          'extends_first_match_not_own_class',
+          'builder_simple_names_ambiguous_in_tree'):
+    check(f"zero-pin {k}", diag[k], z[k])
+# The type-variable pin is checked by asking the resolver directly: Builder
+# declares `Class<T> category()`, so if the guard is removed this returns a
+# plausible FQCN instead of None and the whole resolver can silently mis-key.
+check("zero-pin category_returning_a_type_variable",
+      0 if rm._category_of(
+          'Builder',
+          {'Builder': 'com.hypixel.hytale.server.npc.asset.builder.Builder'},
+          '', root) is None else 1,
+      z['category_returning_a_type_variable'])
+
+own_decl, inherited = [], 0
+for p_ in root.rglob('*.java'):
+    text = p_.read_text(errors='replace')
+    if 'registerCoreComponentType' not in text:
+        continue
+    pkg_m = rm._PKG.search(text)
+    imps = {x.rsplit('.', 1)[-1]: x for x in rm._IMPORT.findall(text)}
+    for m_ in rm._FORM3.finditer(text):
+        o = m_.end() - 1
+        try:
+            cl = rm._scan(text, o)
+            ar = rm._split_args(text[o + 1:cl - 1])
+        except (ValueError, AssertionError):
+            continue
+        if len(ar) < 2 or rm._DECLARATION.match(text, cl):
+            continue
+        ref = rm._CTOR_REF.match(ar[1].strip())
+        if not ref:
+            continue
+        b = ref.group(1).split('.')[-1]
+        f = (rm.find_source(rm._resolve_type(b, imps, pkg_m.group(1) if pkg_m else ''), root)
+             or rm.find_source(b, root))
+        if f and rm._CATEGORY.search(f.read_text(errors='replace')):
+            own_decl.append(b)
+        else:
+            inherited += 1
+check("categories resolved by inheritance", inherited, c3['resolved_by_inheritance'])
+check("categories declared on the builder itself", len(own_decl),
+      c3['resolved_by_own_declaration'])
+check("which builders declare their own category",
+      sorted(set(own_decl)), sorted(c3['own_declaration_builders']))
+
 slots = collections.defaultdict(list)
 for cat, r in cc.items():
     for n in r.names:

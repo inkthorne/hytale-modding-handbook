@@ -39,7 +39,7 @@ not a real Java field name: nothing in the jar is called that, so a reader who
 greps for it finds this note rather than a phantom codec.
 """
 from __future__ import annotations
-import re, pathlib, sys
+import re, pathlib, sys, collections
 from dataclasses import dataclass, field
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from codec_parser import _scan, _split_args, find_source
@@ -189,7 +189,21 @@ def _category_of(builder: str, imports: dict, pkg: str, root: pathlib.Path,
     own_imports = {f.rsplit('.', 1)[-1]: f for f in _IMPORT.findall(body)}
     cm = _CATEGORY.search(body)
     if cm:
-        return _resolve_type(cm.group(1), own_imports, own_pkg)
+        cat = _resolve_type(cm.group(1), own_imports, own_pkg)
+        # The category must name a REAL type. `Builder.java` declares the method
+        # as `public Class<T> category();` — a type VARIABLE — and _resolve_type
+        # happily turns `T` into `…npc.asset.builder.T`, a plausible-looking FQCN
+        # that is not `<category-unresolved>` and so slips past the guard built
+        # for exactly this. Today nothing reaches it, because this walk follows
+        # `extends` and `Builder` is only ever reached through `implements`. That
+        # is an unstated traversal-order property protecting a 194-site resolver,
+        # and the obvious future hardening — "also follow interfaces" — is the
+        # regression. Requiring the captured name to resolve to a source file
+        # makes the protection deliberate instead of emergent, and fails LOUDLY
+        # (into the bucket the fixture pins at zero) rather than quietly.
+        if find_source(cat, root) is None:
+            return None
+        return cat
     em = _EXTENDS.search(body)
     if em:
         return _category_of(em.group(1), own_imports, own_pkg, root,
@@ -294,6 +308,71 @@ def _pick_name(args: list[str], consts: dict[str, str]):
     # call-graph following); anything else is a runtime value.
     kind = 'indirect' if re.fullmatch(r'\w+', first) else 'runtime'
     return None, kind, first, -1
+
+
+def core_component_diagnostics(root: pathlib.Path) -> dict:
+    """Properties of the category() resolution that hold on build-26 and must.
+
+    Each one fails by substituting a PLAUSIBLE category rather than by admitting
+    it cannot resolve, which is the direction `<category-unresolved>` cannot
+    protect against — so each is pinned at zero in the fixture rather than left
+    as a property nobody measured. Reported, not enforced, here; the fixture
+    runner is what turns them into a check.
+    """
+    visited, multi, extends_foreign, ambiguous = set(), [], [], []
+    by_simple = collections.Counter(p.stem for p in root.rglob('*.java'))
+
+    def walk(builder, imports, pkg, seen=frozenset()):
+        if builder in seen:
+            return
+        fq = _resolve_type(builder, imports, pkg)
+        f = find_source(fq, root)
+        if f is None:
+            f = find_source(builder, root)
+            if f is not None and by_simple[builder] > 1:
+                ambiguous.append(builder)
+        if f is None:
+            return
+        visited.add(str(f))
+        body = f.read_text(errors='replace')
+        if len(_CATEGORY.findall(body)) > 1:
+            multi.append(str(f))
+        em = _EXTENDS.search(body)
+        if _CATEGORY.search(body):
+            return
+        if em:
+            m_own = re.search(r'\bclass\s+(\w+)', body)
+            if m_own and m_own.group(1) != f.stem:
+                extends_foreign.append(str(f))
+            own_pkg_m = _PKG.search(body)
+            walk(em.group(1),
+                 {x.rsplit('.', 1)[-1]: x for x in _IMPORT.findall(body)},
+                 own_pkg_m.group(1) if own_pkg_m else '',
+                 seen | {builder})
+
+    for p in root.rglob('*.java'):
+        src = p.read_text(errors='replace')
+        if 'registerCoreComponentType' not in src:
+            continue
+        pkg_m = _PKG.search(src)
+        imports = {x.rsplit('.', 1)[-1]: x for x in _IMPORT.findall(src)}
+        for m in _FORM3.finditer(src):
+            opener = m.end() - 1
+            try:
+                close = _scan(src, opener)
+                args = _split_args(src[opener + 1:close - 1])
+            except (ValueError, AssertionError):
+                continue
+            if len(args) < 2 or _DECLARATION.match(src, close):
+                continue
+            ref = _CTOR_REF.match(args[1].strip())
+            if ref:
+                walk(ref.group(1).split('.')[-1], imports,
+                     pkg_m.group(1) if pkg_m else '')
+    return {'classes_visited': len(visited),
+            'files_with_two_category_declarations': len(multi),
+            'extends_first_match_not_own_class': len(extends_foreign),
+            'builder_simple_names_ambiguous_in_tree': len(ambiguous)}
 
 
 def mine(root: pathlib.Path) -> dict[str, Registry]:

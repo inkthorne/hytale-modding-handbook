@@ -321,6 +321,19 @@ that phrasing; do not "improve" it into "the full set of condition types".
 > ten names arrive through `ObjectivePlugin.registerTask(id, …)` by the same
 > indirection, so the follower earns its keep the moment objectives get a JSON
 > page. Until then one audited entry costs less than the machinery.
+>
+> **Those ten are split across two files, which is §1's lesson arriving again.**
+> Six are in `ObjectivePlugin.java:173-178` on `this` (`Craft`, `Gather`,
+> `UseBlock`, `UseEntity`, `TreasureMap`, `ReachLocation`); four are in
+> `NPCObjectivesPlugin.java:69-72` on an `objectivePlugin` reference
+> (`KillSpawnBeacon`, `KillSpawnMarker`, `Bounty`, `KillNPC`). A follower anchored
+> on the declaring file finds **6 of 10** and exits clean — the same 60%-with-a-green-run
+> shape as mining only form 1 for `Interaction.CODEC`.
+>
+> And a collision to guard when that follower is written:
+> `TaskRegistry.registerTask` (`TaskRegistry.java:21,25`) has two unrelated
+> overloads taking `CompletableFuture` / `ScheduledFuture`. A corpus-wide
+> `registerTask\s*\(` matches both, and neither registers anything named.
 
 So a registry has **three** possible verdicts, not two:
 

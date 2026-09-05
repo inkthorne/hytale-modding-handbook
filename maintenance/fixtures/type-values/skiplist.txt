@@ -1,0 +1,5 @@
+# Fixture skiplist for check-type-values.py. Drives the mixed-source path: Epsilon
+# is page-local on aaa.md (registered in that page's own java fence) and WAIVED here
+# on bbb.md, so one value is resolved by two different page-scoped sources. That is
+# the shape the by-source tally used to get wrong, printing `unresolved 1` beside PASS.
+Epsilon  bbb.md  fixture: waived on this page only, to exercise per-(value, page) resolution

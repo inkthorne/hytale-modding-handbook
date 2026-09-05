@@ -127,6 +127,9 @@ def main():
     ap.add_argument('--docs', default=str(REPO / 'docs'))
     ap.add_argument('--src', default=os.path.expanduser('~/.cache/hytale-jar/src'))
     ap.add_argument('--assets', default=os.path.expanduser('~/.cache/hytale-assets'))
+    ap.add_argument('--skiplist', default=str(HERE / 'type-value-skiplist.txt'),
+                    help='audited exemptions; overridable so the fixture can drive '
+                         'the stale-entry and mixed-source paths on its own corpus')
     ap.add_argument('-v', '--verbose', action='store_true')
     a = ap.parse_args()
 
@@ -161,7 +164,7 @@ def main():
               f"assets={len(asset_types)} from {n_assets} file(s)")
         return 1
 
-    skip = load_skiplist(HERE / 'type-value-skiplist.txt')
+    skip = load_skiplist(pathlib.Path(a.skiplist))
     values, page_local, (n_fence, n_json, n_java) = docs_values(docs, src)
 
     # Resolution is per (value, page): the page's own java fence and the skiplist are

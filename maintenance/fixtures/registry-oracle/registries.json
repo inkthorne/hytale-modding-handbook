@@ -1,92 +1,146 @@
 {
-  "note": "Fixture for maintenance/scripts/registry_miner.py (queued gate 1, phase b). Figures marked source=notes were derived independently by hand in registry-oracle-notes.md \u00a71-\u00a72 and are the real check; figures marked source=measured were produced by this miner and are regression baselines only \u2014 they cannot validate it.",
-  "build": "0.6.3 (build-26)",
-  "independent": {
-    "source": "notes",
-    "interaction_codec": {
-      "names": 124,
-      "form1_registrations": 89,
-      "form2_registrations": 35,
-      "form2_statements": 21,
-      "verdict": "closed",
-      "why": "\u00a71: the two forms are disjoint; mining only form 1 sees 72%."
-    },
-    "field_statements": {
-      "CODEC": {
-        "form2": 44,
-        "form1": 578
-      },
-      "TYPE_CODEC": {
-        "form2": 14,
-        "form1": 0
-      },
-      "PLUGIN_CODEC": {
-        "form2": 10,
-        "form1": 1
-      },
-      "PAGE_CODEC": {
-        "form2": 3,
-        "form1": 1
-      },
-      "OPERATION_CODEC": {
-        "form2": 0,
-        "form1": 56
-      }
-    },
-    "open_registries": [
-      "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
-      "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerEffect.CODEC",
-      "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerCondition.CODEC",
-      "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerRule.CODEC"
-    ],
-    "indirect_registries": [
-      "com.hypixel.hytale.builtin.adventure.objectives.config.task.ObjectiveTaskAsset.CODEC",
-      "com.hypixel.hytale.builtin.adventure.objectives.task.ObjectiveTask.CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC"
-    ],
-    "closed_despite_nonliteral_arg0": {
-      "why": "\u00a72's false-positive guard: register(Priority.DEFAULT, \"Name\", ...) puts a non-literal in argument one while the id is a literal in argument two. A shape test reading only argument one calls ~a dozen closed provider registries open.",
-      "examples": [
-        "com.hypixel.hytale.server.core.asset.type.fluid.FluidTicker.CODEC",
-        "com.hypixel.hytale.server.core.universe.playerdata.PlayerStorageProvider.CODEC",
-        "com.hypixel.hytale.server.core.modules.accesscontrol.provider.BanStorageProvider.CODEC"
-      ]
-    },
-    "open_registry_count": {
-      "value": 10,
-      "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent."
-    }
+ "note": "Fixture for maintenance/scripts/registry_miner.py (queued gate 1, phase b). Figures marked source=notes were derived independently by hand in registry-oracle-notes.md \u00a71-\u00a72 and are the real check; figures marked source=measured were produced by this miner and are regression baselines only \u2014 they cannot validate it.",
+ "build": "0.6.3 (build-26)",
+ "independent": {
+  "source": "notes",
+  "interaction_codec": {
+   "names": 124,
+   "form1_registrations": 89,
+   "form2_registrations": 35,
+   "form2_statements": 21,
+   "verdict": "closed",
+   "why": "\u00a71: the two forms are disjoint; mining only form 1 sees 72%."
   },
-  "measured": {
-    "source": "measured",
-    "registrations": 754,
-    "second_form_only": [
-      "com.hypixel.hytale.builtin.adventure.farming.config.stages.spread.SpreadGrowthBehaviour.CODEC",
-      "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.action.EventAction.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.action.effect.shape.Shape.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.location.EventLocation.Config.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.condition.spawner.Spawner.Config.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.adventure.worldevents.context.Context.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.instances.removal.RemovalCondition.CODEC",
-      "com.hypixel.hytale.builtin.worldgen.modifier.content.Content.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.worldgen.modifier.content.cave.CaveTypeGenerator.TYPE_CODEC",
-      "com.hypixel.hytale.builtin.worldgen.modifier.op.Op.TYPE_CODEC",
-      "com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.FarmingStageData.CODEC",
-      "com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.GrowthModifierAsset.CODEC",
-      "com.hypixel.hytale.server.core.asset.type.camera.CameraEffect.CODEC",
-      "com.hypixel.hytale.server.core.entity.entities.player.pages.choices.ChoiceElement.CODEC",
-      "com.hypixel.hytale.server.core.modules.entityui.asset.CombatTextUIComponentAnimationEvent.CODEC",
-      "com.hypixel.hytale.server.core.modules.entityui.asset.EntityUIComponent.CODEC",
-      "com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.SelectInteraction.EntityMatcher.CODEC",
-      "com.hypixel.hytale.server.core.modules.projectile.config.PhysicsConfig.CODEC",
-      "com.hypixel.hytale.server.core.universe.world.WorldConfig.PLUGIN_CODEC"
+  "field_statements": {
+   "CODEC": {
+    "form2": 44,
+    "form1": 578
+   },
+   "TYPE_CODEC": {
+    "form2": 14,
+    "form1": 0
+   },
+   "PLUGIN_CODEC": {
+    "form2": 10,
+    "form1": 1
+   },
+   "PAGE_CODEC": {
+    "form2": 3,
+    "form1": 1
+   },
+   "OPERATION_CODEC": {
+    "form2": 0,
+    "form1": 56
+   }
+  },
+  "open_registries": [
+   "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
+   "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerEffect.CODEC",
+   "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerCondition.CODEC",
+   "com.hypixel.hytale.builtin.triggervolumes.effect.TriggerRule.CODEC"
+  ],
+  "indirect_registries": [
+   "com.hypixel.hytale.builtin.adventure.objectives.config.task.ObjectiveTaskAsset.CODEC",
+   "com.hypixel.hytale.builtin.adventure.objectives.task.ObjectiveTask.CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC"
+  ],
+  "closed_despite_nonliteral_arg0": {
+   "why": "\u00a72's false-positive guard: register(Priority.DEFAULT, \"Name\", ...) puts a non-literal in argument one while the id is a literal in argument two. A shape test reading only argument one calls ~a dozen closed provider registries open.",
+   "examples": [
+    "com.hypixel.hytale.server.core.asset.type.fluid.FluidTicker.CODEC",
+    "com.hypixel.hytale.server.core.universe.playerdata.PlayerStorageProvider.CODEC",
+    "com.hypixel.hytale.server.core.modules.accesscontrol.provider.BanStorageProvider.CODEC"
+   ]
+  },
+  "open_registry_count": {
+   "value": 10,
+   "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent."
+  },
+  "core_component_types": {
+   "why": "\u00a71's THIRD correction. NPCPlugin.registerCoreComponentType(name, Builder::new) registers into a builder FACTORY chosen by the builder's category() return type, not into a codec field, so forms 1 and 2 see none of these ~194 names. Every figure here was derived by grep and by reading `extends` chains in the decompiled source, NOT by registry_miner \u2014 the point of the fixture is that the two routes must agree.",
+   "occurrences": 195,
+   "declaration_sites": 1,
+   "call_sites": 194,
+   "declaration_note": "NPCPlugin:1507 declares the method and its parameter list has the same arity as every call site, so arity cannot exclude it; the miner excludes it structurally (a declaration is followed by its body). Left in, it reads as one unresolvable site.",
+   "constant_named": 3,
+   "constants": {
+    "FACTORY_CLASS_TRANSIENT_PATH": "Path",
+    "FACTORY_CLASS_ROLE": "Role"
+   },
+   "by_name_convention": {
+    "why": "Independent route: bucket each site by its builder's `Builder<Category>*` name rather than by resolving category(). It sees only the 191 sites whose id is a string literal \u2014 a naive `registerCoreComponentType(\"...\"` grep cannot see a constant id.",
+    "Action": 86,
+    "Sensor": 57,
+    "EntityFilter": 21,
+    "BodyMotion": 18,
+    "HeadMotion": 7,
+    "no_category_in_name": 2,
+    "no_category_in_name_builders": [
+     "BuilderEncounterMemberCollector",
+     "BuilderCombatTargetCollector"
     ],
-    "id_not_in_argument_zero": 28,
-    "register_class_name_codec_sites": 12,
-    "registries": 98
+    "total": 191
+   },
+   "reconciliation": "convention 191 + 3 constant-named = 194 call sites. Per category the constants land as BuilderBodyMotionPath (+1 BodyMotion), BuilderSensorPath (+1 Sensor) and BuilderActionRole (+1 Action); BuilderSensorEntityPrioritiserAttitude is `BuilderSensor`-prefixed but categorises as ISensorEntityPrioritiser, which is why the convention's Sensor bucket (57) and the resolved Sensor bucket (57) agree only after both corrections cancel.",
+   "categories_resolved": {
+    "com.hypixel.hytale.server.npc.instructions.Action": 87,
+    "com.hypixel.hytale.server.npc.instructions.Sensor": 57,
+    "com.hypixel.hytale.server.npc.corecomponents.IEntityFilter": 21,
+    "com.hypixel.hytale.server.npc.instructions.BodyMotion": 19,
+    "com.hypixel.hytale.server.npc.instructions.HeadMotion": 7,
+    "com.hypixel.hytale.server.npc.corecomponents.ISensorEntityCollector": 2,
+    "com.hypixel.hytale.server.npc.corecomponents.ISensorEntityPrioritiser": 1
+   },
+   "unresolved_categories": 0,
+   "unresolved_note": "Must stay 0. A category the resolver cannot reach is not a harmless gap: phase (c) scopes a documented name to its slot, so an unplaced name is a name checked against the wrong vocabulary or none.",
+   "probes": {
+    "Kill": [
+     "Sensor"
+    ],
+    "Orbit": [],
+    "WanderInCircle": [
+     "BodyMotion"
+    ],
+    "Timer": [
+     "BodyMotion",
+     "HeadMotion",
+     "Sensor"
+    ]
+   },
+   "probes_why": "`Kill` is the one that mattered: effects-stats.md documented `\"Type\": \"Kill\"` as an INTERACTION, and a forms-1-and-2 miner reports it registered nowhere \u2014 which reads as 'invented' when the truth is \u00a74 collision, a real name in a different registry. `Orbit` is the control: npc-roles.md uses it twice and captions it both times as a custom BodyMotion, so it must resolve to NOTHING or the caption is wrong. `Timer` is the reason the vocabulary has to stay partitioned: it is a legal `Type` in three slots and an unscoped membership test would pass it in all seven."
   }
+ },
+ "measured": {
+  "source": "measured",
+  "registrations": 754,
+  "second_form_only": [
+   "com.hypixel.hytale.builtin.adventure.farming.config.stages.spread.SpreadGrowthBehaviour.CODEC",
+   "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.action.EventAction.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.action.effect.shape.Shape.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.location.EventLocation.Config.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.spawner.Spawner.Config.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.adventure.worldevents.context.Context.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.instances.removal.RemovalCondition.CODEC",
+   "com.hypixel.hytale.builtin.worldgen.modifier.content.Content.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.worldgen.modifier.content.cave.CaveTypeGenerator.TYPE_CODEC",
+   "com.hypixel.hytale.builtin.worldgen.modifier.op.Op.TYPE_CODEC",
+   "com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.FarmingStageData.CODEC",
+   "com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.GrowthModifierAsset.CODEC",
+   "com.hypixel.hytale.server.core.asset.type.camera.CameraEffect.CODEC",
+   "com.hypixel.hytale.server.core.entity.entities.player.pages.choices.ChoiceElement.CODEC",
+   "com.hypixel.hytale.server.core.modules.entityui.asset.CombatTextUIComponentAnimationEvent.CODEC",
+   "com.hypixel.hytale.server.core.modules.entityui.asset.EntityUIComponent.CODEC",
+   "com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.SelectInteraction.EntityMatcher.CODEC",
+   "com.hypixel.hytale.server.core.modules.projectile.config.PhysicsConfig.CODEC",
+   "com.hypixel.hytale.server.core.universe.world.WorldConfig.PLUGIN_CODEC"
+  ],
+  "id_not_in_argument_zero": 28,
+  "register_class_name_codec_sites": 12,
+  "registries": 105,
+  "registries_note": "98 before 2026-09-04; +7 when form 3 (registerCoreComponentType) was added. Those 7 are all closed, so the open count stays 10 \u2014 a form-3 site that could not be categorised would land in <category-unresolved>, which the independent block pins at 0."
+ }
 }

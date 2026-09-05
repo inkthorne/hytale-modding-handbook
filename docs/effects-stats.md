@@ -596,12 +596,17 @@ Trigger interactions when stat reaches its minimum or maximum value.
 | `SoundEventId` | string | Sound played when the bound is hit |
 | `Particles` | array | `ModelParticle[]` spawned on the entity when the bound is hit |
 
-Only two shipped assets use these keys — `Server/Entity/Stats/Stamina.json` and
-`Server/Entity/Stats/GlidingActive.json`. Neither kills the entity, and **there is no
-`Kill` interaction**: `Interaction.CODEC` registers 124 names and none of them is `Kill`
-(the `Kill` you may find in the jar is an NPC *sensor* core-component type, a different
-registry — see [NPC Roles](npc-roles.md)). To end an entity from a stat bound, reach for
-`DamageEntity`, `RemoveEntity` or a `ChangeStat` on `Health`.
+Shipped usage, counted per key rather than for the pair: `MinValueEffects` appears in
+two assets (`Stamina.json`, `GlidingActive.json`) and `MaxValueEffects` in five
+(`Stamina.json`, `Immunity.json`, and `SignatureEnergy.json` / `SignatureCharges.json` /
+`DeployablePreview.json`, which declare it as an empty `{}`). So three assets populate a
+bound at all — all under `Server/Entity/Stats/`.
+
+None of them kills the entity, and **there is no `Kill` interaction**: `Interaction.CODEC`
+registers 124 names and none of them is `Kill`. The `Kill` you may find in the jar is an
+NPC *sensor* core-component type, registered into a different registry entirely — see
+[NPC Roles](npc-roles.md). To end an entity from a stat bound, reach for `DamageEntity`,
+`RemoveEntity` or a `ChangeStat` on `Health`.
 
 **Both forms in one asset**, from `Server/Entity/Stats/Stamina.json` — the `Interactions`
 array mixes root-interaction **ids** (`"Stamina_Bar_Flash"`) with an **inline** definition:
@@ -630,6 +635,24 @@ array mixes root-interaction **ids** (`"Stamina_Bar_Flash"`) with an **inline** 
         {
           "Type": "ClearEntityEffect",
           "EntityEffectId": "Stamina_Broken"
+        }
+      ]
+    }
+  }
+}
+```
+
+`Immunity.json` is the shortest populated example, and worth reading beside the table
+because it is a bare `ApplyEffect` with nothing else in the array:
+
+```json
+{
+  "MaxValueEffects": {
+    "Interactions": {
+      "Interactions": [
+        {
+          "Type": "ApplyEffect",
+          "EffectId": "Immune"
         }
       ]
     }

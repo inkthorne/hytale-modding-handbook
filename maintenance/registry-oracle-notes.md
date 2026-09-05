@@ -7,6 +7,12 @@ the constraints the gate has to satisfy, each with the evidence that produced it
 
 ## 1. There are two registration forms, and mining only the first under-reports by 28%
 
+> **Three, as of 2026-09-04.** This heading is left as written because the 28% is a
+> real measurement of the first-vs-second gap, but a third form —
+> `registerCoreComponentType`, ~176 names with no codec field anywhere in the
+> statement — is the fourth correction at the end of this section. Read that before
+> treating the two forms below as the whole surface.
+
 The obvious form is a direct call on the codec:
 
 ```
@@ -97,12 +103,13 @@ through it: `ChoiceInteraction` gains `GiveItem` (`ShopPlugin.java:44`) on top o
 > the same failure as matching a documented name across the whole corpus instead of within its
 > section.
 
-### Three corrections to §1, from the phase-(b) miner (2026-09-04)
+### Four corrections to §1, from the phase-(b) miner (2026-09-04)
 
 The miner reproduces §1's headline figures exactly — `Interaction.CODEC` at 124
 names from 89 first-form and 35 second-form registrations across 21 second-form
 statements, and all ten cells of the field table. Three things in §1 need
-amending, and the first two are the kind §1 predicted about itself.
+amending, and the first two are the kind §1 predicted about itself. A fourth
+arrived a few hours later, from phase (c), and it is the largest of the four.
 
 **The field table counts STATEMENTS, not registrations.** Its "via
 `getCodecRegistry`" column reads 44 for `CODEC`; the miner counts 60 *registrations*
@@ -128,8 +135,53 @@ but an event-handler registry with no codec and no `"Type"` vocabulary. For a
 `"Type"`-oracle denominator the figure is **12**. Argument shape alone does not
 identify a codec registry; the anchor does.
 
+**There is a THIRD registration form, and it is not a codec registration at all.**
+`NPCPlugin.registerCoreComponentType(name, Builder::new)` — 194 call sites in 10
+files, chained many-per-statement like the second form — puts a name into a builder
+*factory*, and `NPCPlugin:1507-1509` chooses the factory by calling
+`builder.get().category()`. So the vocabulary is partitioned by `Sensor` /
+`BodyMotion` / `HeadMotion` / `Action` / `IEntityFilter` /
+`ISensorEntityCollector` / `ISensorEntityPrioritiser`, and **not one of those ~176
+names is visible to forms 1 and 2**, because there is no `X.CODEC` anywhere in the
+statement to anchor on. Every `"Type"` on `docs/npc-roles.md` and `docs/npc-combat.md`
+draws on this form.
+
+The category is readable statically without executing anything: every implementation
+is `public [final] Class<X> category()`, so the *return type* is the answer, and 191
+of the 194 sites reach it by inheritance from a `Builder*Base`. Resolution is
+two hops — `BuilderSensorKill::new` → `BuilderSensorKill.java` → `extends
+BuilderSensorBase` → `Class<Sensor> category()`.
+
+It cost a wrong answer within the hour of being missed, which is why it is written
+here rather than only in the code. `docs/effects-stats.md` documented
+`"Type": "Kill"` as an interaction; a forms-1-and-2 sweep reported `Kill` as
+**registered nowhere**, which reads as *invented*. `Kill` is a perfectly real
+registered name — a **sensor** — so the page's actual defect is §4 name collision,
+not invention, and the two want different fixes. A vocabulary oracle that is
+missing a whole registration form does not fail quietly in the safe direction; it
+manufactures fabrication findings.
+
+> **The partition is load-bearing, not decoration.** Fifteen of the 176 names are
+> registered in more than one category: `Timer` is a legal `Type` in `BodyMotion`,
+> `HeadMotion` *and* `Sensor`; `State`, `Random`, `Beacon`, `AdjustPosition` and
+> `ProjectToGround` each span `Action` and `Sensor`; `Nothing` and `Sequence` span
+> three. So a flat "is this name registered?" membership test passes every one of
+> them in every slot, and phase (c) has to check the name against the slot's
+> vocabulary rather than the union — the same lesson as §3 and §4, arriving a third
+> time from a third direction.
+
+The two id-shape rules from §1 and §2 both still apply here and both were needed:
+three of the 194 sites name their type with a `static final String` constant
+(`FACTORY_CLASS_TRANSIENT_PATH` = `"Path"`, twice, and `FACTORY_CLASS_ROLE` =
+`"Role"`), so a `registerCoreComponentType("` grep silently sees 191. And
+`NPCPlugin:1507` *declares* the method with a parameter list of the same arity as
+every call site, so arity cannot exclude it and it surfaces as one bogus
+unresolvable registry; exclude it structurally — a declaration is the occurrence
+followed by a body.
+
 Regression baselines from that run, which cannot validate the miner and exist only
-to make drift visible: 98 registries, 754 registrations, 10 with an open verdict.
+to make drift visible: 105 registries, 948 registrations, 10 with an open verdict.
+(98 / 754 before form 3 was added; all seven new registries are closed.)
 
 ## 2. Some registries are not statically enumerable — the gate needs a third outcome
 

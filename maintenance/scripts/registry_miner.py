@@ -24,12 +24,25 @@ Everything here is shaped by measurements in maintenance/registry-oracle-notes.m
   * Key a registry by its FULLY-QUALIFIED declaring type. Keying on the simple
     name collapses distinct `Config` / `Content` / `Context` / `Op` / `Shape`
     registries into single bogus rows.
+
+A THIRD form was added on 2026-09-04 and is NOT a codec registry at all — see
+§1's third correction. `NPCPlugin.registerCoreComponentType(name, Builder::new)`
+(194 call sites, 10 files) puts a name into a builder FACTORY, and which factory
+is decided by the builder's `category()` return type, not by any field on a
+codec. So the vocabulary is partitioned by `Sensor` / `BodyMotion` / `Action` /
+`MotionController` / … rather than by `X.CODEC`, and forms 1 and 2 cannot see a
+single one of those ~200 names. That gap produced a wrong answer the same day:
+`"Type": "Kill"` in effects-stats.md was first read as registered NOWHERE, when
+it is a registered SENSOR — a §4 collision, not an invention. The registry keys
+these synthesise carry the field `CORE_COMPONENT_TYPES`, which is deliberately
+not a real Java field name: nothing in the jar is called that, so a reader who
+greps for it finds this note rather than a phantom codec.
 """
 from __future__ import annotations
 import re, pathlib, sys
 from dataclasses import dataclass, field
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from codec_parser import _scan, _split_args
+from codec_parser import _scan, _split_args, find_source
 
 # NOTE the leading class is OPTIONAL. `[A-Z][A-Z0-9_]*CODEC` requires at least one
 # character before the literal CODEC and therefore cannot match a field named plainly
@@ -45,6 +58,13 @@ _CONST = re.compile(r'static\s+final\s+String\s+(\w+)\s*=\s*"([^"]*)"\s*;')
 _IMPORT = re.compile(r'^import\s+(?:static\s+)?([\w.]+);', re.M)
 _PKG = re.compile(r'^package\s+([\w.]+);', re.M)
 _LITERAL = re.compile(r'^"([^"]*)"$')
+_FORM3 = re.compile(r'registerCoreComponentType\s*\(')
+_CTOR_REF = re.compile(r'^([\w.]+)::new$')
+_DECLARATION = re.compile(r'\s*(?:throws\s+[\w.,\s]+?)?\{')
+_CATEGORY = re.compile(r'Class\s*<\s*([\w.]+)\s*>\s+category\s*\(')
+_EXTENDS = re.compile(r'\bclass\s+\w+(?:\s*<[^{]*?>)?\s+extends\s+([\w.]+)')
+CORE_COMPONENT_FIELD = 'CORE_COMPONENT_TYPES'
+UNRESOLVED_CATEGORY = '<category-unresolved>'
 
 
 @dataclass
@@ -143,9 +163,74 @@ def _statement_spans(src: str):
         yield src[start:spans[start]], start
 
 
-def mine_file(path: pathlib.Path) -> list[tuple[str, str, Site]]:
+def _category_of(builder: str, imports: dict, pkg: str, root: pathlib.Path,
+                 _seen: frozenset = frozenset()) -> str | None:
+    """FQCN of the category a core-component builder registers into, or None.
+
+    `registerCoreComponentType("Kill", BuilderSensorKill::new)` says nothing about
+    which slot `Kill` is legal in; `NPCPlugin:1507-1509` routes it by
+    `builder.get().category()`. The return TYPE carries the answer — every
+    implementation is `public [final] Class<X> category()` — so this reads the
+    signature rather than the body, and walks `extends` when a concrete builder
+    inherits the method (the common case: 191 of 194 sites resolve through a
+    `Builder*Base`). Returns None rather than guessing, and the caller counts
+    those: a resolver that silently substitutes a plausible category would put
+    real names under the wrong slot, which is worse than an admitted gap.
+    """
+    if builder in _seen:               # a cycle in the decompiled output
+        return None
+    fq = _resolve_type(builder, imports, pkg)
+    src_file = find_source(fq, root) or find_source(builder, root)
+    if src_file is None:
+        return None
+    body = src_file.read_text(errors='replace')
+    own_pkg_m = _PKG.search(body)
+    own_pkg = own_pkg_m.group(1) if own_pkg_m else ''
+    own_imports = {f.rsplit('.', 1)[-1]: f for f in _IMPORT.findall(body)}
+    cm = _CATEGORY.search(body)
+    if cm:
+        return _resolve_type(cm.group(1), own_imports, own_pkg)
+    em = _EXTENDS.search(body)
+    if em:
+        return _category_of(em.group(1), own_imports, own_pkg, root,
+                            _seen | {builder})
+    return None
+
+
+def _mine_core_components(src: str, path: pathlib.Path, imports: dict, pkg: str,
+                          consts: dict, root: pathlib.Path | None):
+    """Form 3. Yields (category_fqcn_or_None, CORE_COMPONENT_FIELD, Site)."""
+    for m in _FORM3.finditer(src):
+        opener = m.end() - 1
+        try:
+            close = _scan(src, opener)
+            args = _split_args(src[opener + 1:close - 1])
+        except (ValueError, AssertionError):
+            continue
+        if len(args) < 2 or _DECLARATION.match(src, close):
+            # NPCPlugin:1507 DECLARES the method, and its parameter list
+            # (`String name`, `Supplier<Builder<T>> builder`) is two arguments
+            # like every call site's, so an arity test does not exclude it. A
+            # declaration is the occurrence followed by a body; skipping it by
+            # name or file would break the moment the method moves or a second
+            # overload appears. Left in as `<category-unresolved>` it read as
+            # one genuinely unresolvable site, which is the false positive the
+            # unresolved bucket exists to make impossible to ignore.
+            continue
+        name, kind, expr, idx = _pick_name(args[:1], consts)
+        cat = None
+        if root is not None:
+            ref = _CTOR_REF.match(args[1].strip())
+            if ref:
+                cat = _category_of(ref.group(1).split('.')[-1], imports, pkg, root)
+        line = src.count('\n', 0, m.start()) + 1
+        yield cat, CORE_COMPONENT_FIELD, Site(str(path), line, 3, name, expr,
+                                              kind, idx, m.start())
+
+def mine_file(path: pathlib.Path,
+              root: pathlib.Path | None = None) -> list[tuple[str, str, Site]]:
     src = path.read_text(errors='replace')
-    if '.register(' not in src:
+    if '.register(' not in src and 'registerCoreComponentType' not in src:
         return []
     pkg_m = _PKG.search(src)
     pkg = pkg_m.group(1) if pkg_m else ''
@@ -175,6 +260,10 @@ def mine_file(path: pathlib.Path) -> list[tuple[str, str, Site]]:
             name, kind, expr, idx = _pick_name(args, consts)
             line = src.count('\n', 0, off + rm.start()) + 1
             out.append((declaring, fld, Site(str(path), line, form, name, expr, kind, idx, off)))
+
+    if 'registerCoreComponentType' in src:
+        for cat, fld, site in _mine_core_components(src, path, imports, pkg, consts, root):
+            out.append((cat or UNRESOLVED_CATEGORY, fld, site))
     return out
 
 
@@ -210,7 +299,7 @@ def _pick_name(args: list[str], consts: dict[str, str]):
 def mine(root: pathlib.Path) -> dict[str, Registry]:
     regs: dict[str, Registry] = {}
     for p in root.rglob('*.java'):
-        for declaring, fld, site in mine_file(p):
+        for declaring, fld, site in mine_file(p, root):
             key = f'{declaring}.{fld}'
             r = regs.setdefault(key, Registry(declaring, fld))
             r.sites.append(site)

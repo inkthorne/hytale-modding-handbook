@@ -190,9 +190,12 @@ Configures block behavior when an item is placed in the world. This property tra
 
 For complete documentation, see [Block Items](items-blocks.md).
 
-`BlockType` has no `"Type"` discriminator — it is a plain key/value block, not a
-codec-map, so every key below is one of `BlockType.CODEC`'s own. From
-`Server/Item/Items/Deco/Deco_Map.json`:
+`BlockType` has no `"Type"` discriminator **of its own** — it is a plain key/value
+block, not a codec-map, so every key below is one of `BlockType.CODEC`'s 81. Read
+that as a statement about the top level only: keys *nested* under `BlockType` are
+frequently codec-maps that do take a `"Type"`, among them `RandomTickProcedure`
+(see [Blocks](blocks.md)), `ConnectedBlockRuleSet`, `Farming`, `Gathering` and
+`Interactions`. From `Server/Item/Items/Deco/Deco_Map.json`:
 
 ```json
 {

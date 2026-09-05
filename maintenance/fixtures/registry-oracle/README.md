@@ -47,7 +47,7 @@ Fixture for `maintenance/scripts/registry_miner.py` (phase b). Run it with:
 
 **The file separates two kinds of figure, and only one can validate the miner.**
 `independent` figures were derived by hand in `registry-oracle-notes.md` §1–§2
-*before* this miner existed, so reproducing them is evidence — 26 checks, covering
+*before* this miner existed, so reproducing them is evidence — 44 checks, covering
 `Interaction.CODEC`'s 124 names across both registration forms, all ten cells of
 the field table, and the three verdicts including §2's false-positive guard.
 `measured` figures came from the miner itself and are regression baselines only:
@@ -56,3 +56,16 @@ circularity in another costume.
 
 The miner reproduced every independent figure on the run that created this
 fixture, and in doing so found three amendments to §1 — recorded there, not here.
+
+**The `core_component_types` block is independent by a different route**, and that
+is the point. §1's third registration form (`registerCoreComponentType`) had no
+hand-derived figures in the notes to reproduce, so instead of writing down what the
+miner said and calling it a fixture, the counts come from a *second method*:
+bucketing each site by its builder's `Builder<Category>*` name rather than by
+resolving `category()`. The two disagree by exactly 3 — the sites whose id is a
+`static final String` constant, which a naive `registerCoreComponentType("` grep
+cannot see — and the fixture records the reconciliation arithmetic rather than the
+agreed total, so a resolver bug would have to reproduce the naming convention's own
+blind spots to stay hidden. `unresolved_categories` is pinned at **0**: a name the
+resolver cannot place is not a harmless gap, because phase (c) checks a documented
+`"Type"` against its *slot*, and 15 of the 176 names are legal in more than one.

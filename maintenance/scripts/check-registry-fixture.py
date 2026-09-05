@@ -77,6 +77,37 @@ check("open registry count", sum(1 for r in regs.values() if r.verdict == 'open'
 amb = [(r.key, s) for r in regs.values() for s in r.sites if s.kind == 'ambiguous']
 check("register calls with two top-level literals", len(amb), 0)
 
+# --- form 3: core-component types, categorised by category() ----------------
+# The independent route here is a NAMING CONVENTION (`Builder<Category>*`) plus the
+# three constant-named sites it structurally cannot see. It agrees with category()
+# resolution only after both corrections are applied, which is exactly why it is
+# worth checking: a resolver bug would have to reproduce the convention's own blind
+# spots to stay hidden.
+cc = {k.rsplit('.', 1)[0]: r for k, r in regs.items()
+      if r.field == rm.CORE_COMPONENT_FIELD}
+c3 = ind['core_component_types']
+check("core-component call sites",
+      sum(len(r.sites) for r in cc.values()), c3['call_sites'])
+check("core-component sites named by a constant",
+      sum(1 for r in cc.values() for s in r.sites if s.kind == 'constant'),
+      c3['constant_named'])
+check("core-component categories", len(cc), len(c3['categories_resolved']))
+for cat, want in c3['categories_resolved'].items():
+    r = cc.get(cat)
+    check(f"category {cat.rsplit('.', 1)[-1]}", len(r.sites) if r else 'MISSING', want)
+check("core-component categories unresolved",
+      len(cc.get(rm.UNRESOLVED_CATEGORY, rm.Registry('', '')).sites),
+      c3['unresolved_categories'])
+conv = c3['by_name_convention']
+check("convention total + constants == call sites",
+      conv['total'] + c3['constant_named'], c3['call_sites'])
+slots = collections.defaultdict(list)
+for cat, r in cc.items():
+    for n in r.names:
+        slots[n].append(cat.rsplit('.', 1)[-1])
+for name, want in c3['probes'].items():
+    check(f"probe {name}", sorted(slots.get(name, [])), sorted(want))
+
 # --- regression baselines (cannot validate, only detect drift) --------------
 drift = []
 if len(regs) != meas['registries']:

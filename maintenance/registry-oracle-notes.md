@@ -1127,8 +1127,9 @@ finds 566 distinct values, `"Type" *: *"…"` finds 454. The 112 lost are the en
 world-generator vocabulary — the tab dialect lives only under
 `Server/HytaleGenerator/` (222 files) — so a space-only re-derivation comes back
 clean everywhere except the generator pages, where it manufactures a hundred
-findings at once, every one a real value. Not load-bearing today: zero of the 20
-values resolving only via the asset oracle are tab-only.
+findings at once, every one a real value. (A probe anchored `"Type"\t` matched
+**zero** and read as *no hazard*: the tab is after the colon.) Not load-bearing
+today: zero of the 20 values resolving only via the asset oracle are tab-only.
 
 ## 13. The inherited-scope guard, audited from both sides (2026-09-05)
 

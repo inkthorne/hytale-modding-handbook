@@ -213,10 +213,19 @@ def main():
           f"page(s); {total} \"Type\" occurrence(s), {len(values)} distinct value(s)")
     tally = (by_source['registry'] + by_source['assets'] + by_source['page-local']
              + by_source['skiplist'] + by_source['unresolved'])
+    # The five buckets count DISTINCT VALUES by first source, so they sum to the
+    # distinct count. That makes the skiplist bucket a FLOOR on how much is being
+    # waived, not the answer: a value waived on one page and legitimate on another
+    # is claimed by the higher-priority bucket and never counted here. `used_skips`
+    # is the honest figure for "how much is being waived", and it is what staleness
+    # detection reads — so the two are reported side by side rather than one of
+    # them silently standing in for the other.
     print(f"  INFO  resolved by: registry {by_source['registry']}, "
           f"shipped assets {by_source['assets']}, page's own java fence "
           f"{by_source['page-local']}, audited skiplist {by_source['skiplist']}, "
-          f"unresolved {by_source['unresolved']}")
+          f"unresolved {by_source['unresolved']} "
+          f"(distinct values by first source; {len(used_skips)} live "
+          f"(value, page) exemption(s) in total)")
     if tally != len(values):
         print(f"  FAIL  the by-source tally is {tally} but there are {len(values)} "
               f"distinct value(s) — a value is being counted twice or not at all")

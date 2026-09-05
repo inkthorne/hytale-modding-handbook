@@ -1113,6 +1113,39 @@ there was misattribution.
 
 > Two files, seven occurrences — worth writing both, because the review that
 > produced this paragraph rendered it as "7 shipped assets" and so did the first
-> draft here. The separator in those files is a **tab**, so a
-> `grep '"Type": *"Wall"'` returns zero and a `\s*` regex returns seven; whichever
-> figure you quote, say which of the two it counts.
+> draft here. Whichever figure you quote, say which of the two it counts.
+
+### The tab hazard, measured corpus-wide
+
+The separator in those two files is a **tab**, and that is not a local oddity. Any
+hand-written scan of the asset tree for `"Type"` values must use a whitespace
+class, not a literal space. Measured on build-26, `"Type"\s*:\s*"…"` against
+`"Type" *: *"…"`:
+
+| | `\s*` | space-only | lost |
+|---|---|---|---|
+| distinct values | 566 | 454 | **112** |
+| occurrences | 53,919 | 41,400 | 12,519 |
+
+(Your figures will move slightly with how you write the space-only pattern —
+which is the point. A review pass measuring the same thing got 452 / 12,561 / 231
+files. The 566 agrees exactly, and so does the conclusion; the disagreement is
+entirely in the *comparison* pattern, so state the pattern with the number.)
+
+**The 222 files where the two disagree are entirely under
+`Server/HytaleGenerator/`** — Assignments, Biomes, Density, WorldStructures.
+Nothing outside that subtree is tab-separated. So the failure mode is much
+sharper than "some values get missed": a space-only scan loses **the whole
+world-generator vocabulary and nothing else** — `Abs`, `Clamp`, `Constant`,
+`CellNoise2D`, `Amplitude`, `ColumnRandom`, `AlwaysTrueCondition` and ~105 more.
+A re-derivation written that way comes back clean everywhere except the generator
+pages, where it manufactures a hundred fabrication findings at once, every one of
+them a real value. That is an *easier* trap than a subtle one, because the check
+looks like it is working.
+
+**This is prospective, not load-bearing.** Of the 20 documented values that
+resolve only via the asset oracle, **zero** are in the tab-only set, and zero
+documented values would be wrongly flagged by a space-only asset scan. Today's
+green run does not depend on the whitespace class. The hazard is aimed entirely
+at whoever next writes an asset scan by hand — including at a reviewer
+re-deriving this gate's own figures, which is how it was found.

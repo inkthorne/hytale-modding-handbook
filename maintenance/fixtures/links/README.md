@@ -19,6 +19,34 @@ denominator: **a denominator summed over two populations cannot show one of them
 reaching zero**, and the population that carries the gate's whole purpose was 5%
 of the number it printed.
 
+## And the floor's own population excluded its own test data — eventually
+
+The first version of the split floored a population that **included this fixture
+corpus**: 5 of the repo's 106 "outside" links come from
+`maintenance/fixtures/links/**`, against a floor of 1. Rebuilt as the real
+regression — a top-rooted corpus reaching no further than `docs/`, with the
+fixture directory surviving as it would in any real regression — the outside
+population fell 106 → 5, a 95% collapse of exactly what the floor measures, and
+the gate passed green. **The scaffolding alone cleared the floor.**
+
+Fixture links are now their own bucket: checked for correctness, excluded from the
+number that makes a claim about repo content. Exclusion rather than a bigger
+floor, because a calibrated value rots every time an `examples/` README is added —
+the argument this repo already settled twice for page sizes.
+
+**Mechanism and calibration are different things, and only one of them was
+tested.** The `if pop['outside'] < a.min_outside:` → `if False:` mutation proves
+the floor *fires*. Nothing proved the number it fires on was adequate for the
+population production sees, because every case ran with `--min-links 3` on a
+nine-link corpus and took the default outside floor — calibration meaningless in
+both directions, by design. The gap between the two is where the whole finding
+lived. `_production_on_narrowed()` closes it: the **production invocation with
+production defaults**, over a corpus whose only non-`docs/` markdown is this
+repo's real fixture tree. Its `docs/bulk.md` exists so the corpus clears the
+production `--min-links` of 100 — without it the *total* floor fires first and
+the case passes while asserting nothing about the outside floor, which is the
+same trap as `--root docs/` one level along.
+
 ## Two corpus subtleties that each cost a red case
 
 **`--root docs/` does not simulate the narrowing.** `inside` is computed relative

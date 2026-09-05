@@ -19,6 +19,18 @@ was written to prevent. A figure summed over sources cannot show one source
 reaching zero, which is this repo's third instance of that shape. So the two
 populations are printed separately and the OUTSIDE one carries its own floor.
 
+AND THE GATE'S OWN TEST DATA DOES NOT VOTE IN THAT FLOOR. The first version of
+this split counted `maintenance/fixtures/links/**` in the outside population —
+5 of its 106 — against a floor of 1. Rebuilt as the real regression (a top-rooted
+corpus reaching no further than docs/, with the fixture directory surviving as it
+would in any real regression) the outside population fell 106 -> 5, a 95%
+collapse of exactly what the floor measures, and the gate passed: the scaffolding
+alone cleared the floor. Fixture links are still CHECKED for correctness; they
+are excluded from the number that makes a claim about repo content. Exclusion
+rather than a bigger floor, because a calibrated value rots every time an
+examples README is added — the argument this repo already settled twice for page
+sizes.
+
 Usage: python3 maintenance/scripts/check-links.py [--root DIR] [--min-outside N]
 Exit 0 pass, 1 findings, 2 SKIP (the corpus is absent or implausible).
 """
@@ -76,19 +88,28 @@ def main() -> int:
     pop = collections.Counter()
     findings: list[str] = []
     for p in files:
-        # ROOT-RELATIVE, deliberately. Pointing --root at docs/ therefore makes
-        # every file read as "outside", which is why the fixture simulates the
-        # narrowing with a top-rooted corpus that contains no examples/ rather
-        # than by rooting at docs/ — the latter passes and asserts nothing.
-        inside = 'docs' in p.relative_to(root).parts[:1]
+        rel = p.relative_to(root)
+        # THREE buckets, not two, and the classification is ROOT-RELATIVE.
+        # Pointing --root at docs/ therefore makes every file read as "outside",
+        # which is why the fixture simulates the narrowing with a top-rooted
+        # corpus containing no examples/ rather than by rooting at docs/ — the
+        # latter passes while asserting nothing. `fixture` exists because a floor
+        # its own test data can satisfy is not a floor: those links are checked
+        # for correctness and excluded from the number that claims something
+        # about repo content.
+        if 'docs' in rel.parts[:1]:
+            bucket = 'docs'
+        elif rel.parts[:2] == ('maintenance', 'fixtures'):
+            bucket = 'fixture'
+        else:
+            bucket = 'outside'
         for ln, line in enumerate(p.read_text(errors='replace').split('\n'), 1):
             for m in LINK.finditer(line):
                 tgt, an = m.group(2), m.group(3)
                 if tgt is None and an is None:
                     continue
-                pop['docs' if inside else 'outside'] += 1
+                pop[bucket] += 1
                 tp = str(p) if tgt is None else os.path.normpath(str(p.parent / tgt))
-                rel = p.relative_to(root)
                 if tp not in anchors:
                     findings.append(f'{rel}:{ln} -> {tgt} (no such file)')
                 elif an is not None and an not in anchors[tp]:
@@ -98,7 +119,8 @@ def main() -> int:
 
     total = sum(pop.values())
     print(f'  INFO  {total} markdown link(s) in {len(files)} file(s): '
-          f'{pop["docs"]} under docs/, {pop["outside"]} outside it')
+          f'{pop["docs"]} under docs/, {pop["outside"]} outside it, '
+          f'{pop["fixture"]} in gate fixtures (checked, not floored)')
 
     # TWO floors, and the second one is the point. A total-only floor cannot tell
     # "the widening works" from "the widening was reverted".

@@ -19,7 +19,7 @@ asserts that the floor fires.
 Usage: python3 maintenance/scripts/check-links-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, os, pathlib, shutil, subprocess, sys, tempfile
+import argparse, os, pathlib, re, shutil, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 CORPUS = HERE.parents[0] / 'fixtures' / 'links' / 'corpus'
@@ -33,8 +33,8 @@ FROM = pathlib.Path(A.from_dir)
 
 fails: list[str] = []
 checks = 0
-MIN_CASES = 12
-MIN_MUTATIONS = 5
+MIN_CASES = 15
+MIN_MUTATIONS = 6
 
 
 def run(root, *extra):
@@ -96,12 +96,15 @@ if A.mutations:
              'a dead intra-doc anchor is caught',
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
-             'and it exits 1, not 0'}),
+             'and it exits 1, not 0',
+             'fixture links are still counted and reported, just not floored'}),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
              'and it says the corpus has narrowed, not merely that it is small',
-             "every SKIP line is indented where the caller's filter can see it"}),
+             "every SKIP line is indented where the caller's filter can see it",
+             'the gate fixtures do not vote in the floor they are testing',
+             'and the SKIP names the narrowing, not the corpus size'}),
         'the link pattern loses its path segment': (
             r"""LINK = re.compile(r'\[([^\]]*)\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
             r"""LINK = re.compile(r'\[([^\]]*)\]\(([A-Za-z0-9_\-]+\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
@@ -113,7 +116,21 @@ if A.mutations:
              'a dead intra-doc anchor is caught',
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
-             'and it exits 1, not 0'}),
+             'and it exits 1, not 0',
+             'fixture links are still counted and reported, just not floored'}),
+        'gate-fixture links vote in the floor again': (
+            """        elif rel.parts[:2] == ('maintenance', 'fixtures'):
+            bucket = 'fixture'""",
+            """        elif False:
+            bucket = 'fixture'""",
+            # Only the three production cases move: the fixture's OWN corpus has
+            # nothing under maintenance/fixtures when rooted at CORPUS, so its
+            # bucket is 0 either way. A mutation that reddens only the cases built
+            # for it is the shape you want.
+            {'the gate fixtures do not vote in the floor they are testing',
+             'and the SKIP names the narrowing, not the corpus size',
+             'fixture links are still counted and reported, just not floored'}),
+
         'a missing target FILE stops being a finding': (
             """                if tp not in anchors:
                     findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
@@ -173,7 +190,8 @@ _rc, _out = run(CORPUS)
 check('a healthy corpus passes', lambda: _rc, 0)
 check('it prints the two populations separately, never their sum',
       lambda: next((l.strip() for l in _out.split('\n') if 'INFO' in l), ''),
-      'INFO  5 markdown link(s) in 3 file(s): 4 under docs/, 1 outside it')
+      'INFO  5 markdown link(s) in 3 file(s): 4 under docs/, 1 outside it, '
+      '0 in gate fixtures (checked, not floored)')
 
 # ---- the three break kinds --------------------------------------------------
 check('a dead intra-doc anchor is caught',
@@ -225,6 +243,43 @@ check('a missing root SKIPs with exit 2',
 check('every SKIP line is indented where the caller\'s filter can see it',
       lambda: sorted({l[:6] for l in _docs_only().stdout.split('\n')
                       if 'SKIP' in l}), ['  SKIP'])
+
+# ---- the floor's VALUE, not just its mechanism ------------------------------
+# The `if pop['outside'] < a.min_outside:` -> `if False:` mutation proves the floor
+# FIRES. Nothing proved the number it fires on is adequate for the population
+# production sees — and it was not: the gate's own fixture corpus contributed 5 of
+# the 106 "outside" links against a floor of 1, so the scaffolding alone cleared
+# it. Rebuild the real regression (top-rooted, reaching no further than docs/,
+# with the fixture directory surviving as it would) and the gate passed green.
+#
+# This case runs the PRODUCTION invocation with production defaults — no
+# --min-outside override — over a corpus whose only non-docs/ markdown is this
+# repo's real fixture tree. `docs/bulk.md` exists so the corpus clears the
+# production --min-links of 100; without it the TOTAL floor fires first and the
+# case would pass while asserting nothing about the outside floor, which is the
+# same trap as `--root docs/`.
+def _production_on_narrowed():
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    root = tmp / 'c'
+    shutil.copytree(CORPUS / 'docs', root / 'docs')
+    shutil.copytree(HERE.parents[0] / 'fixtures' / 'links',
+                    root / 'maintenance' / 'fixtures' / 'links')
+    bulk = ['# Bulk', '', '## Target', '']
+    bulk += [f'- [l{i}](#target)' for i in range(120)]
+    (root / 'docs' / 'bulk.md').write_text('\n'.join(bulk) + '\n')
+    r = subprocess.run([sys.executable, str(FROM / 'check-links.py'), '--root', str(root)],
+                       capture_output=True, text=True)
+    shutil.rmtree(tmp, ignore_errors=True)
+    return r
+
+
+check('the gate fixtures do not vote in the floor they are testing',
+      lambda: _production_on_narrowed().returncode, 2)
+check('and the SKIP names the narrowing, not the corpus size',
+      lambda: 'narrowed back to docs/' in _production_on_narrowed().stdout, True)
+check('fixture links are still counted and reported, just not floored',
+      lambda: re.search(r'(\d+) outside it, (\d+) in gate fixtures',
+                        _production_on_narrowed().stdout).groups(), ('0', '5'))
 
 # ---- what must NOT be a finding ---------------------------------------------
 check('a bare page link to a real file is fine',

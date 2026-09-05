@@ -63,7 +63,7 @@ settings GUI** bound to the block — a pedestal that drops an item and respawns
 on an interval, only when the previous one is gone, surviving world reloads
 without duplicating, with the item and delay editable in-world. The verified
 recipe behind it is in
-[`docs/blocks.md`](../docs/blocks-java-api.md#custom-block-entity-components).
+[`docs/blocks-java-api.md`](../docs/blocks-java-api.md#custom-block-entity-components).
 
 ## Building and deploying
 

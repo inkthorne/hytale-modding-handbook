@@ -219,5 +219,5 @@ The collection requires the `hytale:WorldEditor` permission group.
 
 - [Interactions API](interactions.md) — the interaction system these three types plug into
 - [NPC Roles](npc-roles.md) — where the `Mount` **action** lives
-- [Block Items](items-blocks.md) and [blocks.md](blocks-java-api.md#blockmountpoint) — `Seats` / `Beds` mount points
+- [Block Items](items-blocks.md) and [blocks-java-api.md](blocks-java-api.md#blockmountpoint) — `Seats` / `Beds` mount points
 - [player.md → Bed Interaction](player.md#bed-interaction) — the other `BlockMountAPI` caller

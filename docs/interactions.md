@@ -277,7 +277,7 @@ engine code, but only the first is core, so `Projectile` is always available whi
 | `SpawnDeployableAtLocation` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
 | `SpawnDeployableFromRaycast` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
 | `SpawnMinecart` | `MountPlugin` | [mounts.md](mounts.md#spawnminecart-interaction) |
-| `SpawnNPC` | `NPCPlugin` | [npc-roles.md](npc-spawning.md#spawnnpc-interaction) |
+| `SpawnNPC` | `NPCPlugin` | [npc-spawning.md](npc-spawning.md#spawnnpc-interaction) |
 | `SpawnPrefab` | `InteractionModule` | [interactions-world.md](interactions-world.md#spawnprefab) |
 | `SpawnTriggerVolume` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |

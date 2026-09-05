@@ -816,26 +816,47 @@ section "[HARD] The gates' own fixtures pass"
 # Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
 # included rather than deferred behind a flag.
 FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py"
-FIX_OK=1; FIX_LINES=0
+# The summary prefixes each runner is expected to print. NOT `| ` — an earlier
+# version ended the alternation with a bare space, so every indented line counted,
+# including a traceback's `  File "..."` lines. Harmless then (a traceback arrives
+# with RC!=0 and is caught first) but it meant the counter was not measuring what
+# its name said, in a section about figures meaning what they claim.
+FIX_SUMMARY='^(CORPUS|FIXTURE|TRAPS|INDEPENDENT|BASELINE|MUTATIONS)\b'
+FIX_OK=1; FIX_RAN=0; FIX_NAMES=""
 for R in $FIXTURE_RUNNERS "check-type-values-fixture.py --mutations"; do
   # shellcheck disable=SC2086
   OUT="$(python3 maintenance/scripts/$R 2>&1)"; RC=$?
-  N="$(printf '%s\n' "$OUT" | grep -cE '^(CORPUS|FIXTURE|TRAPS|INDEPENDENT|BASELINE|MUTATIONS| )')"
-  FIX_LINES=$(( FIX_LINES + N ))
+  FIX_RAN=$(( FIX_RAN + 1 ))
+  FIX_NAMES="${FIX_NAMES}${FIX_NAMES:+, }${R%% *}"
+  N="$(printf '%s\n' "$OUT" | grep -cE "$FIX_SUMMARY")"
   if [ "$RC" -ne 0 ]; then
     FIX_OK=0
     fail "${R%% *} failed:"
     printf '%s\n' "$OUT" | sed 's/^/    /'
+  elif [ "$N" -eq 0 ]; then
+    # PER-RUNNER floor, not per-section. Summed across three runners, one going
+    # silent was masked by the other two: stubbing check-codec-fixture.py to
+    # `sys.exit(0)` with no output removed `FIXTURE 44 type(s)` and `TRAPS 6
+    # case(s)` from the evidence while the section still printed "all 3 ... pass".
+    # Same shape as the `covered` denominator aggregated across files, and the
+    # `audited skiplist` bucket claimed by a higher-priority source — a figure
+    # summed over sources cannot show one source reaching zero.
+    FIX_OK=0
+    fail "${R%% *} exited 0 but printed no summary line — it ran, or did it?"
   else
-    printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|MUTATIONS)' | sed 's/^/        /'
+    printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|MUTATIONS)\b' | sed 's/^/        /'
   fi
 done
-# Zero-floor, the same one these fixtures exist to enforce: a runner that prints no
-# summary at all must not read as three green runs.
-if [ "$FIX_LINES" -eq 0 ]; then
-  fail "the fixture runners produced no summary lines — they ran, or did they?"
-elif [ "$FIX_OK" -eq 1 ]; then
-  pass "all 3 gate fixtures pass (codec chains, registry oracle, type values + mutations)"
+# The count is DERIVED from the loop. It used to read "all 3" as a literal while the
+# loop was driven by $FIXTURE_RUNNERS plus one more, so a fourth runner would have
+# been reported as three — a count that does not come from what it counts, which is
+# the thing this gate has spent six commits removing everywhere else.
+if [ "$FIX_OK" -eq 1 ]; then
+  # Both the count AND the names come from the loop. Adding a fourth runner used to
+  # print "all 4 gate fixtures pass (codec chains, registry oracle, type values)" —
+  # the number derived and the list beside it still naming three, which is the same
+  # defect one field over and was visible only because the derived count moved.
+  pass "all $FIX_RAN gate fixtures pass: $FIX_NAMES"
 fi
 
 # =====================================================================

@@ -116,16 +116,23 @@ except Exception as e:                          # noqa: BLE001
     print( '        Every case below depends on this call; none of them ran.')
     print(f'\nFIXTURE {checks} check(s): setup failed before the assertions')
     sys.exit(1)
-check('sections seen', lambda: r.seen, 11)
-check('sections bound', lambda: len(r.bound), 4)
-check('sections unbound', lambda: len(r.unbound), 7)
-check('seen == bound + unbound', lambda: len(r.bound) + len(r.unbound), r.seen)
+check('sections seen', lambda: r.seen, 19)
+check('sections bound', lambda: len(r.bound), 5)
+check('sections unbound', lambda: len(r.unbound), 10)
+# The sum invariant now has FOUR terms. Every section lands in exactly one class,
+# so a section that silently falls out of the classification is a failure rather
+# than a smaller number nobody notices.
+check('seen == direct + inherited-accepted + inherited-rejected + unbound',
+      lambda: sum(r.counts().values()), r.seen)
+check('the four counts are all reported',
+      lambda: sorted(r.counts()),
+      ['direct', 'inherited-accepted', 'inherited-rejected', 'unbound'])
 
 # Each unbound section is counted WITH ITS REASON. "Unbound" as a bare number is
 # the aggregate that cannot show one cause reaching zero — the third instance of
 # that shape in this gate.
 check('unbound reasons, counted separately', lambda: sorted(r.unbound_by_reason.items()),
-      sorted([('no Package line', 1),
+      sorted([('no Package line', 4),
               ('package does not resolve', 2),
               ('no source file for the class', 3),
               ('class declares no codec chain', 1)]))
@@ -145,10 +152,41 @@ check('a package directory with no .java does not resolve',
 
 # ---- the binding itself -----------------------------------------------------
 check('bound section names', lambda: sorted(b.section for b in r.bound),
-      ['Gadget', 'Learning Widgets', 'Nested', 'Widget'])
+      ['Gadget', 'Learning Widgets', 'Nested', 'SubWidget', 'Widget'])
 # 28 real sections put an FQCN on the Package line. Binding on the heading gives
 # `binderpkg.Gadget.Learning` — the heading heuristic must not run at all here.
 # 40 real sections on the interactions-* pages are path-style, and all 40 resolve.
+# --- inherited scope: a hypothesis the CONTENT confirms, not binding by position -
+# A subsection under a bound class inherits its binding only if every top-level key
+# it names exists on that class's parsed chain (parents walked). One unknown key
+# rejects it, and the rejection names the key. A misattributed table's keys do not
+# exist on the ancestor, so the guard fails toward refusing rather than accusing.
+check('a subsection whose keys all exist on the ancestor is ACCEPTED',
+      lambda: sorted(b.section for b in r.inherited_accepted),
+      ['SubWidget Properties', 'Widget Discriminated', 'Widget Properties'])
+check('a subsection naming a foreign key is REJECTED, not bound',
+      lambda: [(x.section, x.failing_key) for x in r.inherited_rejected],
+      [('Widget Examples', 'Colour')])
+check('an accepted inherited binding carries the ANCESTOR fqcn',
+      lambda: next(b.fqcn for b in r.inherited_accepted
+                   if b.section == 'Widget Properties'), 'binderpkg.Widget')
+check('inheritance does not inflate the DIRECT count',
+      lambda: len(r.bound), 5)
+
+# A subsection's table routinely documents keys inherited from a parent codec.
+# An inherited binding with nothing to confirm it is binding by POSITION, which is
+# what the guard refuses. Absence of evidence is not evidence.
+check('a subsection with no keys is not accepted on position alone',
+      lambda: [u.reason for u in r.unbound if u.section == 'Widget Notes'],
+      ['no Package line'])
+check('the fingerprint walks parent chains',
+      lambda: [b.fqcn for b in r.inherited_accepted
+               if b.section == 'SubWidget Properties'], ['binderpkg.SubWidget'])
+# A sibling heading ends the scope: `#### Orphan Details` must not reach SubWidget.
+check('a sibling heading ends the inherited scope',
+      lambda: [u.reason for u in r.unbound if u.section == 'Orphan Details'],
+      ['no Package line'])
+
 check('a path-style Package value binds under the supplied root',
       lambda: next(b.fqcn for b in r.bound if b.section == 'Nested'),
       'binderpkg.sub.Nested')

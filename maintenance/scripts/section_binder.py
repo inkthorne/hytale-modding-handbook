@@ -86,6 +86,17 @@ class Bound:
 
 
 @dataclass
+class Inherited:
+    """A subsection bound through an ancestor, with the fingerprint that decided it."""
+    page: str
+    section: str
+    ancestor: str
+    fqcn: str
+    chain: object = None
+    failing_key: str | None = None       # set only on a rejection
+
+
+@dataclass
 class Unbound:
     page: str
     section: str
@@ -97,7 +108,18 @@ class Unbound:
 class BindResult:
     seen: int = 0
     bound: list[Bound] = field(default_factory=list)
+    inherited_accepted: list[Inherited] = field(default_factory=list)
+    inherited_rejected: list[Inherited] = field(default_factory=list)
     unbound: list[Unbound] = field(default_factory=list)
+
+    def counts(self) -> dict[str, int]:
+        """The four classes, every one printed on every run. A consumer must say
+        which it uses: `direct` is a Package line or a path heading; `inherited`
+        is an ancestor plus a content fingerprint, which is a weaker warrant."""
+        return {'direct': len(self.bound),
+                'inherited-accepted': len(self.inherited_accepted),
+                'inherited-rejected': len(self.inherited_rejected),
+                'unbound': len(self.unbound)}
 
     @property
     def unbound_by_reason(self) -> dict[str, int]:
@@ -109,14 +131,100 @@ class BindFloor(Exception):
 
 
 def _sections(text: str):
-    """Yield (section_title, package_or_None) for every heading in a page."""
+    """Yield (title, package_or_None, level, body) for every heading in a page.
+
+    `body` runs to the next heading of ANY level, so a section's fingerprint is its
+    own content and never a child's.
+    """
     lines = text.split('\n')
-    for m in HEADING.finditer(text):
+    ms = list(HEADING.finditer(text))
+    for i, m in enumerate(ms):
         title = m.group(2).strip()
         start = text.count('\n', 0, m.start()) + 1
         window = '\n'.join(lines[start:start + PACKAGE_GAP_LINES])
         pm = PACKAGE.search(window)
-        yield title, (pm.group(1) if pm else None)
+        end = ms[i + 1].start() if i + 1 < len(ms) else len(text)
+        yield title, (pm.group(1) if pm else None), len(m.group(1)), text[m.end():end]
+
+
+# A key table's first column and a JSON fence's root object are the section's own
+# FINGERPRINT. Matching them against a parsed chain is content checked against
+# structure — not a name matched corpus-wide (§12) and not a title pattern.
+TABLE = re.compile(r'^\|(.+)\|\s*\n\|[\s:|-]+\|\s*$((?:\n\|.*)*)', re.M)
+JSON_FENCE = re.compile(r'^[ \t]*```json[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
+ROOT_KEY = re.compile(r'^\s{0,4}"([A-Za-z_][A-Za-z0-9_]*)"\s*:', re.M)
+DISCRIMINATOR = re.compile(r'CodecMapCodec\s*\(\s*"([^"]+)"')
+
+
+def discriminators(src: pathlib.Path) -> set[str]:
+    """Names declared as a CodecMapCodec's discriminator, mined not assumed.
+
+    A discriminator is the field a codec-map switches on; it is not appended to any
+    chain, so it exists on no chain's key set. Without this the fingerprint rejects
+    every fence documenting a discriminated type — `Type` alone accounted for 91 of
+    128 rejections on the real corpus. Build-26 declares four: Type (38),
+    component, Id and type.
+
+    THIS WIDENS THE ACCEPT SURFACE and the widening is not free: `Id` is a common
+    key name, so a table listing `Id` for a sibling class no longer fails on it.
+    That is exactly what the ordered sample audit of ACCEPTED inherited bindings
+    has to measure — recorded in registry-oracle-notes.md rather than assumed away.
+    """
+    out = set()
+    for p in src.rglob('*.java'):
+        t = p.read_text(errors='replace')
+        if 'CodecMapCodec' in t:
+            out |= set(DISCRIMINATOR.findall(t))
+    return out
+
+
+def chain_key_names(chain, src: pathlib.Path, _depth: int = 0) -> set[str]:
+    """Every key on a chain INCLUDING its parents'. A subsection's table routinely
+    documents inherited keys, so a fingerprint that stopped at the declared chain
+    would reject correct sections — the safe direction, but uselessly."""
+    names = {getattr(k, 'name', str(k)) for k in chain.keys}
+    if chain.parent and _depth < 8:
+        recv = chain.parent.split('.')[0]
+        # `chain.parent` is a receiver like `Widget.CODEC`, and the chain does not
+        # carry its own package, so a bare find_source misses every parent that is
+        # not at the tree root. Fall back to a filename search — ambiguity is
+        # possible in principle and would show up as an over-permissive
+        # fingerprint, which the ordered sample audit covers.
+        pp = find_source(recv, src)
+        if pp is None:
+            cands = list(src.rglob(f'{recv}.java'))
+            pp = cands[0] if len(cands) == 1 else None
+        if pp is not None:
+            parent = parse_chain(pp.read_text(errors='replace'))
+            if parent is not None:
+                names |= chain_key_names(parent, src, _depth + 1)
+    return names
+
+
+def section_keys(body: str) -> list[str]:
+    """Top-level keys the section names: key-table first columns, fence root keys.
+
+    A ONE-LINE fence yields nothing, because ROOT_KEY anchors at a line start and
+    the first key of `{ "Type": "X" }` sits after the brace. That is a coverage
+    loss rather than a correctness bug: no keys means no fingerprint means the
+    inherited binding is not accepted, which is the safe direction.
+    """
+    out = []
+    for m in TABLE.finditer(body):
+        hdr = [c.strip().strip('*`') for c in m.group(1).split('|')]
+        if not any(h.lower() in ('key', 'property', 'field', 'name') for h in hdr):
+            continue
+        col = next(i for i, h in enumerate(hdr)
+                   if h.lower() in ('key', 'property', 'field', 'name'))
+        for row in m.group(2).strip().split('\n'):
+            cells = [c.strip() for c in row.strip().strip('|').split('|')]
+            if col < len(cells):
+                cell = cells[col].strip().strip('*`')
+                if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', cell):
+                    out.append(cell)
+    for m in JSON_FENCE.finditer(body):
+        out += ROOT_KEY.findall(m.group(1))
+    return out
 
 
 def bind_all(docs: pathlib.Path, src: pathlib.Path,
@@ -132,6 +240,7 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
             raise BindFloor(f'{label} not found at {p}')
 
     r = BindResult()
+    discrim = discriminators(src)
     # A directory with no .java in it is not a package for this purpose. 29 of the
     # 1083 directories are like that, and counting them as resolving pushed those
     # sections into "no source file for the class" instead — so the split between
@@ -143,9 +252,28 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
 
     for page in sorted(docs.glob('*.md')):
         text = page.read_text(errors='replace')
-        for title, pkg in _sections(text):
+        scope: list[tuple] = []          # (level, title, fqcn, key names, chain)
+        for title, pkg, level, body in _sections(text):
             r.seen += 1
+            # A `####` under a bound `###` may inherit; a sibling or higher heading
+            # ends the scope. A section with its OWN binding never inherits.
+            while scope and scope[-1][0] >= level:
+                scope.pop()
             if pkg is None:
+                if scope:
+                    _, anc_title, anc_fqcn, anc_names, anc_chain = scope[-1]
+                    keys = section_keys(body)
+                    bad = next((k for k in keys
+                                if k not in anc_names and k not in discrim), None)
+                    if keys and bad is None:
+                        r.inherited_accepted.append(Inherited(
+                            page.name, title, anc_title, anc_fqcn,
+                            chain=anc_chain))
+                        continue
+                    if bad is not None:
+                        r.inherited_rejected.append(Inherited(
+                            page.name, title, anc_title, anc_fqcn, failing_key=bad))
+                        continue
                 r.unbound.append(Unbound(page.name, title, 'no Package line'))
                 continue
             # Rule 2: a path-style value, resolved under the caller's root. Tried
@@ -166,6 +294,8 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                                              'class declares no codec chain', fqcn))
                     continue
                 r.bound.append(Bound(page.name, title, fqcn, chain))
+                scope.append((level, title, fqcn,
+                              chain_key_names(chain, src), chain))
                 continue
             # An FQCN Package line names the class itself; the heading is not
             # consulted at all for these.
@@ -183,6 +313,8 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                                              'class declares no codec chain', fqcn))
                     continue
                 r.bound.append(Bound(page.name, title, fqcn, chain))
+                scope.append((level, title, fqcn,
+                              chain_key_names(chain, src), chain))
                 continue
             cm = CLASSNAME.search(title)
             if cm is None:
@@ -214,6 +346,8 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                                          'class declares no codec chain', fqcn))
                 continue
             r.bound.append(Bound(page.name, title, fqcn, chain))
+            scope.append((level, title, fqcn,
+                          chain_key_names(chain, src), chain))
 
     if r.seen == 0:
         raise BindFloor(

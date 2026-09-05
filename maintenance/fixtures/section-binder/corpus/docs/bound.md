@@ -23,3 +23,13 @@ sections are written this way and every one of them resolves. The heading is
 deliberately hostile: its first CamelCase token is `Learning`, so binding on the
 heading gives `binderpkg.Gadget.Learning` and fails. When the Package value's last
 segment is CamelCase, it *is* the class, and the heading heuristic must not run.
+
+### Nested
+
+**Package:** `sub/Nested`
+
+A **path-style** Package value, relative to a root the caller supplies. Forty real
+sections on the four `interactions-*` pages are written this way
+(`config/server/SpawnPrefabInteraction` and the like, relative to
+`…modules.interaction.interaction`), and all forty resolve. They are also the
+JSON-heaviest pages in the corpus, which is why this rule exists.

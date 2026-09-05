@@ -110,15 +110,15 @@ expect_raises('floor: a missing source tree is not a clean bind',
 # a check is the same defect as fixing the reported field and leaving its
 # neighbours, which is the defect this fixture already carries two notes about.
 try:
-    r = sb.bind_all(docs, src)
+    r = sb.bind_all(docs, src, path_style_root='binderpkg')
 except Exception as e:                          # noqa: BLE001
     print(f'  FAIL  bind_all raised on the fixture corpus: {type(e).__name__}: {e}')
     print( '        Every case below depends on this call; none of them ran.')
     print(f'\nFIXTURE {checks} check(s): setup failed before the assertions')
     sys.exit(1)
-check('sections seen', lambda: r.seen, 9)
-check('sections bound', lambda: len(r.bound), 3)
-check('sections unbound', lambda: len(r.unbound), 6)
+check('sections seen', lambda: r.seen, 11)
+check('sections bound', lambda: len(r.bound), 4)
+check('sections unbound', lambda: len(r.unbound), 7)
 check('seen == bound + unbound', lambda: len(r.bound) + len(r.unbound), r.seen)
 
 # Each unbound section is counted WITH ITS REASON. "Unbound" as a bare number is
@@ -127,9 +127,12 @@ check('seen == bound + unbound', lambda: len(r.bound) + len(r.unbound), r.seen)
 check('unbound reasons, counted separately', lambda: sorted(r.unbound_by_reason.items()),
       sorted([('no Package line', 1),
               ('package does not resolve', 2),
-              ('no source file for the class', 2),
+              ('no source file for the class', 3),
               ('class declares no codec chain', 1)]))
 # Without a resolve check the FQCN path binds anything with a dot and a capital.
+check('a path-style value naming a missing class does not bind',
+      lambda: [u.reason for u in r.unbound if u.section == 'Ghost'],
+      ['no source file for the class'])
 check('an FQCN naming a missing class does not bind',
       lambda: [u.reason for u in r.unbound if u.section == 'Phantom'],
       ['no source file for the class'])
@@ -142,9 +145,13 @@ check('a package directory with no .java does not resolve',
 
 # ---- the binding itself -----------------------------------------------------
 check('bound section names', lambda: sorted(b.section for b in r.bound),
-      ['Gadget', 'Learning Widgets', 'Widget'])
+      ['Gadget', 'Learning Widgets', 'Nested', 'Widget'])
 # 28 real sections put an FQCN on the Package line. Binding on the heading gives
 # `binderpkg.Gadget.Learning` — the heading heuristic must not run at all here.
+# 40 real sections on the interactions-* pages are path-style, and all 40 resolve.
+check('a path-style Package value binds under the supplied root',
+      lambda: next(b.fqcn for b in r.bound if b.section == 'Nested'),
+      'binderpkg.sub.Nested')
 check('an FQCN Package line binds on itself, not on the heading',
       lambda: next(b.fqcn for b in r.bound if b.section == 'Learning Widgets'),
       'binderpkg.Gadget')

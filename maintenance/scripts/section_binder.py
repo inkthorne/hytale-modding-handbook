@@ -41,7 +41,7 @@ from codec_parser import find_source, parse_chain
 # between, not to the heading — and an unbounded search would bind a section to the
 # next section's package.
 HEADING = re.compile(r'^(#{2,4})\s+(.+?)\s*$', re.M)
-PACKAGE = re.compile(r'^\*\*Package:\*\*\s*`?([A-Za-z0-9_.]+)`?', re.M)
+PACKAGE = re.compile(r'^\*\*Package:\*\*\s*`?([A-Za-z0-9_./]+)`?', re.M)
 # Headings are "Widget", "InteractionType Enum", "Interaction Base Class" — take the
 # first CamelCase token rather than the whole heading.
 CLASSNAME = re.compile(r'\b([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\b')
@@ -63,6 +63,18 @@ PACKAGE_GAP_LINES = 4
 # REMOVES the heading heuristic for them rather than tuning it, which matters where
 # the heading would mislead: `### Learning Recipes` binds on `Learning`.
 FQCN_TAIL = re.compile(r'\.([A-Z][A-Za-z0-9_]*)$')
+
+# A SECOND BINDING RULE, reported under its own label. Forty sections across the
+# four `interactions-*` pages write their Package value as a PATH relative to the
+# interaction package — `config/server/SpawnPrefabInteraction`,
+# `config/none/simple/...` — rather than as a dotted package. All forty resolve
+# under the root below, measured. They earn a rule of their own rather than a
+# rewrite of the pages because those four are the JSON-heaviest in the corpus, so
+# this is the single largest available widening of the scoped-"Type" check's input.
+# The root is a parameter, not a constant, because it is corpus-specific: nothing
+# about the shape says "interaction", and a caller with a different tree must say so.
+PATH_STYLE_ROOT = 'com.hypixel.hytale.server.core.modules.interaction.interaction'
+PATH_STYLE = re.compile(r'^[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)+$')
 
 
 @dataclass
@@ -107,7 +119,8 @@ def _sections(text: str):
         yield title, (pm.group(1) if pm else None)
 
 
-def bind_all(docs: pathlib.Path, src: pathlib.Path) -> BindResult:
+def bind_all(docs: pathlib.Path, src: pathlib.Path,
+             path_style_root: str = PATH_STYLE_ROOT) -> BindResult:
     """Bind every section in `docs` that can be bound, and COUNT the ones that cannot.
 
     Floors are exceptions rather than an empty result, because "0 bound, 0 unbound"
@@ -134,6 +147,25 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path) -> BindResult:
             r.seen += 1
             if pkg is None:
                 r.unbound.append(Unbound(page.name, title, 'no Package line'))
+                continue
+            # Rule 2: a path-style value, resolved under the caller's root. Tried
+            # before the FQCN rule because a path contains no dots and would
+            # otherwise fall through to the package-directory lookup and be
+            # recorded as "package does not resolve" — the same mislabelling the
+            # FQCN rule was added to fix.
+            if PATH_STYLE.match(pkg):
+                fqcn = f'{path_style_root}.' + pkg.replace('/', '.')
+                path = find_source(fqcn, src)
+                if path is None:
+                    r.unbound.append(Unbound(page.name, title,
+                                             'no source file for the class', fqcn))
+                    continue
+                chain = parse_chain(path.read_text(errors='replace'))
+                if chain is None:
+                    r.unbound.append(Unbound(page.name, title,
+                                             'class declares no codec chain', fqcn))
+                    continue
+                r.bound.append(Bound(page.name, title, fqcn, chain))
                 continue
             # An FQCN Package line names the class itself; the heading is not
             # consulted at all for these.

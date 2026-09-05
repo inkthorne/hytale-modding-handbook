@@ -46,3 +46,11 @@ A package **directory that exists but declares no classes**. It must read as
 "package does not resolve", not "no source file for the class": with the directory
 counted as a package the section falls through to the class lookup instead, and the
 two reasons trade members so neither means what its label says.
+
+### Ghost
+
+**Package:** `sub/NoSuchNested`
+
+A **path-style** value naming a class that does not exist. The path rule must
+resolve before binding, exactly as the FQCN rule must — without the check it binds
+anything containing a slash.

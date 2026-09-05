@@ -1127,6 +1127,15 @@ class, not a literal space. Measured on build-26, `"Type"\s*:\s*"…"` against
 | distinct values | 566 | 454 | **112** |
 | occurrences | 53,919 | 41,400 | 12,519 |
 
+> **Start with the near-miss, because it is the whole lesson in one line.** While
+> checking how far this hazard reached, I wrote a pattern anchored on
+> `"Type"\t`. It matched **zero files**, and zero reads as *the hazard is
+> narrower than we thought*. It matches zero because the tab is after the
+> **colon** — `"Type":\t"…"` — and `before` is empty in all 12,519 occurrences,
+> so there is no `"Type" :\t` variant for it to find either. A check written to
+> verify a claim about *patterns that silently match nothing* silently matched
+> nothing, and came one keystroke from being filed as evidence of absence.
+
 **There are four separator dialects, and each has a known extent.** Measured by
 capturing the whitespace either side of the colon in every `"Type"` in the asset
 tree — a complete partition, since the four sum to the 53,919 that `\s*` matches:
@@ -1138,17 +1147,26 @@ tree — a complete partition, since the four sum to the 53,919 that `\s*` match
 | — | — | 143 | 69 | mostly `World/Default/` |
 | **space** | one space | 42 | 14 | `HytaleGenerator/WorldStructures/` only |
 
-Two things this corrects about how the hazard was first described, both mine.
-The tab is after the **colon**, not after the key — `"Type":\t"…"` — so a
-pattern anchored on `"Type"\t` matches nothing at all and would look like proof
-the hazard does not exist. And there is a fourth dialect neither pass mentioned,
-`"Type":"…"` with no whitespace anywhere, in 69 files; both comparison patterns
-below happen to admit it, which is luck rather than design.
+A fourth dialect neither measuring pass mentioned is `"Type":"…"` with no
+whitespace at all, in 69 files. Both comparison patterns below admit it — mine
+because `*` allows zero, the review's because `?` does — which is luck rather
+than design, and the specific luck is worth naming: **both were written to be
+lenient about *a* space, and leniency about a space silently implies leniency
+about *zero* spaces.** Neither of us decided that; `?` and `*` decided it. An
+entry that depends on undecided leniency breaks the day someone tightens a regex
+for an unrelated reason.
 
 So a pattern's figure is a function of **which dialects it admits**, and the
-dialects are directory-scoped rather than scattered. That is what makes a
-space-only scan fail in one clean block instead of noisily: it drops dialect 2
-entirely, and dialect 2 is the world generator.
+dialects are per-file rather than per-line: **16,634 files use exactly one and
+only 75 mix** (99.55% pure). That is what makes a space-only scan fail in one
+clean block instead of degrading gently — it drops dialect 2 entire, and dialect
+2 is the world generator.
+
+> **"Directory-scoped" invites an assumption that one directory breaks.** The
+> mixing is directory-scoped too: of the 75 mixed files, 58 are `World/Default/`
+> (dialects 1+3), 14 `WorldStructures/`, 2 `EncounterManager/Examples/`, 1
+> `NPC/Roles/`. So a reader who concludes "this directory is uniform, I can scan
+> it with a literal" is right almost everywhere and wrong in `World/Default`.
 
 The comparison figure therefore moves with how you write the pattern, and that
 is the point rather than an untidiness. Two passes measuring "the same thing"
@@ -1160,10 +1178,17 @@ produced:
 | `"Type" *: *"` | 454 | 41,400 | 12,519 | 222 |
 
 Both derive cleanly and neither is wrong; they are different questions wearing
-the same label. The nine-file gap is dialect 4 — the second pattern tolerates a
-space *before* the colon and the first does not. All 14 of those files are
-`HytaleGenerator/WorldStructures/*.json`, and only 9 produce the gap because the
-other 5 also carry dialect 2 and so sit outside `\s*` under both patterns.
+the same label. The nine-file gap is **derivable, not merely explicable**, and it
+is this rule stated in the smallest possible case. Dialect 4 never occurs pure —
+all 14 of its files are mixed, all under `WorldStructures/`:
+
+| files | dialects present | first pattern | second pattern | gap? |
+|---|---|---|---|---|
+| 9 | 1 + 4 | misses 4 | catches 4 | **yes** |
+| 5 | 1 + 2 + 4 | misses 2 | misses 2 | no |
+
+The 9/5 split is therefore not a property of the files' contents so much as of
+which dialect each pattern happens to admit.
 
 **So: quote the regex beside any figure a regex produced, and say what the count
 counts.** The `\s*` reference figure — 566 — is the only one of the three that is

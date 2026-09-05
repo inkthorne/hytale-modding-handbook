@@ -314,6 +314,13 @@ that phrasing; do not "improve" it into "the full set of condition types".
 > `registerEffectType`, `registerConditionType`, `registerRuleType`) start reaching
 > the docs — not before. The entry itself is the tripwire: `check-type-values.py`
 > reports a skiplist line that starts resolving on its own as a finding.
+>
+> **The two triggers, so the decision is not re-argued from scratch:** a *second*
+> §2(b) value appearing in a docs JSON fence, or the miner being opened anyway for
+> a game update. `ObjectiveTask` / `ObjectiveTaskAsset` are the ones to watch —
+> ten names arrive through `ObjectivePlugin.registerTask(id, …)` by the same
+> indirection, so the follower earns its keep the moment objectives get a JSON
+> page. Until then one audited entry costs less than the machinery.
 
 So a registry has **three** possible verdicts, not two:
 
@@ -520,6 +527,23 @@ log is a log** before reading it for warnings — require the summary line the s
 prints (`All hard checks passed` / `hard check(s) FAILED`) and treat its absence as "no result",
 never as "no problems". A detector that cannot distinguish a clean run from a crashed one has
 just moved the blind spot rather than closed it.
+
+**The wrapper is part of the check, and it is the half nobody reads.** All of the
+above is about a detector that cannot fire. The 2026-09-05 instance was a detector that
+fired correctly and a *caller* that turned the result into a pass:
+`check-type-values.py` exited **0** when its jar cache was missing and printed `SKIP` at
+column 0, and `verify-docs.sh`'s block filtered output with `grep -E '^  (INFO|WARN)'`,
+discarded the column-0 line, saw `RC=0`, and ran `pass "$(… sed -n 's/^  PASS  //p')"`
+over output containing no PASS line — emitting a bare `PASS` with no message and no
+denominator. Two independent mistakes had to line up, one in each layer, and **neither is
+visible from the checker alone or the caller alone**. So: a skip must never share an exit
+code with a pass (use a third value); the caller must guard the input independently rather
+than trusting the callee's status; and any `pass "$(…)"` interpolating a captured
+substring must be run once against output where that substring is absent. Note which half
+had been reviewed — the checker's reasoning carried several hundred words of comment and
+its twenty-two lines of shell carried none, which is the general hazard: the interesting
+half attracts the documentation, the documentation attracts the review, and the plumbing
+has nothing to read.
 
 **Practical rules.** Strip escapes before matching a verify log
 (`sed 's/\x1b\[[0-9;]*m//g'`), and prefer the summary line the script itself prints over a grep

@@ -190,12 +190,19 @@ Configures block behavior when an item is placed in the world. This property tra
 
 For complete documentation, see [Block Items](items-blocks.md).
 
+`BlockType` has no `"Type"` discriminator — it is a plain key/value block, not a
+codec-map, so every key below is one of `BlockType.CODEC`'s own. From
+`Server/Item/Items/Deco/Deco_Map.json`:
+
 ```json
 {
   "BlockType": {
-    "Type": "Furniture",
-    "ModelId": "Chair_Wood",
-    "SubType": "Seat"
+    "Material": "Solid",
+    "DrawType": "Model",
+    "CustomModel": "Blocks/Miscellaneous/Map.blockymodel",
+    "Group": "Wood",
+    "HitboxType": "Window",
+    "VariantRotation": "Wall"
   }
 }
 ```

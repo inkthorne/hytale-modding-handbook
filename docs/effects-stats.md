@@ -596,7 +596,15 @@ Trigger interactions when stat reaches its minimum or maximum value.
 | `SoundEventId` | string | Sound played when the bound is hit |
 | `Particles` | array | `ModelParticle[]` spawned on the entity when the bound is hit |
 
-**Example (death on zero health):**
+Only two shipped assets use these keys — `Server/Entity/Stats/Stamina.json` and
+`Server/Entity/Stats/GlidingActive.json`. Neither kills the entity, and **there is no
+`Kill` interaction**: `Interaction.CODEC` registers 124 names and none of them is `Kill`
+(the `Kill` you may find in the jar is an NPC *sensor* core-component type, a different
+registry — see [NPC Roles](npc-roles.md)). To end an entity from a stat bound, reach for
+`DamageEntity`, `RemoveEntity` or a `ChangeStat` on `Health`.
+
+**Both forms in one asset**, from `Server/Entity/Stats/Stamina.json` — the `Interactions`
+array mixes root-interaction **ids** (`"Stamina_Bar_Flash"`) with an **inline** definition:
 
 ```json
 {
@@ -604,23 +612,24 @@ Trigger interactions when stat reaches its minimum or maximum value.
     "TriggerAtZero": true,
     "Interactions": {
       "Interactions": [
-        { "Type": "Kill" }
+        "Stamina_Bar_Flash",
+        "Stamina_Broken_Check",
+        {
+          "Type": "ChangeStat",
+          "Behaviour": "Set",
+          "StatModifiers": {
+            "StaminaRegenDelay": -0.5
+          }
+        }
       ]
     }
-  }
-}
-```
-
-**Example (visual effect at max energy):**
-
-```json
-{
+  },
   "MaxValueEffects": {
     "Interactions": {
       "Interactions": [
         {
-          "Type": "ApplyEffect",
-          "EffectId": "FullEnergy_Glow"
+          "Type": "ClearEntityEffect",
+          "EntityEffectId": "Stamina_Broken"
         }
       ]
     }

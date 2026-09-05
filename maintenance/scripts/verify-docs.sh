@@ -821,7 +821,7 @@ section "[HARD] The gates' own fixtures pass"
 # always executes at least once — but the floor below does not rely on that
 # accident, because folding the literal in is the obvious tidy-up and would remove
 # it. Same floor as MIN_MUTATIONS in check-type-values-fixture.py.
-FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py"
+FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py check-section-binder-fixture.py"
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
 # including a traceback's `  File "..."` lines. Harmless then (a traceback arrives

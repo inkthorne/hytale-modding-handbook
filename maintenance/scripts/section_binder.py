@@ -94,6 +94,8 @@ class Inherited:
     fqcn: str
     chain: object = None
     failing_key: str | None = None       # set only on a rejection
+    keys: tuple = ()                     # the fingerprint that decided it
+    exempted: tuple = ()                 # keys accepted only via a discriminator
 
 
 @dataclass
@@ -293,11 +295,14 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path,
                     if keys and bad is None:
                         r.inherited_accepted.append(Inherited(
                             page.name, title, anc_title, anc_fqcn,
-                            chain=anc_chain))
+                            chain=anc_chain, keys=tuple(keys),
+                            exempted=tuple(k for k in keys
+                                           if k in discrim and k not in anc_names)))
                         continue
                     if bad is not None:
                         r.inherited_rejected.append(Inherited(
-                            page.name, title, anc_title, anc_fqcn, failing_key=bad))
+                            page.name, title, anc_title, anc_fqcn, failing_key=bad,
+                            keys=tuple(keys)))
                         continue
                 r.unbound.append(Unbound(page.name, title, 'no Package line'))
                 continue

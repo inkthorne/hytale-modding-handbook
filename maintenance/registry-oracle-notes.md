@@ -1248,3 +1248,71 @@ documented values would be wrongly flagged by a space-only asset scan. Today's
 green run does not depend on the whitespace class. The hazard is aimed entirely
 at whoever next writes an asset scan by hand — including at a reviewer
 re-deriving this gate's own figures, which is how it was found.
+
+## 13. The inherited-scope guard, audited from both sides (2026-09-05)
+
+`section_binder.bind_all` binds a docs section to the codec class it documents, and
+reports four classes: **direct** (a `**Package:**` line, an FQCN, or a path-style
+heading), **inherited-accepted**, **inherited-rejected**, **unbound**. A subsection
+inherits its ancestor's binding only if every top-level key it names — key-table
+first column, JSON-fence root keys — exists on that class's chain with parents
+walked. One unknown key rejects it and the rejection records the key.
+
+Build-26: **139 direct, 52 inherited-accepted, 86 inherited-rejected, 2859
+unbound, 3136 seen** (the four sum exactly).
+
+### The rejections are correct refusals — but only after three fixes
+
+The first audit pass read the rejections by failing key, on the hypothesis that
+base-interaction keys were failing because the parent walk could not reach them.
+That was right, and it took three fixes:
+
+1. **The parent's field name is part of the address.** `chain.parent` is
+   `Interaction.ABSTRACT_CODEC`, not `Interaction.CODEC`, and `Interaction.CODEC`
+   is an `AssetCodecMapCodec` with no keys at all.
+2. **Simple names collide.** Two files are named `SimpleInteraction.java`
+   (`protocol` and `interaction.config`), so a unique-filename lookup refused and
+   the walk stopped at hop 0 — 15 rejections blamed `Next`, a key
+   `SimpleInteraction` declares. Resolve sibling-directory first, then up the
+   package tree, and only then accept a unique tree-wide match.
+3. **`BuilderCodec.abstractBuilder` puts the parent in argument ONE**, where
+   `BuilderCodec.builder` puts it in argument two. A phase-(a) parser defect, not a
+   binder one: 96 chains use `abstractBuilder` against 1516 plain builders, which
+   looks negligible and is the opposite, because every one of the 96 is a **base
+   class** — precisely the links other chains inherit through.
+
+`Next` 15 → 13 → gone; accepted 40 → 44 → **52**.
+
+What remains is genuine. The residual rejections are led by `Interactions` (15),
+`default` (6), `ItemAnimationId` (5), and every one checked was absent from the
+ancestor's full ancestry. The shape is consistent and worth knowing: they sit in
+`§Examples` / `§Structure` / `§Usage Patterns` subsections whose fences show a
+**composed** shape whose root is a different type. `interactions-flow.md`'s
+`§Examples` under `StatsConditionInteraction` opens `{"Type": "Serial",
+"Interactions": [...]}` — a `Serial`, not a `StatsCondition`. The guard refused a
+real misattribution.
+
+### The accepted sample: 20 of 20 correct, and the exemption costs nothing today
+
+Sampled 20 of the 52 accepted (seeded, `random.seed(11)`) and read each against its
+ancestor's declared keys. **20 of 20 correctly attributed**; no misattribution in
+the sample. Fingerprint sizes: min 1 key, median 4, max 18.
+
+**The discriminator exemption is used, and only in its safe form.** 38 of the 52
+acceptances depended on an exempted key, and **all 49 exempted occurrences were
+`Type`**. The mined set is `Type` (38 declarations), `component`, `Id` and `type` —
+and `Id` is the one that worried us, because it is a common key name and a global
+exemption for it would silently accept a sibling's table. It is used **zero** times.
+So the per-codec refinement is not needed yet; the figure to re-check if it ever is:
+`exempted` on each `Inherited` record names which keys carried the acceptance, so
+the cost of the fallback is measurable rather than assumed.
+
+> **The audit instrument was wrong first.** The initial pass reconstructed each
+> section's fingerprint by keying bodies on `(page, title)` — and
+> `interactions-flow.md` has five different `#### Core Properties` subsections, so
+> they collapsed and five distinct ancestors all showed the *last* one's keys. The
+> binder itself was correct; only the audit was not. Fixed by recording the
+> fingerprint on the `Inherited` record at bind time rather than reconstructing it,
+> which is the same rule as reading a gate's own denominator instead of recounting
+> its inputs.
+

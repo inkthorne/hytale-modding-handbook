@@ -299,6 +299,22 @@ registered by `WorldEventsPlugin.setup()`" — a *scoped* claim rather than a cl
 is the correct way to write about an open registry and happens to already be right. Preserve
 that phrasing; do not "improve" it into "the full set of condition types".
 
+> **Arrears: an indirect-registrar follower is not built, deliberately.** Category
+> (b) is statically resolvable, and phase (c) meets exactly one value that needs it
+> — `IntervalCondition` on `docs/world-events.md`. The chain is
+> `.register(conditionType.id(), …)` at `WorldEventsPlugin.java:220` and `:221`
+> (two calls, because each condition registers on both `EventCondition.TYPE_CODEC`
+> and `EventCondition.Config.TYPE_CODEC`) inside `registerCondition` at `:218`,
+> called at `:129` with `IntervalCondition.TYPE`, which is
+> `new EventCondition.Type("IntervalCondition", 0.033333335f)` at
+> `IntervalCondition.java:25`. That is two call-graph hops plus a constructor
+> unwrap to resolve one documented value, so phase (c) carries an audited skiplist
+> entry with those file:lines instead. Build the follower when a second value needs
+> it, or when §2(b)'s other registrars (`registerTask`, `registerCompletion`,
+> `registerEffectType`, `registerConditionType`, `registerRuleType`) start reaching
+> the docs — not before. The entry itself is the tripwire: `check-type-values.py`
+> reports a skiplist line that starts resolving on its own as a finding.
+
 So a registry has **three** possible verdicts, not two:
 
 | Verdict | Meaning |
@@ -1036,3 +1052,67 @@ follow-up commit, never by touching the reviewed commit. The generalisation wort
 keeping is narrower than "don't rewrite history" — **a fact worth correcting is
 worth committing**, because the working tree is the only surface anything in this
 project actually reads.
+
+## 12. Phase (c) is unscoped, and the obvious scoping was measured before it was rejected
+
+`check-type-values.py` (queued gate 1, phase c, landed 2026-09-04) checks that a
+documented `"Type"` value is a registered name **somewhere**. It does not check
+that the name is legal in the **slot** it appears in. That is a real gap — §4 lists
+eight names registered on two different codecs, and §1's fourth correction adds 15
+core-component names registered in more than one category — so the gate catches
+*invention* and is blind to *misattribution*.
+
+**Do not read the numbers below as an argument that scoping is nearly done.** They
+are here because the next person to look at this will reach for the same binding,
+find an encouraging figure, and ship it.
+
+Scoping needs a map from the enclosing JSON key to the codec that decodes its
+value. The obvious construction is to mine `new KeyedCodec("<Key>", <X>.CODEC)`
+corpus-wide and keep the keys that bind to exactly one type-discriminated codec.
+Measured on build-26: **165** JSON keys bind to at least one, and **156** bind to
+exactly one. That 156 looks like a gate.
+
+It is not. "Exactly one" is an artefact of the match window, not a fact about the
+corpus, and one counterexample is enough to see why:
+
+| Key | Binds "uniquely" to | Whose whole vocabulary is | But the docs use it for |
+|---|---|---|---|
+| `Interactions` | `ChoiceInteraction.CODEC` | `GiveItem`, `StartObjective` | `RootInteraction` — `ChangeStat`, `ApplyEffect`, `ClearEntityEffect`, … |
+
+A gate built on that binding would hard-fail `docs/effects-stats.md`, which is
+correct. And the slots that most need scoping — `Sensor`, `BodyMotion`,
+`Instructions`, `MotionControllerList` — bind to **nothing at all**, because §1's
+third registration form has no `KeyedCodec` anywhere near it.
+
+**The safe subset cannot be carved out either, and this is the load-bearing
+point.** The instrument that would identify "the keys that bind unambiguously" is
+the same corpus-wide name match that called `Interactions` unambiguous. So the
+subset's safety is unverified *by construction*, not merely unverified yet — the
+selection and the error share a cause. Note also which way each version fails: the
+unscoped gate produces false negatives, which are stated openly in the checker, in
+`CLAUDE.md` and here; a scoped gate on a bad binding produces false *positives* on
+correct pages, which under invariant 1 either blocks runs or breeds skiplist
+entries justified by the checker's own binding — invariant 7's trap, arriving
+through the door the gate was built to avoid.
+
+What a sound binding would need: parse the **enclosing codec's chain** and read the
+codec argument the key actually declares, rather than matching key names across the
+corpus. That is §3's lesson — match within the documenting scope, never globally —
+arriving from a third direction, after §3 itself and after §4's name collisions.
+The whole-chain parser that phase (a) built is the prerequisite, so this is
+buildable; it is arrears, not a dead end.
+
+One thing to state whenever this gate's green line is quoted: `CLAUDE.md` cites a
+fabricated `"Type": "Wall"` as the defect that motivated the whole oracle, and
+**this gate would have passed it**. `Wall` is registered on `PatternAsset.CODEC`
+*and* appears as a `"Type"` **seven times across two shipped assets**
+(`HytaleGenerator/Assignments/Plains1/Plains1_Oak_Vines.json` ×4,
+`HytaleGenerator/Biomes/Experimental/Zone4.json` ×3), so it passes for two
+independent reasons and would survive the loss of either oracle. The fabrication
+there was misattribution.
+
+> Two files, seven occurrences — worth writing both, because the review that
+> produced this paragraph rendered it as "7 shipped assets" and so did the first
+> draft here. The separator in those files is a **tab**, so a
+> `grep '"Type": *"Wall"'` returns zero and a `\s*` regex returns seven; whichever
+> figure you quote, say which of the two it counts.

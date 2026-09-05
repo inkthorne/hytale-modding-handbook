@@ -49,6 +49,15 @@ REPO = HERE.parents[1]
 # Fences may be INDENTED — a ```json nested in a numbered list is still a fence,
 # and an `^```' anchor silently skipped interactions.md's `My_Type` example (and,
 # by luck, the java fence that registers it, so the two errors cancelled).
+#
+# Two things this cannot do, both measured as absent from build-26's corpus (2036
+# fences, 4072 line-initial markers, exactly 2x; no four-backtick fences; no fence
+# whose closing indent differs from its opening): the indent group is captured and
+# unused, so a closer need not match its opener; and a four-backtick fence would be
+# sliced at its first three. Both fail by UNDER-COUNTING — a mis-paired json fence
+# stops being scanned rather than being scanned wrongly — which is why the
+# `N json fence(s) of M` denominator this gate prints is the thing that would catch
+# it, and why the exposure is acceptable rather than a gap.
 FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
 TYPE = re.compile(r'"Type"\s*:\s*"([^"]*)"')
 
@@ -123,11 +132,18 @@ def main():
 
     docs, src, assets = (pathlib.Path(a.docs), pathlib.Path(a.src),
                          pathlib.Path(a.assets))
+    # Exit 2, NOT 0. Returning 0 here made verify-docs.sh print a bare `PASS` with
+    # no message over output that contained no PASS line: the shell filtered the
+    # column-0 SKIP away, saw RC=0, and reported a clean run of a check that had
+    # examined nothing. That is the silent zero this gate family exists to
+    # prevent, in the gate whose docstring explains it. `build-jar-cache.sh`
+    # wipes before it rebuilds, so an interrupted rebuild leaves exactly this
+    # state — the branch is not hypothetical.
     for label, p, how in (('decompiled source', src, 'maintenance/scripts/build-jar-cache.sh'),
                           ('asset cache', assets, 'the unzip command in CLAUDE.md')):
         if not p.exists():
-            print(f"SKIP  {label} not found at {p} — build it with {how}")
-            return 0
+            print(f"  SKIP  {label} not found at {p} — build it with {how}")
+            return 2
 
     registered = set()
     for r in rm.mine(src).values():
@@ -150,31 +166,40 @@ def main():
 
     # Resolution is per (value, page): the page's own java fence and the skiplist are
     # both page-scoped, so a value legitimate on one page is not thereby legitimate
-    # on another. The by-source tally counts DISTINCT VALUES by the first source
-    # that carries them, so the four figures sum to the distinct count and a source
-    # that stops contributing is visible as a number that moved.
-    by_source = collections.Counter()
+    # on another. The tally is derived from THAT SAME PASS rather than re-derived,
+    # which is not tidiness — an earlier version decided findings per (value, page)
+    # and then recomputed the tally with `all(... for page in pages)`, and the two
+    # could disagree whenever different pages resolved a value by different
+    # page-scoped sources. It printed `unresolved 1` and `PASS` on the same run.
+    # A reported denominator that can contradict the verdict beside it is the exact
+    # defect invariant 6 exists to prevent, so there is now one pass and one source
+    # of truth.
+    PRECEDENCE = ('registry', 'assets', 'page-local', 'skiplist')
     findings, used_skips = [], set()
+    sources = {}                       # value -> set of sources that resolved it
     for value, pages in sorted(values.items()):
+        used = set()
         for page in sorted(pages):
-            if value in registered or value in asset_types:
-                continue
-            if value in page_local.get(page, ()):
-                continue
-            if page in skip.get(value, {}):
+            if value in registered:
+                used.add('registry')
+            elif value in asset_types:
+                used.add('assets')
+            elif value in page_local.get(page, ()):
+                used.add('page-local')
+            elif page in skip.get(value, {}):
+                used.add('skiplist')
                 used_skips.add((value, page))
-                continue
-            findings.append((value, page, pages[page]))
-        if value in registered:
-            by_source['registry'] += 1
-        elif value in asset_types:
-            by_source['assets'] += 1
-        elif all(value in page_local.get(pg, ()) for pg in pages):
-            by_source['page-local'] += 1
-        elif all(pg in skip.get(value, {}) for pg in pages):
-            by_source['skiplist'] += 1
-        else:
+            else:
+                used.add('unresolved')
+                findings.append((value, page, pages[page]))
+        sources[value] = used
+
+    by_source = collections.Counter()
+    for value, used in sources.items():
+        if 'unresolved' in used:
             by_source['unresolved'] += 1
+        else:
+            by_source[next(k for k in PRECEDENCE if k in used)] += 1
 
     missed = [c for c in CANARIES
               if c in registered or c in asset_types
@@ -196,6 +221,11 @@ def main():
         print(f"  FAIL  the by-source tally is {tally} but there are {len(values)} "
               f"distinct value(s) — a value is being counted twice or not at all")
         return 1
+    if by_source['unresolved'] != len({v for v, _, _ in findings}):
+        print(f"  FAIL  the tally says {by_source['unresolved']} unresolved value(s) "
+              f"but {len({v for v, _, _ in findings})} are reported below — the "
+              f"denominator and the verdict disagree")
+        return 1
     if a.verbose:
         print(f"  INFO  oracle sizes: {len(registered)} registered name(s), "
               f"{len(asset_types)} asset \"Type\" value(s) over {n_assets} json file(s), "
@@ -204,8 +234,12 @@ def main():
     rc = 0
     if missed:
         print(f"  FAIL  known-positive probe passed the oracle: {', '.join(missed)}")
-        print( "        The union of four oracles now accepts a value registered "
-               "nowhere, so a clean run below proves nothing.")
+        print( "        Either the union of four oracles now accepts a value "
+               "registered nowhere — in which case a clean run below proves "
+               "nothing — OR the value became real in a new build, in which case "
+               "replace the canary. Check which before touching the oracles: "
+               "`Furniture` is already live in the asset tree as an \"Id\" and a "
+               "\"Tag\", one key away from becoming a \"Type\".")
         rc = 1
     for value, page in sorted(stale):
         print(f"  WARN  stale skiplist entry: {value!r} on {page} — it resolves now, "
@@ -245,8 +279,13 @@ def main():
 # behind a warning is invariant 1 wallpaper. So the sound half ships and the
 # scoped half waits for a real key->codec binding: parse the ENCLOSING codec's
 # chain and take the key's declared codec argument, rather than matching key
-# names corpus-wide. That is §3's lesson arriving from a third direction, and
-# it is recorded as arrears in registry-oracle-notes.md rather than half-built.
+# names corpus-wide. That is §3's lesson arriving from a third direction.
+#
+# The full measurement, the counterexample, and the reason the "safe subset"
+# cannot be carved out either (the instrument that would select it is the broken
+# one) are in maintenance/registry-oracle-notes.md §12 — in the notes rather than
+# only in this comment, because these are the numbers that stop the next person
+# concluding "156 bind uniquely, ship the scoped gate".
 
 if __name__ == '__main__':
     sys.exit(main())

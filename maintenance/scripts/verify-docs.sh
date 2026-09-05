@@ -51,6 +51,9 @@ else
 fi
 JAR="${HYTALE_JAR:-$ROOT/install/release/package/game/latest/Server/HytaleServer.jar}"
 ASSETS="${HYTALE_ASSETS:-$HOME/.cache/hytale-assets}"
+# Decompiled source cache (maintenance/scripts/build-jar-cache.sh). Only the
+# "Type"-value gate reads it; every other check works off the jar or the assets.
+SRC_CACHE="${HYTALE_SRC_CACHE:-$HOME/.cache/hytale-jar/src}"
 
 section "Environment"
 if [ -f "$JAR" ]; then info "jar:    $JAR"; else warn "jar not found: $JAR (jar-based checks will be skipped)"; fi
@@ -803,18 +806,38 @@ section "[HARD] Every \"Type\" value in a JSON fence is a registered name"
 # a source that stops contributing shows up as a figure that moved, not as a
 # quieter run. See maintenance/scripts/check-type-values.py for what it does NOT
 # cover (misattribution: a real name in the wrong slot).
-if [ -d "$ASSETS" ]; then
-  OUT="$(python3 maintenance/scripts/check-type-values.py --assets "$ASSETS")"
+# Both caches are guarded HERE as well as in the checker. An earlier version
+# guarded only $ASSETS and trusted the checker's exit code for the source cache;
+# the checker returned 0 on a missing cache, the column-0 SKIP line was filtered
+# out, and the block printed a bare `PASS` with no message over output that
+# contained no PASS line. build-jar-cache.sh wipes before it rebuilds, so an
+# interrupted rebuild produces exactly that state.
+if [ ! -d "$SRC_CACHE" ]; then
+  warn "skipped (no decompiled source cache at $SRC_CACHE — build-jar-cache.sh)"
+elif [ ! -d "$ASSETS" ]; then
+  warn "skipped (no asset cache)"
+else
+  OUT="$(python3 maintenance/scripts/check-type-values.py --src "$SRC_CACHE" --assets "$ASSETS")"
   RC=$?
-  echo "$OUT" | grep -E '^  (INFO|WARN)' | sed 's/^  INFO  /  INFO  /'
+  echo "$OUT" | grep -E '^  INFO'
+  # A stale skiplist entry is a WARN, and it must go through `warn` so it counts
+  # toward the figure invariant 1 reads. Echoed raw it was simultaneously a hard
+  # failure with no stated cause and a warning that did not count as one.
+  while IFS= read -r line; do
+    [ -n "$line" ] && warn "${line#  WARN  }"
+  done <<< "$(echo "$OUT" | grep -E '^  WARN' || true)"
+  FINDINGS="$(echo "$OUT" | grep -E '^  (FAIL|SKIP)' || true)"
   if [ "$RC" -eq 0 ]; then
     pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+  elif [ -n "$FINDINGS" ]; then
+    # Name the actual cause. The header used to say "fabricated ... value(s)"
+    # whatever the cause, so a stale-skiplist-only run rendered as a FAIL with
+    # an empty body under a header naming the wrong problem.
+    fail "check-type-values.py reported:"
+    echo "$OUT" | grep -E '^  (FAIL|SKIP)|^        ' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /; s/^        /    /'
   else
-    fail "fabricated or unregistered \"Type\" value(s):"
-    echo "$OUT" | grep -E '^  FAIL|^        ' | sed 's/^  FAIL  /    /; s/^        /    /'
+    fail "stale skiplist entr(y/ies) above — no fabricated values, but the exemption list no longer matches the corpus"
   fi
-else
-  warn "skipped (no asset cache)"
 fi
 
 # =====================================================================

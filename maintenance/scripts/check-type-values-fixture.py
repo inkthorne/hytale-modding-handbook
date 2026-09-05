@@ -61,6 +61,16 @@ TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
 # is a superset is being caught by something other than the case that names it.
 # label -> (old, new, expected red set, the case this defect BELONGS to).
 #
+# `expect` IS A MEASUREMENT, `names` IS THE SPECIFICATION, and the difference
+# decides what to do when one of these goes red. Three of the five `expect` sets
+# were wrong when first written from prediction; the recorded sets came from
+# running the mutations. So an exact-set failure is a CHANGE DETECTOR — it says a
+# red set moved, never that the new one is wrong — while `names` says what OUGHT to
+# redden. The failure mode is specific: add a twelfth case, watch six exact-set
+# assertions go red, re-measure and paste, and the whole check silently becomes a
+# tautology. `names` survives that repair; `expect` does not. Re-measure `expect`
+# freely; never re-measure `names`.
+#
 # Two assertions per mutation. `names` is the case the defect is the reason for,
 # and it must go red — that is the reviewer's finding that started this: a case can
 # be named for a regression it does not actually detect, propped up by an unrelated
@@ -80,9 +90,15 @@ MUTATIONS = {
         '#!/usr/bin/env python3', '#!/usr/bin/env python3\n# (identity mutation)',
         set(), set()),
 
+    # All THREE missing-input guards share this `return 2`, docs included since the
+    # subject is now guarded beside the oracles — so all three belong in `names`,
+    # not just the two that were there when only the oracles were checked.
     'SKIP returns 0 instead of 2': (
         '            return 2', '            return 0',
-        {'missing source cache exits 2', 'missing asset cache exits 2'}, {'missing source cache exits 2', 'missing asset cache exits 2'}),
+        {'missing source cache exits 2', 'missing asset cache exits 2',
+         'missing docs corpus exits 2'},
+        {'missing source cache exits 2', 'missing asset cache exits 2',
+         'missing docs corpus exits 2'}),
 
     'fence anchor loses indent tolerance': (
         "FENCE = re.compile(r'^([ \\t]*)```(\\w*)[^\\n]*\\n(.*?)^[ \\t]*```', re.M | re.S)",
@@ -93,6 +109,18 @@ MUTATIONS = {
         '''TYPE = re.compile(r'"Type"\\s*:\\s*"([^"]*)"')''',
         '''TYPE = re.compile(r'"Type" *: *"([^"]*)"')''',
         {'a fabricated value fails and is named', 'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a tab-separated asset "Type" resolves'}),
+
+    # The zero-floor is a guard, so it gets a mutation like every other guard —
+    # otherwise the newest defence is the one nothing verifies, which is how the
+    # gate acquired three instances of this shape in the first place.
+    'zero-floor removed (a clean run over an empty corpus)': (
+        """        print( "        A clean run over an empty corpus is the sentence invariant 6 "
+               "exists to make impossible.")
+        return 1""",
+        """        print( "        A clean run over an empty corpus is the sentence invariant 6 "
+               "exists to make impossible.")""",
+        {'an EMPTY docs corpus fails rather than passing'},
+        {'an EMPTY docs corpus fails rather than passing'}),
 
     'stale entries no longer set rc': (
         '''              f"or the page no longer uses it. Remove the line.")\n        rc = 1''',
@@ -184,6 +212,27 @@ def all_cases(checker) -> dict[str, list[str]]:
         case('missing skiplist exits 2, not a traceback', rc, t, want_rc=2,
              must=('SKIP',), must_not=('PASS', 'Traceback'))
 
+        # THE SUBJECT, not an oracle. The three cases above are "a missing-cache
+        # run"; these two are its mirror image, "a missing-corpus run", and the
+        # asymmetry is why they were absent: a missing oracle makes everything
+        # FAIL, which is loud, and a missing corpus makes everything PASS, which
+        # is silent. Both produced `0 json fence(s) of 0 in 0 page(s)` + PASS + 0.
+        rc, t = run(checker, tmp / 'no-docs', src, assets, SKIPLIST)
+        case('missing docs corpus exits 2', rc, t, want_rc=2,
+             must=('SKIP',), must_not=('PASS',))
+        (tmp / 'empty-docs').mkdir()
+        rc, t = run(checker, tmp / 'empty-docs', src, assets, SKIPLIST)
+        # `must_not=('INFO',)` is the load-bearing half and it took a mutation to
+        # find. An empty corpus ALSO makes every skiplist entry stale, which sets
+        # rc=1 on its own — so with the zero-floor's `return 1` removed this case
+        # still saw exit 1 and still matched 'scanned nothing' (the print survives
+        # the mutation), and passed. That is the same prop failure as the fence
+        # case, in the case written to fix the fence case. The early return is what
+        # the guard actually does, and its observable signature is that NOTHING
+        # follows: no INFO lines, no tally, no stale warnings.
+        case('an EMPTY docs corpus fails rather than passing', rc, t, want_rc=1,
+             must=('scanned nothing', '0 page(s)'), must_not=('PASS', 'INFO'))
+
         (docs / 'zzz.md').write_text('# Z\n\n```json\n{ "Type": "Zzz_NotReal" }\n```\n')
         rc, t = run(checker, docs, src, assets, SKIPLIST)
         case('a fabricated value fails and is named', rc, t, want_rc=1,
@@ -240,6 +289,17 @@ def main():
             mutant = pathlib.Path(td) / 'mutant.py'
             mutant.write_text(src.replace(old, new, 1))
             red = {k for k, v in all_cases(mutant).items() if v}
+            if label.startswith('IDENTITY') and red:
+                # Abort, do not continue. Every later `ok` would be measured in a
+                # known-broken environment, and a page of `ok` lines under one FAIL
+                # invites exactly the reading one wants ("the fixture catches
+                # everything") — which is how the ModuleNotFoundError run read.
+                print(f'  FAIL {label}: the control reddened {len(red)} case(s); '
+                      f'the harness itself is broken, so no mutation below would '
+                      f'mean anything. Aborting.')
+                for x in sorted(red):
+                    print(f'         {x}')
+                return 1
             missing_own = names - red
             if missing_own:
                 rc = 1

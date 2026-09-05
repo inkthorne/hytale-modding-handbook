@@ -50,11 +50,12 @@ precedence, exit codes, or rendering — which is where all three defects were.
 
 ## What the runner asserts
 
-Eleven cases, each an end-to-end invocation rather than an import: the healthy run
-(both INFO lines **verbatim**), the three missing-input runs (source cache, asset
-cache, skiplist — all exit 2), a fabricated value, a stale entry with no
-fabrication, the mixed-source tally, the live exemption count, the tab-separated
-asset value, and a canary that has become resolvable. Exit codes are captured in
+Thirteen cases, each an end-to-end invocation rather than an import: the healthy
+run (both INFO lines **verbatim**), the four missing-input runs (docs corpus,
+source cache, asset cache, skiplist — all exit 2), an **empty** docs corpus, a
+fabricated value, a stale entry with no fabrication, the mixed-source tally, the
+live exemption count, the tab-separated asset value, and a canary that has become
+resolvable. Exit codes are captured in
 the same statement as the command — a status taken through a pipe or a wrapper
 reports the wrapper, which this repo has been bitten by twice.
 
@@ -93,6 +94,32 @@ reported all five defects "caught" by nearly every case — it was measuring a
 `registry_miner`. A red for the wrong reason is worth no more than a green for the
 wrong reason, and it is more dangerous, because "the fixture catches everything" is
 the result you were hoping for.
+
+**Guard the SUBJECT, not only the oracles.** `--docs` was the last input whose
+validity was inferred (from `REPO = HERE.parents[1]`) rather than checked, and an
+absent or empty corpus produced `0 json fence(s) of 0 in 0 page(s)` followed by
+`PASS` and exit 0. Third appearance of one shape in this gate — a bare `PASS` over
+an absent oracle, a `PASS` beside `unresolved 1`, a `PASS` over an absent corpus.
+It survived a round spent on exactly this because the category everyone worked
+from was *a missing-cache run*, and every remedy followed the oracles; *a
+missing-corpus run* is its mirror image and nobody wrote it down. The asymmetry is
+not accidental: an absent oracle makes everything **fail**, which is loud; an
+absent subject makes everything **pass**, which is silent.
+
+**`expect` is a measurement; `names` is the specification.** Three of the five
+`expect` sets were wrong when first written from prediction, and the recorded ones
+came from running the mutations — so an exact-set failure is a *change detector*,
+never evidence the new set is wrong. `names` says what **ought** to redden. The
+failure mode is specific: add a case, watch several exact-set assertions go red,
+re-measure and paste, and the whole check silently becomes a tautology. Re-measure
+`expect` freely; never re-measure `names`.
+
+**The empty-corpus case needed a mutation to get right, and it had the fence
+case's own defect.** An empty corpus also makes every skiplist entry stale, which
+sets `rc=1` by itself — so with the zero-floor's `return 1` removed the case still
+saw exit 1, still matched `scanned nothing` (the print survives the mutation), and
+passed. It now asserts `must_not=('INFO',)`: the guard's observable signature is
+the early return, and what that means is that *nothing follows it*.
 
 **Red sets are wider than the named case, deliberately.** The corpus is built so a
 regression produces a *finding*, and a finding turns every `want_rc=0` case red at

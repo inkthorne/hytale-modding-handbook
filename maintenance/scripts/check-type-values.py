@@ -142,10 +142,14 @@ def main():
     # prevent, in the gate whose docstring explains it. `build-jar-cache.sh`
     # wipes before it rebuilds, so an interrupted rebuild leaves exactly this
     # state — the branch is not hypothetical.
-    for label, p, how in (('decompiled source', src, 'maintenance/scripts/build-jar-cache.sh'),
-                          ('asset cache', assets, 'the unzip command in CLAUDE.md')):
+    # The docs corpus is guarded HERE, beside the oracles, and that placement is the
+    # point: it was the only input whose validity was inferred from where this file
+    # sits (REPO = HERE.parents[1]) rather than checked.
+    for label, p, how in (('docs corpus', docs, 'check the --docs path'),
+                          ('decompiled source', src, 'build it with maintenance/scripts/build-jar-cache.sh'),
+                          ('asset cache', assets, 'build it with the unzip command in CLAUDE.md')):
         if not p.exists():
-            print(f"  SKIP  {label} not found at {p} — build it with {how}")
+            print(f"  SKIP  {label} not found at {p} — {how}")
             return 2
 
     registered = set()
@@ -205,6 +209,26 @@ def main():
                 findings.append((value, page, pages[page]))
         sources[value] = used
 
+    # ZERO-FLOOR ON THE SUBJECT, not just on the oracles. Every input this gate
+    # READS is guarded above; the thing it is ABOUT was not, and an absent or empty
+    # --docs produced `0 json fence(s) of 0 in 0 page(s)` followed by PASS and exit
+    # 0. That is the third appearance of one shape in this gate — a bare PASS over
+    # an absent oracle, a PASS beside `unresolved 1`, a PASS over an absent corpus —
+    # and the asymmetry is why it survived a round spent on exactly this: an absent
+    # ORACLE makes everything fail, which is loud and gets fixed; an absent SUBJECT
+    # makes everything pass, which is silent. The fixture was built from the
+    # category "a missing-cache run" and every remedy followed the oracles;
+    # "a missing-corpus run" is its mirror image and nobody wrote it down.
+    # Precedent for failing rather than passing on a zero denominator: the README
+    # gate's `RM_PAGES -eq 0`.
+    n_pages = len(list(docs.glob('*.md')))
+    if n_pages == 0 or n_json == 0 or not values:
+        print(f"  FAIL  scanned nothing: {n_pages} page(s), {n_json} json fence(s), "
+              f"{len(values)} distinct value(s) under {docs}")
+        print( "        A clean run over an empty corpus is the sentence invariant 6 "
+               "exists to make impossible.")
+        return 1
+
     by_source = collections.Counter()
     for value, used in sources.items():
         if 'unresolved' in used:
@@ -220,7 +244,7 @@ def main():
              if (v, pg) not in used_skips]
 
     total = sum(sum(p.values()) for p in values.values())
-    print(f"  INFO  {n_json} json fence(s) of {n_fence} in {len(list(docs.glob('*.md')))} "
+    print(f"  INFO  {n_json} json fence(s) of {n_fence} in {n_pages} "
           f"page(s); {total} \"Type\" occurrence(s), {len(values)} distinct value(s)")
     tally = (by_source['registry'] + by_source['assets'] + by_source['page-local']
              + by_source['skiplist'] + by_source['unresolved'])

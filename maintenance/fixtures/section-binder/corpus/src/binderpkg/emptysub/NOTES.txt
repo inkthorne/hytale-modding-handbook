@@ -1,0 +1,5 @@
+Deliberately holds no .java. A directory is not a package for binding purposes if it
+declares no classes: 29 of the real tree's 1083 directories are like this, and
+counting them as resolving made two unbound reasons trade members, so neither meant
+what its label said. (A file is needed here at all only because git does not track
+empty directories.)

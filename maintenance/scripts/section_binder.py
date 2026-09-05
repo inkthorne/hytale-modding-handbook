@@ -46,7 +46,23 @@ PACKAGE = re.compile(r'^\*\*Package:\*\*\s*`?([A-Za-z0-9_.]+)`?', re.M)
 # first CamelCase token rather than the whole heading.
 CLASSNAME = re.compile(r'\b([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)\b')
 
+# Measured on the real corpus, 481 Package lines that have a heading above them:
+#   gap 1: 204   gap 2: 264   gap 4: 8   gap 6: 3   gap 11: 1   gap 34: 1
+# Nothing at 3 or 5, and the mass sits at 1-2, so 4 is a cut through empty space
+# rather than an arbitrary number; 6 would recover three more. The gap-34 line is
+# genuinely detached from its heading and SHOULD be missed — an unbounded search
+# binds a section to the NEXT section's package, which is worse than not binding.
 PACKAGE_GAP_LINES = 4
+
+# A Package value whose last segment is CamelCase is a fully-qualified CLASS name,
+# not a package. 28 real sections are written that way and all 28 resolve; the
+# binder used to append the heading's class to them, look for
+# `...TeleporterInteraction.Teleporter`, and record "package does not resolve" —
+# sending a reader after a missing package when the FQCN was stated outright. These
+# are the most bindable sections in the corpus. Taking the value as the class also
+# REMOVES the heading heuristic for them rather than tuning it, which matters where
+# the heading would mislead: `### Learning Recipes` binds on `Learning`.
+FQCN_TAIL = re.compile(r'\.([A-Z][A-Za-z0-9_]*)$')
 
 
 @dataclass
@@ -103,8 +119,14 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path) -> BindResult:
             raise BindFloor(f'{label} not found at {p}')
 
     r = BindResult()
+    # A directory with no .java in it is not a package for this purpose. 29 of the
+    # 1083 directories are like that, and counting them as resolving pushed those
+    # sections into "no source file for the class" instead — so the split between
+    # those two buckets partly reflected which check ran first rather than the
+    # cause. The whole point of the per-reason breakdown is that a cause reaching
+    # zero must be visible, which it cannot be if two causes trade members.
     pkg_dirs = {str(d.relative_to(src)).replace('/', '.')
-                for d in src.rglob('*') if d.is_dir()}
+                for d in src.rglob('*') if d.is_dir() and any(d.glob('*.java'))}
 
     for page in sorted(docs.glob('*.md')):
         text = page.read_text(errors='replace')
@@ -112,6 +134,23 @@ def bind_all(docs: pathlib.Path, src: pathlib.Path) -> BindResult:
             r.seen += 1
             if pkg is None:
                 r.unbound.append(Unbound(page.name, title, 'no Package line'))
+                continue
+            # An FQCN Package line names the class itself; the heading is not
+            # consulted at all for these.
+            tail = FQCN_TAIL.search(pkg)
+            if tail is not None:
+                fqcn = pkg
+                path = find_source(fqcn, src)
+                if path is None:
+                    r.unbound.append(Unbound(page.name, title,
+                                             'no source file for the class', fqcn))
+                    continue
+                chain = parse_chain(path.read_text(errors='replace'))
+                if chain is None:
+                    r.unbound.append(Unbound(page.name, title,
+                                             'class declares no codec chain', fqcn))
+                    continue
+                r.bound.append(Bound(page.name, title, fqcn, chain))
                 continue
             cm = CLASSNAME.search(title)
             if cm is None:

@@ -102,10 +102,23 @@ expect_raises('floor: a missing source tree is not a clean bind',
               'not found')
 
 # ---- the denominator, before the binding logic ------------------------------
-r = sb.bind_all(docs, src)
-check('sections seen', lambda: r.seen, 6)
-check('sections bound', lambda: len(r.bound), 2)
-check('sections unbound', lambda: len(r.unbound), 4)
+# The setup call is crash-safe too, and it took a third instance to get here.
+# check() rejects a non-callable so every ASSERTION survives a crash — but this
+# call is not an assertion, and a mutation that made the FQCN path skip its resolve
+# check took the whole file down with an AttributeError, printing no FAIL line and
+# scoring as "no reds". Making check() uniform and leaving the one call that is not
+# a check is the same defect as fixing the reported field and leaving its
+# neighbours, which is the defect this fixture already carries two notes about.
+try:
+    r = sb.bind_all(docs, src)
+except Exception as e:                          # noqa: BLE001
+    print(f'  FAIL  bind_all raised on the fixture corpus: {type(e).__name__}: {e}')
+    print( '        Every case below depends on this call; none of them ran.')
+    print(f'\nFIXTURE {checks} check(s): setup failed before the assertions')
+    sys.exit(1)
+check('sections seen', lambda: r.seen, 9)
+check('sections bound', lambda: len(r.bound), 3)
+check('sections unbound', lambda: len(r.unbound), 6)
 check('seen == bound + unbound', lambda: len(r.bound) + len(r.unbound), r.seen)
 
 # Each unbound section is counted WITH ITS REASON. "Unbound" as a bare number is
@@ -113,12 +126,28 @@ check('seen == bound + unbound', lambda: len(r.bound) + len(r.unbound), r.seen)
 # that shape in this gate.
 check('unbound reasons, counted separately', lambda: sorted(r.unbound_by_reason.items()),
       sorted([('no Package line', 1),
-              ('package does not resolve', 1),
-              ('no source file for the class', 1),
+              ('package does not resolve', 2),
+              ('no source file for the class', 2),
               ('class declares no codec chain', 1)]))
+# Without a resolve check the FQCN path binds anything with a dot and a capital.
+check('an FQCN naming a missing class does not bind',
+      lambda: [u.reason for u in r.unbound if u.section == 'Phantom'],
+      ['no source file for the class'])
+# A directory with no .java is not a package. Counted as one, this section falls
+# through to the class lookup and the two reasons trade members.
+check('a package directory with no .java does not resolve',
+      lambda: [u.reason for u in r.unbound
+               if u.section == 'Widget' and u.page == 'unbound.md'],
+      ['package does not resolve'])
 
 # ---- the binding itself -----------------------------------------------------
-check('bound section names', lambda: sorted(b.section for b in r.bound), ['Gadget', 'Widget'])
+check('bound section names', lambda: sorted(b.section for b in r.bound),
+      ['Gadget', 'Learning Widgets', 'Widget'])
+# 28 real sections put an FQCN on the Package line. Binding on the heading gives
+# `binderpkg.Gadget.Learning` — the heading heuristic must not run at all here.
+check('an FQCN Package line binds on itself, not on the heading',
+      lambda: next(b.fqcn for b in r.bound if b.section == 'Learning Widgets'),
+      'binderpkg.Gadget')
 check('Widget resolves to its FQCN',
       lambda: next(b.fqcn for b in r.bound if b.section == 'Widget'), 'binderpkg.Widget')
 check('Widget hands back its parsed chain (2 keys)',

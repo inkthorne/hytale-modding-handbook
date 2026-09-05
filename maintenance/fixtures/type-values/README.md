@@ -121,6 +121,29 @@ saw exit 1, still matched `scanned nothing` (the print survives the mutation), a
 passed. It now asserts `must_not=('INFO',)`: the guard's observable signature is
 the early return, and what that means is that *nothing follows it*.
 
+**Floors on the fixture itself, because the chain ends here.** The fixture guards
+the checker and nothing guards the fixture. `MUTATIONS = {}` printed *"0 defect(s)
+reintroduced, expected red set asserted exactly"* and exited 0 — a claim about zero
+things phrased as verification, which is the fourth appearance of that sentence in
+this gate; and `all_cases` returning nothing printed *"0 case(s): 0 passed, 0
+failed"* and exited 0, one layer above it. `MIN_CASES` and `MIN_MUTATIONS` are
+floors, plus a check that the IDENTITY control is present by name. Raise them when
+cases are added; lowering one needs a reason in the commit message, like the
+page-size arrears list.
+
+The realistic path to zero is not deletion in one go — it is `expect`-staleness:
+someone adds cases, several exact-set assertions redden at once, and the cheapest
+repair under pressure is to drop the offending mutations rather than re-measure
+each. Every individual deletion looks locally reasonable.
+
+**The canary case uses `__NotARegisteredType__`, not `Furniture`.** `Furniture` is
+one keystroke from real — already live in the asset tree as an `"Id"` and a
+`"Tag"` — so the day it becomes a `"Type"` the checker's `CANARIES` must change,
+this case breaks, and the cheapest repair is to paste in whatever the checker now
+lists. That is `expect`-vs-`names` wearing the canary's clothes. Keep `Furniture`
+in `CANARIES`, where the drift alarm is wanted; just don't let the fixture's own
+correctness depend on a name chosen to be fragile.
+
 **Red sets are wider than the named case, deliberately.** The corpus is built so a
 regression produces a *finding*, and a finding turns every `want_rc=0` case red at
 once. Pinning the exact set rather than requiring it to be non-empty is what stops

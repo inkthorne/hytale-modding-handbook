@@ -79,6 +79,25 @@ TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
 # and a finding turns every `want_rc=0` case red at once. That cascade is exactly
 # what could hide a case going quiet, which is why the set is pinned rather than
 # merely required to be non-empty.
+# FLOORS. Same shape as the checker's own, and this file is where the chain ends:
+# the fixture guards the checker and nothing guards the fixture. `MUTATIONS = {}`
+# printed "0 defect(s) reintroduced, expected red set asserted exactly" and exited
+# 0 — a claim about zero things, phrased as verification, which is the fourth
+# appearance of one sentence in this gate. `all_cases` returning nothing printed
+# "0 case(s): 0 passed, 0 failed" and exited 0, one layer above that.
+#
+# The realistic path to either is not deletion in one go. It is `expect`-staleness:
+# someone adds cases, several exact-set assertions redden at once, and the cheapest
+# repair under pressure is to drop the offending mutations rather than re-measure
+# each. Every individual deletion looks locally reasonable and nothing stops the
+# slide at zero.
+#
+# These are FLOORS, not targets. Raise them freely when cases or mutations are
+# added; lowering one needs a reason in the commit message, exactly like the
+# page-size arrears list.
+MIN_CASES = 13
+MIN_MUTATIONS = 7
+
 MUTATIONS = {
     # THE CONTROL, and it must come first. A copy of the checker with NOTHING
     # changed must still pass every case. Without it the harness reported all five
@@ -247,13 +266,19 @@ def all_cases(checker) -> dict[str, list[str]]:
              want_rc=1, must=('WARN', 'stale skiplist entry', "'Alpha'"),
              must_not=('PASS',))
 
-        # Furniture is one keystroke from real — already live in the asset tree as an
-        # "Id" and a "Tag" — so this probe is the difference between a clean corpus
-        # and an oracle that accepts everything.
-        (assets / 'Server' / 'Thing' / 'canary.json').write_text('{ "Type": "Furniture" }\n')
+        # Make a canary real and check the probe fires. Use the SYNTHETIC canary,
+        # not `Furniture`: Furniture is one keystroke from real — already live in
+        # the asset tree as an "Id" and a "Tag" — and the day it becomes a "Type"
+        # the checker's CANARIES must change, this case breaks, and the cheapest
+        # repair is to paste in whatever the checker now lists. That is
+        # `expect`-vs-`names` wearing the canary's clothes. `__NotARegisteredType__`
+        # is drift-proof by construction, so the fixture's correctness stops
+        # depending on a name chosen to be fragile on purpose.
+        (assets / 'Server' / 'Thing' / 'canary.json').write_text(
+            '{ "Type": "__NotARegisteredType__" }\n')
         rc, t = run(checker, docs, src, assets, SKIPLIST)
         case('a canary that became real fails the run', rc, t, want_rc=1,
-             must=('known-positive probe', 'Furniture'), must_not=('PASS',))
+             must=('known-positive probe', '__NotARegisteredType__'), must_not=('PASS',))
     return out
 
 
@@ -266,6 +291,10 @@ def main():
     a = ap.parse_args()
 
     res = all_cases(CHECKER)
+    if len(res) < MIN_CASES:
+        print(f'  FAIL  {len(res)} case(s) ran, floor is {MIN_CASES}. A fixture that '
+              f'examines nothing reports the same thing as one that passes.')
+        return 1
     fails = {k: v for k, v in res.items() if v}
     for label in res:
         if a.verbose and not res[label]:
@@ -277,6 +306,15 @@ def main():
     if not a.mutations:
         return rc
 
+    if len(MUTATIONS) < MIN_MUTATIONS:
+        print(f'  FAIL  {len(MUTATIONS)} mutation(s) defined, floor is '
+              f'{MIN_MUTATIONS}. "expected red set asserted exactly" over an empty '
+              f'table is a claim about nothing.')
+        return 1
+    if not any(k.startswith('IDENTITY') for k in MUTATIONS):
+        print('  FAIL  no IDENTITY control in MUTATIONS. Without it a broken harness '
+              'reports every defect as caught.')
+        return 1
     print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     with tempfile.TemporaryDirectory() as td:
         for label, (old, new, expect, names) in MUTATIONS.items():

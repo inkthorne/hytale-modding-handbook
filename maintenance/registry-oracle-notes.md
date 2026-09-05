@@ -1261,6 +1261,24 @@ walked. One unknown key rejects it and the rejection records the key.
 Build-26: **139 direct, 52 inherited-accepted, 86 inherited-rejected, 2859
 unbound, 3136 seen** (the four sum exactly).
 
+### The input sets step 5 and scoped (c) are built against
+
+Measured after the guard, and these are the denominators, not the section counts.
+A table or fence is *usable* by a check if its section is direct-bound or
+inherited-accepted:
+
+| | total | direct | inherited-accepted | usable |
+|---|---|---|---|---|
+| key tables **with** a Default column | 60 | 5 | 8 | 21% |
+| key tables without one | 253 | 20 | 7 | 10% |
+| json fences containing a `"Type"` | 412 | 32 | 38 | 16% |
+
+(Measured at 52 accepted; the fractions move a little with the parent-walk fixes
+below and should be re-printed before either check ships.) Position-only
+inheritance would have offered 68% and 50% — the guard refuses most of that, which
+is the guard working. **The honest figure for the defaults check is ~13 of 60, not
+41 of 60**, and it is the figure to quote when that check reports coverage.
+
 ### The rejections are correct refusals — but only after three fixes
 
 The first audit pass read the rejections by failing key, on the hypothesis that

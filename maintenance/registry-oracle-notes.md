@@ -1127,10 +1127,24 @@ class, not a literal space. Measured on build-26, `"Type"\s*:\s*"…"` against
 | distinct values | 566 | 454 | **112** |
 | occurrences | 53,919 | 41,400 | 12,519 |
 
-(Your figures will move slightly with how you write the space-only pattern —
-which is the point. A review pass measuring the same thing got 452 / 12,561 / 231
-files. The 566 agrees exactly, and so does the conclusion; the disagreement is
-entirely in the *comparison* pattern, so state the pattern with the number.)
+The comparison figure moves with how you write the pattern, and that is the
+point rather than an untidiness. Two passes measuring "the same thing" produced:
+
+| Comparison pattern | distinct | matched | lost | files disagreeing with `\s*` |
+|---|---|---|---|---|
+| `"Type": ?"` | 452 | 41,358 | 12,561 | 231 |
+| `"Type" *: *"` | 454 | 41,400 | 12,519 | 222 |
+
+Both derive cleanly and neither is wrong; they are different questions wearing
+the same label. The nine-file gap is the second pattern's extra tolerance for a
+space *before* the colon: fourteen files write `"Type" : "…"`, and nine of them
+therefore disagree with `\s*` under the first pattern and agree under the second
+(the other five also contain tab-separated values, so they disagree under both).
+All nine are `Server/HytaleGenerator/WorldStructures/*.json`.
+
+**So: quote the regex beside any figure a regex produced, and say what the count
+counts.** The `\s*` reference figure — 566 — is the only one of the three that is
+a property of the corpus rather than of the question asked about it.
 
 **The 222 files where the two disagree are entirely under
 `Server/HytaleGenerator/`** — Assignments, Biomes, Density, WorldStructures.

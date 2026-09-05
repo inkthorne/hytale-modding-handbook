@@ -164,7 +164,15 @@ def main():
               f"assets={len(asset_types)} from {n_assets} file(s)")
         return 1
 
-    skip = load_skiplist(pathlib.Path(a.skiplist))
+    skip_path = pathlib.Path(a.skiplist)
+    if not skip_path.exists():
+        # Exit 2, like a missing cache. A missing exemption list is a missing INPUT,
+        # not a crash and certainly not a pass: without it every waived value reads
+        # as a fabrication. Left as a bare FileNotFoundError it was the one input
+        # whose absence produced a traceback rather than a status the caller can act on.
+        print(f"  SKIP  skiplist not found at {skip_path}")
+        return 2
+    skip = load_skiplist(skip_path)
     values, page_local, (n_fence, n_json, n_java) = docs_values(docs, src)
 
     # Resolution is per (value, page): the page's own java fence and the skiplist are

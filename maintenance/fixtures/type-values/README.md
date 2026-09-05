@@ -50,9 +50,51 @@ precedence, exit codes, or rendering — which is where all three defects were.
 
 ## What the runner asserts
 
-Nine cases, each an end-to-end invocation, not an import: healthy run; missing
-source cache; missing asset cache; a fabricated value; a stale skiplist entry with
-no fabrications; the mixed-source tally; the tab-separated asset value; the indented
-fence; and a canary that has become resolvable. Exit codes are captured in the same
-statement as the command — a status taken through a pipe or a wrapper reports the
-wrapper, which this repo has been bitten by twice.
+Eleven cases, each an end-to-end invocation rather than an import: the healthy run
+(both INFO lines **verbatim**), the three missing-input runs (source cache, asset
+cache, skiplist — all exit 2), a fabricated value, a stale entry with no
+fabrication, the mixed-source tally, the live exemption count, the tab-separated
+asset value, and a canary that has become resolvable. Exit codes are captured in
+the same statement as the command — a status taken through a pipe or a wrapper
+reports the wrapper, which this repo has been bitten by twice.
+
+**Assert counts, not the absence of a name.** The first version of this fixture
+asserted things like `'"Beta"' not in output`, and that is satisfied *by the
+regression it guards*: a fence that stops being scanned takes its value out of the
+corpus rather than making it fail. Absence assertions detect a value that fails to
+**resolve** and never one that silently stops being **scanned** — which is the
+entire class the fence anchor belongs to. The two INFO lines are pinned exactly
+instead; they move the moment anything leaves the corpus.
+
+## `--mutations`
+
+    python3 maintenance/scripts/check-type-values-fixture.py --mutations
+
+Reintroduces each known defect into a copy of the checker and asserts **the exact
+set of cases that goes red**, plus that the case the defect *belongs to* is among
+them. It exists because of a specific failure, and the failure is the fixture
+making the mistake the fixture is for.
+
+**A case propped up by an unrelated corpus feature.** With the pre-fix fence anchor
+restored, five cases went red — which looked like coverage. All five failed on
+`exit 1`, and that exit came from the Epsilon waiver going stale because *its*
+fence happened to be indented, not from anything the fence case asserted. De-indent
+that one fence and the broken checker passed 10 of 10, the named case included.
+That is the original `My_Type` bug — an anchor that skipped a value *and* the java
+fence justifying it, so the two errors cancelled and the run looked clean —
+reappearing one level up, inside the fixture written to prevent it. The corpus now
+puts `Beta` and `Theta` in indented fences so the scan denominator and two buckets
+move on their own, and the case has been re-verified with the prop removed.
+
+**The IDENTITY control comes first and must stay.** A copy of the checker with
+nothing changed must pass every case. Without it the first `--mutations` run
+reported all five defects "caught" by nearly every case — it was measuring a
+`ModuleNotFoundError`, because a mutant in a temp directory cannot import
+`registry_miner`. A red for the wrong reason is worth no more than a green for the
+wrong reason, and it is more dangerous, because "the fixture catches everything" is
+the result you were hoping for.
+
+**Red sets are wider than the named case, deliberately.** The corpus is built so a
+regression produces a *finding*, and a finding turns every `want_rc=0` case red at
+once. Pinning the exact set rather than requiring it to be non-empty is what stops
+that cascade hiding a case that has gone quiet.

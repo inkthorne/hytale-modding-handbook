@@ -3,3 +3,4 @@
 # on bbb.md, so one value is resolved by two different page-scoped sources. That is
 # the shape the by-source tally used to get wrong, printing `unresolved 1` beside PASS.
 Epsilon  bbb.md  fixture: waived on this page only, to exercise per-(value, page) resolution
+Theta  bbb.md  fixture: waived on its only page, so the skiplist bucket is nonzero somewhere

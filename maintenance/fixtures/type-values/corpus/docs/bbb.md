@@ -15,3 +15,11 @@ sources on different pages, which is the case the tally used to get wrong.
    ```json
    { "Type": "Beta" }
    ```
+
+3. `Theta` is waived on this page and appears on no other, so it is the one value
+   the **skiplist bucket** actually claims. Without it that bucket reads 0 in every
+   case and the one source whose job is waiving goes untested:
+
+   ```json
+   { "Type": "Theta" }
+   ```

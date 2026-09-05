@@ -1,132 +1,266 @@
 #!/usr/bin/env python3
 """
-Run check-type-values.py against a miniature corpus with known answers.
+Run check-type-values.py against a miniature corpus with known answers, and
+(with --mutations) verify that each case detects the defect it is named for.
 
 Phase (c) shipped without a fixture while phases (a) and (b) shipped with one, and
 all three defects the review then found map onto a case nobody had constructed: a
 missing-cache run, a value resolved by different sources on different pages, and a
 stale-entry-only run. See maintenance/fixtures/type-values/README.md.
 
-Every case invokes the checker as a SUBPROCESS rather than importing it, because
-two of the three defects were in what it printed and what it exited with — neither
-of which an import exercises. Exit status is read from the call itself, never
-through a pipe or wrapper: this repo has twice reported a wrapper's status as the
-script's.
+TWO THINGS THIS FILE LEARNED THE HARD WAY, both about how a green run gets faked.
 
-Usage: python3 maintenance/scripts/check-type-values-fixture.py [-v]
+1. ASSERT THE COUNTS, NOT THE ABSENCE OF A NAME. The first version of case
+   "indented fence" asserted `'json fence(s)' in out` (a format-string substring,
+   present even when zero fences are scanned) and `'"Beta"' not in out` — which the
+   regression SATISFIES, because a fence that stops being scanned takes its value
+   out of the corpus rather than making it fail. Every absence assertion detects a
+   value that fails to RESOLVE and none detects a value that silently stops being
+   SCANNED, which is the entire class the fence anchor belongs to. The exact INFO
+   lines are asserted instead: they pin the fence denominator and all five buckets
+   at once, and they move the moment anything leaves the corpus.
+
+2. A CASE CAN BE PROPPED UP BY AN UNRELATED CORPUS FEATURE. With the pre-fix anchor
+   restored, five cases went red — but all five on `exit 1`, coming from the Epsilon
+   waiver going stale because ITS fence was indented, not from anything the
+   fence case asserted. De-indent that one fence and the broken checker passes 10 of
+   10, the named case included. That is the original `My_Type` bug (an anchor that
+   skipped a value AND the fence justifying it, so the errors cancelled) reappearing
+   one level up, inside the fixture written to prevent it. `--mutations` exists
+   because of this: it asserts the EXACT SET of cases each mutation reddens, so a
+   case that stops detecting its own defect is a failure rather than a silence.
+
+Every case invokes the checker as a SUBPROCESS rather than importing it, because
+two of the three original defects were in what it printed and what it exited with —
+neither of which an import exercises. Exit status is read from the call itself,
+never through a pipe or wrapper: this repo has twice reported a wrapper's status as
+the script's.
+
+Usage:
+  python3 maintenance/scripts/check-type-values-fixture.py [-v]
+  python3 maintenance/scripts/check-type-values-fixture.py --mutations [-v]
 """
 from __future__ import annotations
-import argparse, pathlib, shutil, subprocess, sys, tempfile
+import argparse, os, pathlib, shutil, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 FIX = HERE.parents[0] / 'fixtures' / 'type-values'
 CORPUS, SKIPLIST = FIX / 'corpus', FIX / 'skiplist.txt'
 CHECKER = HERE / 'check-type-values.py'
 
-ap = argparse.ArgumentParser()
-ap.add_argument('-v', '--verbose', action='store_true')
-A = ap.parse_args()
+# The healthy corpus, stated exactly. Six values, one per resolution path plus the
+# two trap cases. Asserting these two lines verbatim is what makes a value leaving
+# the corpus a failure rather than a quieter pass.
+SCAN = '6 json fence(s) of 7 in 2 page(s); 7 "Type" occurrence(s), 6 distinct value(s)'
+TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
+         "audited skiplist 1, unresolved 0 (distinct values by first source; "
+         "2 live (value, page) exemption(s) in total)")
 
-fails: list[str] = []
-checks = 0
+# label -> (old, new) applied to a COPY of the checker, and the exact set of case
+# labels that must go red. "and no others" is the point: a mutation whose red set
+# is a superset is being caught by something other than the case that names it.
+# label -> (old, new, expected red set, the case this defect BELONGS to).
+#
+# Two assertions per mutation. `names` is the case the defect is the reason for,
+# and it must go red — that is the reviewer's finding that started this: a case can
+# be named for a regression it does not actually detect, propped up by an unrelated
+# corpus feature. The exact-set check is the second: red sets here are WIDER than
+# the named case because the corpus is built so a regression produces a FINDING,
+# and a finding turns every `want_rc=0` case red at once. That cascade is exactly
+# what could hide a case going quiet, which is why the set is pinned rather than
+# merely required to be non-empty.
+MUTATIONS = {
+    # THE CONTROL, and it must come first. A copy of the checker with NOTHING
+    # changed must still pass every case. Without it the harness reported all five
+    # defects as caught by nearly every case, when what it had actually measured
+    # was a ModuleNotFoundError in the temp directory — a red for the wrong reason
+    # is as worthless as a green for the wrong reason, and here it was worse,
+    # because "the fixture catches everything" is what I wanted to see.
+    'IDENTITY (no change — the harness control)': (
+        '#!/usr/bin/env python3', '#!/usr/bin/env python3\n# (identity mutation)',
+        set(), set()),
+
+    'SKIP returns 0 instead of 2': (
+        '            return 2', '            return 0',
+        {'missing source cache exits 2', 'missing asset cache exits 2'}, {'missing source cache exits 2', 'missing asset cache exits 2'}),
+
+    'fence anchor loses indent tolerance': (
+        "FENCE = re.compile(r'^([ \\t]*)```(\\w*)[^\\n]*\\n(.*?)^[ \\t]*```', re.M | re.S)",
+        "FENCE = re.compile(r'^()```(\\w*)[^\\n]*\\n(.*?)^```', re.M | re.S)",
+        {'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a fence indented inside a list item is scanned'}),
+
+    'TYPE regex narrowed to space-only': (
+        '''TYPE = re.compile(r'"Type"\\s*:\\s*"([^"]*)"')''',
+        '''TYPE = re.compile(r'"Type" *: *"([^"]*)"')''',
+        {'a fabricated value fails and is named', 'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a tab-separated asset "Type" resolves'}),
+
+    'stale entries no longer set rc': (
+        '''              f"or the page no longer uses it. Remove the line.")\n        rc = 1''',
+        '''              f"or the page no longer uses it. Remove the line.")''',
+        {'a stale entry alone fails, as a WARN naming the entry'}, {'a stale entry alone fails, as a WARN naming the entry'}),
+
+    'tally re-derived by a second pass (the original defect 2)': (
+        """    by_source = collections.Counter()
+    for value, used in sources.items():
+        if 'unresolved' in used:
+            by_source['unresolved'] += 1
+        else:
+            by_source[next(k for k in PRECEDENCE if k in used)] += 1""",
+        """    by_source = collections.Counter()
+    for value, pages in values.items():
+        if value in registered: by_source['registry'] += 1
+        elif value in asset_types: by_source['assets'] += 1
+        elif all(value in page_local.get(pg, ()) for pg in pages): by_source['page-local'] += 1
+        elif all(pg in skip.get(value, {}) for pg in pages): by_source['skiplist'] += 1
+        else: by_source['unresolved'] += 1""",
+        {'a canary that became real fails the run', 'a fabricated value fails and is named', 'a fence indented inside a list item is scanned', 'a stale entry alone fails, as a WARN naming the entry', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved',
+         'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a value resolved by different sources per page is not unresolved'}),
+}
 
 
-def run(docs, src, assets, skiplist):
-    """Invoke the checker; return (rc, stdout). rc comes from the call itself."""
+def run(checker, docs, src, assets, skiplist):
+    # PYTHONPATH matters only for mutants, which live in a temp dir: the checker
+    # does sys.path.insert(0, __file__'s parent), so a copy elsewhere cannot find
+    # registry_miner and dies with ModuleNotFoundError before parsing anything.
+    # The first --mutations run reported all five defects "caught" by nearly every
+    # case; it was measuring an import failure. See IDENTITY below for the control
+    # that turns that into a failure instead of a result.
+    env = dict(os.environ, PYTHONPATH=str(HERE) + os.pathsep + os.environ.get('PYTHONPATH', ''))
     p = subprocess.run(
-        [sys.executable, str(CHECKER), '--docs', str(docs), '--src', str(src),
+        [sys.executable, str(checker), '--docs', str(docs), '--src', str(src),
          '--assets', str(assets), '--skiplist', str(skiplist)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, env=env)
     return p.returncode, p.stdout + p.stderr
 
 
-def case(label, rc, out, *, want_rc, must=(), must_not=()):
-    global checks
-    checks += 1
-    problems = []
-    if rc != want_rc:
-        problems.append(f'exit {rc}, wanted {want_rc}')
-    for m in must:
-        if m not in out:
-            problems.append(f'missing {m!r}')
-    for m in must_not:
-        if m in out:
-            problems.append(f'unexpected {m!r}')
-    if problems:
-        fails.append(f'{label}: ' + '; '.join(problems))
-        if A.verbose:
-            print(f'  FAIL {label}\n' + '\n'.join('      ' + l for l in out.splitlines()))
-    elif A.verbose:
-        print(f'  ok   {label}')
+def all_cases(checker) -> dict[str, list[str]]:
+    """Run every case. Returns {label: [problems]} — empty list means it passed."""
+    out: dict[str, list[str]] = {}
+
+    def case(label, rc, text, *, want_rc, must=(), must_not=()):
+        problems = []
+        if rc != want_rc:
+            problems.append(f'exit {rc}, wanted {want_rc}')
+        problems += [f'missing {m!r}' for m in must if m not in text]
+        problems += [f'unexpected {m!r}' for m in must_not if m in text]
+        out[label] = problems
+
+    with tempfile.TemporaryDirectory() as td:
+        tmp = pathlib.Path(td)
+        docs, src, assets = tmp / 'docs', tmp / 'src', tmp / 'assets'
+        for name, dst in (('docs', docs), ('src', src), ('assets', assets)):
+            shutil.copytree(CORPUS / name, dst)
+
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        # The load-bearing case. Both INFO lines exact: the scan denominator catches
+        # anything that stops being SCANNED, the tally catches anything that changes
+        # WHICH ORACLE resolves it. Together they subsume every absence assertion the
+        # first version of this file used, and unlike those they cannot be satisfied
+        # by the regression they guard.
+        case('healthy corpus: scan denominator and tally are exact', rc, t,
+             want_rc=0, must=(SCAN, TALLY, 'PASS'), must_not=('FAIL', 'WARN'))
+        case('a value resolved by different sources per page is not unresolved',
+             rc, t, want_rc=0, must=("page's own java fence 1", 'unresolved 0'))
+        # The live count, not the label: this line exists BECAUSE the bucket
+        # under-reports, so asserting the word 'live' would pass on '0 live'.
+        case('the live exemption count is the number, not the label', rc, t,
+             want_rc=0, must=('2 live (value, page) exemption(s)',))
+        # Delta is tab-separated in the assets. Asserted positively via the tally
+        # (shipped assets 2); the old `'"Delta"' not in out` was satisfied by the
+        # regression, since a dropped value stops being reported at all.
+        case('a tab-separated asset "Type" resolves', rc, t, want_rc=0,
+             must=('shipped assets 2',))
+        # Beta and Theta live in fences indented inside list items.
+        case('a fence indented inside a list item is scanned', rc, t, want_rc=0,
+             must=(SCAN, 'registry 2', 'audited skiplist 1'))
+
+        rc, t = run(checker, docs, tmp / 'no-src', assets, SKIPLIST)
+        case('missing source cache exits 2', rc, t, want_rc=2,
+             must=('SKIP',), must_not=('PASS',))
+        rc, t = run(checker, docs, src, tmp / 'no-assets', SKIPLIST)
+        case('missing asset cache exits 2', rc, t, want_rc=2,
+             must=('SKIP',), must_not=('PASS',))
+        rc, t = run(checker, docs, src, assets, tmp / 'no-skiplist.txt')
+        case('missing skiplist exits 2, not a traceback', rc, t, want_rc=2,
+             must=('SKIP',), must_not=('PASS', 'Traceback'))
+
+        (docs / 'zzz.md').write_text('# Z\n\n```json\n{ "Type": "Zzz_NotReal" }\n```\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('a fabricated value fails and is named', rc, t, want_rc=1,
+             must=('FAIL', 'Zzz_NotReal', 'zzz.md', 'unresolved 1'), must_not=('PASS',))
+        (docs / 'zzz.md').unlink()
+
+        stale = tmp / 'stale.txt'
+        stale.write_text(SKIPLIST.read_text() +
+                         '\nAlpha  aaa.md  bogus: Alpha resolves via the registry\n')
+        rc, t = run(checker, docs, src, assets, stale)
+        case('a stale entry alone fails, as a WARN naming the entry', rc, t,
+             want_rc=1, must=('WARN', 'stale skiplist entry', "'Alpha'"),
+             must_not=('PASS',))
+
+        # Furniture is one keystroke from real — already live in the asset tree as an
+        # "Id" and a "Tag" — so this probe is the difference between a clean corpus
+        # and an oracle that accepts everything.
+        (assets / 'Server' / 'Thing' / 'canary.json').write_text('{ "Type": "Furniture" }\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('a canary that became real fails the run', rc, t, want_rc=1,
+             must=('known-positive probe', 'Furniture'), must_not=('PASS',))
+    return out
 
 
-with tempfile.TemporaryDirectory() as td:
-    tmp = pathlib.Path(td)
-    docs, src, assets = tmp / 'docs', tmp / 'src', tmp / 'assets'
-    for name, dst in (('docs', docs), ('src', src), ('assets', assets)):
-        shutil.copytree(CORPUS / name, dst)
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--mutations', action='store_true',
+                    help='reintroduce each known defect and assert the EXACT set of '
+                         'cases that goes red')
+    ap.add_argument('-v', '--verbose', action='store_true')
+    a = ap.parse_args()
 
-    # 1. The healthy corpus. Five distinct values, one per resolution source plus
-    #    the tab case, nothing unresolved.
-    rc, out = run(docs, src, assets, SKIPLIST)
-    case('healthy corpus passes', rc, out, want_rc=0,
-         must=('PASS', 'unresolved 0'), must_not=('FAIL', 'WARN'))
+    res = all_cases(CHECKER)
+    fails = {k: v for k, v in res.items() if v}
+    for label in res:
+        if a.verbose and not res[label]:
+            print(f'  ok   {label}')
+    print(f'\nFIXTURE {len(res)} case(s): {len(res) - len(fails)} passed, {len(fails)} failed')
+    for k, v in fails.items():
+        print(f'  FAIL {k}: ' + '; '.join(v))
+    rc = 1 if fails else 0
+    if not a.mutations:
+        return rc
 
-    # 2/3. A missing oracle must NOT be an exit 0. This is the defect that printed
-    #      a bare PASS in verify-docs.sh: the shell filtered the SKIP line away and
-    #      trusted the status, so the status had to carry the meaning too.
-    rc, out = run(docs, tmp / 'no-such-src', assets, SKIPLIST)
-    case('missing source cache exits 2', rc, out, want_rc=2,
-         must=('SKIP',), must_not=('PASS',))
-    rc, out = run(docs, src, tmp / 'no-such-assets', SKIPLIST)
-    case('missing asset cache exits 2', rc, out, want_rc=2,
-         must=('SKIP',), must_not=('PASS',))
+    print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
+    with tempfile.TemporaryDirectory() as td:
+        for label, (old, new, expect, names) in MUTATIONS.items():
+            src = CHECKER.read_text()
+            if old not in src:
+                print(f'  FAIL {label}: anchor no longer present in the checker — the '
+                      f'mutation is stale and tests nothing')
+                rc = 1
+                continue
+            mutant = pathlib.Path(td) / 'mutant.py'
+            mutant.write_text(src.replace(old, new, 1))
+            red = {k for k, v in all_cases(mutant).items() if v}
+            missing_own = names - red
+            if missing_own:
+                rc = 1
+                print(f'  FAIL {label}: the case this defect belongs to stayed GREEN')
+                for x in sorted(missing_own):
+                    print(f'         {x}')
+                continue
+            if red == expect:
+                print(f'  ok   {label} -> {len(red)} case(s) red, exactly as expected')
+                if a.verbose:
+                    for r in sorted(red):
+                        print(f'         {r}')
+            else:
+                rc = 1
+                print(f'  FAIL {label}:')
+                for x in sorted(expect - red):
+                    print(f'         expected red, stayed green: {x}')
+                for x in sorted(red - expect):
+                    print(f'         unexpectedly red: {x}')
+    return rc
 
-    # 4. The mixed-source tally. Epsilon is page-local on aaa.md and skiplisted on
-    #    bbb.md. The old tally re-derived with all(... for page in pages) and
-    #    printed `unresolved 1` beside PASS on exactly this shape.
-    rc, out = run(docs, src, assets, SKIPLIST)
-    case('a value resolved by different sources per page is not unresolved',
-         rc, out, want_rc=0, must=("page's own java fence 1", 'unresolved 0'))
-    case('the live exemption count is reported, not just the bucket',
-         rc, out, want_rc=0, must=('live',))
 
-    # 5. The tab-separated asset value. A space-only asset scan drops 112 distinct
-    #    values in the real tree, all under Server/HytaleGenerator/ (notes §12).
-    case('a tab-separated asset "Type" resolves', rc, out, want_rc=0,
-         must_not=('"Delta"',))
-
-    # 6. The indented fence in bbb.md. An `^```' anchor skipped this shape.
-    case('a fence indented inside a list item is scanned', rc, out, want_rc=0,
-         must=('json fence(s)',), must_not=('"Beta"',))
-
-    # 7. A fabricated value must fail and must be named.
-    (docs / 'ccc.md').write_text('# C\n\n```json\n{ "Type": "Zzz_NotReal" }\n```\n')
-    rc, out = run(docs, src, assets, SKIPLIST)
-    case('a fabricated value fails and is named', rc, out, want_rc=1,
-         must=('FAIL', 'Zzz_NotReal', 'ccc.md', 'unresolved 1'), must_not=('PASS',))
-    (docs / 'ccc.md').unlink()
-
-    # 8. A stale entry with NO fabrication. This rendered as a FAIL whose header
-    #    named fabricated values and whose body was empty, because the detail grep
-    #    matched only FAIL lines while the cause was a WARN.
-    stale = tmp / 'stale.txt'
-    stale.write_text(SKIPLIST.read_text() +
-                     '\nAlpha  aaa.md  bogus: Alpha resolves via the registry\n')
-    rc, out = run(docs, src, assets, stale)
-    case('a stale entry alone fails, as a WARN naming the entry', rc, out, want_rc=1,
-         must=('WARN', 'stale skiplist entry', "'Alpha'"), must_not=('PASS',))
-
-    # 9. A canary that has become resolvable must fail LOUDLY, because the probe is
-    #    the only thing standing between "clean corpus" and "oracle accepts
-    #    everything". Furniture is one keystroke from real: it is already live in
-    #    the asset tree as an "Id" and a "Tag".
-    (assets / 'Server' / 'Thing' / 'canary.json').write_text('{ "Type": "Furniture" }\n')
-    rc, out = run(docs, src, assets, SKIPLIST)
-    case('a canary that became real fails the run', rc, out, want_rc=1,
-         must=('known-positive probe', 'Furniture'), must_not=('PASS',))
-
-print(f'\nFIXTURE {checks} case(s): {checks - len(fails)} passed, {len(fails)} failed')
-for f in fails:
-    print(f'  FAIL {f}')
-sys.exit(1 if fails else 0)
+if __name__ == '__main__':
+    sys.exit(main())

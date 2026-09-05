@@ -1127,8 +1127,32 @@ class, not a literal space. Measured on build-26, `"Type"\s*:\s*"…"` against
 | distinct values | 566 | 454 | **112** |
 | occurrences | 53,919 | 41,400 | 12,519 |
 
-The comparison figure moves with how you write the pattern, and that is the
-point rather than an untidiness. Two passes measuring "the same thing" produced:
+**There are four separator dialects, and each has a known extent.** Measured by
+capturing the whitespace either side of the colon in every `"Type"` in the asset
+tree — a complete partition, since the four sum to the 53,919 that `\s*` matches:
+
+| Between key and `:` | Between `:` and value | occurrences | files | where |
+|---|---|---|---|---|
+| — | one space | 41,215 | 16,484 | everywhere (the mainstream) |
+| — | **tab** | 12,519 | 222 | `HytaleGenerator/` — Assignments 118, Biomes 75, Density 18, WorldStructures 14 |
+| — | — | 143 | 69 | mostly `World/Default/` |
+| **space** | one space | 42 | 14 | `HytaleGenerator/WorldStructures/` only |
+
+Two things this corrects about how the hazard was first described, both mine.
+The tab is after the **colon**, not after the key — `"Type":\t"…"` — so a
+pattern anchored on `"Type"\t` matches nothing at all and would look like proof
+the hazard does not exist. And there is a fourth dialect neither pass mentioned,
+`"Type":"…"` with no whitespace anywhere, in 69 files; both comparison patterns
+below happen to admit it, which is luck rather than design.
+
+So a pattern's figure is a function of **which dialects it admits**, and the
+dialects are directory-scoped rather than scattered. That is what makes a
+space-only scan fail in one clean block instead of noisily: it drops dialect 2
+entirely, and dialect 2 is the world generator.
+
+The comparison figure therefore moves with how you write the pattern, and that
+is the point rather than an untidiness. Two passes measuring "the same thing"
+produced:
 
 | Comparison pattern | distinct | matched | lost | files disagreeing with `\s*` |
 |---|---|---|---|---|
@@ -1136,11 +1160,10 @@ point rather than an untidiness. Two passes measuring "the same thing" produced:
 | `"Type" *: *"` | 454 | 41,400 | 12,519 | 222 |
 
 Both derive cleanly and neither is wrong; they are different questions wearing
-the same label. The nine-file gap is the second pattern's extra tolerance for a
-space *before* the colon: fourteen files write `"Type" : "…"`, and nine of them
-therefore disagree with `\s*` under the first pattern and agree under the second
-(the other five also contain tab-separated values, so they disagree under both).
-All nine are `Server/HytaleGenerator/WorldStructures/*.json`.
+the same label. The nine-file gap is dialect 4 — the second pattern tolerates a
+space *before* the colon and the first does not. All 14 of those files are
+`HytaleGenerator/WorldStructures/*.json`, and only 9 produce the gap because the
+other 5 also carry dialect 2 and so sit outside `\s*` under both patterns.
 
 **So: quote the regex beside any figure a regex produced, and say what the count
 counts.** The `\s*` reference figure — 566 — is the only one of the three that is

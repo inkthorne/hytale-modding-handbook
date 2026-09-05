@@ -799,6 +799,46 @@ fi
 fi
 
 # =====================================================================
+section "[HARD] The gates' own fixtures pass"
+# Until 2026-09-05 nothing ran these. verify-docs.sh ran every PRODUCT gate —
+# symbols, snippets, doc-type, page size, type-values — and the three gates that
+# verify the gates were exactly the ones left outside it: the repo checked its docs
+# on every run and its checkers never. That is "when a component gets a fixture, ask
+# what consumes it" one level further out than where it was first applied.
+#
+# Nothing had rotted when this was wired in (44/44, 51/51, 13/13), so this closes a
+# prospective gap rather than a live defect. It compounds with a real one though:
+# outside this script, a fixture's expected sets rot invisibly — the checker is
+# edited, verify-docs stays green, and the divergence surfaces only when someone
+# runs the fixture by hand and meets a wall of red at the worst possible moment,
+# which is precisely when "delete the failing mutations" is the cheap repair.
+#
+# Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
+# included rather than deferred behind a flag.
+FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py"
+FIX_OK=1; FIX_LINES=0
+for R in $FIXTURE_RUNNERS "check-type-values-fixture.py --mutations"; do
+  # shellcheck disable=SC2086
+  OUT="$(python3 maintenance/scripts/$R 2>&1)"; RC=$?
+  N="$(printf '%s\n' "$OUT" | grep -cE '^(CORPUS|FIXTURE|TRAPS|INDEPENDENT|BASELINE|MUTATIONS| )')"
+  FIX_LINES=$(( FIX_LINES + N ))
+  if [ "$RC" -ne 0 ]; then
+    FIX_OK=0
+    fail "${R%% *} failed:"
+    printf '%s\n' "$OUT" | sed 's/^/    /'
+  else
+    printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|MUTATIONS)' | sed 's/^/        /'
+  fi
+done
+# Zero-floor, the same one these fixtures exist to enforce: a runner that prints no
+# summary at all must not read as three green runs.
+if [ "$FIX_LINES" -eq 0 ]; then
+  fail "the fixture runners produced no summary lines — they ran, or did they?"
+elif [ "$FIX_OK" -eq 1 ]; then
+  pass "all 3 gate fixtures pass (codec chains, registry oracle, type values + mutations)"
+fi
+
+# =====================================================================
 section "[HARD] Every \"Type\" value in a JSON fence is a registered name"
 # Queued gate 1, phase (c). `"Type"` is the discriminator on nearly every JSON
 # page here and a fabricated one reads exactly like a real one; nothing checked

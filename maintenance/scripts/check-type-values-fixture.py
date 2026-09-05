@@ -180,9 +180,16 @@ def run(checker, docs, src, assets, skiplist):
     return p.returncode, p.stdout + p.stderr
 
 
-def all_cases(checker) -> dict[str, list[str]]:
-    """Run every case. Returns {label: [problems]} — empty list means it passed."""
+def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
+    """Run every case. Returns ({label: [problems]}, [cases that produced a traceback]).
+
+    The traceback list exists because `NameError -> exit 1` is indistinguishable
+    from `defect caught -> exit 1` if you read only the status. That is the empty
+    PASS in a third costume: a status that means two things cannot separate them.
+    A mutant that CRASHED is not a mutant that was CAUGHT.
+    """
     out: dict[str, list[str]] = {}
+    crashed: list[str] = []
 
     def case(label, rc, text, *, want_rc, must=(), must_not=()):
         problems = []
@@ -190,6 +197,8 @@ def all_cases(checker) -> dict[str, list[str]]:
             problems.append(f'exit {rc}, wanted {want_rc}')
         problems += [f'missing {m!r}' for m in must if m not in text]
         problems += [f'unexpected {m!r}' for m in must_not if m in text]
+        if 'Traceback (most recent call last)' in text:
+            crashed.append(label)
         out[label] = problems
 
     with tempfile.TemporaryDirectory() as td:
@@ -279,7 +288,7 @@ def all_cases(checker) -> dict[str, list[str]]:
         rc, t = run(checker, docs, src, assets, SKIPLIST)
         case('a canary that became real fails the run', rc, t, want_rc=1,
              must=('known-positive probe', '__NotARegisteredType__'), must_not=('PASS',))
-    return out
+    return out, crashed
 
 
 def main():
@@ -290,7 +299,11 @@ def main():
     ap.add_argument('-v', '--verbose', action='store_true')
     a = ap.parse_args()
 
-    res = all_cases(CHECKER)
+    res, crashed = all_cases(CHECKER)
+    if crashed:
+        print(f'  FAIL  the checker crashed on {len(crashed)} case(s): '
+              + ', '.join(crashed))
+        return 1
     if len(res) < MIN_CASES:
         print(f'  FAIL  {len(res)} case(s) ran, floor is {MIN_CASES}. A fixture that '
               f'examines nothing reports the same thing as one that passes.')
@@ -325,8 +338,38 @@ def main():
                 rc = 1
                 continue
             mutant = pathlib.Path(td) / 'mutant.py'
+            # A mutation is a CLAIM about what changed, and it needs verifying like
+            # any other. Three times this session one did something else: `or True`
+            # was cruder than the defect and tripped the wrong case; an empty-corpus
+            # case passed off an unrelated tripwire; and a slice anchored on
+            # `MUTATIONS = {` matched the comment EXPLAINING the floor, edited that
+            # instead, and the run died on NameError at exit 1 — indistinguishable
+            # from the floor firing.
+            #
+            # The check is that the anchor is UNIQUE. A size check cannot do this:
+            # `replace(old, new, 1)` edits the first match only, so the delta is
+            # exactly len(new)-len(old) however many places matched, and the
+            # assertion that shipped first here was incapable of firing. Ambiguity
+            # is the failure — `replace` silently picks the first, and the first is
+            # whichever the file happens to mention earlier.
+            n = src.count(old)
+            if n != 1:
+                print(f'  FAIL {label}: the anchor occurs {n} time(s) in the '
+                      f'checker, not once. `replace` would edit the first, which is '
+                      f'whichever comes earlier in the file — say where you mean.')
+                rc = 1
+                continue
             mutant.write_text(src.replace(old, new, 1))
-            red = {k for k, v in all_cases(mutant).items() if v}
+            mres, mcrashed = all_cases(mutant)
+            if mcrashed:
+                # A broken mutant, not a detected defect. Without this the run
+                # reports reds that mean nothing — which is how an anchor that ate
+                # its own guard read as the guard firing.
+                rc = 1
+                print(f'  FAIL {label}: the MUTANT CRASHED on {len(mcrashed)} case(s) '
+                      f'— it is broken, not caught. Fix the mutation, not the case.')
+                continue
+            red = {k for k, v in mres.items() if v}
             if label.startswith('IDENTITY') and red:
                 # Abort, do not continue. Every later `ok` would be measured in a
                 # known-broken environment, and a page of `ok` lines under one FAIL

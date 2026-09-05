@@ -815,6 +815,12 @@ section "[HARD] The gates' own fixtures pass"
 #
 # Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
 # included rather than deferred behind a flag.
+# The third runner is a literal below rather than an entry here because it carries
+# an argument, and word-splitting this variable would turn `--mutations` into a
+# fourth "runner". That is also why FIX_RAN cannot currently reach 0 — the loop
+# always executes at least once — but the floor below does not rely on that
+# accident, because folding the literal in is the obvious tidy-up and would remove
+# it. Same floor as MIN_MUTATIONS in check-type-values-fixture.py.
 FIXTURE_RUNNERS="check-codec-fixture.py check-registry-fixture.py"
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
@@ -851,7 +857,9 @@ done
 # loop was driven by $FIXTURE_RUNNERS plus one more, so a fourth runner would have
 # been reported as three — a count that does not come from what it counts, which is
 # the thing this gate has spent six commits removing everywhere else.
-if [ "$FIX_OK" -eq 1 ]; then
+if [ "$FIX_RAN" -eq 0 ]; then
+  fail "no fixture runners were invoked — \"all 0 gate fixtures pass\" is a claim about nothing"
+elif [ "$FIX_OK" -eq 1 ]; then
   # Both the count AND the names come from the loop. Adding a fourth runner used to
   # print "all 4 gate fixtures pass (codec chains, registry oracle, type values)" —
   # the number derived and the list beside it still naming three, which is the same

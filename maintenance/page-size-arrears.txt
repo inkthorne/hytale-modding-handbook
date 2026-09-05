@@ -28,6 +28,14 @@
 # time rather than trusted. Check too for content stranded by topic rather than
 # by link — that split left a chunk-section entry in the remainder's Gotchas.
 #
+# AND A SEAM NOTE MUST NOT CARRY BOTH A HEADING AND A SIZE. blocks.md's read
+# "`## Java API Reference` onward (~1,100 lines)". Both figures were real
+# measurements of real spans, 319 lines apart: 1,115 is exactly `## Java API
+# Reference` through `## Block Health & Fragility`, and 1,434 is exactly
+# "onward". Nothing in the note said which one bound, so it looked like one
+# boundary and was two. Record the HEADINGS the cut runs between; the size is
+# what the gate prints.
+#
 # RETIRED ENTRIES. One line each: this file is a gate input, not a log, and the
 # record of how a split went belongs in its commit message.
 #

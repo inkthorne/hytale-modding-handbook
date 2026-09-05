@@ -153,6 +153,6 @@ bundled block JSON, language entries, and `.ui` page load.
 
 ## Related docs
 
-- [`docs/blocks.md`](../../docs/blocks.md#custom-block-entity-components) — the verified custom block-entity component, item-spawning, and press-F GUI recipe
+- [`docs/blocks.md`](../../docs/blocks-java-api.md#custom-block-entity-components) — the verified custom block-entity component, item-spawning, and press-F GUI recipe
 - [`docs/components.md`](../../docs/components.md) — ECS, `ChunkStore`, queries, and ticking systems
 - [`docs/ui-api.md`](../../docs/ui-api.md) — `UICommandBuilder` / `UIEventBuilder` and custom UI pages

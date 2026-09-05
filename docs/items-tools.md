@@ -1423,5 +1423,5 @@ unknown block, …). Carries a player-facing localized message:
 
 - [Items Reference](items.md) - Common properties and systems
 - [Interactions API](interactions.md) - Tool interactions
-- [Block Interactions](interactions-block.md) - BreakBlock, ChangeBlock, PlaceBlock
+- [Entity & World Interactions](interactions-world.md) - BreakBlock, ChangeBlock, PlaceBlock
 - [Weapons Reference](items-weapons.md) - Combat items

@@ -120,35 +120,68 @@ else
 fi
 
 # =====================================================================
-section "[HARD] Anchor links resolve (cross-doc: target file honoured)"
-OUT="$(python3 - <<'PY'
-import re, glob, os
+section "[HARD] Markdown links resolve (every .md in the repo, path-aware)"
+# CORPUS AND DENOMINATOR, both widened after this gate missed two links that a
+# docs/ split broke. It globbed `docs/*.md` on BOTH sides, so `examples/README.md`
+# and `examples/item-respawner/README.md` — the handbook's own entry point —
+# pointed `../docs/blocks.md#custom-block-entity-components` at a section that had
+# moved, and nothing reported it. Widening the glob alone would not have helped:
+# the old link pattern was `([a-zA-Z0-9_\-]+\.md)?#`, which cannot express a
+# PATH, so `../docs/blocks.md#x` never matched in the first place. Two independent
+# narrowings, and the figure the gate printed — `all anchor links resolve` — was
+# true of docs/ and false of the repo.
+#
+# It also prints what it scanned now (invariant 6). This was the one gate whose
+# denominator WAS the whole story, and it printed none: had it said "N link(s) in
+# M file(s)" the missing population would have been a number to be surprised by.
+#
+# And a link with NO anchor is checked too, which the old pattern's mandatory `#`
+# excluded. That found `items-tools.md` pointing at `interactions-block.md`, a
+# page that has never existed.
+OUT="$(python3 - <<'PYLINK'
+import re, os, pathlib
 from collections import defaultdict
 def slug(t):
     s=t.strip().lower(); s=re.sub(r"[^\w\- ]","",s); return s.replace(" ","-")
+SKIP={".git","build","out",".gradle","node_modules"}
+files=[p for p in sorted(pathlib.Path(".").rglob("*.md")) if not (SKIP & set(p.parts))]
 anchors={}
-for f in glob.glob("docs/*.md"):
+for p in files:
     seen=defaultdict(int); a=set()
-    for line in open(f):
+    for line in p.read_text(errors="replace").split("\n"):
         m=re.match(r"^#{1,6}\s+(.*?)\s*#*$",line)
         if m:
             b=slug(m.group(1)); n=seen[b]; seen[b]+=1; a.add(b if n==0 else f"{b}-{n}")
-    anchors[os.path.basename(f)]=a
-bad=0
-lr=re.compile(r"\[[^\]]*\]\(([a-zA-Z0-9_\-]+\.md)?#([a-zA-Z0-9_\-]+)\)")
-for f in glob.glob("docs/*.md"):
-    bn=os.path.basename(f)
-    for ln,line in enumerate(open(f),1):
+    anchors[str(p)]=a
+lr=re.compile(r"\[[^\]]*\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)")
+bad=0; links=0
+for p in files:
+    for ln,line in enumerate(p.read_text(errors="replace").split("\n"),1):
         for m in lr.finditer(line):
-            tf=m.group(1) or bn; an=m.group(2)
-            if tf not in anchors or an not in anchors[tf]:
-                bad+=1; print(f"BROKEN {bn}:{ln} -> {tf}#{an}")
+            tgt,an=m.group(1),m.group(2)
+            if tgt is None and an is None: continue
+            links+=1
+            tp=str(p) if tgt is None else os.path.normpath(str(p.parent/tgt))
+            if tp not in anchors:
+                bad+=1; print(f"BROKEN {p}:{ln} -> {tgt} (no such file)")
+            elif an is not None and an not in anchors[tp]:
+                bad+=1; print(f"BROKEN {p}:{ln} -> {tgt or p.name}#{an} (no such anchor)")
 print(f"COUNT {bad}")
-PY
+print(f"SCANNED {links} {len(files)}")
+PYLINK
 )"
 BAD="$(echo "$OUT" | awk '/^COUNT/{print $2}')"
-if [ "$BAD" -eq 0 ]; then pass "all anchor links resolve"; else
-  fail "$BAD broken anchor link(s):"; echo "$OUT" | grep '^BROKEN' | sed 's/^BROKEN/      /'
+NLINKS="$(echo "$OUT" | awk '/^SCANNED/{print $2}')"
+NFILES="$(echo "$OUT" | awk '/^SCANNED/{print $3}')"
+SCAN="$NLINKS link(s) in $NFILES markdown file(s)"
+# A floor, because "0 broken over 0 links" is the sentence this repo has produced
+# eight times. The corpus is the whole tree; it cannot legitimately be near-empty.
+if [ -z "$BAD" ] || [ -z "$NLINKS" ] || [ "$NLINKS" -lt 100 ]; then
+  fail "link check scanned $SCAN — treating as a broken check, not a clean run"
+elif [ "$BAD" -eq 0 ]; then
+  pass "all markdown links resolve ($SCAN)"
+else
+  fail "$BAD broken link(s) of $SCAN:"; echo "$OUT" | grep '^BROKEN' | sed 's/^BROKEN/      /'
 fi
 
 # =====================================================================

@@ -1,0 +1,21 @@
+# Audited exemptions for check-type-values.py (queued gate 1, phase c).
+#
+# Format: <value> <whitespace> <page.md> <whitespace> <justification>
+# One line per (value, page). Comments and blank lines ignored.
+#
+# INVARIANT 1 applies to this file: an entry is a claim that the checker is
+# wrong, and it needs evidence the checker itself cannot see — a jar file:line,
+# not a re-reading of what the checker printed (invariant 7). The gate REPORTS
+# STALE ENTRIES rather than letting them re-suppress silently, so an entry that
+# starts resolving on its own surfaces as a finding instead of persisting.
+#
+# Audit method for every entry below: open the cited file in
+# ~/.cache/hytale-jar/src and read the declaration. Do not audit by re-running
+# the gate.
+#
+# Before adding an entry, suspect the four oracle sources first. On this gate's
+# first run it found two real fabrications and needed exactly one exemption;
+# every other unresolved value was a gap in an oracle, and one of those gaps was
+# an entire missing registration form (registerCoreComponentType, ~176 names).
+
+IntervalCondition  world-events.md  §2(b) indirection: real, statically knowable, but only across two call-graph hops the miner does not make. The id reaches `.register(` as `conditionType.id()` inside WorldEventsPlugin.registerConditionType (WorldEventsPlugin.java:195); its caller registerCondition (:218) is called at :129 with `IntervalCondition.TYPE`, declared `new EventCondition.Type("IntervalCondition", 0.033333335f)` at IntervalCondition.java:25 (duplicated as `String ID` at :24). All five EventCondition types arrive this way; this is the only one docs/ names inside a JSON fence. Building an indirect-registrar follower for one value is recorded as deliberate arrears in registry-oracle-notes.md §2.

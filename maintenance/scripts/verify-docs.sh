@@ -796,6 +796,28 @@ fi
 fi
 
 # =====================================================================
+section "[HARD] Every \"Type\" value in a JSON fence is a registered name"
+# Queued gate 1, phase (c). `"Type"` is the discriminator on nearly every JSON
+# page here and a fabricated one reads exactly like a real one; nothing checked
+# these before. The check prints its own denominator and its per-oracle tally —
+# a source that stops contributing shows up as a figure that moved, not as a
+# quieter run. See maintenance/scripts/check-type-values.py for what it does NOT
+# cover (misattribution: a real name in the wrong slot).
+if [ -d "$ASSETS" ]; then
+  OUT="$(python3 maintenance/scripts/check-type-values.py --assets "$ASSETS")"
+  RC=$?
+  echo "$OUT" | grep -E '^  (INFO|WARN)' | sed 's/^  INFO  /  INFO  /'
+  if [ "$RC" -eq 0 ]; then
+    pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+  else
+    fail "fabricated or unregistered \"Type\" value(s):"
+    echo "$OUT" | grep -E '^  FAIL|^        ' | sed 's/^  FAIL  /    /; s/^        /    /'
+  fi
+else
+  warn "skipped (no asset cache)"
+fi
+
+# =====================================================================
 section "[HARD] Complete doc snippets compile against the jar"
 # A ```java block starting with `package ` is a complete compilation unit and
 # must compile (same-doc same-package blocks co-compile). Fragments are exempt.

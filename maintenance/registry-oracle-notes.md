@@ -135,6 +135,19 @@ but an event-handler registry with no codec and no `"Type"` vocabulary. For a
 `"Type"`-oracle denominator the figure is **12**. Argument shape alone does not
 identify a codec registry; the anchor does.
 
+**Constant resolution is load-bearing for the headline figure, not defensive.**
+§1 lists "ids can be constants" as one of three properties that break a naive
+matcher, alongside chaining and runtime values — a list of hazards. It is more than
+that: an independent literal-only sweep of both forms returns **123** names for
+`Interaction.CODEC`, not 124. The missing one is `CameraPlugin.java:44`,
+`getCodecRegistry(Interaction.CODEC).register(CODEC_CAMERA_SHAKE, …)`, with
+`CODEC_CAMERA_SHAKE = "CameraShake"` at line 34 — a constant id sitting in argument
+position one of the three-argument form, so it needs §1's constant rule *and* §1's
+"the name is not always the first argument" rule at the same site. Drop constant
+resolution and `docs/interactions.md`'s 124-row table becomes a 123-row table with
+no error anywhere; the same name is also §4's worst case, since `CameraShake` has
+zero literals of its own anywhere in the jar.
+
 **There is a THIRD registration form, and it is not a codec registration at all.**
 `NPCPlugin.registerCoreComponentType(name, Builder::new)` — 194 call sites in 10
 files, chained many-per-statement like the second form — puts a name into a builder

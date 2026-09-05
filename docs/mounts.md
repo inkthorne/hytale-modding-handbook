@@ -180,7 +180,7 @@ of a multi-seat block is taken. Callers pass the raw target block position plus 
 (the block centre) when they have no finer hit information.
 
 The seats themselves are block data, not mount data — the `Seats` and `Beds` arrays of a
-`BlockType`, each entry an [offset and yaw](blocks.md#blockmountpoint). A block with no matching
+`BlockType`, each entry an [offset and yaw](blocks-java-api.md#blockmountpoint). A block with no matching
 entry yields `NO_MOUNT_POINT_FOUND`.
 
 ## Components
@@ -219,5 +219,5 @@ The collection requires the `hytale:WorldEditor` permission group.
 
 - [Interactions API](interactions.md) — the interaction system these three types plug into
 - [NPC Roles](npc-roles.md) — where the `Mount` **action** lives
-- [Block Items](items-blocks.md) and [blocks.md](blocks.md#blockmountpoint) — `Seats` / `Beds` mount points
+- [Block Items](items-blocks.md) and [blocks.md](blocks-java-api.md#blockmountpoint) — `Seats` / `Beds` mount points
 - [player.md → Bed Interaction](player.md#bed-interaction) — the other `BlockMountAPI` caller

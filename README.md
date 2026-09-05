@@ -38,6 +38,8 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Trigger Volumes](./docs/trigger-volumes.md) - Scripted encounters as JSON effect assets
 - [Camera](./docs/camera.md) - Server-controlled camera and camera effects
 - [Blocks](./docs/blocks.md) - Block states and custom blocks
+- [Connected Blocks](./docs/blocks-connected.md) - Connected and patterned rule sets
+- [Blocks Java API](./docs/blocks-java-api.md) - BlockType, block events, world block access
 - [Fluids](./docs/fluids.md) - Fluid systems
 - [Prefabs](./docs/prefabs.md) - Structure templates
 - [Prefab Categories](./docs/prefabs-categories.md) - Category system for prefabs

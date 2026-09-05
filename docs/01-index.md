@@ -38,7 +38,9 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [inventory.md](inventory.md) | Complete inventory management API including item stacks, containers, transactions, crafting recipes, and related events. |
 | [tasks.md](tasks.md) | Documents the task registration system for tracking async futures and scheduled tasks throughout plugin lifecycle. |
 | [ui.md](ui.md) | UI system covering pages, windows, HUD, DSL syntax, elements, styling, and Java API. |
-| [blocks.md](blocks.md) | Covers the block system including block states, BlockType properties, block events (place/break/use/damage), world access, and authoring custom block-entity components (per-block state, chunk-store ticking, item spawning, persistence, and a press-F settings GUI). |
+| [blocks.md](blocks.md) | The block **JSON**: block states, `BlockType` properties, hitboxes, sound and particle sets, fluids, visual assets and per-block animation speed. |
+| [blocks-connected.md](blocks-connected.md) | Connected blocks — the four `ConnectedBlockRuleSet` types, shape configs and neighbour rules, and the patterned rule sets behind multi-block roofs and walls. |
+| [blocks-java-api.md](blocks-java-api.md) | The block **Java API**: `BlockType`, ticking, block events (place/break/use/damage), world block access, block health, and authoring custom block-entity components (per-block state, chunk-store ticking, item spawning, persistence, and a press-F settings GUI). |
 | [assets.md](assets.md) | Asset registry system for custom assets, asset stores, built-in asset access, and asset lifecycle events. |
 | [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |
@@ -89,7 +91,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Audio System](audio.md)  [Block Definitions](blocks.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [NPC Combat](npc-combat.md)  [NPC Spawning](npc-spawning.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
+[Audio System](audio.md)  [Block Definitions](blocks.md)  [Blocks Java API](blocks-java-api.md)  [Connected Blocks](blocks-connected.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [NPC Combat](npc-combat.md)  [NPC Spawning](npc-spawning.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
 
 ### Java API + Save / config file format
 _Covers both a Java API and an on-disk save/config file format._
@@ -129,7 +131,7 @@ JSON asset types used in Hytale's data-driven systems.
 [SoundEvents](audio.md#soundevents), [AudioCategories](audio.md#audiocategories), [AmbienceFX](audio.md#ambiencefx), [EQ](audio.md#eq-equalizer), [Reverb](audio.md#reverb), [ItemSounds](audio.md#itemsounds), [SoundSets](audio.md#soundsets)
 
 **Blocks - Connected Blocks**
-[Connected block templates](blocks.md#connected-block-templates), [Patterned rule sets](blocks.md#patterned-connected-block-rule-sets), [Pattern entries](blocks.md#pattern-entries), [Rules](blocks.md#rules), [Shapes](blocks.md#shapes)
+[Connected block templates](blocks-connected.md#connected-block-templates), [Patterned rule sets](blocks-connected.md#patterned-connected-block-rule-sets), [Pattern entries](blocks-connected.md#pattern-entries), [Rules](blocks-connected.md#rules), [Shapes](blocks-connected.md#shapes)
 
 **NPCs - Spawning**
 [Spawn Beacons](npc-spawning.md#spawn-beacons), [Companion Block Spawners](npc-spawning.md#companion-block-spawners), [The recipe asset](npc-spawning.md#the-recipe-asset)
@@ -193,7 +195,7 @@ JSON asset types used in Hytale's data-driven systems.
 [UICommandBuilder](ui-api.md), [UIEventBuilder](ui-api.md), [WindowManager](ui-api.md), [PageManager](ui-api.md), [HudManager](ui-api.md), [HotbarManager](ui-api.md), [Window](ui-api.md), [WindowType](ui-api.md), [OpenWindow](ui-api.md), [Page](ui-api.md), [CustomUIPage](ui-api.md), [HudComponent](ui-api.md), [CustomUIEventBindingType](ui-api.md)
 
 **Blocks**
-[BlockType](blocks.md), [BlockMaterial](blocks.md), [Rotation](blocks.md), [RotationTuple](blocks.md), [PlaceBlockEvent](blocks.md), [BreakBlockEvent](blocks.md), [DamageBlockEvent](blocks.md), [UseBlockEvent](blocks.md)
+[BlockType](blocks-java-api.md#blocktype), [BlockMaterial](blocks-java-api.md#blockmaterial), [Rotation](blocks-java-api.md#rotation), [RotationTuple](blocks-java-api.md#rotationtuple), [PlaceBlockEvent](blocks-java-api.md#placeblockevent), [BreakBlockEvent](blocks-java-api.md#breakblockevent), [DamageBlockEvent](blocks-java-api.md#damageblockevent), [UseBlockEvent](blocks-java-api.md#useblockevent)
 
 **Assets**
 [AssetRegistry](assets.md), [Model](assets.md), [ModelAsset](assets.md), [AssetPackRegisterEvent](assets.md), [AssetPackUnregisterEvent](assets.md), [LoadAssetEvent](assets.md), [CommonAssetMonitorEvent](assets.md), [SendCommonAssetsEvent](assets.md), [PathEvent](assets.md)
@@ -244,7 +246,7 @@ JSON asset types used in Hytale's data-driven systems.
 [UniverseResources](universe-saves.md#universe-resources), [UniverseResourceType](universe-saves.md#universe-resources), [IUniverseResourceStorage](universe-saves.md#universe-resources), [IUniverseResourceStorageProvider](universe-saves.md#universe-resources), [DiskUniverseResourceStorageProvider](universe-saves.md#universe-resources), [HardcoreState](universe-saves.md#universe-resources)
 
 **Connected Blocks & Block Animation**
-[PatternedConnectedBlockRuleSet](blocks.md#patterned-connected-block-rule-sets), [PatternedConnectedBlockRuleSetAsset](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockPatternConfig](blocks.md#patterned-connected-block-rule-sets), [ConnectedBlockFaceTags](blocks.md#patterned-connected-block-rule-sets), [BlockAnimationModule](blocks.md#per-block-animation-speed), [BlockAnimationSection](blocks.md#per-block-animation-speed)
+[PatternedConnectedBlockRuleSet](blocks-connected.md#patterned-connected-block-rule-sets), [PatternedConnectedBlockRuleSetAsset](blocks-connected.md#patterned-connected-block-rule-sets), [ConnectedBlockPatternConfig](blocks-connected.md#patterned-connected-block-rule-sets), [ConnectedBlockFaceTags](blocks-connected.md#patterned-connected-block-rule-sets), [BlockAnimationModule](blocks.md#per-block-animation-speed), [BlockAnimationSection](blocks.md#per-block-animation-speed)
 
 **Companion Block Spawners**
 [CompanionBlockSpawnerPlugin](npc-spawning.md#companion-block-spawners), [CompanionBlockSpawnerBlock](npc-spawning.md#companion-block-spawners), [CompanionBlockSpawnerRecipe](npc-spawning.md#companion-block-spawners), [CompanionSpawnerMarkerReference](npc-spawning.md#companion-block-spawners)

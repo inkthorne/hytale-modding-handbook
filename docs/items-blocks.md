@@ -306,7 +306,7 @@ Inside a gathering mode:
 
 > Java side: `Breaking` / `Harvest` / `Soft` decode into `BlockBreakingDropType` /
 > `HarvestingDropType` / `SoftBlockDropType` — see
-> [Gathering Drop Types](blocks.md#gathering-drop-types).
+> [Gathering Drop Types](blocks-java-api.md#gathering-drop-types).
 
 `DropList` can be an inline object (used by chests to drop their item form):
 
@@ -468,7 +468,7 @@ accepts only `FaceType` and `Filler`.
 
 A sibling `BlockType` key, `SupportsRequiredFor` (`"Any"` or `"All"`, default `All`),
 controls whether one satisfied direction is enough or every declared direction must
-hold — see [BlockSupportsRequiredForType](blocks.md#blocksupportsrequiredfortype).
+hold — see [BlockSupportsRequiredForType](blocks-java-api.md#blocksupportsrequiredfortype).
 
 ---
 
@@ -635,7 +635,7 @@ block IDs (a `*` prefix references another block's state definitions):
 
 | Key | Description |
 |-----|-------------|
-| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 but no shipped block uses it — see [Patterned Connected Block Rule Sets](blocks.md#patterned-connected-block-rule-sets) |
+| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 but no shipped block uses it — see [Patterned Connected Block Rule Sets](blocks-connected.md#patterned-connected-block-rule-sets) |
 | `Regular` / shape keys | Per-shape `{ "State": "<state name>" }` mappings |
 | `MaterialName` | Material/group name (Roof) |
 | `Topper` | Top-piece state (Roof) |
@@ -833,7 +833,7 @@ Stage entry fields: `Type` (`BlockType`/`BlockState`/`Prefab`/`Spread`), `Block`
 > Java side: stage entries decode into `FarmingStageData` subtypes (registered `Type`
 > values: `BlockType`, `BlockState`, `Prefab`, `Spread`), and each id in
 > `ActiveGrowthModifiers` names a `GrowthModifierAsset` under `Server/Farming/Modifiers/`
-> — see [Farming Config Classes](blocks.md#farming-config-classes).
+> — see [Farming Config Classes](blocks-java-api.md#farming-config-classes).
 
 ### HarvestCrop Interaction
 
@@ -1311,7 +1311,7 @@ Processing benches combine the `Open_Processing_Bench` use with `BenchBlock` /
 Recipes themselves live on the crafted items (`Recipe.BenchRequirement`), but the bench
 definition — tier levels, upgrade costs, categories — is carried inline by the bench
 item's `BlockType.Bench` object (e.g. `Bench_Weapon.json` defines `Type`, `Id`, and
-`TierLevels` there). See [Bench Configuration](blocks.md#bench-configuration) for the
+`TierLevels` there). See [Bench Configuration](blocks-java-api.md#bench-configuration) for the
 `Type` variants (`Crafting`, `Processing`, `DiagramCrafting`, `StructuralCrafting`) and
 the tier/upgrade keys.
 
@@ -1440,7 +1440,8 @@ Backtick-quoted strings below are literal messages from `HytaleServer.jar`.
 ## Related Documentation
 
 - [Items Reference](items.md) - Common properties and systems
-- [Blocks API](blocks.md) - BlockType class and events
+- [Blocks API](blocks-java-api.md) - `BlockType` class, block events and world block access
+- [Block Definitions](blocks.md) - The block JSON: states, hitboxes, sounds, particles
 - [Drop System](drops.md) - `DropList` loot tables for blocks and containers
 - [Interactions API](interactions.md) - Block interactions
 - [Entity & World Interactions](interactions-world.md) - PlaceBlock, BreakBlock

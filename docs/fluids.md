@@ -183,7 +183,7 @@ public abstract class FluidTicker {
 }
 ```
 
-Subclasses implement the protected `spread(...)` hook, which returns a `BlockTickStrategy` — the same enum scheduled block ticks use (see [Block Ticking](blocks.md#blocktickstrategy)): `CONTINUE` keeps the fluid ticking, `SLEEP` parks it until a neighboring block change re-wakes it via `setTickingSurrounding`, `WAIT_FOR_ADJACENT_CHUNK_LOAD` retries once the neighbor chunk is in.
+Subclasses implement the protected `spread(...)` hook, which returns a `BlockTickStrategy` — the same enum scheduled block ticks use (see [Block Ticking](blocks-java-api.md#blocktickstrategy)): `CONTINUE` keeps the fluid ticking, `SLEEP` parks it until a neighboring block change re-wakes it via `setTickingSurrounding`, `WAIT_FOR_ADJACENT_CHUNK_LOAD` retries once the neighbor chunk is in.
 
 They may also override the protected `isAlive(...)`, which returns a **`FluidTicker.AliveStatus`** (`ALIVE`, `DEMOTE`, `WAIT_FOR_ADJACENT_CHUNK`) rather than a `BlockTickStrategy`. Both `FiniteFluidTicker` and `FireFluidTicker` override it to always return `ALIVE`; the base implementation is what enforces `SupportedBy` and `CanDemote`. Both hooks take the same argument list, with the fluid's current level as a `byte` between `Fluid` and the block coordinates:
 
@@ -209,7 +209,7 @@ boolean canOccupySolidBlocks()  // true — fire spreads into flammable solid bl
 List<FireFluidTicker.FlammabilityConfig> getSortedFlammabilityConfigs() // by Priority
 ```
 
-A custom ticker is possible in principle by subclassing and registering a new `Type` on `FluidTicker.CODEC` in `setup()` — the same codec-registration pattern as [custom block ticking](blocks.md#hooking-custom-block-ticking).
+A custom ticker is possible in principle by subclassing and registering a new `Type` on `FluidTicker.CODEC` in `setup()` — the same codec-registration pattern as [custom block ticking](blocks-java-api.md#hooking-custom-block-ticking).
 
 ---
 

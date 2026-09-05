@@ -716,7 +716,7 @@ box.forEachBlock(offsetX, offsetY, offsetZ, scale, (x, y, z) -> {
 
 **Package:** `com.hypixel.hytale.math.block`
 
-A family of static utilities that enumerate the integer block coordinates forming a geometric shape — spheres, cubes, cones, cylinders, domes, pyramids, tori, and diamonds. These are the math behind builder-tool brushes: they generate coordinates only and have **no world dependency**, so you pair them with your own chunk/world block-set calls (see [World block access](blocks.md#world-block-access)) to actually place or inspect blocks.
+A family of static utilities that enumerate the integer block coordinates forming a geometric shape — spheres, cubes, cones, cylinders, domes, pyramids, tori, and diamonds. These are the math behind builder-tool brushes: they generate coordinates only and have **no world dependency**, so you pair them with your own chunk/world block-set calls (see [World block access](blocks-java-api.md#world-block-access)) to actually place or inspect blocks.
 
 Each call is a zero-allocation visitor: it invokes a `TriIntObjPredicate<T>` once per block position, threading a caller-supplied context object `T` through every callback so no lambda capture is needed on hot paths.
 
@@ -813,7 +813,7 @@ Vector3i pos = new Vector3i(bx, by, bz);   // pack(Vector3i)/unpack(long) were r
 
 **Package:** `com.hypixel.hytale.math.iterator`
 
-Two iterators for walking positions in a pattern — a straight block line in 3D, and an outward chunk spiral. Like the [block shape utilities](#block-shape-iteration), they generate coordinates only (no world dependency); pair them with [world block access](blocks.md#world-block-access) or your chunk-loading calls to act on the results.
+Two iterators for walking positions in a pattern — a straight block line in 3D, and an outward chunk spiral. Like the [block shape utilities](#block-shape-iteration), they generate coordinates only (no world dependency); pair them with [world block access](blocks-java-api.md#world-block-access) or your chunk-loading calls to act on the results.
 
 ### LineIterator
 

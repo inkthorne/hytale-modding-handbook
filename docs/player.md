@@ -1036,7 +1036,7 @@ All 15 shipped beds wire it the same way, from the block's own `Use` slot (from
 Three pieces have to be present for the interaction to do anything useful, and they are
 separate: the `Bed` interaction on `Use`, a `RespawnBlock`
 [block-entity component](items-blocks.md#block-entity-components) to hold the owner, and a `Beds`
-[mount point](blocks.md#blockmountpoint) for the player to lie on. The interaction creates the
+[mount point](blocks-java-api.md#blockmountpoint) for the player to lie on. The interaction creates the
 `RespawnBlock` component on demand if the block does not already have one, so a bed that lacks
 it still works — but a bed with no `Beds` entry claims a respawn point and then fails to mount.
 

@@ -12,7 +12,7 @@ seo:
 This document covers the core event system. A compiling end-to-end demo of both mechanisms (global bus + ECS event system) lives in `examples/events/`. For specific event classes, see the relevant domain documentation:
 
 - **Player events** → [player.md](player.md) (includes ChangeGameModeEvent, CraftRecipeEvent)
-- **Block events** → [blocks.md](blocks.md)
+- **Block events** → [blocks-java-api.md](blocks-java-api.md#block-events)
 - **World/Chunk events** → [world-lifecycle-events.md](world-lifecycle-events.md)
 - **Entity events** → [entities.md](entities.md) (includes LivingEntityUseBlockEvent)
 - **Combat/Damage events** → [combat.md](combat.md)

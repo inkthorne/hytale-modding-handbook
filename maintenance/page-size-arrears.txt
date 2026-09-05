@@ -28,15 +28,25 @@
 # time rather than trusted. Check too for content stranded by topic rather than
 # by link — that split left a chunk-section entry in the remainder's Gotchas.
 #
-# world.md was removed 2026-09-04: the split landed as world-chunks.md and
-# world-lifecycle-events.md. Its recorded anchor inventory was re-derived from
-# the tree before cutting rather than trusted — the note's line numbers had
-# already gone stale, and the events seam cost an intra-page link, not a
-# cross-doc one.
-
-blocks.md
-#   seam: the connected-block sections (~380 lines), and `## Java API Reference`
-#   onward (~1,100).
+# RETIRED ENTRIES. One line each: this file is a gate input, not a log, and the
+# record of how a split went belongs in its commit message.
+#
+# world.md   split 2026-09-04 -> world-chunks.md, world-lifecycle-events.md; record in 68d6967.
+# blocks.md  split 2026-09-05 -> blocks-connected.md, blocks-java-api.md; record in the split commit.
+#
+# PRE-RECORDED SEAMS FOR PAGES NOT YET OVER THE LINE. Comments, not entries — the
+# parser ignores them, so the "listed but no longer over" warning cannot fire on
+# a page that was never over. They exist because a seam that lives only in a
+# session transcript is a seam nobody finds when the gate finally trips.
+#
+# blocks-java-api.md — reference vs behaviour: `## Java API Reference` (~670) is
+#   the class/enum/structure reference; `## Block Ticking` through
+#   `## Custom Block-Entity Components` (~730) is runtime behaviour. Landed at
+#   1,457 on 2026-09-05, 43 lines under; the next substantial section trips it.
+# npc-roles.md — `## Beacon messaging`: `BeaconSupport`, `MessageSupport`,
+#   `EventSupport` and `NPCMessage` are a real `components/messaging/` subsystem
+#   and none of them is documented, so the cut is to a NEW page rather than a
+#   rearrangement. Sat at 1,496 on 2026-09-05, four lines under.
 
 interactions-flow.md
 #   seam: the cooldown cluster — `## CooldownCondition`, `## TriggerCooldown`,

@@ -62,6 +62,8 @@ Item definition (Server/Item/Items/*.json)
 | [Consumables](items-consumables.md) | `items-consumables.md` | Food, potions, healing items (60+ items) |
 | [Blocks](items-blocks.md) | `items-blocks.md` | Furniture, lighting, doors, containers, benches (200+ items) |
 | [Block System](blocks.md) | `blocks.md` | Block rendering, hitboxes, sounds, particles, fluids |
+| [Connected Blocks](blocks-connected.md) | `blocks-connected.md` | `ConnectedBlockRuleSet` types and patterned rule sets |
+| [Blocks Java API](blocks-java-api.md) | `blocks-java-api.md` | `BlockType`, block events, world block access |
 | [Crafting](items-crafting.md) | `items-crafting.md` | Crafting benches, recipes, processing, tier system |
 
 **Future documentation:**
@@ -194,7 +196,7 @@ For complete documentation, see [Block Items](items-blocks.md).
 block, not a codec-map, so every key below is one of `BlockType.CODEC`'s 81. Read
 that as a statement about the top level only: keys *nested* under `BlockType` are
 frequently codec-maps that do take a `"Type"`, among them `RandomTickProcedure`
-(see [Blocks](blocks.md)), `ConnectedBlockRuleSet`, `Farming`, `Gathering` and
+(see [Blocks](blocks.md)), [`ConnectedBlockRuleSet`](blocks-connected.md), `Farming`, `Gathering` and
 `Interactions`. From `Server/Item/Items/Deco/Deco_Map.json`:
 
 ```json

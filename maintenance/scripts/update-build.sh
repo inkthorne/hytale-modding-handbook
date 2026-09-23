@@ -22,10 +22,14 @@
 #   maintenance/scripts/update-build.sh --skip-caches  # reuse existing caches (re-triage)
 #   maintenance/scripts/update-build.sh --no-src       # skip jar decompilation (faster)
 #   maintenance/scripts/update-build.sh --no-build     # skip example compilation (faster)
+#   maintenance/scripts/update-build.sh --no-verify    # stop before verify-docs.sh (used by the fixture)
 #
 # Env overrides:
 #   HYTALE_JAR / HYTALE_ASSETS / HYTALE_JAR_CACHE   as in the other scripts
 #   UPDATE_REPORT   Report dir (default ~/.cache/hytale-update-report; wiped each run)
+#   UPDATE_BASELINE_DIR  Asset baselines (default maintenance/baseline; the fixture overrides it)
+#   UPDATE_SNAPSHOT Previous-build snapshot (default ~/.cache/hytale-update-snapshot;
+#                   NOT wiped: replaced only when the jar cache holds an older build)
 #
 # Exit code: non-zero if a cache step fails or verify-docs.sh hard-fails.
 
@@ -33,12 +37,13 @@ set -u
 cd "$(dirname "$0")/../.." || exit 2
 REPO="$(pwd)"
 
-SKIP_CACHES=0; NO_SRC=""; NO_BUILD=""
+SKIP_CACHES=0; NO_SRC=""; NO_BUILD=""; NO_VERIFY=0
 for arg in "$@"; do
   case "$arg" in
     --skip-caches) SKIP_CACHES=1 ;;
     --no-src)      NO_SRC="--no-src" ;;
     --no-build)    NO_BUILD="--no-build" ;;
+    --no-verify)   NO_VERIFY=1 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
@@ -61,7 +66,8 @@ JAR="${HYTALE_JAR:-$ROOT/install/release/package/game/latest/Server/HytaleServer
 ASSETS="${HYTALE_ASSETS:-$HOME/.cache/hytale-assets}"
 JAR_CACHE="${HYTALE_JAR_CACHE:-$HOME/.cache/hytale-jar}"
 REPORT="${UPDATE_REPORT:-$HOME/.cache/hytale-update-report}"
-BASELINE="$REPO/maintenance/baseline/CommonAssetsIndex.hashes"
+BASELINE_DIR="${UPDATE_BASELINE_DIR:-$REPO/maintenance/baseline}"
+BASELINE="$BASELINE_DIR/CommonAssetsIndex.hashes"
 
 section "Environment"
 [ -f "$JAR" ] || { fail "jar not found: $JAR"; exit 2; }
@@ -73,49 +79,58 @@ info "installed:  ${NEW_VER:-unknown} ($( [ -n "$BUILD_MARKER" ] && basename "$B
 info "docs stamp: ${OLD_VER:-unknown}"
 [ -n "$NEW_VER" ] && [ "$NEW_VER" = "${OLD_VER:-}" ] && \
   warn "installed build matches the docs stamp — nothing may have updated (continuing anyway)"
-# The *-old snapshots are the only record of the previous build: once the caches
-# are rebuilt, nothing else holds it. A --skip-caches re-triage therefore keeps
-# them from the previous run instead of re-snapshotting the caches it did not
-# rebuild. Re-snapshotting would make "old" equal "new" and empty every drift
-# section on exactly the run meant to re-read them.
-KEEP="$(mktemp -d)"
-if [ "$SKIP_CACHES" = 1 ]; then
-  for f in javap-index-old.txt src-old; do
-    [ -e "$REPORT/$f" ] && mv "$REPORT/$f" "$KEEP/"
-  done
-fi
 rm -rf "$REPORT" && mkdir -p "$REPORT"
 info "report dir: $REPORT (wiped)"
 
 # ---- 1. snapshot the previous build's jar cache ----
-section "Snapshot previous javap index and decompiled source"
+# The snapshot is the only record of the previous build: once the caches are
+# rebuilt, nothing else holds it. So it lives OUTSIDE the per-run report dir,
+# and it is replaced only when the cache provably holds a build other than the
+# installed one (cache-meta.txt, written by build-jar-cache.sh). A re-run after
+# the caches were already rebuilt (a second full run, a run after a failure,
+# or --skip-caches) keeps the existing snapshot instead of snapshotting the new
+# build as "old", which would compare the build with itself.
+section "Snapshot of the previous build"
+SNAP="${UPDATE_SNAPSHOT:-$HOME/.cache/hytale-update-snapshot}"
+meta() { awk -F= -v k="$2" '$1==k{sub(/^[^=]*=/,""); print; exit}' "$1" 2>/dev/null; }
+CACHE_VER="$(meta "$JAR_CACHE/cache-meta.txt" version)"
+if [ -z "$CACHE_VER" ] && [ -f "$JAR_CACHE/javap-index.txt" ]; then CACHE_VER="unstamped"; fi
+TAKE=0
 if [ "$SKIP_CACHES" = 1 ]; then
-  for f in javap-index-old.txt src-old; do
-    if [ -e "$KEEP/$f" ]; then mv "$KEEP/$f" "$REPORT/"; info "kept $f from the previous run (--skip-caches)"
-    else warn "--skip-caches: no $f from a previous run — its drift section will be skipped"; fi
-  done
+  info "--skip-caches: using the existing snapshot"
+elif [ ! -f "$JAR_CACHE/javap-index.txt" ]; then
+  warn "no existing jar cache to snapshot (first run?)"
+elif [ "$CACHE_VER" = "${NEW_VER:-?}" ]; then
+  info "the jar cache was already built from the installed $NEW_VER — keeping the existing snapshot"
 else
-  if [ -f "$JAR_CACHE/javap-index.txt" ]; then
-    cp "$JAR_CACHE/javap-index.txt" "$REPORT/javap-index-old.txt"
-    info "saved $(wc -l < "$REPORT/javap-index-old.txt") lines → javap-index-old.txt"
-  else
-    warn "no existing javap index — the API drift report will be skipped"
-  fi
-  # The source snapshot is what exposes changes a signature diff cannot see:
-  # method bodies, annotations such as @Deprecated, and reads of inlined
-  # compile-time constants. CFR output is deterministic for a given jar
-  # (measured 2026-09-23: 6,564 files re-decompiled, 0 differing), so every
-  # file the diff reports is a real change.
-  if [ -d "$JAR_CACHE/src" ] && [ -z "$NO_SRC" ]; then
-    cp -a "$JAR_CACHE/src" "$REPORT/src-old"
-    info "saved $(find "$REPORT/src-old" -name '*.java' | wc -l) decompiled files → src-old/"
-  elif [ -n "$NO_SRC" ]; then
-    info "--no-src: source drift will be skipped"
-  else
-    warn "no existing decompiled source — the source drift report will be skipped"
-  fi
+  TAKE=1
+  [ "$CACHE_VER" = "unstamped" ] && warn "the jar cache has no cache-meta.txt (built before 2026-09-23); assuming it holds the previous build"
 fi
-rm -rf "$KEEP"
+if [ "$TAKE" = 1 ]; then
+  # Copy beside the store (same filesystem) and rename into place only once the
+  # copy is complete, so a failure leaves the previous snapshot intact.
+  TMP="$SNAP.new.$$"
+  { rm -rf "$TMP" && mkdir -p "$TMP"; } || { fail "cannot create $TMP"; exit 2; }
+  cp "$JAR_CACHE/javap-index.txt" "$TMP/javap-index.txt" || { rm -rf "$TMP"; fail "snapshot copy failed (javap index)"; exit 2; }
+  if [ -d "$JAR_CACHE/src" ]; then
+    # kept even under --no-src: --no-src governs rebuilding, not preserving
+    cp -a "$JAR_CACHE/src" "$TMP/src" || { rm -rf "$TMP"; fail "snapshot copy failed (decompiled source)"; exit 2; }
+  fi
+  cp "$JAR_CACHE/cache-meta.txt" "$TMP/cache-meta.txt" 2>/dev/null || echo "version=$CACHE_VER" > "$TMP/cache-meta.txt"
+  { rm -rf "$SNAP.prev" && { [ ! -e "$SNAP" ] || mv "$SNAP" "$SNAP.prev"; } && mv "$TMP" "$SNAP" && rm -rf "$SNAP.prev"; } \
+    || { fail "could not move the snapshot into place at $SNAP"; exit 2; }
+  info "snapshot of $CACHE_VER taken → $SNAP"
+fi
+SNAP_VER="$(meta "$SNAP/cache-meta.txt" version)"
+if [ -f "$SNAP/javap-index.txt" ]; then
+  N_SNAPSRC=0; [ -d "$SNAP/src" ] && N_SNAPSRC=$(find "$SNAP/src" -name '*.java' | wc -l)
+  info "previous build on record: ${SNAP_VER:-unknown} ($(wc -l < "$SNAP/javap-index.txt") index lines, $N_SNAPSRC decompiled files)"
+  [ "$SNAP_VER" = "${NEW_VER:-?}" ] && warn "the snapshot is of the installed build itself — every drift section below compares $NEW_VER with itself"
+  ln -s "$SNAP/javap-index.txt" "$REPORT/javap-index-old.txt"
+  [ -d "$SNAP/src" ] && ln -s "$SNAP/src" "$REPORT/src-old"
+else
+  warn "no snapshot of a previous build at $SNAP — the API and source drift sections will be skipped"
+fi
 
 # ---- 2+3. rebuild caches ----
 if [ "$SKIP_CACHES" = 1 ]; then
@@ -164,9 +179,9 @@ else
 fi
 
 section "Server/Cosmetics asset drift vs baseline (generated index)"
-if [ -f "$REPO/maintenance/baseline/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; then
+if [ -f "$BASELINE_DIR/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; then
   "$REPO/maintenance/scripts/hash-server-assets.sh" "$ASSETS" > "$REPORT/ServerAssetsIndex.hashes"
-  diff "$REPO/maintenance/baseline/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
+  diff "$BASELINE_DIR/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
     > "$REPORT/server-drift.diff"
   grep '^<' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-old-paths.txt"
   grep '^>' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-new-paths.txt"
@@ -229,32 +244,48 @@ else
 fi
 
 # ---- 5b. source drift old→new: what the signature diff cannot see ----
+# Reports every top-level class whose decompiled source changed. It is labelled
+# SIG+BODY only when that top-level class is itself in the signature diff; a
+# change confined to a NESTED class's signature does not vouch for the outer
+# body, so such a file stays BODY and is triaged as one.
+# Caveat, measured by review: CFR output is identical for the same jar and
+# decompiler, but it is NOT independent of other classes. An unchanged caller
+# can re-render when a callee's generic signature changes (a cast appears), so
+# BODY rows can include callers of a re-generified API. Noise, not misses.
 section "Source drift (decompiled source old → new)"
-if [ -d "$REPORT/src-old" ] && [ -d "$JAR_CACHE/src" ]; then
+OLD_DEC="$(meta "$SNAP/cache-meta.txt" decompiler)"; NEW_DEC="$(meta "$JAR_CACHE/cache-meta.txt" decompiler)"
+NEW_SRC_STATE="$(meta "$JAR_CACHE/cache-meta.txt" src)"
+if [ ! -d "$REPORT/src-old" ]; then
+  warn "no decompiled source in the previous-build snapshot — source drift skipped (body-only and @Deprecated changes are NOT reported)"
+elif [ ! -d "$JAR_CACHE/src" ] || [ "$(find "$JAR_CACHE/src" -name '*.java' | wc -l)" = 0 ]; then
+  warn "the new cache has no decompiled source (${NEW_SRC_STATE:-state unknown}) — source drift skipped (body-only and @Deprecated changes are NOT reported)"
+else
+  [ -n "$OLD_DEC" ] && [ -n "$NEW_DEC" ] && [ "$OLD_DEC" != "$NEW_DEC" ] && \
+    warn "decompiler differs between the snapshot ($OLD_DEC) and the new cache ($NEW_DEC) — expect most files to differ for that reason alone"
   diff -ru "$REPORT/src-old" "$JAR_CACHE/src" > "$REPORT/src-drift.diff"
   python3 - "$REPORT/src-old" "$JAR_CACHE/src" "$REPORT/api-changed-classes.txt" "$REPORT/src-drift.diff" <<'PY' > "$REPORT/src-changed-classes.txt"
 import os, re, sys, filecmp
 old_root, new_root, api_path, diff_path = sys.argv[1:5]
 def files(root):
     out = {}
-    for d, _, fs in os.walk(root):
+    for d, _, fs in os.walk(root, followlinks=True):
         for f in fs:
             if f.endswith(".java"):
                 p = os.path.join(d, f)
                 out[os.path.relpath(p, root)[:-5].replace(os.sep, ".")] = p
     return out
 old, new = files(old_root), files(new_root)
-# classes whose signatures the javap diff already reported; a file covers its
-# nested classes, so Outer$Inner counts against Outer
-sig = set()
+api = set()                                   # exact names, nested ones keep their $
 if os.path.exists(api_path):
     for line in open(api_path):
         m = re.match(r"(?:ADDED|REMOVED|CHANGED) +(\S+)", line)
-        if m: sig.add(m.group(1).split("$")[0])
-changed = sorted(c for c in old.keys() & new.keys() if not filecmp.cmp(old[c], new[c], shallow=False))
+        if m: api.add(m.group(1))
+common = old.keys() & new.keys()
+changed = sorted(c for c in common if not filecmp.cmp(old[c], new[c], shallow=False))
 for c in changed:
-    print(f"{'SIG+BODY' if c in sig else 'BODY    '} {c}")
-# @Deprecated lines added or removed, attributed to their file
+    nested = sorted(a for a in api if a.startswith(c + "$"))
+    label = "SIG+BODY" if c in api else "BODY    "
+    print(f"{label} {c}" + (f"  (nested signature change: {', '.join(n.split('.')[-1] for n in nested)})" if nested and c not in api else ""))
 cur = None
 for line in open(diff_path, encoding="utf-8", errors="replace"):
     if line.startswith("+++ "):
@@ -262,100 +293,33 @@ for line in open(diff_path, encoding="utf-8", errors="replace"):
         cur = os.path.relpath(p, new_root)[:-5].replace(os.sep, ".") if p.endswith(".java") else None
     elif cur and line[:1] in "+-" and not line.startswith(("+++", "---")) and "@Deprecated" in line:
         print(f"DEPRECATION {'added  ' if line[0] == '+' else 'removed'} {cur}: {line[1:].strip()}")
+print(f"#COUNTS {len(common)} {len(old.keys() - new.keys())} {len(new.keys() - old.keys())} {len(changed)}")
 PY
+  read -r N_COMMON N_ONLYOLD N_ONLYNEW N_CHANGED < <(sed -n 's/^#COUNTS //p' "$REPORT/src-changed-classes.txt")
+  sed -i '/^#COUNTS /d' "$REPORT/src-changed-classes.txt"
   N_BODY=$(grep -c '^BODY ' "$REPORT/src-changed-classes.txt" || true)
   N_BOTH=$(grep -c '^SIG+BODY' "$REPORT/src-changed-classes.txt" || true)
   N_DEP=$(grep -c '^DEPRECATION' "$REPORT/src-changed-classes.txt" || true)
-  N_OLD=$(find "$REPORT/src-old" -name '*.java' | wc -l); N_NEW=$(find "$JAR_CACHE/src" -name '*.java' | wc -l)
-  info "compared $N_OLD old / $N_NEW new decompiled file(s); full diff in src-drift.diff"
-  if [ "$((N_BODY + N_BOTH + N_DEP))" = 0 ]; then
-    info "no source changes in files present in both builds (added/removed classes are in the API drift above)"
+  info "compared $N_COMMON file(s) present in both builds ($N_ONLYOLD only in the old, $N_ONLYNEW only in the new — those are the removed/added classes in the API drift above); $N_CHANGED changed; full diff in src-drift.diff"
+  BIGGER=$(( N_COMMON > 0 ? (N_ONLYOLD + N_ONLYNEW) * 100 / (N_COMMON + N_ONLYOLD + N_ONLYNEW) : 100 ))
+  [ "$BIGGER" -ge 20 ] && warn "$BIGGER% of files exist in only one tree — a truncated decompile on either side would look like this; check the file counts above"
+  if [ "$N_CHANGED" = 0 ] && [ "$N_DEP" = 0 ]; then
+    info "no source changes in the $N_COMMON file(s) present in both builds"
   else
-    warn "$N_BODY file(s) changed with NO signature change (behaviour-only; invisible to the API drift above), $N_BOTH also changed signatures, $N_DEP @Deprecated line(s) added/removed (src-changed-classes.txt)"
-    grep -E '^(BODY |DEPRECATION)' "$REPORT/src-changed-classes.txt" | head -60 | sed 's/^/        /'
+    warn "$N_BODY file(s) changed with NO signature change on their top-level class (behaviour-only; invisible to the API drift above), $N_BOTH also changed signatures, $N_DEP @Deprecated line(s) added/removed (src-changed-classes.txt)"
+    grep -E '^(BODY |DEPRECATION)' "$REPORT/src-changed-classes.txt" | sed -n '1,60p' | sed 's/^/        /'
     [ "$((N_BODY + N_DEP))" -gt 60 ] && info "(list truncated at 60 lines — full list in the report dir)"
   fi
-else
-  info "no src-old snapshot (first run, --no-src, or no decompiler) — source drift skipped"
 fi
 
 # ---- 6. triage greps: what do the docs/examples say about the changed things ----
 section "Triage: docs/examples referencing the drift"
-# Asset keys. A doc names an asset in one of three ways, and each needs its own key:
-#   - by id: `Tool_Shears_Basic`, with no extension. Matched on the file's stem,
-#     as a whole word, but only when that stem names exactly one shipped file AND
-#     is id-shaped (contains "_"). Measured over all 60,693 shipped paths
-#     (2026-09-23): unique-but-plain stems such as `Migrations/0.json`, `Entity.png`
-#     or `None.json` flagged up to 134 files each until the "_" rule was added.
-#   - by a unique file name with a plain stem: `Entity.png`. Matched as the whole
-#     name with its extension, bounded so that `1.json` does not match
-#     `Zone1_Plains1.json`.
-#   - by an ambiguous file name: `en-US/server.lang`. Matched as parent/name,
-#     so a pt-BR change does not flag pages that cite only en-US.
-#   - by a wildcard: `Server/Languages/*/server.lang`, `<lang>/server.lang`.
-#     Matched for every file of that name, because such a claim spans all of them.
-# Output lines are "<kind> <thing> → <files>"; kind "body" marks a class whose
-# source changed with no signature change (section 5b).
-python3 - "$REPORT" "$ASSETS" <<'PY' > "$REPORT/triage.txt"
-import os, re, sys, collections
-report, assets = sys.argv[1:3]
-def lines(name):
-    p = os.path.join(report, name)
-    return [l.strip() for l in open(p)] if os.path.exists(p) else []
-corpus = {}
-for root in ("docs", "examples"):
-    for d, dirs, fs in os.walk(root):
-        dirs[:] = [x for x in dirs if x not in ("build", ".gradle")]
-        for f in fs:
-            p = os.path.join(d, f)
-            b = open(p, "rb").read()
-            if b"\0" not in b:                       # skip binaries, like grep -I
-                corpus[p] = b.decode("utf-8", "replace")
-# every shipped path, to decide whether a name is ambiguous
-shipped = []
-idx = os.path.join(assets, "CommonAssetsIndex.hashes")
-if os.path.exists(idx):
-    shipped += [l.split(" ", 1)[1].strip() for l in open(idx) if " " in l]
-shipped += [l.split(" ", 1)[1].strip() for l in lines("ServerAssetsIndex.hashes") if " " in l]
-names = collections.Counter(os.path.basename(p) for p in shipped)
-stems = collections.Counter(os.path.splitext(os.path.basename(p))[0] for p in shipped)
-def hits(pred):
-    return sorted(k for k, t in corpus.items() if pred(t))
-def asset_hits(p):
-    name = os.path.basename(p); stem = os.path.splitext(name)[0]
-    if names[name] <= 1 and stems[stem] <= 1 and "_" in stem and len(stem) >= 5 \
-            and re.fullmatch(r"\w+", stem):
-        rx = re.compile(r"(?<![\w])" + re.escape(stem) + r"(?![\w])")
-        return hits(rx.search)
-    if names[name] <= 1:
-        rx = re.compile(r"(?<![\w-])" + re.escape(name) + r"(?![\w.])")
-        return hits(rx.search)
-    key = os.path.basename(os.path.dirname(p)) + "/" + name
-    wild = re.compile(r"(?:\*|<[^<>/\s]+>)/" + re.escape(name) + r"(?![\w.])")
-    return hits(lambda t: key in t or wild.search(t))
-out = []
-for f in ("assets-modified.txt", "assets-removed.txt", "server-modified.txt", "server-removed.txt"):
-    for p in lines(f):
-        if p: out.append(("asset", p, asset_hits(p)))
-classes = {}
-for l in lines("api-changed-classes.txt"):
-    m = re.match(r"(?:ADDED|REMOVED|CHANGED) +(\S+)", l)
-    if m: classes[m.group(1)] = "class"
-for l in lines("src-changed-classes.txt"):
-    m = re.match(r"BODY +(\S+)", l)
-    if m: classes.setdefault(m.group(1), "body")
-for cls, kind in sorted(classes.items()):
-    simple = cls.split(".")[-1].split("$")[-1]
-    rx = re.compile(r"(?<![\w])" + re.escape(simple) + r"(?![\w])")
-    out.append((kind, cls, hits(rx.search)))
-for kind, thing, h in out:
-    if h: print(f"{kind} {thing} → {' '.join(h)}")
-print(f"#SUMMARY {len(out)} changed thing(s) checked, {sum(1 for o in out if o[2])} referenced in docs/examples")
-PY
+python3 "$REPO/maintenance/scripts/triage_drift.py" "$REPORT" "$ASSETS" > "$REPORT/triage.txt"
 grep -v '^#SUMMARY' "$REPORT/triage.txt" | sed 's/^/        /'
 info "$(sed -n 's/^#SUMMARY //p' "$REPORT/triage.txt") (triage.txt)"
 
 # ---- 7. verify-docs ----
+[ "$NO_VERIFY" = 1 ] && { section "verify-docs.sh"; info "skipped (--no-verify)"; exit 0; }
 section "verify-docs.sh"
 # shellcheck disable=SC2086
 "$REPO/maintenance/scripts/verify-docs.sh" $NO_BUILD

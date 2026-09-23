@@ -7,9 +7,12 @@ plugin development, you can ignore this directory.
 ## Contents
 
 - **[scripts/](./scripts/)** — `update-build.sh`, the one-command mechanical
-  half of a game-update pass (snapshots the old API index, rebuilds both caches,
-  reports asset + API drift with triage greps, runs the checker, prints the
-  remaining judgment checklist); `verify-docs.sh`, the regression checker that
+  half of a game-update pass (keeps a snapshot of the previous build's javap
+  index and decompiled source in `~/.cache/hytale-update-snapshot`, rebuilds both
+  caches, reports asset drift, API drift and source drift, i.e. body-only and
+  `@Deprecated` changes, triages which docs mention each change via
+  `triage_drift.py`, runs the checker, and prints the remaining judgment
+  checklist; its fixture is `check-update-build-fixture.py`); `verify-docs.sh`, the regression checker that
   validates `docs/` and `examples/` against the installed Hytale build;
   `build-jar-cache.sh`, which builds the greppable jar cache;
   `hash-server-assets.sh`, which generates the `Server/`+`Cosmetics/` hash

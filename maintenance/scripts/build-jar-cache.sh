@@ -6,6 +6,11 @@
 # Produces (outside the repo, never committed — mirrors the assets cache):
 #   ~/.cache/hytale-jar/javap-index.txt   signatures + constant values of every com.hypixel.* class
 #   ~/.cache/hytale-jar/src/              decompiled .java for com.hypixel.hytale.*
+#   ~/.cache/hytale-jar/cache-meta.txt    which jar version and decompiler built this cache,
+#                                         and whether the decompile completed. update-build.sh
+#                                         reads it to decide whether the cache holds the
+#                                         PREVIOUS build (snapshot it) or the installed one
+#                                         (it was already rebuilt; keep the existing snapshot).
 #
 # The decompiler tool itself is cached separately (it survives a cache wipe):
 #   ~/.cache/hytale-jar-tools/cfr.jar
@@ -79,6 +84,12 @@ split -l 400 "$WORK/classes.txt" "$WORK/batch."
 ls "$WORK"/batch.* | xargs -P "$(nproc 2>/dev/null || echo 4)" -I{} \
   sh -c 'javap -p -constants -cp "$1" $(cat "$2") > "$2.sig" 2>/dev/null' _ "$JAR" {}
 cat "$WORK"/batch.*.sig > "$INDEX"
+# Stamp the cache as soon as the index exists: a later decompile failure must
+# still leave a cache that says which build it came from, or the next
+# update-build.sh run would mistake it for the previous build and snapshot it.
+JAR_VER="$(unzip -p "$JAR" META-INF/MANIFEST.MF 2>/dev/null | tr -d '\r' | sed -n 's/^Implementation-Version: //p')"
+META="$CACHE/cache-meta.txt"
+{ echo "version=${JAR_VER:-unknown}"; echo "src=none"; } > "$META"
 INDEXED="$(grep -cE '^(Compiled from|(public |final |abstract |private |protected |static |sealed |non-sealed )*(class|interface|enum|record) )' "$INDEX" 2>/dev/null || echo '?')"
 note "index written: $INDEX ($(du -h "$INDEX" | cut -f1), ~$INDEXED type decls)"
 
@@ -110,24 +121,43 @@ if [ "$DO_SRC" = "1" ]; then
     note "SKIPPED: no decompiler available and download failed."
     note "Provide one with DECOMPILER_JAR=/path/to/cfr.jar (or install 'vineflower'/'cfr'),"
     note "then re-run. The signature index above is complete and usable on its own."
+    { echo "version=${JAR_VER:-unknown}"; echo "src=skipped (no decompiler)"; } > "$META"
   else
     command -v java >/dev/null 2>&1 || { echo "  java missing — cannot decompile" >&2; exit 2; }
     mkdir -p "$SRC"
     note "decompiler: $DEC_KIND ($DEC)"
     note "decompiling com.hypixel.hytale.* -> $SRC (this takes a few minutes)"
+    # The decompiler's identity is recorded because source drift compares two
+    # decompilations: a different decompiler (or version) re-renders every file.
+    case "$DEC_KIND" in
+      jar)     DEC_ID="jar $(sha256sum "$DEC" 2>/dev/null | cut -c1-16)" ;;
+      *)       DEC_ID="$DEC_KIND $(command -v "$DEC")" ;;
+    esac
+    DEC_RC=0
     case "$DEC_KIND" in
       jar|cfr-cmd)
         # CFR: --jarfilter scopes which classes get written
         RUN=(java -jar "$DEC"); [ "$DEC_KIND" = "cfr-cmd" ] && RUN=(cfr)
         "${RUN[@]}" "$JAR" --jarfilter 'com\.hypixel\.hytale\..*' \
-          --outputdir "$SRC" --silent true --comments false 2>/dev/null
+          --outputdir "$SRC" --silent true --comments false 2>/dev/null || DEC_RC=$?
         ;;
       vineflower)
-        vineflower -dgs=1 "$JAR" "$SRC" >/dev/null 2>&1
+        vineflower -dgs=1 "$JAR" "$SRC" >/dev/null 2>&1 || DEC_RC=$?
         ;;
     esac
     JAVAFILES="$(find "$SRC" -name '*.java' 2>/dev/null | wc -l | tr -d ' ')"
     note "decompiled: $JAVAFILES .java files ($(du -sh "$SRC" 2>/dev/null | cut -f1))"
+    # A failed, empty or partial decompile must fail the script. Exiting 0 here
+    # once let update-build.sh report "no source changes" over an empty tree.
+    # CFR writes one file per top-level class (0.6.8: 6,564 of 6,564), so fewer
+    # files than top-level classes means the decompile stopped early.
+    WANT="$(grep -c '^com\.hypixel\.hytale\.[^$]*$' "$WORK/classes.txt" || true)"
+    if [ "$DEC_RC" != 0 ] || [ "$JAVAFILES" = 0 ] || [ "$JAVAFILES" -lt "$WANT" ]; then
+      { echo "version=${JAR_VER:-unknown}"; echo "src=failed (exit $DEC_RC, $JAVAFILES files)"; echo "decompiler=$DEC_ID"; } > "$META"
+      echo "  FAILED: decompiler exited $DEC_RC and wrote $JAVAFILES file(s) for $WANT top-level class(es)" >&2
+      exit 3
+    fi
+    { echo "version=${JAR_VER:-unknown}"; echo "src=ok"; echo "src_files=$JAVAFILES"; echo "decompiler=$DEC_ID"; } > "$META"
   fi
 fi
 

@@ -28,8 +28,8 @@
 #   HYTALE_JAR / HYTALE_ASSETS / HYTALE_JAR_CACHE   as in the other scripts
 #   UPDATE_REPORT   Report dir (default ~/.cache/hytale-update-report; wiped each run)
 #   UPDATE_BASELINE_DIR  Asset baselines (default maintenance/baseline; the fixture overrides it)
-#   UPDATE_SNAPSHOT Previous-build snapshot (default ~/.cache/hytale-update-snapshot;
-#                   NOT wiped: replaced only when the jar cache holds an older build)
+#   UPDATE_SNAPSHOT Previous-build snapshot, written by build-jar-cache.sh whenever it
+#                   replaces a cache built from a different jar (default: as there)
 #
 # Exit code: non-zero if a cache step fails or verify-docs.sh hard-fails.
 
@@ -84,7 +84,10 @@ info "installed:  ${NEW_VER:-unknown} ($( [ -n "$BUILD_MARKER" ] && basename "$B
 info "docs stamp: ${OLD_VER:-unknown}"
 [ -n "$NEW_VER" ] && [ "$NEW_VER" = "${OLD_VER:-}" ] && \
   warn "installed build matches the docs stamp — nothing may have updated (continuing anyway)"
-SNAP="${UPDATE_SNAPSHOT:-$HOME/.cache/hytale-update-snapshot}"
+# same default rule as build-jar-cache.sh: the default cache's store, or one beside the cache
+if [ -n "${UPDATE_SNAPSHOT:-}" ]; then SNAP="$UPDATE_SNAPSHOT"
+elif [ "$(realpath -m "$JAR_CACHE")" = "$(realpath -m "$HOME/.cache/hytale-jar")" ]; then SNAP="$HOME/.cache/hytale-update-snapshot"
+else SNAP="$(realpath -m "$JAR_CACHE").snapshot"; fi
 export UPDATE_SNAPSHOT="$SNAP"            # build-jar-cache.sh writes the same store
 meta() { awk -F= -v k="$2" '$1==k{sub(/^[^=]*=/,""); print; exit}' "$1" 2>/dev/null; }
 # The report dir is wiped every run and the cache on every rebuild; the store
@@ -140,6 +143,9 @@ if [ -f "$SNAP/javap-index.txt" ]; then
   if [ "$SNAP_SHA" = "$INSTALLED_SHA" ] || \
      { cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt" && cmp -s "$SNAP/class-hashes.txt" "$JAR_CACHE/class-hashes.txt"; }; then
     warn "the snapshot IS the installed build (same jar, or byte-identical index and class hashes) — every drift section below compares it with itself"
+  elif { [ -z "$SNAP_SHA" ] || [ ! -f "$SNAP/class-hashes.txt" ]; } && cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt"; then
+    # a snapshot from before jar_sha/class-hashes existed cannot prove it differs
+    warn "the snapshot's index is byte-identical to the installed build's and it has no jar_sha/class hashes to tell them apart — it may be the installed build compared with itself"
   fi
   ln -s "$SNAP/javap-index.txt" "$REPORT/javap-index-old.txt"
   [ -d "$SNAP/src" ] && ln -s "$SNAP/src" "$REPORT/src-old"
@@ -251,7 +257,8 @@ fi
 #    ("Decompilation failed") whatever its bytecode, so a change inside it is
 #    invisible in the source (0.6.8 has 9 such methods in 8 files, one of them
 #    PluginManager.loadManifest). For those files only, the classes' bytecode
-#    hashes are compared and a change is reported as BYTECODE-ONLY.
+#    hashes are compared and a change is reported as BYTECODE (or BLIND when a
+#    side has no class hashes, so nothing could be compared).
 section "Source drift (decompiled source old → new)"
 OLD_DEC="$(meta "$SNAP/cache-meta.txt" decompiler)"; NEW_DEC="$(meta "$JAR_CACHE/cache-meta.txt" decompiler)"
 OLD_SRC_STATE="$(meta "$SNAP/cache-meta.txt" src)"; NEW_SRC_STATE="$(meta "$JAR_CACHE/cache-meta.txt" src)"
@@ -329,9 +336,11 @@ PY
   N_BODY=$(grep -c '^BODY ' "$REPORT/src-changed-classes.txt" || true)
   N_BOTH=$(grep -c '^SIG+BODY' "$REPORT/src-changed-classes.txt" || true)
   N_BYTE=$(grep -c '^BYTECODE' "$REPORT/src-changed-classes.txt" || true)
+  N_BLINDROWS=$(grep -c '^BLIND' "$REPORT/src-changed-classes.txt" || true)
   N_DEP=$(grep -c '^DEPRECATION' "$REPORT/src-changed-classes.txt" || true)
   N_UNEX=$(grep -c '^UNEXPLAINED' "$REPORT/src-changed-classes.txt" || true)
-  info "compared $N_COMMON file(s) present in both builds ($N_ONLYOLD only in the old, $N_ONLYNEW only in the new); $N_CHANGED changed; $N_BLIND unchanged file(s) contain a failed decompile and were checked by bytecode instead; full diff in src-drift.diff"
+  info "compared $N_COMMON file(s) present in both builds ($N_ONLYOLD only in the old, $N_ONLYNEW only in the new); $N_CHANGED changed; $N_BLIND unchanged file(s) contain a failed decompile, $((N_BLIND - N_BLINDROWS)) of them checked by bytecode instead; full diff in src-drift.diff"
+  [ "$N_BLINDROWS" -gt 0 ] && warn "$N_BLINDROWS file(s) with a failed decompile could NOT be checked (no class hashes on one side) — a change inside them is invisible (BLIND rows)"
   [ "$N_UNEX" -gt 0 ] && warn "$N_UNEX file(s) exist on one side only WITHOUT being an added/removed class in the API drift — a truncated decompile looks like this; their changes are NOT reported"
   grep -E '^(UNEXPLAINED|BLIND)' "$REPORT/src-changed-classes.txt" | sed -n '1,20p' | sed 's/^/        /'
   if [ "$((N_CHANGED + N_BYTE + N_DEP))" = 0 ]; then

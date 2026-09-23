@@ -15,6 +15,9 @@ passed:
     build-jar-cache.sh by hand destroyed the previous build; a partial decompile
     dropped changes silently; --skip-caches did not check which build the cache
     held; relative or nested store paths were not guarded.
+  round 3 (c6a46fa) — a scratch cache overwrote the default store; an old-style
+    snapshot identical to the installed build went unwarned; six guards had no
+    test.
 So the behaviour rests on this runner, and --mutations proves each check can go
 red by reverting each fix.
 
@@ -25,8 +28,8 @@ v1 -> v2:
     BlockHarvestUtils  outer body changes AND nested Qx gains a method
     KickCommand        body-only change
     Dep                gains @Deprecated
-    Sw                 a returned string changes inside a method CFR cannot
-                       decompile (sealed-interface pattern switch)
+    PluginManager      a returned string changes inside a method CFR cannot
+                       decompile (a sealed-interface pattern switch in nested In)
     Gone / Fresh       removed / added
 Part 2 unit-tests triage_drift.AssetMatcher on a synthetic corpus.
 
@@ -46,8 +49,8 @@ ap.add_argument('-v', '--verbose', action='store_true')
 ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 
-MIN_CHECKS = 80
-MIN_MUTATIONS = 18
+MIN_CHECKS = 150
+MIN_MUTATIONS = 28
 
 
 class Run:
@@ -74,16 +77,20 @@ def check(cond, what):
 
 # ---------------------------------------------------------------- jars
 P = 'com/hypixel/hytale/demo'
-SW = '''public class Sw {
+# The stub-hidden change sits in a NESTED class (In) of a class the docs name,
+# so the fixture holds both the member-level bytecode compare and its triage.
+SW = '''public class PluginManager {
   sealed interface R permits E, Rec {}
   enum E implements R { A, B }
   record Rec(int x) implements R {}
-  static String m(R r) {
-    return switch (r) {
-      case E.A -> "%s-a";
-      case E.B -> "b";
-      case Rec q -> "rec" + q.x();
-    };
+  static class In {
+    static String m(R r) {
+      return switch (r) {
+        case E.A -> "%s-a";
+        case E.B -> "b";
+        case Rec q -> "rec" + q.x();
+      };
+    }
   }
 }'''
 SRC = {
@@ -92,14 +99,14 @@ SRC = {
         'KickCommand': 'public class KickCommand { public String run(){ return "old"; } }',
         'Gone': 'public class Gone { public void g(){} }',
         'Dep': 'public class Dep { public void d(){} }',
-        'Sw': SW % 'old',
+        'PluginManager': SW % 'old',
     },
     'v2': {
         'BlockHarvestUtils': 'public class BlockHarvestUtils { public static int f(int x){ return x & 0x2000; } public static class Qx { public int a(){return 1;} public int b(){return 2;} } }',
         'KickCommand': 'public class KickCommand { public String run(){ return "new"; } }',
         'Fresh': 'public class Fresh { public void h(){} }',
         'Dep': 'public class Dep { @Deprecated public void d(){} }',
-        'Sw': SW % 'new',
+        'PluginManager': SW % 'new',
     },
 }
 
@@ -166,6 +173,8 @@ def run(tmp, state, *args, cwd=None, script='update-build.sh', **over):
                UPDATE_BASELINE_DIR=str(tmp / 'baseline'), DECOMPILER_JAR=str(CFR))
     env.pop('DECOMPILER_CMD', None); env.pop('HYTALE_JAR', None)
     env.update(over)
+    for k in [k for k, v in env.items() if v is None]:   # None = unset, to exercise a default
+        del env[k]
     extra = ['--no-verify', '--no-build'] if script == 'update-build.sh' else []
     r = subprocess.run([str(R.scripts / script), *extra, *args], env=env, capture_output=True, text=True, cwd=cwd)
     rep = state / 'report'
@@ -184,7 +193,8 @@ def expect_update(label, rc, out, src, api, tri):
     check(f'BODY     {D}BlockHarvestUtils  (nested signature change: BlockHarvestUtils$Qx)' in src,
           f"{label}: outer body change kept as BODY despite a nested signature change")
     check(f'SIG+BODY {D}BlockHarvestUtils' not in src, f"{label}: nested change does not relabel the file SIG+BODY")
-    check(f'BYTECODE {D}Sw' in src, f"{label}: change inside a failed decompile reported as BYTECODE")
+    check(f'BYTECODE {D}PluginManager' in src, f"{label}: change inside a failed decompile (nested class) reported as BYTECODE")
+    check(f'body {D}PluginManager →' in tri, f"{label}: triage flags pages naming a BYTECODE class")
     check(f'DEPRECATION added   {D}Dep: @Deprecated' in src, f"{label}: @Deprecated addition reported")
     check(f'CHANGED {D}BlockHarvestUtils$Qx' in api, f"{label}: API drift has the nested signature change")
     check(f'ADDED   {D}Fresh' in api and f'REMOVED {D}Gone' in api, f"{label}: API drift has the added and removed classes")
@@ -316,6 +326,61 @@ def part1():
         check(not (R.scripts.parents[1] / 'relsnap').exists(), "relative UPDATE_SNAPSHOT: nothing created inside the repo")
         expect_update('relative store path', *r)
 
+        # S (r3 MEDIUM-1): a scratch cache never touches the default store
+        home = tmp / 'S-home'; home.mkdir()
+        st = tmp / 'S'
+        def_store = home / '.cache/hytale-update-snapshot'
+        install(tmp, 'v1'); run(tmp, st, HOME=str(home), HYTALE_JAR_CACHE=None, UPDATE_SNAPSHOT=None)
+        install(tmp, 'v2'); run(tmp, st, HOME=str(home), HYTALE_JAR_CACHE=None, UPDATE_SNAPSHOT=None)
+        before = (def_store / 'cache-meta.txt').read_text() if (def_store / 'cache-meta.txt').exists() else ''
+        check('version=0.9.1' in before, "default paths: the default store holds the previous build (setup)")
+        for v in ('v1n', 'v2n'):
+            run(tmp, st, script='build-jar-cache.sh', HOME=str(home), UPDATE_SNAPSHOT=None,
+                HYTALE_JAR=str(tmp / v / 'HytaleServer.jar'), HYTALE_JAR_CACHE=str(st / 'scratch-cache'))
+        after = (def_store / 'cache-meta.txt').read_text() if (def_store / 'cache-meta.txt').exists() else ''
+        check(after == before, "scratch cache: the default store is untouched")
+        check((st / 'scratch-cache.snapshot/javap-index.txt').exists(), "scratch cache: its previous build goes to a store beside it")
+        # a store that belongs to another cache is never replaced from this one
+        run(tmp, st, script='build-jar-cache.sh', HOME=str(home), UPDATE_SNAPSHOT=str(def_store),
+            HYTALE_JAR=str(tmp / 'v1n/HytaleServer.jar'), HYTALE_JAR_CACHE=str(st / 'scratch-cache'))
+        check((def_store / 'cache-meta.txt').read_text() == before, "a store owned by another cache is NOT replaced")
+
+        # T (r3 LOW-2): the early stamp — a --no-src cache is still stamped, so it is saved as the previous build
+        st = tmp / 'T'
+        install(tmp, 'v1'); run(tmp, st, '--no-src')
+        install(tmp, 'v2'); rc, out, *_ = run(tmp, st)
+        check('saved the previous build (0.9.1' in out and 'no jar_sha stamp' not in out,
+              "--no-src cache: stamped, and saved as the previous build")
+
+        # U (r3 LOW-2): a failed copy, and a failed rename, both leave the cache unwiped
+        st = fresh(tmp, 'U'); install(tmp, 'v2')
+        victim = next((st / 'cache-jar/src').rglob('*.java')); os.chmod(victim, 0)
+        try:
+            rc, out, *_ = run(tmp, st)
+            check(rc != 0 and 'snapshot copy of src/' in out, "unreadable cache file: the snapshot copy fails at its own guard")
+            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in (st / 'cache-jar/cache-meta.txt').read_text(),
+                  "failed snapshot copy: the v1 cache is NOT wiped")
+        finally:
+            os.chmod(victim, 0o644)
+        st = fresh(tmp, 'U2'); install(tmp, 'v2')
+        stuck = st / 'snapshot.prev'; (stuck / 'x').mkdir(parents=True); os.chmod(stuck, 0o555)
+        try:
+            rc, out, *_ = run(tmp, st)
+            check(rc != 0 and 'could not move the snapshot into place' in out, "a stuck snapshot.prev: the rename fails at its own guard")
+            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in (st / 'cache-jar/cache-meta.txt').read_text(),
+                  "failed snapshot rename: the v1 cache is NOT wiped")
+        finally:
+            os.chmod(stuck, 0o755)
+
+        # V (r3 LOW-1): a pre-jar_sha snapshot identical to the installed build is flagged
+        st = fresh(tmp, 'V')
+        shutil.copytree(st / 'cache-jar', st / 'snapshot')
+        (st / 'snapshot/class-hashes.txt').unlink()
+        m = st / 'snapshot/cache-meta.txt'; m.write_text(re.sub(r'jar_sha=.*\n', '', m.read_text()))
+        rc, out, *_ = run(tmp, st, '--skip-caches')
+        check('no jar_sha/class hashes to tell them apart' in out, "old-style snapshot identical to the installed build: warned")
+        check('could NOT be checked (no class hashes on one side)' in out, "BLIND rows are counted in a WARN")
+
         # Q (r2 LOW-3): an interrupted copy's leftovers are removed
         st = fresh(tmp, 'Q'); install(tmp, 'v2')
         (st / 'snapshot.new.99999').mkdir()
@@ -333,7 +398,7 @@ def part2():
         'Server/Languages/en-US/server.lang', 'Server/Languages/pt-BR/server.lang',
         'Server/Item/Block/Migrations/1.json', 'Icons/Items/EditorTools/Entity.png',
     ] + [f'Characters/Anim{i}/Walk_Backward.blockyanim' for i in range(6)]
-      + [f'Family/F{i}/Five_Member.json' for i in range(5)])
+      + [f'Family/F{i}/Five_Member.json' for i in range(5)] + ['Server/X/A_B.json'])
     corpus = {
         'docs/a.md': 'Craft it at the `Bench_Alchemy`.',
         'docs/b.md': 'Keys live in `Server/Languages/en-US/server.lang`.',
@@ -349,6 +414,7 @@ def part2():
     check(h('Server/Item/Items/Bench/Bench_Alchemy.json') == ['docs/a.md'], "id: bare-id citation matched, a longer id is not")
     check(h('Server/Item/Block/Hitboxes/Bench/Bench_Alchemy.json') == ['docs/a.md'], "id: the hitbox sharing the id is matched too")
     check(h('Family/F0/Five_Member.json') == ['docs/h.md'], "id: a 5-file family is still an id (the MAX_ID_FILES boundary)")
+    check(m.rule('Server/X/A_B.json')[0] != 'stem', "rule: a stem shorter than 5 characters is never matched bare")
     check(h('Server/Languages/en-US/server.lang') == ['docs/b.md', 'docs/c.md'], "parent: en-US matches its own citation and the wildcard")
     check(h('Server/Languages/pt-BR/server.lang') == ['docs/c.md'], "parent: pt-BR matches only the wildcard, not an en-US citation")
     check(h('Server/Item/Block/Migrations/1.json') == [], "name: `1.json` does not match inside `Zone1_Plains1.json`")
@@ -388,7 +454,34 @@ MUTATIONS = [
       "update: triage flags pages naming BlockHarvestUtils as a body change"}),
     ("r2 MAJOR-2: failed decompiles not checked by bytecode", U,
      'elif any(oh.get(k) != nh.get(k) for k in members):', 'elif False:',
-     {"update: change inside a failed decompile reported as BYTECODE"}),
+     {"update: change inside a failed decompile (nested class) reported as BYTECODE"}),
+    ("r3 LOW-2: bytecode compared on the top-level class only", U,
+     'members = [k for k in (oh.keys() | nh.keys()) if k == c or k.startswith(c + "$")]', 'members = [c]',
+     {"update: change inside a failed decompile (nested class) reported as BYTECODE"}),
+    ("r3 LOW-2: triage ignores BYTECODE rows", T, r'(?:BODY|BYTECODE|BLIND) +(\S+)', r'(?:BODY) +(\S+)',
+     {"update: triage flags pages naming a BYTECODE class"}),
+    ("r3 LOW-2: no early stamp", B, 'write_meta none\n', '',
+     {"--no-src cache: stamped, and saved as the previous build"}),
+    ("r3 LOW-2: snapshot copy failure ignored", B,
+     '|| { rm -rf "$TMP"; echo "  FAILED: snapshot copy of src/ — the cache is NOT wiped" >&2; exit 4; }', '|| true',
+     {"unreadable cache file: the snapshot copy fails at its own guard"}),
+    ("r3 LOW-2: snapshot rename failure ignored", B,
+     '|| { echo "  FAILED: could not move the snapshot into place at $SNAP — the cache is NOT wiped" >&2; exit 4; }', '|| true',
+     {"a stuck snapshot.prev: the rename fails at its own guard"}),
+    ("r3 MEDIUM-1: every cache writes the default store", B,
+     'else SNAP="$C_ABS.snapshot"; fi', 'else SNAP="$HOME/.cache/hytale-update-snapshot"; fi',
+     # not "the default store is untouched": the ownership check below protects it
+     # on its own (this mutation first stayed green for that reason), so what only
+     # the per-cache default provides is the scratch cache's own record
+     {"scratch cache: its previous build goes to a store beside it"}),
+    ("r3 MEDIUM-1: store ownership not checked", B,
+     '&& [ "$(meta "$SNAP/cache-meta.txt" cache)" != "$C_ABS" ]; then', '&& false; then',
+     {"a store owned by another cache is NOT replaced"}),
+    ("r3 LOW-1: old-style snapshot self-compare not warned", U,
+     'elif { [ -z "$SNAP_SHA" ] || [ ! -f "$SNAP/class-hashes.txt" ]; } && cmp', 'elif false && cmp',
+     {"old-style snapshot identical to the installed build: warned"}),
+    ("r3 LOW-2: id length rule dropped", T, ' and "_" in stem and len(stem) >= 5', ' and "_" in stem',
+     {"rule: a stem shorter than 5 characters is never matched bare"}),
     ("r2 MEDIUM-1: incomplete decompile state not read", U,
      '[ "${side#*:}" = ok ] || warn', 'true || warn',
      {"incomplete snapshot decompile: warns"}),

@@ -14,8 +14,10 @@
 # The previous build is preserved automatically. This script is the only thing
 # that destroys the cache, so it is where the old one is saved: before wiping a
 # cache built from a DIFFERENT jar, it copies it to the snapshot store
-# (~/.cache/hytale-update-snapshot), which update-build.sh diffs against. Running
-# this script by hand after a game update is therefore safe. Identity is the
+# (~/.cache/hytale-update-snapshot for the default cache), which update-build.sh
+# diffs against. Running this script by hand after a game update is therefore
+# safe, and a scratch cache (HYTALE_JAR_CACHE) gets its own store beside it.
+# Two runs at once against one store are NOT supported. Identity is the
 # jar's content hash, never the version string, which can be absent or unchanged.
 #
 # The decompiler tool itself is cached separately (it survives a cache wipe):
@@ -31,7 +33,9 @@
 #   DECOMPILER_JAR    Path to a CFR jar to use for --src (it is driven with CFR's flags)
 #   DECOMPILER_CMD    A command taking CFR's command line (<jar> --jarfilter .. --outputdir ..),
 #                     e.g. a wrapper script; takes precedence over DECOMPILER_JAR
-#   UPDATE_SNAPSHOT   Snapshot store (default ~/.cache/hytale-update-snapshot)
+#   UPDATE_SNAPSHOT   Snapshot store. Default: ~/.cache/hytale-update-snapshot for the
+#                     default cache, and <cache>.snapshot for any other cache, so exploring
+#                     another jar in a scratch cache never touches the real record.
 #
 # Re-run after a game update (the cache is wiped each run, like the assets cache,
 # so renamed/removed classes don't linger and mask dead references in the docs).
@@ -78,9 +82,12 @@ for c in javap unzip; do
   command -v "$c" >/dev/null 2>&1 || { echo "  required tool missing: $c" >&2; exit 2; }
 done
 
-SNAP="${UPDATE_SNAPSHOT:-$HOME/.cache/hytale-update-snapshot}"
 meta() { awk -F= -v k="$2" '$1==k{sub(/^[^=]*=/,""); print; exit}' "$1" 2>/dev/null; }
-C_ABS="$(realpath -m "$CACHE")"; S_ABS="$(realpath -m "$SNAP")"
+C_ABS="$(realpath -m "$CACHE")"
+if [ -n "${UPDATE_SNAPSHOT:-}" ]; then SNAP="$UPDATE_SNAPSHOT"
+elif [ "$C_ABS" = "$(realpath -m "$HOME/.cache/hytale-jar")" ]; then SNAP="$HOME/.cache/hytale-update-snapshot"
+else SNAP="$C_ABS.snapshot"; fi
+S_ABS="$(realpath -m "$SNAP")"
 case "$S_ABS/" in "$C_ABS/"*) echo "  snapshot store $SNAP is inside the cache $CACHE, which this script wipes" >&2; exit 2 ;; esac
 case "$C_ABS/" in "$S_ABS/"*) echo "  cache $CACHE is inside the snapshot store $SNAP" >&2; exit 2 ;; esac
 JAR_SHA="$(sha256sum "$JAR" | cut -c1-16)"
@@ -94,6 +101,10 @@ if [ ! -f "$CACHE/javap-index.txt" ]; then
   note "no existing cache — nothing to preserve"
 elif [ -n "$OLD_SHA" ] && [ "$OLD_SHA" = "$JAR_SHA" ]; then
   note "the cache was built from this same jar — rebuilding it; the snapshot store is untouched"
+elif [ -f "$SNAP/cache-meta.txt" ] && [ -n "$(meta "$SNAP/cache-meta.txt" cache)" ] \
+     && [ "$(meta "$SNAP/cache-meta.txt" cache)" != "$C_ABS" ]; then
+  # the store holds another cache's previous build: never overwrite it from this one
+  note "WARN: the snapshot store $SNAP holds the previous build of a different cache ($(meta "$SNAP/cache-meta.txt" cache)) — NOT replacing it"
 elif [ -z "$OLD_SHA" ] && [ -f "$SNAP/javap-index.txt" ]; then
   # An unstamped cache cannot be proven to be another build, and a snapshot
   # already exists: replacing it on an assumption could swap the only record of
@@ -114,6 +125,7 @@ else
   if [ -d "$CACHE/src" ]; then
     cp -a "$CACHE/src" "$TMP/src" || { rm -rf "$TMP"; echo "  FAILED: snapshot copy of src/ — the cache is NOT wiped" >&2; exit 4; }
   fi
+  echo "cache=$C_ABS" >> "$TMP/cache-meta.txt" 2>/dev/null
   { rm -rf "$SNAP.prev" && { [ ! -e "$SNAP" ] || mv "$SNAP" "$SNAP.prev"; } && mv "$TMP" "$SNAP" && rm -rf "$SNAP.prev"; } \
     || { echo "  FAILED: could not move the snapshot into place at $SNAP — the cache is NOT wiped" >&2; exit 4; }
   note "saved the previous build ($(meta "$SNAP/cache-meta.txt" version || true), jar ${OLD_SHA:-unstamped}) → $SNAP"

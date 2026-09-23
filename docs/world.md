@@ -132,7 +132,7 @@ CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)          // @Deprecat
 CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey) // @Deprecated
 ```
 
-> As of 0.6.3 the five `@Deprecated` getters above carry a plain `@Deprecated` (no `forRemoval`), as does
+> As of 0.6.8 the five `@Deprecated` getters above carry a plain `@Deprecated` (no `forRemoval`), as does
 > the whole `IChunkAccessorSync` interface they come from — they still work. The un-deprecated route to a
 > chunk is the `ChunkStore` reference API: `world.getChunkStore().getChunkReferenceAsync(chunkKey, flags)`
 > (see [GetChunkFlags](world-chunks.md#getchunkflags)) and `getChunkComponent(chunkKey, WorldChunk.getComponentType())`.

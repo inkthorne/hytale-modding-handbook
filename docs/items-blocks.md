@@ -158,7 +158,7 @@ file of its own — it is `BlockBoundingBoxes.DEFAULT`, id `0`, and is also what
 |------|------|-------------|
 | `IsStackable` | boolean | Whether the builder tool's scatter may stack this block on a like block (default `true`; 73 blocks set it to `false`, 42 set it to `true` explicitly) |
 
-`IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.6.3 (the
+`IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.6.8 (the
 `IsUsable` flag was removed by 0.6.3 — whether a block responds to Use is decided solely
 by `BlockType.Interactions.Use`, see [Block Interactions](#block-interactions)).
 

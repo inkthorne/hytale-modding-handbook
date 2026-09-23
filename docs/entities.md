@@ -918,7 +918,7 @@ Server-initiated teleports are asynchronous for players: the server adds a `Tele
 |--------|-------------|
 | `static getComponentType()` | Component type for store access |
 
-No other members (0.6.3): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. In 0.5.9 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); by 0.6.3 those moved to `TeleportAckTracker`.
+No other members (0.6.8): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. In 0.5.9 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); by 0.6.3 those moved to `TeleportAckTracker`.
 
 ### TeleportAckTracker
 

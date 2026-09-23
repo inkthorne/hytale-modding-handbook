@@ -264,7 +264,7 @@ Bit-flag constants for the `int settings` (a.k.a. `flags`) parameter accepted by
 | `NO_UPDATE_HEIGHTMAP` | 512 | Skip the heightmap update |
 | `NO_SEND_AUDIO` | 1024 | Skip break/place audio |
 | `NO_DROP_ITEMS` | 2048 | Skip item drops when breaking |
-| `NO_FIRE_ON_BREAK` | 4096 | Declared in 0.6.3 (intent: skip fire spread/ignition on break); nothing in the 0.6.8 jar reads it yet |
+| `NO_FIRE_ON_BREAK` | 4096 | Skip the broken block's `OnBreak` interaction, despite the fire-sounding name: `BlockHarvestUtils.fireOnBreakInteraction` returns early when the bit is set, and `performBlockBreak` passes the caller's settings straight through to it. It is a compile-time constant, so the jar reads it as the literal `0x1000` and a search for its name finds only the declaration |
 
 The decompiled `WorldChunk.setBlock` pipeline consumes `NO_UPDATE_STATE`, `NO_SEND_PARTICLES`, `NO_SET_FILLER`, `NO_BREAK_FILLER`, `PHYSICS`, `FORCE_CHANGED`, `PERFORM_BLOCK_UPDATE`, and `NO_UPDATE_HEIGHTMAP` directly; the notify/connections/audio/drops flags are honored by the higher-level breaking and interaction paths.
 

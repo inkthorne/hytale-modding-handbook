@@ -899,7 +899,7 @@ static boolean test(int value, int flag)   // (value & flag) == flag
 
 The `blockEntityConsumer` / `entityConsumer` callbacks see every block-entity holder and entity holder the paste creates; `PasteRegion` (a `PrefabUtil` nested class) is an optional pre-resolved set of chunk refs so a paste on the world thread never has to look chunks up.
 
-The 0.5.9-style boolean overloads — three `paste(...)` taking `boolean force` (the widest also taking `boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities`) and three `remove(...)` taking `boolean force` — still compile as of 0.6.3 but are all `@Deprecated(forRemoval = true, since = "2026-06-16")`. They just fold the booleans into `pasteFlags` (`force → FORCE`, `technicalPaste → TECHNICAL`, `pasteAnchorAsBlock → ANCHOR_BLOCK`, `!loadEntities → NO_ENTITIES`) and delegate. Write new code against the flag-based forms above.
+The 0.5.9-style boolean overloads — three `paste(...)` taking `boolean force` (the widest also taking `boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities`) and three `remove(...)` taking `boolean force` — still compile as of 0.6.8 but are all `@Deprecated(forRemoval = true, since = "2026-06-16")`. They just fold the booleans into `pasteFlags` (`force → FORCE`, `technicalPaste → TECHNICAL`, `pasteAnchorAsBlock → ANCHOR_BLOCK`, `!loadEntities → NO_ENTITIES`) and delegate. Write new code against the flag-based forms above.
 
 Rotation here is the block-config `Rotation` enum (`None`, `Ninety`, `OneEighty`, `TwoSeventy`); it is converted internally via `PrefabRotation.fromRotation()`.
 

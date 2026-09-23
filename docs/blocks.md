@@ -303,7 +303,7 @@ Blocks can emit colored light:
 |----------|------|-------------|
 | `Gathering` | object | Tool type and drop configuration |
 | `VariantRotation` | string | Rotation support — see [VariantRotation](#variantrotation) |
-| `Flags` | object | Boolean flags (only `IsStackable` as of 0.6.3 — see [Flags](#flags)) |
+| `Flags` | object | Boolean flags (only `IsStackable` as of 0.6.8 — see [Flags](#flags)) |
 | `Interactions` | object | Primary, Use, Collision, OnBreak, … handlers |
 | `State` | object | State definitions (`Definitions` map) |
 | `IsDoor` | boolean | Marks a door block (`BlockType.isDoor()`; shipped doors set it) |

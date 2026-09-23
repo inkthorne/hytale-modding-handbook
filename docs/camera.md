@@ -372,7 +372,7 @@ Each keyframe (`InteractionCamera`):
 | `Position` | `Vector3f` | `{X:0,Y:0,Z:0}` | Camera offset as an `{ "X", "Y", "Z" }` object (`Vector3fUtil.CODEC`), **not** an array; non-null |
 | `Rotation` | `Direction` | `{Yaw:0,Pitch:0,Roll:0}` | `{ "Yaw", "Pitch", "Roll" }` object, **in degrees** — the codec multiplies each component by π/180 on load. Non-null |
 
-> **One shipped asset uses these keyframe arrays** as of 0.6.3 (none did in 0.5.9):
+> **One shipped asset uses these keyframe arrays** as of 0.6.8 (none did in 0.5.9):
 > `Server/Item/Interactions/Weapons/Two_Handed_Bow/Debug_Bow_Two_Handed_Ability1.json` puts a single
 > `FirstPerson` keyframe (`Time: 0.3`, `Position: {X:0, Y:-0.7, Z:0}`, no `Rotation`) on its dash
 > interaction. The `"Camera"` blocks you'll find in `Server/Models/**` are a *different*, model-camera

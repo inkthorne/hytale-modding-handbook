@@ -166,7 +166,7 @@ Add the `ServerVersion` field as a **semver range**:
 }
 ```
 
-`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.9` on the last Update 5 build and `0.6.3` on the current one. Read it with:
+`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.9` on the last Update 5 build and `0.6.8` on the current one. Read it with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version

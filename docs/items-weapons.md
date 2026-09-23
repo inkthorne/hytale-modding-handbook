@@ -1115,7 +1115,7 @@ interaction's `DamageEffects` carries `WorldSoundEventId` (spatial, heard by all
 
 The shared `Weapon_Sword_Primary_*_Damage` interactions (and the common `DamageEntityParent`) carry
 **no** sound of their own, so a weapon that doesn't override `DamageEffects` in its `InteractionVars`
-is **silent on hit**. As of 0.6.3 eight stock swords ship with an empty `InteractionVars`
+is **silent on hit**. As of 0.6.8 eight stock swords ship with an empty `InteractionVars`
 block — so they also get no `BaseDamage` — Cutlass, Frost, Nexus, Runic, Silversteel, Steel,
 Steel_Incandescent, and Wood. If you base a weapon on one of those and want an impact sound
 (or any tier damage at all), add a `DamageEffects` and `DamageCalculator` block per combo

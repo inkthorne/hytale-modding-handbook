@@ -238,7 +238,7 @@ ItemStack getItemInHand()
 > @Deprecated(forRemoval=true) static byte getActiveSlot(Ref<EntityStore>, int sectionId, ComponentAccessor<EntityStore>)
 > ```
 > The static `com.hypixel.hytale.server.core.inventory.InventoryUtils.setActiveSlot(Ref, int, byte, ComponentAccessor)`
-> these delegate to is plain `@Deprecated` (no `forRemoval`) in 0.6.3. There are **no `Holder`-based overloads on
+> these delegate to is plain `@Deprecated` (no `forRemoval`) in 0.6.8. There are **no `Holder`-based overloads on
 > `Inventory`** — set the slot through the per-section component instead (below).
 
 #### Setting the active slot (current API)

@@ -378,7 +378,7 @@ single-entry map.
 Selects a block tint color. Two forms occur:
 
 **Constant** — one color for the whole biome (from `Void.json`). A third form, `Mix`,
-blends tint providers (registered as of 0.6.3; unused by the shipped biomes).
+blends tint providers (registered as of 0.6.8; unused by the shipped biomes).
 
 ```json
 "TintProvider": {

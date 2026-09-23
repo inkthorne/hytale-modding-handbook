@@ -79,7 +79,7 @@ Interaction System
 ### Interaction Documentation Index
 
 A curated reading path through the types that have a written section, grouped by the page that
-covers them. It is **not** the full vocabulary: as of build-26, `Interaction.CODEC` carries **124**
+covers them. It is **not** the full vocabulary: as of build-31 (0.6.8), `Interaction.CODEC` carries **124**
 registered `Type` values, of which 93 have a written section on another page and 31 are documented in
 their registry rows themselves. None is undocumented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see

@@ -799,11 +799,13 @@ section "[HARD] The gates' own fixtures pass"
 #
 # Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
 # included rather than deferred behind a flag. The exception is
-# check-update-build-fixture.py, ~30s with mutations: it drives the real
-# update-build.sh end to end, nine times per pass, against generated jars.
-# Kept in because update-build.sh runs only at a game update. Its defects would
-# otherwise surface only then, on the one run whose previous-build snapshot
-# cannot be regenerated.
+# check-update-build-fixture.py. It drives the real build-jar-cache.sh and
+# update-build.sh end to end against generated jars: 153 checks in ~21s, which
+# is kept here because those scripts run only at a game update, and their
+# defects would otherwise surface only then, on the one run whose previous-build
+# snapshot cannot be regenerated. Its --mutations pass (19 mutations, ~7 min)
+# is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
+# or triage_drift.py changes.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -817,7 +819,7 @@ check-section-binder-fixture.py
 check-type-values-fixture.py --mutations
 check-defaults-fixture.py --mutations
 check-links-fixture.py --mutations
-check-update-build-fixture.py --mutations'
+check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
 # including a traceback's `  File "..."` lines. Harmless then (a traceback arrives

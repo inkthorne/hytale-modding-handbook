@@ -12,7 +12,8 @@ changed thing that some file mentions:
     <kind> <thing> → <file> <file> ...
 
 kind is "asset", "class" (signature changed) or "body" (source changed with no
-signature change on the top-level class). The last line is
+signature change on the top-level class, or a bytecode-only change inside a
+method the decompiler could not render). The last line is
 "#SUMMARY <checked> changed thing(s) checked, <n> referenced in docs/examples".
 
 Asset keys. A doc names an asset in one of four ways, and each needs its own key:
@@ -100,7 +101,7 @@ def main(report, assets, root="."):
         if m:
             classes[m.group(1)] = "class"
     for l in lines("src-changed-classes.txt"):
-        m = re.match(r"BODY +(\S+)", l)
+        m = re.match(r"(?:BODY|BYTECODE|BLIND) +(\S+)", l)
         if m:
             classes.setdefault(m.group(1), "body")
     for cls, kind in sorted(classes.items()):

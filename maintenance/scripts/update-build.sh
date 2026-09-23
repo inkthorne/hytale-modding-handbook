@@ -201,14 +201,14 @@ TOUCHED=0
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   base="$(basename "$p")"
-  hits="$(grep -rl -F "$base" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
+  hits="$(grep -rlI --exclude-dir=build --exclude-dir=.gradle -F "$base" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
   [ -n "$hits" ] && { printf '        asset %s → %s\n' "$p" "$hits"; TOUCHED=1; }
 done < <(cat "$REPORT/assets-modified.txt" "$REPORT/assets-removed.txt" \
              "$REPORT/server-modified.txt" "$REPORT/server-removed.txt" 2>/dev/null)
 if [ -s "$REPORT/api-changed-classes.txt" ]; then
   while IFS= read -r cls; do
     simple="${cls##*.}"; simple="${simple##*$}"
-    hits="$(grep -rlw "$simple" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
+    hits="$(grep -rlIw --exclude-dir=build --exclude-dir=.gradle "$simple" docs/ examples/ 2>/dev/null | tr '\n' ' ')"
     [ -n "$hits" ] && { printf '        class %s → %s\n' "$cls" "$hits"; TOUCHED=1; }
   done < <(grep '^\(ADDED\|REMOVED\|CHANGED\)' "$REPORT/api-changed-classes.txt" | awk '{print $2}' | sort -u)
 fi

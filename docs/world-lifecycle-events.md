@@ -7,7 +7,7 @@ seo:
 
 # World & Chunk Lifecycle Events
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 Split out of [world.md](world.md) at the 2026-09-04 seam. The event classes a plugin subscribes to for world and chunk lifecycle, from `com.hypixel.hytale.server.core.universe.world.events` and its `.ecs` subpackage. The registry, priorities and base types these plug into are in [events.md](events.md), which defers domain event classes to pages like this one.\n\n> **Not to be confused with [world-events.md](world-events.md).** That documents the **World Event** feature added in 0.6.3 — scripted stage/fork timelines authored as JSON under `Server/WorldEvent`. This page is the engine's world and chunk lifecycle events, which are Java classes on the event bus. The two share the phrase and nothing else.
 

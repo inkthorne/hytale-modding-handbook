@@ -138,7 +138,7 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ### ServerVersion (target server version)
 
-> Verified against 0.6.3 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
+> Verified against 0.6.8 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
 
 > **Changed in Update 5.** `ServerVersion` is now a **semver range**, not a literal build string. It is parsed
 > into a `SemverRange` and checked by *range satisfaction* against the server's own version — the old
@@ -193,7 +193,7 @@ unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 A caret/range means you **no longer have to re-pin on every patch release** — the chief reason the old exact-string
 form was painful. Pin a range that reflects what your plugin actually tolerates. A caret does **not** survive a
 *minor* bump, though: `^0.5.0` (`>=0.5.0 <0.6.0`) stopped matching when the server moved to `0.6.x`, so every plugin
-still pinned to it now logs the `INCOMPATIBLE` warning below against `0.6.3`. Re-pin on each minor update.
+still pinned to it now logs the `INCOMPATIBLE` warning below against `0.6.8`. Re-pin on each minor update.
 
 Warnings (all non-fatal):
 - **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues, please check for plugin updates.` (`INCOMPATIBLE`).

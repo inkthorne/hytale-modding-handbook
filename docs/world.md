@@ -7,7 +7,7 @@ seo:
 
 # World API
 
-**Doc type:** Java API + JSON asset format · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Verified against 0.6.8**
 
 Covers the runtime `World` object, its configuration classes, world time, game flags and the world map
 markers a plugin can add. Two halves were split out on 2026-09-04: the per-chunk API — `WorldChunk`,

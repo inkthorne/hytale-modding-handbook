@@ -7,14 +7,14 @@ seo:
 
 # Block Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 >
 > **See also:** [Drop System](drops.md) for `DropList` loot tables
 >
 > All structures and examples below are taken directly from real asset files under
-> `Server/Item/Items/`. Counts cited are from the shipped assets: 2,952 item files carry a `BlockType` in 0.6.3.
+> `Server/Item/Items/`. Counts cited are from the shipped assets: 2,952 item files carry a `BlockType` in 0.6.8.
 
 This page documents the `BlockType` property an item carries to become a placeable block — rendering, collision, gathering, states, connections, interactions, and block-entity components.
 

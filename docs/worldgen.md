@@ -7,7 +7,7 @@ seo:
 
 # World Generation
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as
@@ -223,7 +223,7 @@ maps, prop probability, and tint/environment selection.
 | `Distance` | Distance-based falloff via a `Curve` |
 
 The tables above cover the types the shipped biomes lean on. The full density vocabulary
-registered by the generator (as of 0.6.3, `DensityAsset.CODEC` registrations in
+registered by the generator (as of 0.6.8, `DensityAsset.CODEC` registrations in
 `com.hypixel.hytale.builtin.hytalegenerator.assets.AssetManager`) is larger — comparators
 and logic (`Comparator`, `Equal`, `GreaterThan`, `GreaterOrEqual`, `LessThan`,
 `LessOrEqual`, `And`, `Or`, `Not`, `Nor`, `Xor`, `Selector`, `Switch`, `SwitchState`),
@@ -388,7 +388,7 @@ static final BuilderCodecMapCodec<IWorldGenProvider> CODEC;   // keyed by "Type"
 IWorldGen getGenerator() throws WorldGenLoadException
 ```
 
-Registered `Type` values (as of 0.6.3):
+Registered `Type` values (as of 0.6.8):
 
 | `Type` | Provider class | Registered by |
 |--------|----------------|---------------|

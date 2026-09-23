@@ -7,7 +7,7 @@ seo:
 
 # Crafting System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 
@@ -1115,7 +1115,7 @@ list it explicitly do so as a plain `MaterialQuantity`:
 ```
 
 The `MaterialQuantity` codec also accepts a `Metadata` document on an output entry, but
-**no shipped recipe uses it** as of 0.6.3 — do not copy a `Metadata.BlockState` shape from
+**no shipped recipe uses it** as of 0.6.8 — do not copy a `Metadata.BlockState` shape from
 older references; the furnace recipe that once carried one is now a bare `ItemId`.
 
 ### Multiple Bench Options

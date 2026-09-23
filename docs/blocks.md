@@ -7,7 +7,7 @@ seo:
 
 # Block Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 Block definitions configure every placeable block in Hytale, from terrain and ores to furniture, doors, and fluids. Blocks are defined as items with a `BlockType` property that specifies rendering, collision, sounds, particles, and interaction behavior.
 
@@ -43,7 +43,7 @@ Hytale separates block visual assets from game logic:
 
 | Location | Content |
 |----------|---------|
-| `Server/Item/Items/<Category>/` | Block item definitions (~2,950 item files carry a `BlockType` in 0.6.3) |
+| `Server/Item/Items/<Category>/` | Block item definitions (~2,950 item files carry a `BlockType` in 0.6.8) |
 | `Server/Item/Block/Fluids/` | Fluid block definitions (14 files) |
 | `Server/Item/Block/Hitboxes/<Category>/` | Collision shape definitions |
 | `Server/Item/Block/Sounds/` | Sound set mappings (57 files) |
@@ -61,7 +61,7 @@ Hytale separates block visual assets from game logic:
 
 Blocks are organized into categories for the Creative Library:
 
-| Category | Examples (block items using it in 0.6.3) |
+| Category | Examples (block items using it in 0.6.8) |
 |----------|----------|
 | `Blocks.Wood` | Planks, logs, bark (315 items) |
 | `Blocks.Rocks` | Stone, sandstone, marble (189) |
@@ -76,7 +76,7 @@ Blocks are organized into categories for the Creative Library:
 Furniture is **not** under `Blocks.*` — it has its own top-level namespace, and so do the
 builder-tool blocks:
 
-| Category | Examples (block items using it in 0.6.3) |
+| Category | Examples (block items using it in 0.6.8) |
 |----------|----------|
 | `Furniture.Containers` | Chests, barrels, crates (89) |
 | `Furniture.Doors` | Doors, gates, trapdoors (83) |
@@ -132,7 +132,7 @@ Java runtime
 | `BlockBoundingBoxes` | `server.core.asset.type.blockhitbox` | Hitbox asset (`Server/Item/Block/Hitboxes`); see [BlockBoundingBoxes](blocks-java-api.md#blockboundingboxes) |
 | `BlockTickManager` | `server.core.asset.type.blocktick` | Static holder for the block-tick provider; see [Block Ticking](blocks-java-api.md#block-ticking) |
 | `BlockTypeModule` | `server.core.blocktype` | Core `JavaPlugin` module behind block types: registers the `Bench` codec variants and the block-physics component; `BlockTypeModule.get()` |
-| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`, singleton `BlockSetModule.getInstance()`); still carries `@Deprecated(forRemoval = true)` as of 0.6.3 |
+| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`, singleton `BlockSetModule.getInstance()`); still carries `@Deprecated(forRemoval = true)` as of 0.6.8 |
 
 ---
 
@@ -346,7 +346,7 @@ inline `ItemDropList` object, whose single key is `Container`:
 
 What `DropList` is **not** is a bare array of item entries — `[{ "ItemId": …, "Quantity": … }]` fails to decode.
 
-`GatherType` values used by shipped blocks (0.6.3): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Benches`, `OreCopper` / `OreIron` / `OreSilver` / `OreGold` / `OreCobalt` / `OreThorium` / `OreMithril` / `OreAdamantite`, `Unbreakable`, `SoftWoods`. The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
+`GatherType` values used by shipped blocks (0.6.8): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Benches`, `OreCopper` / `OreIron` / `OreSilver` / `OreGold` / `OreCobalt` / `OreThorium` / `OreMithril` / `OreAdamantite`, `Unbreakable`, `SoftWoods`. The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
 
 ### VariantRotation
 
@@ -368,7 +368,7 @@ Enables directional placement based on player facing:
 | `"Pipe"` / `"DoublePipe"` | Axis-aligned pipe orientations (58 / 128) |
 | `"All"` | Every rotation (1) |
 
-(The `VariantRotation` enum; counts are shipped 0.6.3 usage.)
+(The `VariantRotation` enum; counts are shipped 0.6.8 usage.)
 
 ### Flags
 
@@ -895,7 +895,7 @@ Blocks can respond to player interactions via JSON configuration.
 
 `BlockType.Interactions` is a map keyed by [`InteractionType`](interactions.md#interactiontype-enum);
 a value is either a nested-interaction id or an inline interaction object. The keys shipped blocks
-use, with their usage counts in 0.6.3:
+use, with their usage counts in 0.6.8:
 
 | Slot | Trigger | Uses | Description |
 |------|---------|------|-------------|

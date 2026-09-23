@@ -7,7 +7,7 @@ seo:
 
 # Audio System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.6.8**
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 
@@ -70,7 +70,7 @@ Server/Audio/
 | [ItemSounds](#itemsounds) | `ItemSounds/` | 36 | Inventory drag/drop sounds |
 | [SoundSets](#soundsets) | `SoundSets/` | 1 | Named sound event collections |
 
-**Total: 1,803 audio asset files** (counts as of 0.6.3)
+**Total: 1,803 audio asset files** (counts as of 0.6.8)
 
 ---
 
@@ -228,7 +228,7 @@ files at the root of `SoundEvents/`:
 }
 ```
 
-Real attenuation presets (quietest to loudest), with their distances as shipped in 0.6.3:
+Real attenuation presets (quietest to loudest), with their distances as shipped in 0.6.8:
 
 | Preset | `StartAttenuationDistance` | `MaxDistance` |
 |--------|---------------------------|---------------|
@@ -609,7 +609,7 @@ Music selectors under `AmbienceFX/Music/` pair `Conditions` and a `Priority` wit
 **`MusicContainer`** reference. The value is either a container id string or an inline container
 object that inherits one through `Parent` (both forms decode through `MusicContainer.CHILD_ASSET_CODEC`);
 the inline form lets the selector override `AudioCategory`/`LoopCount` without a new container file.
-`AmbienceFX/Music/Zone3/Mus_Zone3_Dungeon.json` as shipped in 0.6.3:
+`AmbienceFX/Music/Zone3/Mus_Zone3_Dungeon.json` as shipped in 0.6.8:
 
 ```json
 {
@@ -683,7 +683,7 @@ a weighted-random or sequential playlist, or layered/segmented arrangements that
 `.json` file is one container, keyed by its **id** (the filename without `.json`); containers reference each other
 by id, so you compose larger arrangements from smaller ones. This replaces the flat
 [AmbienceFX `Music` block](#music-configuration), which is now auto-migrated into a generated `RandomMusicContainer`;
-an ambience selects music with its `MusicContainer` key. **212 container files** ship in 0.6.3, holding 273
+an ambience selects music with its `MusicContainer` key. **212 container files** ship in 0.6.8, holding 273
 container nodes in total — 232 `SingleTrack`, 21 `Segment`, 19 `Random` and 1 `Sequence` (nodes outnumber files
 because a `Segment`'s layers hold inline `SingleTrack` containers). No shipped container uses `Horizontal`.
 
@@ -803,7 +803,7 @@ plugin can build one in Java via the `*MusicContainer` config classes
 (`com.hypixel.hytale.server.core.asset.type.musiccontainer.config`) — each has a `getChildIds()` and a `CODEC`;
 `MusicContainer.getAssetMap()` resolves ids. The legacy migration path is `RandomMusicContainer.fromLegacy(...)`.
 
-> The 0.6.3 wire format (`com.hypixel.hytale.protocol.MusicContainer`) carries extra per-container fields — `exitAt`
+> The 0.6.8 wire format (`com.hypixel.hytale.protocol.MusicContainer`) carries extra per-container fields — `exitAt`
 > (`MusicSync`), `align` (`DestinationAlign`), `alignMarkerName`, `stingers` (`StingerBinding[]`), and `markers`
 > (`MusicMarker[]`) on segments — but the server config codecs expose **no JSON keys** for them yet, so they cannot be
 > authored in assets. The same is true of `protocol.StateTransition.postEvent`, added in 0.6.3 with no
@@ -817,7 +817,7 @@ plugin can build one in Java via the `*MusicContainer` config classes
 
 `AudioState` assets define the named state axes (e.g. `AudioState_CaveRegion` with values
 `Shallow` / `Volcanic` / `Deep`) that a [Segment container's](#segment-layered) `StateBindings`
-react to (and that an ambience's `SetStates` writes). Two ship in 0.6.3: `AudioState_CaveRegion`
+react to (and that an ambience's `SetStates` writes). Two ship in 0.6.8: `AudioState_CaveRegion`
 (client-authoritative) and `AudioState_Test_EncounterIntensity` (server-authoritative):
 
 ```json

@@ -7,7 +7,7 @@ seo:
 
 # World Chunks
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 Split out of [world.md](world.md) at the 2026-09-04 seam. The chunk half of the World API: the `WorldChunk` component and its block, state and terrain access; the accessor and column/section layers beneath it; the settings flags every block-writing method takes; and `ChunkTracker`, which decides what each player has loaded. The `World` object that owns all of this stays in [world.md](world.md), and the chunk **events** are in [world-lifecycle-events.md](world-lifecycle-events.md).
 
@@ -264,7 +264,7 @@ Bit-flag constants for the `int settings` (a.k.a. `flags`) parameter accepted by
 | `NO_UPDATE_HEIGHTMAP` | 512 | Skip the heightmap update |
 | `NO_SEND_AUDIO` | 1024 | Skip break/place audio |
 | `NO_DROP_ITEMS` | 2048 | Skip item drops when breaking |
-| `NO_FIRE_ON_BREAK` | 4096 | Declared in 0.6.3 (intent: skip fire spread/ignition on break); nothing in the 0.6.3 jar reads it yet |
+| `NO_FIRE_ON_BREAK` | 4096 | Declared in 0.6.3 (intent: skip fire spread/ignition on break); nothing in the 0.6.8 jar reads it yet |
 
 The decompiled `WorldChunk.setBlock` pipeline consumes `NO_UPDATE_STATE`, `NO_SEND_PARTICLES`, `NO_SET_FILLER`, `NO_BREAK_FILLER`, `PHYSICS`, `FORCE_CHANGED`, `PERFORM_BLOCK_UPDATE`, and `NO_UPDATE_HEIGHTMAP` directly; the notify/connections/audio/drops flags are honored by the higher-level breaking and interaction paths.
 
@@ -450,7 +450,7 @@ Palette-compressed block storage for one 32×32×32 section: block ids, filler i
 
 ```java
 static ComponentType<ChunkStore, BlockSection> getComponentType()
-static final int VERSION   // on-disk section format version (6 in 0.6.3)
+static final int VERSION   // on-disk section format version (6 in 0.6.8)
 
 // Reads
 int get(int x, int y, int z)

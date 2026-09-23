@@ -7,7 +7,7 @@ seo:
 
 # Camera Control
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.8**
 
 The server can take control of a player's camera — pulling it back into a zoomed-out
 **top-down** or **side-scroller** view, repositioning it, locking its orientation, and
@@ -320,7 +320,7 @@ first- and third-person **perspective**. It **cannot** zoom or reposition — th
 [packet path](#the-setservercamera-packet) only.
 
 Real shipped example — `Server/Item/Items/_Debug/Test_Camera_Item.json` (the only asset in 0.5.9
-— still the only one in 0.6.3 — that uses this interaction type, and it only exercises `ForcePerspective`):
+— still the only one in 0.6.8 — that uses this interaction type, and it only exercises `ForcePerspective`):
 
 ```json
 "Next": {

@@ -7,7 +7,7 @@ seo:
 
 # Entities API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
 
@@ -206,7 +206,7 @@ boolean isWaitingForClientReady()
 static ComponentType<EntityStore, Player> getComponentType()
 ```
 
-> **Deprecations:** still true in 0.6.3 — `getPlayerConnection()`
+> **Deprecations:** still true in 0.6.8 — `getPlayerConnection()`
 > and `getPlayerRef()` are marked `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
 > `PacketHandler` from a `PlayerRef` via [`PlayerRef.getPacketHandler()`](#playerref) instead of
 > `getPlayerConnection()`. `getPlayerRef()` still works with no 1:1 replacement — prefer carrying
@@ -401,7 +401,7 @@ These hold no per-entity state — presence alone is the signal. They expose a s
 | `NPCMarkerComponent` | Tags the entity as an NPC — **deprecated, see note** | `NPCMarkerComponent.get()` |
 | `PropComponent` | Tags the entity as a static prop | `PropComponent.get()` |
 
-> **Deprecated (still `@Deprecated(forRemoval = true)` in 0.6.3):** `NPCMarkerComponent` is
+> **Deprecated (still `@Deprecated(forRemoval = true)` in 0.6.8):** `NPCMarkerComponent` is
 > on the way out. The engine still attaches it to every NPC, so
 > it works today, but it is slated for removal. To identify or count NPCs, query
 > the `NPCEntity` component instead — `store.getEntityCountFor(NPCEntity.getComponentType())`
@@ -715,7 +715,7 @@ result.defaultTriggerBlocksProcessing(manager, entity, ref, flag, accessor);
 
 > [!question]
 > Unlike the other components on this page, `InteractionManager` does **not**
-> expose a static `getComponentType()` accessor (still true as of 0.6.3, verified via
+> expose a static `getComponentType()` accessor (still true as of 0.6.8, verified via
 > `javap`), so the `store.getComponent(ref, …)` retrieval used elsewhere does not
 > apply here. Its only public constructor is
 > `InteractionManager(PlayerRef, IInteractionSimulationHandler)`.
@@ -952,7 +952,7 @@ The `Teleport` check closes the one-tick window between a plugin adding the comp
 | `hasElapsedSinceLastTeleport(Duration)` | True if that long has passed (or no teleport yet) |
 | `hasElapsedSinceLastTeleport(long, Duration)` | Same, against a supplied `System.nanoTime()` |
 
-`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every *initiated* teleport (`ensureAndGetComponent` + `setLastTeleport`, at send time — same-world and cross-world), so it's reliable to read; note that for a same-world teleport both `origin()` and `destination()` currently hold the destination transform (0.6.3), so use `timestampNanos()` / `hasElapsedSinceLastTeleport` rather than `origin()` for "where did they come from":
+`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every *initiated* teleport (`ensureAndGetComponent` + `setLastTeleport`, at send time — same-world and cross-world), so it's reliable to read; note that for a same-world teleport both `origin()` and `destination()` currently hold the destination transform (0.6.8), so use `timestampNanos()` / `hasElapsedSinceLastTeleport` rather than `origin()` for "where did they come from":
 
 ```java
 // Teleport cooldown: 5s since the player last teleported
@@ -1128,7 +1128,7 @@ World-space raycast variants that don't need an entity (`getTargetBlock(World, B
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.hitboxcollision`
 
-Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/`; `HitboxCollision` is the network-synced **component** referencing one config by id. The three shipped configs (0.6.3) are:
+Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/`; `HitboxCollision` is the network-synced **component** referencing one config by id. The three shipped configs (0.6.8) are:
 
 | Asset id | Contents |
 |----------|----------|

@@ -7,7 +7,7 @@ seo:
 
 # Mounts & Seating
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/NPC` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/NPC` · **Verified against 0.6.8**
 
 Three different things in Hytale are the same system underneath: **riding an NPC**, **sitting on a
 block**, and **driving a minecart**. All three end with a `MountedComponent` on the rider and a

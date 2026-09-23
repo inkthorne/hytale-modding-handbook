@@ -7,7 +7,7 @@ seo:
 
 # Encounter Manager
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/EncounterManager` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/EncounterManager` · **Verified against 0.6.8**
 
 New as of 0.6.3. An **encounter** is an invisible manager entity that runs an NPC-style **instruction tree** on
 behalf of a group of NPCs: it can trigger nearby spawn markers, keep a roster of the **players** taking part, drive

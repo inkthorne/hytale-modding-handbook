@@ -7,7 +7,7 @@ seo:
 
 # Interactions API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
 
 > **Note:** For `InteractionManager` (the entity component that manages interaction chains), see [entities.md](entities.md#interactionmanager).
 >
@@ -139,7 +139,7 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-26 (0.6.3)** — **124** rows: 93 have a
+Every `Type` value `Interaction.CODEC` accepts, as of **build-31 (0.6.8)** — **124** rows: 93 have a
 written section on another page and 31 are documented in their registry rows themselves. **None is
 undocumented** — as of 2026-09-04 every registered `Type` is covered. A `—` appearing here again
 means some type is undocumented: usually a game update adding one, but an edit that drops a link or

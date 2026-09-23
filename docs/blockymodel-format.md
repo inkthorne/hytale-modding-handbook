@@ -7,7 +7,7 @@ seo:
 
 # Block Model Format (.blockymodel)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.8**
 
 This document describes the `.blockymodel` file format used for defining 3D geometry in Hytale.
 
@@ -50,7 +50,7 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 
 ## File Location
 
-Models live under `Common/`, grouped by what they are for (counts are the shipped `.blockymodel` files as of 0.6.3, 2,830 in total):
+Models live under `Common/`, grouped by what they are for (counts are the shipped `.blockymodel` files as of 0.6.8, 2,830 in total):
 
 | Category | Location | Shipped files |
 |----------|----------|---------------|

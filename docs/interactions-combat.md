@@ -7,7 +7,7 @@ seo:
 
 # Combat & Effects Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -1113,7 +1113,7 @@ This stops any ongoing:
 > the same tag set. A boss whose every attack should survive interrupts therefore needs the tag on
 > each of its attack root interactions.
 >
-> As of 0.6.3 **no shipped root interaction actually declares an `Uninterruptable` tag** — the two
+> As of 0.6.8 **no shipped root interaction actually declares an `Uninterruptable` tag** — the two
 > vanilla assets that write `"ExcludedTag": "Uninterruptable"` (`Bomb_Explode_Stun`,
 > `Debug_Stick_Stun`) therefore currently exclude nothing. Treat the name as a convention to follow,
 > not as an engine-recognised value; any string works as long as your root interactions declare it.

@@ -7,7 +7,7 @@ seo:
 
 # Singleplayer API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 Events for singleplayer-specific functionality.
 

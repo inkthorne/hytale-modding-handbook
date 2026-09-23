@@ -7,7 +7,7 @@ seo:
 
 # Deployables
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/ProjectileConfigs` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/ProjectileConfigs` · **Verified against 0.6.8**
 
 A **deployable** is a temporary, player-owned entity placed into the world by an interaction — the
 crossbow turret, the healing and slowness totems, the fire trap. `DeployablesPlugin`
@@ -147,7 +147,7 @@ An auto-targeting shooter.
 | `TrapSpawner` | `DeployableConfig` | **Required.** The nested config this spawner deploys |
 
 > **Neither has a shipped use.** Of the four registered types, only `Aoe` and `Turret` appear in
-> 0.6.3 assets — the fire trap is an `Aoe`, despite its name and file path. `Trap` and
+> 0.6.8 assets — the fire trap is an `Aoe`, despite its name and file path. `Trap` and
 > `TrapSpawner` are registered, loadable and undocumented by example, so treat the key lists above
 > as the codec's word rather than as patterns validated by shipped content.
 

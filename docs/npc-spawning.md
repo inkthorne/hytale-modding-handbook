@@ -7,7 +7,7 @@ seo:
 
 # NPC Spawning
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.8**
 
 Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Four ways NPCs enter the world: **spawn beacons** (ambient, environment-filtered), **companion block spawners** (a block that keeps an NPC alive nearby), **manual spawn markers** (a placed marker that stays inert until an interaction fires it) and the **`SpawnNPC` interaction** (an item or block chain spawning on demand). Role definitions themselves stay in [npc-roles.md](npc-roles.md).
 

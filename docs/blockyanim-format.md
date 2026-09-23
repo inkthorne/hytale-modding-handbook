@@ -7,7 +7,7 @@ seo:
 
 # Block Animation Format (.blockyanim)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.8**
 
 This document describes the `.blockyanim` file format used for animating block states in Hytale.
 
@@ -47,7 +47,7 @@ Blockyanim files define animations for block models, controlling how individual 
 
 ## File Location
 
-Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Distribution of the 6,736 shipped files under `Common/` (0.6.3):
+Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Distribution of the 6,736 shipped files under `Common/` (0.6.8):
 
 | Location | Files | Typical use |
 |----------|-------|-------------|

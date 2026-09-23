@@ -7,7 +7,7 @@ seo:
 
 # Item Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
@@ -137,7 +137,7 @@ Controls how the item renders in the inventory:
 
 Controls which animation set the player uses when holding or using the item. Can be a string referencing a predefined animation set, or an object for custom overrides.
 
-**String format** (values used by the 0.6.3 item set; `Block` and `Item` account for ~90% of items):
+**String format** (values used by the 0.6.8 item set; `Block` and `Item` account for ~90% of items):
 
 | Category | Values |
 |----------|--------|
@@ -226,8 +226,8 @@ Marks how an item behaves with the player's utility slot. The `Utility` object h
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Compatible` | boolean | Item may be placed in the utility slot (117 items in 0.6.3) |
-| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (26 items in 0.6.3) |
+| `Compatible` | boolean | Item may be placed in the utility slot (117 items in 0.6.8) |
+| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (26 items in 0.6.8) |
 | `EntityStatsToClear` | string[] | Stats reset when the item leaves the utility slot (accepted by the codec; unused by shipped items) |
 
 Either `Compatible` or `Usable` is present; both are plain booleans.
@@ -240,7 +240,7 @@ Quality determines an item's rarity tier, affecting its UI border color and sort
 
 Each tier is its own asset under `Server/Item/Qualities/<Quality>.json` (`QualityValue`, slot/tooltip textures,
 `TextColor`, `LocalizationKey`, `VisibleQualityLabel`, …); the `Quality` string on an item must match one of those
-filenames. 0.6.3 ships eleven:
+filenames. 0.6.8 ships eleven:
 
 | Quality | Description | Usage |
 |---------|-------------|-------|

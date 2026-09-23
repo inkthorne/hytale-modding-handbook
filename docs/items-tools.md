@@ -7,7 +7,7 @@ seo:
 
 # Tool Items
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
@@ -68,7 +68,7 @@ Tool item (inherits Tool_<Family>_Crude base)
 | [Feedbag](#feedbag) | 1 | Feeding | Attracting livestock |
 | [Fertilizer](#fertilizer) | 2 | Growing | Accelerating plant growth |
 
-("Files" = JSON files belonging to that family as of 0.6.3. It is not always the folder count: the
+("Files" = JSON files belonging to that family as of 0.6.8. It is not always the folder count: the
 `Pickaxe/_Debug/` break-shape test items are excluded, and Feedbag and Fertilizer share the one
 `Feedbag/` folder (3 files). `Server/Item/Items/Tool/` also holds five loose tools outside these
 families — `Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map` —
@@ -162,7 +162,7 @@ Configures durability loss per block set. This example is taken from `Tool_Picka
 
 ### Tool.Speed
 
-Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Tool_Shears_Basic` is the **only** item in the shipped 0.6.3 assets that sets it:
+Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Tool_Shears_Basic` is the **only** item in the shipped 0.6.8 assets that sets it:
 
 ```json
 {
@@ -174,7 +174,7 @@ Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Too
 
 ### Other Tool Keys
 
-The full `Tool` (`ItemTool`) codec, as of 0.6.3:
+The full `Tool` (`ItemTool`) codec, as of 0.6.8:
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -213,7 +213,7 @@ Limits are enforced on decode (`BreakShape.validateShape`): `Width × Height × 
 at most 32 (`MAX_OFFSET`). Exceeding either throws `IllegalArgumentException` at asset load
 ("Break shape volume … exceeds the maximum of 1024").
 
-`BreakShape` is used only by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.3 assets
+`BreakShape` is used only by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.8 assets
 (excerpt from `Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`):
 
 ```json
@@ -242,7 +242,7 @@ On the Java side, `ItemTool.getBreakShape()` and `ItemTool.getBreakShapeDurabili
 
 ## Material Tiers
 
-Pickaxes and hatchets share one material progression (values read from the 0.6.3 `Tool_Pickaxe_*` /
+Pickaxes and hatchets share one material progression (values read from the 0.6.8 `Tool_Pickaxe_*` /
 `Tool_Hatchet_*` files; "inherits" means the variant doesn't set the key and takes the Crude base's
 value). Breaking power is per gather type, never a single number — see each family's scaling table.
 
@@ -365,7 +365,7 @@ Mining tool optimized for rocks, stone, and ore extraction.
 
 ### Power Scaling by Tier
 
-`Rocks` spec values from every 0.6.3 `Tool_Pickaxe_*` file ("inherits" = not set by the variant, so the Crude value applies):
+`Rocks` spec values from every 0.6.8 `Tool_Pickaxe_*` file ("inherits" = not set by the variant, so the Crude value applies):
 
 | Pickaxe | Quality | ItemLevel | Rocks (Power / Quality) | Durability |
 |---------|---------|-----------|-------------------------|------------|
@@ -478,7 +478,7 @@ The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound o
 
 ### Power Scaling by Tier
 
-`Woods` spec power from every 0.6.3 `Tool_Hatchet_*` file; higher tiers raise the `Woods` power (it plateaus at 0.5 from Thorium up) and add `HitSoundLayer` overrides.
+`Woods` spec power from every 0.6.8 `Tool_Hatchet_*` file; higher tiers raise the `Woods` power (it plateaus at 0.5 from Thorium up) and add `HitSoundLayer` overrides.
 
 | Hatchet | Quality | ItemLevel | Woods | Durability |
 |---------|---------|-----------|-------|------------|
@@ -583,7 +583,7 @@ Farming tool that converts soil blocks for planting.
 
 The `Hoe_Till` root interaction (`RootInteractions/Weapons/Hoe/Attacks/Till/Hoe_Till.json`, a 0.233s
 `BlockInteraction` cooldown per game mode) wraps the `Hoe_Till` interaction, which uses `ChangeBlock`.
-Its `Changes` is a map of source block to result block — 16 entries as of 0.6.3, covering the dirt,
+Its `Changes` is a map of source block to result block — 16 entries as of 0.6.8, covering the dirt,
 grass, mud, leaves, needles and pathway soil variants (abridged excerpt):
 
 ```json
@@ -1385,7 +1385,7 @@ Every arg entry carries `Type` (the discriminator), `Id`, an optional `Default`,
 | `BrushOrigin` | `BrushOriginArg` | `BrushOrigin` | — |
 
 (Those nine are the names registered on `ToolArg.CODEC` by `BuilderToolsPlugin`. The package also contains
-`BrushAxisArg` and `BrushRotationArg`, but as of 0.6.3 neither is registered under a JSON `Type`, so they
+`BrushAxisArg` and `BrushRotationArg`, but as of 0.6.8 neither is registered under a JSON `Type`, so they
 cannot be declared from an item file.)
 
 ### ToolArg (Base Class)

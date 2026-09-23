@@ -7,7 +7,7 @@ seo:
 
 # Connected Blocks
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
 
 Split out of [blocks.md](blocks.md) at the seam recorded in `maintenance/page-size-arrears.txt`.
 Connected blocks pick their model and state from their neighbours: a block opts in through
@@ -177,7 +177,7 @@ fixed shape vocabulary and matches neighbors by face tag, a **patterned** rule s
 composable rule tree: boolean `And` / `Or` / `Not` nodes over two leaf predicates (face tags
 and neighbor shapes), evaluated against a rotatable pattern of block offsets.
 
-> **Nothing in 0.6.3 ships as a patterned rule set.** `Server/Item/ConnectedBlockRuleSets/`
+> **Nothing in 0.6.8 ships as a patterned rule set.** `Server/Item/ConnectedBlockRuleSets/`
 > — the directory the asset store reads — does not exist in `Assets.zip`, and all ~554
 > connected blocks still use `Stair`, `Roof` or `CustomTemplate`. The system is fully wired
 > (assets, codecs, client packets) and available to plugins, but there is no shipped example

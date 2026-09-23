@@ -7,7 +7,7 @@ seo:
 
 # Combat API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
 
 This document covers damage events, combat systems, and kill feed customization.
 
@@ -183,7 +183,7 @@ Asset type representing the cause/type of damage. Returned by `Damage.getCause()
 ### Predefined Constants (all `@Deprecated`)
 
 > **⚠️ All eight `DamageCause.*` static fields carry `@Deprecated` + `@Nullable`** (a bare
-> `@Deprecated`; the 0.6.3 jar records no `since` element on it). `DamageCause`
+> `@Deprecated`; the 0.6.8 jar records no `since` element on it). `DamageCause`
 > is now an asset-store-backed type — the causes live as JSON assets under `Server/Entity/Damage/`,
 > and the static convenience fields are deprecated in favor of looking the cause up by id. See
 > [Obtaining a cause](#obtaining-a-cause-non-deprecated) below for the current API.

@@ -7,7 +7,7 @@ seo:
 
 # UI Elements Reference
 
-**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.3**
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.8**
 
 Comprehensive reference for all UI element types in Hytale's DSL.
 

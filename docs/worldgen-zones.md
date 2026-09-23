@@ -7,7 +7,7 @@ seo:
 
 # World Structures (Zones)
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
 
 The "zone" in Hytale's data is a **world structure** file under
 `Server/HytaleGenerator/WorldStructures/`. A world structure assigns biomes across the
@@ -151,7 +151,7 @@ in the shared world biome map by name:
 fields built from several `SimplexNoise2D` sources through `Mix`/`Min`/`Normalizer`/`Clamp`/
 `Distance` nodes, and also exports the sub-fields `World-Continent-Map` and `World-River-Map`.
 
-Which map each shipped structure reads (as of 0.6.3):
+Which map each shipped structure reads (as of 0.6.8):
 
 | Structure(s) | `Density` | Defined in |
 |--------------|-----------|------------|
@@ -342,7 +342,7 @@ No ranges; a flat density and a single default biome.
 ## Gotchas & Errors
 
 Backtick-quoted strings below are the literal messages `BasicWorldStructureAsset` and the
-`HytaleGenerator` plugin log (verified against `HytaleServer.jar` 0.6.3). All of them are
+`HytaleGenerator` plugin log (verified against `HytaleServer.jar` 0.6.8). All of them are
 **warnings** — the world still generates, just wrong — so watch the server log rather than
 waiting for a load failure.
 

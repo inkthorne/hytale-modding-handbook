@@ -7,7 +7,7 @@ seo:
 
 # Prefabs API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.8**
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 
@@ -1168,14 +1168,14 @@ Prefabs are stored as `.prefab.json` files (JSON documents read through the BSON
 | **World Gen Prefabs** | `PrefabStore.getWorldGenPrefabsPath()` | Prefabs resolved through the world-gen root (default generator name `"Default"`) |
 | **Asset Pack Prefabs** | `{AssetPack}/Server/Prefabs/` | Custom prefabs from mods — `PrefabStore.getAssetPrefabsPathForPack(pack)` |
 
-**Binary format:** every one of the 7,828 prefabs shipped in the 0.6.3 `Assets.zip` is plain `.prefab.json` — no `.lpf` files ship. `.lpf` is the server's own packed buffer format (`BinaryPrefabBufferCodec`, format version 21; a raw block-column encoding, not a general-purpose compression container). It appears in two places: as an on-demand `<name>.prefab.json.lpf` conversion cache that `PrefabBufferUtil` writes the first time a JSON prefab is packed, and as `<name>.lpf` when a prefab is saved with `PrefabFormat.COMPRESSED` (or `AUTO` at ≥ 300,000 blocks — see [PrefabFormat](#prefabformat-063)). Loading is transparent either way.
+**Binary format:** every one of the 7,828 prefabs shipped in the 0.6.8 `Assets.zip` is plain `.prefab.json` — no `.lpf` files ship. `.lpf` is the server's own packed buffer format (`BinaryPrefabBufferCodec`, format version 21; a raw block-column encoding, not a general-purpose compression container). It appears in two places: as an on-demand `<name>.prefab.json.lpf` conversion cache that `PrefabBufferUtil` writes the first time a JSON prefab is packed, and as `<name>.lpf` when a prefab is saved with `PrefabFormat.COMPRESSED` (or `AUTO` at ≥ 300,000 blocks — see [PrefabFormat](#prefabformat-063)). Loading is transparent either way.
 
 ### Root Schema (Version 8)
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `version` | int | Yes | - | Format version — must be exactly 8 (`Prefab version is too old/new` otherwise) |
-| `blockIdVersion` | int | No | 8 | Block-id migration version; `BlockMigration` assets from this version upward are applied to every `name` on load. Files written by 0.6.3 carry 11 |
+| `blockIdVersion` | int | No | 8 | Block-id migration version; `BlockMigration` assets from this version upward are applied to every `name` on load. Files written by 0.6.8 carry 11 |
 | `anchorX` | int | Yes | - | Anchor X position (placement origin) |
 | `anchorY` | int | Yes | - | Anchor Y position (placement origin) |
 | `anchorZ` | int | Yes | - | Anchor Z position (placement origin) |
@@ -1233,7 +1233,7 @@ Block components attach block-entity (ECS `ChunkStore`) data to placed blocks. T
 | `ItemContainer` | object | The serialized `SimpleItemContainer`: `Capacity` (slot count) and `Items` (slot → item stack map, `{}` for empty) |
 | `Capacity` | int | Container capacity (short) |
 
-Of the 1,524 `ItemContainerBlock` blocks in the shipped 0.6.3 prefabs, exactly one — `Goblin_Thief_Chest` — sets a `Droplist`; the rest (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. The other block-component ids that appear in shipped prefabs, by frequency: `FarmingBlock` (7,715), `BlockSpawner` (3,027), `TilledSoil` (2,113), `PlacedByInteraction` (1,152 — a single `WhoPlacedUuid` binary field), `PrefabSpawner` (1,083 — see [PrefabSpawnerBlock](#prefabspawnerblock)), `RespawnBlock` (550), `BenchBlock` (170), `ProcessingBenchBlock` (150), `BlockMapMarker` (5).
+Of the 1,524 `ItemContainerBlock` blocks in the shipped 0.6.8 prefabs, exactly one — `Goblin_Thief_Chest` — sets a `Droplist`; the rest (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. The other block-component ids that appear in shipped prefabs, by frequency: `FarmingBlock` (7,715), `BlockSpawner` (3,027), `TilledSoil` (2,113), `PlacedByInteraction` (1,152 — a single `WhoPlacedUuid` binary field), `PrefabSpawner` (1,083 — see [PrefabSpawnerBlock](#prefabspawnerblock)), `RespawnBlock` (550), `BenchBlock` (170), `ProcessingBenchBlock` (150), `BlockMapMarker` (5).
 
 ### Fluid Entry Properties
 

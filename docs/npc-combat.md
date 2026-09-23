@@ -7,7 +7,7 @@ seo:
 
 # NPC Combat
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.8**
 
 Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Hytale has **two** NPC melee paths and the choice matters; this page covers both, and the Combat Action Evaluator that drives the second. Role definitions, sensors and instructions stay in [npc-roles.md](npc-roles.md).
 

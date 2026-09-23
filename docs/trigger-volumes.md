@@ -7,7 +7,7 @@ seo:
 
 # Trigger Volumes
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.6.8**
 
 New in Update 5, substantially extended in 0.6.3 (rules, signals, more events/effects). A **trigger volume** is a
 3D region (box, sphere, or cylinder) that runs a list of **effects** when something happens inside it — a player
@@ -109,7 +109,7 @@ Every effect entry carries the base keys below (from `TriggerEffect`), plus its 
 ## Built-in effect types
 
 The `Type` value selects the effect. These are the names registered by the built-in `TriggerVolumesPlugin`
-(verified against the 0.6.3 jar). The JSON keys listed are each effect's codec keys (enum values in
+(verified against the 0.6.8 jar). The JSON keys listed are each effect's codec keys (enum values in
 `UPPER_SNAKE`); for semantics read the corresponding `…effect.builtin.<Name>Effect` class or use the in-game inspector.
 
 | `Type` | Effect | Type-specific JSON keys |
@@ -239,7 +239,7 @@ Conditions gate an asset's effects: list them under `Conditions`, and the effect
 
 > Note the naming asymmetry: **effect** type names drop the `Effect` suffix (`SendMessageEffect` → `"SendMessage"`),
 > while **condition** type names keep the full class name (`PermissionCondition` → `"PermissionCondition"`) — except
-> `TimeOfDayCondition`, registered as plain `"TimeOfDay"` in 0.6.3.
+> `TimeOfDayCondition`, registered as plain `"TimeOfDay"` in 0.6.8.
 
 ## Rules
 

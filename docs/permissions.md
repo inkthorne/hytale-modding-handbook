@@ -7,7 +7,7 @@ seo:
 
 # Permissions API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 This page covers the role-based permission system: checking permissions on players and commands, the built-in group hierarchy, registering your own permission nodes and groups, swapping the permission backend, and the events fired when player or group permissions change.
 
@@ -481,6 +481,7 @@ allow-list) rather than what an already-connected player is allowed to do. It sh
 | `BanProvider` (SPI, `.provider`) | Extends `AccessProvider`; the ban store: `hasBan(UUID)`, `getBan(UUID)`, `addBan(Ban)`, `removeBan(UUID)`, `getBans()`, plus `default` no-op `load()` / `save()`. Its `default getDisconnectReason` denies with the ban's own `getDisconnectReason()` when `getBan(uuid)` is non-null, else denies with the generic `UNDESCRIBED_BAN` message when `hasBan(uuid)`, else allows (`NO_REASON`, an empty `Optional`). Expiry is the implementation's job — filter on `Ban.isInEffect()` inside `getBan`/`hasBan`, as `HytaleBanProvider` does |
 | `HytaleBanProvider` (`.provider`) | Default disk `BanProvider` (`bans.json`, `BAN_FILE_PATH`) |
 | `BanStorageProvider` (`.provider`) | Codec-selected factory (`CODEC`, keyed by id) that yields the `BanProvider` — `DiskBanStorageProvider` (`"Disk"`) is the built-in |
+| `ConnectionRegistry` (`server.core.io`, 0.6.8+) | Final singleton (`ConnectionRegistry.get()`) mapping an account `UUID` to its live `PacketHandler`s. Its only public operation is `disconnect(UUID, Message)`, which disconnects each of them and returns how many it disconnected (`0` when the account has none); it is how `ban` kicks |
 | `Ban` (`.ban`) | A single ban (final, codec-backed `CODEC`): `new Ban(target, by, timestamp, expiresOn, reason)` — `expiresOn == null` is permanent; `getTarget()`, `getBy()`, `getTimestamp()`, `getExpiresOn()`, `getReason()`, `isInEffect()`, `getDisconnectReason()`, plus typed metadata via `getMetadata(KeyedCodec)` / `withMetadata(...)` |
 
 ### AccessControlModule entry points
@@ -489,7 +490,8 @@ allow-list) rather than what an already-connected player is allowed to do. It sh
 |--------|-------------|
 | `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection (the `SingleplayerModule` uses this) |
 | `getBanProvider()` / `setBanProvider(BanProvider)` / `restoreBanProvider(expected, previous)` | Read or swap the ban store; `setBanProvider` returns the previous one and `restoreBanProvider` puts it back only if the current one is still `expected` |
-| `ban(Ban)` / `unban(UUID)` / `isBanned(UUID)` | Ban bookkeeping through the active provider |
+| `ban(Ban)` / `unban(UUID)` / `isBanned(UUID)` | Ban bookkeeping through the active provider. `ban` returns `false` without storing anything when the ban is not `isInEffect()` or the provider refuses it; on success it also **disconnects every live connection of the target account** with `ban.getDisconnectReason()`, via `ConnectionRegistry` (below) |
+| `getDisconnectReason(UUID)` | (0.6.8+ public; private before) The same verdict the connect-time check uses: asks each registered `AccessProvider` in registration order and returns the first present reason, awaiting a provider whose future is still pending before moving on; `Optional.empty()` when every provider allows. Use it to pre-check an account without connecting it |
 | `isJoinPermissionRequired()` / `setJoinPermissionRequired(boolean)` | Read / persist the config flag (`CompletableFuture<Void>`) |
 | `allowJoin(UUID)` / `allowJoin(Collection<UUID>)` / `disallowJoin(UUID)` / `disallowAllJoins()` | Grant / revoke the `hytale.server.join` **user** grant (the `/whitelist add|remove|clear` commands) |
 | `isAllowedToJoin(UUID)` / `getUsersWithJoinGrant()` | Effective check (groups/wildcards count) / the direct grants only |
@@ -506,7 +508,7 @@ AccessControlModule.get().ban(new Ban(targetUuid, adminUuid, Instant.now(),
 ```
 
 > [!WARNING]
-> Verified against `HytaleServer.jar` (0.6.3). Apart from `SingleplayerModule`, no first-party plugin registers an
+> Verified against `HytaleServer.jar` (0.6.8). Apart from `SingleplayerModule`, no first-party plugin registers an
 > `AccessProvider` or swaps the `BanProvider`, so those entry points are documented from their signatures — register
 > during your plugin `setup()` and test against your target build.
 

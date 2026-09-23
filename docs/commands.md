@@ -7,7 +7,7 @@ seo:
 
 # Commands API
 
-**Doc type:** Java API · **Verified against 0.6.3**
+**Doc type:** Java API · **Verified against 0.6.8**
 
 The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
 
@@ -159,7 +159,7 @@ protected abstract void execute(
 
 ### Usage Example
 
-Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.6.3 jar).
+Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.6.8 jar).
 
 ```java
 public class HelloCommand extends AbstractPlayerCommand {
@@ -331,7 +331,7 @@ MatchResult matches(String language, String search, int termDepth)
 
 ### Permission model (why a new command says "no permission")
 
-> Verified against 0.6.3 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
+> Verified against 0.6.8 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
 
 When a command is registered, `setOwner()` runs:
 

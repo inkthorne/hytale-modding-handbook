@@ -7,7 +7,7 @@ seo:
 
 # Adventure API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.8**
 
 This document covers adventure gameplay features like instance discovery and treasure chests.
 

@@ -7,7 +7,7 @@ seo:
 
 # Props & Structure Placement
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
 
 Hytale places trees, rocks, plants, ores, encounters and structures through **props**. A biome
 carries a `Props[]` array; each entry pairs a set of **positions** (where to try placing) with an
@@ -156,7 +156,7 @@ root/branch types:
 | `Weighted` | `WeightedAssignments[]`, `SkipChance`, `Seed` | Randomly choose one child assignment by `Weight`. `SkipChance` is the chance to place nothing. |
 | `Constant` | `Prop` | Always yields one prop. |
 | `Imported` | `Name` | Pull in an assignment graph exported elsewhere. |
-| `Sandwich` | `Delimiters[]` (`MinY`/`MaxY` → `Assignments`) | Route by the candidate's Y band (registered as of 0.6.3; unused by the shipped files). |
+| `Sandwich` | `Delimiters[]` (`MinY`/`MaxY` → `Assignments`) | Route by the candidate's Y band (registered as of 0.6.8; unused by the shipped files). |
 
 These five are the complete assignment vocabulary (`AssignmentsAsset.CODEC` registrations).
 `Union` is **not** an assignment — it is a prop type (see below); an assignment that places
@@ -301,7 +301,7 @@ position — `Plains1_Oak_Trees.json` unions a `Prefab` tree with a `Cluster` of
 
 ### Other prop types
 
-Also registered (as of 0.6.3): `Locator` (`Prop` + `Pattern`/`Scanner`/`PlacementCap` —
+Also registered (as of 0.6.8): `Locator` (`Prop` + `Pattern`/`Scanner`/`PlacementCap` —
 relocate a child prop to a matching surface), `Mask` (`Prop` + `Mask` block mask — e.g.
 `Taiga1_Iron.json` wraps its `Density` ore prop), `Offset` (`Offset` + `Prop`), `Weighted` (`Entries` of `Weight`/`Prop`,
 `Seed`), `Queue` (`Props[]`, first that fits), `StaticRotator` / `RandomRotator`
@@ -406,7 +406,7 @@ whole set**: `MaterialSet.test` returns `contains && Inclusive || !contains && !
 ## Positions & PropDistributions
 
 The `Positions/`, `PropDistributions/`, and `Props/` directories hold standalone, reusable graphs.
-As of 0.6.3 each ships only a stub example (`ExamplePositions.json` is a bare `List`,
+As of 0.6.8 each ships only a stub example (`ExamplePositions.json` is a bare `List`,
 `ExamplePropDistribution.json` a bare `Constant`, `ExampleProp.json` a bare `Cuboid`); the
 real composed graphs live inline in biomes.
 
@@ -480,7 +480,7 @@ in any asset file and they are not part of the format:
 
 ## Gotchas & Errors
 
-Backtick-quoted strings below are literal messages from `HytaleServer.jar` 0.6.3.
+Backtick-quoted strings below are literal messages from `HytaleServer.jar` 0.6.8.
 
 The `HytaleGenerator` prop pipeline logs rather than throws, so a broken prop usually shows
 up as *nothing being placed* plus a line in the server log:
@@ -497,7 +497,7 @@ kept here because they still surface in server logs:
 - **`Prefab nesting limit exceeded!`** → thrown by `buildertools`' `RecursivePrefabLoader` (the `/prefab` command), not by worldgen. Fix: flatten the prefab references / break the cycle.
 - **`prefab pool contains list with null element`** → a prefab pool list has a null/missing path entry. Fix: remove the null and provide a valid resource path. (Through build-17 an empty pool threw a sibling `prefab pool contains empty list` message; 0.5.7 removed that exact string — an empty pool still fails, but not with that text.)
 
-> As of 0.6.3 the `prefab pool contains list with null element` string lives in the
+> As of 0.6.8 the `prefab pool contains list with null element` string lives in the
 > `PrefabProp` under `hytalegenerator/props/deprecated/prefab/`, not the live `PrefabProp`
 > in `hytalegenerator/props/` — the live one logs the messages in the first list above
 > instead.

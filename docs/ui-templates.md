@@ -7,7 +7,7 @@ seo:
 
 # UI Templates, Variables & Localization
 
-**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.3**
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.8**
 
 Advanced DSL features for reusable UI components and localization.
 

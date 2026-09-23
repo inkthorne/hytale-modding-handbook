@@ -7,7 +7,7 @@ seo:
 
 # World Events
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/WorldEvent` · **Verified against 0.6.3**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/WorldEvent` · **Verified against 0.6.8**
 
 New as of 0.6.3. A **world event** is a scripted timeline that runs inside a world: a graph of **stages**, each
 offering one or more **forks**; a fork waits on a list of **conditions** (a timer, players entering a radius, a
@@ -114,7 +114,7 @@ into its own file under `Server/WorldEvent/Stage/` and referenced by id — usef
 "Whichever fork's conditions complete first will be selected to run its actions and 'next' stage" — forks are
 alternatives, evaluated concurrently; the losing forks' conditions are cancelled.
 
-> **No stage assets ship in 0.6.3.** `Server/WorldEvent/Stage/` is a registered asset path but the game ships it
+> **No stage assets ship in 0.6.8.** `Server/WorldEvent/Stage/` is a registered asset path but the game ships it
 > empty — the only shipped world-event asset writes its stage inline. The standalone-file example above is
 > therefore constructed from the codec, not copied from a shipped file.
 

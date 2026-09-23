@@ -7,7 +7,7 @@ seo:
 
 # Caves
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
 
 Hytale caves are **not** a separate "cave type / cave node / corridor" system. A cave is simply a
 **density field** that goes negative inside the volume you want hollow, combined into a biome's
@@ -136,7 +136,7 @@ combinator:
 > way round (its `Mix` returns `Constant -1` outside the depth band) and is only correct after an
 > `Inverter`. Check which way an existing field is authored before importing it.
 
-Import counts across the shipped assets (as of 0.6.3): `Plains1_Caves_Terrain` 8×,
+Import counts across the shipped assets (as of 0.6.8): `Plains1_Caves_Terrain` 8×,
 `Volcanic1_Caves_Terrain` 4×, `Plains1_Caves_Deeproot_Terrain` 2×, and
 `Plains1_Caves_Mountains` **0×** — that file is loaded only for its `Cave_Snakes_Ceiling`
 sub-export, so treat its top-level field as a reference graph rather than a live one.

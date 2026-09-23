@@ -7,7 +7,7 @@ seo:
 
 # Prefab Categories
 
-**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.8**
 
 Hytale ships 7,828 `.prefab.json` files under `Server/Prefabs`, organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 
@@ -60,7 +60,7 @@ Note the singular directory names: `Mineshaft`, `Dungeon`, `Cave`, `Npc` — not
 
 ## Quick Navigation
 
-Counts are exact file counts in the 0.6.3 `Assets.zip`.
+Counts are exact file counts in the 0.6.8 `Assets.zip`.
 
 | Category | Directory | Count | Description |
 |----------|-----------|-------|-------------|
@@ -92,7 +92,7 @@ Prefab files follow consistent naming patterns that encode category, type, varia
 
 ### Common Patterns
 
-Every example below is a real 0.6.3 filename (the `.prefab.json` suffix is omitted).
+Every example below is a real 0.6.8 filename (the `.prefab.json` suffix is omitted).
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
@@ -135,7 +135,7 @@ Biome/theme tokens appear as an infix in the filename, not only at the end. Thes
 | `_Desert_` (23) | Arid/desert regions | `Arches_Desert_Drylands_Pillars_006` |
 | `_Frozen_` (14) | Frozen variants | `Encounter_Shale_Monuments_EncounterOBJ_Shale_Frozen_001` |
 
-(`_Eternal` and `_Underwater` were documented for earlier builds but appear on no 0.6.3 prefab filename; aquatic content is instead grouped by directory — `Plants/Seaweed/`, `Plants/Coral/`, `Rock_Formations/Rocks/Ocean/`.)
+(`_Eternal` and `_Underwater` were documented for earlier builds but appear on no 0.6.8 prefab filename; aquatic content is instead grouped by directory — `Plants/Seaweed/`, `Plants/Coral/`, `Rock_Formations/Rocks/Ocean/`.)
 
 ---
 
@@ -290,7 +290,7 @@ Size is a directory level under most materials, and repeats in the filename:
 | `Medium` | 184 | `Encounter_City_Oceans_Buildings_Medium_Blue_001` |
 | `Tiny` | 8 | rare |
 
-(No `Massive` tier ships in 0.6.3 — earlier builds of this page listed one.)
+(No `Massive` tier ships in 0.6.8 — earlier builds of this page listed one.)
 
 ### Example: Sandstone Arch
 
@@ -357,7 +357,7 @@ Building types are directory names one level below the faction theme, and are pl
 | `Chieftain` / `Grandfather` / `Throne` | Leader structures |
 | `Bridge` / `Lampposts` / `Seats` / `Braziers` / `Totems` | Props and connectors |
 
-(There are no `Workshop` or `Inn` directories in 0.6.3; `Temple` appears exactly once, under `Slothian/Disabled/`.)
+(There are no `Workshop` or `Inn` directories in 0.6.8; `Temple` appears exactly once, under `Slothian/Disabled/`.)
 
 ### Example: Kweebec Well
 
@@ -420,7 +420,7 @@ Server/Prefabs/Monuments/
 | `Zone1/` | 29 | `Encounter_Zone1_Tier1_001` |
 | `Shale/` | 9 | `Encounter_Shale_Monuments_EncounterOBJ_Shale_Frozen_001` |
 
-(There is no `Boss` encounter directory in 0.6.3.)
+(There is no `Boss` encounter directory in 0.6.8.)
 
 ### Incidental Structures
 

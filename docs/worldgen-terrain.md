@@ -7,7 +7,7 @@ seo:
 
 # Terrain Density Graphs
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.3**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
 
 Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
 **node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
@@ -351,7 +351,7 @@ and an `Empty` provider:
 | `SpaceAndDepth` | `LayerContext` (`DEPTH_INTO_FLOOR` or `DEPTH_INTO_CEILING`), `MaxExpectedDepth`, `Layers[]`, optional `Condition` | Stacks layers measured by depth into the floor (or up into the ceiling) — this is the closest real analogue to "soil layers". |
 | `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. The only layer type the shipped biomes use. |
 
-The other registered `Layers[]` entry types (as of 0.6.3) are `NoiseThickness`
+The other registered `Layers[]` entry types (as of 0.6.8) are `NoiseThickness`
 (`ThicknessFunctionXZ` + `Material` — thickness driven by a density field),
 `RangeThickness` (`RangeMin`, `RangeMax`, `Seed`, `Material` — a random thickness per
 column) and `WeightedThickness` (`PossibleThicknesses` of `Weight`/`Thickness`, plus
@@ -362,7 +362,7 @@ parameters `SPACE_ABOVE_FLOOR` / `SPACE_BELOW_CEILING`.
 | `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Selects material based on a noise/density value falling inside a `From`/`To` range. Used for scattered surface variation (pebbles, leaves, grass patches). |
 | `Constant` | `Material` | A single fixed material. |
 
-Also registered (as of 0.6.3, mostly unused by the shipped biomes): `Weighted`
+Also registered (as of 0.6.8, mostly unused by the shipped biomes): `Weighted`
 (`WeightedMaterials` with `Weight`/`Material`, `SkipChance`, `Seed`), `Striped` (`Stripes`
 between `TopY`/`BottomY`), `UpwardDepth`/`DownwardDepth` (`Depth` + `Material`),
 `UpwardSpace`/`DownwardSpace` (`Space` + `Material`), `TerrainDensity` (`Delimiters` over the
@@ -436,13 +436,13 @@ in any asset file and they are not part of the format:
 ## Gotchas & Errors
 
 Backtick-quoted strings below are the literal messages the density-asset codecs emit
-(verified against `HytaleServer.jar` 0.6.3). Codec **validator failures** reject the asset
+(verified against `HytaleServer.jar` 0.6.8). Codec **validator failures** reject the asset
 at load; **warnings** let generation continue with a degraded node, so they are easy to
 miss — watch the server log.
 
 Validator failures (`Validators`/`results.fail`, asset is rejected):
 
-- **`FromMin must be less than FromMax. Given: `** / **`ToMin must be less than ToMax. Given: `** — assembled lines `FromMin must be less than FromMax. Given: <fromMin> and <fromMax>` (and the `ToMin`/`ToMax` twin) → a `Normalizer` node's range is **inverted** (`FromMin > FromMax`). Fix: order each pair strictly ascending. A *degenerate* pair (`FromMin == FromMax`) is only a warning today, with a different literal: **`FromMin must be less than FromMax. This will fail to load in future versions. Given: `** — so equal bounds still load in 0.6.3 but are on notice.
+- **`FromMin must be less than FromMax. Given: `** / **`ToMin must be less than ToMax. Given: `** — assembled lines `FromMin must be less than FromMax. Given: <fromMin> and <fromMax>` (and the `ToMin`/`ToMax` twin) → a `Normalizer` node's range is **inverted** (`FromMin > FromMax`). Fix: order each pair strictly ascending. A *degenerate* pair (`FromMin == FromMax`) is only a warning today, with a different literal: **`FromMin must be less than FromMax. This will fail to load in future versions. Given: `** — so equal bounds still load in 0.6.8 but are on notice.
 - **`Inputs can't be empty. Anchor offsets its first input.`** → an `Anchor` density node with no `Inputs`. Fix: give it at least one input.
 - **`Keys must have unique Value entries. Keys[`** — assembled line `Keys must have unique Value entries. Keys[<j>] and Keys[<i>] both use <value>` → two `MultiMix` `Keys` entries share a `Value`. Fix: make every key's `Value` distinct.
 - **`Vector must have all components greater than 0, got `** — assembled line appends the offending vector → a vector-valued parameter (e.g. a scale) has a zero or negative component (`VectorAssetValidatorUtil`).

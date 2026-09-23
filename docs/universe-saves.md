@@ -7,7 +7,7 @@ seo:
 
 # Universes & Save Format
 
-**Doc type:** Java API + Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.6.3**
+**Doc type:** Java API + Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.6.8**
 
 A Hytale **save is a universe of worlds**. When you host a dedicated server you point it at a
 save directory; that directory *is* the universe. This page documents the on-disk layout, the
@@ -333,6 +333,16 @@ Optional flags include `--backup` with `--backup-dir <dir>` (plus `--backup-freq
 for extra mod directories (all from `com.hypixel.hytale.server.core.Options`). Players join and spawn
 directly into your authored world.
 
+> **Gotcha (0.6.8+) — the server refuses to boot inside the launcher's install directory.** At startup
+> `com.hypixel.hytale.startup.InstallDirGuard` walks up from the working directory looking for a launcher-managed
+> folder: one whose parent is named `install` and which contains the launcher's `env.dat`. If it finds one, the
+> server prints a banner headed `The server will not boot inside the install path` and exits with code **11**
+> (`ShutdownReason.INVALID_INSTALL_DIR`). The reason is that the server writes worlds, config, mods and logs into its
+> working directory, and extra files there can break launcher validation and updates. Fix: run from a save
+> directory outside the install tree, as above, pointing `--assets` at the packaged `Assets.zip`. The check is
+> skipped by `--allow-install-dir` (`Options.ALLOW_INSTALL_DIR`; the server's own help text says you accept the
+> risk of data loss), by `--singleplayer`, and by `--bare` without `--bootstrap`.
+
 ## Updating a world on a running server
 
 A persistent world is **resident while the server runs** — it stays loaded and ticking even with no
@@ -394,7 +404,7 @@ plugins can persist their own keyed records under `universe/` with a **data stor
 A world's `chunks/` data goes through the `IChunkStorageProvider` on its runtime `WorldConfig`
 (`world.getWorldConfig().getChunkStorageProvider()` / `setChunkStorageProvider(...)`). Providers
 are codec-registered by id; the ids `Universe` registers are `Hytale` (`DefaultChunkStorageProvider`,
-still the `Priority.DEFAULT` choice in 0.6.3), `IndexedStorage`, `RocksDb`, `Migration`, and `Empty`.
+still the `Priority.DEFAULT` choice in 0.6.8), `IndexedStorage`, `RocksDb`, `Migration`, and `Empty`.
 
 ```java
 // IChunkStorageProvider<Data>
@@ -638,6 +648,9 @@ format changes run through).
 
 ## Gotchas & Errors
 
+- **`The server will not boot inside the install path`** (0.6.8+; exit code 11) → the working directory is inside the
+  launcher's install tree. Run from a save directory elsewhere, or pass `--allow-install-dir` to accept the risk — see
+  [the dedicated-server workflow](#workflow-a-creative-authored-world--dedicated-server).
 - **Players still spawn at the crossroads** → the spawn world still has
   `"Plugin": { "CreativeHub": { ... } }`. Clear it to `"Plugin": {}`.
 - **`Defaults.World` has no effect** → the value must match a `universe/worlds/<name>/`

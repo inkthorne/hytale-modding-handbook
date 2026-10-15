@@ -36,6 +36,55 @@ public class EffectiveRequired {
         public String getId() { return "probe"; }
     }
 
+    record Parsed(TreeSet<String> keys, boolean hook) {}
+
+    /** Parse a CodecValidationException message as holders: an optional `Key: x` line, `Results:`, then
+     *  one line per result, `\tFAIL: ...` or `\tWARNING: ...`. Only a holder with a FAIL rejected the
+     *  document (warn-only holders are listed but do not throw); a failing holder with no preceding Key
+     *  line is a codec-level hook. */
+    static Parsed parse(String message) {
+        TreeSet<String> keys = new TreeSet<>();
+        boolean hook = false, inBlock = false, blockKeyed = false, blockFailed = false;
+        String pending = null, blockKey = null;
+        for (String ln : (message + "\nEND").split("\n")) {
+            boolean boundary = ln.startsWith("Key: ") || ln.equals("Results:") || ln.equals("END");
+            if (boundary && inBlock && blockFailed) {
+                if (blockKeyed) keys.add(blockKey); else hook = true;
+            }
+            if (ln.startsWith("Key: ")) { pending = ln.substring(5).trim(); inBlock = false; blockFailed = false; }
+            else if (ln.equals("Results:")) { inBlock = true; blockFailed = false; blockKeyed = pending != null; blockKey = pending; pending = null; }
+            else if (inBlock && ln.startsWith("\tFAIL")) blockFailed = true;
+        }
+        return new Parsed(keys, hook);
+    }
+
+    /** Build real ValidationResults holders (warn-only keyed, failing keyed, warn-only key-less, failing key-less) and
+     *  check parse() against them. A parser that counts holders instead of failures misclassifies the warn-only ones. */
+    static boolean selfTest() {
+        HytaleLogger log = HytaleLogger.getLogger();
+        boolean ok = true;
+        for (int variant = 0; variant < 3; variant++) {
+            AssetExtraInfo<String> ei = new AssetExtraInfo<>(new AssetExtraInfo.Data(Dummy.class, "probe", null));
+            var vr = ei.getValidationResults();
+            ei.pushKey("Warned"); vr.warn("w"); vr._processValidationResults(); ei.popKey();
+            ei.pushKey("Failed"); vr.fail("f"); vr._processValidationResults(); ei.popKey();
+            vr.warn("w-root"); vr._processValidationResults();                  // warn-only key-less holder
+            if (variant == 1) { vr.fail("f-root"); vr._processValidationResults(); }   // failing key-less holder
+            if (variant == 2) { ei.pushKey("Failed2"); vr.fail("f2"); vr._processValidationResults(); ei.popKey(); }
+            try { vr.logOrThrowValidatorExceptions(log); ok = false; System.err.println("self-test: nothing thrown"); }
+            catch (CodecValidationException e) {
+                Parsed pr = parse(e.getMessage());
+                TreeSet<String> want = new TreeSet<>(variant == 2 ? List.of("Failed", "Failed2") : List.of("Failed"));
+                boolean wantHook = variant == 1;
+                if (!pr.keys().equals(want) || pr.hook() != wantHook) {
+                    ok = false;
+                    System.err.println("self-test variant " + variant + ": got keys " + pr.keys() + " hook " + pr.hook() + ", want " + want + " hook " + wantHook);
+                }
+            }
+        }
+        return ok;
+    }
+
     static Class<?> load(String cn) throws ClassNotFoundException {
         ClassNotFoundException first = null;
         String cur = cn;
@@ -50,6 +99,7 @@ public class EffectiveRequired {
 
     public static void main(String[] args) throws Exception {
         HytaleLogger log = HytaleLogger.getLogger();
+        if (args[0].equals("--self-test")) { System.out.println(selfTest() ? "SELFTEST ok" : "SELFTEST FAILED"); return; }
         for (String name : Files.readAllLines(Path.of(args[0]))) {
             name = name.trim();
             if (name.isEmpty()) continue;
@@ -77,16 +127,10 @@ public class EffectiveRequired {
                     ei.getValidationResults().logOrThrowValidatorExceptions(log);
                     status = "KEYS";
                 } catch (CodecValidationException e) {
-                    TreeSet<String> keys = new TreeSet<>();
-                    for (String ln : e.getMessage().split("\n"))
-                        if (ln.startsWith("Key: ")) keys.add(ln.substring(5).trim());
+                    Parsed pr = parse(e.getMessage());
+                    TreeSet<String> keys = pr.keys;
+                    boolean hook = pr.hook;
                     status = "KEYS"; detail = String.join(",", keys);
-                    // A holder with an empty key prints "Results:" with no "Key:" line before it. Count
-                    // both: more Results than Keys means a codec-level hook ALSO failed, and dropping
-                    // that when a key is named too hid it (the first cut classified only the key-less case).
-                    long results = e.getMessage().lines().filter(l -> l.equals("Results:")).count();
-                    long keyLines = e.getMessage().lines().filter(l -> l.startsWith("Key: ")).count();
-                    boolean hook = results > keyLines;
                     if (keys.isEmpty()) { status = "CODEC_LEVEL"; detail = e.getMessage().replace('\n', ' '); }
                     else if (hook) detail += "|CODEC_LEVEL";
                 }

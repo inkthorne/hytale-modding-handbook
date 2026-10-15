@@ -65,12 +65,40 @@ for jp in sorted(src.rglob('*.java')):
     if 'BuilderCodec' in t and re.search(r'\bstatic\s+final\s+[\w.<>?, ]+\s+CODEC\s*(?:=|;)', t):
         names.append(str(jp.relative_to(src))[:-5].replace('/', '.'))
 
+def is_hook_crash(n: str, d: str) -> bool:
+    """A THROW whose first frame is a lambda of the class under test (or of a class nested in it): its own
+    validator/afterDecode crashing on the empty document. The BINARY name is compared: a hook in a nested
+    helper is `Outer$Inner.lambda$...`, and matching the top-level simple name only dropped it from every count."""
+    binary = n.split('.')[-1]
+    top = d.split(' < ')[0]
+    cls_of_frame = top.rsplit('.', 1)[0]
+    return (cls_of_frame == binary or cls_of_frame.startswith(binary + '$')) and '.lambda$' in top
+
+
+# the classifier's own cases (it has one real instance at 0.7.2, no nested one)
+for _n, _d, _want in (
+        ('a.b.Outer', 'Outer.lambda$static$3 < BuilderCodec.afterDecodeAndValidate | NPE: x', True),
+        ('a.b.Outer', 'Outer$Helper.lambda$static$0 < BuilderCodec.afterDecode | NPE: x', True),
+        ('a.b.Outer', 'Outer.processConfig < BuilderCodec.afterDecode | NPE: x', False),         # a method, not a lambda
+        ('a.b.Outer', 'BlockSoundSet.getAssetMap < Outer.processConfig | NPE: x', False),       # another class threw
+        ('a.b.Out', 'Outer.lambda$static$3 < X.y | NPE: x', False)):                             # prefix is not nesting
+    if is_hook_crash(_n, _d) != _want:
+        print(f"VOID  is_hook_crash({_n!r}, {_d!r}) != {_want}")
+        sys.exit(2)
+
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
     r = subprocess.run(['javac', '-nowarn', '-proc:none', '-cp', a.jar, '-d', str(tmp),
                         str(HERE / 'EffectiveRequired.java')], capture_output=True, text=True)
     if r.returncode:
         sys.exit(f"FAIL  EffectiveRequired.java did not compile:\n{r.stderr}")
+    # The holder parser is tested against REAL ValidationResults (warn-only and failing, keyed and
+    # key-less) before it is trusted: counting holders instead of failures would misclassify a
+    # warn-only one, and no class at 0.7.2 has one to show it.
+    st = subprocess.run(['java', '-cp', f'{tmp}:{a.jar}', 'EffectiveRequired', '--self-test'], capture_output=True, text=True)
+    if 'SELFTEST ok' not in st.stdout:
+        print(f"VOID  the holder parser failed its self-test: {(st.stdout + st.stderr)[:600]}")
+        sys.exit(2)
     (tmp / 'in.txt').write_text('\n'.join(names) + '\n')
     r = subprocess.run(['java', '-cp', f'{tmp}:{a.jar}', 'EffectiveRequired', str(tmp / 'in.txt')],
                        capture_output=True, text=True, timeout=300)
@@ -91,8 +119,7 @@ for n, st, d in rows:
         # own validator/afterDecode hook crashing on the empty document (BlockSpawnerTable:
         # a validator dereferencing Entries). Anything else is an unbooted singleton or the
         # harness not supplying an id, which says nothing about the document.
-        simple = n.split('.')[-1].split('$')[-1]
-        if d.split(' < ')[0].split('.')[0] == simple and '.lambda$' in d.split(' < ')[0]:
+        if is_hook_crash(n, d):
             st = 'HOOK_CRASH'
     measured[n] = (st, set(d.split(',')) if d and st == 'KEYS' else set())
 status = collections.Counter(s for s, _ in measured.values())
@@ -178,6 +205,12 @@ GOT = {'classes': len(names), 'decodable': status['KEYS'], 'predicted': npred, '
        'non-null default': pass_nonnull, 'null initialiser, assigned elsewhere': len(pass_null),
        'default unresolved': len(unresolved), 'codec-level, names no key': len(keyless),
        'codec-level, alongside keys': len(alongside), 'hook crash': len(crash), 'unparsed': len(unparsed)}
+HOOKS = {'AnchorDensityAsset', 'BlockTagOrItemIdField', 'Box', 'ReputationRank', 'StateFadeConfig', 'SpawnMarker',
+         'BlockSpawnerTable'}          # pinned BY NAME: a swap would keep the count and change the claim
+hooks_got = set(keyless) | set(alongside) | set(crash)
+if hooks_got != HOOKS:
+    print(f"  FAIL codec-level hook classes changed: gained {sorted(hooks_got - HOOKS)}, lost {sorted(HOOKS - hooks_got)}"
+          " - re-derive and update HOOKS here and the names quoted in CLAUDE.md / README.md")
 moved = {k: (BASELINE[k], GOT[k]) for k in BASELINE if BASELINE[k] != GOT[k]}
 for k, (was, now) in moved.items():
     print(f"  FAIL pinned figure moved: {k}: {was} -> {now}")
@@ -186,7 +219,12 @@ if moved:
           " re-derive (run with -v), update BASELINE here and the quoted figures. No update: codec_parser or"
           " the harness regressed - the engine's side ('rejected') should not move on its own.")
 bad = [x for x in unexplained if x not in KNOWN_UNEXPLAINED]
+# One stable line for callers to echo (verify-docs prints it verbatim); starts with `PINNED`.
+print(f"PINNED rejected={pred_fail} of predicted={npred} null-validated keys in {status['KEYS']} decodable classes; "
+      f"accepted={npred - pred_fail} (non-null default {pass_nonnull}, assigned elsewhere {len(pass_null)}, unresolved {len(unresolved)}); "
+      f"hook-classes={len(hooks_got)}; {len(BASELINE)} figures + {len(HOOKS)} names, {len(moved)} moved"
+      f"{'' if hooks_got == HOOKS else ', hook names CHANGED'}")
 stale = sorted(KNOWN_UNEXPLAINED - set(unexplained))
 for x in bad: print(f"  FAIL unexplained failing key {x}")
 for x in stale: print(f"  FAIL known blind spot {x} no longer reproduces - remove it from KNOWN_UNEXPLAINED")
-sys.exit(1 if bad or stale or moved else 0)
+sys.exit(1 if bad or stale or moved or hooks_got != HOOKS else 0)

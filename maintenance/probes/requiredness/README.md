@@ -14,7 +14,7 @@ decompiled source cache (`maintenance/scripts/build-jar-cache.sh`). Flags: `run.
 Results at 0.7.2. `run.sh` pins the decode matrix, the Parent rows and the real-codec rows (`EXPECTATION
 CHANGED` + exit 1 if one moves). `effective-required.py` pins the BASELINE figures below (exit 1 with
 "pinned figure moved" and instructions to re-derive; a parser that stops reading validators moves
-`predicted` but not `rejected`, and is caught by that pin, not by the subset check):
+`predicted` but not `rejected`, and is caught by that pin, not by the subset check). The seven codec-level hook classes are pinned by name, and the holder parser and the crash classifier are tested on real ValidationResults / synthetic frames before use (exit 2 if they fail). The last stdout line starting `PINNED` is the stable summary for callers to echo:
 
 - The `true` third `KeyedCodec` argument (`strict_null`) never rejects an omitted key, on any path.
   It only changes an explicit `null` on the BSON inherit path.

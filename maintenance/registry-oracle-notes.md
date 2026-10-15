@@ -1254,3 +1254,24 @@ oracle now covers it independently. A stale exemption can mean the oracle grew, 
 the page changed.
 
 **Unqualified registrations (review of the 0.7.2 pass, closed 2026-10-15).** The recount shared no *code* with the miner, but it shared the miner's form-1 predicate: both needed a `Receiver.` before the field, so `CODEC.register("Box", …)` in `TriggerVolumeShape` matched neither. At 0.7.2 that was 69 sites in 20 classes (68 form-1, plus `OpenCustomUIInteraction`'s `getCodecRegistry(PAGE_CODEC)`); at 0.6.8 it was 68 in 18. The miner was missing 18 registries (107 → 125) and `Condition.CODEC` was short by 15 names. The review counted 17, because `EditorPropertyGallery.TYPED_SAMPLE_CODEC` is not named plain `CODEC`. The fix: the miner resolves a bare field the way Java does, from the inside out. A local or parameter of that name excludes the call; otherwise the innermost enclosing class declaring a static field of that name binds it; failing both, the site is UNRESOLVED. There is no superclass rule, and UNRESOLVED is pinned at 0. The recount binds the same sites by a forward pass over a class stack, with a shadow search in the enclosing member. They agree on site count, registry set, per-registry name set and no-name count at both builds. One ordering caveat: the miner was run once (a dump) before the recount's list of new registries existed, against the acceptance's order. The independence of that list rests on the recount's own hand-readable derivation, which produces the same 18. Decisions: Schema's `""` id is a resolved site but not a vocabulary name, and cast literals (`(Object)"null"`) resolve. Three sites have no resolved name: ItemAbility's two `AbilitySlot.X.name()` ids, knowable but not evaluated, and `OpenCustomUIInteraction`'s `id` parameter. Verdict changes: ItemAbility.CODEC and OpenCustomUIInteraction.PAGE_CODEC become open, taking the open count from 10 to 12. Still not covered, and now measured rather than assumed: a registry held in a variable (0); a `getCodecRegistry(` with a non-field argument other than the 3 `PluginBase` declarations (0); an inherited bare field (UNRESOLVED 0); a `this.`/`super.` receiver (0 in the tree, excluded by rule). The first version of this fix stored a nested class's parent link in the recount as a stack position rather than a class index. The synthetic tree caught it, which is the case for keeping nested-class cases there.
+
+**Narrowed by review the same day (80cc419..cf95513, MEDIUM-3).** The first fix bound a bare field to the innermost enclosing class that declared it, and walked past every other class. Java looks in a class's inherited members first. Four cases bound to the outer field in BOTH scripts:
+- a nested class extending `Base`;
+- an anonymous `new Base(){…}`;
+- an inner class with an instance `CODEC`;
+- an untyped lambda parameter named `CODEC`.
+
+The reviewer's tree gave Host.CODEC 7 names where 4 are right. UNRESOLVED = 0 could not show it, because those sites were bound, not unresolved. The live trees had 0 such sites, so no figure moved; the defect was in the rule.
+
+The rule is now the walk outward described in the miner's `_Lexical` docstring. The claim "an inherited bare field (UNRESOLVED 0)" holds again, because a class that may inherit now returns UNRESOLVED.
+
+What the two scripts share is part of the record. The decision table and six patterns were copied from the miner into the recount, so agreement vouches for the scope walk and for the 69/68 figures, and for nothing else.
+
+Found and fixed in the same round:
+- a second declarator in one static declaration read as UNRESOLVED;
+- the recount let a closed sibling block's local shadow a later site;
+- a registration spelled in a `//` comment supplied check-type-values with a page-local name. Miner anchors are now read from masked text; 0 real sites changed.
+
+Still not handled, stated so it is not rediscovered:
+- in the recount, a `for` header's variable stays in scope after its loop closes;
+- a multi-declarator that follows a lambda-bodied initialiser is read as UNRESOLVED. That fails loudly, never as a wrong binding.

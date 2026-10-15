@@ -798,7 +798,7 @@ section "[HARD] The gates' own fixtures pass"
 # which is precisely when "delete the failing mutations" is the cheap repair.
 #
 # Cost is ~1 min against a run that compiles six Gradle projects (codec ~26s and
-# registry ~21s of it, both added 2026-10-15), so --mutations is included rather
+# registry ~45s of it, both added 2026-10-15), so --mutations is included rather
 # than deferred behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
 # update-build.sh end to end against generated jars: 181 checks in ~27s, which

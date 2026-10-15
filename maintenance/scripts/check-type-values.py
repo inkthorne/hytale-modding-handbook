@@ -21,7 +21,10 @@ that binding was measured and is unsound — see the note at the foot of this fi
 FOUR ORACLE SOURCES, and the gate reports how many values each one carried,
 because a source that silently stops contributing is how this check would rot:
 
-  1. registry_miner over the decompiled jar — all three registration forms.
+  1. registry_miner over the decompiled jar — all three registration forms, in their
+     qualified spelling only. An unqualified in-class `CODEC.register(` (68 sites in 19
+     classes at 0.7.2; registry-oracle-notes.md §15) is missed, so this oracle can only
+     under-resolve: a value registered there fails here unless another oracle covers it.
   2. `"Type"` values observed in the shipped asset tree. Covers vocabularies
      whose registration mechanism the miner does not model at all (drop-table
      types, recipe types); an id in this set is real by demonstration.

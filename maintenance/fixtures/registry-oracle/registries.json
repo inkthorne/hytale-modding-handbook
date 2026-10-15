@@ -58,7 +58,7 @@
    "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent."
   },
   "core_component_types": {
-   "why": "\u00a71's THIRD correction. NPCPlugin.registerCoreComponentType(name, Builder::new) registers into a builder FACTORY chosen by the builder's category() return type, not into a codec field, so forms 1 and 2 see none of these ~194 names. Every figure here was derived by grep and by reading `extends` chains in the decompiled source, NOT by registry_miner \u2014 the point of the fixture is that the two routes must agree.",
+   "why": "\u00a71's THIRD correction. NPCPlugin.registerCoreComponentType(name, Builder::new) registers into a builder FACTORY chosen by the builder's category() return type, not into a codec field, so forms 1 and 2 see none of these 198 call sites (0.7.2; 194 at build-26). Every figure here was derived by grep and by reading `extends` chains in the decompiled source, NOT by registry_miner \u2014 the point of the fixture is that the two routes must agree.",
    "occurrences": 199,
    "declaration_sites": 1,
    "call_sites": 198,
@@ -69,7 +69,7 @@
     "FACTORY_CLASS_ROLE": "Role"
    },
    "by_name_convention": {
-    "why": "Independent route: bucket each site by its builder's `Builder<Category>*` name rather than by resolving category(). It sees only the 191 sites whose id is a string literal \u2014 a naive `registerCoreComponentType(\"...\"` grep cannot see a constant id.",
+    "why": "Independent route: bucket each site by its builder's `Builder<Category>*` name rather than by resolving category(). It sees only the 195 sites (0.7.2; 191 at build-26) whose id is a string literal \u2014 a naive `registerCoreComponentType(\"...\"` grep cannot see a constant id.",
     "Action": 89,
     "Sensor": 58,
     "EntityFilter": 21,
@@ -82,7 +82,7 @@
     ],
     "total": 195
    },
-   "reconciliation": "convention 195 + 3 constant-named = 198 call sites (0.7.2; 191 + 3 = 194 at build-26). Per category the constants land as BuilderBodyMotionPath (+1 BodyMotion), BuilderSensorPath (+1 Sensor) and BuilderActionRole (+1 Action); BuilderSensorEntityPrioritiserAttitude is `BuilderSensor`-prefixed but categorises as ISensorEntityPrioritiser, which is why the convention's Sensor bucket (57) and the resolved Sensor bucket (57) agree only after both corrections cancel.",
+   "reconciliation": "convention 195 + 3 constant-named = 198 call sites (0.7.2; 191 + 3 = 194 at build-26). Per category the constants land as BuilderBodyMotionPath (+1 BodyMotion), BuilderSensorPath (+1 Sensor) and BuilderActionRole (+1 Action); BuilderSensorEntityPrioritiserAttitude is `BuilderSensor`-prefixed but categorises as ISensorEntityPrioritiser, which is why the convention's Sensor bucket and the resolved Sensor bucket (58 and 58 at 0.7.2; 57 and 57 at build-26) agree only after both corrections cancel.",
    "categories_resolved": {
     "com.hypixel.hytale.server.npc.instructions.Action": 90,
     "com.hypixel.hytale.server.npc.instructions.Sensor": 58,
@@ -132,7 +132,7 @@
     "category_returning_a_type_variable_why": "Builder.java declares `public Class<T> category();` \u2014 a type VARIABLE. _resolve_type turns `T` into a plausible FQCN that is NOT <category-unresolved>, so the guard built for this would not fire. Nothing reaches it only because the walk follows `extends` and Builder is reached only through `implements` \u2014 an unstated traversal-order property protecting a 194-site resolver, and 'also follow interfaces' is the obvious future hardening that would break it. _category_of now requires the captured name to resolve to a real source file, which makes the protection deliberate."
    }
   },
-  "rederived": "0.7.2 (2026-10-14): every independent figure re-derived by maintenance/scripts/hand-registry-recount.py, a text sweep sharing no code with registry_miner. It was first run on the 0.6.8 snapshot, where it reproduced every figure below as originally hand-derived for build-26 (124/89/35/21, the field table, 195/194, 86/57/21/18/7 = 191, 188 inherited), and only then on 0.7.2. The miner and the recount agree on every changed figure. Changes: Interaction.CODEC +13 ability types (ApplyAbilityEffects, AttachBeam, ClearCarriedBlock, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, MarkAbilityBenchIntroSeen, OpenAbilityBench, OpenChapterRewards, PullEntityAbility, SpawnAbilityEntity, SplitAbilityProjectile, TriggerAbilityFX), -2 treasure types (DestroyTreasureCondition, OpenTreasureContainer); core components +4 (Actions ClearEncounterWeather, GrantReward, SetEncounterWeather; Sensor GameFlag)."
+  "rederived": "0.7.2 (2026-10-14): every independent figure re-derived by maintenance/scripts/hand-registry-recount.py, a text sweep sharing no code with registry_miner. It was first run on the 0.6.8 snapshot, where it reproduced every figure below as originally hand-derived for build-26 (124/89/35/21, the field table, 195/194, 86/57/21/18/7 = 191, 188 inherited), and only then on 0.7.2. The miner and the recount agree on every changed figure. Caveat (review, 2026-10-15): both match only qualified registrations, so neither sees the 68 unqualified in-class `CODEC.register(` sites in 19 classes; there the agreement certifies nothing (registry-oracle-notes.md \u00a715). Changes: Interaction.CODEC +13 types, ten from the ability system plus AttachBeam, ClearCarriedBlock and OpenChapterRewards (ApplyAbilityEffects, AttachBeam, ClearCarriedBlock, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, MarkAbilityBenchIntroSeen, OpenAbilityBench, OpenChapterRewards, PullEntityAbility, SpawnAbilityEntity, SplitAbilityProjectile, TriggerAbilityFX), -2 treasure types (DestroyTreasureCondition, OpenTreasureContainer); core components +4 (Actions ClearEncounterWeather, GrantReward, SetEncounterWeather; Sensor GameFlag)."
  },
  "measured": {
   "source": "measured",

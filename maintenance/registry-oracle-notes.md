@@ -1244,7 +1244,7 @@ cells, 195 occurrences and 194 call sites, the convention buckets 86 / 57 / 21 /
 that has not reproduced the previous build's known answer is a second miner, not a check.
 
 0.7.2 results, which agree with the miner on every changed figure: `Interaction.CODEC`
-135 names (92 + 43 in 29 statements) — +13 ability-system types, −2 treasure types;
+135 names (92 + 43 in 29 statements) — +13 types (ten from the ability system, plus `AttachBeam`, `ClearCarriedBlock` and `OpenChapterRewards`), −2 treasure types;
 field table `CODEC` 54 / 586, `PLUGIN_CODEC` 12 / 1, `PAGE_CODEC` 4 / 3; core components
 199 / 198, convention 195 + 3 constant-named, Action 90, Sensor 58, 192 by inheritance
 (+`ClearEncounterWeather`, `GrantReward`, `SetEncounterWeather`, `GameFlag`). The measured
@@ -1258,3 +1258,5 @@ knowing: its registration is still the two-hop indirection described there, unch
 but 0.7.2 ships 18 `Server/WorldEvent` assets using it as a `"Type"`, so the shipped-asset
 oracle now covers it independently. A stale exemption can mean the oracle grew, not that
 the page changed.
+
+**What the recount does not make independent (review of the 0.7.2 pass, 2026-10-15).** The recount shares no *code* with the miner, but it shares the miner's form-1 predicate. Both need a `Receiver.` qualifier before the field: the recount's `(?:[A-Z]\w*\.)+([A-Z_]*CODEC)\.register\(` and the miner's `\b([\w.]+)\.(CODEC_FIELD)\s*\.register`. A class registering into its own field unqualified, `CODEC.register("Box", …)` in `TriggerVolumeShape`, matches neither. At 0.7.2 that is 68 sites in 19 classes (`TriggerVolumeShape`, `TradeSlot`, `ObjectiveTypeSetup`, `WorldLocationProvider`, `ObjectiveLocationMarkerArea`, `TaskConditionAsset`, `ObjectiveLocationTriggerCondition`, `TransactionRecord`, `EditorPropertyGallery`, `CombatActionOption`, `Schema`, `UIEditor`, `FlockAsset`, `ScaledResponseCurve`, `ResponseCurve`, `ItemAbility`, `ItemDropContainer`, `MusicContainer`, `Condition`; 67 at 0.6.8). The review's probe found 17 of those registries absent from the miner entirely, and `Condition.CODEC` missing 15 names. The form-2 analogue is `OpenCustomUIInteraction`'s unqualified `getCodecRegistry(PAGE_CODEC)`. Where both routes are blind, their agreement certifies nothing. The consequence for `check-type-values.py` runs in the safe direction: a missing registry can only leave a value unresolved, never pass an invented one, and the gate reports 0 unresolved. The consequence for closure claims is that those 19 registries are not counted at all. Fixing it means resolving an unqualified field against its enclosing class, and doing it differently in the two scripts, so they stay independent.

@@ -21,6 +21,18 @@ Everything here is shaped by measurements in maintenance/registry-oracle-notes.m
     false-positive guard matters: `register(Priority.DEFAULT, "Name", …)` has a
     non-literal in position one while the id is a literal in position two, and a
     shape test reading only argument one calls a dozen closed registries open.
+  * The receiver is not always spelled. `CODEC.register("Box", …)` inside the class
+    that declares CODEC has NO `Receiver.` before the field (68 sites in 19 classes at
+    0.7.2, 17 of those registries invisible to the first version of this miner, and
+    `Condition.CODEC` short by 15 names), and `getCodecRegistry(PAGE_CODEC)` is its
+    form-2 analogue. Such a site is bound by LEXICAL SCOPE (class `_Lexical`): the
+    innermost enclosing class that declares a static field of that name. There is no
+    superclass rule — a site with no declaring enclosing class is reported as
+    UNRESOLVED, never guessed — and a call is excluded only by a PROPERTY of its
+    receiver (a local or parameter shadowing the field, a `this.`/`super.` receiver),
+    never by package or file. Every `Site` records its `spelling`, so a figure can be
+    checked against the qualified population alone (the hand-derived fixture
+    figures) or the unqualified one (derived by hand-registry-recount.py).
   * Key a registry by its FULLY-QUALIFIED declaring type. Keying on the simple
     name collapses distinct `Config` / `Content` / `Context` / `Op` / `Shape`
     registries into single bogus rows.
@@ -53,17 +65,27 @@ from codec_parser import _scan, _split_args, find_source
 CODEC_FIELD = r'[A-Z0-9_]*CODEC'
 _FORM2 = re.compile(r'getCodecRegistry\s*\(\s*([\w.]+)\.(' + CODEC_FIELD + r')\s*\)')
 _FORM1 = re.compile(r'\b([\w.]+)\.(' + CODEC_FIELD + r')\s*\.register\s*\(')
+# The UNQUALIFIED spellings: the field is a bare identifier, so it can only mean a
+# field visible from the call site's own lexical scope. `(?<![\w.])` is what makes
+# the pattern unqualified. `this.CODEC` / `super.CODEC` match the QUALIFIED patterns
+# with a receiver of `this`/`super`; mine_file reports those as excluded.
+_FORM2U = re.compile(r'getCodecRegistry\s*\(\s*(' + CODEC_FIELD + r')\s*\)')
+_FORM1U = re.compile(r'(?<![\w.$])(' + CODEC_FIELD + r')\s*\.register\s*\(')
 _REGISTER = re.compile(r'\.register\s*\(')
 _CONST = re.compile(r'static\s+final\s+String\s+(\w+)\s*=\s*"([^"]*)"\s*;')
 _IMPORT = re.compile(r'^import\s+(?:static\s+)?([\w.]+);', re.M)
 _PKG = re.compile(r'^package\s+([\w.]+);', re.M)
 _LITERAL = re.compile(r'^"([^"]*)"$')
+# `Schema` registers `CODEC.register((Object)"null", …)`: the literal sits behind a cast
+# because the id parameter is `Object`. It is still a literal id, not a runtime value.
+_CAST_LITERAL = re.compile(r'^\(\s*[\w.$<>?,\s]+\s*\)\s*"([^"]*)"$')
 _FORM3 = re.compile(r'registerCoreComponentType\s*\(')
 _CTOR_REF = re.compile(r'^([\w.]+)::new$')
 _DECLARATION = re.compile(r'\s*(?:throws\s+[\w.,\s]+?)?\{')
 _CATEGORY = re.compile(r'Class\s*<\s*([\w.]+)\s*>\s+category\s*\(')
 _EXTENDS = re.compile(r'\bclass\s+\w+(?:\s*<[^{]*?>)?\s+extends\s+([\w.]+)')
 CORE_COMPONENT_FIELD = 'CORE_COMPONENT_TYPES'
+UNRESOLVED_OWNER = '<owner-unresolved>'
 UNRESOLVED_CATEGORY = '<category-unresolved>'
 
 
@@ -77,6 +99,8 @@ class Site:
     kind: str = 'literal'     # literal | constant | indirect | runtime | ambiguous
     arg_index: int = 0        # WHICH argument carried the id (§1: not always 0)
     stmt: int = 0             # offset of the enclosing statement, so sites != names
+    spelling: str = 'qualified'   # 'qualified' (`X.FIELD`) | 'unqualified' (bare `FIELD`,
+                                  # bound by lexical scope) — figures are checked per spelling
 
 
 @dataclass
@@ -88,7 +112,12 @@ class Registry:
     @property
     def key(self): return f'{self.declaring_type}.{self.field}'
     @property
-    def names(self): return sorted({s.name for s in self.sites if s.name})
+    def names(self):
+        # `if s.name` drops the EMPTY id too: Schema registers `(Object)""` under
+        # Priority.DEFAULT, the default entry rather than a discriminator anyone writes
+        # as a "Type". Such a site is RESOLVED (it does not make the registry open) and
+        # is not a vocabulary name. Decided 2026-10-15; fixture: unqualified.empty_id_decision.
+        return sorted({s.name for s in self.sites if s.name})
     @property
     def open_sites(self): return [s for s in self.sites if s.name is None]
     @property
@@ -105,8 +134,11 @@ class Registry:
         ('21 sites, 35 names'), because form 2 chains many registers per statement."""
         return {1: sum(1 for s in self.sites if s.form == 1),
                 2: sum(1 for s in self.sites if s.form == 2)}
-    def statements(self, form=None):
-        return len({s.stmt for s in self.sites if form is None or s.form == form})
+    def statements(self, form=None, spelling=None):
+        return len({s.stmt for s in self.sites if (form is None or s.form == form)
+                    and (spelling is None or s.spelling == spelling)})
+    def of_spelling(self, spelling):
+        return [s for s in self.sites if s.spelling == spelling]
 
 
 def _resolve_type(simple: str, imports: dict[str, str], pkg: str) -> str:
@@ -161,6 +193,135 @@ def _statement_spans(src: str):
         spans[start] = max(spans.get(start, 0), end)
     for start in sorted(spans):
         yield src[start:spans[start]], start
+
+
+def _mask(src: str) -> str:
+    """`src` with every comment and the INSIDE of every string/char literal replaced by
+    spaces (newlines kept), so offsets still index the original. Structure — braces,
+    declarations — is read from this; ids are read from the original."""
+    out = list(src)
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c in '"\'':
+            q, j = c, i + 1
+            while j < n and src[j] != q:
+                j += 2 if src[j] == '\\' else 1
+            for k in range(i + 1, min(j, n)):
+                if out[k] != '\n': out[k] = ' '
+            i = j + 1; continue
+        if c == '/' and i + 1 < n and src[i+1] in '/*':
+            if src[i+1] == '/':
+                j = src.find('\n', i); j = n if j < 0 else j
+            else:
+                j = src.find('*/', i); j = n if j < 0 else j + 2
+            for k in range(i, j):
+                if out[k] != '\n': out[k] = ' '
+            i = j; continue
+        i += 1
+    return ''.join(out)
+
+
+_CLASS_HEADER = re.compile(r'(?<![\w.$])(?:(class|interface|enum)\s+(\w+)|(record)\s+(\w+)\s*[(<])')
+_STATIC_FIELD = re.compile(r'\bstatic\b[^;(){}=]*?(?<![\w.$])(' + CODEC_FIELD + r')\s*[=;,]')
+_IFACE_FIELD = re.compile(r'[\w>\]]\s+(' + CODEC_FIELD + r')\s*=')
+_NOT_A_TYPE = frozenset('return throw new else case assert yield instanceof in do'.split())
+
+
+@dataclass
+class _Scope:
+    open: int
+    header: int               # offset where the text before `{` begins (method parameters live here)
+    close: int = -1
+    cls: str | None = None    # class/interface/enum/record NAME, or None for a plain block
+    iface: bool = False
+    fields: set = field(default_factory=set)   # static CODEC-shaped fields declared directly in this class body
+
+
+class _Lexical:
+    """The brace structure of ONE file, for binding an unqualified identifier.
+
+    An unqualified `CODEC.register(` means "the CODEC visible from here", and Java's
+    rule for that is lexical: a local or parameter first, then each enclosing class
+    outward (its own static fields, and — which is the rule deliberately NOT
+    implemented — its superclass's). So the lookup walks the scopes enclosing the call
+    site from the inside out and stops at the first that declares the name:
+
+      * a block that declares a LOCAL/PARAMETER of that name  -> the call is EXCLUDED
+        (it is not the registry field);
+      * a class that declares a STATIC FIELD of that name     -> the call is bound to it;
+      * nothing                                                -> UNRESOLVED.
+
+    A superclass rule would resolve an inherited `CODEC` and is left out on purpose:
+    guessing a registry is worse than listing a site nobody could place, and the
+    fixture pins UNRESOLVED at 0. Anonymous-class bodies, lambdas and array
+    initialisers are plain blocks — only a header naming class/interface/enum/record
+    makes a scope a class.
+    """
+    def __init__(self, src: str):
+        m = self.masked = _mask(src)
+        self.scopes: list[_Scope] = []
+        stack, last = [], -1
+        for i, c in enumerate(m):
+            if c == '{':
+                head = m[last + 1:i]
+                ch = _CLASS_HEADER.search(head)
+                sc = _Scope(i, last + 1)
+                if ch:
+                    sc.cls = ch.group(2) or ch.group(4)
+                    sc.iface = ch.group(1) == 'interface'
+                self.scopes.append(sc); stack.append(sc); last = i
+            elif c == '}':
+                if stack: stack.pop().close = i
+                last = i
+            elif c == ';':
+                last = i
+        for sc in self.scopes:
+            if sc.close < 0: sc.close = len(m)
+        for fm in _STATIC_FIELD.finditer(m):
+            inner = self._innermost(fm.start(1))
+            if inner is not None and inner.cls:
+                inner.fields.add(fm.group(1))
+        for sc in self.scopes:
+            if sc.iface:          # interface fields are implicitly static
+                for fm in _IFACE_FIELD.finditer(m, sc.open, sc.close):
+                    if self._innermost(fm.start(1)) is sc:
+                        sc.fields.add(fm.group(1))
+
+    def _innermost(self, off):
+        best = None
+        for sc in self.scopes:
+            if sc.open < off < sc.close and (best is None or sc.open > best.open):
+                best = sc
+        return best
+
+    def _owner(self, off):
+        """The scope a declaration at `off` belongs to: the innermost scope whose body
+        contains it, or the block whose HEADER contains it (a method's parameters)."""
+        best = None
+        for sc in self.scopes:
+            if sc.header <= off < sc.close and (best is None or sc.open > best.open):
+                best = sc
+        return best
+
+    def resolve(self, off: int, fld: str):
+        """('class', [outer..declaring class names]) | ('local', None) | ('unresolved', None)."""
+        chain = [sc for sc in self.scopes if sc.open < off < sc.close]
+        chain.sort(key=lambda sc: sc.open)
+        local = re.compile(r'(?<![\w.$])([\w$.]+(?:\s*<[^;(){}=]*?>)?(?:\s*\[\s*\])*)\s+'
+                           + re.escape(fld) + r'\s*[=;,:)]')
+        for k in range(len(chain) - 1, -1, -1):
+            sc = chain[k]
+            if sc.cls:
+                if fld in sc.fields:
+                    return 'class', [c.cls for c in chain[:k + 1] if c.cls]
+                continue
+            for lm in local.finditer(self.masked, sc.header, off):
+                if lm.group(1).split('.')[-1] in _NOT_A_TYPE:
+                    continue
+                if self._owner(lm.start(1)) is sc:
+                    return 'local', None
+        return 'unresolved', None
 
 
 def _category_of(builder: str, imports: dict, pkg: str, root: pathlib.Path,
@@ -241,8 +402,40 @@ def _mine_core_components(src: str, path: pathlib.Path, imports: dict, pkg: str,
         yield cat, CORE_COMPONENT_FIELD, Site(str(path), line, 3, name, expr,
                                               kind, idx, m.start())
 
-def mine_file(path: pathlib.Path,
-              root: pathlib.Path | None = None) -> list[tuple[str, str, Site]]:
+@dataclass
+class Skip:
+    """A registration-shaped call that was NOT mined, and why. Reported, never dropped."""
+    file: str
+    line: int
+    field: str
+    form: int
+    reason: str               # 'unresolved' | 'local' | 'this-super'
+    expr: str
+
+
+def _anchor(stmt: str):
+    """(form, receiver or None, field, offset of the field token) for the first
+    registry anchor in a statement, or None. Qualified spellings first, as before;
+    an UNQUALIFIED anchor has receiver None."""
+    m = _FORM2.search(stmt)
+    if m: return 2, m.group(1), m.group(2), m.start(2)
+    m = _FORM2U.search(stmt)
+    if m: return 2, None, m.group(1), m.start(1)
+    m = _FORM1.search(stmt)
+    if m: return 1, m.group(1), m.group(2), m.start(2)
+    m = _FORM1U.search(stmt)
+    if m: return 1, None, m.group(1), m.start(1)
+    return None
+
+
+def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
+              skipped: list | None = None) -> list[tuple[str, str, Site]]:
+    """Registrations in one file as (declaring type, field, Site).
+
+    An unqualified site whose owner cannot be bound is yielded with the declaring type
+    UNRESOLVED_OWNER (and recorded in `skipped`); mine() keeps those out of the registry
+    table. check-type-values' page-local oracle wants the NAME regardless of owner.
+    `skipped` collects Skip rows for the calls that were deliberately not mined."""
     src = path.read_text(errors='replace')
     if '.register(' not in src and 'registerCoreComponentType' not in src:
         return []
@@ -251,18 +444,37 @@ def mine_file(path: pathlib.Path,
     imports = {fq.rsplit('.', 1)[-1]: fq for fq in _IMPORT.findall(src)}
     consts = dict(_CONST.findall(src))
     out = []
+    lexical = None
 
     for stmt, off in _statement_spans(src):
         if '.register(' not in stmt:
             continue
-        m2, m1 = _FORM2.search(stmt), _FORM1.search(stmt)
-        if m2:
-            recv, fld, form = m2.group(1), m2.group(2), 2
-        elif m1:
-            recv, fld, form = m1.group(1), m1.group(2), 1
-        else:
+        anc = _anchor(stmt)
+        if anc is None:
             continue
-        declaring = _resolve_type(recv, imports, pkg)
+        form, recv, fld, at = anc
+        spelling = 'qualified' if recv is not None else 'unqualified'
+        first_line = src.count('\n', 0, off + at) + 1
+        if recv is not None:
+            if recv.split('.')[-1] in ('this', 'super'):      # property: an instance receiver
+                if skipped is not None:
+                    skipped.append(Skip(str(path), first_line, fld, form, 'this-super', recv + '.' + fld))
+                continue
+            declaring = _resolve_type(recv, imports, pkg)
+        else:
+            if lexical is None:
+                lexical = _Lexical(src)
+            how, names = lexical.resolve(off + at, fld)
+            if how == 'local':                                 # property: a local shadows the field
+                if skipped is not None:
+                    skipped.append(Skip(str(path), first_line, fld, form, 'local', fld))
+                continue
+            if how == 'class':
+                declaring = '.'.join(([pkg] if pkg else []) + names)
+            else:
+                declaring = UNRESOLVED_OWNER
+                if skipped is not None:
+                    skipped.append(Skip(str(path), first_line, fld, form, 'unresolved', fld))
 
         for rm in _REGISTER.finditer(stmt):
             opener = rm.end() - 1
@@ -273,7 +485,7 @@ def mine_file(path: pathlib.Path,
             args = _split_args(body)
             name, kind, expr, idx = _pick_name(args, consts)
             line = src.count('\n', 0, off + rm.start()) + 1
-            out.append((declaring, fld, Site(str(path), line, form, name, expr, kind, idx, off)))
+            out.append((declaring, fld, Site(str(path), line, form, name, expr, kind, idx, off, spelling)))
 
     if 'registerCoreComponentType' in src:
         for cat, fld, site in _mine_core_components(src, path, imports, pkg, consts, root):
@@ -281,12 +493,20 @@ def mine_file(path: pathlib.Path,
     return out
 
 
+def _lit(arg: str):
+    """The string a literal argument spells, or None. `(Object)"null"` is a literal id
+    behind a cast (Schema's id parameter is an Object), and spells `null`."""
+    a = arg.strip()
+    m = _LITERAL.match(a) or _CAST_LITERAL.match(a)
+    return m.group(1) if m else None
+
+
 def _pick_name(args: list[str], consts: dict[str, str]):
     """The id is the FIRST argument that is a string literal or a resolvable constant —
     NOT necessarily argument one (§1: `register(Class, "Name", codec)` at 18 sites), and
     the search must span every position (§2's false-positive guard:
     `register(Priority.DEFAULT, "Name", …)` is closed, not open)."""
-    lits = [i for i, a in enumerate(args) if _LITERAL.match(a.strip())]
+    lits = [i for i, a in enumerate(args) if _lit(a) is not None]
     if len(lits) > 1:
         # Build-26 has none: of 754 register calls, 738 carry exactly one top-level
         # string literal and 16 carry zero. That is luck, not design — with two, the
@@ -294,9 +514,9 @@ def _pick_name(args: list[str], consts: dict[str, str]):
         return None, 'ambiguous', args[lits[0]].strip(), -1
     for i, a in enumerate(args):
         a = a.strip()
-        lit = _LITERAL.match(a)
-        if lit:
-            return lit.group(1), 'literal', a, i
+        lit = _lit(a)
+        if lit is not None:
+            return lit, 'literal', a, i
         if a in consts:
             return consts[a], 'constant', a, i
         if a.startswith(('this.', 'super.')) and a.split('.')[-1] in consts:
@@ -375,10 +595,15 @@ def core_component_diagnostics(root: pathlib.Path) -> dict:
             'builder_simple_names_ambiguous_in_tree': len(ambiguous)}
 
 
-def mine(root: pathlib.Path) -> dict[str, Registry]:
+def mine(root: pathlib.Path, skipped: list | None = None) -> dict[str, Registry]:
+    """Every registry in the tree. `skipped`, if given, receives a Skip row for each
+    call that was seen and deliberately not mined (see Skip.reason); UNRESOLVED sites
+    are among them and are never entered into a registry."""
     regs: dict[str, Registry] = {}
     for p in root.rglob('*.java'):
-        for declaring, fld, site in mine_file(p, root):
+        for declaring, fld, site in mine_file(p, root, skipped):
+            if declaring == UNRESOLVED_OWNER:
+                continue
             key = f'{declaring}.{fld}'
             r = regs.setdefault(key, Registry(declaring, fld))
             r.sites.append(site)

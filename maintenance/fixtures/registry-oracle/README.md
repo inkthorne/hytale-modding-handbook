@@ -80,3 +80,24 @@ agreed total, so a resolver bug would have to reproduce the naming convention's 
 blind spots to stay hidden. `unresolved_categories` is pinned at **0**: a name the
 resolver cannot place is not a harmless gap, because phase (c) checks a documented
 `"Type"` against its *slot*, and 15 of the 176 names are legal in more than one.
+
+### Unqualified registrations (2026-10-15)
+
+A review of the 0.7.2 pass found that the miner and the recount both required a
+`Receiver.` before the codec field, so `CODEC.register("Box", ...)` inside the class that
+declares `CODEC` was invisible to both: 69 sites in 20 classes at 0.7.2 (68 at 0.6.8),
+18 registries absent from the miner and `Condition.CODEC` short by 15 names. The miner now
+binds such a site by lexical scope (innermost enclosing class that declares a static field
+of that name; no superclass rule; a local or parameter that shadows it, or a `this.`/`super.`
+receiver, excludes the call). The recount binds them by a different route. Fixture changes:
+
+- `independent.unqualified` (0.7.2) and `independent.unqualified_previous_build` (0.6.8) are the
+  **recount's** figures, never the miner's. The pre-existing `independent` figures are
+  unchanged and are checked against **qualified** sites only.
+- `synthetic` + `synthetic/src/`: a hand-written tree with one instance of every binding rule
+  (see the comments in `Outer.java`). Both scripts run on it; the expected figures were read
+  off the source, not produced by either script.
+- The runner also compares miner and recount **live** on each tree (`AGREEMENT` line), pins
+  `UNRESOLVED` at 0, and counts what neither spelling covers (`residue`).
+- `check-registry-fixture.py --mutations` removes each guard in a patched copy of the scripts and
+  requires named checks to go red (~20 s).

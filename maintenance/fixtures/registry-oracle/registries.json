@@ -43,7 +43,8 @@
    "com.hypixel.hytale.builtin.adventure.objectives.config.task.ObjectiveTaskAsset.CODEC",
    "com.hypixel.hytale.builtin.adventure.objectives.task.ObjectiveTask.CODEC",
    "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.TYPE_CODEC",
-   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC"
+   "com.hypixel.hytale.builtin.adventure.worldevents.condition.EventCondition.Config.TYPE_CODEC",
+   "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC"
   ],
   "closed_despite_nonliteral_arg0": {
    "why": "\u00a72's false-positive guard: register(Priority.DEFAULT, \"Name\", ...) puts a non-literal in argument one while the id is a literal in argument two. A shape test reading only argument one calls ~a dozen closed provider registries open.",
@@ -55,7 +56,8 @@
   },
   "open_registry_count": {
    "value": 10,
-   "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent."
+   "why": "\u00a72 derived the open set by hand. This count sits in the FAILING path, not the drift line: 'open' is the verdict that makes phase (c) skip a page, so an inflated open count is a silent coverage loss \u2014 the exact failure the gate exists to prevent.",
+   "population": "qualified sites only (10); `unqualified.open_registry_count_all_spellings` is the whole-registry figure (12)"
   },
   "core_component_types": {
    "why": "\u00a71's THIRD correction. NPCPlugin.registerCoreComponentType(name, Builder::new) registers into a builder FACTORY chosen by the builder's category() return type, not into a codec field, so forms 1 and 2 see none of these 198 call sites (0.7.2; 194 at build-26). Every figure here was derived by grep and by reading `extends` chains in the decompiled source, NOT by registry_miner \u2014 the point of the fixture is that the two routes must agree.",
@@ -132,11 +134,603 @@
     "category_returning_a_type_variable_why": "Builder.java declares `public Class<T> category();` \u2014 a type VARIABLE. _resolve_type turns `T` into a plausible FQCN that is NOT <category-unresolved>, so the guard built for this would not fire. Nothing reaches it only because the walk follows `extends` and Builder is reached only through `implements` \u2014 an unstated traversal-order property protecting a 194-site resolver, and 'also follow interfaces' is the obvious future hardening that would break it. _category_of now requires the captured name to resolve to a real source file, which makes the protection deliberate."
    }
   },
-  "rederived": "0.7.2 (2026-10-14): every independent figure re-derived by maintenance/scripts/hand-registry-recount.py, a text sweep sharing no code with registry_miner. It was first run on the 0.6.8 snapshot, where it reproduced every figure below as originally hand-derived for build-26 (124/89/35/21, the field table, 195/194, 86/57/21/18/7 = 191, 188 inherited), and only then on 0.7.2. The miner and the recount agree on every changed figure. Caveat (review, 2026-10-15): both match only qualified registrations, so neither sees the 68 unqualified in-class `CODEC.register(` sites in 19 classes; there the agreement certifies nothing (registry-oracle-notes.md \u00a715). Changes: Interaction.CODEC +13 types, ten from the ability system plus AttachBeam, ClearCarriedBlock and OpenChapterRewards (ApplyAbilityEffects, AttachBeam, ClearCarriedBlock, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, MarkAbilityBenchIntroSeen, OpenAbilityBench, OpenChapterRewards, PullEntityAbility, SpawnAbilityEntity, SplitAbilityProjectile, TriggerAbilityFX), -2 treasure types (DestroyTreasureCondition, OpenTreasureContainer); core components +4 (Actions ClearEncounterWeather, GrantReward, SetEncounterWeather; Sensor GameFlag)."
+  "rederived": "0.7.2 (2026-10-14): every independent figure re-derived by maintenance/scripts/hand-registry-recount.py, a text sweep sharing no code with registry_miner. It was first run on the 0.6.8 snapshot, where it reproduced every figure below as originally hand-derived for build-26 (124/89/35/21, the field table, 195/194, 86/57/21/18/7 = 191, 188 inherited), and only then on 0.7.2. The miner and the recount agree on every changed figure. (The review of 2026-10-15 found that this recount, like the miner, matched only qualified registrations, so neither saw 69 unqualified in-class sites in 20 classes. Closed the same day: the recount's UNQUALIFIED section binds each such site by its own route, and `unqualified` / `unqualified_previous_build` below are its figures; registry-oracle-notes.md \u00a715.) Changes: Interaction.CODEC +13 types, ten from the ability system plus AttachBeam, ClearCarriedBlock and OpenChapterRewards (ApplyAbilityEffects, AttachBeam, ClearCarriedBlock, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, MarkAbilityBenchIntroSeen, OpenAbilityBench, OpenChapterRewards, PullEntityAbility, SpawnAbilityEntity, SplitAbilityProjectile, TriggerAbilityFX), -2 treasure types (DestroyTreasureCondition, OpenTreasureContainer); core components +4 (Actions ClearEncounterWeather, GrantReward, SetEncounterWeather; Sensor GameFlag).",
+  "unqualified": {
+   "build": "0.7.2 (build-34)",
+   "sites": 69,
+   "form1_sites": 68,
+   "form2_sites": 1,
+   "declaring_classes": 20,
+   "unresolved_owner": 0,
+   "excluded": 0,
+   "new_registry_keys": [
+    "com.hypixel.hytale.builtin.adventure.objectives.config.markerarea.ObjectiveLocationMarkerArea.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.objectivesetup.ObjectiveTypeSetup.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.taskcondition.TaskConditionAsset.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.triggercondition.ObjectiveLocationTriggerCondition.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.worldlocationproviders.WorldLocationProvider.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.transaction.TransactionRecord.CODEC",
+    "com.hypixel.hytale.builtin.adventure.shop.barter.TradeSlot.CODEC",
+    "com.hypixel.hytale.builtin.asseteditor.propertygallery.EditorPropertyGallery.TYPED_SAMPLE_CODEC",
+    "com.hypixel.hytale.builtin.npccombatactionevaluator.evaluator.combatactions.CombatActionOption.CODEC",
+    "com.hypixel.hytale.builtin.triggervolumes.shape.TriggerVolumeShape.CODEC",
+    "com.hypixel.hytale.codec.schema.config.Schema.CODEC",
+    "com.hypixel.hytale.codec.schema.metadata.ui.UIEditor.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.item.config.container.ItemDropContainer.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.musiccontainer.config.MusicContainer.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.ScaledResponseCurve.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.config.ResponseCurve.CODEC",
+    "com.hypixel.hytale.server.flock.config.FlockAsset.CODEC"
+   ],
+   "registries": {
+    "com.hypixel.hytale.builtin.adventure.objectives.config.markerarea.ObjectiveLocationMarkerArea.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Box",
+      "Radius"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.objectivesetup.ObjectiveTypeSetup.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Objective",
+      "ObjectiveLine"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.taskcondition.TaskConditionAsset.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "SoloInventory"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.triggercondition.ObjectiveLocationTriggerCondition.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "HourRange",
+      "Weather"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.worldlocationproviders.WorldLocationProvider.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "LocationRadius"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.transaction.TransactionRecord.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "SpawnEntity"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.shop.barter.TradeSlot.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Fixed",
+      "Pool"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.asseteditor.propertygallery.EditorPropertyGallery.TYPED_SAMPLE_CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Alpha",
+      "Beta"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.npccombatactionevaluator.evaluator.combatactions.CombatActionOption.CODEC": {
+     "sites": 3,
+     "form1": 3,
+     "form2": 0,
+     "names": [
+      "Ability",
+      "SelectBasicAttackTarget",
+      "State"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.triggervolumes.shape.TriggerVolumeShape.CODEC": {
+     "sites": 3,
+     "form1": 3,
+     "form2": 0,
+     "names": [
+      "Box",
+      "Cylinder",
+      "Sphere"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.codec.schema.config.Schema.CODEC": {
+     "sites": 8,
+     "form1": 8,
+     "form2": 0,
+     "names": [
+      "array",
+      "boolean",
+      "integer",
+      "null",
+      "number",
+      "object",
+      "string"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 1
+    },
+    "com.hypixel.hytale.codec.schema.metadata.ui.UIEditor.CODEC": {
+     "sites": 8,
+     "form1": 8,
+     "form2": 0,
+     "names": [
+      "Dropdown",
+      "Icon",
+      "LocalizationKey",
+      "MultilineText",
+      "Number",
+      "Text",
+      "Timeline",
+      "WeightedTimeline"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [],
+     "no_name": 2,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.item.config.container.ItemDropContainer.CODEC": {
+     "sites": 5,
+     "form1": 5,
+     "form2": 0,
+     "names": [
+      "Choice",
+      "Droplist",
+      "Empty",
+      "Multiple",
+      "Single"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.musiccontainer.config.MusicContainer.CODEC": {
+     "sites": 5,
+     "form1": 5,
+     "form2": 0,
+     "names": [
+      "Horizontal",
+      "Random",
+      "Segment",
+      "Sequence",
+      "SingleTrack"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.ScaledResponseCurve.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "Switch"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.config.ResponseCurve.CODEC": {
+     "sites": 4,
+     "form1": 4,
+     "form2": 0,
+     "names": [
+      "Exponential",
+      "Logistic",
+      "SineWave",
+      "Switch"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC": {
+     "sites": 1,
+     "form1": 0,
+     "form2": 1,
+     "names": [],
+     "no_name": 1,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.flock.config.FlockAsset.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "Weighted"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.npc.decisionmaker.core.conditions.base.Condition.CODEC": {
+     "sites": 15,
+     "form1": 15,
+     "form2": 0,
+     "names": [
+      "HasTarget",
+      "IsInState",
+      "LineOfSight",
+      "NearbyCount",
+      "OwnStatAbsolute",
+      "OwnStatPercent",
+      "Randomiser",
+      "SelfHasEffect",
+      "TargetDistance",
+      "TargetHasEffect",
+      "TargetMovementState",
+      "TargetStatAbsolute",
+      "TargetStatPercent",
+      "TimeOfDay",
+      "TimeSinceLastUsed"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    }
+   },
+   "why": "Derived by maintenance/scripts/hand-registry-recount.py (the UNQUALIFIED section), which binds each site to its owner by a different route from registry_miner (a forward pass keeping a stack of open classes, with a local shadow looked for in the enclosing member), NOT pasted from the miner. Unqualified = no `Receiver.` before the field: `CODEC.register(...)` inside the class that declares CODEC, and `getCodecRegistry(PAGE_CODEC)`. The qualified figures elsewhere in this block are unchanged and are checked against qualified sites only.",
+   "empty_id_decision": "Schema's `CODEC.register(Priority.DEFAULT, (Object)\"\", ...)` has the id \"\". DECISION: it is a RESOLVED site (a literal id, so it does not make Schema.CODEC open) but NOT a vocabulary name: \"\" is the default-priority fallback entry, not a discriminator anyone can write as a \"Type\". Both scripts count it in `sites` and `empty_id_sites` and leave it out of `names`; the safe direction, since leaving a name out can only fail a docs value, never pass one.",
+   "cast_literal_decision": "`(Object)\"null\"` and its seven siblings (Schema.init) are literal ids behind a cast. Counted as resolved names in both scripts, implemented separately in each (miner: _CAST_LITERAL in _lit; recount: CAST_LIT in unq_name).",
+   "no_name_sites": [
+    {
+     "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
+     "site": "ItemAbility.java:71",
+     "expr": "AbilitySlot.Core.name()",
+     "label": "enum constant name",
+     "reading": "protocol/AbilitySlot.java declares `enum AbilitySlot { Core(0), Support(1) }`, so the id is statically the string \"Core\"; neither script evaluates `.name()`, so the registry reads open although its vocabulary is knowable"
+    },
+    {
+     "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
+     "site": "ItemAbility.java:72",
+     "expr": "AbilitySlot.Support.name()",
+     "label": "enum constant name",
+     "reading": "the id is statically \"Support\" (same enum)"
+    },
+    {
+     "registry": "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC",
+     "site": "OpenCustomUIInteraction.java:74",
+     "expr": "id",
+     "label": "parameter (indirect, \u00a72(b))",
+     "reading": "`registerCustomPageSupplier(plugin, tClass, id, supplier)` registers its parameter; registerSimple and both registerBlockEntityCustomPage overloads forward theirs. Callers (9 files at 0.7.2) pass string literals, plus MemoriesPlugin's RECORDED_MEMORIES_ID constant. The 7 qualified PAGE_CODEC sites keep their literals; this one makes the registry open"
+    }
+   ],
+   "verdict_changes": [
+    {
+     "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
+     "before": "absent",
+     "after": "open",
+     "reading": "two ids written `AbilitySlot.X.name()`: knowable (Core, Support) but not evaluated"
+    },
+    {
+     "registry": "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC",
+     "before": "closed",
+     "after": "open",
+     "reading": "gains a site whose id is the parameter `id`; indirect, and the registry is in indirect_registries"
+    },
+    {
+     "registry": "com.hypixel.hytale.server.npc.decisionmaker.core.conditions.base.Condition.CODEC",
+     "before": "closed (4 names)",
+     "after": "closed (19 names)",
+     "reading": "15 unqualified literal sites added to the 4 qualified ones; still one registry row"
+    }
+   ],
+   "open_registry_count_all_spellings": 12,
+   "open_registry_count_all_spellings_why": "10 (the qualified-population figure, \u00a72) + ItemAbility.CODEC + OpenCustomUIInteraction.PAGE_CODEC. Disjoint by reading source: ItemAbility has no qualified site at all, and PAGE_CODEC's seven qualified sites (ShopPlugin:45, TeleporterPlugin:81, AugmentBlocksPlugin:55, PortalsPlugin:107, InteractionModule:311-313) all take literals.",
+   "residue": {
+    "variable_held_registries": 0,
+    "non_field_argument_calls": 0,
+    "non_field_argument_declarations": 3
+   },
+   "residue_why": "What neither spelling covers, measured by the recount instead of asserted: no registry is held in a variable (`x = \u2026getCodecRegistry(\u2026)`), and every getCodecRegistry( whose argument is not a field is one of the three PluginBase overload DECLARATIONS (PluginBase.java:207/213/219), not a registration. Before 2026-10-15 the fourth hit was OpenCustomUIInteraction's `getCodecRegistry(PAGE_CODEC)`, now a mined unqualified form-2 site. If this moves, the \"nothing else is left\" claim is false and a third spelling exists."
+  },
+  "unqualified_previous_build": {
+   "build": "0.6.8 (build-31)",
+   "sites": 68,
+   "form1_sites": 67,
+   "form2_sites": 1,
+   "declaring_classes": 18,
+   "unresolved_owner": 0,
+   "excluded": 0,
+   "new_registry_keys": [
+    "com.hypixel.hytale.builtin.adventure.objectives.config.markerarea.ObjectiveLocationMarkerArea.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.objectivesetup.ObjectiveTypeSetup.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.taskcondition.TaskConditionAsset.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.triggercondition.ObjectiveLocationTriggerCondition.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.config.worldlocationproviders.WorldLocationProvider.CODEC",
+    "com.hypixel.hytale.builtin.adventure.objectives.transaction.TransactionRecord.CODEC",
+    "com.hypixel.hytale.builtin.adventure.shop.barter.TradeSlot.CODEC",
+    "com.hypixel.hytale.builtin.npccombatactionevaluator.evaluator.combatactions.CombatActionOption.CODEC",
+    "com.hypixel.hytale.builtin.triggervolumes.shape.TriggerVolumeShape.CODEC",
+    "com.hypixel.hytale.codec.schema.config.Schema.CODEC",
+    "com.hypixel.hytale.codec.schema.metadata.ui.UIEditor.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.item.config.container.ItemDropContainer.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.musiccontainer.config.MusicContainer.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.ScaledResponseCurve.CODEC",
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.config.ResponseCurve.CODEC",
+    "com.hypixel.hytale.server.flock.config.FlockAsset.CODEC"
+   ],
+   "registries": {
+    "com.hypixel.hytale.builtin.adventure.objectives.config.markerarea.ObjectiveLocationMarkerArea.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Box",
+      "Radius"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.objectivesetup.ObjectiveTypeSetup.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Objective",
+      "ObjectiveLine"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.taskcondition.TaskConditionAsset.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "SoloInventory"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.triggercondition.ObjectiveLocationTriggerCondition.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "HourRange",
+      "Weather"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.config.worldlocationproviders.WorldLocationProvider.CODEC": {
+     "sites": 3,
+     "form1": 3,
+     "form2": 0,
+     "names": [
+      "LocationRadius",
+      "LookBlocksBelow",
+      "TagBlockHeight"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.objectives.transaction.TransactionRecord.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "SpawnBlock",
+      "SpawnEntity"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.adventure.shop.barter.TradeSlot.CODEC": {
+     "sites": 2,
+     "form1": 2,
+     "form2": 0,
+     "names": [
+      "Fixed",
+      "Pool"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.npccombatactionevaluator.evaluator.combatactions.CombatActionOption.CODEC": {
+     "sites": 3,
+     "form1": 3,
+     "form2": 0,
+     "names": [
+      "Ability",
+      "SelectBasicAttackTarget",
+      "State"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.builtin.triggervolumes.shape.TriggerVolumeShape.CODEC": {
+     "sites": 3,
+     "form1": 3,
+     "form2": 0,
+     "names": [
+      "Box",
+      "Cylinder",
+      "Sphere"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.codec.schema.config.Schema.CODEC": {
+     "sites": 8,
+     "form1": 8,
+     "form2": 0,
+     "names": [
+      "array",
+      "boolean",
+      "integer",
+      "null",
+      "number",
+      "object",
+      "string"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 1
+    },
+    "com.hypixel.hytale.codec.schema.metadata.ui.UIEditor.CODEC": {
+     "sites": 8,
+     "form1": 8,
+     "form2": 0,
+     "names": [
+      "Dropdown",
+      "Icon",
+      "LocalizationKey",
+      "MultilineText",
+      "Number",
+      "Text",
+      "Timeline",
+      "WeightedTimeline"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.item.config.container.ItemDropContainer.CODEC": {
+     "sites": 5,
+     "form1": 5,
+     "form2": 0,
+     "names": [
+      "Choice",
+      "Droplist",
+      "Empty",
+      "Multiple",
+      "Single"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.musiccontainer.config.MusicContainer.CODEC": {
+     "sites": 5,
+     "form1": 5,
+     "form2": 0,
+     "names": [
+      "Horizontal",
+      "Random",
+      "Segment",
+      "Sequence",
+      "SingleTrack"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.ScaledResponseCurve.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "Switch"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.asset.type.responsecurve.config.ResponseCurve.CODEC": {
+     "sites": 4,
+     "form1": 4,
+     "form2": 0,
+     "names": [
+      "Exponential",
+      "Logistic",
+      "SineWave",
+      "Switch"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC": {
+     "sites": 1,
+     "form1": 0,
+     "form2": 1,
+     "names": [],
+     "no_name": 1,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.flock.config.FlockAsset.CODEC": {
+     "sites": 1,
+     "form1": 1,
+     "form2": 0,
+     "names": [
+      "Weighted"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    },
+    "com.hypixel.hytale.server.npc.decisionmaker.core.conditions.base.Condition.CODEC": {
+     "sites": 15,
+     "form1": 15,
+     "form2": 0,
+     "names": [
+      "HasTarget",
+      "IsInState",
+      "LineOfSight",
+      "NearbyCount",
+      "OwnStatAbsolute",
+      "OwnStatPercent",
+      "Randomiser",
+      "SelfHasEffect",
+      "TargetDistance",
+      "TargetHasEffect",
+      "TargetMovementState",
+      "TargetStatAbsolute",
+      "TargetStatPercent",
+      "TimeOfDay",
+      "TimeSinceLastUsed"
+     ],
+     "no_name": 0,
+     "empty_id_sites": 0
+    }
+   },
+   "why": "The same recount run on the previous build's snapshot FIRST, as \u00a715 requires of any recount: 68 sites (67 form-1 + the PAGE_CODEC form-2 site) in 18 classes at 0.6.8, against 69 in 20 at 0.7.2 (+ItemAbility, +EditorPropertyGallery; WorldLocationProvider 3 -> 1 and TransactionRecord 2 -> 1). The review's '67 at 0.6.8' counts form-1 only.",
+   "residue": {
+    "variable_held_registries": 0,
+    "non_field_argument_calls": 0,
+    "non_field_argument_declarations": 3
+   }
+  },
+  "field_statements_population": "qualified sites only; the unqualified population is under `unqualified`",
+  "indirect_registries_note": "OpenCustomUIInteraction.PAGE_CODEC added by hand (unqualified site at OpenCustomUIInteraction.java:74 registers the parameter `id`; \u00a72(b) shape). Checked against the registry as a whole, not the qualified population."
  },
  "measured": {
   "source": "measured",
-  "registrations": 977,
+  "registrations": 1046,
   "second_form_only": [
    "com.hypixel.hytale.builtin.adventure.farming.config.stages.spread.SpreadGrowthBehaviour.CODEC",
    "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
@@ -164,7 +758,76 @@
   ],
   "id_not_in_argument_zero": 28,
   "register_class_name_codec_sites": 12,
-  "registries": 107,
-  "registries_note": "98 before 2026-09-04; +7 when form 3 (registerCoreComponentType) was added. Those 7 are all closed, so the open count stays 10 \u2014 a form-3 site that could not be categorised would land in <category-unresolved>, which the independent block pins at 0. 0.7.2: 107 \u2014 +RewardAsset.CODEC (new builtin.rewards, second form only) and +IHeightmap.CODEC; none removed; open count still 10. `registrations` read 754 (the pre-form-3 figure, never updated when form 3 landed; 948 at 0.6.8) and is now 977. It is not checked by the runner."
+  "registries": 125,
+  "registries_note": "98 before 2026-09-04; +7 when form 3 (registerCoreComponentType) was added. Those 7 are all closed, so the open count stays 10 \u2014 a form-3 site that could not be categorised would land in <category-unresolved>, which the independent block pins at 0. 0.7.2: 107 \u2014 +RewardAsset.CODEC (new builtin.rewards, second form only) and +IHeightmap.CODEC; none removed; open count still 10. `registrations` read 754 (the pre-form-3 figure, never updated when form 3 landed; 948 at 0.6.8) and is now 977. It is not checked by the runner. Unqualified registrations (2026-10-15): 107 -> 125 registries (+18, the recount's new_registry_keys; the 19th declaring class, Condition, already had qualified sites) and 977 -> 1046 registrations (+69: 68 form-1 + OpenCustomUIInteraction's form-2 site). The open count 10 -> 12 (ItemAbility, PAGE_CODEC). `registrations` is now checked by the runner.",
+  "registries_before_unqualified": 107,
+  "registrations_before_unqualified": 977
+ },
+ "synthetic": {
+  "why": "Hand-derived by reading maintenance/fixtures/registry-oracle/synthetic/src (every site is commented there with what a binder must do). Run through BOTH the miner and the recount; neither's output was pasted here.",
+  "registries": {
+   "synth.alpha.Outer.CODEC": {
+    "unqualified_names": [
+     "AfterShadow",
+     "CastLit",
+     "InnerToOuter",
+     "OuterA"
+    ],
+    "qualified_names": [
+     "Qual"
+    ],
+    "unqualified_sites": 4,
+    "no_name": 0
+   },
+   "synth.alpha.Outer.Own.CODEC": {
+    "unqualified_names": [
+     "DeeperToOwn",
+     "OwnField"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 2,
+    "no_name": 0
+   },
+   "synth.alpha.PageHolder.PAGE_CODEC": {
+    "unqualified_names": [
+     "Chained",
+     "Chained2"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 3,
+    "no_name": 1,
+    "form2": 3
+   },
+   "synth.alpha.Registry.CODEC": {
+    "unqualified_names": [
+     "IfaceField"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 3,
+    "no_name": 1,
+    "empty_id_sites": 1
+   }
+  },
+  "unqualified_sites": 12,
+  "qualified_sites": 1,
+  "new_registry_keys": [
+   "synth.alpha.Outer.Own.CODEC",
+   "synth.alpha.PageHolder.PAGE_CODEC",
+   "synth.alpha.Registry.CODEC"
+  ],
+  "excluded": {
+   "local": 2,
+   "this-super": 2
+  },
+  "unresolved_owner": 1,
+  "open_registries": [
+   "synth.alpha.PageHolder.PAGE_CODEC",
+   "synth.alpha.Registry.CODEC"
+  ],
+  "residue": {
+   "variable_held_registries": 1,
+   "non_field_argument_calls": 1,
+   "non_field_argument_declarations": 1
+  }
  }
 }

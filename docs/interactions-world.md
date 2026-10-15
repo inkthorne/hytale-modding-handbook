@@ -328,6 +328,16 @@ The one shipped use, `Server/Item/Items/Portal/Dungeon/Dungeon_Portal_Early_Exit
 }
 ```
 
+**`BlockLore`** (`BlockLorePageSupplier`) reads the targeted block's item `TranslationProperties`: `Description` is
+the page text, aligned by `TextAlignment`, and `Name` (when set) the title. Without a target block or a `Description`
+key it opens nothing. The shipped lore notes put the interaction on a template and let each child supply the text:
+`Server/Item/Items/Lore/Template_Lore_Note.json` gives its block `"Use": { "Interactions": [ { "Type": "OpenCustomUI",
+"Page": { "Id": "BlockLore", "TextAlignment": "Left" } } ] }`, and `Lore/Lore_Note_Died_Improperly.json` sets
+`"Parent": "Template_Lore_Note_Goblin_Pages"` and adds the `TranslationProperties` `Name` and `Description`.
+
+For the chapter-complete page (title, subtitle, reward tiles and two buttons) use the separate interaction type
+[`OpenChapterRewards`](interactions.md#openchapterrewards). It only displays; granting is the [rewards module](encounters.md#rewards)'s job.
+
 > **Gotcha — `Workbench` and `Arcanebench` are not page ids.** They look like UI pages but are
 > **bench ids** consumed by `Recipe.BenchRequirement`; no shipped `OpenCustomUI` uses them.
 

@@ -125,7 +125,7 @@ role too.
 | `SetTargetNPCInvulnerable` | `Invulnerable` **required** | Toggle invulnerability on the target NPC |
 | `SetEncounterWeather` | `Weather` **required**; `TransitionSeconds` *2.0* (>0) | Override the weather each tracked member sees (`EncounterWeatherState.setDesiredWeather`). `Weather` is a `Server/Weathers` asset id; `TransitionSeconds` is the sky's cross-fade, both into this weather and back out of it. A player whose weather override another encounter already holds keeps that one (`WeatherTracker.tryClaimOverride` is first-come) |
 | `ClearEncounterWeather` | — | Return the tracked members to their normal weather (`EncounterWeatherState.clearDesiredWeather`) |
-| `GrantReward` | `Reward` **required** | Grant a reward to every tracked member (`RewardModule.grantReward` per member). `Reward` is a `Server/Rewards` asset id |
+| `GrantReward` | `Reward` **required** | Grant a reward to every tracked member (`RewardModule.grantReward` per member). `Reward` is a `Server/Rewards` asset id, checked at load by `RewardExistsValidator` — see [Rewards](#rewards) |
 | `SignalWorldEvent` | `SignalId` **required**, non-empty | `store.invoke(ref, new WorldEventSignal(null, signalId))` — completes any [world event](world-events.md) `SignalCondition` waiting on that id |
 
 > **`Count` defaults to 0, and 0 means *all*.** `TriggerSpawners` without an explicit `Count` fires *every* matching
@@ -181,6 +181,115 @@ proximity-tested at apply time — the collector's sensor `Range` is what define
 - `EncounterMembers`: `stampMember(ref, ttlSeconds)`, `getMemberTtl()`, `isEmpty()`, `clearMembers()`.
 - The plugin also registers a **beacon receiver provider** so the NPC `Beacon` sensors/actions can target
   encounter managers (`Example_Beacon_Sender.json` / `Example_Beacon_Receiver.json`).
+
+## Rewards
+
+New in 0.7.2. A **reward** is a JSON asset under `Server/Rewards/`, keyed by file name and polymorphic on `"Type"`.
+The `Rewards` built-in plugin (`RewardModule`, package `com.hypixel.hytale.builtin.rewards`, manifest id
+`Hytale:Rewards`) registers the store in `setup()` along with the one built-in type. `EncounterManager` and `NPC` both
+declare `Hytale:Rewards` as a dependency, and `GrantReward` is the only shipped caller.
+
+| `Type` | Class | Keys | Effect |
+|--------|-------|------|--------|
+| `Entitlement` | `EntitlementReward` | `EntitlementId` (string) — required: `Validators.nonNull()` plus `nonEmptyString()` | Sends the player's client a `SelfGrantEntitlement` packet carrying the id, asking it to grant itself that entitlement. That packet is the whole effect on the server side |
+
+The one shipped reward is `Server/Rewards/Reward_Cosmetics_Chapter1.json`:
+
+```json
+{
+  "Type": "Entitlement",
+  "EntitlementId": "cosmetics.chapter_1.boss"
+}
+```
+
+The Goblin Gobliterator boss fight grants it on a win, from
+`Server/EncounterManager/Goblin_Gobliterator/Templates/Template_Goblin_Gobliterator_Encounter.json`:
+
+```json
+{
+  "$Comment": "Grants the win reward to every encounter member.",
+  "Type": "GrantReward",
+  "Reward": "Reward_Cosmetics_Chapter1"
+}
+```
+
+**Granting from Java.** `RewardModule.get().grantReward(rewardId, playerRef)` looks the id up in
+`RewardAsset.getAssetMap()` and calls the asset's `grant(PlayerRef)`. It returns `false`, logging a WARNING, for a
+`null` id, an unknown id (`Unknown reward %s requested for %s`), or a `grant` that throws (`Reward %s failed for %s`;
+the exception is caught there). The module keeps no record of what it granted, and `GrantReward` grants again each
+time the action runs. The shipped boss fight runs it in the same action list that sets its `Encounter_Live` flag to
+`false`, which is what keeps it to one grant per win. The chapter-complete page
+([`OpenChapterRewards`](interactions.md#openchapterrewards)) only displays reward tiles and grants nothing.
+
+**A custom reward type.** Extend `RewardAsset`, implement `grant(PlayerRef)`, and register the class against
+`RewardAsset.CODEC` in your plugin's `setup()`, which is how `RewardModule.setup()` registers `Entitlement`. List
+`"Hytale:Rewards": "*"` under `Dependencies` in your manifest so the reward store exists first. The codec copies
+`EntitlementReward.CODEC`'s shape:
+
+```java
+package com.example.rewards;
+
+import com.hypixel.hytale.builtin.rewards.asset.RewardAsset;
+import com.hypixel.hytale.codec.Codec;
+import com.hypixel.hytale.codec.KeyedCodec;
+import com.hypixel.hytale.codec.builder.BuilderCodec;
+import com.hypixel.hytale.codec.validation.Validators;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import javax.annotation.Nonnull;
+
+public class ChatMessageReward extends RewardAsset {
+    public static final BuilderCodec<ChatMessageReward> CODEC =
+        BuilderCodec.builder(ChatMessageReward.class, ChatMessageReward::new)
+            .appendInherited(new KeyedCodec<>("MessageKey", Codec.STRING),
+                (reward, key) -> reward.messageKey = key,
+                reward -> reward.messageKey,
+                (reward, parent) -> reward.messageKey = parent.messageKey)
+            .addValidator(Validators.nonNull())
+            .addValidator(Validators.nonEmptyString())
+            .documentation("Localization key of the chat message sent to the player.")
+            .add()
+            .build();
+
+    protected String messageKey;
+
+    @Override
+    public void grant(@Nonnull PlayerRef playerRef) {
+        playerRef.sendMessage(Message.translation(this.messageKey));
+    }
+}
+```
+
+```java
+package com.example.rewards;
+
+import com.hypixel.hytale.builtin.rewards.RewardModule;
+import com.hypixel.hytale.builtin.rewards.asset.RewardAsset;
+import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+
+public class RewardsPlugin extends JavaPlugin {
+    public RewardsPlugin(JavaPluginInit init) {
+        super(init);
+    }
+
+    @Override
+    protected void setup() {
+        getCodecRegistry(RewardAsset.CODEC)
+            .register("ChatMessage", ChatMessageReward.class, ChatMessageReward.CODEC);
+    }
+
+    // Callable from any of your systems or commands once assets have loaded.
+    public static boolean grantWelcome(PlayerRef playerRef) {
+        return RewardModule.get().grantReward("Reward_Welcome", playerRef);
+    }
+}
+```
+
+A pack then ships `Server/Rewards/Reward_Welcome.json` as `{ "Type": "ChatMessage", "MessageKey": "server.myplugin.welcome" }`,
+with the text in its `Server/Languages/en-US/server.lang` as `myplugin.welcome = …` (the `server.` prefix names that
+file), and an encounter can hand it out with `{ "Type": "GrantReward", "Reward": "Reward_Welcome" }`.
 
 ## Gotchas
 

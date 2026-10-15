@@ -768,6 +768,10 @@ supplier's own codec (`Server/Item/Items/Electrum/Portal/Teleporter.json` shows 
 `"Confirmation"` (`ConfirmationPage`; required `TitleKey`, `MessageKey` and `Success`, optional `ConfirmKey` /
 `CancelKey` button labels and `Fail` — `Success` / `Fail` are root interactions run as a `Use` on the block when the
 player confirms or the page closes any other way) and `"BlockLore"` (`BlockLorePage`; optional `TextAlignment`, default `Center`).
+Java can open either through `openCustomPage`: `new ConfirmationPage(playerRef, new ConfirmationPage.Text(title, message,
+confirmLabel, cancelLabel), successRootId, failRootId, targetBlock, targetBlockRaw, worldName)`, where the root ids are
+`RootInteraction` asset ids and `null` block positions run the root with no target block, or `new BlockLorePage(playerRef,
+title, description, BlockLorePage.TextAlignment.Left)`. Shipped examples: [OpenCustomUI](interactions-world.md#opencustomui).
 
 ---
 

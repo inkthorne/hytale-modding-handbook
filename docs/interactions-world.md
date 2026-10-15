@@ -292,7 +292,7 @@ Every `Page.Id` registered in 0.7.2, with the module or plugin whose `setup()` r
 | `Shop` | `ShopPlugin` | `ShopId` (string) | Shop interface (`ShopPageSupplier`) |
 | `Memories` / `MemoriesUnlocked` | `MemoriesPlugin` | - | Memories/journal pages |
 | `Teleporter` | `TeleporterPlugin` | `Create` (boolean), `Mode` (shipped assets write `Warp`) | Teleporter settings page |
-| `PortalDevice` | `PortalsPlugin` | `Config` (a `PortalDeviceConfig`) | Portal device: opens the client's native summon or active-portal page (`PortalDeviceSummonPage.open` / `PortalDeviceActivePage.open`) and returns no custom page — 0.7.2 removed its `.ui` pages |
+| `PortalDevice` | `PortalsPlugin` | `Config` (a `PortalDeviceConfig`) | Portal device: opens the client's native summon or active-portal page (`PortalDeviceSummonPage.open` / `PortalDeviceActivePage.open`); its supplier returns `null`, and 0.7.2 dropped its `.ui` pages |
 | `BlockSpawner` | `BlockSpawnerPlugin` | - | Block-spawner settings page (block entity) |
 | `PrefabSpawner` | `BuilderToolsPlugin` | - | Prefab-spawner settings page (block entity) |
 | `ConfigInstanceBlock` | `InstancesPlugin` | - | Instance-gateway settings page (block entity) |

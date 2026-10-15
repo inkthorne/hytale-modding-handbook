@@ -967,7 +967,7 @@ else
     pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
   elif [ "$RC" -eq 1 ]; then
     NF="$(echo "$OUT" | grep -cE '^  FLAG')"
-    fail "$NF asset id(s) do not resolve in the family their key refers to:"
+    fail "$NF asset-id gate flag(s) (an id outside its key's family, or a placeholder note naming a real asset):"
     echo "$OUT" | grep -E '^  FLAG' | sed 's/^  FLAG  /    /'
   else
     fail "check-asset-ids.py exited $RC (2 = missing input, 3 = nothing examined):"

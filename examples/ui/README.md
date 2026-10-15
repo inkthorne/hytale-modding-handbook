@@ -21,12 +21,13 @@ Toggles HUD components visibility.
 ### `/statushud <show|hide|update>`
 Toggles a custom HUD overlay (`StatusHud`, a `CustomUIHud`) showing health/mana.
 
-- `/statushud show` - Creates a `StatusHud`, registers it via `player.getHudManager().setCustomHud(playerRef, statusHud)`, and stores it in a per-player `ConcurrentHashMap<UUID, StatusHud>` for later updates.
+- `/statushud show` - Creates a `StatusHud`, registers it via `player.getHudManager().addCustomHud(playerRef, statusHud)`, and stores it in a per-player `ConcurrentHashMap<UUID, StatusHud>` for later updates.
 - `/statushud update` - Looks up the stored HUD and calls `hud.updateStats(health, mana)` with sample values (a real plugin would pull these from game state).
-- `/statushud hide` - Calls `setCustomHud(playerRef, null)` and removes the map entry.
+- `/statushud hide` - Calls `removeCustomHud(playerRef, StatusHud.KEY)` and removes the map entry.
 
-> **Gotcha:** Only one `CustomUIHud` can be active per player at a time —
-> calling `setCustomHud()` replaces any existing custom HUD.
+> **Gotcha:** custom HUDs are keyed. `HudManager` keeps one `CustomUIHud` per **key**
+> (`StatusHud.KEY` here), so HUDs with different keys show side by side, while
+> `addCustomHud()` with a key already in use removes the old HUD and shows the new one.
 
 ## Building
 

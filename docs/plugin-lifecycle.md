@@ -7,7 +7,7 @@ seo:
 
 # Plugin Lifecycle API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers the plugin entry point, its lifecycle phases, the registries and core modules it exposes, the `manifest.json` format, logging, and server/plugin lifecycle events.
 
@@ -178,7 +178,7 @@ PrefabStore prefabs = PrefabStore.get();
 | `CollisionModule` | `com.hypixel.hytale.server.core.modules.collision` | Collision detection and raycasting |
 | `ProjectileModule` | `com.hypixel.hytale.server.core.modules.projectile` | Projectile spawning and management |
 | `PrefabStore` | `com.hypixel.hytale.server.core.prefab` | Load and spawn prefabs |
-| `BlockModule` | `com.hypixel.hytale.server.core.modules.block` | Block operations (place, break, query) |
+| `BlockModule` | `com.hypixel.hytale.server.core.modules.block` | Block-entity state: `BlockStateInfo`, block-entity component types, `getBlockEntity(...)` lookups. Block reads and writes go through the chunk sections instead (see [block-access.md](block-access.md)) |
 | `DamageModule` | `com.hypixel.hytale.server.core.modules.entity.damage` | Damage calculation and application |
 | `ItemModule` | `com.hypixel.hytale.server.core.modules.item` | Item operations |
 | `EntityModule` | `com.hypixel.hytale.server.core.modules.entity` | Entity spawning and management |

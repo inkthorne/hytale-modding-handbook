@@ -28,9 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Clean up references when HUD is hidden</li>
  * </ul>
  *
- * <p><b>Important:</b> Only one CustomUIHud can be active per player at a time.
- * Identified by a key (see {@link StatusHud#KEY}): addCustomHud() shows it,
- * removeCustomHud(playerRef, key) hides it.
+ * <p><b>Important:</b> custom HUDs are keyed (see {@link StatusHud#KEY}). A player
+ * can show several at once under different keys; addCustomHud() with a key that is
+ * already in use replaces that HUD. removeCustomHud(playerRef, key) hides it.
  *
  * @see StatusHud
  */

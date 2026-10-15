@@ -30,6 +30,10 @@ public class EventsPlugin extends JavaPlugin {
     protected void setup() {
         // Global bus: welcome each player as they connect. PlayerConnectEvent
         // is a non-keyed event, so plain register() (not registerGlobal).
+        // As of game 0.7.2 it is an IAsyncEvent<Void>: register() still works,
+        // because the bus wraps this Consumer as one stage of a CompletableFuture
+        // chain, but that stage may run off the world thread. Use
+        // registerAsync(...) when the handler itself must wait on something.
         connectRegistration = getEventRegistry().register(PlayerConnectEvent.class, event -> {
             event.getPlayerRef().sendMessage(
                 Message.raw("Welcome, " + event.getPlayerRef().getUsername() + "!"));

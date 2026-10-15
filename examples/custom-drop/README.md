@@ -26,7 +26,7 @@ few fields to make a variant. A drop table is the opposite shape — **compositi
 - **`Multiple`** — evaluate **every** child. Use it for "roll each of these independently."
 - **`Choice`** — pick **one** child, by weight. Use it for "pick one of these."
 - **`Single`** — a leaf that drops one actual `Item`.
-- **`Empty`** — a "nothing" outcome, only valid *inside* a `Choice`/`Multiple`.
+- **`Empty`** — a "nothing" outcome, only useful *inside* a `Choice`/`Multiple`.
 
 The headline gotcha is **`Multiple` vs `Choice`**: in a `Multiple`, a child's `Weight` is
 an *independent* 0–100% chance (each child rolls on its own); in a `Choice`, a child's
@@ -71,7 +71,7 @@ JSON to self-document.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "^0.6.0",
+  "ServerVersion": "^0.7.0",
   "IncludesAssetPack": true
 }
 ```
@@ -83,11 +83,12 @@ JSON to self-document.
 | `Version` | Your pack's version. Bump it when you change things. |
 | `Authors` | Who made it. A list of `{ "Name": "..." }` objects. |
 | `IncludesAssetPack` | `true` because this pack contains assets (the drop file). |
-| `ServerVersion` | The server version **range** this pack targets (semver). `^0.5.0` = compatible with `0.5.x`. |
+| `ServerVersion` | The server version **range** this pack targets (semver). `^0.7.0` = compatible with `0.7.x`. |
 
 > **About `ServerVersion`:** since Update 5 this is a **semver range**, not an exact build string. The server
-> checks whether its own version satisfies the range; if not, it still loads the pack but logs a warning. `^0.5.0`
-> means "any `0.5.x`", so you don't have to re-pin on every patch. To read the running server version:
+> checks whether its own version satisfies the range; if not, it still loads the pack but logs a warning. `^0.7.0`
+> means "any `0.7.x`", so you don't have to re-pin on every patch (but you do on every minor: `^0.6.0` stopped
+> matching when the game moved to `0.7.x`). To read the running server version:
 > ```bash
 > unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 > ```
@@ -140,7 +141,7 @@ verbatim (raw chicken + light hide, each always dropping). The third `Choice` is
 | `ItemId` | **Case-sensitive** id of a registered item. `Food_Chicken_Raw` and `Ingredient_Hide_Light` ship with the game; `Food_Hearty_Snack` comes from the `custom-food` pack. |
 | `QuantityMin` / `QuantityMax` | Drop count. When they differ, a value is picked uniformly in that range (e.g. 1–2). |
 | `Weight` | Means **different things** by parent — see below. |
-| `Empty` | A "drop nothing" outcome. Only valid as a child of a `Choice`/`Multiple`, never as the file root. |
+| `Empty` | A "drop nothing" outcome. It is registered like every other container type, so it decodes anywhere a container can sit, but it is only useful as a child of a `Choice`/`Multiple`. |
 
 **Why `Weight` means two different things here — the key lesson:**
 
@@ -201,8 +202,8 @@ So a child `Weight` under `Multiple` is an absolute percentage; a child `Weight`
 > case-included.
 
 > [!note]
-> The JSON here is fully verified against the game's shipped assets (build
-> `0.5.0`): the override path, the chicken's original drop contents, and
+> The JSON here is fully verified against the game's shipped assets (game
+> `0.7.2`): the override path, the chicken's original drop contents, and
 > every `ItemId` were copied from the extracted `Assets.zip`, and the chicken role's
 > `"DropList": "Drop_Chicken"` confirms a same-path file overrides the shipped table. The
 > end-to-end in-game kill test (steps 3–5) is the one thing to run yourself — it needs a
@@ -214,8 +215,11 @@ This pack copies a real shipped drop table. To browse the originals, extract the
 `Assets.zip` once:
 
 ```bash
-unzip -q -o ~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/package/game/latest/Assets.zip -d ~/.cache/hytale-assets
+rm -rf ~/.cache/hytale-assets && unzip -q ~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/package/game/latest/Assets.zip -d ~/.cache/hytale-assets
 ```
+
+(Wipe first, as above: `unzip -o` over an older extraction keeps files a game update removed,
+so a dead reference would still look valid.)
 
 Then look in:
 - `Server/Drops/` — every shipped loot table: `NPCs/` (creatures), `Items/` (destructible

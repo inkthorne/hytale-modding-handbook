@@ -16,6 +16,12 @@ Teleport command demonstrating position arguments. Supports relative coordinates
 - `/tp 100 64 200` - Teleport to absolute coordinates
 - `/tp ~10 ~ ~-5` - Move 10 blocks on X, stay same Y, move -5 on Z
 
+> **This `/tp` shadows the game's own.** The built-in teleport plugin also registers `tp`
+> (alias `teleport`), and `CommandManager.register` stores commands in a map keyed by name,
+> so whichever registers last wins, with no warning, and the built-in's `teleport` alias
+> (which points at the name `tp`) follows the winner. Pick a name nothing else uses for a
+> real plugin.
+
 ## Building
 
 ```batch

@@ -8,5 +8,5 @@
     }
   ],
   "Main": "hytale.examples.events.EventsPlugin",
-  "ServerVersion": "^0.6.0"
+  "ServerVersion": "^0.7.0"
 }

@@ -8,6 +8,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 /**
@@ -29,12 +30,14 @@ public class BreakBlockNotifierSystem extends EntityEventSystem<EntityStore, Bre
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        BreakBlockEvent event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player == null) {
+        // Player itself has no sendMessage; chat goes through the entity's PlayerRef
+        // component. (Player.getPlayerRef() also returns it, but is
+        // @Deprecated(forRemoval = true).)
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef == null) {
             return; // an NPC or other non-player entity broke the block
         }
-        // Player itself has no sendMessage — chat goes through its PlayerRef.
-        player.getPlayerRef().sendMessage(Message.raw(
+        playerRef.sendMessage(Message.raw(
             "You broke " + event.getBlockType().getId()
                 + " at " + event.getTargetBlock().toString()));
     }

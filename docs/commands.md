@@ -7,7 +7,7 @@ seo:
 
 # Commands API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 The command system lets plugins register console- and player-executable commands with typed, validated arguments and tab completion.
 
@@ -159,7 +159,7 @@ protected abstract void execute(
 
 ### Usage Example
 
-Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.6.8 jar).
+Full working example: [`examples/commands/.../HelloCommand.java`](../examples/commands/src/main/java/hytale/examples/commands/HelloCommand.java) (compiles against the 0.7.2 jar).
 
 ```java
 public class HelloCommand extends AbstractPlayerCommand {
@@ -331,7 +331,7 @@ MatchResult matches(String language, String search, int termDepth)
 
 ### Permission model (why a new command says "no permission")
 
-> Verified against 0.6.8 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
+> Verified against 0.7.2 (`AbstractCommand.setOwner`/`hasPermission`, `AssetModule`, `permissions/commands/op`).
 
 When a command is registered, `setOwner()` runs:
 
@@ -849,6 +849,8 @@ ArgTypes.HITBOX_COLLISION_CONFIG // HitboxCollisionConfig asset
 ArgTypes.REPULSION_CONFIG        // RepulsionConfig asset
 ArgTypes.GAME_PROFILE_LOOKUP     // resolved PublicGameProfile (blocking lookup)
 ArgTypes.GAME_PROFILE_LOOKUP_ASYNC // CompletableFuture<PublicGameProfile>
+ArgTypes.CONNECTED_PROFILE_LOOKUP // 0.7.2+: PublicGameProfile of a connected account (UUID or name prefix), else a profile lookup; what /kick uses
+ArgTypes.ITEM_QUALITY_ASSET       // 0.7.2+: ItemQuality asset (Server/Item/Qualities)
 ArgTypes.INT_RANGE               // Pair<Integer, Integer> — two tokens, e.g. "-2 8"
 ArgTypes.INTEGER_COMPARISON_OPERATOR // ArgTypes.IntegerComparisonOperator enum
 ArgTypes.INTEGER_OPERATION       // ArgTypes.IntegerOperation enum
@@ -987,13 +989,18 @@ boolean isHeight()     // "_" prefix (Y only)
 double resolveXZ(double base)
 double resolveYAtWorldCoords(double base, World world, double x, double z)
     throws GeneralCommandException
+CompletableFuture<Void> loadHeightColumn(World world, double x, double z)  // 0.7.2+
 ```
 
 Prefixes accepted by `parse` (verified in source): `~N` is an offset from the
 base, `cN` is a chunk coordinate (multiplied by 32 blocks on resolve), and `_N`
 is terrain-relative — `resolveYAtWorldCoords` returns the terrain surface
 height + 1 + N, and throws [`GeneralCommandException`](#generalcommandexception)
-if the chunk at (x, z) isn't loaded.
+if the chunk column at (x, z) isn't loaded (`server.commands.errors.chunkNotLoaded`) or the column's
+`HeightmapColumn` has no ground there (`No ground found`). As of 0.7.2 the height comes from that
+heightmap component on the chunk column, and `loadHeightColumn(world, x, z)` loads the column
+asynchronously first (it completes at once for a coordinate without the `_` prefix), so chain
+`resolveYAtWorldCoords` after it when the target may be unloaded.
 
 ### RelativeInteger & RelativeFloat
 The values behind `ArgTypes.RELATIVE_INTEGER` / `ArgTypes.RELATIVE_FLOAT`

@@ -11,6 +11,9 @@ What it does in game:
 
 - Sends a welcome chat message when a player connects (global bus; the
   `EventRegistration` handle is kept so the handler could be unregistered).
+  `PlayerConnectEvent` became an async event (`IAsyncEvent<Void>`) in game 0.7.2;
+  a plain `register()` still receives it, but the handler can run off the world
+  thread, so it only touches the `PlayerRef`.
 - Logs each disconnect with the engine's `DisconnectReason` (global bus).
 - Messages the player naming the block type and position whenever they break a
   block (`BreakBlockNotifierSystem`, an `EntityEventSystem` filtered to

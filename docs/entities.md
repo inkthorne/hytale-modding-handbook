@@ -7,7 +7,7 @@ seo:
 
 # Entities API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers the entity class tree (Entity, LivingEntity, Player), the lightweight `PlayerRef`, and the ECS components that hold entity state — stats, velocity, and interactions.
 
@@ -167,7 +167,7 @@ static void addLocationChange(Ref<EntityStore> ref, double x, double y, double z
 static CompletableFuture<Transform> getRespawnPosition(Ref<EntityStore> ref, String spawnPoint, ComponentAccessor<EntityStore> accessor)
 static void applyMovementStates(Ref<EntityStore> ref, SavedMovementStates saved, MovementStates current, ComponentAccessor<EntityStore> accessor)
 void resetVelocity(Velocity velocity)
-void processVelocitySample(double deltaTime, Vector3d sample, Velocity velocity)
+void processVelocitySample(double deltaTime, Vector3d displacement, Velocity velocity)   // engine-driven
 
 // Managers
 WindowManager getWindowManager()
@@ -206,7 +206,7 @@ boolean isWaitingForClientReady()
 static ComponentType<EntityStore, Player> getComponentType()
 ```
 
-> **Deprecations:** still true in 0.6.8 — `getPlayerConnection()`
+> **Deprecations:** still true in 0.7.2 — `getPlayerConnection()`
 > and `getPlayerRef()` are marked `@Deprecated(forRemoval=true)`. For sending to-client packets, get the
 > `PacketHandler` from a `PlayerRef` via [`PlayerRef.getPacketHandler()`](#playerref) instead of
 > `getPlayerConnection()`. `getPlayerRef()` still works with no 1:1 replacement — prefer carrying
@@ -381,11 +381,11 @@ These carry state and have getters/setters (and a constructor that seeds the val
 | `ModelComponent` | The entity's render model | `new ModelComponent(Model)`, `getModel()`, `static getEyeHeight(Ref, ComponentAccessor)` (0.6.3+; `0` when the entity has no model) |
 | `PersistentModel` | A model that persists across reloads | `new PersistentModel(Model.ModelReference)`, `getModelReference()` / `setModelReference(...)` |
 | `DisplayNameComponent` | Floating name | `new DisplayNameComponent(Message)`, `getDisplayName()` |
-| `EntityScaleComponent` | Uniform render scale | `new EntityScaleComponent(float)`, `getScale()` / `setScale(float)` |
+| `EntityScaleComponent` | Uniform render scale (0.7.2+: also scales the `BoundingBox`, see below) | `new EntityScaleComponent(float)`, `getScale()` / `setScale(float)` |
 | `HeadRotation` | Head look direction | `new HeadRotation(Rotation3fc)`, `getRotation()` (→ `Rotation3f`) / `setRotation(...)`, `getDirection()` (→ `Vector3d`) |
 | `DynamicLight` | Light emitted by the entity | `new DynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
 | `PersistentDynamicLight` | Persisted dynamic light | `new PersistentDynamicLight(ColorLight)`, `getColorLight()` / `setColorLight(...)` |
-| `BoundingBox` | Collision/selection box | `new BoundingBox(Box)`, `getBoundingBox()` / `setBoundingBox(...)`, `getDetailBoxes()` |
+| `BoundingBox` | Collision/selection box | `new BoundingBox(Box)`, `getBoundingBox()` / `setBoundingBox(...)`, `getDetailBoxes()`, `getScale()` / `setScale(float)` (0.7.2+) |
 | `AudioComponent` | Looping sound-event ids on the entity | `getSoundEventIds()` (`int[]`), `addSound(int)` |
 | `FromWorldGen` / `WorldGenId` | Tags an entity with its world-gen id | `new FromWorldGen(int)` / `new WorldGenId(int)`, `getWorldGenId()` |
 
@@ -401,7 +401,7 @@ These hold no per-entity state — presence alone is the signal. They expose a s
 | `NPCMarkerComponent` | Tags the entity as an NPC — **deprecated, see note** | `NPCMarkerComponent.get()` |
 | `PropComponent` | Tags the entity as a static prop | `PropComponent.get()` |
 
-> **Deprecated (still `@Deprecated(forRemoval = true)` in 0.6.8):** `NPCMarkerComponent` is
+> **Deprecated (still `@Deprecated(forRemoval = true)` in 0.7.2):** `NPCMarkerComponent` is
 > on the way out. The engine still attaches it to every NPC, so
 > it works today, but it is slated for removal. To identify or count NPCs, query
 > the `NPCEntity` component instead — `store.getEntityCountFor(NPCEntity.getComponentType())`
@@ -430,6 +430,8 @@ ModelComponent mc = store.getComponent(ref, ModelComponent.getComponentType());
 
 > [!NOTE]
 > Components ending in `consumeNetworkOutdated()` (e.g. `ModelComponent`, `EntityScaleComponent`, `DynamicLight`, `AudioComponent`) are network-synced: mutating them marks the entity dirty so the change is pushed to clients on the next tick. The `Persistent*` variants additionally survive save/reload.
+
+**Scale and the hitbox (0.7.2+).** `BoundingBox` now keeps an unscaled box plus a `scale`; `setScale(float)` rescales the collision box and the detail boxes, and ignores non-finite or non-positive values. You rarely call it yourself: the engine's `EntityScaleBoundingBoxSystem` runs every tick over entities with both `EntityScaleComponent` and `BoundingBox` and sets the box scale to the entity scale divided by the model's own scale (or the entity scale alone when there is no `ModelComponent`). So scaling an entity with `EntityScaleComponent` now grows its hitbox too.
 
 ---
 
@@ -626,6 +628,8 @@ if (velocity != null) {
 
 Note: `addVelocity()` (renamed from `addForce()` in Update 5) and `set()` exist but haven't been verified to work.
 
+0.7.2 added a fourth overload, `addInstruction(Vector3d, VelocityConfig, ChangeVelocityType, float preMultiplier)`; the three-argument form is unchanged and passes `1.0f`. The pre-multiplier is consumed by the NPC path (`NPCVelocityInstructionSystem` hands it to the role's motion controller); the built-in `KnockbackSystems` fills it from `KnockbackComponent.getPreMultiplier()`.
+
 This API is for **discrete impulses** — knockback, launches, dashes. Do **not** drive an AI-controlled NPC's continuous movement by writing `Velocity` every tick; that fights the locomotion (steering-force) layer. Continuous NPC movement belongs in a `BodyMotion` — see [NPC Roles → Registering custom core components (Java)](npc-roles.md#registering-custom-core-components-java).
 
 ### Example: Launch Player Upward
@@ -685,6 +689,8 @@ void executeChain(Ref<EntityStore> ref, CommandBuffer<EntityStore> buffer, Inter
 void cancelChains(InteractionChain chain)
 ```
 
+As of 0.7.2, `tryStartChain` returns `false` up front when the world's gameplay config blocks the root interaction (`WorldConfig.isRootInteractionAllowed(root)`, which tests the root interaction's tags against the config's blocked tags), and every chain that starts — server-started or client-synced — first fires the cancellable ECS event `InteractionChainStartEvent` on the entity (`server.core.modules.interaction.event`; `getChain()`, `getContext()`, `getType()`, `getRootInteractionId()`). Cancelling it marks a server-started chain `Failed` before its first tick, and answers a client-started one with a cancel packet. Handle it with an `EntityEventSystem<EntityStore, InteractionChainStartEvent>`, as the built-in `CheckInteractionChainStartSystem` does.
+
 ### Query
 ```java
 // Check if a chain can run
@@ -706,22 +712,18 @@ boolean applyRules(InteractionContext context, InteractionChainData data, Intera
 The `InteractionManager` is used when processing trigger blocks:
 
 ```java
-CollisionResult result = new CollisionResult(false, true);  // Enable triggers
+// The two constructor flags are (enableSlides, enableCharacters); triggers are a separate switch
+CollisionResult result = new CollisionResult(false, true);
+result.enableTriggerBlocks();
 module.findIntersections(world, hitbox, position, result, true, false);
 
-// Process triggers with the entity's interaction manager (see note below)
-result.defaultTriggerBlocksProcessing(manager, entity, ref, flag, accessor);
+// Process triggers with the entity's interaction manager (lookup below)
+InteractionManager manager = accessor.getComponent(ref,
+        InteractionModule.get().getInteractionManagerComponent());
+result.defaultTriggerBlocksProcessing(manager, entity, ref, executeTriggers, accessor);
 ```
 
-> [!question]
-> Unlike the other components on this page, `InteractionManager` does **not**
-> expose a static `getComponentType()` accessor (still true as of 0.6.8, verified via
-> `javap`), so the `store.getComponent(ref, …)` retrieval used elsewhere does not
-> apply here. Its only public constructor is
-> `InteractionManager(PlayerRef, IInteractionSimulationHandler)`.
-> The exact supported way for a plugin to obtain an existing entity's
-> `InteractionManager` is unconfirmed from bytecode alone — treat `manager` above
-> as already-resolved rather than copying a specific lookup call.
+Unlike the other components on this page, `InteractionManager` has **no** static `getComponentType()` (still true in 0.7.2). Its component type comes from the interaction module instead: `InteractionModule.get().getInteractionManagerComponent()` (`com.hypixel.hytale.server.core.modules.interaction.InteractionModule`), which is how the engine's `PlayerProcessMovementSystem` and the NPC `MotionControllerBase` fetch it before calling `defaultTriggerBlocksProcessing`. The component can be absent, so null-check it. Its only public constructor is `InteractionManager(PlayerRef, IInteractionSimulationHandler)`; the engine attaches it for you.
 
 ---
 
@@ -918,7 +920,7 @@ Server-initiated teleports are asynchronous for players: the server adds a `Tele
 |--------|-------------|
 | `static getComponentType()` | Component type for store access |
 
-No other members (0.6.8): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. In 0.5.9 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); by 0.6.3 those moved to `TeleportAckTracker`.
+No other members (0.7.2): its presence on a player entity means a teleport is in flight. Its main plugin use is a **guard** — a non-null `store.getComponent(ref, PendingTeleport.getComponentType())` means the client hasn't acknowledged yet, so position-based logic (anti-cheat distance checks, region triggers) should skip that tick rather than treat the stale pre-teleport position as real. In 0.5.9 the component itself held the queue (`queueTeleport`/`validate`/`isEmpty`/`getPosition`/`MAX_OFFSET`); by 0.6.3 those moved to `TeleportAckTracker`.
 
 ### TeleportAckTracker
 
@@ -952,7 +954,7 @@ The `Teleport` check closes the one-tick window between a plugin adding the comp
 | `hasElapsedSinceLastTeleport(Duration)` | True if that long has passed (or no teleport yet) |
 | `hasElapsedSinceLastTeleport(long, Duration)` | Same, against a supplied `System.nanoTime()` |
 
-`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every *initiated* teleport (`ensureAndGetComponent` + `setLastTeleport`, at send time — same-world and cross-world), so it's reliable to read; note that for a same-world teleport both `origin()` and `destination()` currently hold the destination transform (0.6.8), so use `timestampNanos()` / `hasElapsedSinceLastTeleport` rather than `origin()` for "where did they come from":
+`TeleportRecord.Entry` is a record: `origin()` (`Location`), `destination()` (`Location`), `timestampNanos()` (`long`). The engine writes an entry on every *initiated* teleport (`ensureAndGetComponent` + `setLastTeleport`, at send time — same-world and cross-world), so it's reliable to read; note that for a same-world teleport both `origin()` and `destination()` currently hold the destination transform (0.7.2), so use `timestampNanos()` / `hasElapsedSinceLastTeleport` rather than `origin()` for "where did they come from":
 
 ```java
 // Teleport cooldown: 5s since the player last teleported
@@ -1120,7 +1122,7 @@ for (Ref<EntityStore> target : TargetUtil.getAllEntitiesInSphere(center, 5.0, st
 }
 ```
 
-World-space raycast variants that don't need an entity (`getTargetBlock(World, BiIntPredicate, x, y, z, dx, dy, dz, maxDistance)` and friends) also exist for custom ray origins.
+World-space raycast variants that don't need an entity also exist for custom ray origins, taking the ray as `x, y, z, dx, dy, dz, maxDistance`. Use the `ChunkStore` forms added in 0.7.2: `getTargetBlock(ChunkStore, BiIntPredicate, ...)`, `getTargetBlockOrigin(ChunkStore, ...)`, `getTargetLocation(ChunkStore, IntPredicate, ...)` and `getTargetBlockAvoidLocations(ChunkStore, ...)`, passing `world.getChunkStore()`. They read blocks through the chunk store's sections. The older `World`-first overloads of `getTargetBlock`, `getTargetBlockOrigin` and `getTargetBlockAvoidLocations` are `@Deprecated` in 0.7.2 (the `World` form of `getTargetLocation` is not). `getTargetBlockAvoidLocations` now takes its avoid-set as `Collection<Int3OpenHashSet>` (it was `Collection<LongOpenHashSet>` in 0.6.8).
 
 ---
 
@@ -1128,7 +1130,7 @@ World-space raycast variants that don't need an entity (`getTargetBlock(World, B
 
 **Package:** `com.hypixel.hytale.server.core.modules.entity.hitboxcollision`
 
-Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/`; `HitboxCollision` is the network-synced **component** referencing one config by id. The three shipped configs (0.6.8) are:
+Controls how an entity's hitbox pushes against others. `HitboxCollisionConfig` is a JSON **asset** under `Server/Entity/HitboxCollision/`; `HitboxCollision` is the network-synced **component** referencing one config by id. The three shipped configs (0.7.2) are:
 
 | Asset id | Contents |
 |----------|----------|

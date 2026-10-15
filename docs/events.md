@@ -7,13 +7,13 @@ seo:
 
 # Events API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This document covers the core event system. A compiling end-to-end demo of both mechanisms (global bus + ECS event system) lives in `examples/events/`. For specific event classes, see the relevant domain documentation:
 
 - **Player events** → [player.md](player.md) (includes ChangeGameModeEvent, CraftRecipeEvent)
 - **Block events** → [blocks-java-api.md](blocks-java-api.md#block-events)
-- **World/Chunk events** → [world-lifecycle-events.md](world-lifecycle-events.md)
+- **World/Chunk events** → [world-lifecycle-events.md](world-lifecycle-events.md) (includes `ChunkSectionPreLoadProcessEvent`, where per-block load listeners hook in as of 0.7.2)
 - **Entity events** → [entities.md](entities.md) (includes LivingEntityUseBlockEvent)
 - **Combat/Damage events** → [combat.md](combat.md)
 - **NPC/Sensor events** → [npc.md](npc.md)
@@ -68,7 +68,7 @@ EventRegistry (getEventRegistry())
 | `EventPriority` | `event` | Enum controlling handler execution order |
 | `EventRegistration<KeyType, EventType>` | `event` | Handle for unregistering / combining listeners |
 | `IBaseEvent<KeyType>` | `event` | Marker interface for all events |
-| `IEvent<KeyType>` | `event` | Marker interface for keyed events |
+| `IEvent<KeyType>` | `event` | Marker interface for synchronous events |
 | `IAsyncEvent<KeyType>` | `event` | Marker interface for async events |
 | `ICancellable` | `event` | Interface for cancellable events |
 | `EcsEvent` | `component.system` | Abstract base for ECS events |
@@ -203,11 +203,13 @@ public interface IBaseEvent<KeyType> {
 
 **Package:** `com.hypixel.hytale.event`
 
-Marker interface for keyed events. Extends `IBaseEvent`.
+Marker interface for **synchronous** events: the bus calls every handler in-line, in priority order, on the
+dispatching thread. Extends `IBaseEvent`. Whether an event is keyed is decided by `KeyType`, not by this
+interface: `BootEvent` is an `IEvent<Void>` (no key), `WorldEvent` an `IEvent<String>` (keyed by world name).
 
 ```java
 public interface IEvent<KeyType> extends IBaseEvent<KeyType> {
-    // Marker interface for keyed events
+    // Marker interface for synchronous events
 }
 ```
 
@@ -215,7 +217,11 @@ public interface IEvent<KeyType> extends IBaseEvent<KeyType> {
 
 **Package:** `com.hypixel.hytale.event`
 
-Marker interface for async events. Extends `IBaseEvent`. Used with `registerAsync()` and `registerAsyncGlobal()` methods.
+Marker interface for async events. Extends `IBaseEvent`. The bus dispatches these along a
+`CompletableFuture` chain, one stage per handler. Used with `registerAsync()` and `registerAsyncGlobal()`;
+a plain `register()`/`registerGlobal()` also works, because the bus routes every `IAsyncEvent` class to its async
+registry and wraps the `Consumer` as one more `thenApply` stage. That stage runs on whichever thread completed the
+previous one, so a handler on an async event may be called off the world thread.
 
 ```java
 public interface IAsyncEvent<KeyType> extends IBaseEvent<KeyType> {
@@ -279,10 +285,10 @@ public abstract class CancellableEcsEvent extends EcsEvent implements ICancellab
 
 ```
 IBaseEvent<KeyType>
-├── IEvent<KeyType>           (keyed events registered via EventRegistry)
-│   └── ICancellable          (optional - for cancellable keyed events)
-├── IAsyncEvent<KeyType>      (async events registered via registerAsync*)
-│
+├── IEvent<KeyType>           (synchronous events; keyed when KeyType is not Void)
+├── IAsyncEvent<KeyType>      (async events, dispatched along a CompletableFuture chain)
+ICancellable                  (separate interface; either kind may also implement it)
+
 EcsEvent                      (ECS events handled by EntityEventSystem)
 └── CancellableEcsEvent       (cancellable ECS events)
     └── ICancellableEcsEvent  (interface)
@@ -351,12 +357,15 @@ combined.unregister();
 
 Some events are "keyed" (filtered by a key type like String or item type). Use:
 - `register()` for non-keyed events (e.g., `PlayerConnectEvent`)
-- `registerGlobal()` for keyed events when you want ALL events regardless of key (e.g., `PlayerInteractEvent`)
+- `registerGlobal()` for keyed events when you want ALL events regardless of key (e.g., `PlayerReadyEvent`)
 - `register(EventClass, key, handler)` for keyed events filtered to a specific key
 
 ### Keyed Events
 Use `registerGlobal()` or provide a specific key:
-- `PlayerInteractEvent` (keyed by String)
+- `PlayerReadyEvent` (keyed by the **world name**; `Player.java` dispatches it with `world.getName()`)
+- `DrainPlayerFromWorldEvent` (keyed by the **world name**, and an **`IAsyncEvent`** as of 0.7.2). `World.drainPlayersTo(World, Collection<PlayerRef>, Message, boolean)` dispatches it once per drained player; a handler can redirect the player with `setDestinationWorld(World)` or replace the shown `Message`. See [player.md](player.md#event-summary)
+- `PlayerInteractEvent` is keyed by String too, but it is `@Deprecated` and nothing in the server dispatches it,
+  so a handler for it never fires
 - `PlayerChatEvent` (keyed by String, and an **`IAsyncEvent`**) — the bus routes any async event class to
   the async registry, so `registerGlobal(...)` still works: your `Consumer` is wrapped as
   `f -> f.thenApply(e -> { consumer.accept(e); return e; })`. Use `registerAsyncGlobal(...)` when the
@@ -367,7 +376,7 @@ Use `registerGlobal()` or provide a specific key:
 
 ### Non-Keyed Events
 Use `register()`:
-- `PlayerConnectEvent`
+- `PlayerConnectEvent` (an **`IAsyncEvent<Void>`** as of 0.7.2; `register()` still works, as above)
 - `PlayerDisconnectEvent`
 - `AllWorldsLoadedEvent`
 - `BootEvent`, `ShutdownEvent`
@@ -376,7 +385,10 @@ Use `register()`:
 ```java
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.event.events.player.PlayerConnectEvent;
-import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.component.Ref;
 
 @Override
 protected void setup() {
@@ -385,15 +397,20 @@ protected void setup() {
         event.getPlayerRef().sendMessage(Message.raw("Welcome!"));
     });
 
-    // Keyed event: use registerGlobal() to catch ALL interactions
-    getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        // Player (the entity component) has no sendMessage — go through its PlayerRef
-        event.getPlayer().getPlayerRef().sendMessage(Message.raw("You interacted!"));
+    // Keyed event: use registerGlobal() to catch it in EVERY world
+    getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> {
+        // Player (the entity component) has no sendMessage; read the entity's PlayerRef
+        // component (Player.getPlayerRef() is @Deprecated(forRemoval = true))
+        Ref<EntityStore> ref = event.getPlayerRef();
+        PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
+        playerRef.sendMessage(Message.raw("You are ready!"));
     });
 
-    // Keyed event: filter to specific key
-    getEventRegistry().register(PlayerInteractEvent.class, "specific_interaction_id", event -> {
-        event.getPlayer().getPlayerRef().sendMessage(Message.raw("Specific interaction!"));
+    // Keyed event: filter to one key (here, the world named "lobby")
+    getEventRegistry().register(PlayerReadyEvent.class, "lobby", event -> {
+        Ref<EntityStore> ref = event.getPlayerRef();
+        ref.getStore().getComponent(ref, PlayerRef.getComponentType())
+            .sendMessage(Message.raw("Welcome to the lobby!"));
     });
 }
 ```
@@ -418,6 +435,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.PlaceBlockEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class PlaceBlockEventSystem extends EntityEventSystem<EntityStore, PlaceBlockEvent> {
@@ -430,11 +448,11 @@ public class PlaceBlockEventSystem extends EntityEventSystem<EntityStore, PlaceB
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        PlaceBlockEvent event) {
-        // Get player component using chunk and index
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
-            // Player itself has no sendMessage — chat goes through its PlayerRef
-            player.getPlayerRef().sendMessage(Message.raw("You placed a block!"));
+        // Read components off the acting entity using chunk and index. Player itself has
+        // no sendMessage; chat goes through the entity's PlayerRef component.
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw("You placed a block!"));
         }
     }
 
@@ -461,7 +479,8 @@ protected void setup() {
 | Method | Description |
 |--------|-------------|
 | `handle(index, chunk, store, buffer, event)` | Called when the event fires. Use `chunk.getComponent(index, type)` to access entity components. |
-| `getQuery()` | Return a Query to filter which entities this system handles. Return `null` to handle all, or a ComponentType to filter. |
+| `getQuery()` | Return a Query to filter which entities this system handles: a `ComponentType` (it implements `Query`) to filter, or `Query.any()` to handle every entity. Returning `null` throws when the system is registered, because `ComponentRegistry` validates the query. |
+| `getHierarchyScope()` | 0.7.2+, inherited from `QuerySystem` with a default of `HierarchyScope.ROOT`. That default skips entities that have a parent; override it with `ALL`, `PARENT_ONLY` or `CHILD_ONLY` to change which side of an entity hierarchy the system sees. |
 
 ### EntityEventSystem vs. WorldEventSystem
 
@@ -498,6 +517,65 @@ whole store** (`store.invoke(event)`). The two need different system base classe
 | `ChunkUnloadEvent` | `...world.events.ecs` | Chunk unloaded |
 | `PrefabPasteEvent` | `...prefab.event` | Prefab pasted |
 | `KillFeedEvent.*` | `...damage.event` | Kill feed messages |
+| `InteractionChainStartEvent` | `...modules.interaction.event` | An interaction chain is about to start on the entity (0.7.2+). `getChain()`, `getContext()`, `getType()` → `InteractionType`, `getRootInteractionId()`. Cancellable: `InteractionManager` then fails the chain (or sends the client a cancel) instead of ticking it |
+| `ProjectileLaunchEvent` | `...modules.projectile.event` | A projectile was launched; invoked at the **launcher** (0.7.2+). `getProjectileRef()`, `getInteractionType()`, `isLaunchedByWeapon()`. Not cancellable |
+
+### Example: vetoing an interaction chain (0.7.2+)
+
+`InteractionChainStartEvent` is invoked at the acting entity before `InteractionManager` ticks a new chain,
+so one `EntityEventSystem` can veto any interaction by its root id or `InteractionType`. The shipped
+`CheckInteractionChainStartSystem` (portals) uses it the same way, to stop a player using an item that
+belongs to another world. Registering the system is enough: `ComponentRegistry` registers the event type
+for an `EntityEventSystem` the first time it sees one.
+
+```java
+package example.events;
+
+import com.hypixel.hytale.component.ArchetypeChunk;
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.protocol.InteractionType;
+import com.hypixel.hytale.server.core.Message;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.interaction.event.InteractionChainStartEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+
+/** Stops players eating: cancels the shipped food-consume chains before they start. */
+public class NoEatingSystem extends EntityEventSystem<EntityStore, InteractionChainStartEvent> {
+
+    public NoEatingSystem() {
+        super(InteractionChainStartEvent.class);
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Player.getComponentType();
+    }
+
+    @Override
+    public void handle(int index, ArchetypeChunk<EntityStore> chunk,
+                       Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
+                       InteractionChainStartEvent event) {
+        if (event.getType() != InteractionType.Secondary
+                || !event.getRootInteractionId().startsWith("Root_Secondary_Consume_Food")) {
+            return;
+        }
+        event.setCancelled(true);
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw("No eating here."));
+        }
+    }
+}
+```
+
+Register it like any other system: `getEntityStoreRegistry().registerSystem(new NoEatingSystem());`. The
+root ids are the shipped `Server/Item/RootInteractions/` asset ids (`Template_Food` uses
+`Root_Secondary_Consume_Food_T1`). Block reads and writes from inside a handler go through the chunk
+sections, which [block-access.md](block-access.md) covers.
 
 ---
 
@@ -506,8 +584,9 @@ whole store** (`store.invoke(event)`). The two need different system base classe
 Many events implement `ICancellable` or extend `CancellableEcsEvent` and can be cancelled:
 
 ```java
-getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-    if (shouldPreventInteraction()) {
+// PlayerChatEvent is an async, cancellable event; registerGlobal wraps the Consumer for you
+getEventRegistry().registerGlobal(PlayerChatEvent.class, event -> {
+    if (shouldBlockMessage(event.getContent())) {
         event.setCancelled(true);
     }
 });
@@ -538,7 +617,7 @@ if (event.isCancelled()) {
 Backtick-quoted error strings below are the literal messages thrown by the event/ECS-event system (verified against `HytaleServer.jar`).
 
 - **`eventTypeClass must extend EcsEvent!`** → an ECS event class registered via `registerEntityEventType`/`registerWorldEventType` (or used by an `EntityEventSystem`) does not extend `EcsEvent`. Fix: extend `EcsEvent`, or `CancellableEcsEvent` for cancellable ones.
-- **Symptom:** a handler registered with `register()` on a keyed event (e.g. `PlayerInteractEvent`) never fires → keyed events are filtered by key, so a plain `register()` only matches the default/`Void` key. Fix: use `registerGlobal()` for all keys, or `register(EventClass, key, handler)` for a specific key (see [Keyed vs Non-Keyed Events](#keyed-vs-non-keyed-events)).
+- **Symptom:** a handler registered with `register()` on a keyed event (e.g. `PlayerReadyEvent`) never fires → keyed events are filtered by key, so a plain `register()` only matches the default/`Void` key. Fix: use `registerGlobal()` for all keys, or `register(EventClass, key, handler)` for a specific key (see [Keyed vs Non-Keyed Events](#keyed-vs-non-keyed-events)).
 - **Symptom:** an ECS event (e.g. `PlaceBlockEvent`, `Damage`) handler can't reach the acting player → ECS events carry no direct player accessor. Fix: handle them in an `EntityEventSystem` and read components via `chunk.getComponent(index, type)` (see [ECS Events](#ecs-events-entityeventsystem)).
 - **Symptom:** a later handler re-processes an event another handler already cancelled → cancellation does not stop dispatch. Fix: check `event.isCancelled()` first, and use an earlier `EventPriority` (e.g. `EARLY`) when you intend to cancel before others run.
 

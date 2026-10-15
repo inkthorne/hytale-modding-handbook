@@ -21,7 +21,7 @@
       "Interactions": [
         {
           "Type": "ApplyEffect",
-          "EffectId": "Food_Instant_Heal_T2"
+          "EffectId": "Food_Instant_Heal_T1"
         },
         {
           "Type": "ApplyEffect",

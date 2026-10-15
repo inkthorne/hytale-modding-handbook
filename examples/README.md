@@ -1,7 +1,8 @@
 # Examples
 
-Each subdirectory demonstrates one aspect of Hytale modding. `custom-food/` is a
-no-code **pack** (pure JSON); the rest are standalone Gradle/Java **plugins**.
+Each subdirectory demonstrates one aspect of Hytale modding. `custom-food/` and
+`custom-drop/` are no-code **packs** (pure JSON); the other six are standalone
+Gradle/Java **plugins**.
 They're ordered simplest to most involved — **start with `custom-food/`** (no code,
 no build), then move on to the plugins once you want to run code.
 
@@ -11,8 +12,9 @@ no build), then move on to the plugins once you want to run code.
 | [custom-drop/](./custom-drop/) | Pack | Pure-JSON loot tables: override a creature's drop table so your item drops in the world | — |
 | [commands/](./commands/) | Plugin | The command system: registering commands and reading arguments | `/hello`, `/tp <x> <y> <z>` |
 | [ui/](./ui/) | Plugin | Custom UI pages and HUD management | `/menu`, `/hud <show\|hide>`, `/statushud <show\|hide\|update>` |
-| [inventory/](./inventory/) | Plugin | The inventory API: item stacks, containers, transactions | `/give <item> <qty>`, `/inv-clear <section>` |
+| [inventory/](./inventory/) | Plugin | The inventory API: item stacks, containers, transactions | `/give <item> <qty>`, `/inv-clear <section>`, `/inspect`, `/sort <type>` |
 | [entity-count/](./entity-count/) | Plugin | The ECS ticking-system pattern: per-tick code that reads the entity store | `/entitycount <show\|hide>` |
+| [events/](./events/) | Plugin | Both event mechanisms side by side: the global event bus and an ECS `EntityEventSystem` | — |
 | [item-respawner/](./item-respawner/) | Plugin | A stateful, editable placeable block: custom block-entity component + chunk-store ticking + item spawning, persisted across reloads, with a press-F settings GUI | — |
 
 ## What each one covers
@@ -54,6 +56,12 @@ world thread, counts entities by the components they carry
 (`Total` / `Players` / `NPCs` / `Other`), and pushes the live numbers to a
 `CustomUIHud`. The clearest example of "run code on the server's heartbeat."
 
+### [events/](./events/)
+The two event mechanisms side by side. The global event bus welcomes players on
+`PlayerConnectEvent` and logs `PlayerDisconnectEvent`; an `EntityEventSystem`
+filtered to players reacts to `BreakBlockEvent` on the world thread, with the
+breaking entity's components in reach.
+
 ### [item-respawner/](./item-respawner/)
 The most involved example: a **stateful, editable placeable block**. It combines a
 custom block-item, a custom **block-entity component** (`Component<ChunkStore>`
@@ -67,8 +75,8 @@ recipe behind it is in
 
 ## Building and deploying
 
-The plugin examples build independently from their own directory (`custom-food/` is a
-pack — copy the folder into the Mods folder instead, per its README):
+The plugin examples build independently from their own directory (`custom-food/` and
+`custom-drop/` are packs — copy the folder into the Mods folder instead, per their READMEs):
 
 ```bash
 ./gradlew build     # build the plugin jar

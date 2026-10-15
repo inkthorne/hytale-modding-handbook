@@ -45,10 +45,12 @@ public class ClearCommand extends AbstractPlayerCommand {
         String section = ctx.get(sectionArg).toLowerCase();
 
         if (section.equals("all")) {
-            // EVERYTHING is a combined view over every section; clearing it
-            // empties the whole inventory in one call.
+            // EVERYTHING is a combined view over armor, hotbar, utility, storage
+            // and backpack; clearing it empties all five in one call. Despite the
+            // name it leaves out the tools section, and also the ability-slot and
+            // rune-bag sections that game 0.7.2 added.
             InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING).clear();
-            playerRef.sendMessage(Message.raw("Cleared entire inventory"));
+            playerRef.sendMessage(Message.raw("Cleared armor, hotbar, utility, storage and backpack"));
             return;
         }
 

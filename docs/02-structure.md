@@ -138,7 +138,7 @@ If the plugin includes assets (files in `Server/` or `Common/`), add:
 
 ### ServerVersion (target server version)
 
-> Verified against 0.6.8 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
+> Verified against 0.7.2 (`com.hypixel.hytale.common.plugin.PluginManifest`, `com.hypixel.hytale.common.semver.SemverRange`).
 
 > **Changed in Update 5.** `ServerVersion` is now a **semver range**, not a literal build string. It is parsed
 > into a `SemverRange` and checked by *range satisfaction* against the server's own version — the old
@@ -161,12 +161,12 @@ Add the `ServerVersion` field as a **semver range**:
   "Name": "My Plugin",
   "Version": "1.0.0",
   "Main": "com.example.MyPlugin",
-  "ServerVersion": "^0.6.0",
+  "ServerVersion": "^0.7.0",
   "IncludesAssetPack": true
 }
 ```
 
-`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.9` on the last Update 5 build and `0.6.8` on the current one. Read it with:
+`PluginManifest.getServerVersion()` returns a `SemverRange`; `PluginManifest.checkServerVersionCompatibility(range, runningVersion)` resolves to `COMPATIBLE`, `INCOMPATIBLE`, `MISSING`, or `PARSE_FAILED`. The running version it checks against is the `HytaleServer.jar`'s `Implementation-Version` manifest attribute — a semver, `0.5.9` on the last Update 5 build, `0.6.8` on the last 0.6 build, and `0.7.2` on the current one. Read it with:
 
 ```bash
 unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
@@ -176,12 +176,12 @@ unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 
 | Value | Matches |
 |-------|---------|
-| `^0.6.0` | Compatible with `0.6.x` (`>=0.6.0 <0.7.0`) — the recommended default on the current build |
-| `~0.6.0` | `>=0.6.0 <0.7.0` — identical to the caret here; the tilde bumps the *minor* when the minor is non-zero, and the *major* when it is zero |
-| `>=0.6.0 <0.7.0` | Explicit bounded range (space = AND) |
-| `0.6.x` / `0.6.0` | Bare form; `x`/`*` become `0`, and a zero patch widens to `>=0.6.0 <0.7.0` — **not** an exact match |
-| `=0.6.3` | Exactly `0.6.3` — valid, but brittle: won't match a `0.6.4` patch |
-| `^0.5.0 \|\| ^0.6.0` | `\|\|` joins alternatives (OR) |
+| `^0.7.0` | Compatible with `0.7.x` (`>=0.7.0 <0.8.0`) — the recommended default on the current build |
+| `~0.7.0` | `>=0.7.0 <0.8.0` — identical to the caret here; the tilde bumps the *minor* when the minor is non-zero, and the *major* when it is zero |
+| `>=0.7.0 <0.8.0` | Explicit bounded range (space = AND) |
+| `0.7.x` / `0.7.0` | Bare form; `x`/`*` become `0`, and a zero patch widens to `>=0.7.0 <0.8.0` — **not** an exact match |
+| `=0.7.2` | Exactly `0.7.2` — valid, but brittle: won't match a `0.7.3` patch |
+| `^0.6.0 \|\| ^0.7.0` | `\|\|` joins alternatives (OR) |
 | `*` | Any version (`SemverRange.WILDCARD`) — opts out of the check |
 
 > **Gotcha — a bare version with a non-zero patch is a parse error, not an exact match.**
@@ -192,8 +192,8 @@ unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 
 A caret/range means you **no longer have to re-pin on every patch release** — the chief reason the old exact-string
 form was painful. Pin a range that reflects what your plugin actually tolerates. A caret does **not** survive a
-*minor* bump, though: `^0.5.0` (`>=0.5.0 <0.6.0`) stopped matching when the server moved to `0.6.x`, so every plugin
-still pinned to it now logs the `INCOMPATIBLE` warning below against `0.6.8`. Re-pin on each minor update.
+*minor* bump, though: `^0.6.0` (`>=0.6.0 <0.7.0`) stopped matching when the server moved to `0.7.x`, so every plugin
+still pinned to it now logs the `INCOMPATIBLE` warning below against `0.7.2`. Re-pin on each minor update.
 
 Warnings (all non-fatal):
 - **Doesn't satisfy the range:** `Plugin '<name>' targets server version range '<range>' which does not match the running server version '<v>'. You may encounter issues, please check for plugin updates.` (`INCOMPATIBLE`).
@@ -269,7 +269,7 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.commands.CommandsPlugin",
-  "ServerVersion": "^0.6.0"
+  "ServerVersion": "^0.7.0"
 }
 ```
 
@@ -284,7 +284,7 @@ Key built-in assets that may be useful for plugin and pack development:
     { "Name": "inkthorne" }
   ],
   "Main": "hytale.examples.ui.UIPlugin",
-  "ServerVersion": "^0.6.0",
+  "ServerVersion": "^0.7.0",
   "IncludesAssetPack": true
 }
 ```
@@ -341,7 +341,7 @@ CustomSword/
 > template exposes (`Swing_Left_Damage`, `Guard_Wield`, `Consume_Charge`, …), and the value is
 > either the **id** of an existing interaction or an **inline `RootInteraction`** that overrides
 > one — a `ContainedAssetCodec`, so both forms are legal. Across every `Server/` asset in the
-> game, all 1,840 `InteractionVars` values are objects or id strings; none is a number. Damage
+> game (0.7.2), all 2,117 `InteractionVars` values are objects (1,789) or id strings (328); none is a number. Damage
 > lives one level down, inside the interaction's `DamageCalculator`. There is no top-level
 > `Name` key on an item either — the display name comes from `TranslationProperties.Name`.
 > See [Weapon Items](items-weapons.md#example-child-iron-sword) for the full pattern.

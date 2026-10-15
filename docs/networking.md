@@ -7,7 +7,7 @@ seo:
 
 # Networking API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 ## Overview
 
@@ -583,6 +583,7 @@ Backtick-quoted error strings below are literal message fragments thrown by the 
 - **`is out of bounds (buffer length:`** → `<field>: offset <O> is out of bounds (buffer length: <L>)` (`invalidOffset`); the sibling messages `does not match the canonical layout position` (`nonCanonicalLayout`) and `consumed no bytes` (`nonAdvancingEntry`) mean the same family of fault: a variable-block offset table is inconsistent with the bytes actually present — the length prefixes and the payload disagree. Fix: ensure reader and writer use the same field order/encoding and that every length prefix matches the bytes written.
 - **`exceeds maximum`** → `<field>: array length <A> exceeds maximum <M>` / `string length …` / `dictionary count …` (`arrayTooLong` / `stringTooLong` / `dictionaryTooLarge`, with matching `is below minimum` forms): a collection or string field violates the schema's size bounds. Fix: respect the field's declared min/max (they are what the generated `MAX_SIZE` is computed from).
 - **`: invalid or incomplete VarInt`** (`invalidVarInt`) → a VarInt was truncated. The related `: unknown polymorphic type ID` (`unknownPolymorphicType`), `: duplicate key '` (`duplicateKey`), and `: invalid enum value` messages mean a polymorphic type tag is unknown to this build, a map carried the same key twice, or an enum ordinal is out of range — usually a client/server protocol mismatch. Fix: make sure both sides run the same protocol CRC (see [ProtocolVersion](#protocolversion)).
+- **`: nesting exceeds maximum depth`** (0.7.2+) → `<type>: nesting exceeds maximum depth 32` (`nestingTooDeep`): a recursive structure was nested deeper than `ReadCursor.MAX_NESTING_DEPTH` (32). `ReadCursor` now counts depth through `enterNested(String)` / `exitNested()`. Fix: flatten the structure, or keep self-referencing payloads under 32 levels.
 - **Symptom:** a custom `NetworkSerializable` round-trips incorrectly or over/under-reads → reader and writer disagree on field order or `MAX_SIZE`. Fix: serialize and deserialize fields in the exact same order, and size the buffer to `MAX_SIZE`.
 
 ---

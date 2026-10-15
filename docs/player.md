@@ -7,7 +7,7 @@ seo:
 
 # Player API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This document covers player-related events and messaging APIs.
 
@@ -16,8 +16,8 @@ This document covers player-related events and messaging APIs.
 Implemented across `com.hypixel.hytale.server.core` (messaging) and `com.hypixel.hytale.server.core.event.events.player` (events), and provides:
 - A fluent `Message` builder for chat text, formatting, translations, and composition
 - Player connection, chat, interaction, craft, and input events
-- A keyed `PlayerInteractEvent` exposing the action type, held item, and target
-- The `InteractionType` enum categorizing interaction kinds
+- The `InteractionType` enum categorizing interaction kinds, and the ECS `InteractionChainStartEvent` (0.7.2+) that sees every interaction before it starts
+- A deprecated `PlayerInteractEvent` that nothing dispatches (documented so you don't build on it)
 - An ECS `ChangeGameModeEvent` for intercepting game-mode changes
 - A `HiddenPlayersManager` for per-player visibility (vanish/spectator systems)
 
@@ -31,12 +31,12 @@ Messaging
 
 Player Events  (com.hypixel.hytale.server.core.event.events.player)
 ├── PlayerConnectEvent / PlayerDisconnectEvent / PlayerReadyEvent
-├── PlayerChatEvent          (keyed by String)
-├── PlayerInteractEvent      (keyed by String)
-│   └── InteractionType (action category)
+├── PlayerChatEvent          (keyed by String, async)
+├── PlayerInteractEvent      (deprecated; never dispatched)
 └── PlayerCraft / Mouse / SetupConnect / world add-remove events
 
 ECS Events
+├── InteractionChainStartEvent (0.7.2+) ──▶ InteractionType (action category)
 └── ChangeGameModeEvent ──▶ GameMode
 
 Player-scoped managers
@@ -49,8 +49,9 @@ Player-scoped managers
 |-------|----------|-------------|
 | `Message` | `server.core` | Fluent chat-message builder (formatting, translations, composition) |
 | `HiddenPlayersManager` | `server.core.entity.entities.player` | Per-player visibility control |
-| `PlayerInteractEvent` | `server.core.event.events.player` | Keyed event fired on player interactions |
-| `InteractionType` | `protocol` | Enum of interaction kinds returned by `getActionType()` |
+| `PlayerInteractEvent` | `server.core.event.events.player` | `@Deprecated`, and nothing in the server dispatches it |
+| `InteractionChainStartEvent` | `server.core.modules.interaction.event` | (0.7.2+) Cancellable ECS event invoked before every interaction chain starts |
+| `InteractionType` | `protocol` | Enum of interaction kinds (`InteractionChainStartEvent.getType()`) |
 | `ChangeGameModeEvent` | `server.core.event.events.ecs` | Cancellable ECS event for game-mode changes |
 
 ## Message
@@ -218,16 +219,16 @@ Events related to player connections, interactions, and input.
 
 | Class | Description | Keyed |
 |-------|-------------|-------|
-| `PlayerConnectEvent` | Player connects to server | No |
+| `PlayerConnectEvent` | Player connects to server. An **`IAsyncEvent<Void>`** as of 0.7.2 | No |
 | `PlayerDisconnectEvent` | Player disconnects from server | No |
 | `PlayerReadyEvent` | Player is ready (fully loaded) | Yes (String, world name) |
-| `PlayerChatEvent` | Player sends a chat message | Yes (String) |
-| `PlayerInteractEvent` | Player interacts with something | Yes (String) |
+| `PlayerChatEvent` | Player sends a chat message. An `IAsyncEvent`, dispatched with **no** key, so only `registerGlobal(...)` handlers see it | Yes (String) |
+| `PlayerInteractEvent` | `@Deprecated`; never dispatched (see below) | Yes (String) |
 | `PlayerCraftEvent` | Player crafts an item | Yes (String, world name) |
 | `PlayerMouseButtonEvent` | Player mouse button input | No |
 | `PlayerMouseMotionEvent` | Player mouse movement | No |
 | `AddPlayerToWorldEvent` | Player added to a world | Yes (String, world name) |
-| `DrainPlayerFromWorldEvent` | Player removed from a world | Yes (String, world name) |
+| `DrainPlayerFromWorldEvent` | A world is draining its players to another world. An **`IAsyncEvent<String>`** as of 0.7.2, with `getSourceWorld()`, `getDestinationWorld()`/`setDestinationWorld(World)`, `getMessage()`/`setMessage(Message)` and `isRemovalExceptional()` | Yes (String, world name) |
 | `PlayerSetupConnectEvent` | Player setup phase connect | No |
 | `PlayerSetupDisconnectEvent` | Player setup phase disconnect | No |
 | `RemovedPlayerFromWorldEvent` | Player entity removed from a world; leave-message control | Yes (String, world name) |
@@ -257,13 +258,24 @@ protected void setup() {
 }
 ```
 
+`PlayerConnectEvent` became an `IAsyncEvent` in 0.7.2. A plain `register()` still works, because the
+bus wraps the `Consumer` as one stage of the event's `CompletableFuture` chain, but that stage can run on
+whichever thread completed the stage before it. The shipped `InstancesPlugin` and `CreativeHubPlugin`
+listen with `registerAsyncGlobal(...)` and `thenCompose`, which is the form to use when the handler must
+wait on something (see [events.md → IAsyncEvent](events.md#iasynceventkeytype)).
+
 ---
 
 ## PlayerInteractEvent
 
 **Package:** `com.hypixel.hytale.server.core.event.events.player`
 
-Fired when a player interacts with blocks, entities, items, or triggers game actions. This is a **keyed event** where the key is the interaction ID string.
+> **Nothing fires this event.** The class is `@Deprecated`, and no code in `HytaleServer.jar` constructs
+> or dispatches it (true in 0.6.8 as well); the one built-in reference, the camera demo, only registers a
+> handler. A handler registered for it never runs. To see or veto interactions, handle the ECS
+> [`InteractionChainStartEvent`](#reacting-to-interactions-interactionchainstartevent) instead.
+
+The class's own API, for reference — a keyed event (String key) carrying:
 
 ### Methods
 
@@ -279,31 +291,13 @@ Fired when a player interacts with blocks, entities, items, or triggers game act
 | `isCancelled()` | `boolean` | Whether the event is cancelled |
 | `setCancelled(boolean)` | `void` | Cancel or uncancel the event |
 
-### Registration
-
-Since `PlayerInteractEvent` is keyed by String (interaction ID), use `registerGlobal()` to catch all interactions:
-
-```java
-getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-    // Handle all interactions
-});
-```
-
-Or register for a specific interaction key:
-
-```java
-getEventRegistry().register(PlayerInteractEvent.class, "some_interaction_id", event -> {
-    // Handle specific interaction
-});
-```
-
 ---
 
 ## InteractionType
 
 **Package:** `com.hypixel.hytale.protocol`
 
-Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event.getActionType()` to get the interaction type.
+Enum naming which input or engine trigger started an interaction chain. Read it from `InteractionChainStartEvent.getType()`; it is also the key of an item's or block's `Interactions` map.
 
 ### Enum Values by Category
 
@@ -316,6 +310,7 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 | `Ability1` | First ability slot |
 | `Ability2` | Second ability slot |
 | `Ability3` | Third ability slot |
+| `Ability4` | (0.7.2+) Fourth ability slot. It was inserted after `Ability3`, so every later value's ordinal moved up by one |
 
 **Object Interactions:**
 
@@ -368,110 +363,61 @@ Enum representing the type of interaction in a `PlayerInteractEvent`. Use `event
 
 ---
 
-## PlayerInteractEvent Usage Examples
+## Reacting to Interactions (InteractionChainStartEvent)
 
-### Detecting Primary Attacks
+**Package:** `com.hypixel.hytale.server.core.modules.interaction.event` · 0.7.2+
+
+`InteractionManager` invokes this `CancellableEcsEvent` at the acting entity just before it starts ticking a
+new interaction chain, for client-initiated and server-initiated chains alike. Cancel it and the chain
+never runs: a client chain gets a cancel packet, a server chain is marked `Failed`.
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getType()` | `InteractionType` | Which slot or trigger started the chain (`Primary`, `Secondary`, `Ability1`, …) |
+| `getRootInteractionId()` | `String` | Id of the root interaction asset the chain runs |
+| `getContext()` | `InteractionContext` | Held item, held-item container and slot, target, and the rest of the chain context |
+| `getChain()` | `InteractionChain` | The chain itself |
+| `isCancelled()` / `setCancelled(boolean)` | | Veto the chain |
+
+Handle it with an `EntityEventSystem`. This one disables right-click for players:
 
 ```java
+import com.hypixel.hytale.component.ArchetypeChunk;
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.component.query.Query;
+import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.protocol.InteractionType;
-import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
+import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.modules.interaction.event.InteractionChainStartEvent;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
-@Override
-protected void setup() {
-    getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        if (event.getActionType() == InteractionType.Primary) {
-            event.getPlayer().getPlayerRef().sendMessage(Message.raw("You attacked!"));
+public class NoSecondarySystem extends EntityEventSystem<EntityStore, InteractionChainStartEvent> {
+
+    public NoSecondarySystem() {
+        super(InteractionChainStartEvent.class);
+    }
+
+    @Override
+    public Query<EntityStore> getQuery() {
+        return Player.getComponentType();
+    }
+
+    @Override
+    public void handle(int index, ArchetypeChunk<EntityStore> chunk,
+                       Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
+                       InteractionChainStartEvent event) {
+        if (event.getType() == InteractionType.Secondary) {
+            event.setCancelled(true);
         }
-    });
+    }
 }
 ```
 
-### Checking Held Item During Interaction
-
-```java
-getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-    var item = event.getItemInHand();
-    if (item != null) {
-        event.getPlayer().getPlayerRef().sendMessage(
-            Message.raw("Interacted while holding: " + item.getItemId())   // or item.getItem().getId()
-        );
-    }
-});
-```
-
-### Cancelling Interactions
-
-```java
-getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-    // Prevent all secondary (right-click) actions
-    if (event.getActionType() == InteractionType.Secondary) {
-        event.setCancelled(true);
-        event.getPlayer().getPlayerRef().sendMessage(Message.raw("Secondary actions disabled!"));
-    }
-});
-```
-
-### Filtering Multiple Interaction Types
-
-```java
-import java.util.Set;
-
-@Override
-protected void setup() {
-    Set<InteractionType> combatActions = Set.of(
-        InteractionType.Primary,
-        InteractionType.Ability1,
-        InteractionType.Ability2,
-        InteractionType.Ability3
-    );
-
-    getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        if (combatActions.contains(event.getActionType())) {
-            // Handle combat-related interactions
-            event.getPlayer().getPlayerRef().sendMessage(Message.raw("Combat action: " + event.getActionType()));
-        }
-    });
-}
-```
-
-### Detecting Projectile Hits
-
-```java
-getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-    if (event.getActionType() == InteractionType.ProjectileHit) {
-        var targetEntity = event.getTargetEntity();
-        if (targetEntity != null) {
-            event.getPlayer().getPlayerRef().sendMessage(
-                Message.raw("Your projectile hit an entity!")
-            );
-        }
-    }
-});
-```
-
----
-
-## Complete Usage Example
-
-```java
-import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.event.events.player.PlayerConnectEvent;
-import com.hypixel.hytale.server.core.event.events.player.PlayerInteractEvent;
-
-@Override
-protected void setup() {
-    // Non-keyed event: use register()
-    getEventRegistry().register(PlayerConnectEvent.class, event -> {
-        event.getPlayerRef().sendMessage(Message.raw("Welcome!"));
-    });
-
-    // Keyed event: use registerGlobal() to catch ALL interactions
-    getEventRegistry().registerGlobal(PlayerInteractEvent.class, event -> {
-        event.getPlayer().getPlayerRef().sendMessage(Message.raw("You interacted!"));
-    });
-}
-```
+Register it with `getEntityStoreRegistry().registerSystem(new NoSecondarySystem())`. The shipped
+`CheckInteractionChainStartSystem` (portals) reads `event.getContext().getHeldItem()` the same way to stop
+an item being used outside the world it belongs to. A second example, filtering by root id, is on
+[events.md](events.md#example-vetoing-an-interaction-chain-072).
 
 ---
 
@@ -510,6 +456,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.ChangeGameModeEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class GameModeChangeSystem extends EntityEventSystem<EntityStore, ChangeGameModeEvent> {
@@ -522,9 +469,9 @@ public class GameModeChangeSystem extends EntityEventSystem<EntityStore, ChangeG
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        ChangeGameModeEvent event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
-            player.getPlayerRef().sendMessage(Message.raw("Switching to " + event.getGameMode() + " mode"));
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw("Switching to " + event.getGameMode() + " mode"));
 
             // Optionally prevent the mode change
             // event.setCancelled(true);
@@ -685,6 +632,7 @@ An immutable record of the client's **creative-mode preferences**, sent by the c
 | `showBuilderToolsNotifications()` | `boolean` | Show builder-tools toast messages |
 | `noPhysics()` | `boolean` | Free-flight without collision |
 | `eraserEnabled()` | `boolean` | (0.6.3+) Builder "eraser" mode on |
+| `activateTriggerVolumes()` | `boolean` | (0.7.2+) Whether this creative player still sets off [trigger volumes](trigger-volumes.md) |
 
 ```java
 PlayerSettings settings = store.getComponent(ref, PlayerSettings.getComponentType());
@@ -1000,7 +948,7 @@ Per-world slice of the profile, from `getPerWorldData(worldName)`:
 
 ### PlayerRespawnPointData
 
-One bound respawn point (a bed/waystone-style anchor): `getBlockPosition()` (`Vector3i` of the anchor block), `getRespawnPosition()` (`Vector3d` where the player actually appears), `getName()` / `setName(String)`. Constructed as `new PlayerRespawnPointData(blockPos, respawnPos, name)`. These are what `Player.getRespawnPosition(...)` resolves against.
+One bound respawn point (a bed/waystone-style anchor): `getBlockPosition()` (`Vector3i` of the anchor block), `getRespawnPosition()` (`Vector3d` where the player actually appears), `getName()` / `setName(String)`, and (0.7.2+) `getYaw()`, the facing the player respawns with (codec key `Yaw`). Constructed as `new PlayerRespawnPointData(blockPos, respawnPos, name)` or, 0.7.2+, `new PlayerRespawnPointData(blockPos, respawnPos, name, yaw)`. These are what `Player.getRespawnPosition(...)` resolves against.
 
 ### Bed Interaction
 
@@ -1017,21 +965,25 @@ its whole codec is the inherited one:
 }
 ```
 
-All 15 shipped beds wire it the same way, from the block's own `Use` slot (from
-`Server/Item/Items/Furniture/Kweebec/Furniture_Kweebec_Bed.json`):
+As of 0.7.2 all 16 shipped beds reach it the same way: the block's `Use` slot names the shared root
+interaction `Block_Bed` (`Server/Item/RootInteractions/Block/Block_Bed.json`), whose only interaction is
+`{ "Type": "Bed" }`. From `Server/Item/Items/Furniture/Kweebec/Furniture_Kweebec_Bed.json`:
 
 ```json
 {
   "BlockType": {
     "Beds": [ { "Offset": { "X": -0.1, "Y": 0.4, "Z": 0.7 }, "Yaw": 0 } ],
     "Interactions": {
-      "Use": { "Interactions": [ { "Type": "Bed" } ] },
+      "Use": "Block_Bed",
       "Primary": "Check_Can_Break_Respawn"
     },
     "BlockEntity": { "Components": { "RespawnBlock": {} } }
   }
 }
 ```
+
+An inline `"Use": { "Interactions": [ { "Type": "Bed" } ] }`, which is how the beds were wired before 0.7.2,
+does the same thing.
 
 Three pieces have to be present for the interaction to do anything useful, and they are
 separate: the `Bed` interaction on `Use`, a `RespawnBlock`
@@ -1073,10 +1025,10 @@ Windows are the overlay UIs opened through the [`WindowManager`](ui.md) / `PageM
 
 ### ContainerBlockWindow
 
-A window backed by an `ItemContainer` that lives on a **block** (chest, treasure pot). Extends `BlockWindow` (which ties the window to block coordinates and auto-closes when the player walks away or the block changes) and implements `ItemContainerWindow`.
+A window backed by an `ItemContainer` that lives on a **block** (a chest, a pot). Extends `BlockWindow` (which ties the window to block coordinates and auto-closes when the player walks away or the block changes) and implements `ItemContainerWindow`.
 
 ```java
-// Open a chest-style window on the container block at pos (built-in treasure-chest flow)
+// Open a chest-style window on the container block at pos (the built-in OpenContainerInteraction flow)
 ContainerBlockWindow window = new ContainerBlockWindow(
         pos.x, pos.y, pos.z, rotationIndex, blockType, itemContainer);
 
@@ -1156,10 +1108,17 @@ public class AlwaysAllowed extends ChoiceRequirement {
 
 ## Gotchas & Errors
 
-Backtick-quoted error strings below are the literal messages thrown by the color parser (`ColorParseUtil` / `ColorAlphaCodec`, verified against `HytaleServer.jar`).
-
-- **`Hex color must start with '#'`** → you passed a hex string without the leading `#` to `Message.color(String hexColor)`. Fix: include it, e.g. `.color("#FF0000")` (see [Message](#message)).
-- **`Invalid color format, expected: #RGBA, #RRGGBBAA, rgba(#RGB,A), rgba(#RRGGBB,A) or rgba(R,G,B,A)`** → the color string passed to `Message.color(...)` didn't match a supported form. Fix: use a documented hex form such as `#RRGGBB` (e.g. `.color("#00FF00")`).
+- **Symptom:** a typo in `Message.color(String hexColor)` raises nothing on the server. The method stores
+  the string as given (`this.message.color = color`), with no parsing, so a malformed value goes to the
+  client as-is. Fix: pass a well-formed `#RRGGBB` string, or use the `Message.color(Color)` overload, which
+  formats the hex for you.
+- The color errors you *can* see server-side come from asset decoding, not from `Message`. A JSON color key
+  read through `ColorAlphaCodec` fails with **`Invalid color format, expected: #RGBA, #RRGGBBAA, rgba(#RGB,A), rgba(#RRGGBB,A) or rgba(R,G,B,A)`**
+  (`ColorCodec`, for keys with no alpha, says `#RGB, #RRGGBB or rgb(R,G,B)`), and
+  `ColorParseUtil.hexAlphaStringToRGBAInt` throws **`Hex color must start with '#'`**.
+- **Symptom:** a `PlayerInteractEvent` handler never runs → the event is deprecated and nothing dispatches
+  it. Fix: handle `InteractionChainStartEvent` in an `EntityEventSystem` (see
+  [Reacting to Interactions](#reacting-to-interactions-interactionchainstartevent)).
 
 ---
 

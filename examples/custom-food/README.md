@@ -5,7 +5,7 @@ No Java, no compiler, no Gradle, and no drawing — it reuses art and effects th
 already ship with the game. If you can edit a text file, you can build this.
 
 It adds one new item, the **Hearty Snack**: eat it to instantly restore health and
-gain a short "Hearty" buff (+5% max health for 45 seconds).
+gain a "Hearty" buff (+5% max health for 6 minutes).
 
 > **Pack vs Plugin:** A *pack* is pure content (JSON/assets) the game loads
 > directly — no code runs. A *plugin* is compiled Java. The other examples in this
@@ -57,7 +57,7 @@ README instead of inline.
   "Authors": [
     { "Name": "inkthorne" }
   ],
-  "ServerVersion": "^0.6.0",
+  "ServerVersion": "^0.7.0",
   "IncludesAssetPack": true
 }
 ```
@@ -69,11 +69,12 @@ README instead of inline.
 | `Version` | Your pack's version. Bump it when you change things. |
 | `Authors` | Who made it. A list of `{ "Name": "..." }` objects. |
 | `IncludesAssetPack` | `true` because this pack contains assets (the item + language files). |
-| `ServerVersion` | The server version **range** this pack targets (semver). `^0.5.0` = compatible with `0.5.x`. |
+| `ServerVersion` | The server version **range** this pack targets (semver). `^0.7.0` = compatible with `0.7.x`. |
 
 > **About `ServerVersion`:** since Update 5 this is a **semver range**, not an exact build string. The server
-> checks whether its own version satisfies the range; if not, it still loads the pack but logs a warning. `^0.5.0`
-> means "any `0.5.x`", so you don't have to re-pin on every patch. To read the running server version:
+> checks whether its own version satisfies the range; if not, it still loads the pack but logs a warning. `^0.7.0`
+> means "any `0.7.x`", so you don't have to re-pin on every patch (but you do on every minor: `^0.6.0` stopped
+> matching when the game moved to `0.7.x`). To read the running server version:
 > ```bash
 > unzip -p "$HYTALE_JAR" META-INF/MANIFEST.MF | grep Implementation-Version
 > ```
@@ -105,7 +106,7 @@ README instead of inline.
       "Interactions": [
         {
           "Type": "ApplyEffect",
-          "EffectId": "Food_Instant_Heal_T2"
+          "EffectId": "Food_Instant_Heal_T1"
         },
         {
           "Type": "ApplyEffect",
@@ -131,8 +132,8 @@ The two effects, both shipped with the game:
 
 | `EffectId` | Effect |
 |------------|--------|
-| `Food_Instant_Heal_T2` | Instantly restores 10% health. |
-| `Meat_Buff_T1` | "Hearty" buff: +5% max health for 45 seconds. |
+| `Food_Instant_Heal_T1` | Instantly restores 5% health — the same instant heal the shipped foods use (`Food_Pie_Apple` among them). |
+| `Meat_Buff_T1` | "Hearty" buff: +5% max health for 360 seconds (6 minutes). |
 
 Everything else the food needs — the consume timing, the chewing animation, the
 eating sound — is inherited from `Template_Food`, so it isn't repeated here. That's
@@ -142,7 +143,7 @@ the payoff of `Parent`.
 
 ```
 items.Food_Hearty_Snack.name = Hearty Snack
-items.Food_Hearty_Snack.description = Instantly restores health and grants a short Hearty buff (+5% max health for 45s).
+items.Food_Hearty_Snack.description = Instantly restores health and grants a Hearty buff (+5% max health for 6 minutes).
 ```
 
 Each line is `key = value`. The item's `TranslationProperties.Name` of
@@ -164,8 +165,10 @@ time and reloading:
   `BlockType.CustomModel` / `CustomModelTexture` at a model under
   `Common/Items/Consumables/Food/`.
 - **Different effect?** Change an `EffectId`. Other real food effects include
-  `Food_Instant_Heal_T1` / `_T3` (weaker / stronger heal), `HealthRegen_Buff_T2`
-  (heal-over-time), and `FruitVeggie_Buff_T1` (+max stamina).
+  `Food_Health_Restore_Small` / `_Medium` / `_Large` (a flat instant heal of 10 / 15 / 20
+  health), `HealthRegen_Buff_T2` (heal-over-time), and `FruitVeggie_Buff_T1` (+max stamina).
+  (Game 0.7.2 removed `Food_Instant_Heal_T2` and `_T3`, which earlier versions of this
+  pack used; a reference to a removed effect fails the pack on boot.)
 - **Different name?** Edit the right-hand side of the lines in `server.lang`.
 
 ## How to test it in your dev game
@@ -195,8 +198,8 @@ time and reloading:
    /gamemode Adventure
    ```
 5. **Eat it.** While in Adventure mode, hold the snack and **right-click** (the consume
-   slot). The +5% max-health "Hearty" buff appears in your status effects for 45
-   seconds. Note the *instant heal* is only visible if you've taken damage first — at
+   slot). The +5% max-health "Hearty" buff appears in your status effects for 6
+   minutes. Note the *instant heal* is only visible if you've taken damage first — at
    full health there's nothing to restore, so take a little damage before testing.
    When you're done, `/gamemode Creative` switches you straight back — game mode is a
    live per-player toggle, so you can flip between modes in the same world without
@@ -212,8 +215,11 @@ This pack copies a real game template and reuses real game assets. To browse the
 yourself, extract the game's `Assets.zip` once:
 
 ```bash
-unzip -q -o ~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/package/game/latest/Assets.zip -d ~/.cache/hytale-assets
+rm -rf ~/.cache/hytale-assets && unzip -q ~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/install/release/package/game/latest/Assets.zip -d ~/.cache/hytale-assets
 ```
+
+(Wipe first, as above: `unzip -o` over an older extraction keeps files a game update removed,
+so a dead reference such as a removed effect id would still look valid.)
 
 Then look in:
 - `Server/Item/Items/Food/` — the food template and every shipped food item to copy from.

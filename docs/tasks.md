@@ -7,7 +7,7 @@ seo:
 
 # Tasks API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers registering async and scheduled tasks so the plugin system can track them across the plugin lifecycle.
 

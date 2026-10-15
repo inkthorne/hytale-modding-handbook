@@ -3,4 +3,4 @@
 # maps to this file; "server.items.Food_Hearty_Snack.name" -> "items.Food_Hearty_Snack.name").
 
 items.Food_Hearty_Snack.name = Hearty Snack
-items.Food_Hearty_Snack.description = Instantly restores health and grants a short Hearty buff (+5% max health for 45s).
+items.Food_Hearty_Snack.description = Instantly restores health and grants a Hearty buff (+5% max health for 6 minutes).

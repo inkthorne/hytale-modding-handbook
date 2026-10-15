@@ -7,7 +7,7 @@ seo:
 
 # Components (ECS) API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 Hytale uses an Entity Component System (ECS) architecture. Entities are composed of components stored in typed stores.
 
@@ -593,6 +593,45 @@ int getIndex()
 
 ---
 
+## Entity Hierarchy (Parent/Child, 0.7.2+)
+
+**Package:** `com.hypixel.hytale.component` (`HierarchyScope` is in `component.system`)
+
+0.7.2 lets an entity own child entities in the same store. The hierarchy is one level deep: an entity that has a parent cannot own children, and an entity that owns children cannot be given a parent (both throw `IllegalArgumentException`). Removing a parent removes its children first. Nothing in the shipped 0.7.2 code creates children yet, so treat this as new, unexercised API.
+
+```java
+// Store (immediate) and CommandBuffer (deferred) both gained:
+void setParent(Ref<ECS_TYPE> ref, Ref<ECS_TYPE> parent)        // parent == null detaches
+Ref<ECS_TYPE> addEntity(Holder<ECS_TYPE> holder, AddReason reason, Ref<ECS_TYPE> parent)
+Ref<ECS_TYPE> addEntity(Holder<ECS_TYPE> holder, Ref<ECS_TYPE> ref, AddReason reason, Ref<ECS_TYPE> parent)
+void addEntities(Holder<ECS_TYPE>[] holders, int holderOffset,
+                 Ref<ECS_TYPE>[] refs, int refOffset, int count, AddReason reason, Ref<ECS_TYPE> parent)
+
+// Store only:
+Ref<ECS_TYPE> getParent(Ref<ECS_TYPE> ref)                     // null for a root entity
+Ref<ECS_TYPE> addEntity(Archetype<ECS_TYPE> archetype, AddReason reason, Ref<ECS_TYPE> parent)
+void forEachChunk(Ref<ECS_TYPE> parent, Query<ECS_TYPE> query, BiConsumer<ArchetypeChunk<ECS_TYPE>, CommandBuffer<ECS_TYPE>> consumer)
+void forEachEntityParallel(Ref<ECS_TYPE> parent, Query<ECS_TYPE> query, IntBiObjectConsumer<ArchetypeChunk<ECS_TYPE>, CommandBuffer<ECS_TYPE>> consumer)
+
+// ArchetypeChunk: every entity in a chunk shares one parent
+Ref<ECS_TYPE> getParent()
+
+// Store constants for the internal parent ids: ROOT_PARENT_ID = 0 (root, no children), OWNER_ROOT_ID = 1 (root that owns children)
+```
+
+The `forEachChunk(parent, ...)` overloads visit only that parent's children, and with a `null` parent only root entities. The original two-argument `forEachChunk(query, consumer)` still visits every matching chunk, children included.
+
+**Systems skip children by default.** `QuerySystem` gained `default HierarchyScope getHierarchyScope()`, which returns `HierarchyScope.ROOT`. The store matches a query system against an archetype chunk only when the chunk is in the system's scope, so every `EntityTickingSystem`, `RefSystem`, `HolderSystem` and `EntityEventSystem` that does not override it ignores child entities. Override it to change that:
+
+| `HierarchyScope` | Root without children | Root with children | Child |
+|------------------|:---:|:---:|:---:|
+| `ALL` | yes | yes | yes |
+| `ROOT` (default) | yes | yes | no |
+| `PARENT_ONLY` | no | yes | no |
+| `CHILD_ONLY` | no | no | yes |
+
+---
+
 ## Enums
 
 ### AddReason
@@ -639,7 +678,7 @@ holder.addComponent(EntityStore.REGISTRY.getNonSerializedComponentType(), NonSer
 
 The ECS system uses two primary store types:
 - `Store<EntityStore>` - Entity components (Player, PlayerRef, TransformComponent, etc.)
-- `Store<ChunkStore>` - Chunk components (WorldChunk, block data, etc.)
+- `Store<ChunkStore>` - Chunk components (WorldChunk columns, BlockSection sections, block entities, etc.)
 
 ---
 
@@ -681,6 +720,8 @@ Ref<EntityStore> entityRef = entityStore.getRefFromUUID(uuid);
 
 The ECS type parameter for chunk components. Provides access to chunk references and loading.
 
+As of 0.7.2, `ChunkStore` extends the new `ChunkGrid` (same package), and every method listed below except `REGISTRY` is declared on `ChunkGrid` and inherited, so call sites are unchanged. The world itself no longer has chunk or block accessors (`getChunkIfLoaded`, `getChunkAsync` and the rest were removed from `World` in 0.7.2): go through `world.getChunkStore()`.
+
 ### Static Fields
 ```java
 static final ComponentRegistry<ChunkStore> REGISTRY  // Component registry for chunks
@@ -696,6 +737,9 @@ Ref<ChunkStore> getChunkReference(long index)    // Get chunk (column) ref by pa
 Ref<ChunkStore> getChunkSectionReference(int x, int y, int z)          // Section by section coords
 Ref<ChunkStore> getChunkSectionReferenceAtBlock(int x, int y, int z)   // Section containing a BLOCK position
 boolean hasLoadedSections(long index)             // 0.6.3+: any section of that column loaded?
+List<Ref<ChunkStore>> getLoadedSectionReferences(int chunkX, int chunkZ)  // 0.7.2+: loaded sections of one column
+int lowestLoadedSectionBelow(int chunkX, int chunkZ, int anchorY)         // 0.7.2+: min(anchorY, lowest loaded section y)
+int highestLoadedSectionAbove(int chunkX, int chunkZ, int anchorY)        // 0.7.2+: max(anchorY, highest loaded section y)
 
 // Async chunk access
 CompletableFuture<Ref<ChunkStore>> getChunkSectionReferenceAsync(int x, int y, int z)
@@ -710,10 +754,24 @@ int getLoadedChunksCount()
 int getTotalGeneratedChunksCount()
 int getTotalLoadedChunksCount()
 
-// 0.6.3+: sections can be loaded/unloaded individually ("cubic" sections)
+// Sections can be loaded/unloaded individually ("cubic" sections) when the world's
+// chunk loader or generator is cubic; this reports which one you have
 boolean supportsCubicSections()
 void removeSection(Ref<ChunkStore> sectionRef, RemoveReason reason)
 ```
+
+Reading a block goes through its section, not the column: resolve the section ref, then read the `BlockSection` component with **world** block coordinates (the engine's `/block get` command, `BlockGetCommand`, does exactly this):
+
+```java
+ChunkStore chunkStore = world.getChunkStore();
+Ref<ChunkStore> sectionRef = chunkStore.getChunkSectionReferenceAtBlock(x, y, z);
+if (sectionRef != null && sectionRef.isValid()) {
+    BlockSection section = chunkStore.getStore().getComponent(sectionRef, BlockSection.getComponentType());
+    BlockType type = BlockType.getAssetMap().getAsset(section.get(x, y, z));
+}
+```
+
+The synchronous lookup returns `null` for an unloaded section. To load on demand, use `getChunkSectionReferenceAtBlockAsync(x, y, z)` and continue on the world thread (`thenAcceptAsync(ref -> ..., world)`), as the shipped `SimpleBlockCommand` does. See [World Chunks](world-chunks.md) for writes.
 
 ---
 
@@ -816,7 +874,7 @@ ModelTransform getSentTransform()   // Last transform broadcast to clients (engi
 ```
 
 ### Section Access
-The entity's owning chunk **section** (a `Ref<ChunkStore>`); resolve the `WorldChunk` from it via the chunk store if you need block data.
+The entity's owning chunk **section** (a `Ref<ChunkStore>`). For block data, read that section's `BlockSection` component from the chunk store (see [ChunkStore](#chunkstore)); `WorldChunk` lost its block accessors in 0.7.2.
 ```java
 Ref<ChunkStore> getSectionRef()
 void setSectionLocation(Ref<ChunkStore> sectionRef)   // engine-managed; don't set this yourself
@@ -1070,6 +1128,9 @@ public abstract void tick(float deltaTime, int index,
 
 // Define which entities to process (from QuerySystem interface)
 public Query<ECS_TYPE> getQuery();
+
+// 0.7.2+: which levels of the entity hierarchy to process (default ROOT: child entities are skipped)
+public HierarchyScope getHierarchyScope();
 ```
 
 #### Example: Per-Player Ticking System

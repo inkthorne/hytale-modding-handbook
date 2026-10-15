@@ -7,6 +7,10 @@ Demonstrates the Hytale inventory API with commands for managing player items.
 ### `/give <item> <quantity>`
 Add items to your inventory. Tries hotbar first, then storage.
 
+> **This `/give` shadows the game's own `/give`.** `CommandManager.register` stores commands in
+> a map keyed by name, so whichever plugin registers `give` last wins, with no warning. Pick a
+> name nothing else uses for a real plugin.
+
 **Examples:**
 - `/give Weapon_Sword_Wood 1` - Give 1 wooden sword
 - `/give Plant_Fruit_Apple 10` - Give 10 apples
@@ -23,7 +27,7 @@ Add items to your inventory. Tries hotbar first, then storage.
 Clear inventory sections.
 
 **Examples:**
-- `/inv-clear all` - Clear entire inventory
+- `/inv-clear all` - Clear armor, hotbar, utility, storage and backpack in one call (the `EVERYTHING` view, which despite its name leaves out the tools section and the ability-slot and rune-bag sections added in game 0.7.2)
 - `/inv-clear hotbar` - Clear only hotbar
 - `/inv-clear storage` - Clear only storage
 - `/inv-clear armor` - Clear equipped armor
@@ -98,7 +102,7 @@ ItemContainer hotbar = store.getComponent(ref,
     InventoryComponent.Hotbar.getComponentType()).getInventory();
 ItemContainer storage = store.getComponent(ref,
     InventoryComponent.Storage.getComponentType()).getInventory();
-// Other sections: Armor, Utility, Tool, Backpack.
+// Other sections: Armor, Utility, Tool, Backpack, and (game 0.7.2+) AbilitySlots, RuneBag.
 ```
 
 ### Adding Items with a Combined Container
@@ -135,7 +139,8 @@ if (!heldItem.isEmpty()) {
 
 ### Clearing and Sorting
 ```java
-// Clear every section at once via the combined EVERYTHING container.
+// Clear armor, hotbar, utility, storage and backpack at once via the combined
+// EVERYTHING container (it does not include the tools section).
 InventoryComponent.getCombined(store, ref, InventoryComponent.EVERYTHING).clear();
 
 // Clear or sort a single section's container.

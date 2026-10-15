@@ -7,7 +7,7 @@ seo:
 
 # Permissions API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers the role-based permission system: checking permissions on players and commands, the built-in group hierarchy, registering your own permission nodes and groups, swapping the permission backend, and the events fired when player or group permissions change.
 
@@ -66,8 +66,8 @@ Permission Events (event.events.permissions)
 
 Interface for anything that can hold permissions. `PlayerRef` implements it (as does the
 console's `ConsoleSender`); the entity component `Player` does **not** — get the `PlayerRef`
-from your command's `execute` parameters, from `player.getPlayerRef()`, or from the store
-(`PlayerRef.getComponentType()`).
+from your command's `execute` parameters or from the store (`store.getComponent(ref, PlayerRef.getComponentType())`);
+`player.getPlayerRef()` still works but is `@Deprecated(forRemoval = true)`.
 
 ### Methods
 ```java
@@ -481,14 +481,14 @@ allow-list) rather than what an already-connected player is allowed to do. It sh
 | `BanProvider` (SPI, `.provider`) | Extends `AccessProvider`; the ban store: `hasBan(UUID)`, `getBan(UUID)`, `addBan(Ban)`, `removeBan(UUID)`, `getBans()`, plus `default` no-op `load()` / `save()`. Its `default getDisconnectReason` denies with the ban's own `getDisconnectReason()` when `getBan(uuid)` is non-null, else denies with the generic `UNDESCRIBED_BAN` message when `hasBan(uuid)`, else allows (`NO_REASON`, an empty `Optional`). Expiry is the implementation's job — filter on `Ban.isInEffect()` inside `getBan`/`hasBan`, as `HytaleBanProvider` does |
 | `HytaleBanProvider` (`.provider`) | Default disk `BanProvider` (`bans.json`, `BAN_FILE_PATH`) |
 | `BanStorageProvider` (`.provider`) | Codec-selected factory (`CODEC`, keyed by id) that yields the `BanProvider` — `DiskBanStorageProvider` (`"Disk"`) is the built-in |
-| `ConnectionRegistry` (`server.core.io`, 0.6.8+) | Final singleton (`ConnectionRegistry.get()`) mapping an account `UUID` to its registered `PacketHandler`s. A handler registers only once it knows its account: the setup, game and asset-editor handlers do, and a handler still in the handshake, authentication or password stage is outside it. Its only public operation is `disconnect(UUID, Message)`, which disconnects each registered handler and returns how many it disconnected (`0` when the account has none). Both `ban` and the built-in `/kick` go through it, so `/kick` also ends an asset-editor session of that account |
+| `ConnectionRegistry` (`server.core.io`, 0.6.8+) | Final singleton (`ConnectionRegistry.get()`) mapping an account to its registered `PacketHandler`s. As of 0.7.2 it keys each account by its `ProfileServiceClient.PublicGameProfile` (UUID plus username), not a bare `UUID`. A handler registers only once it knows its account: the setup, game and asset-editor handlers do, and a handler still in the handshake, authentication or password stage is outside it. Public operations: `disconnect(UUID, Message)` disconnects each registered handler and returns how many it disconnected (`0` when the account has none); (0.7.2+) `findProfile(String)` resolves a UUID string or a connected username (an exact match, else a case-insensitive prefix match) to its profile, or `null`; (0.7.2+) `getConnectedUsernames()`. Both `ban` and the built-in `/kick` go through it. As of 0.7.2 `/kick` takes its target through `ArgTypes.CONNECTED_PROFILE_LOOKUP`, which tries `findProfile` before an online profile lookup, so it can name an account connected only through the asset editor |
 | `Ban` (`.ban`) | A single ban (final, codec-backed `CODEC`): `new Ban(target, by, timestamp, expiresOn, reason)` — `expiresOn == null` is permanent; `getTarget()`, `getBy()`, `getTimestamp()`, `getExpiresOn()`, `getReason()`, `isInEffect()`, `getDisconnectReason()`, plus typed metadata via `getMetadata(KeyedCodec)` / `withMetadata(...)` |
 
 ### AccessControlModule entry points
 
 | Method | Description |
 |--------|-------------|
-| `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection (the `SingleplayerModule` uses this). As of 0.6.8 that includes **asset-editor connections**: `AssetEditorPacketHandler` runs the same `getDisconnectReason` check before initializing the editor client, with the play-stage connection timeout |
+| `registerAccessProvider(AccessProvider)` | Add a custom gate consulted on every connection (the `SingleplayerModule` uses this). Since 0.6.8 that includes **asset-editor connections**: `AssetEditorPacketHandler` runs the same `getDisconnectReason` check before initializing the editor client, with the play-stage connection timeout |
 | `getBanProvider()` / `setBanProvider(BanProvider)` / `restoreBanProvider(expected, previous)` | Read or swap the ban store; `setBanProvider` returns the previous one and `restoreBanProvider` puts it back only if the current one is still `expected` |
 | `ban(Ban)` / `unban(UUID)` / `isBanned(UUID)` | Ban bookkeeping through the active provider. `ban` returns `false` without storing anything when the ban is not `isInEffect()` or the provider refuses it; on success it also disconnects every connection of the target account that has reached setup (setup, game or asset editor) with `ban.getDisconnectReason()`, via `ConnectionRegistry` (Key Classes, above). A connection still authenticating is not kicked, but it is refused by the ban when it reaches the setup check |
 | `getDisconnectReason(UUID)` | (0.6.8+ public; private before) Returns `CompletableFuture<Optional<Message>>`. It asks each registered `AccessProvider` in registration order and completes with the first present reason, waiting for a provider whose future is still pending before moving on, or with `Optional.empty()` when every provider allows. If a provider fails, the future completes **exceptionally**: the connect-time check turns that into an internal-server-error refusal, so a caller must handle the failure itself. Use it to pre-check an account without connecting it |
@@ -508,7 +508,7 @@ AccessControlModule.get().ban(new Ban(targetUuid, adminUuid, Instant.now(),
 ```
 
 > [!WARNING]
-> Verified against `HytaleServer.jar` (0.6.8). Apart from `SingleplayerModule`, no first-party plugin registers an
+> Verified against `HytaleServer.jar` (0.7.2). Apart from `SingleplayerModule`, no first-party plugin registers an
 > `AccessProvider` or swaps the `BanProvider`, so those entry points are documented from their signatures — register
 > during your plugin `setup()` and test against your target build.
 

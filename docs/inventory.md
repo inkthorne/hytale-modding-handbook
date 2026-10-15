@@ -7,7 +7,7 @@ seo:
 
 # Inventory API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 The inventory system lets plugins read and mutate player inventories — moving, adding, removing, sorting, and filtering item stacks across the hotbar, storage, armor, utility, tools, and backpack sections.
 
@@ -60,7 +60,7 @@ Inventory  (player; sectioned)
 | Class | Location | Description |
 |-------|----------|-------------|
 | `Inventory` | `server.core.inventory` | Player inventory with multiple sections (**deprecated for removal as of 0.6.3**) |
-| `InventoryComponent` | `server.core.inventory` | ECS component base for one inventory section (`Hotbar`, `Storage`, `Armor`, `Utility`, `Tool`, `Backpack`); the current API |
+| `InventoryComponent` | `server.core.inventory` | ECS component base for one inventory section (`Hotbar`, `Storage`, `Armor`, `Utility`, `Tool`, `Backpack`, and 0.7.2+ `AbilitySlots`, `RuneBag`); the current API |
 | `ItemStack` | `server.core.inventory` | A stack of items with count and metadata |
 | `Item` | `server.core.asset.type.item.config` | Item definition/config backing an `ItemStack` |
 | `ItemContainer` | `server.core.inventory.container` | A container of slots; add/remove/move/filter API |
@@ -108,6 +108,8 @@ static final int UTILITY_SECTION_ID  = -5
 static final int TOOLS_SECTION_ID    = -8
 static final int BACKPACK_SECTION_ID = -9
 static final int DUMMY_SECTION_ID    = -10   // 0.6.3+: placeholder section id, never a real container
+static final int ABILITIES_SECTION_ID = -11  // 0.7.2+: InventoryComponent.AbilitySlots
+static final int RUNE_BAG_SECTION_ID  = -12  // 0.7.2+: InventoryComponent.RuneBag
 ```
 
 ### Default Capacities
@@ -121,6 +123,12 @@ static final short DEFAULT_STORAGE_ROWS     = 4
 static final short DEFAULT_STORAGE_COLUMNS  = 9
 static final short DEFAULT_STORAGE_CAPACITY = 36
 static final byte  INACTIVE_SLOT_INDEX      = -1
+
+// 0.7.2+: the ability and rune-bag sections
+static final short ABILITIES_LINE_WIDTH       = 3
+static final short ABILITIES_LINES            = 2
+static final short DEFAULT_ABILITIES_CAPACITY = 6
+static final short DEFAULT_RUNE_BAG_CAPACITY  = 50
 ```
 
 ### Get Sections
@@ -149,8 +157,9 @@ CombinedItemContainer getCombinedStorageHotbarBackpack()
 
 The non-deprecated way to reach a section is through its ECS component. Each section is a subclass of
 `com.hypixel.hytale.server.core.inventory.InventoryComponent` with a static `getComponentType()`:
-`InventoryComponent.Hotbar`, `.Storage`, `.Armor`, `.Utility`, `.Tool`, `.Backpack`. The component wraps the
-section's `ItemContainer`:
+`InventoryComponent.Hotbar`, `.Storage`, `.Armor`, `.Utility`, `.Tool`, `.Backpack`, and as of 0.7.2
+`.AbilitySlots` (section `-11`, the rune-ability bench slots) and `.RuneBag` (section `-12`). The component wraps
+the section's `ItemContainer`:
 
 ```java
 // InventoryComponent (instance)
@@ -187,7 +196,9 @@ typically only have a `Store`/`ComponentAccessor` and a `Ref` — use the **stat
 `InventoryComponent.getCombined(...)`, which takes a `ComponentAccessor<EntityStore>`, a
 `Ref<EntityStore>`, and one or more section selectors. Predefined selectors are
 `ComponentType[]` constants on `InventoryComponent`: `EVERYTHING`, `HOTBAR_FIRST`,
-`HOTBAR_STORAGE_BACKPACK`, `BACKPACK_STORAGE_HOTBAR`, `ARMOR_HOTBAR_UTILITY_STORAGE`, … .
+`HOTBAR_STORAGE_BACKPACK`, `BACKPACK_STORAGE_HOTBAR`, `ARMOR_HOTBAR_UTILITY_STORAGE`, … . Despite its name,
+`EVERYTHING` is armor, hotbar, utility, storage and backpack: it leaves out the tools section, and the
+`AbilitySlots` and `RuneBag` sections added in 0.7.2.
 
 ```java
 import com.hypixel.hytale.server.core.inventory.InventoryComponent;
@@ -238,7 +249,7 @@ ItemStack getItemInHand()
 > @Deprecated(forRemoval=true) static byte getActiveSlot(Ref<EntityStore>, int sectionId, ComponentAccessor<EntityStore>)
 > ```
 > The static `com.hypixel.hytale.server.core.inventory.InventoryUtils.setActiveSlot(Ref, int, byte, ComponentAccessor)`
-> these delegate to is plain `@Deprecated` (no `forRemoval`) in 0.6.8. There are **no `Holder`-based overloads on
+> these delegate to is plain `@Deprecated` (no `forRemoval`) in 0.7.2. There are **no `Holder`-based overloads on
 > `Inventory`** — set the slot through the per-section component instead (below).
 
 #### Setting the active slot (current API)
@@ -398,7 +409,8 @@ ItemStack withRestoredDurability(double amount)
 ItemStack withState(String state)
 ItemStack withQuantity(int quantity)
 
-// Quality (0.6.3+) — override the item's quality tier for this stack only; index into Server/Item/Qualities
+// Quality (0.6.3+) — override the item's quality tier for this stack only; index into Server/Item/Qualities.
+// The override is saved under the codec key "QualityOverride" as of 0.7.2 (it was "Quality" in 0.6.x).
 ItemStack withQuality(int qualityIndex)
 
 // Metadata
@@ -533,6 +545,7 @@ ItemArmor getArmor()          // Armor properties (if armor)
 ItemWeapon getWeapon()        // Weapon properties (if weapon)
 ItemGlider getGlider()        // Glider properties (if glider)
 ItemUtility getUtility()      // Utility properties (if utility item)
+ItemAbility getAbility()      // 0.7.2+: rune-ability properties (codec key "Ability"), or null
 ```
 
 ### Interactions
@@ -935,13 +948,19 @@ ItemStack replace(short slot, ItemStack itemStack)
 // Strip a metadata-marked flag from every stack in the container
 container.replaceAll((slot, existing) -> {
     AdventureMetadata meta = existing.getFromMetadataOrNull(AdventureMetadata.KEYED_CODEC);
-    if (meta == null || !meta.isCursed()) {
+    if (meta == null || !meta.isEphemeral()) {
         return existing;                       // untouched
     }
-    meta.setCursed(false);
+    meta.setEphemeral(false);
+    meta.setEphemeralWorld(null);
     return existing.withMetadata(AdventureMetadata.KEYED_CODEC, meta);
 });
 ```
+
+`AdventureMetadata`'s flag is `Ephemeral` as of 0.7.2: an item bound to the world whose UUID is in
+`EphemeralWorld` (the portals plugin's `CheckInteractionChainStartSystem` deletes such an item when a player tries
+to use it in any other world). It replaced 0.6.x's `Cursed` flag; `isCursed()`/`setCursed(boolean)` and the `Cursed` key are
+gone.
 
 ---
 
@@ -1486,6 +1505,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.CraftRecipeEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class CraftingSystem extends EntityEventSystem<EntityStore, CraftRecipeEvent.Pre> {
@@ -1498,11 +1518,11 @@ public class CraftingSystem extends EntityEventSystem<EntityStore, CraftRecipeEv
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        CraftRecipeEvent.Pre event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
             var recipe = event.getCraftedRecipe();
             int quantity = event.getQuantity();
-            player.getPlayerRef().sendMessage(Message.raw("Crafting " + quantity + " items..."));
+            playerRef.sendMessage(Message.raw("Crafting " + quantity + " items..."));
 
             // Optionally cancel the craft
             // event.setCancelled(true);
@@ -1672,6 +1692,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.InventorySetActiveSlotEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class SlotSwitchSystem extends EntityEventSystem<EntityStore, InventorySetActiveSlotEvent> {
@@ -1684,9 +1705,9 @@ public class SlotSwitchSystem extends EntityEventSystem<EntityStore, InventorySe
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        InventorySetActiveSlotEvent event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
-            player.getPlayerRef().sendMessage(Message.raw(
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw(
                 "Switched from slot " + event.getPreviousSlot() + " to " + event.getNewSlot()
             ));
         }

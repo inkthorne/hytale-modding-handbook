@@ -31,7 +31,8 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 
 ### World & Environment
 - [World](./docs/world.md) - World management
-- [World Chunks](./docs/world-chunks.md) - Per-chunk API, accessors, and ChunkTracker
+- [World Chunks](./docs/world-chunks.md) - Chunk storage and lifecycle, cubic sections, and ChunkTracker
+- [Block Access](./docs/block-access.md) - Reading and writing blocks through chunk sections (0.7.2+)
 - [World & Chunk Lifecycle Events](./docs/world-lifecycle-events.md) - Engine events for world and chunk lifecycle
 - [World Events](./docs/world-events.md) - Scripted world-event timelines (0.6.3+)
 - [Universes & Saves](./docs/universe-saves.md) - Save format, universe resources, dedicated-server config
@@ -39,7 +40,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Camera](./docs/camera.md) - Server-controlled camera and camera effects
 - [Blocks](./docs/blocks.md) - Block states and custom blocks
 - [Connected Blocks](./docs/blocks-connected.md) - Connected and patterned rule sets
-- [Blocks Java API](./docs/blocks-java-api.md) - BlockType, block events, world block access
+- [Blocks Java API](./docs/blocks-java-api.md) - BlockType, block events, ticking, and block health
 - [Fluids](./docs/fluids.md) - Fluid systems
 - [Prefabs](./docs/prefabs.md) - Structure templates
 - [Prefab Categories](./docs/prefabs-categories.md) - Category system for prefabs

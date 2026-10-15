@@ -29,7 +29,8 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [entities.md](entities.md) | Covers the entity system including Player and Entity classes, entity stats, velocity management, and interaction chains. |
 | [player.md](player.md) | Describes player-specific functionality including messaging, permissions, connect/disconnect events, and interaction events. |
 | [world.md](world.md) | The runtime World object, its configuration classes, world time, game flags, and world map markers. |
-| [world-chunks.md](world-chunks.md) | The per-chunk Java API split out of world.md: WorldChunk, chunk accessors, columns and sections, block-write settings flags, and ChunkTracker. |
+| [world-chunks.md](world-chunks.md) | Chunk storage and lifecycle: ChunkStore/ChunkGrid column and section references, chunk-load flags, the reduced WorldChunk column component, chunk flags, cubic sections, section lighting, and ChunkTracker. |
+| [block-access.md](block-access.md) | Reading and writing blocks in 0.7.2+: resolving chunk-section references, the BlockSection / FluidSection / BlockComponentSection / BlockHealthSection components, BlockOperations writes, SectionReader, SetBlockSettings, threading, and a migration table from the removed World and WorldChunk block methods. |
 | [world-lifecycle-events.md](world-lifecycle-events.md) | The Java event classes fired for world and chunk lifecycle — creation, loading, removal, saving, unloading. Not the JSON World Event feature; that is world-events.md. |
 | [universe-saves.md](universe-saves.md) | Save / universe format for dedicated servers: per-world config.json, binding a world to a WorldStructure, the Defaults.World spawn selection, IsPvpEnabled, and the CreativeHub crossroads. |
 | [events.md](events.md) | Core event system documentation covering registration methods, event priorities, keyed vs non-keyed events, and ECS patterns. |
@@ -40,7 +41,7 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [ui.md](ui.md) | UI system covering pages, windows, HUD, DSL syntax, elements, styling, and Java API. |
 | [blocks.md](blocks.md) | The block **JSON**: block states, `BlockType` properties, hitboxes, sound and particle sets, fluids, visual assets and per-block animation speed. |
 | [blocks-connected.md](blocks-connected.md) | Connected blocks — the four `ConnectedBlockRuleSet` types, shape configs and neighbour rules, and the patterned rule sets behind multi-block roofs and walls. |
-| [blocks-java-api.md](blocks-java-api.md) | The block **Java API**: `BlockType`, ticking, block events (place/break/use/damage), world block access, block health, and authoring custom block-entity components (per-block state, chunk-store ticking, item spawning, persistence, and a press-F settings GUI). |
+| [blocks-java-api.md](blocks-java-api.md) | The block **Java API**: `BlockType`, ticking, block events (place/break/use/damage), block health (world block reads and writes are in [block-access.md](block-access.md)), and authoring custom block-entity components (per-block state, chunk-store ticking, item spawning, persistence, and a press-F settings GUI). |
 | [assets.md](assets.md) | Asset registry system for custom assets, asset stores, built-in asset access, and asset lifecycle events. |
 | [codecs.md](codecs.md) | BSON-based serialization system using codecs for data persistence and configuration loading, including BuilderCodec patterns. |
 | [networking.md](networking.md) | Network serialization types including NetworkSerializable interface, Direction rotation class, and sync modes. |
@@ -55,7 +56,7 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [npc.md](npc.md) | NPC loading events and metadata including BuilderInfo for loaded NPCs and sensor event systems for AI. |
 | [npc-roles.md](npc-roles.md) | NPC role asset definitions including templates, variants, behaviors, attitudes, and spawning configurations. |
 | [drops.md](drops.md) | Drop/loot table system for blocks, NPCs, containers, and prefabs with weighted selection and modular composition. |
-| [adventure.md](adventure.md) | Adventure gameplay features including instance discovery, zone discovery, treasure chest opening, and world map tracking. |
+| [adventure.md](adventure.md) | Adventure gameplay features including instance discovery, zone discovery, portal worlds and ephemeral items, and world map tracking. |
 | [world-events.md](world-events.md) | Scripted world-event timelines (0.6.3+) — stage/fork assets under `Server/WorldEvent`, their conditions, actions and context keys, and the Java API for starting and observing them. |
 | [encounters.md](encounters.md) | Encounter Manager (0.6.3+) — multi-NPC encounters scripted as `Server/EncounterManager` JSON with encounter-scoped boss-bar, music, role-change and world-event-signal components. |
 | [mounts.md](mounts.md) | Mounts and seating — riding NPCs, sitting on block seats and driving minecarts; the `Mount`/`Seating`/`SpawnMinecart` interactions, `BlockMountAPI`, the rider/mount component pair, the NPC `Mount` action and the `/mount` commands. |
@@ -76,7 +77,7 @@ Docs are tagged with a `**Doc type:**` line. This groups them by what they docum
 ### Java API
 _Documents Java classes/methods — verify with `javap` against `HytaleServer.jar`._
 
-[Adventure API](adventure.md)  [Asset Editor Events API](asset-editor.md)  [Assets API](assets.md)  [Codecs API](codecs.md)  [Collision API](collision.md)  [Commands API](commands.md)  [Components (ECS) API](components.md)  [Entities API](entities.md)  [Events API](events.md)  [Fluids API](fluids.md)  [InteractionContext](interactions-context.md)  [Inventory API](inventory.md)  [Localization (i18n) API](i18n.md)  [Math / Vector API](math.md)  [NPC API](npc.md)  [Networking API](networking.md)  [Operation System](interactions-operations.md)  [Permissions API](permissions.md)  [Player API](player.md)  [Plugin Lifecycle API](plugin-lifecycle.md)  [Projectiles API](projectiles.md)  [Singleplayer API](singleplayer.md)  [Tasks API](tasks.md)  [UI Java API](ui-api.md)  [World API](world.md)  [World Chunks](world-chunks.md)  [World & Chunk Lifecycle Events](world-lifecycle-events.md)
+[Adventure API](adventure.md)  [Asset Editor Events API](asset-editor.md)  [Assets API](assets.md)  [Block Access](block-access.md)  [Codecs API](codecs.md)  [Collision API](collision.md)  [Commands API](commands.md)  [Components (ECS) API](components.md)  [Entities API](entities.md)  [Events API](events.md)  [Fluids API](fluids.md)  [InteractionContext](interactions-context.md)  [Inventory API](inventory.md)  [Localization (i18n) API](i18n.md)  [Math / Vector API](math.md)  [NPC API](npc.md)  [Networking API](networking.md)  [Operation System](interactions-operations.md)  [Permissions API](permissions.md)  [Player API](player.md)  [Plugin Lifecycle API](plugin-lifecycle.md)  [Projectiles API](projectiles.md)  [Singleplayer API](singleplayer.md)  [Tasks API](tasks.md)  [UI Java API](ui-api.md)  [World API](world.md)  [World Chunks](world-chunks.md)  [World & Chunk Lifecycle Events](world-lifecycle-events.md)
 
 ### JSON asset format
 _Documents on-disk JSON asset file formats — verify against the extracted `Assets.zip`._
@@ -174,7 +175,7 @@ JSON asset types used in Hytale's data-driven systems.
 [PlayerConnectEvent](player.md), [PlayerDisconnectEvent](player.md), [PlayerInteractEvent](player.md), [InteractionType](player.md), [Message](player.md), [FormattedMessage](player.md), [GameMode](player.md), [ChangeGameModeEvent](player.md), [HiddenPlayersManager](player.md)
 
 **World & Chunks**
-[World](world.md), [GameplayConfig](world.md), [WorldConfig](world.md), [DeathConfig](world.md), [ClientFeature](world.md), [WorldChunk](world-chunks.md), [ChunkTracker](world-chunks.md), [ChunkVisibility](world-chunks.md), [ChunkFlag](world-chunks.md), [WorldEvent](world-lifecycle-events.md), [AddWorldEvent](world-lifecycle-events.md), [ChunkEvent](world-lifecycle-events.md), [ChunkSaveEvent](world-lifecycle-events.md), [ChunkPreLoadProcessEvent](world-lifecycle-events.md), [MoonPhaseChangeEvent](world-lifecycle-events.md)
+[World](world.md), [GameplayConfig](world.md), [WorldConfig](world.md), [DeathConfig](world.md), [ClientFeature](world.md), [WorldChunk](world-chunks.md), [ChunkStore](world-chunks.md), [BlockSection](block-access.md), [BlockOperations](block-access.md), [SectionReader](block-access.md), [ChunkTracker](world-chunks.md), [ChunkVisibility](world-chunks.md), [ChunkFlag](world-chunks.md), [WorldEvent](world-lifecycle-events.md), [AddWorldEvent](world-lifecycle-events.md), [ChunkEvent](world-lifecycle-events.md), [ChunkSaveEvent](world-lifecycle-events.md), [ChunkPreLoadProcessEvent](world-lifecycle-events.md), [MoonPhaseChangeEvent](world-lifecycle-events.md)
 
 **Event System**
 [EventRegistry](events.md), [EventRegistration](events.md), [EventPriority](events.md), [EntityEventSystem](events.md), [IBaseEvent](events.md), [IEvent](events.md), [IAsyncEvent](events.md), [ICancellable](events.md), [EcsEvent](events.md), [CancellableEcsEvent](events.md), [ICancellableEcsEvent](events.md)
@@ -234,7 +235,7 @@ JSON asset types used in Hytale's data-driven systems.
 [AllNPCsLoadedEvent](npc.md), [LoadedNPCEvent](npc.md), [BuilderInfo](npc.md), [SensorEvent](npc.md), [SensorEntityEvent](npc.md), [EventSearchType](npc.md)
 
 **Adventure**
-[DiscoverInstanceEvent](adventure.md), [DiscoverZoneEvent](adventure.md), [TreasureChestOpeningEvent](adventure.md), [InstanceDiscoveryConfig](adventure.md), [WorldMapTracker](adventure.md), [ZoneDiscoveryInfo](adventure.md)
+[DiscoverInstanceEvent](adventure.md), [DiscoverZoneEvent](adventure.md), [InstanceDiscoveryConfig](adventure.md), [WorldMapTracker](adventure.md), [ZoneDiscoveryInfo](adventure.md)
 
 **Game Flags**
 [GameFlagsResource](world.md#game-flags), [GameFlagsPlugin](world.md#game-flags), [SetGameFlagInteraction](world.md#game-flags), [GameFlagConditionInteraction](world.md#game-flags)
@@ -275,7 +276,8 @@ JSON asset types used in Hytale's data-driven systems.
 - entities.md - Players, entities, stats, velocity, and entity events
 - player.md - Player events, messaging, and spectator mode
 - world.md - World access, configuration, world time, and game flags (universe-scoped persistent state)
-- world-chunks.md - Per-chunk API: WorldChunk, accessors, block-write settings flags, and ChunkTracker
+- world-chunks.md - Chunk storage and lifecycle: ChunkStore/ChunkGrid, chunk flags, cubic sections, and ChunkTracker
+- block-access.md - Reading and writing blocks: chunk sections, BlockSection, BlockOperations, SectionReader, and migration from the removed World block methods
 - world-lifecycle-events.md - World and chunk lifecycle event classes (distinct from the world-events.md timeline feature)
 - universe-saves.md - Save/universe format, universe resources, dedicated-server config, and binding worlds to structures
 - events.md - Core event system patterns
@@ -314,7 +316,7 @@ JSON asset types used in Hytale's data-driven systems.
 - drops.md - Loot tables for NPCs, blocks, containers
 
 **Adventure** - Adventure gameplay features
-- adventure.md - Instance discovery, treasure chests
+- adventure.md - Instance discovery, portal worlds
 - world-events.md - Scripted world-event timelines: stages, forks, conditions, actions and context keys
 - mounts.md - Riding NPCs, block seats and minecarts; BlockMountAPI and the mount component pair
 - deployables.md - Turrets, AoE totems and traps; the DeployableConfig registry and the SpawnDeployable interactions

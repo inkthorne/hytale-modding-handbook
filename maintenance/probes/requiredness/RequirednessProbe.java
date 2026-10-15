@@ -360,6 +360,49 @@ public class RequirednessProbe {
             record("R2", "P2", "with-Name", describeManifest(() -> m.decode(BsonDocument.parse("{\"Name\":\"n\"}"), new ExtraInfo())));
         } catch (Throwable t) { System.out.println("R2 not runnable: " + first(t)); }
 
+
+        // ---- real shipped codecs the handbook calls "required": omit every key, decode ----------
+        // The docs say each key below is required. Each decode runs with a COLLECTING
+        // ExtraInfo (as asset loading does), so one decode reports every key that failed
+        // instead of stopping at the first. `expect` is the set the SOURCE predicts: a key
+        // fails when omitted only if it is null_validated AND its field is still null after
+        // construction (BuilderField.nullValidate reads the field through the getter).
+        System.out.println("## REAL codecs, empty document: which keys fail when omitted (collecting ExtraInfo)");
+        String ITP = "com.hypixel.hytale.server.core.modules.interaction.interaction.config.";
+        Object[][] real = {
+            {ITP + "server.ShowEventTitleInteraction", "ShowEventTitle {}: Target is nonNull but its field starts as Target.World; PrimaryTitle is nonNull with a null field", new String[] {"PrimaryTitle"}},
+            {"com.hypixel.hytale.builtin.instances.interactions.TeleportInstanceInteraction", "TeleportInstance {}: OriginSource is nonNull but its field starts as ENTITY; InstanceName has no default", new String[] {"InstanceName"}},
+            {"com.hypixel.hytale.builtin.augmentblocks.AugmentConditionInteraction", "AugmentCondition {}: RequiredAugmentTags is nonNull but its field starts as an empty array", new String[] {}},
+            {"com.hypixel.hytale.builtin.crafting.interaction.OpenBenchPageInteraction", "OpenBenchPage {}: Page is nonNull but its field starts as SIMPLE_CRAFTING", new String[] {}},
+            {ITP + "server.RunOnBlockTypesInteraction", "RunOnBlockTypes {}: Range/MaxCount/Interactions/BlockSets are all true-flag; BlockSets also nonEmptyArray, field = EMPTY_BLOCKSETS", new String[] {}},
+            {ITP + "none.RunRootInteraction", "RunRootInteraction {}: RootInteraction is nonNull with a null field", new String[] {"RootInteraction"}},
+            {"com.hypixel.hytale.server.npc.interactions.SendBeaconInteraction", "SendBeacon {}: Message is nonNull with a null field", new String[] {"Message"}},
+            {"com.hypixel.hytale.builtin.creativehub.interactions.HubPortalInteraction", "HubPortal {}: WorldName is nonNull with a null field", new String[] {"WorldName"}},
+            {"com.hypixel.hytale.builtin.adventure.camera.interaction.CameraShakeInteraction", "CameraShake {}: CameraEffect is nonNull with a null field", new String[] {"CameraEffect"}},
+        };
+        for (Object[] rr : real) {
+            String label = (String) rr[1];
+            String cell;
+            java.util.TreeSet<String> got = new java.util.TreeSet<>();
+            try {
+                BuilderCodec<?> c = (BuilderCodec<?>) Class.forName((String) rr[0]).getField("CODEC").get(null);
+                AssetExtraInfo<String> ei = new AssetExtraInfo<>(new AssetExtraInfo.Data(Doc.class, "probe", null));
+                c.decode(BsonDocument.parse("{}"), ei);
+                try {
+                    ei.getValidationResults().logOrThrowValidatorExceptions(LOG);
+                    cell = "OK decoded, nothing failed";
+                } catch (com.hypixel.hytale.codec.exception.CodecValidationException e) {
+                    for (String ln : e.getMessage().split("\n"))
+                        if (ln.startsWith("Key: ")) got.add(ln.substring(5).trim());
+                    cell = "FAILS on key(s) " + got;
+                }
+            } catch (Throwable t) { cell = "THROW " + first(t); }
+            record("R3", "P2", label, cell);
+            expect(cell.startsWith("OK") ? ((String[]) rr[2]).length == 0
+                    : got.equals(new java.util.TreeSet<>(Arrays.asList((String[]) rr[2]))),
+                    "R3 " + label + ": expected failing keys " + Arrays.toString((String[]) rr[2]) + ", got: " + cell);
+        }
+
         // ---- verdict ----------------------------------------------------------------------
         String neg = CELLS.get("bS|P1|missing");
         System.out.println();

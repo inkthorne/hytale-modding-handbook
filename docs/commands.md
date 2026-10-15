@@ -1002,6 +1002,27 @@ heightmap component on the chunk column, and `loadHeightColumn(world, x, z)` loa
 asynchronously first (it completes at once for a coordinate without the `_` prefix), so chain
 `resolveYAtWorldCoords` after it when the target may be unloaded.
 
+Hop back onto the world thread inside that chain. `resolveYAtWorldCoords` reads the column's
+`HeightmapColumn` through the chunk store, and store access asserts the world thread. A plain
+`thenRun` is unsafe here: when the column is already loaded, `getChunkReferenceAsync` hands back an
+already-completed future, so the callback runs on whatever thread called `loadHeightColumn`. Every
+shipped caller hops (`TeleportAllCommand`, `TeleportPlayerToCoordinatesCommand` via
+`world.execute`; `TeleportToCoordinatesCommand`, `TpCinematicCommand` via `runAsync`). The
+`TeleportAllCommand` shape:
+
+```java
+relY.loadHeightColumn(world, x, z).thenRun(() -> world.execute(() -> {
+    double y;
+    try {
+        y = relY.resolveYAtWorldCoords(base.y, world, x, z);
+    } catch (CommandException e) {
+        e.sendTranslatedMessage(context.sender());   // chunkNotLoaded / "No ground found"
+        return;
+    }
+    // ... use (x, y, z) on the world thread
+}));
+```
+
 ### RelativeInteger & RelativeFloat
 The values behind `ArgTypes.RELATIVE_INTEGER` / `ArgTypes.RELATIVE_FLOAT`
 (`5` absolute, `~5` relative):

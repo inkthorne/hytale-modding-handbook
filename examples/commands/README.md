@@ -19,8 +19,10 @@ Teleport command demonstrating position arguments. Supports relative coordinates
 > **This `/tp` shadows the game's own.** The built-in teleport plugin also registers `tp`
 > (alias `teleport`), and `CommandManager.register` stores commands in a map keyed by name,
 > so whichever registers last wins, with no warning, and the built-in's `teleport` alias
-> (which points at the name `tp`) follows the winner. Pick a name nothing else uses for a
-> real plugin.
+> (which points at the name `tp`) follows the winner. The registration's unregister step also
+> removes by **name**: when this example is unloaded, whatever command `tp` maps to is
+> removed, so the game's `/tp` (and its `teleport` alias, which still points at `tp`) stays
+> gone until the server restarts. Pick a name nothing else uses for a real plugin.
 
 ## Building
 

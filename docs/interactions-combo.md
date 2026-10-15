@@ -208,19 +208,21 @@ Each chain step can specify a `RunTime` to control how long it lasts:
     {
       "Type": "Simple",
       "RunTime": 0.5,
-      "Effects": { "ItemAnimationId": "Swing_Right" }
+      "Effects": { "ItemAnimationId": "SwingRight" }
     },
     {
       "Type": "Simple",
       "RunTime": 0.5,
-      "Effects": { "ItemAnimationId": "Swing_Left" }
+      "Effects": { "ItemAnimationId": "SwingLeft" }
     }
   ]
 }
 ```
 
 (adapted from `_Debug/Debug_Combo_Primary.json`, whose steps are `SendMessage` interactions with
-the same `RunTime`/`Effects`)
+the same `RunTime`/`Effects`. That debug chain names `Swing_Right`/`Swing_Left`, which exist only in the
+debug `Item/Animations/_Debug/Combo_Test.json` animation set; the example uses `SwingRight`/`SwingLeft`,
+the ids defined by the regular sets such as `Default.json` and `Item.json`)
 
 **Using Replace for variable substitution:**
 

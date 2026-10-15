@@ -16,7 +16,7 @@ This document covers player-related events and messaging APIs.
 Implemented across `com.hypixel.hytale.server.core` (messaging) and `com.hypixel.hytale.server.core.event.events.player` (events), and provides:
 - A fluent `Message` builder for chat text, formatting, translations, and composition
 - Player connection, chat, interaction, craft, and input events
-- The `InteractionType` enum categorizing interaction kinds, and the ECS `InteractionChainStartEvent` (0.7.2+) that sees every interaction before it starts
+- The `InteractionType` enum categorizing interaction kinds, and the ECS `InteractionChainStartEvent` (0.7.2+) that sees every root interaction chain before it starts
 - A deprecated `PlayerInteractEvent` that nothing dispatches (documented so you don't build on it)
 - An ECS `ChangeGameModeEvent` for intercepting game-mode changes
 - A `HiddenPlayersManager` for per-player visibility (vanish/spectator systems)
@@ -50,7 +50,7 @@ Player-scoped managers
 | `Message` | `server.core` | Fluent chat-message builder (formatting, translations, composition) |
 | `HiddenPlayersManager` | `server.core.entity.entities.player` | Per-player visibility control |
 | `PlayerInteractEvent` | `server.core.event.events.player` | `@Deprecated`, and nothing in the server dispatches it |
-| `InteractionChainStartEvent` | `server.core.modules.interaction.event` | (0.7.2+) Cancellable ECS event invoked before every interaction chain starts |
+| `InteractionChainStartEvent` | `server.core.modules.interaction.event` | (0.7.2+) Cancellable ECS event invoked before every root interaction chain starts (forked sub-chains skip it) |
 | `InteractionType` | `protocol` | Enum of interaction kinds (`InteractionChainStartEvent.getType()`) |
 | `ChangeGameModeEvent` | `server.core.event.events.ecs` | Cancellable ECS event for game-mode changes |
 
@@ -222,7 +222,7 @@ Events related to player connections, interactions, and input.
 | `PlayerConnectEvent` | Player connects to server. An **`IAsyncEvent<Void>`** as of 0.7.2 | No |
 | `PlayerDisconnectEvent` | Player disconnects from server | No |
 | `PlayerReadyEvent` | Player is ready (fully loaded) | Yes (String, world name) |
-| `PlayerChatEvent` | Player sends a chat message. An `IAsyncEvent`, dispatched with **no** key, so only `registerGlobal(...)` handlers see it | Yes (String) |
+| `PlayerChatEvent` | Player sends a chat message. An `IAsyncEvent`, dispatched with **no** key, so a handler registered for a specific key never sees it: listen with `registerGlobal(...)` or `registerAsyncGlobal(...)` (an `…Unhandled` handler runs only when no global handler is registered) | Yes (String) |
 | `PlayerInteractEvent` | `@Deprecated`; never dispatched (see below) | Yes (String) |
 | `PlayerCraftEvent` | Player crafts an item | Yes (String, world name) |
 | `PlayerMouseButtonEvent` | Player mouse button input | No |
@@ -368,7 +368,8 @@ Enum naming which input or engine trigger started an interaction chain. Read it 
 **Package:** `com.hypixel.hytale.server.core.modules.interaction.event` · 0.7.2+
 
 `InteractionManager` invokes this `CancellableEcsEvent` at the acting entity just before it starts ticking a
-new interaction chain, for client-initiated and server-initiated chains alike. Cancel it and the chain
+new root interaction chain, for client-initiated and server-initiated chains alike. Sub-chains that a running
+chain forks through `InteractionContext.fork` are created directly and skip the event. Cancel it and the chain
 never runs: a client chain gets a cancel packet, a server chain is marked `Failed`.
 
 | Method | Return Type | Description |

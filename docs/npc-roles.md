@@ -1121,7 +1121,7 @@ State transitions can reference shared action lists:
 
 Groups define named collections of NPC roles, referenced elsewhere (attitudes, flock filters, spawn filters). Found in `Server/NPC/Groups/`. The file name is the group name. Group files have no `Type` field; they directly contain an `IncludeRoles` array. Role names may use trailing-wildcard patterns (`Fox*`).
 
-The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and **`IncludeGroups` / `ExcludeGroups`**, which compose one group out of others. In practice 94 of the 114 shipped files use only `IncludeRoles`, and just one uses `ExcludeRoles`.
+The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and **`IncludeGroups` / `ExcludeGroups`**, which compose one group out of others. In practice 103 of the 114 shipped files use only `IncludeRoles` (9 of those also carry a `$Comment`, which is an editor annotation and selects nothing), and just one uses `ExcludeRoles`.
 
 ### Group Definition
 

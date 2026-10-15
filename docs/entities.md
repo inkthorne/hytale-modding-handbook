@@ -689,7 +689,7 @@ void executeChain(Ref<EntityStore> ref, CommandBuffer<EntityStore> buffer, Inter
 void cancelChains(InteractionChain chain)
 ```
 
-As of 0.7.2, `tryStartChain` returns `false` up front when the world's gameplay config blocks the root interaction (`WorldConfig.isRootInteractionAllowed(root)`, which tests the root interaction's tags against the config's blocked tags), and every chain that starts — server-started or client-synced — first fires the cancellable ECS event `InteractionChainStartEvent` on the entity (`server.core.modules.interaction.event`; `getChain()`, `getContext()`, `getType()`, `getRootInteractionId()`). Cancelling it marks a server-started chain `Failed` before its first tick, and answers a client-started one with a cancel packet. Handle it with an `EntityEventSystem<EntityStore, InteractionChainStartEvent>`, as the built-in `CheckInteractionChainStartSystem` does.
+As of 0.7.2, `tryStartChain` returns `false` up front when the world's gameplay config blocks the root interaction (`WorldConfig.isRootInteractionAllowed(root)`, which tests the root interaction's tags against the config's blocked tags), and every root chain that starts — server-started or client-synced — first fires the cancellable ECS event `InteractionChainStartEvent` on the entity (sub-chains forked off a running chain by `InteractionContext.fork` skip it) (`server.core.modules.interaction.event`; `getChain()`, `getContext()`, `getType()`, `getRootInteractionId()`). Cancelling it marks a server-started chain `Failed` before its first tick, and answers a client-started one with a cancel packet. Handle it with an `EntityEventSystem<EntityStore, InteractionChainStartEvent>`, as the built-in `CheckInteractionChainStartSystem` does.
 
 ### Query
 ```java

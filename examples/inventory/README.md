@@ -8,8 +8,10 @@ Demonstrates the Hytale inventory API with commands for managing player items.
 Add items to your inventory. Tries hotbar first, then storage.
 
 > **This `/give` shadows the game's own `/give`.** `CommandManager.register` stores commands in
-> a map keyed by name, so whichever plugin registers `give` last wins, with no warning. Pick a
-> name nothing else uses for a real plugin.
+> a map keyed by name, so whichever plugin registers `give` last wins, with no warning. The
+> registration's unregister step also removes by **name**: when this example is unloaded,
+> whatever command `give` maps to is removed, and the game's `/give` stays gone until the
+> server restarts. Pick a name nothing else uses for a real plugin.
 
 **Examples:**
 - `/give Weapon_Sword_Wood 1` - Give 1 wooden sword

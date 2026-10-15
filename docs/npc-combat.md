@@ -106,7 +106,7 @@ A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evalua
 - `AvailableActions`: an object keyed by action name. Each action has a `Type` — one of the three registered on `CombatActionOption.CODEC`: `Ability` (fires an `Ability` root interaction), `State` (switches the role to a `State`/`SubState`, letting the role's instructions run the move) or `SelectBasicAttackTarget` — plus a `Target`, an `Ability` reference, an `AttackDistanceRange`, a `PostExecuteDistanceRange` (the distance to hold *after* the action), optional `Description`/`InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
 - `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` (`Attacks`, `MaxRange`, `Timeout`, `CooldownRange`, optional `Randomise` and `InteractionVars`) and an `Actions` list of available action names.
 
-Abridged from `Balancing/Intelligent/Goblin_New/CAE_Goblin_Glutton.json` (two of its six actions, one of its three action sets, and the basic attacks' `InteractionVars` omitted):
+Abridged from `Balancing/Intelligent/Goblin_New/CAE_Goblin_Glutton.json` (shown: three of its six actions — `Summon`, `Guard` and `ThrowGoblin` are left out — and one of its three action sets, with `Seek` and `Spectate` left out; also left out are the top-level `EntityEffects` array, `Charge`'s third condition (a `NearbyCount`), and the `InteractionVars` on `Slam` and on the basic attacks):
 
 ```json
 {

@@ -216,7 +216,7 @@ frequently codec-maps that do take a `"Type"`, among them `RandomTickProcedure`
 
 ### Utility
 
-Marks how an item behaves with the player's utility slot. The `Utility` object holds a single boolean flag.
+Marks how an item behaves with the player's utility slot. The `Utility` object holds two boolean flags and two optional stat keys; shipped items use only the flags.
 
 ```json
 {
@@ -230,10 +230,10 @@ Marks how an item behaves with the player's utility slot. The `Utility` object h
 |----------|------|-------------|
 | `Compatible` | boolean | Item may be placed in the utility slot (121 items set it `true` in 0.7.2) |
 | `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (30 items set it `true` in 0.7.2) |
-| `StatModifiers` | object | Stat modifiers applied while the item is in the utility slot (9 shipped utility items) |
-| `EntityStatsToClear` | string[] | Stats reset when the item leaves the utility slot (accepted by the codec; unused by shipped items) |
+| `StatModifiers` | object | Stat modifiers applied while the item is in the utility slot (accepted by the codec; set in 0 of the 159 shipped `Utility` objects in 0.7.2) |
+| `EntityStatsToClear` | string[] | Stats reset when the item leaves the utility slot (accepted by the codec; set in 0 of the 159 shipped `Utility` objects) |
 
-`Compatible` and `Usable` are plain booleans; most items set one of them, and 5 shipped items set both.
+`Compatible` and `Usable` are plain booleans; most items set one of them. 5 shipped `Utility` objects set both keys, and 2 of those set both `true`.
 
 ---
 

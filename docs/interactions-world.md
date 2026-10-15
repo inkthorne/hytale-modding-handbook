@@ -370,7 +370,7 @@ combined hotbar-first container, so it fills the hotbar before the backpack.
 ```json
 {
   "Type": "AddItem",
-  "ItemId": "Food_Hearty_Snack",
+  "ItemId": "Plant_Fruit_Apple",
   "Quantity": 1
 }
 ```

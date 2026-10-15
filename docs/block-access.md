@@ -48,9 +48,13 @@ the section's y, exactly as it gives the column's x and z. Every block-level met
 itself (`ChunkUtil.indexBlock` keeps the low 5 bits), so you never convert to local coordinates.
 
 > **How tall is a world?** On a default world a column has sections 0–9 (blocks 0–319), loaded with the
-> column. Worlds whose storage or generator is *cubic* can hold sections at any y, which is why 0.7.2
-> deprecated `ChunkUtil.HEIGHT` and its siblings. Check a y with `SectionReader.canHoldY(y)` rather
-> than a hard-coded `0..319`; see [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections).
+> column. Worlds with *cubic* storage can load sections at any y, which is why 0.7.2 deprecated
+> `ChunkUtil.HEIGHT` and its siblings. Ask the world which y it can hold, in place of a hard-coded
+> `0..319`. `SectionReader.canHoldY(y)` returning `false` rules a y out: it is outside `0..319` and
+> neither the world's loader nor its generator is cubic. A `true` outside `0..319` is only permission. Loading
+> such a section takes a cubic loader, and generating it takes a cubic loader *and* a cubic generator,
+> so a lookup there can still complete with `null`; see
+> [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections).
 
 ---
 
@@ -70,8 +74,8 @@ CompletableFuture<Ref<ChunkStore>> getChunkSectionReferenceAsync(int sectionX, i
 ```
 
 The `AtBlock` forms only convert with `ChunkUtil.chunkCoordinate` and delegate. The future completes
-with `null` when there is nothing to return, for example a section above the column on a non-cubic
-world, or a `NO_LOAD | NO_GENERATE` request for a section that is not in memory. Always check
+with `null` when there is nothing to return, for example a section outside `0..9` that the world's
+loader and generator cannot supply (see [Cubic sections](world-chunks.md#cubic-sections)), or a `NO_LOAD | NO_GENERATE` request for a section that is not in memory. Always check
 `ref != null && ref.isValid()`.
 
 **Which one to use depends on the thread.**
@@ -84,7 +88,8 @@ world, or a `NO_LOAD | NO_GENERATE` request for a section that is not in memory.
 - **Anywhere else, or when the section may not be loaded** (commands, async callbacks), use the async
   form and continue **on the world executor**. `World` implements `Executor`, so pass it as the second
   argument of `thenAcceptAsync`. Component reads and writes on the `ChunkStore` assert they are on the
-  world thread, so continuing on the completing thread is not safe.
+  world thread, and a plain `thenAccept` gives no thread guarantee: when the section is already loaded
+  the future usually comes back completed, and the continuation runs at once on the calling thread.
 
 ```java
 // SimpleBlockCommand (server.core.universe.world.commands.block), condensed
@@ -154,9 +159,13 @@ static boolean testPlaceBlock(ComponentAccessor<ChunkStore> accessor, BlockSecti
                               int x, int y, int z, BlockType blockType, int rotationIndex,
                               BlockOperations.TestBlockFunction occupiedIsOk)
 
-// Mark the blocks around (x, y, z) ticking — the PERFORM_BLOCK_UPDATE effect
+// Mark the 3x3x3 cells around (x, y, z) ticking
 static void updateBlockArea(ChunkStore chunkStore, ChunkSection chunkSection, BlockSection section,
                             int x, int y, int z)
+// The PERFORM_BLOCK_UPDATE effect: mark ticking every cell of blockType's hitbox footprint at that
+// rotation, plus a one-cell margin (a 3x3x3 for a one-cell block); returns early without a hitbox asset
+static void updateBlockArea(ChunkStore chunkStore, ChunkSection chunkSection, BlockSection section,
+                            BlockType blockType, int rotation, int x, int y, int z)
 
 // For a filler block, the position of the block it belongs to
 static BlockPosition resolveBaseBlockPosition(ChunkStore chunkStore, BlockPosition position)
@@ -173,17 +182,25 @@ The block id is the **int** index from `BlockType.getAssetMap().getIndex(id)`; `
 the string key. To clear a block, write id `0` with `BlockType.EMPTY`, as `PrefabUtil` does.
 
 When the id or rotation changes (or `FORCE_CHANGED` is set), `setBlock` runs the side-effect pipeline:
-it marks the section for saving, updates the column's heightmap, sends particles, swaps the block
-entity, invalidates light, sets the ticking bit from the new type's tick procedure, removes and places
-filler blocks, and resets block physics. Most of those (all but the light, ticking and physics steps) can be suppressed with a
-[`SetBlockSettings`](#setblocksettings) bit. It does **not** fire `BreakBlockEvent`, drop items or play
-sounds.
+it marks the section for saving, updates the column's heightmap, sends particles, reports the
+replacement (`BlockAnimationModule.onBlockReplaced`, `BlockHealthModule.onBlockReplaced`), swaps the
+block entity, invalidates light through the world's lighting manager, sets the ticking bit from the new
+type's tick procedure, removes and places filler blocks, and resets block physics. A
+[`SetBlockSettings`](#setblocksettings) bit can suppress the heightmap, particle, block-entity and
+filler steps. The saving flag, the two `onBlockReplaced` calls, the light invalidation, the ticking
+bit and the physics reset (made whenever the column ref is valid) always run. It does **not** fire
+`BreakBlockEvent`, drop items or play sounds.
 
-> **⚠️ `BlockSection.set(x, y, z, id, rotation, filler)` is the raw palette write.** None of the side
-> effects above run: no saving flag, heightmap, light, filler or block entity. Use it only for
-> bulk analysis or worldgen-style code; for gameplay edits use `BlockOperations.setBlock`.
+> **⚠️ `BlockSection.set(x, y, z, id, rotation, filler)` is the raw palette write.**
+> When it changes something it calls the section's own `BlockSection.invalidateLocalLight()` and,
+> once the section is loaded, records the cell so `ChunkSystems` resends it to players. Every other
+> step above is skipped: the saving flag, heightmap, ticking bit, filler, block entity, health,
+> physics, and the world-level light update that `setBlock` makes through
+> `ChunkLightingManager.invalidateLightAtBlock` (which also weighs the heightmap change).
+> Use it only for bulk analysis or worldgen-style code; for gameplay edits use
+> `BlockOperations.setBlock`.
 > `BlockOperations.setBlockPreLoad` is the in-between form for sections that are not in the store yet
-> (it sets the saving flag and the ticking bit, nothing else).
+> (on top of the raw write it sets the saving flag and the ticking bit, nothing else).
 
 ---
 
@@ -355,7 +372,7 @@ method that consumes it.
 | `PHYSICS` | 32 | Mark the change as physics-caused (physics break particles; filler change reason `BY_PHYSICS`) |
 | `FORCE_CHANGED` | 64 | Run the pipeline even if id and rotation are unchanged (and invalidate the block) |
 | `NO_UPDATE_NEIGHBOR_CONNECTIONS` | 128 | Declared, but no reader of the value was found in the 0.7.2 jar |
-| `PERFORM_BLOCK_UPDATE` | 256 | Mark the blocks around the change ticking (`BlockOperations.updateBlockArea`) |
+| `PERFORM_BLOCK_UPDATE` | 256 | Mark the new block's hitbox footprint plus a one-cell margin ticking (the `BlockType`/rotation overload of `BlockOperations.updateBlockArea`) |
 | `NO_UPDATE_HEIGHTMAP` | 512 | Skip the heightmap update |
 | `NO_SEND_AUDIO` | 1024 | Skip break audio in the `BlockHarvestUtils` paths |
 | `NO_DROP_ITEMS` | 2048 | Skip item drops in the `BlockHarvestUtils` paths (they also set it themselves for a non-natural break) |
@@ -543,14 +560,37 @@ When a block is replaced, `BlockOperations.setBlock` clears its entry
 `getHeight(x, z)` (world coordinates); it returns `HeightmapColumn.NO_HEIGHT` (`Integer.MIN_VALUE`) where
 no height is known.
 
+Which read to use depends on the thread, as for sections. On the world thread,
+`ChunkStore.getChunkComponent` is the short form; it goes through `Store.getComponent`, which asserts
+the world thread:
+
 ```java
+// on the world thread (a system, an interaction, a world.execute task, or after thenApplyAsync(..., world))
 HeightmapColumn heights = chunkStore.getChunkComponent(
         ChunkUtil.indexChunkFromBlock(x, z), HeightmapColumn.getComponentType());
 int top = heights != null ? heights.getHeight(x, z) : HeightmapColumn.NO_HEIGHT;
 ```
 
-`FitToHeightMapSpawnProvider` uses exactly this. `getCollisionHeight(x, z)` is the collision-based
-variant.
+Off the world thread, read through `Store.getComponentConcurrent`, which is safe from any thread. That is
+what `FitToHeightMapSpawnProvider` does: a spawn lookup runs on whatever thread asks, often a thread
+other than the world thread (see [world.md → Controlling Respawn Location](world.md#controlling-respawn-location)),
+so it resolves the column with `getChunkReferenceAsync(index, 32)`
+(`HIGH_PRIORITY`), continues with a plain `thenApply` with no hop to the world executor (so the continuation can run on
+any thread, including the caller's when the column is already loaded), and reads
+the heightmap with `chunkStore.getStore().getComponentConcurrent(chunkRef, HeightmapColumn.getComponentType())`:
+
+```java
+// condensed from FitToHeightMapSpawnProvider.getSpawnPointAsync / fit
+chunkStore.getChunkReferenceAsync(ChunkUtil.indexChunkFromBlock(x, z), GetChunkFlags.HIGH_PRIORITY)
+        .thenApply(chunkRef -> {
+            HeightmapColumn heights = chunkRef != null && chunkRef.isValid()
+                    ? chunkStore.getStore().getComponentConcurrent(chunkRef, HeightmapColumn.getComponentType())
+                    : null;
+            return heights != null ? heights.getHeight(x, z) : HeightmapColumn.NO_HEIGHT;
+        });
+```
+
+`getCollisionHeight(x, z)` is the collision-based variant.
 
 ---
 
@@ -602,8 +642,16 @@ coordinates throughout.
   through `BlockSection.set`, which is the raw palette write. Use `BlockOperations.setBlock`.
 - **A ticking bit set by hand is lost on reload** → mark the section dirty:
   `ChunkSection.markNeedsSaving()` after `BlockSection.setTicking` returns `true`.
-- **Nothing exists above y 319 (or below 0)** → the world is not cubic; a section lookup there
-  completes with `null`. Check `SectionReader.canHoldY(y)`.
+- **A section lookup above y 319 (or below 0) completes with `null`** → the world cannot supply that
+  section. Which half is missing decides the fix:
+  - loading a stored off-range section needs a cubic **loader** (`IChunkLoader.Cubic`; in 0.7.2 the
+    `RocksDb` storage provider), and
+  - generating a new one needs a cubic loader **and** a cubic generator (`IWorldGen.Cubic`).
+
+  `SectionReader.canHoldY(y)` answers neither question, since it is `true` when either half is cubic.
+  A cubic loader with the default generator, or the default storage with `CubicTestWorldGenProvider`,
+  both report `canHoldY(400) == true`, and both return `null` at y 400 for a section that was never
+  stored there.
 
 ---
 

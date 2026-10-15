@@ -212,6 +212,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.DiscoverZoneEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class ZoneDiscoverySystem extends EntityEventSystem<EntityStore, DiscoverZoneEvent.Display> {
@@ -224,10 +225,11 @@ public class ZoneDiscoverySystem extends EntityEventSystem<EntityStore, Discover
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        DiscoverZoneEvent.Display event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
+        // Chat goes through the entity's PlayerRef component
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
             var discoveryInfo = event.getDiscoveryInfo();
-            player.getPlayerRef().sendMessage(Message.raw("Zone discovered!"));
+            playerRef.sendMessage(Message.raw("Zone discovered!"));
 
             // Optionally suppress the discovery display
             // event.setCancelled(true);
@@ -387,7 +389,9 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 
 // In a command or event handler where you have access to a Player
-Player player = /* ... */;
+Ref<EntityStore> ref = /* the player's entity */;
+Store<EntityStore> store = ref.getStore();
+Player player = store.getComponent(ref, Player.getComponentType());
 WorldMapTracker tracker = player.getWorldMapTracker();
 
 // Get current zone
@@ -402,7 +406,7 @@ boolean discovered = tracker.discoverZone(world, "ancient_ruins");
 
 // Check teleport permissions — both take the player, and the coordinate
 // check is a static method on the class, not on the tracker instance
-PlayerRef playerRef = player.getPlayerRef();
+PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
 boolean canTeleportToCoords = WorldMapTracker.isAllowTeleportToCoordinates(playerRef, player);
 boolean canTeleportToMarkers = tracker.isAllowTeleportToMarkers(playerRef, player);
 
@@ -916,6 +920,7 @@ import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.DiscoverZoneEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class AdventurePlugin extends JavaPlugin {
@@ -943,9 +948,9 @@ public class AdventurePlugin extends JavaPlugin {
         public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                            Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                            DiscoverZoneEvent.Display event) {
-            Player player = chunk.getComponent(index, Player.getComponentType());
-            if (player != null) {
-                player.getPlayerRef().sendMessage(
+            PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                playerRef.sendMessage(
                     Message.raw("New zone: " + event.getDiscoveryInfo().zoneName())
                         .bold(true)
                         .color("#FFD700")

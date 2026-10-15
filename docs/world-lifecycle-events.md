@@ -257,8 +257,9 @@ getEventRegistry().registerGlobal(ChunkPreLoadProcessEvent.class, event -> {
 Implements `IEvent<String>` and `IProcessedEvent` (it does **not** extend `ChunkEvent`, so there is no
 `getChunk()`). Fired once per chunk **section** before the section's entity is added to the
 `ChunkStore`, keyed by the world's name. For a classic column that is ten times per column load (sections
-0–9, right after `ChunkPreLoadProcessEvent`); on a cubic world it also fires for sections loaded on their
-own (see [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections)).
+0–9, right after `ChunkPreLoadProcessEvent`). It also fires for each section loaded or generated on its
+own, outside `0..9`, which takes a cubic chunk loader (see
+[world-chunks.md → Cubic sections](world-chunks.md#cubic-sections)).
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -291,6 +292,15 @@ systems, not by the event registry, and **on the store they are invoked on**:
 
 A system registered on the wrong store never sees the event. For the chunk events, query on
 `WorldChunk` and register on `getChunkStoreRegistry()`. The unit below compiles against the 0.7.2 jar.
+
+> **⚠️ `ChunkUnloadEvent` handlers run on parallel worker threads.** `ChunkUnloadingSystem` walks the
+> columns with `store.forEachEntityParallel(...)` and invokes the event from inside that walk
+> (`commandBuffer.invoke(chunkRef, event)` on a forked buffer), so handlers for different columns run
+> at the same time on fork-join workers (the world thread takes a share and waits for the rest). Read through the
+> `ArchetypeChunk`, the event's `getChunk()` and the `CommandBuffer` you are handed, and queue writes on
+> that buffer (it is merged back after the parallel pass). A direct `store.getComponent(...)` from the
+> handler fails `Store.assertThread` with `Assert not in thread!` on a worker, and any plugin state the
+> handler touches must be thread-safe.
 
 ```java
 package com.example.chunkevents;

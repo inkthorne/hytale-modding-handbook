@@ -131,8 +131,11 @@ void resendGameplayConfig()
 
 ### Entities
 ```java
+Ref<EntityStore> getEntityRef(UUID uuid)   // the current lookup: resolve components on the ref via the store
+
+// @Deprecated in 0.7.2 (plain, not forRemoval): the legacy Entity-object API.
+// New code works with Ref<EntityStore> and Store.addEntity(holder, AddReason) — see components.md
 Entity getEntity(UUID uuid)
-Ref<EntityStore> getEntityRef(UUID uuid)
 <T extends Entity> T spawnEntity(T entity, Vector3d position, Rotation3f rotation)
 <T extends Entity> T addEntity(T entity, Vector3d position, Rotation3f rotation, AddReason reason)
 ```
@@ -207,7 +210,8 @@ static void broadcastPacketToPlayers(ComponentAccessor<EntityStore> accessor, To
 static void broadcastPacketToPlayers(ComponentAccessor<EntityStore> accessor, ToClientPacket... packets)
 static void broadcastPacketToPlayersNoCache(ComponentAccessor<EntityStore> accessor, ToClientPacket packet)
 
-// Force a player's model to be rebuilt/resent
+// Force a player's model to be rebuilt/resent from its PlayerSkinComponent.
+// @Deprecated(forRemoval=true) in 0.7.2 — expect it to disappear in a later build
 static void resetPlayerModel(Ref<EntityStore> playerRef, ComponentAccessor<EntityStore> accessor)
 ```
 
@@ -237,8 +241,8 @@ protected void execute(CommandContext ctx, Store<EntityStore> store,
     world.sendMessage(Message.raw("Hello everyone!"));
 
     // Get all players (getPlayerRefs() — getPlayers() is deprecated for removal)
-    for (PlayerRef ref : world.getPlayerRefs()) {
-        ref.sendMessage(Message.raw("Individual message"));
+    for (PlayerRef other : world.getPlayerRefs()) {
+        other.sendMessage(Message.raw("Individual message"));
     }
 }
 ```
@@ -345,8 +349,9 @@ static final int DEFAULT_NIGHTTIME_DURATION_SECONDS = 1151;   // was 1728 before
 // Gameplay WorldConfig is reached through the gameplay config, not world.getWorldConfig()
 WorldConfig config = world.getGameplayConfig().getWorldConfig();
 
-if (config.isBlockBreakingAllowed()) {
-    // Players can break blocks
+BlockType stone = BlockType.getAssetMap().getAsset("Rock_Stone");
+if (config.isBlockBreakingAllowed(stone)) {
+    // Players can break this block type (AllowBlockBreaking, or the bypass tag)
 }
 
 int dayLength = config.getDaytimeDurationSeconds();
@@ -360,7 +365,7 @@ Two keys in the gameplay config's `World` block refine the all-or-nothing switch
 | Key | Type | Effect |
 |-----|------|--------|
 | `BlockBreakingBypassTag` | string | With `AllowBlockBreaking: false`, blocks whose type carries this tag can still be broken. `isBlockBreakingAllowed(blockType)` returns `true` when `AllowBlockBreaking` is on, otherwise only for a block type with the tag; a `null` block type is refused |
-| `BlockedRootInteractionTags` | string[] | Codec doc: *Root interactions with any of these tags (for example "Type=Bed") cannot run in this world and show no interaction hint*. Checked by `isRootInteractionAllowed(rootInteraction)`: `UseBlock` and `UseEntity` end `Failed` when it returns `false`, and the interaction manager cancels a client-started chain whose root is blocked. The effect on each interaction is described on [items-blocks.md](items-blocks.md#block_secondary-interaction) (`UseBlock`) and [items-weapons.md](items-weapons.md#useentity-interaction) (`UseEntity`) |
+| `BlockedRootInteractionTags` | string[] | Codec doc: *Root interactions with any of these tags (for example "Type=Bed") cannot run in this world and show no interaction hint*. Checked by `isRootInteractionAllowed(rootInteraction)`: `UseBlock` and `UseEntity` end `Failed` when it returns `false`; the interaction manager cancels a client-started chain whose root is blocked, `InteractionManager.tryStartChain` returns `false` for a server-started one, and `BlockInteractionUtils.runRootInteractionOnBlock` returns early. `InteractionManager.startChain` runs the chain unconditionally, so code that must honour the tags should call `tryStartChain`. The effect on each interaction is described on [items-blocks.md](items-blocks.md#block_secondary-interaction) (`UseBlock`) and [items-weapons.md](items-weapons.md#useentity-interaction) (`UseEntity`) |
 
 The shipped dungeon configs use both:
 
@@ -810,10 +815,11 @@ void addMarkerProvider(String key, WorldMapManager.MarkerProvider provider)
 Map<String, WorldMapManager.MarkerProvider> getMarkerProviders()
 
 // Marker overrides (0.6.3+): per-marker-id tweaks layered over what providers emit.
-// MapMarkerOverride is a record (server.core.universe.world.worldmap.markers); 0.7.2 added `name`:
-//   MapMarkerOverride(UUID id, String name, String icon, Boolean global), or
-//   MapMarkerOverride(String name, String icon, Boolean global)
-//   (nullable name/icon/global = leave that property untouched)
+// MapMarkerOverride is a record (server.core.universe.world.worldmap.markers); 0.7.2 added `name`
+// as the third component, after `icon`:
+//   MapMarkerOverride(UUID id, String icon, String name, Boolean global), or
+//   MapMarkerOverride(String icon, String name, Boolean global)   // random UUID id
+//   (nullable icon/name/global = leave that property untouched; `name` is a localization key)
 Map<String, MapMarkerOverride> getMarkerOverridesView()
 boolean addMarkerOverride(String markerId, MapMarkerOverride override)
 boolean removeMarkerOverride(String markerId)

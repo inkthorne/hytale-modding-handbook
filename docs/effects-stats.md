@@ -289,9 +289,9 @@ its keys are available:
   "DamageCalculatorCooldown": 1.0,
   "StatModifierEffects": {
     "WorldParticles": [
-      { "SystemId": "Heal_Sparkle" }
+      { "SystemId": "Potion_Health_Implosion", "PositionOffset": { "Y": 1.0 } }
     ],
-    "WorldSoundEventId": "SFX_Heal_Tick"
+    "WorldSoundEventId": "SFX_Potion_Drink_Success_02"
   }
 }
 ```

@@ -89,7 +89,7 @@ launches and chimes when a player enters:
 | `Conditions` | array | Optional gate (see [Conditions](#conditions)). All must pass for the effects to run. |
 | `RejectionEffects` | array | Optional effects run when a condition **fails** (e.g. a "denied" message). |
 | `Rules` | array | 0.6.3+ — passive [rules](#rules) active while an entity is inside (tolerant array, `TriggerVolumeCodecs.TOLERANT_RULES`). |
-| `ConditionTiming` | enum | When conditions are evaluated relative to the volume's activation delay: `BEFORE_VOLUME_DELAY` or `AFTER_VOLUME_DELAY` (default). |
+| `ConditionTiming` | enum | When conditions are evaluated relative to the volume's activation delay: `"BeforeVolumeDelay"` or `"AfterVolumeDelay"` (default). Write the PascalCase key, which every codec of this field takes. This asset's codec (and the group manager's `GroupEntry`) uses `EnumStyle.LEGACY`, which also matches the constant name case-insensitively (`BEFORE_VOLUME_DELAY`); the per-volume codecs (`TriggerVolume`, `VolumeEntry`, `TriggerVolumeGroup`) use the default style and take only `BeforeVolumeDelay`, which is how the one shipped use (`The_Deepworks/resources/TriggerVolumeData.json`) spells it. |
 | `TargetTypes` | array | Which entity kinds the volume reacts to. The sample uses `"Player"`; values map to [`EntityTargetType`](#entitytargettype). |
 | `IncludeVolumeSettings` | bool | 0.6.3+ — when `true`, the asset also carries per-volume settings that are copied onto any volume it is assigned to: `VolumeTags`, `RejectionDelayMode`, `Cooldown` (s), `CooldownMode`, `ActivationDelay` (s), `ProjectileSource`, `KeepLoaded`, `RotateEffectsOnPaste`, `CancelDelayedOnExit`. Ignored (and not written back) when `false`. |
 

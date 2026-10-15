@@ -61,7 +61,7 @@ Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/
 }
 ```
 
-A minimal beacon can also start an NPC in a chosen state:
+A minimal beacon can also start an NPC in a chosen state. This is the shipped `Beacons/Edible_Goblin_Scrapper.json`, less its `TargetSlot`. Its role, `Edible_Goblin_Scrapper`, now lives under `Roles/Intelligent/Faction/Goblin/_Deprecated/`, so for new content name a current role, and one whose instructions define the state you start it in:
 
 ```json
 {

@@ -569,7 +569,7 @@ shape states (`Corner_Left`, `Corner_Right`, `Inverted_Corner_Left`,
 ## Connected Blocks
 
 Blocks that connect to neighbors (stairs, roofs, walls/bars, doors) use
-`ConnectedBlockRuleSet` (581 blocks, counting rule sets declared inside state definitions). Its shape depends on `Type`.
+`ConnectedBlockRuleSet` (566 blocks in 0.7.2, all at the top level of `BlockType`; a further 15 files write `"ConnectedBlockRuleSet": null`, which declares none). Its shape depends on `Type`.
 
 ### Stair
 

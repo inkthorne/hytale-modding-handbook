@@ -66,8 +66,13 @@ it is loaded now, else `null`. The async forms load or generate as their [flags]
 allow, and complete with `null` when there is nothing to return. A failed load puts the column or
 section on a short back-off (`FAILURE_BACKOFF_NANOS`, growing to `MAX_FAILURE_BACKOFF_NANOS`, 10 s),
 during which a new request fails immediately with `Chunk failure backoff` / `Chunk section failure
-backoff`. The future completes on a worker thread, so continue with `thenAcceptAsync(..., world)`
-before touching components — see [block-access.md → Resolving a section](block-access.md#resolving-a-section).
+backoff`. A fresh load or generation finishes its last stage on the world executor
+(`thenApplyAsync(postLoadChunk, world)` for a column, `whenCompleteAsync(..., world)` for a section),
+but a ref that is already loaded usually comes back as an already-completed future, and a plain `thenAccept`
+on a completed future runs at once on the **calling** thread. Called from a command, a scheduler or
+another async callback, that is a thread other than the world thread, so continue with
+`thenAcceptAsync(..., world)` before touching components either way — see
+[block-access.md → Resolving a section](block-access.md#resolving-a-section).
 
 ---
 
@@ -187,23 +192,39 @@ A section is 32×32×32 blocks, and section coordinates are block coordinates sh
 (`ChunkUtil.chunkCoordinate`). On a default world a column has the ten sections `y = 0..9` (blocks
 0–319); they are loaded and saved with their column, and `ChunkColumn` lists them.
 
-0.7.2 lets a world grow past that range. `ChunkGrid.supportsCubicSections()` is `true` when the world's
-chunk loader implements `IChunkLoader.Cubic` or its generator implements `IWorldGen.Cubic`; a section
-at any `y` can then be loaded (and, with a cubic generator, generated) on its own. In the 0.7.2 jar the
-`RocksDb` storage provider's loader is cubic, and so is the test generator `CubicTestWorldGenProvider`;
-the default storage (`Hytale`, which delegates to `IndexedStorage`) is not. On a non-cubic world, a
-lookup for a section outside `0..9` completes with `null`.
+0.7.2 lets a world grow past that range, but loading and generating an off-range section have
+different requirements, and the query plugins see is looser than both:
+
+- `ChunkGrid.supportsCubicSections()` is `true` when the world's chunk loader implements
+  `IChunkLoader.Cubic` **or** its generator implements `IWorldGen.Cubic`.
+- `ChunkGrid.getChunkSectionReferenceAsync` **loads** a section outside `0..9` on its own only through a
+  cubic loader (`IChunkLoader.Cubic.loadSectionHolder`).
+- It **generates** one only when the loader is cubic **and** the generator is cubic
+  (`IWorldGen.Cubic.generate(seed, x, y, z, …)`). The column path makes the same test: with both
+  cubic, a column's ten sections are generated section by section through the cubic generator, and otherwise
+  the whole column comes from the classic `IWorldGen.generate`.
+
+In the 0.7.2 jar the `RocksDb` storage provider's loader is cubic, and so is the test generator
+`CubicTestWorldGenProvider`; the default storage (`Hytale`, which delegates to `IndexedStorage`) and the
+shipped generators other than `CubicTestWorldGenProvider` are classic. So only `RocksDb` storage with a cubic generator grows sections on
+demand. `RocksDb` with a classic generator loads off-range sections that were stored, and the default
+storage with `CubicTestWorldGenProvider` reaches none at all, yet `supportsCubicSections()` is `true` for
+both. Wherever the required half is missing, a lookup for a section outside `0..9` completes with
+`null`.
 
 Consequences for plugins:
 
 - `ChunkUtil.HEIGHT` (320), `HEIGHT_SECTIONS` (10), `HEIGHT_MINUS_1`, `HEIGHT_MASK` and
   `SIZE_BLOCKS_COLUMN` are `@Deprecated` in 0.7.2. Check a height with
   `new SectionReader(chunkStore).canHoldY(y)`, which is `supportsCubicSections() || (0 <= y && y < 320)`.
+  A `false` rules the y out. A `true` outside `0..319` only says one half is cubic, so treat it as
+  "a section may exist here" and handle a `null` lookup.
 - `ChunkColumn` still holds only sections `0..9`. Reach any other section through `ChunkGrid`
   (`getChunkSectionReference`, `getLoadedSectionReferences(chunkX, chunkZ)`,
   `lowestLoadedSectionBelow` / `highestLoadedSectionAbove`).
-- Sections carry their own keep-alive (`ChunkSection.pollKeepAlive` / `addKeepLoaded`), so on a cubic
-  world a section can unload while its column stays loaded (`ChunkStore.SECTION_UNLOAD_RESOURCE`).
+- Sections carry their own keep-alive (`ChunkSection.pollKeepAlive` / `addKeepLoaded`), so a section
+  outside `0..9` can unload while its column stays loaded (`ChunkStore.SECTION_UNLOAD_RESOURCE`);
+  `SectionUnloadingSystem` keeps sections `0..9` for as long as their column is loaded.
 
 ---
 

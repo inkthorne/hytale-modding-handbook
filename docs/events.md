@@ -402,15 +402,20 @@ protected void setup() {
         // Player (the entity component) has no sendMessage; read the entity's PlayerRef
         // component (Player.getPlayerRef() is @Deprecated(forRemoval = true))
         Ref<EntityStore> ref = event.getPlayerRef();
+        // getComponent is @Nullable (ComponentAccessor), so guard the lookup
         PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
-        playerRef.sendMessage(Message.raw("You are ready!"));
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw("You are ready!"));
+        }
     });
 
     // Keyed event: filter to one key (here, the world named "lobby")
     getEventRegistry().register(PlayerReadyEvent.class, "lobby", event -> {
         Ref<EntityStore> ref = event.getPlayerRef();
-        ref.getStore().getComponent(ref, PlayerRef.getComponentType())
-            .sendMessage(Message.raw("Welcome to the lobby!"));
+        PlayerRef playerRef = ref.getStore().getComponent(ref, PlayerRef.getComponentType());
+        if (playerRef != null) {
+            playerRef.sendMessage(Message.raw("Welcome to the lobby!"));
+        }
     });
 }
 ```
@@ -517,12 +522,13 @@ whole store** (`store.invoke(event)`). The two need different system base classe
 | `ChunkUnloadEvent` | `...world.events.ecs` | Chunk unloaded |
 | `PrefabPasteEvent` | `...prefab.event` | Prefab pasted |
 | `KillFeedEvent.*` | `...damage.event` | Kill feed messages |
-| `InteractionChainStartEvent` | `...modules.interaction.event` | An interaction chain is about to start on the entity (0.7.2+). `getChain()`, `getContext()`, `getType()` → `InteractionType`, `getRootInteractionId()`. Cancellable: `InteractionManager` then fails the chain (or sends the client a cancel) instead of ticking it |
+| `InteractionChainStartEvent` | `...modules.interaction.event` | A root interaction chain is about to start on the entity (0.7.2+). `getChain()`, `getContext()`, `getType()` → `InteractionType`, `getRootInteractionId()`. Cancellable: `InteractionManager` then fails the chain (or sends the client a cancel) instead of ticking it |
 | `ProjectileLaunchEvent` | `...modules.projectile.event` | A projectile was launched; invoked at the **launcher** (0.7.2+). `getProjectileRef()`, `getInteractionType()`, `isLaunchedByWeapon()`. Not cancellable |
 
 ### Example: vetoing an interaction chain (0.7.2+)
 
-`InteractionChainStartEvent` is invoked at the acting entity before `InteractionManager` ticks a new chain,
+`InteractionChainStartEvent` is invoked at the acting entity before `InteractionManager` ticks a new root chain
+(sub-chains forked by `InteractionContext.fork` skip it),
 so one `EntityEventSystem` can veto any interaction by its root id or `InteractionType`. The shipped
 `CheckInteractionChainStartSystem` (portals) uses it the same way, to stop a player using an item that
 belongs to another world. Registering the system is enough: `ComponentRegistry` registers the event type

@@ -307,7 +307,7 @@ Blocks can emit colored light:
 | `Flags` | object | Boolean flags (only `IsStackable` as of 0.7.2 — see [Flags](#flags)) |
 | `Interactions` | object | Primary, Use, Collision, OnBreak, … handlers |
 | `State` | object | State definitions (`Definitions` map) |
-| `IsDoor` | boolean | Marks a door block (`BlockType.isDoor()`; shipped doors set it) |
+| `IsDoor` | boolean | Marks a door block; shipped doors set it (48 files). Read it in Java with `BlockType.isDoor()`, which is `@Deprecated` (as it was in 0.6.8) |
 | `TickProcedure` / `RandomTickProcedure` | object | Scheduled / random ticking — see [Block Ticking](blocks-java-api.md#block-ticking). (There is no `Ticker` key on a `BlockType`; `Ticker` belongs to fluid blocks.) |
 
 ### Gathering Configuration

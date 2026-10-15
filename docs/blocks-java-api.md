@@ -146,7 +146,7 @@ BlockGathering getGathering()               // Gathering/farming data
 FarmingData getFarming()                    // Farming configuration
 Holder<ChunkStore> getBlockEntity()         // Block entity template
 RailConfig getRailConfig(int rotation)      // Rail configuration
-boolean isDoor()                            // Is this a door block
+boolean isDoor()                            // @Deprecated; JSON "IsDoor" (still read by DoorInteraction)
 boolean canBePlacedAsDeco()                 // Can be deco placement
 void getBlockCenter(int rotation, Vector3d out)// Get block center
 ```
@@ -332,7 +332,7 @@ These classes back the `Gathering` JSON object (see [Gathering Configuration](bl
 Decodes `Gathering.Breaking` — JSON keys `GatherType`, `Quality`, `ItemId`, `Quantity`, `DropList`:
 
 ```java
-String getGatherType()   // Required tool category ("Rocks", "Woods", ...)
+String getGatherType()   // Tool category that gathers this block ("Rocks", "Woods", ...)
 int getQuality()         // Quality override on the produced item
 int getQuantity()        // Direct-drop quantity
 String getItemId()       // Item produced directly (alternative to a drop list)
@@ -502,7 +502,8 @@ BenchUpgradeRequirement getUpgradeRequirement(int tier)
 RootInteraction getRootInteraction()   // The interaction that opens this bench type
 Bench toPacket()                       // protocol.Bench
 
-// Bind the opening interaction for a bench type (engine wiring)
+// Bind the opening interaction for a bench type (engine wiring).
+// @Deprecated(forRemoval=true), as it was in 0.6.8
 static void registerRootInteraction(BenchType type, RootInteraction interaction)
 ```
 
@@ -621,13 +622,17 @@ When a block's hitbox protrudes its own cell (`BlockBoundingBoxes.protrudesUnitB
 static final int NO_FILLER = 0;
 
 // Iterate / test the neighbor cells a rotated hitbox spills into
-// (overloads add a coverage threshold, and an origin, before the boxes)
+// (both have overloads taking a coverage threshold before the boxes; forEachFillerBlock also has
+//  forEachFillerBlock(float threshold, int expand, boxes, consumer), which widens the cell range by
+//  `expand` cells on every side, and a form taking expandX, expandY, expandZ separately)
 static void forEachFillerBlock(RotatedVariantBoxes boxes, TriIntConsumer consumer)
 static boolean testFillerBlocks(RotatedVariantBoxes boxes, TriIntPredicate predicate)
 
 // Multi-cell footprints (0.6.3+; 0.7.2 added Int3OpenHashSet overloads of the last two,
 // and packedMinCell / packedMaxCell, the box set's extreme cells packed like a filler offset)
-static RotatedVariantBoxes multiCellFootprint(int width, int height)
+// multiCellFootprint: the block type's hitbox at that rotation index, or null when the id or its
+// hitbox asset is unknown, or the hitbox stays inside its own cell (protrudesUnitBox() is false)
+static RotatedVariantBoxes multiCellFootprint(int blockId, int rotation)
 static boolean isFootprintFree(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
 static void markFootprint(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
 static int packedMinCell(RotatedVariantBoxes boxes)
@@ -694,7 +699,9 @@ public interface IBlockTickProvider {
 }
 ```
 
-`BlockTickManager` is the static holder the chunk-tick system reads the provider from:
+`BlockTickManager` is the static holder the chunk-tick system reads the provider from. The whole class
+is `@Deprecated(forRemoval=true)` (as it already was in 0.6.8); the 0.7.2 engine still reads it, so treat
+it as plumbing to understand rather than an API to build on:
 
 ```java
 static void setBlockTickProvider(IBlockTickProvider provider)
@@ -717,7 +724,10 @@ public enum BlockTickStrategy {
 }
 ```
 
-A slept/ignored block is re-woken by flagging it again on its section — `BlockSection.setTicking(x, y, z, true)`, then `ChunkSection.markNeedsSaving()` if it returned `true` (`isTicking(x, y, z)` reads the flag); see [block-access.md → Ticking](block-access.md#ticking). (`BlockChunk.setTicking` was removed in 0.7.2.) `BlockOperations.updateBlockArea(chunkStore, chunkSection, blockSection, x, y, z)` wakes the 3×3×3 neighbourhood, which is what `SetBlockSettings.PERFORM_BLOCK_UPDATE` does on a write. `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's `MergeWaitingBlocksSystem`.
+A slept/ignored block is re-woken by flagging it again on its section — `BlockSection.setTicking(x, y, z, true)`, then `ChunkSection.markNeedsSaving()` if it returned `true` (`isTicking(x, y, z)` reads the flag); see [block-access.md → Ticking](block-access.md#ticking). (`BlockChunk.setTicking` was removed in 0.7.2.)
+`BlockOperations.updateBlockArea(chunkStore, chunkSection, blockSection, x, y, z)` wakes the 3×3×3 neighbourhood of one cell.
+A write with `SetBlockSettings.PERFORM_BLOCK_UPDATE` uses the other overload, `updateBlockArea(chunkStore, chunkSection, blockSection, blockType, rotation, x, y, z)`: it wakes every cell of the new block's rotated hitbox footprint plus a one-cell margin on each side (`FillerBlockUtil.forEachFillerBlock(0.0f, 1, ...)`), which is the 3×3×3 for a one-cell block and larger for a multi-cell one, and does nothing when the block type's hitbox asset is missing.
+Cells in other sections are woken only if those sections are loaded or already loading (both overloads look them up with `NO_LOAD | NO_GENERATE`). `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's `MergeWaitingBlocksSystem`.
 
 ### TickProcedure (scheduled ticks)
 
@@ -968,6 +978,7 @@ import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.ecs.UseBlockEvent;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class UseBlockPreSystem extends EntityEventSystem<EntityStore, UseBlockEvent.Pre> {
@@ -980,11 +991,12 @@ public class UseBlockPreSystem extends EntityEventSystem<EntityStore, UseBlockEv
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        UseBlockEvent.Pre event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
+        // Chat goes through the entity's PlayerRef component
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
             // Prevent using certain block types
             // event.setCancelled(true);
-            player.getPlayerRef().sendMessage(Message.raw("You used a block!"));
+            playerRef.sendMessage(Message.raw("You used a block!"));
         }
     }
 
@@ -1011,10 +1023,10 @@ public class BlockBreakSystem extends EntityEventSystem<EntityStore, BreakBlockE
     public void handle(int index, ArchetypeChunk<EntityStore> chunk,
                        Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
                        BreakBlockEvent event) {
-        Player player = chunk.getComponent(index, Player.getComponentType());
-        if (player != null) {
+        PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+        if (playerRef != null) {
             Vector3i pos = event.getTargetBlock();
-            player.getPlayerRef().sendMessage(Message.raw("You broke a block at " + pos.x + ", " + pos.y + ", " + pos.z));
+            playerRef.sendMessage(Message.raw("You broke a block at " + pos.x + ", " + pos.y + ", " + pos.z));
         }
     }
 
@@ -1046,9 +1058,9 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
         Vector3i target = event.getTargetBlock();
         if (target.y > 100) {
             event.setCancelled(true);
-            Player player = chunk.getComponent(index, Player.getComponentType());
-            if (player != null) {
-                player.getPlayerRef().sendMessage(Message.raw("Cannot place blocks above y=100"));
+            PlayerRef playerRef = chunk.getComponent(index, PlayerRef.getComponentType());
+            if (playerRef != null) {
+                playerRef.sendMessage(Message.raw("Cannot place blocks above y=100"));
             }
         }
     }
@@ -1103,7 +1115,9 @@ How it behaves, read from `BlockHealthSystems` and `BlockHarvestUtils.performBlo
 
 > [!WARNING]
 > This is engine infrastructure exposed publicly. Re-surveyed against 0.7.2, no first-party *content
-> plugin* references it; the consumer outside its own package is the engine's `BlockHarvestUtils`. How a
+> plugin* references it. Outside its own package it is used by two engine classes, `BlockHarvestUtils`
+> (the damage path) and `BlockOperations` (`setBlock` calls `BlockHealthModule.onBlockReplaced`), and
+> `Constants` lists `BlockHealthModule` among the core plugins. How a
 > custom block would author its own durability is not exercised by any shipped plugin.
 
 ---

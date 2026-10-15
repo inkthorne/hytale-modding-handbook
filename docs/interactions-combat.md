@@ -7,7 +7,7 @@ seo:
 
 # Combat & Effects Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.7.2**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -337,7 +337,7 @@ Target selection for combat interactions. Defines hitbox shapes and detection ar
   },
   "HitEntity": {
     "Interactions": [
-      "Sword_Swing_Damage"
+      "Sword_Swing_Right_Damage"
     ]
   }
 }
@@ -352,7 +352,7 @@ Target selection for combat interactions. Defines hitbox shapes and detection ar
 | `HitEntity` | string/object | - | **Root interaction** forked once per hit entity (hence the `{ "Interactions": [...] }` shape, not a bare interaction) |
 | `HitBlock` | string/object | - | **Root interaction** forked once per hit block |
 | `HitEntityRules` | array | - | Conditional hit handling with matchers; **overrides `HitEntity`** for any entity that matches |
-| `IgnoreOwner` | boolean | `true` | Ignore the owner of the affiliated entity (e.g. the thrower of a projectile) |
+| `IgnoreOwner` | boolean | `true` | Skip the chain's **owning** entity — e.g. the thrower, when the selector runs in a projectile's `ProjectileHit` chain. The entity running the selector is skipped whatever this says. (In 0.6.8 the key had no effect: both of its checks tested the running entity, so a thrower could be selected by its own projectile.) |
 | `MaxTargets` | int | `0` | Cap on how many of the selected entities actually get a fork; `0` = unlimited. When more are hit, the survivors are picked by reservoir sampling (i.e. randomly) |
 | `FailOn` | string | `Neither` | What makes the selector take its `Failed` branch: `Neither`, `Entity` (nothing hit an entity), `Block`, or `Either` |
 
@@ -412,6 +412,7 @@ Used for ground slams and radial attacks.
 |----------|------|-------------|
 | `Range` | float | Radius of the sphere. Validated with an inclusive max of `30`; a larger value fails validation with `Must be less than or equal to 30.0` |
 | `Offset` | object | `{ "X", "Y", "Z" }` offset of the sphere center from the entity position. **Rotated by the attacker's head yaw** before being added, so it is relative to facing, not to world axes. A zero offset centres the sphere on the entity's *feet* (its `TransformComponent` position), not its eyes |
+| `SizeAttribute` | string | Name of an [ability attribute](#ability-attribute-keys) (shipped assets use `AoeScale`) that multiplies `Range` for entity selection. The `HitBlock` scan keeps the authored `Range` (0.7.2+) |
 
 > ⚠️ **`AOECircle` is a sphere, not a disc.** Despite the name, `AOECircleSelector` runs
 > `Selector.selectNearbyEntities(...)`, a 3-D radius query over the entity spatial index
@@ -422,26 +423,39 @@ Used for ground slams and radial attacks.
 > **`AOECylinder`** (`AOECylinderSelector extends AOECircleSelector`) is the one that constrains
 > vertical reach: it adds `Height` and selects only entities whose vertical offset from the origin is
 > in `[0, Height]` — so it reaches *upward only*, and misses anything below the origin plane. Use it
-> when a ground slam should not hit a target hovering below a ledge. No shipped asset uses it
-> (`Server/` uses `Horizontal` ×369, `Stab` ×76, `AOECircle` ×17, `Raycast` ×3 and one debug `Donut`),
-> so it is untested in content despite having a registered codec.
+> when a ground slam should not hit a target hovering below a ledge. It also skips dead and
+> `Invulnerable` entities itself. It inherits `SizeAttribute`, but its entity selection reads the raw
+> `Range` and `Height` — only its debug draw is scaled. Two shipped assets use it (0.7.2:
+> `Gobliterator_Explosive_Barrel_Fuse_Burn.json` and its `_HM` variant, a `Range 1`, `Height 3`
+> burn column). Counting the `Selector` objects in `Server/` JSON by `Id`: `Horizontal` ×417,
+> `Stab` ×85, `AOECircle` ×50, `Donut` ×29, `Raycast` ×3, `AOECylinder` ×2.
 >
 > **`Donut` (0.6.3+)** is a ring selector whose radius grows from `MinRadius` to `MaxRadius` over the
 > interaction's `RunTime`, with a constant radial `Width` and vertical `Height` (extending up from the
 > selector position), an `AngleDeg` (360 = full ring; less = an arc centred on the attacker's look
-> direction when the selector starts), `YawOffsetDeg`, and an `Offset`. The only shipped use is
+> direction when the selector starts), `YawOffsetDeg`, and an `Offset`. As of 0.7.2 it is in real
+> content: 29 uses in 26 files, all but one in the Goblin bosses' attacks (Gobliterator flamethrower and
+> slam shockwaves, Feastmaster vomit). The remaining one is the debug item
 > `Server/Item/Items/_Debug/Debug_Donut_Selector.json` (`MinRadius 0.5`, `MaxRadius 6`, `Width 1`,
 > `Height 2`, `AngleDeg 120`, `RunTime 0.6`) — an expanding shockwave.
 >
-> ⚠️ **A selector in a *projectile's* `ProjectileHit`/`ProjectileMiss` does NOT sweep a radius** — it
-> resolves only the entity the projectile directly collides with (unlike a melee swing, which sweeps).
-> To do real AOE from a projectile impact, use `Type: "Explode"`, a [trigger volume](trigger-volumes.md),
-> or a Java radius query (`Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` —
-> the static query `ExplosionUtils.performExplosion` uses internally).
+> **A selector in a *projectile's* `ProjectileHit`/`ProjectileMiss` chain runs around the projectile.**
+> `StandardPhysicsProvider` starts those chains with `InteractionContext.forProxyEntity`, so the running
+> entity is the projectile and the owning entity is its shooter: an `AOECircle` there is centred on the
+> projectile, and `IgnoreOwner` keeps the shooter out of it. 0.7.2 ships this pattern —
+> `Projectile_Config_Bomb_Stun` runs `Bomb_Explode_Stun` (below) from `ProjectileHit`, and
+> `Projectile_Config_Ability_Fireball` runs an `AOECircle` with `SizeAttribute` from both
+> `ProjectileHit` and `ProjectileMiss`. Earlier editions of this page warned, from a plugin report
+> against 0.5.1, that such a selector resolves only the entity the projectile collided with; the 0.7.2
+> source has no such restriction, but that observation has not been re-tested in game. The
+> alternatives remain `Type: "Explode"`, a [trigger volume](trigger-volumes.md), or a Java radius query
+> (`Selector.selectNearbyEntities(accessor, pos, radius, consumer, predicate)` — the static query
+> `ExplosionUtils.performExplosion` uses internally).
 >
 > ⚠️ **`Explode` (`ExplosionConfig`) cannot apply a status effect.** It does radius **damage +
 > knockback + model particles + sound** (`DamageEntities`, `EntityDamageRadius`, `EntityDamage`,
-> `EntityDamageFalloff`, `Knockback`, `Particles`, `SoundEventId`, plus `DamageBlocks`,
+> `EntityDamageCause` (default `Environment`, 0.7.2+), `EntityDamageFalloff`, `Knockback`, `Particles`,
+> `SoundEventId`, plus `DamageBlocks`, `DetonateExplosiveBlocks` (default `true`, 0.7.2+),
 > `BlockDamageRadius`, `BlockDamageFalloff`, `BlockDropChance`, `ItemTool`) — but has **no field for an
 > entity/status effect**. So `Explode` covers AOE *damage*, not AOE *slow/stun/etc.* For AOE **effects**
 > you need a Java radius query + `EffectControllerComponent.addEffect` (see
@@ -465,6 +479,7 @@ Used for wand spells and targeted abilities.
 |----------|------|-------------|
 | `Offset` | object | Starting point offset from entity position |
 | `Distance` | int | Maximum search distance for the ray (default `30`; the codec is `Codec.INTEGER`, so a fractional value is rejected) |
+| `DistanceAttribute` | string | Name of an [ability attribute](#ability-attribute-keys) that multiplies `Distance` (0.7.2+; no shipped asset sets it) |
 | `BlockTag` | string | Tag a block must carry for the ray to count it as a hit |
 | `IgnoreFluids` / `IgnoreEmptyCollisionMaterial` | boolean | Skip fluids / blocks with no collision material (both default `false`) |
 
@@ -489,6 +504,7 @@ Used for spear thrusts and lunging attacks.
 |----------|------|-------------|
 | `ExtendLeft` | float | Hitbox extension to the left |
 | `ExtendRight` | float | Hitbox extension to the right |
+| `SizeAttribute` | string | Name of an [ability attribute](#ability-attribute-keys) that scales `EndDistance` and all four `Extend*` values uniformly; `StartDistance` and the anchor stay put (0.7.2+) |
 
 `Stab` shares `TestLineOfSight`, `ExtendTop`/`ExtendBottom`, `StartDistance`/`EndDistance`, `RollOffset`, `PitchOffset` and a `YawOffset` with `Horizontal`, and gained the same `Anchor` / `IgnorePitch` / `IgnoreYaw` keys in 0.6.3.
 
@@ -543,12 +559,12 @@ Each rule entry has:
     "YawStartOffset": -15
   },
   "HitEntity": {
-    "Interactions": ["Sword_Swing_Damage"]
+    "Interactions": ["Sword_Swing_Right_Damage"]
   }
 }
 ```
 
-**Ground Stomp (AOE Circle):**
+**Ground Stomp (AOE Circle)** — after `Bear_Grizzly_Stomp`, minus its `Replace` wrapper:
 
 ```json
 {
@@ -559,7 +575,7 @@ Each rule entry has:
     "Range": 4
   },
   "HitEntity": {
-    "Interactions": ["Stomp_Damage"]
+    "Interactions": ["Bear_Grizzly_Stomp_Damage"]
   }
 }
 ```
@@ -653,6 +669,7 @@ Most weapon attacks reference a shared `DamageEntityParent` via `"Parent"` inste
 | `DamageCalculator` | object | Damage source (see below). Holds `BaseDamage` per damage type |
 | `DamageEffects` | object | Hit feedback: knockback, sounds, particles (see below) |
 | `EntityStatsOnHit` | array | Stats granted to the attacker on a successful hit |
+| `DamageAttribute` | string | Name of an [ability attribute](#ability-attribute-keys) (e.g. `Damage`) that multiplies every amount the `DamageCalculator` produced. Absent = authored damage (0.7.2+) |
 | `AngledDamage` | array | Per-angle overrides: each entry takes `Angle`, `AngleDistance` and its own `DamageCalculator` / `DamageEffects` / `TargetEntityEffects` / `Next`, so a hit from behind can differ from a hit to the face |
 | `TargetedDamage` | object | Map of hit-detail key (the body part / sub-hitbox the selector reported) to the same per-hit override shape as `AngledDamage` |
 | `Next` | string/object | Interaction to run when the damage lands |
@@ -818,16 +835,22 @@ Applies status effects to entities (buffs, debuffs, damage over time, etc.).
 }
 ```
 
-The effect's duration, magnitude, and particles are defined in the effect asset itself (referenced by `EffectId`), not on the interaction.
+The effect's magnitude and particles are defined in the effect asset itself (referenced by `EffectId`). Its duration is too, unless the interaction overrides it with `Duration` (0.7.2+).
 
 ### Properties
 
-These two keys are all `ApplyEffectInteraction` adds to the base interaction:
+These four keys are all `ApplyEffectInteraction` adds to the base interaction:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `EffectId` | string/object | - | The effect to apply. A `ContainedAssetCodec`, so it takes either an `Server/Entity/Effects/**` asset id (e.g. `Stun`, `Root`, `Red_Flash`) **or an inline effect definition** |
 | `Entity` | string | `User` | Who receives the effect — `Target`, `User`, or `Owner` (`InteractionTarget`; there is no `Self` — `User` is the entity running the chain) |
+| `Duration` | float | `0` | Seconds; overrides the effect asset's duration, applied with the asset's own `OverlapBehavior`. `0` or absent keeps the asset's duration (0.7.2+; 45 shipped uses, 35 of them in ability chains) |
+| `DurationAttribute` | string | - | Name of an [ability attribute](#ability-attribute-keys) whose value, when the acting entity carries one, replaces `Duration` (0.7.2+) |
+
+Since 0.7.2 the effect is also added with an **owner**: the chain's owning entity when it is valid
+(e.g. a projectile's shooter), otherwise the user — and no owner at all when that entity is the target
+itself.
 
 ### Example: Apply Root on a Wand Hit
 
@@ -913,9 +936,11 @@ Modifies entity stats like health, stamina, or signature energy.
 
 > **See also:** [Stat Definitions](effects-stats.md#stat-definitions) for the complete stat asset JSON structure including regeneration rules, conditions, and min/max value effects.
 
-**Example locations:**
-- `Server/Entity/Effects/Potion/*_Regen.json`
-- Used in `BlockedInteractions` for granting stats on block
+**Example locations:** stamina costs and regen delays on the guard chains in
+`Server/Item/Interactions/Weapons/Common/Guarding/` (e.g. `Common_Guard_Shove_StaminaCost.json`,
+`Common_Guard_Wield.json`). The regen potions in `Server/Entity/Effects/Potion/*_Regen.json` carry a
+`StatModifiers` map of the same shape, but as a key of the **effect asset**, not through this
+interaction.
 
 ### Basic Structure
 
@@ -933,13 +958,25 @@ Modifies entity stats like health, stamina, or signature energy.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `StatModifiers` | object | **required** | Map of stat id to value. Validated `nonNull` **and** `nonEmptyMap`, so an empty `{}` fails asset load |
+| `StatModifiers` | object | - | Map of stat id to value; keys are validated against the stat assets. **Optional since 0.7.2** (0.6.8 required a non-empty map). Without it and without `UseAbilityCost` the interaction does nothing |
+| `UseAbilityCost` | boolean | `false` | Spend the casting ability's declared cost (its `Cost` on its `CostType` stat, negated) in place of `StatModifiers`. An ability with no cost, or a creative-mode caster, spends nothing. Only meaningful in ability cast chains (0.7.2+; 12 shipped uses, all under `Server/Item/Interactions/Abilities/`) |
 | `Behaviour` | string | `Add` | How the value is applied (see below) |
 | `ValueType` | string | `Absolute` | `Absolute` or `Percent` |
-| `Entity` | string | `User` | Whose stats change — `User`, `Target` or `Owner` |
+| `Entity` | string | `User` | Accepted and sent to the client, but **the server applies the change to the user** — the entity running the chain — whatever this says |
 
-(`ChangeStatWithModifier` is the same interaction plus an `InteractionModifierId`, which pulls the
-amount from an armour piece's interaction modifier instead of a literal.)
+> ⚠️ **`"Entity": "Target"` does not move a `ChangeStat` onto the target.** `ChangeStatInteraction.firstRun`
+> reads the `EntityStatMap` of `context.getEntity()` and never resolves `Entity`, unlike `ApplyEffect`,
+> `ClearEntityEffect` and `Interrupt`, which all call `InteractionTarget.getEntity`. Inside a selector's
+> `HitEntity` fork the running entity is still the one that ran the selector (the attacker, or the
+> projectile), so the vanilla
+> `{ "Type": "ChangeStat", "Entity": "Target", "StatModifiers": { "Immunity": 25 } }` steps below
+> change that entity's stats on the server, never the target's. To change a target's stats, apply an effect that carries
+> `StatModifiers` instead.
+
+`ChangeStatWithModifier` is the same interaction plus a required `InteractionModifierId`. It starts
+from the literal `StatModifiers` and adjusts each entry by the matching interaction modifier on the
+user's **equipped armour** — additive modifiers are summed onto the amount, then a multiplier
+modifier reduces it by `max(0, 1 − multiplier)` — before applying it. It too always targets the user.
 
 ### StatModifiers
 
@@ -1014,7 +1051,8 @@ Control whether the value is absolute or percentage-based:
 
 ### Example: Grant Signature Energy on Block
 
-Combine `Wielding` with `BlockedInteractions` and `ChangeStat`:
+Combine `Wielding` with `BlockedInteractions` and `ChangeStat`. This one is illustrative — no
+shipped `BlockedInteractions` contains a `ChangeStat` — but every key in it is on the `Wielding` codec:
 
 ```json
 {
@@ -1058,7 +1096,7 @@ Cancels the current interaction chain on the target entity. Used for stagger eff
 | `Entity` | string | `User` | Target entity selector (`User`, `Target` or `Owner`; combat almost always writes `"Target"`) |
 | `RequiredTag` | string | - | Tag the **root interaction** of an active chain must carry to be interrupted; unset = any chain |
 | `ExcludedTag` | string | - | Tag that, if the **root interaction** of an active chain carries it, protects that chain from this interrupt |
-| `InterruptTypes` | array | - | Restrict the interrupt to chains of these `InteractionType`s (`Primary`, `Secondary`, `Ability1`…`Ability3`, `Use`, `Dodge`, `Wielding`, `ProjectileHit`, …). Unset = every type |
+| `InterruptTypes` | array | - | Restrict the interrupt to chains of these `InteractionType`s (`Primary`, `Secondary`, `Ability1`…`Ability4` — `Ability4` is 0.7.2+ — `Use`, `Dodge`, `Wielding`, `ProjectileHit`, …). Unset = every type |
 
 ### How Interruption Works
 
@@ -1113,9 +1151,10 @@ This stops any ongoing:
 > the same tag set. A boss whose every attack should survive interrupts therefore needs the tag on
 > each of its attack root interactions.
 >
-> As of 0.6.8 **no shipped root interaction actually declares an `Uninterruptable` tag** — the two
+> As of 0.7.2 **no shipped root interaction actually declares an `Uninterruptable` tag** — the three
 > vanilla assets that write `"ExcludedTag": "Uninterruptable"` (`Bomb_Explode_Stun`,
-> `Debug_Stick_Stun`) therefore currently exclude nothing. Treat the name as a convention to follow,
+> `Debug_Stick_Stun`, `Bear_Voidtaken_Charge_Contact`) therefore currently exclude nothing. (NPC roles'
+> `WindingUpUninterruptable` is an unrelated charge-motion flag.) Treat the name as a convention to follow,
 > not as an engine-recognised value; any string works as long as your root interactions declare it.
 
 Because the check is per chain, one entity can have some chains interrupted and others spared in the
@@ -1194,7 +1233,7 @@ From an area-effect stun bomb that grants immunity to prevent chain-stunning:
 This pattern (from `Bomb_Explode_Stun`):
 1. Selects entities in a 3-block-radius `AOECircle`
 2. Uses `EffectCondition` with `Match: "None"` to skip targets that already have `Immune`
-3. Grants Immunity via `ChangeStat`
+3. Adds `Immunity` via `ChangeStat` — on the server, to the bomb's own running entity rather than the target (see [ChangeStat](#changestat))
 4. Interrupts their current action (unless tagged `Uninterruptable`)
 5. Applies the `Stun` effect
 6. Deals damage with knockback through `DamageEntityParent`
@@ -1262,11 +1301,26 @@ Use Interrupt alone for light staggers (enemy can recover quickly). Use both for
 
 ---
 
+## Ability Attribute Keys
+
+0.7.2 adds a family of optional `…Attribute` keys that let an ability's **support runes** scale an
+authored value: `DamageAttribute` on `DamageEntity`, `DurationAttribute` on `ApplyEffect`,
+`SizeAttribute` on the `AOECircle` and `Stab` selectors, and `DistanceAttribute` on `Raycast`. Each
+names an attribute (shipped values: `AoeScale`, `Damage`, `Duration`, `FreezeDuration`, `ShortFreezeDuration`). At run time the interaction
+looks it up in the `ImpactModifiers` the acting entity carries — a cast snapshot in the chain's meta
+store first, else the entity's own `ImpactModifiers` component. When nothing carries the attribute,
+the authored value stands, so these keys are inert outside ability chains. The size, distance and
+damage attributes are **multipliers** of the authored value; `DurationAttribute` **replaces**
+`Duration`. Shipped uses are confined to `Server/Item/Interactions/Abilities/`. The ability
+interaction types themselves are catalogued in [interactions.md](interactions.md#complete-type-registry).
+
+---
+
 ## Gotchas & Errors
 
 - **Symptom:** a `DamageEntity` with a flat `Damage` (or `Amount`) number deals no damage → there is no flat-amount field; the amount comes from `DamageCalculator`. Fix: put the value under `DamageCalculator.BaseDamage` (e.g. `{ "Physical": 5 }`), and place knockback/sounds under `DamageEffects` (see [DamageEntity](#damageentity)).
 - **Symptom:** a single `Selector` sweep only damages each entity (or block) once even though the hitbox overlaps it on several frames → by design, a single selector cannot hit the same entity or block more than once. Fix: use a separate `Selector` (or re-trigger the interaction) for a second hit; don't rely on the same sweep hitting twice.
-- **Symptom:** a `HitEntity` interaction never fires even when the swing looks like a hit → the selector's `TestLineOfSight` blocked the target (default `true` on `Horizontal`), or `IgnoreOwner` (default `true`) excluded the attacker. Fix: verify line-of-sight is clear and the intended target is not the owner; loosen `TestLineOfSight` for through-wall attacks.
+- **Symptom:** a `HitEntity` interaction never fires even when the swing looks like a hit → the selector's `TestLineOfSight` blocked the target (default `true` on `Horizontal`), or the target is the entity running the selector (always skipped) or, with `IgnoreOwner` (default `true`), the chain's owning entity — a projectile's shooter. Fix: verify line-of-sight is clear and the intended target is not the owner; loosen `TestLineOfSight` for through-wall attacks.
 - **Symptom:** a `HitEntity` written as `{ "Type": "DamageEntity", ... }` is rejected or ignored → `HitEntity`/`HitBlock` take a **root interaction**, not an interaction. Fix: wrap it, `"HitEntity": { "Interactions": [ { "Type": "DamageEntity", ... } ] }`, or reference a `RootInteractions/` asset id.
 - **Symptom:** a `ClearEntityEffect` with `"EntityEffectIds": [...]` removes nothing → that key does not exist on `ClearEntityEffect` and is silently dropped. Fix: one `ClearEntityEffect` per `EntityEffectId` inside a `Serial` (see [ClearEntityEffect](#clearentityeffect)).
 - **Symptom:** an `Interrupt` with `ExcludedTag` still cancels the "immune" mob's attacks → the tag is matched against the **root interaction's** `Tags`, not the entity's. Fix: add the tag to each root interaction that should survive (see [ExcludedTag System](#excludedtag-system)).

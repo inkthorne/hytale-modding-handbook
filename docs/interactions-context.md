@@ -7,7 +7,7 @@ seo:
 
 # InteractionContext
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) and [Operation System](interactions-operations.md) first.
 >
@@ -108,7 +108,7 @@ public class InteractionContext {
     void execute(RootInteraction root);      // run a root interaction in this context
     // fork(...) overloads return InteractionChain and take args, e.g.:
     InteractionChain fork(InteractionType type, InteractionContext ctx,
-                          RootInteraction root, boolean flag);
+                          RootInteraction root, boolean predicted);
 
     // Static factories (used by the framework; see "Receiving Contexts")
     static InteractionContext forInteraction(InteractionManager mgr, Ref<EntityStore> ref,
@@ -119,9 +119,11 @@ public class InteractionContext {
 
 > **Note:** `InteractionContext` does **not** expose `getMeta`/`setMeta` convenience
 > methods. Meta values are accessed through the `DynamicMetaStore` returned by
-> `getMetaStore()`. There is no `advanceOperation()`: an operation finishes by setting
-> `context.getState().state = InteractionState.Finished` (or `Failed`), after which
-> `InteractionManager` advances the chain to the next operation.
+> `getMetaStore()`. There is no `advanceOperation()`: an interaction finishes by setting
+> `context.getState().state = InteractionState.Finished` (or `Failed`), and the inherited, `final`
+> `Interaction.tick` then moves the operation counter on. A class that implements `Operation`
+> directly has no such step and must move the counter itself — see
+> [Execution Flow](interactions-operations.md#execution-flow).
 
 ---
 
@@ -129,12 +131,17 @@ public class InteractionContext {
 
 ### Owning vs Executing Entity
 
-In most cases, these are the same entity. They differ in delegated interactions:
+In most cases, these are the same entity. They differ in proxy contexts, built by
+`InteractionContext.forProxyEntity(manager, owningEntity, runningForEntity, accessor)`:
 
-| Method | Description | Example |
-|--------|-------------|---------|
-| `getOwningEntity()` | Entity that initiated the chain | Player who summoned a minion |
-| `getEntity()` | Entity currently executing | The minion attacking |
+| Method | Description | Shipped example |
+|--------|-------------|-----------------|
+| `getOwningEntity()` | Entity whose `InteractionManager` runs the chain | The shooter, when a projectile's hit interactions run (`ProjectileModule`) |
+| `getEntity()` | Entity the chain runs for | The projectile itself |
+
+As of 0.7.2 a proxy context (owning entity set and different from the running one) also skips the
+held-item change check entirely, so `OnItemChangeBehavior` never fires there; 0.6.8 keyed that
+exemption on the chain data's `proxyId` instead.
 
 ```java
 @Override
@@ -192,6 +199,18 @@ public void tick(..., InteractionContext context, ...) {
     }
 }
 ```
+
+### Ability slots (0.7.2+)
+
+`Ability2` and `Ability3` no longer always read the hotbar. Unless the entity is using a tool item,
+`InteractionContext.forInteraction` builds their context from the `InventoryComponent.AbilitySlots`
+container — slot 0 for `Ability2`, slot 3 for `Ability3` — whenever either that slot holds an item
+whose `CoreItemAbility` can be used with the held weapon, or the hotbar's active slot holds anything
+at all. In that context `getHeldItem()` is the ability item (or `null` when the slot does not
+qualify), `getHeldItemSectionId()` is `-11`, and the root that runs is the ability's cast root
+(`getRootInteractionId` returns `CoreItemAbility.getCastRootId()`, or `null`), never the held
+weapon's own `Ability2`/`Ability3` binding. Only an entity with an empty active hotbar slot and no
+qualifying ability falls through to the old hotbar/utility selection.
 
 ### Original Item Type
 
@@ -440,7 +459,11 @@ actually expressed: inherit a shared interaction with `Parent`, then override it
 ```json
 {
   "InteractionVars": {
-    "Staff_Cast_Summon_Launch": "Staff_Cast_Launch",
+    "Staff_Cast_Summon_Launch": {
+      "Interactions": [
+        { "Parent": "Staff_Cast_Launch", "ProjectileId": "Ice_Ball" }
+      ]
+    },
     "Staff_Cast_Summon_Effect": "Staff_Cast_Effect",
     "Staff_Cast_Summon_Cost": {
       "Interactions": [
@@ -479,16 +502,18 @@ public void tick(..., InteractionContext context, ...) {
 ### Operation Counter
 
 Track and set the current position in the operation array. There is no
-`advanceOperation()` convenience method — an operation ends its own turn by setting the
-sync state, and the manager then advances the counter:
+`advanceOperation()` convenience method. Inside an `Interaction` subclass you set the sync state
+and the inherited `Interaction.tick` moves the counter on (unless your code already moved it with a
+jump); a raw `Operation` sets the state **and** moves the counter itself, since
+`InteractionManager` advances only when the counter changes:
 
 ```java
-context.getState().state = InteractionState.Finished;   // done; move to the next operation
-context.getState().state = InteractionState.Failed;     // done; take the Failed branch (if any)
+context.getState().state = InteractionState.Finished;   // done
+context.getState().state = InteractionState.Failed;     // done; a SimpleInteraction then takes its Failed branch (if any)
 
-// The counter itself is also readable/writable (this is what jump(label) does):
+// The counter itself is readable/writable (jump(label) is setOperationCounter(label.getIndex())):
 int currentOp = context.getOperationCounter();
-context.setOperationCounter(currentOp + 1);
+context.setOperationCounter(currentOp + 1);             // what a raw Operation must do itself
 ```
 
 ---
@@ -543,11 +568,12 @@ construct it directly.
 ### Context in Custom Interactions
 
 When implementing custom interactions, you receive the context (there is no `LivingEntity`
-parameter — resolve components from `ref` via `context.getCommandBuffer()`):
+parameter — resolve components from `ref` via `context.getCommandBuffer()`). `time` is the seconds
+elapsed since the operation started, not a per-frame delta:
 
 ```java
 @Override
-public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+public void tick(Ref<EntityStore> ref, boolean firstRun, float time,
                  InteractionType type, InteractionContext context,
                  CooldownHandler cooldown) {
     // Context is fully initialized
@@ -564,25 +590,23 @@ public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
 ```java
 public class ApplyBurnOp implements Operation {
     @Override
-    public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+    public void tick(Ref<EntityStore> ref, boolean firstRun, float time,
                      InteractionType type, InteractionContext context,
                      CooldownHandler cooldown) {
-        if (!isFirstTick) {
-            return;
-        }
-
         DynamicMetaStore<InteractionContext> meta = context.getMetaStore();
 
         // Get target from previous Selector operation
         Ref<EntityStore> target = meta.getMetaObject(Interaction.TARGET_ENTITY);
-        if (target == null || !target.isValid()) {
-            return;
+        if (target != null && target.isValid()) {
+            // Apply burn effect to target (e.g. EffectControllerComponent.addEffect(...) via
+            // context.getCommandBuffer(); see interactions-combat.md#applyeffect)
+            // ...
         }
 
-        // Apply burn effect to target (e.g. EffectControllerComponent.addEffect(...) via
-        // context.getCommandBuffer(); see interactions-combat.md#applyeffect)
-        // ...
+        // Finish on every path, and move the counter: this class implements Operation
+        // directly, so nothing else advances the chain past it
         context.getState().state = InteractionState.Finished;
+        context.setOperationCounter(context.getOperationCounter() + 1);
     }
 
     // ... other Operation methods
@@ -631,7 +655,7 @@ public class CheckCriticalHitOp implements Operation {
 ## Gotchas & Errors
 
 - **Symptom:** code won't compile against `context.getMeta(...)` / `setMeta(...)` → `InteractionContext` exposes no such convenience methods. Fix: go through the `DynamicMetaStore` from `getMetaStore()`, using `getMetaObject(key)` / `putMetaObject(key, value)`.
-- **Symptom:** `context.advanceOperation()` won't compile → there is no `advanceOperation()` method. Fix: finish the operation with `context.getState().state = InteractionState.Finished` (or `Failed`); the manager advances the counter. `setOperationCounter(...)`/`jump(label)` exist for explicit repositioning.
+- **Symptom:** `context.advanceOperation()` won't compile → there is no `advanceOperation()` method. Fix: finish with `context.getState().state = InteractionState.Finished` (or `Failed`). In an `Interaction` subclass the inherited `Interaction.tick` then moves the counter; in a class that implements `Operation` directly, also call `context.setOperationCounter(context.getOperationCounter() + 1)`, or the same operation runs again every tick. `jump(label)` exists for explicit repositioning.
 - **Symptom:** you can't construct your own `MetaKey<T>` → `MetaKey` has a package-private constructor and no `create(...)` factory. Fix: register the key once on `Interaction.CONTEXT_META_REGISTRY.registerMetaObject(ctx -> initialValue)` (see [Custom Meta Keys](#custom-meta-keys)), or carry item-driven values via `InteractionVars`.
 - **Symptom:** `tick(..., LivingEntity entity, ...)` doesn't override anything → neither `Operation.tick` nor `Interaction.tick` takes a `LivingEntity`; the signature is `tick(Ref<EntityStore>, boolean, float, InteractionType, InteractionContext, CooldownHandler)`. Fix: drop the parameter and resolve components from `ref` through `context.getCommandBuffer()`.
 - **Symptom:** a meta read returns `null` mid-chain → meta values are only present if an earlier operation set them, and a skipped/branched-past operation never runs. Fix: null-check every `getMetaObject(...)` result before use (e.g. `TARGET_ENTITY` is unset until a `Selector` runs).

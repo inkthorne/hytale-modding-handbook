@@ -7,13 +7,13 @@ seo:
 
 # Operation System
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 > **Prerequisites:** Read [interactions.md](interactions.md) first for an overview of the interaction system.
 >
 > **See also:** [InteractionContext](interactions-context.md) for execution state, [interactions.md](interactions.md) for interaction types.
 
-The Operation system is the low-level execution model that powers all interactions. When an interaction runs, it compiles into a sequence of Operations that execute frame-by-frame.
+The Operation system is the low-level execution model that powers all interactions. Each root interaction is compiled, when its assets load, into a flat sequence of Operations that a chain then executes tick by tick.
 
 ## Overview
 
@@ -22,7 +22,7 @@ Every `Interaction` implements the `Operation` interface. The interaction system
 1. **Compiles** interactions into operation arrays via `OperationsBuilder`
 2. **Executes** operations sequentially, calling `tick()` each frame
 3. **Controls flow** using labels and conditional jumps
-4. **Synchronizes** client/server via `simulateTick()` for prediction
+4. **Synchronizes** client/server: for an entity with no remote client, the server also plays the client's part through `simulateTick()`
 
 Understanding Operations is essential for:
 - Creating custom interactions with complex control flow
@@ -33,15 +33,17 @@ Understanding Operations is essential for:
 ```
 Operation System
 ├── Operation interface (tick / simulateTick / handle + getWaitForDataFrom / getRules / getTags)
-├── Loading phase
-│   ├── walk(Collector) — tree traversal, metadata collection
-│   │   ├── Collector (ListCollector / SingleCollector / TreeCollector)
-│   │   └── CollectorTag (SerialTag / ParallelTag / ChainingTag / ...)
+├── Loading phase (RootInteraction.build)
 │   └── compile(OperationsBuilder) — flatten tree to Operation[]
+├── On-demand analysis
+│   └── walk(Collector) — tree traversal, metadata collection
+│       ├── Collector (ListCollector / SingleCollector / TreeCollector)
+│       └── CollectorTag (SerialTag / ParallelTag / ChainingTag / ...)
 ├── OperationsBuilder (addOperation + Label flow control)
 │   └── Label system (createLabel / createUnresolvedLabel / resolveLabel / jump)
 └── Runtime execution
-    ├── handle(isStart) → tick()/simulateTick() per frame → handle(end)
+    ├── per tick: simulateTick() (no remote client only) → tick() → handle()
+    ├── operation counter — moving it is what advances the chain
     └── WaitForDataFrom (None / Server / Client) — client/server sync
 ```
 
@@ -69,15 +71,16 @@ The `Operation` interface defines the contract for executable interaction steps.
 ```java
 public interface Operation {
     // Server-side execution (called every frame while active)
-    void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+    void tick(Ref<EntityStore> ref, boolean firstRun, float time,
               InteractionType type, InteractionContext context, CooldownHandler cooldown);
 
-    // Server-side simulation of the client's prediction (mirrors tick)
-    void simulateTick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+    // Server-side stand-in for the client's run of the same operation (mirrors tick)
+    void simulateTick(Ref<EntityStore> ref, boolean firstRun, float time,
                       InteractionType type, InteractionContext context, CooldownHandler cooldown);
 
-    // Called when operation becomes active / ends (default: no-op)
-    default void handle(Ref<EntityStore> ref, boolean isStart, float deltaTime,
+    // Called after every server tick of this operation, and once more when its chain
+    // is cancelled (default: no-op)
+    default void handle(Ref<EntityStore> ref, boolean firstRun, float time,
                         InteractionType type, InteractionContext context);
 
     // Determines client/server sync behavior
@@ -108,12 +111,12 @@ There is **no** `LivingEntity` parameter — resolve components from `ref` throu
 | Method | Runs On | Purpose |
 |--------|---------|---------|
 | `tick()` | Server | Authoritative execution with full world access |
-| `simulateTick()` | Server, replaying the client's prediction | Mirrors what the client predicted so the two chains can be compared (`InteractionManager` throws `Simulation and server tick are not in sync` when they diverge) |
+| `simulateTick()` | Server, only for an entity with **no remote client** | `InteractionManager` builds its `hasRemoteClient` flag from whether the entity has a `PlayerRef`. For a player the client runs its own half and reports the result, so `simulateTick` never runs; for an NPC (or any entity without a player) the server plays that half itself, ticks both, and throws `Simulation and server tick are not in sync` when the two land on different operations |
 
 Both methods receive identical parameters:
 - `ref` - Entity store reference for the executing entity
-- `isFirstTick` - `true` on the first frame of this operation
-- `deltaTime` - Time since last frame (for timing calculations)
+- `firstRun` - `true` on the first tick of this operation
+- `time` - Seconds **since this operation started** (shifted on the first tick by any time carried over from the previous operation, and scaled by the world's time dilation). It is an elapsed time, **not** a per-frame delta: `Interaction` itself finishes once `time >= RunTime`
 - `type` - The `InteractionType` (`Primary`, `Secondary`, etc.)
 - `context` - Execution state container (see [InteractionContext](interactions-context.md))
 - `cooldown` - Manages cooldown timers (see [Cooldowns](interactions.md#cooldown-system))
@@ -142,33 +145,36 @@ Understanding when each method is called helps when implementing custom interact
 ASSET LOADING PHASE
 ───────────────────
 1. JSON parsed → Interaction tree built
-2. walk(collector) → Traverse tree, collect metadata
-3. compile(builder) → Build flat Operation[] array
+2. RootInteraction.build() → compile(builder) → flat Operation[] array
 
-RUNTIME EXECUTION PHASE
-───────────────────────
-4. handle(isStart=true) → Operation becomes active
-5. tick() / simulateTick() → Called every frame
-6. handle(isStart=false) → Operation completes
-7. Advance to next operation → Repeat from step 4
+RUNTIME EXECUTION PHASE (per server tick)
+─────────────────────────────────────────
+3. simulateTick()  → only for an entity with no remote client
+4. tick()          → firstRun is true on the operation's first tick
+5. handle()        → right after tick(), same firstRun
+6. If the operation moved the operation counter, the manager continues with the
+   operation the counter now points at in the same tick; otherwise it stops for this tick
+
+ON DEMAND (any time)
+────────────────────
+walk(collector) → InteractionManager.walkChain(...) traverses the tree for analysis
 ```
 
 ### Method Call Timing
 
 | Method | Phase | When Called | Purpose |
 |--------|-------|-------------|---------|
-| `walk()` | Loading | Asset compilation | Traverse interaction tree, collect metadata |
-| `compile()` | Loading | After walk() | Build flat Operation[] from tree |
-| `handle(true)` | Runtime | Operation starts | Initialize operation state |
-| `tick()` | Runtime | Every server frame | Execute operation logic |
-| `simulateTick()` | Runtime | Every frame of a predicted chain | Server-side replay of the client prediction |
-| `handle(false)` | Runtime | Operation ends | Cleanup operation state |
+| `compile()` | Loading | When a `RootInteraction` asset loads, and again for every root whenever `Interaction` assets load or are removed (`RootInteraction.build()`, driven by `InteractionModule`'s asset-event handlers) | Build flat Operation[] from tree |
+| `walk()` | On demand | Whenever some code asks for a traversal through `InteractionManager.walkChain(...)` — damage-data collection for item tooltips, NPC combat validation and evaluation, the ability keyword audit | Traverse interaction tree, collect metadata. It is **not** a step of compilation |
+| `tick()` | Runtime | Every server tick while the operation is current | Execute operation logic |
+| `simulateTick()` | Runtime | Every tick, for an entity with no remote client | Server-side stand-in for the client's run |
+| `handle(firstRun, …)` | Runtime | Right after **every** `tick()`, with the same `firstRun`; and once with `firstRun == false` when the chain is cancelled | `Interaction.handle` uses it to send the play/cancel interaction packets |
 
 ---
 
 ## walk() Method
 
-The `walk()` method traverses the interaction tree using the Visitor pattern. It's called during asset loading to collect metadata about all nested interactions.
+The `walk()` method traverses the interaction tree using the Visitor pattern. It is invoked on demand through `InteractionManager.walkChain(...)` — for example by `WeaponDamageDataCollector` (damage figures for item tooltips), by NPC combat validation and evaluation, and by the 0.7.2 ability keyword audit — and is independent of `compile()`.
 
 ### Method Signature
 
@@ -176,7 +182,7 @@ The `walk()` method traverses the interaction tree using the Visitor pattern. It
 boolean walk(Collector collector, InteractionContext context)
 ```
 
-**Returns:** `true` to stop traversal early, `false` to continue
+**Returns:** `true` to stop traversal early, `false` to continue. A container returns `true` when `InteractionManager.walkInteraction(...)` for one of its children did — which happens only when the collector's `collect(...)` returned `true` for that child. `walkInteraction` discards the value of the child's own nested `walk(...)`, so a stop requested deeper down ends only the container directly around it, not the whole traversal.
 
 ### Collector Interface
 
@@ -214,13 +220,13 @@ InteractionManager.walkInteraction(collector, context, tag, interactionId)
 
 Tags identify which branch is being visited in container interactions. Only `CollectorTag.ROOT`
 and `StringTag` (`interaction.config.data`) are generic; the indexed tags are **nested classes on
-the interaction that emits them**, and two of them are package-private, so a plugin can compare
+the interaction that emits them**, and two of them are `private`, so a plugin can compare
 tags via `equals`/`toString` but cannot name their types:
 
 | Interaction Type | Tag | Declared on | Visibility |
 |-----------------|-----|-------------|------------|
-| `Serial` | `SerialTag.of(int index)` | `SerialInteraction` (`config.none`) | package-private |
-| `Parallel` | `ParallelTag.of(int index)` | `ParallelInteraction` (`config.none`) | package-private |
+| `Serial` | `SerialTag.of(int index)` | `SerialInteraction` (`config.none`) | `private static` |
+| `Parallel` | `ParallelTag.of(int index)` | `ParallelInteraction` (`config.none`) | `private static` |
 | `Chaining` | `ChainingTag.of(int index)` | `ChainingInteraction` (`config.client`) | `public final` |
 | `Charging` | `ChargingTag.of(float seconds)` | `ChargingInteraction` (`config.client`) | `public final` (`getSeconds()` returns `double`) |
 | `FirstClick` | `StringTag.of(String)` | `config.data` | `public`; the instances are `FirstClickInteraction.TAG_CLICK` / `TAG_HELD` |
@@ -383,12 +389,16 @@ The labels passed to `addOperation()` become available for the operation to jump
 
 ## How Interactions Compile to Operations
 
-When an interaction chain starts, the system:
+Compilation happens when assets load, not when a chain starts. `RootInteraction.build()`:
 
-1. **Collects** all interactions in the chain
+1. **Looks up** each id in the root's `Interactions` list (ids missing from the asset map are skipped)
 2. **Calls** `compile(OperationsBuilder)` on each
-3. **Builds** the final `Operation[]` array
-4. **Executes** operations sequentially via `tick()`
+3. **Builds** the final `Operation[]` array and stores it on the root
+4. **Checks** that every operation that waits for client data (`WaitForDataFrom.Client`) also reports `needsRemoteSync()`, throwing `IllegalArgumentException` (`… needs client data but isn't marked as requiring syncing to remote clients`) otherwise
+
+At runtime a chain only walks the stored array. `InteractionModule` runs `build()` for every root
+when roots load, and rebuilds every already-built root whenever `Interaction` assets load or are
+removed.
 
 ### Compilation Example
 
@@ -447,68 +457,75 @@ public void compile(OperationsBuilder builder) {
 
 ### Frame-by-Frame Execution
 
-Each frame during an interaction:
+Each server tick, `InteractionManager` runs the chain's current operation and then looks at the
+**operation counter**:
 
-1. **Get current operation** from the operation array
-2. **Call** `tick()` with current context
-3. **Check** if operation is complete
-4. **Advance** to next operation (or jump if label triggered)
-5. **Repeat** until all operations complete
+1. **Get current operation** — `root.getOperation(counter)`
+2. **Call** `tick()` (and, for an entity with no remote client, `simulateTick()`), then `handle()`
+3. **If the counter moved**, continue with the operation it now points at, in the same tick
+4. **If it did not move**, stop until the next tick — the operation is still running
+5. **Repeat** until the counter passes the end of the array
+
+**The counter is what advances a chain, not the sync state.** `Interaction.tick` (which every
+built-in interaction inherits, and which is `final`) increments the counter itself once the
+interaction's state is `Finished`, `Failed` or `Skip`, unless the interaction already moved it with
+a jump. `JumpOperation` sets the counter to its label. An operation that implements `Operation`
+directly gets neither: it must move the counter itself.
 
 ### Operation Lifecycle
 
 ```
-handle(isStart=true)  →  tick() [frame 1]  →  tick() [frame 2]  →  ...  →  handle(isStart=false)
+tick(firstRun=true) → handle(firstRun=true) → tick(false) → handle(false) → ... → counter moves
 ```
 
-- `handle(isStart=true)` - Called when operation becomes active
-- `tick()` - Called every frame while active
-- `handle(isStart=false)` - Called when operation completes/exits
+- `firstRun` is `true` only on the operation's first tick
+- `handle()` runs after **every** `tick()`, and once more (with `firstRun == false`) if the chain is cancelled
 
 ---
 
 ## Custom Operation Implementation
 
-To create a custom operation, implement the `Operation` interface:
+The simpler route is to extend `SimpleInstantInteraction` (see
+[interactions.md](interactions.md#simpleinstantinteraction)): it inherits `Interaction.tick`, which
+handles timing, the held-item check and advancing the counter. Implement `Operation` directly only
+when you need something an `Interaction` cannot be, and then advance the counter yourself, the way
+`JumpOperation` does:
 
 ```java
 public class MyCustomOp implements Operation {
     private final float duration;
-    private float elapsed = 0f;
 
     public MyCustomOp(float duration) {
         this.duration = duration;
     }
 
     @Override
-    public void tick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+    public void tick(Ref<EntityStore> ref, boolean firstRun, float time,
                      InteractionType type, InteractionContext context,
                      CooldownHandler cooldown) {
-        if (isFirstTick) {
-            // Initialize on first frame
-            elapsed = 0f;
+        // `time` is already the seconds elapsed since this operation started
+        if (time < duration) {
+            context.getState().state = InteractionState.NotFinished;
+            return;
         }
-
-        elapsed += deltaTime;
-
-        if (elapsed >= duration) {
-            // Operation complete - the manager advances to the next operation
-            context.getState().state = InteractionState.Finished;
-        }
+        context.getState().state = InteractionState.Finished;
+        // A raw Operation must move the counter itself. Leave it where it is, and the
+        // manager stops for this tick and runs the same operation again on the next one.
+        context.setOperationCounter(context.getOperationCounter() + 1);
     }
 
     @Override
-    public void simulateTick(Ref<EntityStore> ref, boolean isFirstTick, float deltaTime,
+    public void simulateTick(Ref<EntityStore> ref, boolean firstRun, float time,
                              InteractionType type, InteractionContext context,
                              CooldownHandler cooldown) {
-        // Client-prediction mirror - must reach the same counter/state as tick()
-        tick(ref, isFirstTick, deltaTime, type, context, cooldown);
+        // Must reach the same counter/state as tick()
+        tick(ref, firstRun, time, type, context, cooldown);
     }
 
     @Override
-    public void handle(Ref<EntityStore> ref, boolean isStart, float deltaTime,
+    public void handle(Ref<EntityStore> ref, boolean firstRun, float time,
                        InteractionType type, InteractionContext context) {
-        // Optional: Setup/cleanup logic
+        // Optional: runs after every tick()
     }
 
     @Override
@@ -531,14 +548,15 @@ public class MyCustomOp implements Operation {
 
 ### Timed Operations
 
-Most operations track elapsed time:
+The `time` argument already **is** the elapsed time, so compare it directly; summing it frame by
+frame overcounts. This is what `Interaction` does with `RunTime`:
 
 ```java
 @Override
-public void tick(..., float deltaTime, ..., InteractionContext context, ...) {
-    elapsed += deltaTime;
-    if (elapsed >= runTime) {
+public void tick(..., float time, ..., InteractionContext context, ...) {
+    if (time >= runTime) {
         context.getState().state = InteractionState.Finished;
+        // plus context.setOperationCounter(...) in a raw Operation — see above
     }
 }
 ```
@@ -564,8 +582,8 @@ Effects typically fire on first tick:
 
 ```java
 @Override
-public void tick(..., boolean isFirstTick, ...) {
-    if (isFirstTick) {
+public void tick(..., boolean firstRun, ...) {
+    if (firstRun) {
         playSound();
         playAnimation();
         spawnParticles();
@@ -593,7 +611,8 @@ Backtick-quoted error strings below are the literal messages thrown by the inter
 - **`Simulation and server tick are not in sync (operation position).`** / **`... (root interaction).`** → `simulateTick()` and `tick()` diverged (different jump, or one finished and the other didn't), so the server's prediction replay and its authoritative run are at different counters. Fix: `simulateTick` must mirror `tick`'s flow control exactly (same `jump`/`Finished`/`Failed` decisions), differing only in world side-effects.
 - **`Can't shift backwards`** (`InteractionManager.setGlobalTimeShift`) → a negative time shift was requested. Fix: time shifts are forward-only.
 - **`Failed to find interaction: `** — the offending id follows → a chain referenced an interaction id that is not in the asset map. Fix: see [interactions.md — Gotchas](interactions.md#gotchas--errors).
-- **Symptom:** your operation runs once and the chain hangs on it → nothing set the sync state. Fix: an operation must end its turn with `context.getState().state = InteractionState.Finished` (or `Failed`); there is no `advanceOperation()`.
+- **Symptom:** your operation never ends — it runs on every tick, or restarts with `firstRun == true` over and over → nothing moved the operation counter. `InteractionManager` advances a chain only when the counter changes; a `Finished` state on its own does not do it. Fix: extend `SimpleInstantInteraction`/`SimpleInteraction` (whose inherited `Interaction.tick` increments the counter once the state is `Finished`/`Failed`), or, in a raw `Operation`, set the state **and** call `context.setOperationCounter(context.getOperationCounter() + 1)`. There is no `advanceOperation()`.
+- **Symptom:** a timed operation finishes far too early → it summed the `time` argument each tick. `time` is the elapsed time since the operation started, not a per-frame delta. Fix: compare `time` against the duration directly.
 
 ---
 

@@ -7,11 +7,17 @@ seo:
 
 # Control Flow Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.7.2**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
 This page covers the control-flow interactions: composing interactions in sequence or parallel, branching on game state, looping, variable substitution, and target selection.
+
+> **Reading the examples.** An example that names its source file is taken from the shipped assets.
+> In the others, effect, sound, particle, block and animation ids are real shipped ids, but a bare
+> string that stands for another interaction (`"Attack_Damage_Logic"`, `"Execute_Ability"`, …) is a
+> placeholder for an interaction asset you write yourself. References resolve by basename, so such a
+> string fails validation until an asset of that name exists.
 
 ## Overview
 
@@ -124,9 +130,9 @@ The `Interactions` property accepts an array where each entry can be:
 {
   "Type": "Serial",
   "Interactions": [
-    "Sword_Damage_Light",
-    "Sword_Sound_Hit",
-    "Sword_Particles_Slash"
+    "Attack_Windup",
+    "Attack_Damage_Logic",
+    "Attack_Visual_Effects"
   ]
 }
 ```
@@ -201,7 +207,7 @@ Serial interactions can be nested within other control flow structures for compl
       "Type": "Serial",
       "Interactions": [
         { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "ApplyEffect", "EffectId": "Regeneration" }
+        { "Type": "ApplyEffect", "EffectId": "Potion_Health_Regen" }
       ]
     }
   }
@@ -233,7 +239,7 @@ Serial interactions can be nested within other control flow structures for compl
   "Failed": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "Simple", "Effects": { "LocalSoundEventId": "action_canceled" } }
+      { "Type": "Simple", "Effects": { "LocalSoundEventId": "SFX_Creative_Play_Error" } }
     ]
   },
   "Next": { "1.0": "Consume_Complete" }
@@ -266,76 +272,49 @@ Serial interactions can be nested within other control flow structures for compl
 
 ### Complete Examples
 
-**Dodge Mechanic:**
+**Dodge (from `Interactions/Dodge/Dodge_Left.json`, abbreviated):**
 
-A dodge combines movement, animation, effects, and stat changes in sequence:
-
-```json
-{
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "Simple",
-      "RunTime": 0.4,
-      "Effects": {
-        "ItemAnimationId": "Dodge",
-        "LocalSoundEventId": "SFX_Dodge_Whoosh"
-      },
-      "Next": {
-        "Type": "ApplyForce",
-        "Direction": { "X": -1, "Y": 0, "Z": 0 },
-        "AdjustVertical": false,
-        "Force": 8.0
-      }
-    },
-    {
-      "Type": "ApplyEffect",
-      "EffectId": "Invulnerable"
-    },
-    {
-      "Type": "ChangeStat",
-      "StatModifiers": { "Stamina": -15 }
-    }
-  ]
-}
-```
-
-**Double Jump (from Double_Jump.json):**
-
-A stamina-gated aerial boost. The real asset gates on a `StatsCondition` (`Costs` is a
-pure affordability check) and spends the stamina with a separate `ChangeStat` inside `Next`
-(abbreviated — the asset also resets `StaminaRegenDelay` and emits feather particles):
+A dodge gates on stamina, then runs its steps in order: two effects, the push, and — in Adventure only —
+the stamina spend. The real asset uses the armour-discounted `StatsConditionWithModifier` /
+`ChangeStatWithModifier` pair; the shape is the same with plain `StatsCondition` / `ChangeStat`
+(abbreviated — the asset also sets a `VelocityConfig` on the force and resets `StaminaRegenDelay`):
 
 ```json
 {
-  "Type": "StatsCondition",
-  "Costs": { "Stamina": 2.01 },
+  "Type": "StatsConditionWithModifier",
+  "Costs": { "Stamina": 2 },
+  "InteractionModifierId": "Dodge",
   "Next": {
     "Type": "Serial",
     "Interactions": [
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Invulnerability" },
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Left" },
       {
         "Type": "ApplyForce",
-        "Direction": { "X": 0, "Y": 2, "Z": 0 },
+        "Direction": { "X": -1, "Y": 0, "Z": 0 },
         "AdjustVertical": false,
         "WaitForGround": false,
-        "Force": 15
+        "Force": 13,
+        "ChangeVelocityType": "Set"
       },
       {
-        "Type": "ChangeStat",
-        "StatModifiers": { "Stamina": -2 }
-      },
-      {
-        "Type": "Simple",
-        "RunTime": 1,
-        "Effects": {
-          "LocalSoundEventId": "SFX_Chicken_Alerted",
-          "WorldSoundEventId": "SFX_Chicken_Alerted"
+        "Type": "Condition",
+        "RequiredGameMode": "Adventure",
+        "Next": {
+          "Type": "ChangeStatWithModifier",
+          "StatModifiers": { "Stamina": -2 },
+          "ValueType": "Absolute",
+          "InteractionModifierId": "Dodge"
         }
       }
     ]
-  }
+  },
+  "Failed": "Stamina_Bar_Flash"
 }
 ```
+
+The condition only checks that the stamina is there (`Costs` deducts nothing); the `ChangeStat…` step
+inside `Next` is what spends it.
 
 **Consumable with Charge (from Consume_Charge.json):**
 
@@ -352,13 +331,13 @@ A consumable that requires holding for 4 s, then consumes the item and runs a Se
     },
     {
       "Type": "Charging",
-      "FailOnDamage": true,
-      "HorizontalSpeedMultiplier": 0.4,
+      "FailOnDamage": false,
       "Effects": {
         "ItemAnimationId": "Consume",
         "ClearAnimationOnFinish": true,
         "ClearSoundEventOnFinish": true
       },
+      "HorizontalSpeedMultiplier": 0.75,
       "Next": {
         "4.0": {
           "Type": "ModifyInventory",
@@ -381,53 +360,47 @@ A consumable that requires holding for 4 s, then consumes the item and runs a Se
 }
 ```
 
-**Signature Ability:**
+**Signature Ability (from `Interactions/Weapons/Sword/Attacks/Signature/VortexStrike/Weapon_Sword_Signature_Vortexstrike.json`, verbatim):**
 
-A powerful ability with a signature-energy cost, animation, AOE damage, and cleanup.
-A `StatsCondition` checks the energy (it does not spend it — the `ChangeStat` step does),
-and an AOE `Selector` finds entities to damage:
+A `StatsCondition` checks for a full signature bar (it does not spend it — the trailing `ChangeStat`
+does), then a Serial runs the spin and the stab through `Replace` hooks the item can override:
 
 ```json
 {
   "Type": "StatsCondition",
   "Costs": { "SignatureEnergy": 100 },
+  "ValueType": "Percent",
   "Next": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ChangeStat", "StatModifiers": { "SignatureEnergy": -100 } },
       {
-        "Type": "Simple",
-        "RunTime": 1.2,
-        "Effects": {
-          "ItemAnimationId": "Vortexstrike",
-          "WorldSoundEventId": "SFX_Sword_Signature"
-        }
+        "Type": "Replace",
+        "Var": "Vortexstrike_Spin",
+        "DefaultOk": true,
+        "DefaultValue": { "Interactions": ["Weapon_Sword_Signature_Vortexstrike_Spin"] }
+      },
+      { "Type": "Simple", "RunTime": 0.13 },
+      {
+        "Type": "Replace",
+        "Var": "Vortexstrike_Stab",
+        "DefaultOk": true,
+        "DefaultValue": { "Interactions": ["Weapon_Sword_Signature_Vortexstrike_Stab"] }
       },
       {
-        "Type": "Selector",
-        "Selector": { "Id": "AOECircle", "Range": 4.0 },
-        "HitEntity": {
-          "Interactions": [
-            {
-              "Type": "DamageEntity",
-              "DamageCalculator": { "BaseDamage": { "Physical": 35 } }
-            }
-          ]
-        }
-      },
-      { "Type": "ApplyEffect", "EffectId": "Slow", "Entity": "User" }
+        "Type": "ChangeStat",
+        "StatModifiers": { "SignatureEnergy": -100 },
+        "ValueType": "Percent"
+      }
     ]
-  },
-  "Failed": {
-    "Type": "SendMessage",
-    "Message": "Not enough energy!"
   }
 }
 ```
 
 **Arrow Volley (deep nesting example):**
 
-A charged ability that fires multiple projectiles in sequence:
+A charged ability that fires multiple projectiles in sequence. The pause between shots lives *inside*
+the forked chain, because a `Repeat`'s own `RunTime` does not pace its iterations (see the
+[Repeat gotcha](#repeat)):
 
 ```json
 {
@@ -438,11 +411,9 @@ A charged ability that fires multiple projectiles in sequence:
     "1.5": {
       "Type": "Serial",
       "Interactions": [
-        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -5 },
         {
           "Type": "Repeat",
           "Repeat": 5,
-          "RunTime": 0.1,
           "ForkInteractions": {
             "Interactions": [
               {
@@ -454,6 +425,7 @@ A charged ability that fires multiple projectiles in sequence:
                   },
                   {
                     "Type": "Simple",
+                    "RunTime": 0.1,
                     "Effects": {
                       "WorldSoundEventId": "SFX_Bow_T2_Shoot"
                     }
@@ -463,13 +435,7 @@ A charged ability that fires multiple projectiles in sequence:
             ]
           }
         },
-        {
-          "Type": "Simple",
-          "RunTime": 0.8,
-          "Effects": {
-            "ItemAnimationId": "Bow_Recover"
-          }
-        }
+        { "Type": "Simple", "RunTime": 0.8 }
       ]
     }
   }
@@ -480,9 +446,9 @@ A charged ability that fires multiple projectiles in sequence:
 
 | Aspect | Serial | Parallel |
 |--------|--------|----------|
-| **Execution order** | Sequential (1 → 2 → 3) | Simultaneous (1, 2, 3 all at once) |
-| **Timing** | Total time = sum of all interactions | Total time = longest interaction |
-| **Dependencies** | Each step can depend on previous | No ordering guarantees |
+| **Execution order** | Sequential (1 → 2 → 3) | Branch 1 runs in the chain; branches 2+ are forked and run alongside it |
+| **Timing** | The chain waits for every step | The chain waits for **branch 1 only**; forks finish on their own schedule |
+| **Dependencies** | Each step can depend on previous | No ordering guarantees between branches |
 | **Use case** | Multi-step abilities, state changes | Multiple simultaneous effects |
 | **Failure handling** | A failed step fails the chain and stops the rest (unless it has its own `Failed` branch) | Forks are independent; a failed fork does not stop the others |
 
@@ -497,20 +463,20 @@ A charged ability that fires multiple projectiles in sequence:
 - Playing multiple sounds/particles simultaneously
 - Independent effects that don't need ordering
 
-**Parallel example for reference:**
+**Parallel example for reference** — note each entry is a *root* body, `{ "Interactions": [...] }`:
 
 ```json
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "burning" },
-    { "Type": "ApplyEffect", "EffectId": "slow" },
-    { "Type": "Simple", "Effects": { "LocalSoundEventId": "fire_ignite" } }
+    { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Burn" } ] },
+    { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Slow" } ] },
+    { "Interactions": [ { "Type": "Simple", "Effects": { "LocalSoundEventId": "SFX_Flame_Ignite" } } ] }
   ]
 }
 ```
 
-All three effects start at the same instant rather than one after another.
+All three start on the same tick rather than one after another.
 
 ### Common Patterns
 
@@ -553,8 +519,8 @@ Items or abilities calling this template provide their own `DamageAmount` and `E
 ### Related Interactions
 
 - [Parallel](#parallel) - Execute interactions simultaneously instead of sequentially
-- [Condition](#condition) - Conditional branching (often contains Serial in Then/Else)
-- [StatsCondition](#statscondition) - Stat-based branching (often contains Serial in Then/Else)
+- [Condition](#condition) - Conditional branching (often contains Serial in Next/Failed)
+- [StatsCondition](#statscondition) - Stat-based branching (often contains Serial in Next/Failed)
 - [Replace](#replace) - Variable substitution for templates
 - [Repeat](#repeat) - Execute a Serial block multiple times
 
@@ -564,7 +530,9 @@ Items or abilities calling this template provide their own `DamageAmount` and `E
 
 **Package:** `config/none/ParallelInteraction`
 
-Executes multiple interactions concurrently. Unlike [Serial](#serial) which waits for each interaction to complete before starting the next, Parallel starts all interactions at the same time. This is essential for separating independent concerns like damage logic and visual effects, allowing them to run simultaneously without blocking each other.
+Runs several interaction roots at once. The first entry runs inside the current chain; every other entry
+is **forked** into its own chain with a copy of the context. This is how damage logic and visual effects
+are kept apart without one blocking the other.
 
 ### Core Properties
 
@@ -573,94 +541,78 @@ Executes multiple interactions concurrently. Unlike [Serial](#serial) which wait
 | `Type` | string | Required | Always `"Parallel"` |
 | `Interactions` | array | Required | Codec doc: "The collection of interaction roots to run in parallel via forks." Validated non-null and to contain at least **two** entries |
 
-Each entry is a **root** interaction (`RootInteraction.CHILD_ASSET_CODEC`), not a plain child interaction — an inline object is turned into an anonymous root. Like [Serial](#serial), `ParallelInteraction` extends `Interaction` directly and so has **no `Next`/`Failed` of its own**.
+Each entry is a **root** interaction (`RootInteraction.CHILD_ASSET_CODEC`), not a plain child interaction. Like [Serial](#serial), `ParallelInteraction` extends `Interaction` directly and so has **no `Next`/`Failed` of its own**.
 
 ### Interactions Array Format
 
-The `Interactions` property accepts an array where each entry can be:
+Because each entry is a root, an entry takes one of two forms:
 
-1. **Inline interaction object** - Full interaction definition
-2. **String reference** - Path to another interaction file
-3. **Mixed format** - Combination of both
+1. **Inline root body** — an object whose own `Interactions` array lists the steps of that branch. This is
+   the form every one of the 1,001 inline entries in the shipped assets uses.
+2. **String reference** — the id of a **root interaction** (a file under `RootInteractions/`), not of a
+   plain interaction. The namespaces are separate, so an id that names a file under `Interactions/`
+   does not resolve here.
 
-**Inline interaction objects:**
+An inline object written as a plain interaction (`{ "Type": "ApplyEffect", … }`) is **not** a root body:
+`RootInteraction`'s `Interactions` key is required and non-empty, so such an entry fails validation.
+
+**Inline root bodies:**
 
 ```json
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "Burn" },
-    { "Type": "ApplyEffect", "EffectId": "Slow" }
+    { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Burn" } ] },
+    { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Slow" } ] }
   ]
 }
 ```
 
-**String references:**
+**String references (from `RootInteractions/NPCs/Creature/Mammal/Bear_Voidtaken/Root_Bear_Voidtaken_Tentacle.json`):**
+
+The two shipped string entries both name root interactions:
 
 ```json
 {
   "Type": "Parallel",
   "Interactions": [
-    "Attack_Damage_Branch",
-    "Attack_Visual_Branch",
-    "Attack_Sound_Branch"
-  ]
-}
-```
-
-**Mixed format:**
-
-```json
-{
-  "Type": "Parallel",
-  "Interactions": [
-    "NPC_Attack_Damage",
-    { "Type": "Simple", "Effects": { "WorldSoundEventId": "attack_swoosh" } },
-    "NPC_Attack_Particles"
+    "Root_Bear_Voidtaken_Tentacle_Impact",
+    "Root_Bear_Voidtaken_Tentacle_Spawn"
   ]
 }
 ```
 
 ### Execution Behavior
 
-Parallel interactions use a **fork-based execution model** that provides true concurrency:
-
-1. **First interaction** executes synchronously on the main context
-2. **Remaining interactions** fork with duplicated contexts and run asynchronously
-3. **Parent completes immediately** after forking - it does not wait for child interactions
-
-**Key timing characteristic:** The total duration equals the duration of the **longest** interaction, not the sum. This is fundamentally different from Serial where total time = sum of all interactions.
-
-**Execution flow:**
-
 ```
 ParallelInteraction.tick0()
     │
-    ├─► Execute interactions[0] on main context (SYNC)
+    ├─► context.execute(interactions[0])   push branch 1 onto THIS chain's call stack
     │
-    ├─► Fork interactions[1] with duplicate context (ASYNC)
+    ├─► context.fork(context.duplicate(), interactions[1])   new chain
     │
-    ├─► Fork interactions[2] with duplicate context (ASYNC)
+    ├─► context.fork(context.duplicate(), interactions[2])   new chain
     │
-    └─► Mark parent as Finished (returns immediately)
-        All forked interactions continue independently
+    └─► mark the Parallel step Finished
 ```
 
-**Important execution details:**
-
-- The parent Parallel interaction marks itself as `Finished` immediately after forking
-- Forked interactions continue running independently of the parent
-- There is no built-in mechanism to wait for all forks to complete
-- Changes made in one fork do **not** affect other forks (isolated contexts)
+- **Branch 1 is a call, not a fork.** `context.execute` pushes the root onto the current chain's call
+  stack, so the chain runs branch 1 next and returns to whatever follows the `Parallel` only when branch 1
+  ends. Steps after a `Parallel` therefore wait for branch 1 — and for nothing else.
+- **Branches 2+ are forks.** Each runs as its own chain and is not waited on; there is no built-in join.
+- **Duration.** The chain's own time is branch 1's duration. The forks may end earlier or later.
+- During client simulation (`simulateTick0`) only branch 1 is run; the forks are server-side.
 
 ### Context Behavior
 
-Understanding context duplication is critical for advanced Parallel usage:
+`InteractionContext.duplicate()` copies the context — its held-item fields and the **meta store**
+(target entity, hit location, target block, …) — not the entity. Every branch still acts on the same
+entities.
 
-| Interaction | Context | Notes |
-|-------------|---------|-------|
-| First (`interactions[0]`) | Shared with parent | Changes affect the original context |
-| Subsequent (forked) | Duplicated copy | Changes are isolated to that fork |
+| Branch | Context | Notes |
+|--------|---------|-------|
+| First (`interactions[0]`) | The chain's own | Meta values it sets are visible to steps after the `Parallel` |
+| Subsequent (forked) | A copy | Meta values set in a fork stay in that fork |
 
 **Example implications:**
 
@@ -668,22 +620,17 @@ Understanding context duplication is critical for advanced Parallel usage:
 {
   "Type": "Parallel",
   "Interactions": [
-    { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } },
-    { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } }
+    { "Interactions": [ { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } } ] },
+    { "Interactions": [ { "Type": "ChangeStat", "StatModifiers": { "Health": -10 } } ] }
   ]
 }
 ```
 
-In this example:
-- First interaction modifies health on the main context (applies to entity)
-- Second interaction modifies health on a **duplicated** context
-- The entity only receives **one** 10-damage hit, not two
-
-For damage that must stack, use Serial instead or design your interactions to work independently.
+Both branches run `ChangeStat` against the same entity (`context.getEntity()` is copied into the fork),
+so it loses **20** health, not 10. What the copy isolates is meta state: a target a `Selector` picks in
+one branch is not seen by the other.
 
 ### Deep Nesting Patterns
-
-Parallel interactions can be nested within other control flow structures.
 
 **Parallel inside Serial (common pattern):**
 
@@ -695,8 +642,8 @@ Parallel interactions can be nested within other control flow structures.
     {
       "Type": "Parallel",
       "Interactions": [
-        "Attack_Damage_Logic",
-        "Attack_Visual_Effects"
+        "Root_Attack_Damage_Logic",
+        "Root_Attack_Visual_Effects"
       ]
     },
     { "Type": "Simple", "Effects": { "ClearAnimationOnFinish": true } }
@@ -704,9 +651,10 @@ Parallel interactions can be nested within other control flow structures.
 }
 ```
 
-This pattern ensures stamina is consumed first, then damage and visuals happen concurrently, then cleanup occurs after.
+Stamina is spent first, then damage and visuals start together. The closing `Simple` runs when
+`Root_Attack_Damage_Logic` (branch 1) ends; the visuals fork may still be running then.
 
-**Parallel inside `Next`/`Failed` blocks (StatsCondition):**
+**Parallel inside `Next` (StatsCondition):**
 
 ```json
 {
@@ -715,72 +663,46 @@ This pattern ensures stamina is consumed first, then damage and visuals happen c
   "Next": {
     "Type": "Parallel",
     "Interactions": [
-      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 50 } } },
-      { "Type": "ApplyEffect", "EffectId": "Bleeding" },
-      { "Type": "Simple", "Effects": { "LocalSoundEventId": "critical_hit" } }
+      { "Interactions": [ { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 50 } } } ] },
+      { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Poison_T1", "Entity": "Target" } ] },
+      { "Interactions": [ { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "Impact_Critical" } ] } } ] }
     ]
   }
 }
 ```
 
-**Parallel inside `Next` blocks (Charging):**
+**Ability cast (from `Interactions/Abilities/Fireball/Ability_Fireball_Cast.json`, abbreviated):**
+
+A shipped cast gates on the ability's cost, then forks the cooldown and the cost spend alongside the cast
+itself. Each branch is an inline root body:
 
 ```json
 {
-  "Type": "Charging",
-  "FailOnDamage": true,
+  "Type": "StatsCondition",
+  "UseAbilityCost": true,
+  "Failed": "Ability_Cast_Fail",
   "Next": {
-    "1.5": {
-      "Type": "Parallel",
-      "Interactions": [
-        { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 25 } } },
-        {
-          "Type": "Simple",
-          "Effects": {
-            "WorldSoundEventId": "heavy_attack",
-            "ItemAnimationId": "Slam"
-          }
-        }
-      ]
-    }
+    "Type": "Parallel",
+    "Interactions": [
+      { "Interactions": [ { "Type": "Simple", "RunTime": 0.87 }, { "Type": "LaunchAbilityProjectile", "Projectile": "Projectile_Config_Ability_Fireball" } ] },
+      { "Interactions": [ { "Type": "TriggerCooldown", "UseAbilityCooldown": true } ] },
+      { "Interactions": [ { "Type": "ChangeStat", "UseAbilityCost": true } ] }
+    ]
   }
 }
 ```
 
 ### Complete Examples
 
-**Basic Multiple Effects:**
-
-Apply multiple status effects simultaneously:
-
-```json
-{
-  "Type": "Parallel",
-  "Interactions": [
-    { "Type": "ApplyEffect", "EffectId": "burning" },
-    { "Type": "ApplyEffect", "EffectId": "slow" },
-    { "Type": "Simple", "Effects": { "LocalSoundEventId": "fire_ignite" } }
-  ]
-}
-```
-
-All three effects start at the same instant rather than one after another.
-
 **NPC Melee Attack Pattern (Damage + Visuals Separation):**
-
-This pattern separates damage logic from visual effects, a common design in Hytale's NPC attacks:
 
 ```json
 {
   "Type": "Parallel",
   "Interactions": [
     {
-      "Type": "Serial",
       "Interactions": [
-        {
-          "Type": "Simple",
-          "RunTime": 0.3
-        },
+        { "Type": "Simple", "RunTime": 0.3 },
         {
           "Type": "Selector",
           "Selector": {
@@ -800,19 +722,57 @@ This pattern separates damage logic from visual effects, a common design in Hyta
       ]
     },
     {
-      "Type": "Serial",
       "Interactions": [
         {
           "Type": "Simple",
           "RunTime": 0.8,
-          "Effects": {
-            "ItemAnimationId": "Attack_Swing"
-          }
+          "Effects": { "ItemAnimationId": "SwingLeft" }
         },
         {
           "Type": "Simple",
+          "Effects": { "WorldSoundEventId": "SFX_Sword_T1_Swing" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Branch 1 (Damage):** waits 0.3 s (wind-up), then damages entities in a horizontal arc. It runs in the
+chain, so anything after this `Parallel` waits for it.
+
+**Branch 2 (Visuals):** a fork that plays the 0.8 s swing animation, then the sound.
+
+**AOE Ground Slam with Effects:**
+
+```json
+{
+  "Type": "Parallel",
+  "Interactions": [
+    {
+      "Interactions": [
+        {
+          "Type": "Selector",
+          "Selector": { "Id": "AOECircle", "Range": 4.0 },
+          "HitEntity": {
+            "Interactions": [
+              {
+                "Type": "DamageEntity",
+                "DamageCalculator": { "BaseDamage": { "Physical": 30 } }
+              },
+              { "Type": "ApplyEffect", "EffectId": "Stun", "Entity": "Target" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "Interactions": [
+        {
+          "Type": "Simple",
           "Effects": {
-            "WorldSoundEventId": "sword_whoosh"
+            "WorldSoundEventId": "SFX_Ability_Ground_Slam_Impact",
+            "Particles": [ { "SystemId": "Explosion_Medium" } ]
           }
         }
       ]
@@ -821,75 +781,36 @@ This pattern separates damage logic from visual effects, a common design in Hyta
 }
 ```
 
-**Branch 1 (Damage):** Waits 0.3 seconds (wind-up), then applies damage to entities in a horizontal arc.
-
-**Branch 2 (Visuals):** Plays the full 0.8-second animation with a weapon trail, then plays the sound.
-
-This separation allows:
-- Independent timing control for damage window vs. animation duration
-- Easy modification of one aspect without affecting the other
-- Cleaner organization of concerns
-
-**AOE Ground Slam with Effects:**
-
-A powerful ground slam that combines damage with visual feedback:
-
-```json
-{
-  "Type": "Parallel",
-  "Interactions": [
-    {
-      "Type": "Selector",
-      "Selector": {
-        "Id": "AOECircle",
-        "Range": 4.0
-      },
-      "HitEntity": {
-        "Interactions": [
-          {
-            "Type": "DamageEntity",
-            "DamageCalculator": { "BaseDamage": { "Physical": 30 } }
-          },
-          { "Type": "ApplyEffect", "EffectId": "Stagger", "Entity": "Target" }
-        ]
-      }
-    },
-    {
-      "Type": "Simple",
-      "Effects": {
-        "WorldSoundEventId": "ground_slam",
-        "Particles": [ { "SystemId": "Explosion_Medium" } ]
-      }
-    }
-  ]
-}
-```
-
-All three branches (damage, animation/particles, debuff) execute simultaneously.
+Two branches: the damage selector (whose `HitEntity` also stuns each target) and the sound/particle
+feedback.
 
 **Variable Replacement in Parallel:**
 
-Using [Replace](#replace) within Parallel for customizable attack templates:
+Using [Replace](#replace) inside the branches for customizable attack templates:
 
 ```json
 {
   "Type": "Parallel",
   "Interactions": [
     {
-      "Type": "Replace",
-      "Var": "DamageBranch",
-      "DefaultOk": true,
-      "DefaultValue": {
-        "Interactions": ["Default_Damage"]
-      }
+      "Interactions": [
+        {
+          "Type": "Replace",
+          "Var": "DamageBranch",
+          "DefaultOk": true,
+          "DefaultValue": { "Interactions": ["Default_Damage"] }
+        }
+      ]
     },
     {
-      "Type": "Replace",
-      "Var": "EffectsBranch",
-      "DefaultOk": true,
-      "DefaultValue": {
-        "Interactions": ["Default_Effects"]
-      }
+      "Interactions": [
+        {
+          "Type": "Replace",
+          "Var": "EffectsBranch",
+          "DefaultOk": true,
+          "DefaultValue": { "Interactions": ["Default_Effects"] }
+        }
+      ]
     }
   ]
 }
@@ -897,43 +818,17 @@ Using [Replace](#replace) within Parallel for customizable attack templates:
 
 Items or abilities can provide custom `DamageBranch` and `EffectsBranch` values to inject specific behavior while sharing the parallel execution structure.
 
-**Projectile Impact with Multiple Effects:**
-
-When a projectile hits, apply damage, effects, and visuals simultaneously:
-
-```json
-{
-  "Type": "Parallel",
-  "Interactions": [
-    {
-      "Type": "DamageEntity",
-      "DamageCalculator": { "BaseDamage": { "Physical": 20 } }
-    },
-    { "Type": "ApplyEffect", "EffectId": "slow" },
-    { "Type": "ApplyEffect", "EffectId": "poison" },
-    {
-      "Type": "Simple",
-      "Effects": {
-        "Particles": [ { "SystemId": "poison_splash" } ],
-        "WorldSoundEventId": "poison_impact"
-      }
-    }
-  ]
-}
-```
-
 ### Error Handling
-
-Parallel execution has specific error handling behavior:
 
 | Scenario | Behavior |
 |----------|----------|
 | One branch fails | Other branches continue independently |
-| Parent interaction | Completes immediately regardless of fork outcomes |
-| Fork throws exception | Exception is isolated to that fork |
-| Missing referenced interaction | Only that branch fails to execute |
+| The `Parallel` step itself | Finishes on the tick it runs, whatever the branches do |
+| Steps after the `Parallel` | Wait for branch 1, not for the forks |
+| Unknown root id | Caught at load by the late `RootInteraction` validator; at runtime `getRootInteractionOrUnknown` substitutes the placeholder root |
 
-**Important:** There is no built-in synchronization point for waiting on all forks to complete. If you need to ensure all parallel branches finish before continuing, you must design your interaction flow accordingly (e.g., using `RunTime` on a wrapping Simple interaction).
+**Important:** There is no built-in synchronization point for the forks. If something must happen only
+after every branch finishes, put the work in branch 1 or restructure the chain with `Serial`.
 
 ### Common Patterns
 
@@ -943,16 +838,16 @@ Parallel execution has specific error handling behavior:
 | **Multiple status effects** | Apply several effects at once | Elemental weapons, potions |
 | **AOE with feedback** | Damage selector + particles + sound | Ground slams, explosions |
 | **Template branches** | Replace variables for customizable forks | Reusable attack templates |
-| **Conditional parallel effects** | Parallel inside Then/Else blocks | Critical hit bonuses |
+| **Ability bookkeeping** | Cooldown and cost run as forks beside the cast | The shipped `Ability_*_Cast` chains |
 
 ### When to Use Parallel vs Serial
 
 | Aspect | Serial | Parallel |
 |--------|--------|----------|
-| **Execution order** | Sequential (1 → 2 → 3) | Simultaneous (1, 2, 3 all at once) |
-| **Timing** | Total time = sum of all interactions | Total time = longest interaction |
+| **Execution order** | Sequential (1 → 2 → 3) | Branch 1 in the chain, branches 2+ forked |
+| **Timing** | The chain waits for every step | The chain waits for branch 1 only |
 | **Dependencies** | Each step can depend on previous | No ordering guarantees |
-| **Context** | Shared context throughout | First shares, rest get duplicates |
+| **Context** | One context throughout | Branch 1 shares the chain's; forks get copies |
 | **Use case** | Multi-step abilities, state changes | Multiple simultaneous effects |
 | **Failure handling** | A failed step fails the chain and stops the rest (unless it has its own `Failed` branch) | Forks are independent; a failed fork does not stop the others |
 
@@ -961,20 +856,19 @@ Parallel execution has specific error handling behavior:
 - Separating damage logic from visual effects
 - Playing multiple sounds/particles simultaneously
 - Independent effects that don't need ordering
-- Reducing total execution time (parallel = max duration, not sum)
 
 **When to use Serial:**
 - Stat changes that must happen before damage
 - Consuming items before applying effects
 - Animations that must play in sequence
 - Any ordered multi-step process
-- When effects must modify the same context
+- When later steps must see meta values (such as a selected target) set by earlier ones
 
 ### Related Interactions
 
 - [Serial](#serial) - Execute interactions sequentially instead of concurrently
-- [Condition](#condition) - Conditional branching (can contain Parallel in Then/Else)
-- [StatsCondition](#statscondition) - Stat-based branching (can contain Parallel in Then/Else)
+- [Condition](#condition) - Conditional branching (can contain Parallel in Next/Failed)
+- [StatsCondition](#statscondition) - Stat-based branching (can contain Parallel in Next/Failed)
 - [Replace](#replace) - Variable substitution for template branches
 - [Repeat](#repeat) - Execute interactions multiple times (can wrap Parallel)
 
@@ -984,7 +878,7 @@ Parallel execution has specific error handling behavior:
 
 **Package:** `config/none/ConditionInteraction`
 
-The base Condition interaction provides branching based on game mode and entity movement states (jumping, swimming, crouching, running, flying). It evaluates the current state of an entity and branches to either `Next` (condition passed) or `Failed` (condition did not pass).
+The base Condition interaction provides branching based on game mode and entity movement states (jumping, swimming, crouching, running, flying, gliding). It evaluates the current state of an entity and branches to either `Next` (condition passed) or `Failed` (condition did not pass).
 
 ### Core Properties
 
@@ -997,12 +891,13 @@ The base Condition interaction provides branching based on game mode and entity 
 | `Crouching` | boolean | `null` | If set, entity must be/not be crouching |
 | `Running` | boolean | `null` | If set, entity must be/not be running (sprinting) |
 | `Flying` | boolean | `null` | If set, entity must be/not be flying |
+| `Gliding` | boolean | `null` | If set, entity must be/not be gliding (0.7.2+; read from `MovementStates.gliding`) |
 | `Next` | interaction | `null` | Interaction to execute when condition passes |
 | `Failed` | interaction | `null` | Interaction to execute when condition fails |
 
 ### Branching Behavior
 
-Unlike most condition interactions that use `Then`/`Else`, the base Condition uses `Next`/`Failed`:
+Like every condition on this page, Condition branches through `Next`/`Failed` (no interaction codec has a `Then`/`Else` key):
 
 - **Next**: Executed when ALL specified conditions are met
 - **Failed**: Executed when ANY specified condition is not met
@@ -1030,6 +925,9 @@ Condition Evaluation
     │       └─► Mismatch? → Execute Failed
     │
     ├─► Check Flying (if set)
+    │       └─► Mismatch? → Execute Failed
+    │
+    ├─► Check Gliding (if set)
     │       └─► Mismatch? → Execute Failed
     │
     └─► All checks passed → Execute Next
@@ -1101,7 +999,7 @@ Faster swimming when already in water:
   "Swimming": true,
   "Next": {
     "Type": "ApplyEffect",
-    "EffectId": "dolphins_grace"
+    "EffectId": "Potion_Stamina_Regen"
   }
 }
 ```
@@ -1142,11 +1040,29 @@ Momentum-based damage scaling:
       },
       {
         "Type": "Simple",
-        "Effects": { "WorldSoundEventId": "charge_impact" }
+        "Effects": { "WorldSoundEventId": "SFX_Mace_T1_Impact" }
       }
     ]
   },
   "Failed": "Attack_Normal"
+}
+```
+
+**Glider durability (from `Item/Items/Glider/Template_Glider.json`, abbreviated):**
+
+The shipped glider uses the 0.7.2 `Gliding` key to charge durability only for a glide that is just
+starting, not for one being cancelled:
+
+```json
+{
+  "Type": "Condition",
+  "RequiredGameMode": "Adventure",
+  "Swimming": false,
+  "Gliding": false,
+  "Next": {
+    "Type": "ModifyInventory",
+    "AdjustHeldItemDurability": -1
+  }
 }
 ```
 
@@ -1179,17 +1095,18 @@ This checks: Adventure mode AND sprinting AND NOT jumping.
 
 **Package:** `config/none/StatsConditionInteraction`
 
-Branch based on whether an entity's stats meet a set of thresholds. Each entry in the `Costs` map names a stat and the amount required; when every listed stat is at or above its amount the interaction branches to `Next`, otherwise to `Failed`. It is a **pure check** — nothing is deducted (pair it with [ChangeStat](interactions-combat.md#changestat) to spend the resource, as the real `Double_Jump.json` does). Essential for resource gating (stamina, signature energy) and stat-based ability variations.
+Branch based on whether an entity's stats meet a set of thresholds. Each entry in the `Costs` map names a stat and the amount required; when every listed stat is at or above its amount the interaction branches to `Next`, otherwise to `Failed`. It is a **pure check** — nothing is deducted (pair it with [ChangeStat](interactions-combat.md#changestat) to spend the resource, as the shipped `Weapon_Sword_Signature_Vortexstrike.json` does). Essential for resource gating (stamina, signature energy) and stat-based ability variations.
 
 ### Core Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"StatsCondition"` |
-| `Costs` | object | Required | Map of stat name to threshold amount; passes when every listed stat is ≥ its amount (nothing is deducted). Keys are validated against the loaded `EntityStatType` assets, so a typo fails asset validation at load |
+| `Costs` | object | — | Map of stat name to threshold amount; passes when every listed stat is ≥ its amount (nothing is deducted). Keys are validated against the loaded `EntityStatType` assets, so a typo fails asset validation at load. **Not required since 0.7.2** (it carried `Validators.nonNull()` through 0.6.8), but with neither `Costs` nor `UseAbilityCost` the condition always fails |
 | `LessThan` | boolean | `false` | Invert the comparison: pass when every listed stat is **below** its amount |
 | `ValueType` | string | `"Absolute"` | How to interpret the amounts (`Absolute` or `Percent`) |
 | `Lenient` | boolean | `false` | Allow overdraw: a stat below its amount still passes as long as it is above zero and the stat's minimum is negative |
+| `UseAbilityCost` | boolean | `false` | 0.7.2+. Test the casting ability's own `Cost` / `CostType` instead of `Costs` — see [Ability Costs](#ability-costs). `StatsCondition` only; `StatsConditionWithModifier` does not declare it |
 | `Next` | interaction | `null` | Interaction when all thresholds are met |
 | `Failed` | interaction | `null` | Interaction when any threshold is not met (or a listed stat is missing on the entity) |
 
@@ -1218,6 +1135,18 @@ When `Lenient` is `true`, a stat that is *below* its amount still passes provide
 
 With 4 stamina left this still runs `Next` (4 > 0) if the Stamina stat's minimum is below zero.
 
+### Ability Costs
+
+The 0.7.2 ability system declares a cost on the ability item itself, and `"UseAbilityCost": true` makes
+a `StatsCondition` read it: `AbilityCastUtil.resolveCostMap` builds a one-entry cost map from the ability's
+`CostType` (the stat) and `Cost`, scaled by the cast's `Cost` attribute when the cast carries modifiers. Eight of the nine
+shipped `*_Cast.json` ability chains open this way (`Ability_GroundSlam_Cast` puts a `GroundedCondition` first) (see the ability-cast example under [Parallel](#parallel)).
+
+The condition **passes without checking anything** whenever no cost resolves: outside an ability cast
+(the chain must run from the ability slot), for an ability whose `Cost` is ≤ 0 or whose `CostType` is
+`None`, for a stat id that does not exist, and for a player in Creative. The codec says the same for the
+first case — "An ability without a cost passes." The spend is a separate `ChangeStat` with the same flag.
+
 ### Common Stats
 
 | Stat | Description |
@@ -1229,29 +1158,43 @@ With 4 stamina left this still runs `Next` (4 > 0) if the Stamina stat's minimum
 
 ### Examples
 
-**Stamina Cost Check (from Double_Jump.json):**
+**Stamina Gate (from `Interactions/Weapons/Sword/Attacks/Primary/Thrust/Weapon_Sword_Primary_Thrust_StaminaCondition.json`, verbatim):**
 
-The `Costs` map only checks affordability; the real asset spends the stamina with a separate `ChangeStat` inside `Next` (abbreviated):
+At least 0.1 stamina lets the thrust through; with less, the chain falls back to the ordinary combo.
+`Costs` only checks — the `ChangeStat` in `Next` sets `StaminaRegenDelay` rather than spending stamina:
 
 ```json
 {
   "Type": "StatsCondition",
-  "Costs": { "Stamina": 2.01 },
+  "Costs": { "Stamina": 0.1 },
+  "Failed": "Weapon_Sword_Primary_Chain",
   "Next": {
-    "Type": "Serial",
-    "Interactions": [
-      {
-        "Type": "ApplyForce",
-        "Direction": { "X": 0, "Y": 2, "Z": 0 },
-        "AdjustVertical": false,
-        "Force": 15
-      },
-      {
-        "Type": "ChangeStat",
-        "StatModifiers": { "Stamina": -2 }
-      }
-    ]
+    "Type": "ChangeStat",
+    "Behaviour": "Set",
+    "StatModifiers": { "StaminaRegenDelay": -2 },
+    "Next": {
+      "Type": "Replace",
+      "Var": "Thrust",
+      "DefaultOk": true,
+      "DefaultValue": { "Interactions": ["Weapon_Sword_Primary_Thrust"] }
+    }
   }
+}
+```
+
+**Below-maximum check (from `Interactions/Consumables/Stat_Check.json`, verbatim):**
+
+`LessThan` with a `Percent` cost of `100` means "not at full health". Items such as
+`Food_Candy_Cane` inherit it through a `Stat_Check` interaction var (`"Parent": "Stat_Check"`) and
+override `Costs`:
+
+```json
+{
+  "Type": "StatsCondition",
+  "Costs": { "Health": 100 },
+  "ValueType": "Percent",
+  "LessThan": true,
+  "Next": "Consume_Charge"
 }
 ```
 
@@ -1264,7 +1207,7 @@ The `Costs` map only checks affordability; the real asset spends the stamina wit
   "Next": "Signature_Ability_Execute",
   "Failed": {
     "Type": "Simple",
-    "Effects": { "WorldSoundEventId": "ability_not_ready" }
+    "Effects": { "LocalSoundEventId": "SFX_Creative_Play_Error" }
   }
 }
 ```
@@ -1372,7 +1315,7 @@ EffectCondition Evaluation
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["burning"],
+  "EntityEffectIds": ["Burn"],
   "Entity": "Target",
   "Next": {
     "Type": "DamageEntity",
@@ -1380,12 +1323,12 @@ EffectCondition Evaluation
   },
   "Failed": {
     "Type": "ApplyEffect",
-    "EffectId": "burning"
+    "EffectId": "Burn"
   }
 }
 ```
 
-If target is burning, deal bonus fire damage. Otherwise, ignite them.
+If the target is burning, deal bonus damage. Otherwise, ignite it.
 
 **Multiple Effects Check (All):**
 
@@ -1394,7 +1337,7 @@ Combo system requiring multiple debuffs:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["burning", "poisoned", "frozen"],
+  "EntityEffectIds": ["Burn", "Poison", "Freeze"],
   "Match": "All",
   "Entity": "Target",
   "Next": {
@@ -1404,10 +1347,10 @@ Combo system requiring multiple debuffs:
         "Type": "DamageEntity",
         "DamageCalculator": { "BaseDamage": { "Physical": 100 } }
       },
-      { "Type": "ClearEntityEffect", "EffectId": "burning" },
-      { "Type": "ClearEntityEffect", "EffectId": "poisoned" },
-      { "Type": "ClearEntityEffect", "EffectId": "frozen" },
-      { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "elemental_explosion" } ] } }
+      { "Type": "ClearEntityEffect", "Entity": "Target", "EntityEffectId": "Burn" },
+      { "Type": "ClearEntityEffect", "Entity": "Target", "EntityEffectId": "Poison" },
+      { "Type": "ClearEntityEffect", "Entity": "Target", "EntityEffectId": "Freeze" },
+      { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "Impact_Critical" } ] } }
     ]
   },
   "Failed": "Normal_Attack"
@@ -1439,17 +1382,17 @@ Check for food buff tiers:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["well_fed_tier3"],
+  "EntityEffectIds": ["FruitVeggie_Buff_T3"],
   "Match": "None",
   "Entity": "User",
   "Next": {
     "Type": "EffectCondition",
-    "EntityEffectIds": ["well_fed_tier2"],
+    "EntityEffectIds": ["FruitVeggie_Buff_T2"],
     "Match": "None",
     "Entity": "User",
     "Next": {
       "Type": "EffectCondition",
-      "EntityEffectIds": ["well_fed_tier1"],
+      "EntityEffectIds": ["FruitVeggie_Buff_T1"],
       "Match": "None",
       "Entity": "User",
       "Next": "Apply_Tier1_Buff",
@@ -1468,14 +1411,14 @@ Only allow ability if not already buffed:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["enraged"],
+  "EntityEffectIds": ["Ability_Enrage_Buff"],
   "Match": "None",
   "Entity": "User",
   "Next": {
     "Type": "Serial",
     "Interactions": [
-      { "Type": "ApplyEffect", "EffectId": "enraged" },
-      { "Type": "Simple", "Effects": { "ItemAnimationId": "Enrage" } }
+      { "Type": "ApplyEffect", "EffectId": "Ability_Enrage_Buff" },
+      { "Type": "Simple", "Effects": { "ItemAnimationId": "Stomp" } }
     ]
   },
   "Failed": {
@@ -1492,14 +1435,14 @@ Bonus damage against debuffed targets:
 ```json
 {
   "Type": "EffectCondition",
-  "EntityEffectIds": ["wet"],
+  "EntityEffectIds": ["Freeze"],
   "Match": "All",
   "Entity": "Target",
   "Next": {
     "Type": "Parallel",
     "Interactions": [
-      { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 40 } } },
-      { "Type": "ApplyEffect", "EffectId": "shocked" }
+      { "Interactions": [ { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 40 } } } ] },
+      { "Interactions": [ { "Type": "ApplyEffect", "EffectId": "Stun", "Entity": "Target" } ] }
     ]
   },
   "Failed": {
@@ -1529,7 +1472,7 @@ Branch based on block type and state at a target position. Uses a `Matchers` arr
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"BlockCondition"` |
-| `Matchers` | array | Required | List of `BlockMatcher` objects |
+| `Matchers` | array | — | List of `BlockMatcher` objects. The codec does not require it, but `doInteraction` loops over it with no null check, so leaving it out throws at runtime — always write it |
 | `Next` | interaction | `null` | Interaction when any matcher succeeds |
 | `Failed` | interaction | `null` | Interaction when all matchers fail |
 
@@ -1539,7 +1482,7 @@ Each `BlockMatcher` in the array nests block identity in a `Block` object, with 
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `Block` | object | Required | Codec doc: "Match against block values" — `{ "Id": ..., "State": ..., "Tag": ... }` |
+| `Block` | object | — | Codec doc: "Match against block values" — `{ "Id": ..., "State": ..., "Tag": ... }`. Optional: a matcher without `Block` matches any block that passes its `Face` test |
 | `Block.Id` | string | `null` | Block ID to match. **Compared against the block's *item* id** (`blockType.getItem().getId()`), so a state variant such as the blue lantern still matches its base id `Furniture_Human_Ruins_Lantern`. Validated against the loaded `BlockType` assets |
 | `Block.State` | string | `null` | Block state name to match; a block with no state reads as `"default"` |
 | `Block.Tag` | string | `null` | Block tag to match (any block type carrying the tag in its `Data.Tags`) |
@@ -1635,7 +1578,7 @@ Succeed if the target matches any of several block types:
 {
   "Type": "BlockCondition",
   "Matchers": [
-    { "Block": { "Id": "Soil_Farmland" } },
+    { "Block": { "Id": "Soil_Dirt_Tilled" } },
     { "Block": { "Id": "Soil_Grass" } },
     { "Block": { "Id": "Soil_Dirt" } }
   ],
@@ -1673,8 +1616,25 @@ This is the interaction-side twin of the bench mechanism: the tags come from `Au
 block-entity components (`GrantsAugmentTags`, see
 [items-blocks.md](items-blocks.md#block-entity-components)), the same source a crafting recipe's
 `RequiredAugmentTags` reads through
-[BenchRequirement](items-crafting.md#benchrequirement). No shipped asset uses this
-interaction type.
+[BenchRequirement](items-crafting.md#benchrequirement).
+
+0.7.2 ships its first uses: **14** `AugmentCondition`s across **7** Goblin Lab puzzle blocks under
+`Server/Item/Items/Puzzles/Goblins/Lab/`, every one requiring the single tag `goblin_lab_power` and every one
+writing both `Next` and `Failed`. Only `GoblinLab_Teleporter.json` sets `Radius` (to `200`); the rest take the
+default. Its `Use` chain, abbreviated (the shipped `Next` continues past the page, and its `Failed`
+opens a message page):
+
+```json
+{
+  "Type": "AugmentCondition",
+  "RequiredAugmentTags": [ "goblin_lab_power" ],
+  "Radius": 200,
+  "Next": {
+    "Type": "OpenCustomUI",
+    "Page": { "Id": "AugmentUpgrade" }
+  }
+}
+```
 
 - **It needs a target block.** With no `targetBlock` in the context the check returns false and the
   interaction ends `Failed`, so this is a block-targeting condition even though it is an *instant*
@@ -1732,7 +1692,7 @@ CooldownCondition checks if the specified cooldown timer has expired:
 
 Cooldowns are typically started using [TriggerCooldown](#triggercooldown) and can be reset using [ResetCooldown](#resetcooldown).
 
-For a **non-player** entity that has a client state (a predicted chain), the condition does not evaluate the cooldown at all — it copies the client's state instead. Only entities with a `Player` component actually consult the server-side `CooldownHandler`.
+One case skips the check: when the executing entity has **no** `Player` component **and** the interaction has a client state, the condition copies the client's state instead of evaluating the cooldown. Everything else consults the server-side `CooldownHandler` — players, and NPCs running server-side chains with no client state, which is how the two NPC examples below work.
 
 ### Examples
 
@@ -1848,14 +1808,35 @@ Apply bonus damage only when cooldown is ready:
 
 **Package:** `config/client/TriggerCooldownInteraction`
 
-Start a cooldown timer. Used to initiate time-gated abilities that can later be checked with [CooldownCondition](#cooldowncondition).
+Start a cooldown: the named cooldown's remaining time is set to its full duration and one charge is
+spent. Used to initiate time-gated abilities that can later be checked with
+[CooldownCondition](#cooldowncondition). Codec doc: "Triggers the cooldown as if it was triggered
+normally."
 
 ### Core Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"TriggerCooldown"` |
-| `Cooldown` | object | Required | [InteractionCooldown](#interactioncooldown-configuration) configuration |
+| `Cooldown` | object | *the root's cooldown* | [InteractionCooldown](#interactioncooldown-configuration) configuration. Optional — codec doc: "The cooldown concerning this interaction, defaulting to the root cooldown if none presented" |
+| `UseAbilityCooldown` | boolean | `false` | 0.7.2+. Take the id and duration from the casting ability instead — see below |
+
+**How the id and duration resolve.** When `Cooldown` carries no `Id` (or is absent), the id comes from
+the chain's **initial root interaction**: its own `Cooldown.Id` if it has one, otherwise the root
+interaction's asset id. The duration is the first of: a positive `Cooldown.Cooldown` here; the
+duration of the cooldown currently stored under that id (`CooldownHandler.tick` drops an entry once its
+time has run out and its charges are full); a positive root `Cooldown.Cooldown`, when the id itself came from the
+root; and finally `0.35` s. The charge list resolves the same way, ending at a single instant charge
+(`InteractionManager.DEFAULT_CHARGE_TIMES`, `{0.0}`).
+
+**`UseAbilityCooldown` (0.7.2+).** Codec doc: "Arm the casting ability's declared Cooldown, keyed by its
+Cast root, so the ability item stays the single source (and Parallel pseudo-roots cannot mis-key the
+id). Only meaningful in ability cast chains." When the chain is an ability cast, the id becomes the
+ability's cast-root id and a positive ability cooldown replaces the duration, scaled by the cast's
+`Cooldown` attribute when the cast carries modifiers. Outside a cast the flag does nothing and the
+resolution above applies. All 12 shipped uses (in the `Abilities/` cast and charged-shot chains) write
+`{ "Type": "TriggerCooldown", "UseAbilityCooldown": true }` with no `Cooldown` object at all (see the ability-cast example under
+[Parallel](#parallel)).
 
 ### InteractionCooldown Configuration
 
@@ -1919,7 +1900,9 @@ The same `InteractionCooldown` object is used by root interactions' `Cooldown` (
 
 **Cooldown without Id:**
 
-Anonymous cooldown (cannot be checked with CooldownCondition):
+Not anonymous: with no `Id`, the cooldown is keyed by the chain's initial root interaction — its
+`Cooldown.Id` if it declares one, otherwise the root's own asset id — so a `CooldownCondition` can test
+it under that id:
 
 ```json
 {
@@ -1966,32 +1949,30 @@ TriggerCooldown is typically used inside the `Next` branch of a CooldownConditio
 
 **Package:** `config/client/ResetCooldownInteraction`
 
-Reset a cooldown timer, making it immediately ready. Used to cancel active cooldowns or refresh ability availability.
+**Restarts** a cooldown: its remaining time is set back to its full duration and all of its charges are
+refilled. Codec doc: "Resets the cooldown." It does **not** clear the cooldown — "reset" means the timer
+starts over, so straight after a `ResetCooldown` the cooldown is *active*, and a
+[CooldownCondition](#cooldowncondition) on it takes `Failed`. To make an ability usable again sooner, give
+it a shorter `Cooldown` here: the value replaces the stored duration before the restart.
+
+`CooldownHandler.Cooldown.resetCooldown()` sets `remainingCooldown = cooldownMax` and `resetCharges()`
+sets the charge count to the length of the charge list. The id and duration resolve exactly as for
+[TriggerCooldown](#triggercooldown), including the fallback to the chain's root. The difference from
+`TriggerCooldown` is the charges: `TriggerCooldown` spends one, `ResetCooldown` refills them all.
 
 ### Core Properties
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Type` | string | Required | Always `"ResetCooldown"` |
-| `Cooldown` | object | Required | [InteractionCooldown](#interactioncooldown-configuration) configuration |
+| `Cooldown` | object | *the root's cooldown* | [InteractionCooldown](#interactioncooldown-configuration) configuration. Optional — codec doc: "The cooldown concerning this interaction, defaulting to the root cooldown if none presented" |
 
 ### Examples
 
-**Reset Named Cooldown:**
+**Restart with a shorter duration (from Debug_Stick_Parry.json, abbreviated):**
 
-```json
-{
-  "Type": "ResetCooldown",
-  "Cooldown": {
-    "Id": "ability_dash",
-    "Cooldown": 0
-  }
-}
-```
-
-**Reset on Parry (from Debug_Stick_Parry.json, abbreviated):**
-
-A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-attacks and then resets the parry's own cooldown so it can be used again immediately:
+A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-attacks and then restarts
+the `Debug_Stick_Parry` cooldown with its duration set to 0.5 s and its charges refilled:
 
 ```json
 {
@@ -2014,7 +1995,12 @@ A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-
 }
 ```
 
-**Reset Anonymous Cooldown (from `Interactions/Weapons/Bomb/Bomb_Throw.json`):**
+(The shipped file runs the counter-attack inside a `Parallel` with a push-back force; the order of the
+two steps is the same.)
+
+**Restart the root's cooldown (from `Interactions/Weapons/Bomb/Bomb_Throw.json`):**
+
+No `Id`, so the cooldown is the throw's root cooldown, restarted at 1 s:
 
 ```json
 {
@@ -2025,51 +2011,14 @@ A successful block (the `Wielding` interaction's `BlockedInteractions`) counter-
 }
 ```
 
-### Usage Patterns
-
-**Reset on Kill:**
-
-```json
-{
-  "Type": "Serial",
-  "Interactions": [
-    {
-      "Type": "DamageEntity",
-      "DamageCalculator": { "BaseDamage": { "Physical": 100 } }
-    },
-    {
-      "Type": "ResetCooldown",
-      "Cooldown": {
-        "Id": "execute_ability",
-        "Cooldown": 0
-      }
-    }
-  ]
-}
-```
-
-**Emergency Reset Consumable:**
-
-```json
-{
-  "Type": "Serial",
-  "Interactions": [
-    { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-    {
-      "Type": "ResetCooldown",
-      "Cooldown": {
-        "Id": "ultimate_ability",
-        "Cooldown": 0
-      }
-    }
-  ]
-}
-```
+The same shape appears in `Bomb_Throw_Popberry.json`, `Bomb_Throw_Stun.json` and `Bangstick_Throw.json`; with
+the parry above, those five files are every shipped use of the type.
 
 ### Related Interactions
 
 - [CooldownCondition](#cooldowncondition) - Check if cooldown has elapsed
 - [TriggerCooldown](#triggercooldown) - Start a cooldown timer
+- [IncrementCooldown](#incrementcooldown) - Adjust a running cooldown's time or charges
 
 ---
 
@@ -2178,20 +2127,25 @@ Left  ←       →  Right
 
 ### Examples
 
-**Directional Dodge System:**
+**Shipped dodge (from `Interactions/Dodge.json`, verbatim):**
+
+The real dodge refuses while flying, then routes only the two pure sideways directions to a dodge. The
+four diagonals are given an empty `Simple`, so they finish without doing anything; `Forward`, `Back` and
+standing still (`Failed`) are left out, which does nothing either:
 
 ```json
 {
-  "Type": "MovementCondition",
-  "Forward": "Dodge_Forward",
-  "Back": "Dodge_Back",
-  "Left": "Dodge_Left",
-  "Right": "Dodge_Right",
-  "ForwardLeft": "Dodge_Forward_Left",
-  "ForwardRight": "Dodge_Forward_Right",
-  "BackLeft": "Dodge_Back_Left",
-  "BackRight": "Dodge_Back_Right",
-  "Failed": "Dodge_Back"
+  "Type": "Condition",
+  "Flying": false,
+  "Next": {
+    "Type": "MovementCondition",
+    "ForwardLeft": { "Type": "Simple" },
+    "ForwardRight": { "Type": "Simple" },
+    "Left": "Dodge_Left",
+    "Right": "Dodge_Right",
+    "BackLeft": { "Type": "Simple" },
+    "BackRight": { "Type": "Simple" }
+  }
 }
 ```
 
@@ -2241,7 +2195,7 @@ Only handle cardinal directions. Note the diagonals are **not** routed to `Faile
         "AdjustVertical": false,
         "Force": 8.0 },
       { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
-      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Invulnerability" }
     ]
   },
   "Back": {
@@ -2252,7 +2206,7 @@ Only handle cardinal directions. Note the diagonals are **not** routed to `Faile
         "AdjustVertical": false,
         "Force": 8.0 },
       { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
-      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Invulnerability" }
     ]
   },
   "Left": {
@@ -2263,7 +2217,7 @@ Only handle cardinal directions. Note the diagonals are **not** routed to `Faile
         "AdjustVertical": false,
         "Force": 8.0 },
       { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
-      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Invulnerability" }
     ]
   },
   "Right": {
@@ -2274,7 +2228,7 @@ Only handle cardinal directions. Note the diagonals are **not** routed to `Faile
         "AdjustVertical": false,
         "Force": 8.0 },
       { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
-      { "Type": "ApplyEffect", "EffectId": "invulnerable" }
+      { "Type": "ApplyEffect", "EffectId": "Dodge_Invulnerability" }
     ]
   },
   "Failed": {
@@ -2435,20 +2389,9 @@ Only allow placing a teleporter while the world holds fewer than 2 (the count is
 }
 ```
 
-**Spawner Limit Check:**
-
-```json
-{
-  "Type": "PlacementCountCondition",
-  "Block": "CreatureSpawner",
-  "Value": 5,
-  "Next": "Place_Spawner",
-  "Failed": {
-    "Type": "SendMessage",
-    "Key": "server.interactions.spawner.maxReached"
-  }
-}
-```
+`Teleporter` is the only shipped block type that carries `TrackedPlacement`, so it is the only block a
+`PlacementCountCondition` can count out of the box; to limit another block, add the component to that
+block's `BlockEntity.Components` first, or its count stays at zero.
 
 ### Related Interactions
 
@@ -2530,7 +2473,11 @@ repeating is ignored and the interactions `Failed` are run instead."
 }
 ```
 
-**Interruptible Reload (indefinite loop):**
+**Interruptible Reload (from `Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_Entry.json`, abbreviated):**
+
+An endless loop that reloads one step per iteration. Two different things end it: input listed in
+`Rules.InterruptedBy` cuts it off, and the fork **failing** — here, the `StatsCondition` finding the ammo
+already at 100% — abandons the remaining repetitions and runs `Failed`:
 
 ```json
 {
@@ -2541,27 +2488,41 @@ repeating is ignored and the interactions `Failed` are run instead."
   },
   "ForkInteractions": {
     "Interactions": [
-      { "Type": "ChangeStat", "StatModifiers": { "Ammo": 1 } }
+      {
+        "Type": "StatsCondition",
+        "LessThan": true,
+        "Costs": { "Ammo": 100 },
+        "ValueType": "Percent",
+        "Next": {
+          "Type": "Replace",
+          "Var": "Reload_ItemConsume",
+          "DefaultValue": { "Interactions": ["Common_StatAmmoReload_ItemConsume"] }
+        }
+      }
     ]
   },
   "Failed": {
-    "Type": "SendMessage",
-    "Message": "Reload interrupted"
+    "Type": "Replace",
+    "Var": "No_Ammo_Effects",
+    "DefaultValue": { "Interactions": ["Common_Bow_No_Ammo"] }
   }
 }
 ```
 
-**Rapid Strikes (timed iterations):**
+**Rapid Strikes (from `Weapons/Daggers/Deprecated/Attacks/Stab_Flurry/Daggers_Stab_Flurry_8.json`, verbatim):**
+
+Its `RunTime` is the inert one described in the gotcha above; the pacing comes from the forked chain, which runs the left and then the right stab each iteration:
 
 ```json
 {
   "Type": "Repeat",
-  "Repeat": 4,
+  "$Comment": "Prepare Delay",
   "RunTime": 0.138,
+  "Repeat": 4,
   "ForkInteractions": {
     "Interactions": [
-      "Stab_Left",
-      "Stab_Right"
+      "Daggers_Stab_Flurry_Left",
+      "Daggers_Stab_Flurry_Right"
     ]
   }
 }
@@ -2713,16 +2674,19 @@ root-interaction body written in place rather than referenced by id.
 
 For target selection in combat interactions, see the **[Selector](interactions-combat.md#selector)** interaction in the Combat Interactions documentation.
 
-The `Selector` interaction type defines hitbox shapes (`Horizontal`, `AOECircle`, `Stab`, `Raycast`) and executes interactions when entities or blocks are hit.
+The `Selector` interaction type picks targets with one of the six shapes registered on `SelectorType.CODEC` — `Horizontal`, `Stab`, `AOECircle`, `AOECylinder`, `Raycast` and `Donut` — and runs interactions on the entities or blocks it hits. In 0.7.2 `AOECircle` (and so `AOECylinder`, which extends it) and `Stab` gained a `SizeAttribute` key and `Raycast` a `DistanceAttribute` key, which name an ability attribute that scales the shape during an ability cast.
 
 ---
 
 ## Gotchas & Errors
 
 - **Symptom:** a `Replace` logs a SEVERE error in the server log → `DefaultOk` is `false`/omitted and the `Var` was not provided by the item. It still falls back to `DefaultValue`, but noisily. Fix: set `"DefaultOk": true` when the variable is genuinely optional, or have the referencing item define the variable (see [DefaultOk Behavior](#defaultok-behavior)).
-- **Symptom:** the same effect (e.g. damage) only applies once when run under `Parallel`, not per-branch → `Parallel` branches execute against duplicated contexts, so changes to the shared context are not additive. Fix: use `Serial` for effects that must stack (see the Parallel notes around [duplicated context](#parallel)).
-- **Symptom:** branches after a `Parallel` run before all forks finish → there is no built-in join/sync point for parallel forks. Fix: wrap in a `Simple` interaction with a `RunTime` long enough to cover the branches, or restructure with `Serial`.
-- **Symptom:** a `Condition` / `StatsCondition` interaction does nothing → no branch matched the current game-mode/stat/state and there was no fallthrough target. Fix: provide a default/`Next` branch so the interaction has somewhere to go when no condition matches.
+- **Symptom:** a `Parallel` entry written as a plain interaction (`{ "Type": "ApplyEffect", … }`) fails asset validation → each entry is a **root**, so an inline entry must be a root body, `{ "Interactions": [ … ] }`, and a string entry must name a file under `RootInteractions/`. Fix: wrap the step (see [Interactions Array Format](#interactions-array-format-1)).
+- **Symptom:** a target picked in one `Parallel` branch is unknown in another → forks run on a *copy* of the context's meta store. Entities are not copied, so stat changes and damage from every branch do land. Fix: keep steps that share meta values in one branch, or use `Serial` (see [Context Behavior](#context-behavior)).
+- **Symptom:** steps after a `Parallel` run before all its branches finish → the chain waits for branch 1 only; branches 2+ are forks with no join. Fix: put whatever must finish first in branch 1, or restructure with `Serial`.
+- **Symptom:** a `Condition` / `StatsCondition` interaction does nothing → the check failed and there is no `Failed` branch, so the chain simply fails there. Fix: give it a `Failed` branch.
+- **Symptom (0.7.2):** a `StatsCondition` with `UseAbilityCost` always passes, even when the player is out of the resource → no cost resolved, which passes by design: the chain is not running from the ability slot, the ability has no `Cost`/`CostType`, or the player is in Creative (see [Ability Costs](#ability-costs)).
+- **Symptom:** `ResetCooldown` leaves an ability *on* cooldown → "reset" restarts the timer at its full duration; it does not clear it. Fix: pass a shorter `Cooldown` to shorten the restart (see [ResetCooldown](#resetcooldown)).
 - **Symptom:** a `MovementCondition` diagonal does nothing, and `Failed` never fires for it → `Failed` is the `MovementDirection.None` (standing-still) branch, not a catch-all; an omitted direction key compiles to an empty branch. Fix: define every direction you care about explicitly (see [MovementCondition](#movementcondition)).
 - **Symptom:** an `EffectCondition` takes `Next` even though the target entity is gone → an invalid target ref, or a target with no `EffectControllerComponent`, leaves the state untouched, which reads as success. Fix: gate on something that actually fails (e.g. a `Selector` that produced the target) before the `EffectCondition`.
 - **Symptom (0.6.3):** a block's `Use` chain that starts with a `BlockCondition` stops working in Creative → the interaction force-fails whenever the player's creative `PlaceMode` is not `Default`. Fix: switch the place mode back to `Default` (see [StaticFace Behavior](#staticface-behavior)).

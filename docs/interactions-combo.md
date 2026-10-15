@@ -7,11 +7,15 @@ seo:
 
 # Combo System Interactions
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.7.2**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
 This page covers the combo-system interactions: chaining attacks together with timing windows, branching on tap vs hold, charge-and-release mechanics, and the flag/cancel machinery that coordinates chains.
+
+Examples taken from shipped assets name their file. The others are patterns, and every id in them
+that starts with `MyMod_` is a placeholder for an interaction of your own; all other ids in them
+name shipped assets.
 
 ## Overview
 
@@ -99,7 +103,7 @@ Defines how long (in seconds) the player has to execute the next attack before t
 
 **File location:** `Server/Item/Interactions/Weapons/{WeaponType}/Primary/*_Chain.json` (e.g. `Battleaxe/Primary/Weapon_Battleaxe_Primary_Chain.json`, `Daggers/Primary/Weapon_Daggers_Primary_Chain.json`; the sword's sits one level deeper at `Sword/Attacks/Primary/Weapon_Sword_Primary_Chain.json`)
 
-**Example:**
+**Example** (`Weapon_Sword_Primary_Chain.json`, `Next` elided):
 ```json
 {
   "Type": "Chaining",
@@ -125,10 +129,12 @@ Configured in Root Interaction files: `Server/Item/RootInteractions/Weapons/{Wea
 {
   "RequireNewClick": true,
   "ClickQueuingTimeout": 0.2,
-  "Cooldown": { "Cooldown": 0.25 },
+  "Cooldown": { "Cooldown": 0.217 },
   "Interactions": ["Weapon_Sword_Primary"]
 }
 ```
+
+(`Server/Item/RootInteractions/Weapons/Sword/Root_Weapon_Sword_Primary.json`)
 
 - **Cooldown**: Minimum delay between attacks (prevents spam)
 - **ClickQueuingTimeout**: Buffer window to queue next attack input
@@ -136,32 +142,42 @@ Configured in Root Interaction files: `Server/Item/RootInteractions/Weapons/{Wea
 
 ### ChainingAllowance Timing
 
-The `ChainingAllowance` value determines how long the player has to input the next attack in the chain. This window opens during the current attack animation. The server accepts a small grace band around the boundary — `min(0.5, ChainingAllowance × 0.25)` seconds — during which either the next step or a restart from step 0 is accepted; an input past the allowance restarts the chain at index 0, and once the last `Next` entry has run the chain wraps back to index 0.
+The `ChainingAllowance` value determines how long the player has to input the next attack in the chain. This window opens during the current attack animation. An input past the allowance restarts the chain at index 0, and once the last `Next` entry has run the chain wraps back to index 0.
 
-**Recommended values by weapon type:**
+**For a player, the client picks the step and the server follows it.** `Chaining` waits for client
+data (`WaitForDataFrom.Client`), and the server jumps to whatever `chainingIndex` the client sent.
+It only *checks* that index against its own expectation — the next step, or 0 once the allowance has
+expired, with either one accepted inside a grace band of `min(0.5, ChainingAllowance × 0.25)` seconds
+around the boundary — and on a mismatch logs a `WARNING` (`sent unexpected chainingIndex`) while
+still using the client's index. Only an index outside `Next` fails the interaction. An entity with
+no remote client (an NPC) computes the step on the server instead.
+
+**Shipped values by weapon type** (from the 95 `ChainingAllowance` values under `Server/` in 0.7.2; a few deprecated variants sit outside these bands, the widest being `Weapons/Mace/Deprecated/Variants/Mace_Attack.json` at 8):
 
 | Weapon Type | ChainingAllowance | Feel |
 |-------------|-------------------|------|
 | Fast tools (shears) | 0.5 | Very responsive |
 | Light weapons (sticks, knives, daggers) | 0.725-1.2 | Quick combos |
-| Medium weapons (spears, staves) | 1.2-1.5 | Balanced timing |
-| Heavy weapons (swords, battleaxes) | 2.0-3.0 | Deliberate, weighty |
-| NPCs/AI | 10-15 | Effectively unlimited for AI timing |
+| Most `Variants/*_Attack.json` (axes, spears, staves, tools …) | 1.25 | Balanced timing |
+| Heavy weapons (swords, battleaxes, mace) | 2.0-2.9 | Deliberate, weighty |
+| NPC root interactions | 3-15 (15 for most skeleton, void and golem attackers) | Effectively unlimited for AI timing |
 
 ```json
 {
   "Type": "Chaining",
   "ChainingAllowance": 1.5,
-  "Next": ["Spear_Thrust_1", "Spear_Thrust_2", "Spear_Thrust_3"]
+  "Next": ["Spear_Spin_Swing_Left", "Spear_Spin_Swing_Right"]
 }
 ```
+
+(the tap branch of `Weapons/Battleaxe/Deprecated/Variants/Battleaxe_Scythe_Void_Attack.json`)
 
 ### The Next Array System
 
 The `Next` property is an array defining the sequence of interactions. Each entry can be:
 
-1. **String reference** - Path to another interaction file
-2. **Inline interaction object** - Full interaction definition with optional `RunTime` and `Effects`
+1. **String reference** - The id of another `Interaction` asset (its file name, not a path)
+2. **Inline interaction object** - Full interaction definition with optional `RunTime` and `Effects`. It needs a `"Type"` (or a `"Parent"` to inherit one): `Interaction.CODEC` has no default type
 3. **Nested chain** - Another Chaining, Charging, or Conditional interaction
 
 **Simple string references:**
@@ -171,61 +187,65 @@ The `Next` property is an array defining the sequence of interactions. Each entr
   "Type": "Chaining",
   "ChainingAllowance": 2,
   "Next": [
-    "Sword_Swing_Left",
-    "Sword_Swing_Right",
-    "Sword_Swing_Overhead"
+    "Weapon_Sword_Primary_Swing_Left",
+    "Weapon_Sword_Primary_Swing_Right",
+    "Weapon_Sword_Primary_Swing_Down"
   ]
 }
 ```
 
+(The shipped sword chain reaches these same three interactions through `Replace` steps — see below.)
+
 **Inline interactions with RunTime:**
 
-Each chain step can specify a `RunTime` to control animation duration:
+Each chain step can specify a `RunTime` to control how long it lasts:
 
 ```json
 {
   "Type": "Chaining",
-  "ChainingAllowance": 1.2,
+  "ChainingAllowance": 0.8,
   "Next": [
     {
-      "RunTime": 0.8,
-      "Effects": {
-        "ItemAnimationId": "dagger_slash_1"
-      },
-      "Next": "Dagger_Damage_1"
+      "Type": "Simple",
+      "RunTime": 0.5,
+      "Effects": { "ItemAnimationId": "Swing_Right" }
     },
     {
-      "RunTime": 0.6,
-      "Effects": {
-        "ItemAnimationId": "dagger_slash_2"
-      },
-      "Next": "Dagger_Damage_2"
+      "Type": "Simple",
+      "RunTime": 0.5,
+      "Effects": { "ItemAnimationId": "Swing_Left" }
     }
   ]
 }
 ```
 
+(adapted from `_Debug/Debug_Combo_Primary.json`, whose steps are `SendMessage` interactions with
+the same `RunTime`/`Effects`)
+
 **Using Replace for variable substitution:**
 
-Chains often use Replace interactions to inject a step's behavior via a context variable, falling back to a default:
+Chains often use Replace interactions to inject a step's behavior via an item's `InteractionVars`, falling back to a default. From `Weapons/Sword/Attacks/Primary/Weapon_Sword_Primary_Chain.json` (third step elided):
 
 ```json
 {
   "Type": "Chaining",
   "ChainingAllowance": 2,
+  "ChainId": "Sword_Swings",
   "Next": [
     {
       "Type": "Replace",
+      "DefaultOk": true,
       "Var": "Swing_Left",
       "DefaultValue": {
-        "Interactions": ["Sword_Swing_Left"]
+        "Interactions": ["Weapon_Sword_Primary_Swing_Left"]
       }
     },
     {
       "Type": "Replace",
+      "DefaultOk": true,
       "Var": "Swing_Right",
       "DefaultValue": {
-        "Interactions": ["Sword_Swing_Right"]
+        "Interactions": ["Weapon_Sword_Primary_Swing_Right"]
       }
     }
   ]
@@ -242,10 +262,10 @@ The `ChainId` property enables coordination between separate interaction chains 
 {
   "Type": "Chaining",
   "ChainingAllowance": 2,
-  "ChainId": "Sword_Combat",
-  "Next": ["Sword_Swing_1", "Sword_Swing_2", "Sword_Swing_3"],
+  "ChainId": "MyMod_Sword_Combat",
+  "Next": ["MyMod_Swing_1", "MyMod_Swing_2", "MyMod_Swing_3"],
   "Flags": {
-    "Block_Counter": "Sword_Counter_Attack"
+    "Block_Counter": "MyMod_Counter_Attack"
   }
 }
 ```
@@ -256,8 +276,8 @@ The `ChainId` property enables coordination between separate interaction chains 
 {
   "Type": "Chaining",
   "ChainingAllowance": 3,
-  "ChainId": "Sword_Combat",
-  "Next": ["Sword_Block_Start"]
+  "ChainId": "MyMod_Sword_Combat",
+  "Next": ["MyMod_Block_Start"]
 }
 ```
 
@@ -271,11 +291,11 @@ The `Flags` object defines named branches that can be triggered by ChainFlagInte
 {
   "Type": "Chaining",
   "ChainingAllowance": 2,
-  "ChainId": "Advanced_Combo",
-  "Next": ["Attack_1", "Attack_2", "Attack_3"],
+  "ChainId": "MyMod_Advanced_Combo",
+  "Next": ["MyMod_Attack_1", "MyMod_Attack_2", "MyMod_Attack_3"],
   "Flags": {
-    "Perfect_Parry": "Riposte_Attack",
-    "Dodge_Cancel": "Dodge_Slash"
+    "Perfect_Parry": "MyMod_Riposte_Attack",
+    "Dodge_Cancel": "MyMod_Dodge_Slash"
   }
 }
 ```
@@ -285,65 +305,35 @@ A separate interaction can set these flags:
 ```json
 {
   "Type": "ChainFlag",
-  "ChainId": "Advanced_Combo",
+  "ChainId": "MyMod_Advanced_Combo",
   "Flag": "Perfect_Parry"
 }
 ```
 
 ### Complete Examples
 
-**Basic 3-Hit Combo:**
+**Tap to chain, hold to charge:** the shipped spear wraps its chain in a `Charging`, so a quick
+release runs the one-step chain and a one-second hold throws the spear
+(`Weapons/Spear/Variants/Spear_Attack.json`):
 
 ```json
 {
-  "Type": "Chaining",
-  "ChainingAllowance": 2,
-  "Next": [
-    "interactions/weapons/sword/swing_left",
-    "interactions/weapons/sword/swing_right",
-    "interactions/weapons/sword/swing_overhead"
-  ]
-}
-```
-
-**Dagger Combo with Effects:**
-
-```json
-{
-  "Type": "Chaining",
-  "ChainingAllowance": 1.2,
-  "ChainId": "Dagger_Primary",
-  "Next": [
-    {
-      "RunTime": 0.5,
-      "Effects": {
-        "ItemAnimationId": "dagger_stab_1",
-        "WorldSoundEventId": "sounds/weapons/dagger_swoosh"
-      },
-      "Next": "Dagger_Damage_Light"
+  "Type": "Charging",
+  "Effects": {
+    "ItemAnimationId": "ThrowCharging",
+    "LocalSoundEventId": "SFX_Spear_Throw_Charge_Local",
+    "WorldSoundEventId": "SFX_Spear_Throw_Charge",
+    "ClearAnimationOnFinish": true
+  },
+  "AllowIndefiniteHold": true,
+  "Next": {
+    "0": {
+      "Type": "Chaining",
+      "ChainingAllowance": 1.25,
+      "Next": ["Spear_Stab"]
     },
-    {
-      "RunTime": 0.5,
-      "Effects": {
-        "ItemAnimationId": "dagger_stab_2"
-      },
-      "Next": "Dagger_Damage_Light"
-    },
-    {
-      "RunTime": 0.7,
-      "Effects": {
-        "ItemAnimationId": "dagger_slash_heavy"
-      },
-      "Next": "Dagger_Damage_Heavy"
-    },
-    {
-      "RunTime": 0.6,
-      "Effects": {
-        "ItemAnimationId": "dagger_finisher"
-      },
-      "Next": "Dagger_Damage_Finisher"
-    }
-  ]
+    "1": "Spear_Throw_Charged"
+  }
 }
 ```
 
@@ -355,16 +345,16 @@ A separate interaction can set these flags:
   "Click": {
     "Type": "Chaining",
     "ChainingAllowance": 1.0,
-    "Next": ["Quick_Jab_1", "Quick_Jab_2"]
+    "Next": ["MyMod_Quick_Jab_1", "MyMod_Quick_Jab_2"]
   },
   "Held": {
     "Type": "Charging",
     "Next": {
-      "0": "Charge_Cancel",
+      "0": "MyMod_Charge_Cancel",
       "1.0": {
         "Type": "Chaining",
         "ChainingAllowance": 2.0,
-        "Next": ["Heavy_Swing_1", "Heavy_Swing_2", "Heavy_Finisher"]
+        "Next": ["MyMod_Heavy_Swing_1", "MyMod_Heavy_Swing_2", "MyMod_Heavy_Finisher"]
       }
     }
   }
@@ -373,26 +363,35 @@ A separate interaction can set these flags:
 
 **NPC Attack Pattern:**
 
-NPCs use high `ChainingAllowance` values since AI timing is less precise:
+NPC roots use high `ChainingAllowance` values, since an NPC's attack cadence is set by its AI rather
+than by a player's clicks. From `Server/Item/RootInteractions/NPCs/Undead/Root_NPC_Skeleton_Fighter_Attack.json`
+(the root's `Tags` elided):
 
 ```json
 {
-  "Type": "Chaining",
-  "ChainingAllowance": 15,
-  "Next": [
+  "Interactions": [
     {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "Simple", "RunTime": 0.3 },
-        "NPC_Skeleton_Swing_1"
-      ]
-    },
-    {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "Simple", "RunTime": 0.5 },
-        "NPC_Skeleton_Swing_2"
-      ]
+      "Type": "EffectCondition",
+      "Entity": "User",
+      "EntityEffectIds": ["Hit_Interrupt_Stunned"],
+      "Match": "None",
+      "Next": {
+        "Type": "Serial",
+        "Interactions": [
+          "Hit_Interrupt_Begin_Protected_Attack",
+          {
+            "Type": "Chaining",
+            "ChainId": "Slashes",
+            "ChainingAllowance": 15,
+            "Next": [
+              "Skeleton_Fighter_Club_Swing_Down",
+              "Skeleton_Fighter_Club_Swing_Left",
+              "Skeleton_Fighter_Club_Swing_Right",
+              "Skeleton_Fighter_Club_Swing_Up_Left"
+            ]
+          }
+        ]
+      }
     }
   ]
 }
@@ -436,12 +435,18 @@ Both `Click` and `Held` are optional but at least one should be specified. If ne
 
 ### How Click vs Held Detection Works
 
-The interaction system tracks input state client-side. When FirstClickInteraction executes:
+The codec describes the split as running "a different interaction based on if this chain was from a
+click or due to the key being held down". The decision is the **client's**: `FirstClick` waits for
+client data (`WaitForDataFrom.Client`), and the server takes the `Held` branch exactly when the
+client reports the step as `Failed` — otherwise it finishes the step and falls into `Click`. For an
+entity with no remote client the server decides itself, taking `Held` while the simulation handler
+reports the input as still charging (held).
 
-1. **Click path** - Triggers when the player quickly pressed and released the input, or when still in the initial press frame
-2. **Held path** - Triggers when the player continues holding the input after the initial frame
+1. **Click path** - The chain was started by a click
+2. **Held path** - The chain is running because the input is being held down
 
-This detection integrates with the chain system - if FirstClickInteraction is part of a Chaining sequence, the "held" state refers to whether the player is still holding when that chain step begins.
+Inside a `Chaining` sequence the question is asked again at that step, so one chain can branch
+differently on each step (see the `Debug_Combo_Primary.json` excerpt below).
 
 ### Basic Examples
 
@@ -453,13 +458,13 @@ This detection integrates with the chain system - if FirstClickInteraction is pa
   "Click": {
     "Type": "Simple",
     "RunTime": 0.5,
-    "Next": "Quick_Attack"
+    "Next": "MyMod_Quick_Attack"
   },
   "Held": {
     "Type": "Charging",
     "Next": {
-      "0": "Cancel",
-      "1.0": "Heavy_Attack"
+      "0": "MyMod_Cancel",
+      "1.0": "MyMod_Heavy_Attack"
     }
   }
 }
@@ -486,7 +491,7 @@ From `Server/Item/RootInteractions/Tools/Watering_Can_Use.json` - clicking plays
 
 ### Nested in Chaining
 
-FirstClickInteraction can be used as chain steps to create combos that vary based on input timing. From `Debug_Combo_Primary.json`:
+FirstClickInteraction can be used as chain steps to create combos that vary based on input timing. From `Server/Item/Interactions/_Debug/Debug_Combo_Primary.json` (abbreviated: the third step, also a `FirstClick`, and the flag target's `Effects`/`ApplyForce` follow-up are omitted):
 
 ```json
 {
@@ -550,14 +555,14 @@ The `Held` path commonly uses `ChainFlagInteraction` to communicate with other c
 ```json
 {
   "Type": "FirstClick",
-  "Click": "Normal_Combo_Step",
+  "Click": "MyMod_Normal_Combo_Step",
   "Held": {
     "Type": "Serial",
     "Interactions": [
-      "Heavy_Combo_Step",
+      "MyMod_Heavy_Combo_Step",
       {
         "Type": "ChainFlag",
-        "ChainId": "Weapon_Combat",
+        "ChainId": "MyMod_Weapon_Combat",
         "Flag": "Heavy_Unlocked"
       }
     ]
@@ -600,19 +605,22 @@ Enables charged attacks and abilities that scale with hold duration. Players hol
 | `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while charging. No codec bound; every shipped value is between `0` and `1` |
 | `FailOnDamage` | boolean | `false` | Cancel the charge when the entity takes damage. The codec's own description is "the interaction will be cancelled and the item removed", so treat it as more than a pure cancel and test before shipping it on a non-consumable |
 | `Failed` | string/object | - | Interaction to execute if charging fails/cancels |
-| `MouseSensitivityAdjustmentTarget` | float | `1.0` | Target sensitivity multiplier during charge |
+| `MouseSensitivityAdjustmentTarget` | float | `1.0` | Target sensitivity multiplier during charge; validated `range(0, 1)` |
 | `MouseSensitivityAdjustmentDuration` | float | `1.0` | Overrides the global adjustment: the time taken to go from `1.0` to `0.0` |
 | `CancelOnOtherClick` | boolean | `true` | Cancel the charge when another click arrives while holding |
+| `IgnoreForFlaggedConditions` | boolean | `false` | 0.7.2+. Lets this interaction be ignored by the entity-stat `Charging` and `Wielding` conditions that set `"UseIgnoreFlag": true` (codec: "An override flag that can be used by Conditions to determine whether to ignore this interaction"). The one shipped use is `Tool/Spyglass_Zoom_Wield.json`, whose `Wielding` would otherwise stop stamina regeneration — `Entity/Stats/Stamina.json` pauses regen under an inverse `Wielding` condition with `UseIgnoreFlag` set |
 | `Forks` | object | - | Map of `InteractionType` → **root interaction** to run when that input is pressed *while still holding* this one (see below) |
 | `Delay` | object | - | `ChargingDelay`: delays the charge when the user is damaged — `MinDelay`/`MaxDelay` (seconds, scaled between the `MinHealth` and `MaxHealth` health fractions), with `MaxTotalDelay` capping the accumulated delay |
 
 ### Forks (input-while-holding)
 
 `Forks` is the mechanism behind "hold Secondary to guard, tap Primary to bash". Keys are
-`InteractionType` values (`Primary`, `Secondary`, `Ability1`–`Ability3`, `Use`, …); values are
+`InteractionType` values (`Primary`, `Secondary`, `Ability1`–`Ability4`, `Use`, …); values are
 **root interaction** references — an id, or an inline `{ "Interactions": [...] }` object.
 
-Every shipped use is on a `Wielding` interaction, e.g. `Weapon_Shield_Secondary_Guard_Wield`:
+Every shipped use is on a `Wielding` interaction, e.g. `Weapon_Shield_Secondary_Guard_Wield`
+(abbreviated; as of 0.7.2 its bash goes through a `Replace` so an item can swap it via its
+`Guard_Bash` var):
 
 ```json
 {
@@ -620,7 +628,14 @@ Every shipped use is on a `Wielding` interaction, e.g. `Weapon_Shield_Secondary_
   "CancelOnOtherClick": false,
   "Forks": {
     "Primary": {
-      "Interactions": ["Weapon_Shield_Secondary_Guard_Bash"]
+      "Interactions": [
+        {
+          "Type": "Replace",
+          "Var": "Guard_Bash",
+          "DefaultOk": true,
+          "DefaultValue": { "Interactions": ["Weapon_Shield_Secondary_Guard_Bash"] }
+        }
+      ]
     }
   }
 }
@@ -631,8 +646,8 @@ may cancel it, which is why the vanilla guards pair `Forks` with `"CancelOnOther
 forked chain keeps running even after the charging interaction itself ends.
 
 > **`Wielding` is a `Charging`.** `WieldingInteraction extends ChargingInteraction`, so `Forks`,
-> `CancelOnOtherClick`, `Failed`, `AllowIndefiniteHold`, `DisplayProgress`, `FailOnDamage`, `Delay`
-> and the mouse-sensitivity pair are all equally valid on a `"Type": "Wielding"` block, on top of
+> `CancelOnOtherClick`, `Failed`, `AllowIndefiniteHold`, `DisplayProgress`, `FailOnDamage`, `Delay`,
+> `IgnoreForFlaggedConditions` and the mouse-sensitivity pair are all equally valid on a `"Type": "Wielding"` block, on top of
 > `Wielding`'s own `AngledWielding`, `DamageModifiers`, `KnockbackModifiers`, `StaminaCost`,
 > `BlockedEffects` and `BlockedInteractions`. The one property that does **not** carry over is `Next`:
 > `Wielding` redeclares it as a single interaction, not a charge-threshold map, so
@@ -641,34 +656,42 @@ forked chain keeps running even after the charging interaction itself ends.
 
 ### The Next Map System
 
-The `Next` property is a map where **keys are charge time thresholds** (in seconds as strings) and **values are interactions** to execute when released at or above that threshold. The system selects the highest threshold the player reached.
+The `Next` property is a map where **keys are charge time thresholds** (in seconds as strings) and **values are interactions** to execute when released at or above that threshold. The system selects the highest threshold the player reached; a release below the lowest key runs nothing.
 
 ```json
 {
   "Type": "Charging",
   "Next": {
-    "0": { "Type": "Serial", "Comment": "Uncharged release" },
-    "0.5": { "Type": "Serial", "Comment": "Partial charge" },
-    "1.2": { "Type": "Serial", "Comment": "Full charge" }
+    "0": "MyMod_Uncharged_Release",
+    "0.5": "MyMod_Partial_Charge",
+    "1.2": "MyMod_Full_Charge"
   }
 }
 ```
 
 **Key patterns:**
-- `"0"` - Triggered on immediate release (no charge)
+- `"0"` - Triggered on immediate release (no charge). Optional — of the 68 `"Type": "Charging"` objects under `Server/` with a non-empty `Next`, 16 have no zero threshold (no `"0"` or `"0.0"`), so an early release does nothing
 - Numeric strings like `"0.5"`, `"1.2"` - Minimum charge time to trigger
 - Values can be inline interactions or string references (an inline object may itself use `"Parent"` to inherit from a named interaction and override a few fields)
 
-**Example with references:**
+**Example with references** — the shipped sword primary. A tap runs the combo chain; a hold of
+0.174 s or more runs the thrust (`Weapons/Sword/Attacks/Primary/Weapon_Sword_Primary.json`):
 
 ```json
 {
   "Type": "Charging",
-  "AllowIndefiniteHold": true,
+  "Rules": { "InterruptedBy": ["Secondary"] },
+  "DisplayProgress": false,
   "Next": {
-    "0": "interactions/weapons/bow_cancel",
-    "0.3": "interactions/weapons/bow_fire_weak",
-    "1.0": "interactions/weapons/bow_fire_full"
+    "0": "Weapon_Sword_Primary_Chain",
+    "0.174": {
+      "Type": "Replace",
+      "Var": "Thrust_Stamina",
+      "DefaultOk": true,
+      "DefaultValue": {
+        "Interactions": ["Weapon_Sword_Primary_Thrust_StaminaCondition"]
+      }
+    }
   }
 }
 ```
@@ -707,133 +730,10 @@ The `Effects` object configures visual and audio feedback during the charging ph
 
 ### Complete Examples
 
-**Bow with Progressive Charge:**
-
-```json
-{
-  "Type": "Charging",
-  "AllowIndefiniteHold": true,
-  "DisplayProgress": true,
-  "HorizontalSpeedMultiplier": 0.6,
-  "MouseSensitivityAdjustmentTarget": 0.5,
-  "MouseSensitivityAdjustmentDuration": 0.3,
-  "Effects": {
-    "ItemAnimationId": "bow_draw",
-    "WorldSoundEventId": "sounds/weapons/bow_draw",
-    "ClearSoundEventOnFinish": true,
-    "Particles": [
-      {
-        "SystemId": "particles/bow_tension",
-        "TargetNodeName": "string_center"
-      }
-    ]
-  },
-  "Next": {
-    "0": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "Simple", "Effects": { "ClearAnimationOnFinish": true } }
-      ]
-    },
-    "0.5": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "LaunchProjectile", "ProjectileId": "Arrow_HalfCharge" }
-      ]
-    },
-    "1.2": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "LaunchProjectile", "ProjectileId": "Arrow_FullCharge" }
-      ]
-    }
-  }
-}
-```
-
-**Charged Melee Attack with Stamina:**
-
-```json
-{
-  "Type": "Charging",
-  "AllowIndefiniteHold": false,
-  "DisplayProgress": true,
-  "HorizontalSpeedMultiplier": 0.4,
-  "Effects": {
-    "ItemAnimationId": "sword_charge",
-    "LocalSoundEventId": "sounds/weapons/charge_hum",
-    "ClearAnimationOnFinish": true,
-    "Particles": [
-      {
-        "SystemId": "particles/weapon_glow",
-        "TargetNodeName": "blade_edge",
-        "Scale": 1.5
-      }
-    ]
-  },
-  "Next": {
-    "0": { "Type": "Serial", "Comment": "Charge canceled" },
-    "0.8": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ChangeStat", "StatModifiers": { "Stamina": -20 } },
-        { "Type": "Simple", "Effects": { "ItemAnimationId": "sword_heavy_swing" } },
-        {
-          "Type": "DamageEntity",
-          "DamageCalculator": { "BaseDamage": { "Physical": 25 } }
-        }
-      ]
-    },
-    "1.5": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ChangeStat", "StatModifiers": { "Stamina": -40 } },
-        { "Type": "Simple", "Effects": { "ItemAnimationId": "sword_power_swing" } },
-        {
-          "Type": "DamageEntity",
-          "DamageCalculator": { "BaseDamage": { "Physical": 50 } }
-        }
-      ]
-    }
-  }
-}
-```
-
-**Consumable with Fail on Damage:**
-
-```json
-{
-  "Type": "Charging",
-  "AllowIndefiniteHold": false,
-  "DisplayProgress": true,
-  "FailOnDamage": true,
-  "HorizontalSpeedMultiplier": 0.3,
-  "Effects": {
-    "ItemAnimationId": "eat_food",
-    "LocalSoundEventId": "sounds/player/eating"
-  },
-  "Failed": {
-    "Type": "Serial",
-    "Interactions": [
-      { "Type": "Simple", "Effects": { "LocalSoundEventId": "sounds/ui/action_canceled" } }
-    ]
-  },
-  "Next": {
-    "0": { "Type": "Serial", "Comment": "Eating canceled" },
-    "2.0": {
-      "Type": "Serial",
-      "Interactions": [
-        { "Type": "ModifyInventory", "AdjustHeldItemQuantity": -1 },
-        { "Type": "ApplyEffect", "EffectId": "satiated" }
-      ]
-    }
-  }
-}
-```
-
-**Charging into Chaining (Hybrid):**
+**Bow with Progressive Charge** — `Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot_Charge.json`
+(abbreviated: the `0.1`, `0.6` and `0.9` tiers repeat the pattern with strengths 0, 2 and 3, and the
+particle's offsets are omitted). Each tier sets the stats and then hands off through a `Replace`, so
+an item can substitute its own shot per tier:
 
 ```json
 {
@@ -841,39 +741,99 @@ The `Effects` object configures visual and audio feedback during the charging ph
   "AllowIndefiniteHold": true,
   "DisplayProgress": false,
   "Effects": {
-    "ItemAnimationId": "staff_channel",
+    "ItemAnimationId": "ShootCharging",
+    "ClearAnimationOnFinish": true,
+    "ClearSoundEventOnFinish": true,
+    "WorldSoundEventId": "SFX_Bow_T2_Draw",
+    "LocalSoundEventId": "SFX_Bow_T2_Draw_Local",
     "Particles": [
-      { "SystemId": "particles/magic_gather", "TargetNodeName": "staff_orb" }
+      { "SystemId": "Bow_Charging", "TargetNodeName": "Handle", "Scale": 0.5 }
     ]
   },
+  "HorizontalSpeedMultiplier": 0.67,
   "Next": {
-    "0": { "Type": "Serial" },
-    "0.6": {
-      "Type": "Chaining",
-      "ChainingAllowance": 1.5,
-      "ChainId": "staff_combo",
-      "Next": [
-        { "Type": "LaunchProjectile", "ProjectileId": "magic_bolt" },
-        { "Type": "LaunchProjectile", "ProjectileId": "magic_bolt_double" }
-      ]
+    "0.0": {
+      "Type": "ChangeStat",
+      "Behaviour": "Set",
+      "StatModifiers": { "StaminaRegenDelay": -1 }
+    },
+    "0.3": {
+      "Type": "ChangeStat",
+      "Behaviour": "Set",
+      "StatModifiers": { "Ammo": 0, "StaminaRegenDelay": -1 },
+      "Next": {
+        "Type": "Replace",
+        "Var": "Primary_Shoot_Strength_1",
+        "DefaultValue": { "Interactions": ["Weapon_Shortbow_Primary_Shoot_Strength_1"] }
+      }
+    },
+    "1.2": {
+      "Type": "ChangeStat",
+      "Behaviour": "Set",
+      "StatModifiers": { "Ammo": 0, "StaminaRegenDelay": -1 },
+      "Next": {
+        "Type": "Replace",
+        "Var": "Primary_Shoot_Strength_4",
+        "DefaultValue": { "Interactions": ["Weapon_Shortbow_Primary_Shoot_Strength_4"] }
+      }
     }
   }
 }
 ```
 
+**Consumable** — the `Charging` step of `Consumables/Consume_Charge.json` (abbreviated: the
+surrounding `Serial` and its leading `ConsumeSFX` `Replace` are omitted, and of the steps after
+consumption only the closing delay is kept — the `ConsumedSFX` and `Effect` `Replace` steps, which
+hand off to the item's own sound and effect vars, are left out). Only a hold of four seconds consumes the item; any earlier release runs
+nothing, since there is no lower threshold. The shipped consumable sets `FailOnDamage` to `false`
+explicitly; the one shipped `true` is in `_Debug/Debug_Stick_Parry.json`:
+
+```json
+{
+  "Type": "Charging",
+  "FailOnDamage": false,
+  "Effects": {
+    "ItemAnimationId": "Consume",
+    "ClearAnimationOnFinish": true,
+    "ClearSoundEventOnFinish": true
+  },
+  "HorizontalSpeedMultiplier": 0.75,
+  "Next": {
+    "4.0": {
+      "Type": "ModifyInventory",
+      "AdjustHeldItemQuantity": -1,
+      "Next": {
+        "Type": "Serial",
+        "Interactions": [
+          {
+            "Type": "Simple",
+            "RunTime": 0.2,
+            "$Comment": "Delay before next consume cycle can start to prevent sound overlap"
+          }
+        ]
+      }
+    }
+  },
+  "Failed": { "Type": "Simple" }
+}
+```
+
+**Charging into Chaining** — see the sword primary under [Example with references](#the-next-map-system)
+(tap → `Weapon_Sword_Primary_Chain`) and the spear under [Complete Examples](#complete-examples)
+in the Chaining section (tap → a one-step `Chaining`, hold → throw).
+
 ### Common Patterns
 
-| Pattern | AllowIndefiniteHold | DisplayProgress | HorizontalSpeedMultiplier | Use Case |
-|---------|---------------------|-----------------|---------------------------|----------|
-| **Ranged Hold** | `true` | `true` | 0.5-0.7 | Bows, crossbows, aimed spells |
-| **Melee Power** | `false` | `true` | 0.3-0.5 | Heavy attacks, ground slams |
-| **Consumable** | `false` | `true` | 0.2-0.4 | Food, potions, bandages |
-| **Quick Charge** | `false` | `false` | 0.8-1.0 | Fast abilities, parries |
+| Pattern | AllowIndefiniteHold | DisplayProgress | HorizontalSpeedMultiplier | Shipped example |
+|---------|---------------------|-----------------|---------------------------|-----------------|
+| **Ranged hold** | `true` | `false` | `0.67` | `Weapon_Shortbow_Primary_Shoot_Charge` |
+| **Tap-or-hold melee** | `false` (default) | `false` | `1.0` (default) | `Weapon_Sword_Primary` |
+| **Consumable** | `false` (default) | `true` (default) | `0.75` | `Consume_Charge` |
 
 ### Integration Notes
 
 - Combine with [Serial](interactions-flow.md#serial) to execute multiple effects on release
-- Use [Condition](interactions-flow.md#condition) within `Next` values for ammo/stamina checks
+- Use [StatsCondition](interactions-flow.md#statscondition) within `Next` values for stamina/ammo checks (as `Sword_Combo_Stage_1.json` below does); `Condition` checks game mode and movement state, not stats
 - Chain into [ChainingInteraction](#chaininginteraction) for charge-then-combo patterns
 
 ---
@@ -899,7 +859,7 @@ When `ChainFlagInteraction` executes:
 1. The flag is recorded in the **client's** interaction state for the given `ChainId` — the server-side `ChainFlagInteraction.firstRun` is empty; the server only forwards `ChainId`/`Flag` to the client in the interaction packet
 2. The next time the target `ChainingInteraction` runs, the client sends a `flagIndex` (the position of the flag name among the chain's sorted `Flags` keys) instead of a `chainingIndex`
 3. The server validates the index (an out-of-range value fails the interaction with a `WARNING` log) and, when `flagIndex != -1`, jumps to the interaction defined in `Flags[flagName]` instead of continuing its normal `Next` sequence
-4. The flag is consumed (reset) after triggering, so the following run resumes the normal sequence
+4. The server keeps no flag state at all (`ChainingInteraction.Data` holds only chain indices and a timestamp), so clearing the flag after it has fired is up to the client; the shipped `Debug_Combo` pair is built on a flag firing once and the chain then resuming its normal sequence
 
 This allows interactions to "inject" behavior into an ongoing chain without interrupting it directly.
 
@@ -912,12 +872,12 @@ Multiple chains can share the same `ChainId`, enabling coordination between prim
 ```json
 {
   "Type": "Chaining",
-  "ChainId": "Sword_Combat",
+  "ChainId": "MyMod_Sword_Combat",
   "ChainingAllowance": 2,
-  "Next": ["Sword_Swing_1", "Sword_Swing_2", "Sword_Swing_3"],
+  "Next": ["MyMod_Swing_1", "MyMod_Swing_2", "MyMod_Swing_3"],
   "Flags": {
-    "Counter_Ready": "Sword_Counter_Attack",
-    "Special_Second": "Sword_Special_Strike"
+    "Counter_Ready": "MyMod_Counter_Attack",
+    "Special_Second": "MyMod_Special_Strike"
   }
 }
 ```
@@ -927,7 +887,7 @@ Multiple chains can share the same `ChainId`, enabling coordination between prim
 ```json
 {
   "Type": "Chaining",
-  "ChainId": "Sword_Combat",
+  "ChainId": "MyMod_Sword_Combat",
   "ChainingAllowance": 3,
   "Next": [
     {
@@ -936,7 +896,7 @@ Multiple chains can share the same `ChainId`, enabling coordination between prim
         "Interactions": [
           {
             "Type": "ChainFlag",
-            "ChainId": "Sword_Combat",
+            "ChainId": "MyMod_Sword_Combat",
             "Flag": "Counter_Ready"
           }
         ]
@@ -946,13 +906,13 @@ Multiple chains can share the same `ChainId`, enabling coordination between prim
 }
 ```
 
-When the player successfully blocks (secondary), it sets `Counter_Ready` on the shared chain. The next time the player uses primary attack, instead of continuing the normal combo, the chain jumps to `Sword_Counter_Attack`.
+When the player successfully blocks (secondary), it sets `Counter_Ready` on the shared chain. The next time the player uses primary attack, instead of continuing the normal combo, the chain jumps to `MyMod_Counter_Attack`.
 
 ### Complete Examples
 
 **Debug combo with flag from held input:**
 
-From `Debug_Combo_Primary.json` - when player holds during second attack, it sets a flag:
+From `Debug_Combo_Primary.json` - when player holds during second attack, it sets a flag (abbreviated: `Effects`, the third step and the flag target's follow-up are omitted):
 
 ```json
 {
@@ -1061,11 +1021,11 @@ Cancels and resets an active chain's state, returning it to the beginning. This 
 | `Type` | string | Required | - | Always `"CancelChain"` |
 | `ChainId` | string | Required | `nonNull` | Target chain identifier to cancel/reset |
 
-The `ChainId` validator ensures the property cannot be null or empty - every CancelChainInteraction must specify which chain to cancel.
+The `ChainId` validator (`Validators.nonNull()`) ensures the property is present - every CancelChainInteraction must specify which chain to cancel. It does not reject an empty string.
 
 ### How Chain Cancellation Works
 
-When `CancelChainInteraction` executes, the following steps occur internally:
+When the server runs `CancelChainInteraction`'s cancellation — which it does only for an entity with no remote client (see [Technical Notes](#technical-notes)) — the following steps occur:
 
 1. **Entity lookup** - Gets the entity from the `InteractionContext`
 2. **Component access** - Retrieves (creating it if absent) the entity's `ChainingInteraction.Data` component, which stores the last-reached index per chain
@@ -1081,7 +1041,7 @@ When `CancelChainInteraction` executes, the following steps occur internally:
 Before CancelChain:
 ┌─────────────────────────────────────────────┐
 │ ChainingInteraction.Data                    │
-│   namedMap["Sword_Primary"] = 2             │
+│   namedMap["Sword_Combo"] = 2               │
 │   lastAttack: <timestamp, shared by chains> │
 └─────────────────────────────────────────────┘
 
@@ -1142,17 +1102,17 @@ The charged release (`Sword_Stab_Dash_Charged`) is followed by `CancelChain`, so
 ```json
 {
   "Type": "Chaining",
-  "ChainId": "Advanced_Combo",
+  "ChainId": "MyMod_Advanced_Combo",
   "ChainingAllowance": 2,
-  "Next": ["Attack_1", "Attack_2", "Attack_3"],
+  "Next": ["MyMod_Attack_1", "MyMod_Attack_2", "MyMod_Attack_3"],
   "Flags": {
     "Counter": {
       "Type": "Serial",
       "Interactions": [
-        "Powerful_Counter_Attack",
+        "MyMod_Powerful_Counter_Attack",
         {
           "Type": "CancelChain",
-          "ChainId": "Advanced_Combo"
+          "ChainId": "MyMod_Advanced_Combo"
         }
       ]
     }
@@ -1168,10 +1128,10 @@ When the `Counter` flag triggers, it executes the counter attack and then resets
 {
   "Type": "Serial",
   "Interactions": [
-    "Dodge",
+    "MyMod_Dodge",
     {
       "Type": "CancelChain",
-      "ChainId": "Sword_Primary"
+      "ChainId": "MyMod_Sword_Primary"
     }
   ]
 }
@@ -1189,17 +1149,17 @@ When a weapon has multiple modes (e.g., one-handed vs two-handed grip), switchin
   "Interactions": [
     {
       "Type": "CancelChain",
-      "ChainId": "Sword_Primary"
+      "ChainId": "MyMod_Sword_Primary"
     },
     {
       "Type": "CancelChain",
-      "ChainId": "Sword_Secondary"
+      "ChainId": "MyMod_Sword_Secondary"
     },
     {
       "Type": "Replace",
       "Var": "GripMode",
       "DefaultValue": {
-        "Interactions": ["Switch_Grip_Animation"]
+        "Interactions": ["MyMod_Switch_Grip_Animation"]
       }
     }
   ]
@@ -1220,9 +1180,9 @@ This pattern cancels both primary and secondary attack chains before switching t
 
 ### Technical Notes
 
-- **Empty `firstRun()`** - `firstRun()` (reached from `tick0`) is empty; the cancellation lives in `simulateFirstRun()` (reached from `simulateTick0`), the path the server takes when simulating a client-initiated chain.
+- **Empty `firstRun()`** - `firstRun()` (reached from `tick0`) is empty; the cancellation lives in `simulateFirstRun()` (reached from `simulateTick0`). `InteractionManager` runs `simulateTick` only for an entity **without a remote client**, so for a player the server never removes the entry — the cancel happens on the client, which receives the `ChainId` in the interaction packet.
 
-- **Client/server sync** - The config class serialises to `com.hypixel.hytale.protocol.CancelChainInteraction` (just `chainId` on top of the base interaction fields), so the client runs the same cancel locally and both sides keep a consistent chain index.
+- **Client/server sync** - The config class serialises to `com.hypixel.hytale.protocol.CancelChainInteraction` (just `chainId` on top of the base interaction fields), so the client runs the cancel locally. For a player, the server's own `namedMap` entry therefore survives the cancel; when the client then restarts the chain at index 0, the server checks that against its stale expectation and may log `sent unexpected chainingIndex` at `WARNING`, but it follows the client's index regardless (see [ChainingAllowance Timing](#chainingallowance-timing)).
 
 - **Flags are client-side** - The server's `ChainingInteraction.Data` stores only per-chain indices and a `lastAttack` timestamp; a pending `ChainFlag` is not stored there, so whether it survives a cancel is client behaviour. Don't design around a flag persisting across a cancel.
 
@@ -1240,7 +1200,7 @@ This pattern cancels both primary and secondary attack chains before switching t
 
 - **Symptom:** a combo never advances past the first hit → the next input arrived after the `ChainingAllowance` window closed, so the chain reset to the start. Fix: widen `ChainingAllowance`, and remember the window opens *during* the current attack animation (see [ChainingAllowance Timing](#chainingallowance-timing)).
 - **Symptom:** a `ChainFlag` set in one chain never triggers a branch in another → the two chains don't share the same `ChainId`. Fix: give both interactions the identical `ChainId` so they share flag state (see [ChainId and Cross-Interaction Sync](#chainid-and-cross-interaction-sync)).
-- **Symptom:** a flag-triggered branch only fires once → flags are consumed (reset) immediately after triggering. Fix: re-set the flag with `ChainFlag` each time you need the branch to fire again.
+- **Symptom:** a flag-triggered branch only fires once → a flag is not sticky: the shipped `Debug_Combo` pair relies on it firing once and the chain resuming its normal sequence (flag state lives on the client; the server stores none). Fix: re-set the flag with `ChainFlag` each time you need the branch to fire again.
 - **Symptom:** a `Charging` interaction releases the wrong tier (or nothing) → the `Next` map keys are **strings** representing charge-time thresholds, and the system picks the highest threshold reached. Fix: include a `"0"` entry for immediate release, and use string keys like `"0.5"`, not numbers (see [The Next Map System](#the-next-map-system)).
 - **Symptom:** `CancelChain` silently does nothing → the target `ChainingInteraction` has no `ChainId`, so its index lives in the `Data` component's unnamed map, which `CancelChain` cannot reach (it only removes from `namedMap`). Fix: give the chain an explicit `ChainId` and use the same string in `CancelChain`.
 - **Symptom:** `CancelChain` didn't behave like a partial reset → cancelling always removes the chain's index entry, so the chain restarts at index 0 (there is no reset-to-index). Flag state is client-side and not part of the server's `Data` component, so don't rely on a pending `ChainFlag` surviving a cancel; re-establish state afterward.

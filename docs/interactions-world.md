@@ -7,7 +7,7 @@ seo:
 
 # Entity & World Interactions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.7.2**
 
 > Part of the [Interactions API](interactions.md). For base interaction properties, see [Reference](interactions.md#reference).
 
@@ -68,7 +68,7 @@ Entity & World
 | `ExplodeInteraction` | `config/client/ExplodeInteraction` | Explosion with block and entity damage |
 | `BlockHarvestUtils` | `server.core.modules.interaction` | Java helpers: block damage, breaking, drops |
 | `PlacedByInteractionComponent` | `server.core.modules.interaction.components` | Chunk-store component recording who placed a block |
-| `ChangeStateInteraction` | `config/client/ChangeStateInteraction` | Changes an entity's state-machine state |
+| `ChangeStateInteraction` | `config/client/ChangeStateInteraction` | Changes the targeted block's state |
 | `LaunchPadInteraction` | `config/server/LaunchPadInteraction` | Launch-pad physics |
 | `WieldingInteraction` | `config/client/WieldingInteraction` | Blocking and guarding mechanics |
 
@@ -87,7 +87,7 @@ Entity & World
 | [Door](#door) | Open/close doors and gates |
 | [OpenContainer](#opencontainer) | Open a container block's window |
 | [Explode](#explode) | Explosion with block and entity damage |
-| [ChangeState](#changestate) | Change entity state machine state |
+| [ChangeState](#changestate) | Change the targeted block's state |
 | [LaunchPadInteraction](#launchpadinteraction) | Launch pad physics |
 | [WieldingInteraction](#wieldinginteraction) | Blocking and guarding mechanics |
 | [Java Block Utilities](#java-block-utilities) | BlockHarvestUtils, PlacedByInteractionComponent |
@@ -115,6 +115,9 @@ Spawns a prefab at the current location.
 
 ### Properties
 
+`Offset`, `RotationYaw` and `OriginSource` carry `Validators.nonNull()`; they default to `{0,0,0}`, `None`
+and `Entity`.
+
 | Property | Type | Description |
 |----------|------|-------------|
 | `PrefabPath` | string | Prefab file to paste (e.g. `Goblin_Thief_Chest.prefab.json`) |
@@ -123,17 +126,21 @@ Spawns a prefab at the current location.
 | `OriginSource` | string | `Entity` (position of the interacting entity) or `Block` (position of the targeted block) |
 | `Force` | boolean | Paste even where placement would otherwise be rejected |
 
-### Example: Goblin Thief dropping its loot chest
+With `OriginSource: "Block"`, the `Offset` is first rotated by the targeted block's own yaw and that yaw is
+added to `RotationYaw`, so the paste follows the block's facing. A `PrefabPath` that does not resolve
+returns silently, with no `Failed` state.
 
-From `Server/Item/Interactions/NPCs/Intelligent/Goblin_Thief/Goblin_Thief_Chest.json`:
+### Example: pasting a portal next to the targeted block
+
+The one shipped use, `Server/Item/Interactions/Tests/SpawnPrefab.json`:
 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabPath": "Goblin_Thief_Chest.prefab.json",
-  "Offset": { "X": 0, "Y": 0, "Z": 0 },
+  "PrefabPath": "Example_Portal1.prefab.json",
+  "Offset": { "X": 6, "Y": 0, "Z": 3 },
   "RotationYaw": "OneEighty",
-  "OriginSource": "Entity",
+  "OriginSource": "Block",
   "Force": true
 }
 ```
@@ -159,7 +166,7 @@ Despawns/removes entities from the world.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Entity` | string | Which entity to remove — `User` (the executor; every shipped use), `Owner` or `Target` (`InteractionTarget`; codec doc: "The entity to target for this interaction.") |
+| `Entity` | string | Which entity to remove — `User` (the executor, and the default; nearly every shipped use), `Owner` (the two cinematic NPC dissolve roots added in 0.7.2) or `Target` (`InteractionTarget`; codec doc: "The entity to target for this interaction.") |
 | `Effects` | object | Optional sound/particle effects played on removal (inherited `Effects`) |
 
 ### Example: Projectile self-removal on hit
@@ -274,24 +281,55 @@ Opens a custom UI page registered via Java. Unlike `OpenPage`, this interaction 
 
 #### Built-in Pages
 
-| Page ID | Supplier Properties | Description |
-|---------|---------------------|-------------|
-| `ItemRepair` | `RepairPenalty` (float) | Item repair UI |
-| `Shop` | `ShopId` (string) | Shop interface (`ShopPageSupplier`) |
-| `Memories` / `MemoriesUnlocked` | - | Memories/journal pages |
-| `PrefabSpawner`, `BlockSpawner`, `LaunchPad`, `ConfigInstanceBlock` | - | Block-entity settings pages (registered via `registerBlockEntityCustomPage`) |
+Every `Page.Id` registered in 0.7.2, with the module or plugin whose `setup()` registers it:
 
-Two more are registered by builtin plugins and used by shipped assets: `Teleporter`
-(`TeleporterPlugin`) and `PortalDevice` (`PortalsPlugin`). Where each id comes from: `ItemRepair` and
-`LaunchPad` from `InteractionModule` itself, `Shop` from `ShopPlugin`, `Memories`/`MemoriesUnlocked`
-from `MemoriesPlugin`, `BlockSpawner` from `BlockSpawnerPlugin`, `PrefabSpawner` from
-`BuilderToolsPlugin`, `ConfigInstanceBlock` from `InstancesPlugin`.
+| Page ID | Registered by | Supplier Properties | Description |
+|---------|---------------|---------------------|-------------|
+| `ItemRepair` | `InteractionModule` | `RepairPenalty` (float) | Item repair UI |
+| `BlockLore` | `InteractionModule` | `TextAlignment` (`Left` / `Center` / `Right`; default `Center`) | 0.7.2+. Shows the targeted block's item name and description (`ItemTranslationProperties`); opens nothing when the block's item has no description key |
+| `Confirmation` | `InteractionModule` | `TitleKey`, `MessageKey` (both required), `ConfirmKey`, `CancelKey`, `Success` (required), `Fail` | 0.7.2+. A confirm/cancel dialog that runs a root interaction for each answer — see below |
+| `LaunchPad` | `InteractionModule` | - | Launch-pad settings page (block entity) |
+| `Shop` | `ShopPlugin` | `ShopId` (string) | Shop interface (`ShopPageSupplier`) |
+| `Memories` / `MemoriesUnlocked` | `MemoriesPlugin` | - | Memories/journal pages |
+| `Teleporter` | `TeleporterPlugin` | `Create` (boolean), `Mode` (shipped assets write `Warp`) | Teleporter settings page |
+| `PortalDevice` | `PortalsPlugin` | `Config` (a `PortalDeviceConfig`) | Portal device page |
+| `BlockSpawner` | `BlockSpawnerPlugin` | - | Block-spawner settings page (block entity) |
+| `PrefabSpawner` | `BuilderToolsPlugin` | - | Prefab-spawner settings page (block entity) |
+| `ConfigInstanceBlock` | `InstancesPlugin` | - | Instance-gateway settings page (block entity) |
+| `AugmentUpgrade` | `AugmentBlocksPlugin` | - | 0.7.2+. Augment upgrade page (block entity) |
+| `AugmentMessage` | `AugmentBlocksPlugin` | `Key` (translation key, required) | 0.7.2+. A dismissable page showing one translated message |
+| `GoblinLabConsole` | `GoblinLabPlugin` | - | 0.7.2+. Goblin lab console page (block entity) |
+| `AbilityBenchIntro` | `AbilitiesPlugin` | - | 0.7.2+. Ability-bench introduction page |
+
+"Block entity" rows are registered through `registerBlockEntityCustomPage`, so they open on the
+targeted block's block entity and take no supplier keys. Every id above except `Shop` appears in a
+shipped asset.
+
+**`Confirmation`** (`ConfirmationPageSupplier`) — codec doc: "Asks the player to confirm, then runs
+Success or Fail. Set RequireNewClick on the root that holds it, or holding the interact key opens the
+page again." `Success` and `Fail` are root interactions, inline (`{ "Interactions": [...] }`) or by
+id, and both run "as a Use on the block the player pressed the interact key on … It carries no target
+entity and nothing else from the interaction that opened the page." `Fail` runs when the page closes
+any other way (cancel, Escape, or another page replacing it); leave it out to run nothing.
+`ConfirmKey` / `CancelKey` default to `client.general.button.confirm` / `client.general.button.cancel`.
+The one shipped use, `Server/Item/Items/Portal/Dungeon/Dungeon_Portal_Early_Exit.json`:
+
+```json
+{
+  "Type": "OpenCustomUI",
+  "Page": {
+    "Id": "Confirmation",
+    "TitleKey": "server.portals.dungeon.earlyExit.title",
+    "MessageKey": "server.portals.dungeon.earlyExit.message",
+    "ConfirmKey": "server.portals.dungeon.leave",
+    "CancelKey": "server.portals.dungeon.stay",
+    "Success": { "Interactions": ["Portal_Return"] }
+  }
+}
+```
 
 > **Gotcha — `Workbench` and `Arcanebench` are not page ids.** They look like UI pages but are
-> **bench ids** consumed by `Recipe.BenchRequirement`; no shipped `OpenCustomUI` uses them. The only
-> `Page.Id` values that appear in shipped assets are `ItemRepair`, `Teleporter`, `PortalDevice`,
-> `Memories`, `MemoriesUnlocked`, `LaunchPad`, `BlockSpawner`, `PrefabSpawner` and
-> `ConfigInstanceBlock` (`Shop` is registered but unused by the shipped item assets).
+> **bench ids** consumed by `Recipe.BenchRequirement`; no shipped `OpenCustomUI` uses them.
 
 #### Example: Item Repair Interaction
 
@@ -386,9 +424,15 @@ Adjusts the quantity of the currently held item. Used to consume items on use (e
 | `RequiredGameMode` | string | Optional game mode gate (e.g. `Adventure`) for the adjustment to apply |
 | `AdjustHeldItemDurability` | double | Durability delta for the held item |
 | `ItemToRemove` / `ItemToAdd` | item | Remove / add an item stack |
-| `BrokenItem` | string | Item the held item turns into when its durability hits 0 |
+| `BrokenItem` | string | Item the held item turns into when its durability hits 0; the literal `Empty` deletes it instead |
 | `NotifyOnBreak` | boolean | Codec doc: "If true, shows the 'item broken' message and plays the break sound when durability reaches 0. Defaults to true for tools (no BrokenItem or same item), false for transformations (different BrokenItem)." |
 | `NotifyOnBreakMessage` | string | "Custom translation key for the break notification message. Supports {itemName} parameter. Defaults to 'server.general.repair.itemBroken' if not specified." |
+
+The game-mode gate, `ItemToRemove`, `ItemToAdd`, a positive `AdjustHeldItemQuantity` and the break
+notification all act on the chain's **owning** entity as of 0.7.2 (`context.getOwningEntity()`; 0.6.8
+used the executing entity), so a `ModifyInventory` in a projectile's chain reaches the shooter. The
+held-item adjustments still go through the context's held item and slot. A failed `ItemToRemove`
+(the items are not there) ends the interaction `Failed`.
 
 ### Example: Consume one item only in Adventure mode (from Half_Block.json)
 
@@ -429,9 +473,10 @@ backpack capacity to a target value, gated on the player's current capacity matc
 so an `IncreaseBackpackCapacity` written with no properties resizes an unopened backpack to a single
 slot.
 
-The three shipped upgrades form the intended ladder, each naming the previous rung as its `From`
-(`Server/Item/Items/Upgrade/Upgrade_Backpack_1.json` and its 2 and 3 siblings, which set the same
-interaction on both `Primary` and `Secondary`):
+The four shipped upgrades (0 → 9 → 18 → 27 → 36) form the intended ladder, each naming the previous
+rung as its `From` (`Server/Item/Items/Upgrade/Upgrade_Backpack_1.json` and its 2, 3 and 4 siblings —
+`Upgrade_Backpack_4` is new in 0.7.2 — which set the same interaction on both `Primary` and
+`Secondary`):
 
 ```json
 {
@@ -478,6 +523,13 @@ Attempts to break the target block.
 | `SoftOnly` | boolean | 0.6.3+. Codec doc: "Whether this can only break soft blocks, whatever the breaking entity holds." |
 | `Tool` | string | Tool to break as |
 | `MatchTool` | boolean | Require a match to `Tool` to work |
+
+In a world whose gameplay `WorldConfig` sets `AllowBlockBreaking: false`, a non-harvest `BreakBlock`
+ends `Failed` — unless, as of 0.7.2, the targeted block type carries the tag named by the world
+config's `BlockBreakingBypassTag` (`WorldConfig.isBlockBreakingAllowed(BlockType)`). The shipped
+gameplay configs use it in two worlds that otherwise forbid breaking: `ForgottenTemple` names
+`Lore_Note`, `TheDeepworks` names `Dungeon_Breakable`.
+`CycleBlockGroup` and explosions apply the same per-block test.
 
 ### PlaceBlock
 
@@ -591,7 +643,8 @@ Behavior (from the decompiled source):
 
 - Looks up the block's `ItemContainerBlock` component and opens a `ContainerBlockWindow` for the player (Bench page). Multiple players can have the same container open — windows are tracked per player UUID.
 - The **first** opened window sets the block's `OpenWindow` interaction state (public constant `OPEN_WINDOW`); when the **last** window closes, the `CloseWindow` state (`CLOSE_WINDOW`) is applied. The state's interaction sound plays at the block center.
-- If the targeted block has no container component, the player receives the `server.interactions.invalidBlockState` translation message and nothing opens.
+- 0.7.2+: an `ItemContainerBlock` with `StayOpenWhenEmpty: true` (codec doc: "If true, the container keeps its OpenWindow block state when the last window closes on an empty container.") skips that close step — and its sound — while the container is empty. The shipped portal block-spawner tables under `Server/Item/Block/Spawners/` (`Portals_Goblin_Chest_*`, `Portals_Hollows_Ancient_Chest`) spawn their chests with it set, so a looted chest stays visibly open.
+- Only players open containers. If the targeted block has a block entity but no `ItemContainerBlock` on it, the player receives the `server.interactions.invalidBlockState` translation message and nothing opens.
 
 See [Inventory API](inventory.md) for the container/window classes themselves.
 
@@ -627,11 +680,13 @@ Performs an explosion (codec doc: "Performs an explosion using the provided conf
 |----------|------|-------------|
 | `DamageEntities` | boolean | "Determines whether the explosion should damage entities." |
 | `DamageBlocks` | boolean | "Determines whether the explosion should damage blocks." |
+| `DetonateExplosiveBlocks` | boolean | 0.7.2+. "Determines whether the explosion should detonate explosive blocks within the explosion radius." Default `true` |
 | `BlockDamageRadius` | int | "The radius in which blocks should be damaged by the explosion." |
 | `BlockDamageFalloff` | float | "The falloff applied to the block damage." |
 | `BlockDropChance` | float | "The chance in which a block drops its loot after breaking." |
 | `EntityDamageRadius` | float | "The radius in which entities should be damaged by the explosion." |
 | `EntityDamage` | float | "The amount of damage to be applied to entities within range." |
+| `EntityDamageCause` | string | 0.7.2+. "The cause of the damage to be applied to entities within range." A `DamageCause` id, validated against the loaded causes; default `Environment` |
 | `EntityDamageFalloff` | float | "The falloff applied to the entity damage." |
 | `Knockback` | object | "Determines the knockback effect applied to damaged entities." |
 | `ItemTool` | object | "The item tool to reference when applying damage to blocks." |
@@ -641,7 +696,8 @@ Performs an explosion (codec doc: "Performs an explosion using the provided conf
 Behavior (from the decompiled source):
 
 - **Explosion origin**, in priority order: the `HIT_LOCATION` meta value if present; else the targeted block's center (for collision-triggered interaction types); else the executing entity's position.
-- If the executing entity is a projectile, damage is attributed as a projectile source (shooter = owning entity); otherwise the environment source `"explosion"` is used (public constant `DAMAGE_SOURCE_EXPLOSION`).
+- If the executing entity is a projectile, damage is attributed as a projectile source (shooter = owning entity); otherwise the environment source `DAMAGE_SOURCE_EXPLOSION` is used, whose type string is the translation key `server.general.deathCause.explosion` as of 0.7.2 (it was the bare `"explosion"` before).
+- 0.7.2+: with `DamageBlocks` on, each block is tested against the world's `AllowBlockBreaking` / `BlockBreakingBypassTag` (see [BreakBlock](#breakblock)), so an explosion in a no-break world leaves untagged blocks intact.
 
 ---
 
@@ -649,7 +705,7 @@ Behavior (from the decompiled source):
 
 **Package:** `config/client/ChangeStateInteraction`
 
-Changes block or entity state machine state. Used for toggleable blocks (torches, lanterns), traps, and temporary state effects.
+Changes the targeted block's state (codec doc: "Changes the state of the target block to another state based on the mapping provided."). Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction). Used for toggleable blocks (torches, lanterns), traps, and temporary state effects.
 
 ### Core Properties
 
@@ -659,8 +715,12 @@ Changes block or entity state machine state. Used for toggleable blocks (torches
 | `Effects` | object | Sound/particle effects triggered on state change |
 | `RunTime` | float | Duration in seconds before `Next` interaction executes |
 | `Next` | interaction | Chained interaction to execute after `RunTime` |
-| `UpdateBlockState` | boolean | Force visual state update after change |
+| `UpdateBlockState` | boolean | Default `false`, which writes the new block with the `SetBlockSettings.NO_UPDATE_STATE` flag; `true` drops that flag |
 | `RequireBlockPlacement` | boolean | 0.6.3+. Codec doc: "When set, the state change is treated as a block placement and only runs in worlds where block placement is allowed." (used by `Block/Half_Block.json`, whose `default → Block` change stands in for placing a half block) |
+
+On success the new state's block interaction sound plays at the block. **0.7.2 changed the outcome
+of a state with no such sound**: 0.6.8 set the block and then ended `Failed`, routing the chain down
+its `Failed` branch; 0.7.2 ends normally.
 
 ### State Transition Map (Changes)
 
@@ -904,6 +964,7 @@ Enables blocking and guarding mechanics for shields and weapons. When active, th
 | `HorizontalSpeedMultiplier` | float | `1.0` | Movement speed while blocking (0.0-1.0) — from the `Interaction` base |
 | `DisplayProgress` | boolean | `true` | Show guard duration indicator |
 | `OnItemChangeBehavior` | string | `Cancel` | From the `Interaction` base; the shipped guards use `Finish` so swapping items ends the guard cleanly (see [interactions.md](interactions.md#held-item-change-behavior)) |
+| `IgnoreForFlaggedConditions` | boolean | `false` | 0.7.2+. Codec doc: "An override flag that can be used by Conditions to determine whether to ignore this interaction." Read by the `Wielding` and `Charging` entity conditions when their own `UseIgnoreFlag` is set. The shipped spyglass (`Tool/Spyglass_Zoom_Wield.json`) sets it, and `Entity/Stats/Stamina.json`'s regen condition (`Wielding`, `Inverse`, `UseIgnoreFlag`) therefore keeps stamina regenerating while the player peers through it |
 
 ### File Locations
 
@@ -957,12 +1018,15 @@ Controls directional blocking based on attack angle, with separate modifiers for
 
 | Weapon | DamageModifiers | KnockbackModifiers | Notes |
 |--------|-----------------|--------------------|----|
-| Sword | Physical: 0, Projectile: 0, Poison: 0 | Physical: 0.25, Projectile: 0.25 | Full damage block, 75% knockback reduction |
-| Shield | Physical: 0, Projectile: 0, Poison: 0 | Physical: 0.25, Projectile: 0.25 | Same as sword |
-| Battleaxe | Physical: 0, Projectile: 0, Poison: 0 | Physical: 0.25, Projectile: 0.25 | Heavy weapon guard |
-| Unarmed | Physical: 0.8, Projectile: 0.8 | - | 20% damage reduction only |
-| NPC Skeleton Knight | Physical: 0.2, Projectile: 0.2 | - | 80% damage reduction |
-| NPC Outlander Brute | Physical: 0, Projectile: 0 | - | Full block |
+| Sword (and every other `*_Secondary_Guard_Wield` but Shield, plus `Common_Guard_Wield`) | Physical, Projectile, Poison, Fire, Wind, Earth, Water, Bludgeoning: 0 | Physical, Projectile, Fire, Wind, Earth, Water, Bludgeoning: 0.25 | Full damage block, 75% knockback reduction |
+| Shield guard | as Sword | as Sword, but Fire: 0.2 and an added Poison: 0.2 | The one guard whose knockback map differs |
+| Unarmed (`Unarmed_Block.json`, top-level) | Physical: 0.8, Projectile: 0.8 | - | 20% damage reduction only |
+| NPC Skeleton Knight (top-level) | Physical, Projectile, Fire, Wind, Earth, Water, Bludgeoning: 0.2 | - | 80% damage reduction |
+| NPC Outlander Brute (top-level) | Physical: 0, Projectile: 0 | - | Full block |
+
+The `Fire` / `Wind` / `Earth` / `Water` / `Bludgeoning` entries are 0.7.2 additions to the shipped
+guards, matching damage causes that ship under `Server/Entity/Damage/`. A custom guard written with
+only `Physical` and `Projectile` passes those newer causes through at full strength.
 
 ### DamageModifiers / KnockbackModifiers (Top-Level)
 
@@ -1056,12 +1120,11 @@ Stamina consumption when blocking damage:
 
 ### BlockedEffects
 
-Effects triggered on each successful block (sounds, particles):
+Effects triggered on each successful block (sounds, particles) — a `DamageEffects`, shown here as the shield guard (`Weapon_Shield_Secondary_Guard_Wield.json`) writes it:
 
 ```json
 "BlockedEffects": {
   "WorldSoundEventId": "SFX_Shield_T2_Impact",
-  "LocalSoundEventId": "SFX_Shield_T2_Impact_Local",
   "WorldParticles": [
     { "SystemId": "Shield_Block" }
   ]
@@ -1145,7 +1208,7 @@ Interactions triggered when stamina is depleted while blocking:
     },
     {
       "Type": "Simple",
-      "Effects": { "WorldSoundEventId": "SFX_Guard_Break" }
+      "Effects": { "WorldSoundEventId": "SFX_Shield_T1_Break" }
     }
   ]
 }
@@ -1198,8 +1261,14 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
   "AngledWielding": {
     "Angle": 0,
     "AngleDistance": 90,
-    "DamageModifiers": { "Physical": 0, "Projectile": 0, "Poison": 0 },
-    "KnockbackModifiers": { "Physical": 0.25, "Projectile": 0.25 }
+    "DamageModifiers": {
+      "Physical": 0, "Projectile": 0, "Poison": 0, "Fire": 0,
+      "Wind": 0, "Earth": 0, "Water": 0, "Bludgeoning": 0
+    },
+    "KnockbackModifiers": {
+      "Physical": 0.25, "Projectile": 0.25, "Fire": 0.25,
+      "Wind": 0.25, "Earth": 0.25, "Water": 0.25, "Bludgeoning": 0.25
+    }
   },
   "StaminaCost": { "Value": 7, "CostType": "Damage" },
   "CancelOnOtherClick": false,
@@ -1235,7 +1304,7 @@ This pattern resets the stamina regen delay timer when guard ends, allowing stam
 
 Note what the real file does *not* do: no `BlockedInteractions` (signature-energy-on-block is a pattern, not the sword's default), and the guard-break `Failed` branch is just particles + sound — the stagger comes from the stamina system, not from an `ApplyEffect` here.
 
-**Simple NPC Block** (`NPCs/Undead/Skeleton_Knight/Skeleton_Knight_Shield_Block.json` — a 0.1 s `Simple` "prepare" step, then the guard):
+**Simple NPC Block** (`NPCs/Undead/Skeleton_Knight/Skeleton_Knight_Shield_Block.json`, minus a `"$Comment"` key — a 0.1 s `Simple` "prepare" step, then the guard):
 
 ```json
 {
@@ -1249,59 +1318,10 @@ Note what the real file does *not* do: no `BlockedInteractions` (signature-energ
   "Next": {
     "Type": "Wielding",
     "Effects": { "ItemAnimationId": "Guard", "ClearAnimationOnFinish": true },
-    "DamageModifiers": { "Physical": 0.2, "Projectile": 0.2 }
-  }
-}
-```
-
-**Timed Parry Window:**
-
-```json
-{
-  "Type": "Wielding",
-  "RunTime": 0.25,
-  "AllowIndefiniteHold": false,
-  "AngledWielding": {
-    "Angle": 0,
-    "AngleDistance": 120,
-    "DamageModifiers": { "Physical": 0 }
-  },
-  "Effects": {
-    "ItemAnimationId": "Parry_Start",
-    "ClearAnimationOnFinish": true
-  },
-  "BlockedInteractions": {
-    "Interactions": [
-      {
-        "Type": "Serial",
-        "Interactions": [
-          {
-            "Type": "ApplyForce",
-            "Direction": { "X": 0, "Y": 0, "Z": -1 },
-            "AdjustVertical": false,
-            "Force": 10
-          },
-          {
-            "Type": "ApplyEffect",
-            "Entity": "Target",
-            "EffectId": "Stamina_Broken"
-          },
-          {
-            "Type": "ChainFlag",
-            "ChainId": "Combat",
-            "Flag": "Perfect_Parry"
-          }
-        ]
-      }
-    ]
-  },
-  "Failed": {
-    "Interactions": [
-      {
-        "Type": "SendMessage",
-        "Message": "Parry missed!"
-      }
-    ]
+    "DamageModifiers": {
+      "Physical": 0.2, "Projectile": 0.2, "Fire": 0.2,
+      "Wind": 0.2, "Earth": 0.2, "Water": 0.2, "Bludgeoning": 0.2
+    }
   }
 }
 ```
@@ -1312,7 +1332,7 @@ Note what the real file does *not* do: no `BlockedInteractions` (signature-energ
 |---------|----------------|----------|
 | **Standard Guard** | `AngledWielding` + `StaminaCost` + `Forks.Primary` | Sword/shield blocking with bash option |
 | **Simple NPC Block** | `DamageModifiers` only | Basic AI blocking |
-| **Parry Window** | `RunTime: 0.25`, `BlockedInteractions` with counter | Timing-based defensive option |
+| **Parry** | Short `RunTime` + `FailOnDamage` + `BlockedInteractions` with a counter | Timing-based defensive option — see `Debug_Stick_Parry.json` [above](#blockedinteractions) |
 | **Energy-Building Block** | `BlockedInteractions` with `ChangeStat` | Blocking charges signature meter |
 | **Counter Setup** | `BlockedInteractions` with `ChainFlag` | Successful block unlocks counter-attack |
 
@@ -1456,6 +1476,6 @@ Backtick-quoted error strings below are literal messages from the server (verifi
 - **`server.interactions.invalidBlockState`** (translation message sent to the player by `OpenContainerInteraction`) → the targeted block has no `ItemContainerBlock` component. Fix: only wire `OpenContainer` to container blocks.
 - **`No projectile config typeName provided`** (`ProjectileComponent`) → a `LaunchProjectile` (or the projectile prefab it references) is missing its projectile config type. Fix: point `ProjectileId` at a prefab that defines a valid projectile config.
 - **`has no valid ProjectileConfig:`** (`ProjectileInteraction`) → the referenced projectile prefab exists but carries no usable `ProjectileConfig`. Fix: verify the projectile asset is fully defined, not just present.
-- **Symptom:** a `ChangeState` does nothing and its chain takes the `Failed` branch → the current state isn't a key in the `Changes` map, so no transition matches; the interaction sets `InteractionState.Failed` rather than passing silently. The codec does not validate the map, so a bogus or self-mapping entry loads fine. The same `Failed` result also covers a target state that has no block variant, a target block id that doesn't resolve, and a resulting state with no interaction sound event. Fix: include the block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
+- **Symptom:** a `ChangeState` does nothing and its chain takes the `Failed` branch → the current state isn't a key in the `Changes` map, so no transition matches; the interaction sets `InteractionState.Failed` rather than passing silently. The codec does not validate the map, so a bogus or self-mapping entry loads fine. The same `Failed` result also covers a target state that has no block variant and a target block id that doesn't resolve. Fix: include the block's actual current state as a key, and confirm the target state exists in the block's `State.Definitions`.
 - **Symptom:** a `ChangeState` with `RequireBlockPlacement` never fires → it is treated as block placement, so in worlds whose `WorldConfig` disallows placement it ends immediately in `InteractionState.Failed`. Fix: drop the flag unless the state change really stands in for placing a block.
 - **Symptom:** a `SpawnPrefab` spawns nothing → `PrefabPath` doesn't resolve to a stored prefab. Fix: use the prefab's file name as registered in the prefab store (e.g. `Goblin_Thief_Chest.prefab.json`).

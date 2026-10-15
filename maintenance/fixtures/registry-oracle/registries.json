@@ -764,7 +764,7 @@
   "registrations_before_unqualified": 977
  },
  "synthetic": {
-  "why": "Hand-derived by reading maintenance/fixtures/registry-oracle/synthetic/src (every site is commented there with what a binder must do). Run through BOTH the miner and the recount; neither's output was pasted here.",
+  "why": "Hand-derived by reading maintenance/fixtures/registry-oracle/synthetic/src (every site is commented there with what a binder must do). Run through BOTH the miner and the recount; neither's output was pasted here. synth.beta (added after the 2026-10-15 review) holds the cases where Java binds a bare name differently from 'the innermost class declaring it': an inherited field (nested class extending Base, anonymous class extending Base: UNRESOLVED), an instance field in an inner class (excluded), an untyped lambda parameter (expression and block body, excluded; out of scope after its statement), a local in an ENCLOSING block (excluded) vs a closed SIBLING block (not), a second declarator in one static declaration, and registrations spelled in comments and strings (not registrations).",
   "registries": {
    "synth.alpha.Outer.CODEC": {
     "unqualified_names": [
@@ -806,20 +806,49 @@
     "unqualified_sites": 3,
     "no_name": 1,
     "empty_id_sites": 1
+   },
+   "synth.beta.Host.CODEC": {
+    "unqualified_names": [
+     "AfterLambda",
+     "AfterSiblingBlock",
+     "Control"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 3,
+    "no_name": 0
+   },
+   "synth.beta.Multi.CODEC": {
+    "unqualified_names": [
+     "MultiDeclarator"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0
+   },
+   "synth.beta.Base.CODEC": {
+    "unqualified_names": [],
+    "qualified_names": [
+     "BaseQualified"
+    ],
+    "unqualified_sites": 0,
+    "no_name": 0
    }
   },
-  "unqualified_sites": 12,
-  "qualified_sites": 1,
+  "unqualified_sites": 16,
+  "qualified_sites": 2,
   "new_registry_keys": [
    "synth.alpha.Outer.Own.CODEC",
    "synth.alpha.PageHolder.PAGE_CODEC",
-   "synth.alpha.Registry.CODEC"
+   "synth.alpha.Registry.CODEC",
+   "synth.beta.Host.CODEC",
+   "synth.beta.Multi.CODEC"
   ],
   "excluded": {
-   "local": 2,
-   "this-super": 2
+   "local": 5,
+   "this-super": 2,
+   "instance-field": 2
   },
-  "unresolved_owner": 1,
+  "unresolved_owner": 4,
   "open_registries": [
    "synth.alpha.PageHolder.PAGE_CODEC",
    "synth.alpha.Registry.CODEC"

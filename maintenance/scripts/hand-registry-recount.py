@@ -9,14 +9,29 @@ tool, not a gate; see registry-oracle-notes.md §15.
 
 The UNQUALIFIED section (bottom of the file) covers `CODEC.register(...)` and
 `getCodecRegistry(PAGE_CODEC)` written WITHOUT a `Receiver.` — the spelling the sweeps
-above cannot see (the review of the 0.7.2 pass found 68 such sites in 19 classes). It
-binds each site to its owner by a DIFFERENT route from registry_miner's: one pass over
-comment- and string-stripped text keeping a stack of open classes, each class's static
-CODEC-shaped fields recorded at its own body depth, and a local shadow looked for in the
-site's enclosing MEMBER (the text since the previous member ended at class depth). Where
-the miner reads each brace's header to decide class-or-block, this reads names forward
-(`pending` until the next `{`). It must reproduce the previous build's known site count
-(67 at 0.6.8) before its 0.7.2 output means anything.
+above cannot see (the review of the 0.7.2 pass found 68 such sites in 19 classes; with the
+form-2 site it is 69 in 20 at 0.7.2 and 68 in 18 at 0.6.8). It binds each site by a
+DIFFERENT WALK from registry_miner's: one forward pass over comment- and string-stripped
+text keeping a stack of open classes (class names read forward, held `pending` until the
+`{`; anonymous bodies found by walking back over `new Type(args)`), class-level fields
+found as declarators whose enclosing member starts at the class's own depth (static or
+instance by the modifiers in front, so a second declarator is seen), a shadowing local
+searched in the site's enclosing member and kept only while the running brace depth has not
+fallen below its own, and a lambda parameter's extent measured as a text span.
+
+WHAT IT SHARES WITH THE MINER, stated so the agreement is not over-read: the decision
+table (innermost declaring class binds; instance field or local excludes; a class that may
+inherit leaves the site UNRESOLVED) and SIX PATTERNS — the field character class, the
+class-keyword regex, the not-a-type keyword set, the typed-local regex, the cast-literal
+regex and the lambda-parameter regex — were written into the miner first and copied here.
+A bug in one of those is in both, and agreement cannot see it; the synthetic tree, whose
+expected figures were read off the source by hand, is what covers them. What the second
+route does buy is that the scope WALK (which class, which block, how far a shadow reaches)
+is implemented twice: the 2026-10-15 review's sibling-block and second-declarator cases
+disagreed between the two until each was fixed.
+
+It must reproduce the previous build's known figures (68 sites: 67 form-1 + 1 form-2 at
+0.6.8) before its 0.7.2 output means anything.
 
 Usage: python3 -I maintenance/scripts/hand-registry-recount.py SRC_ROOT [--json OUT]
        python3 -I maintenance/scripts/hand-registry-recount.py SRC_ROOT --unqualified-only [--json OUT]
@@ -204,8 +219,8 @@ SELFQ = re.compile(r'(?<![\w$])(this|super)\s*\.\s*(' + FIELD + r')\s*\.register
 Q1 = re.compile(r'(?<![\w])((?:[A-Z]\w*\.)+)(' + FIELD + r')\.register\(')
 Q2 = re.compile(r'getCodecRegistry\(\s*((?:[\w]+\.)+)(' + FIELD + r')\s*\)')
 CLASSKW = re.compile(r'(?<![\w.$])(class|interface|enum)\s+(\w+)|(?<![\w.$])record\s+(\w+)\s*[(<]')
-STATIC_DECL = re.compile(r'\bstatic\b[^;(){}=]*?(?<![\w.$])(' + FIELD + r')\s*[=;,]')
-IFACE_DECL = re.compile(r'[\w>\]]\s+(' + FIELD + r')\s*=')
+DECLARATOR = re.compile(r'(?<![\w.$])(' + FIELD + r')\s*(?:=|;|,)')
+LAMBDA = re.compile(r'(?<![\w.$])FLD\s*->|\((?:[^()]*,)?\s*FLD\s*(?:,[^()]*)?\)\s*->')
 NOT_TYPE = {'return', 'throw', 'new', 'else', 'case', 'assert', 'yield', 'instanceof', 'in', 'do'}
 CAST_LIT = re.compile(r'\(\s*[\w.$<>?,\s]+\s*\)\s*"([^"]*)"')
 
@@ -222,22 +237,62 @@ def strip_noncode(t):
     return re.sub(r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", blank, t, flags=re.S)
 
 
+def without_angles(text):
+    """`<T extends Bar<U>>` removed (depth-counted): a type-parameter bound is no clause."""
+    out, d = [], 0
+    for ch in text:
+        if ch == '<':
+            d += 1
+        elif ch == '>' and d:
+            d -= 1
+        elif not d:
+            out.append(ch)
+    return ''.join(out)
+
+
+def anonymous_before(code, i):
+    """True if the `{` at code[i] opens `new Type(args) {`: walk back over the balanced
+    argument list and look for `new Type` in front of it."""
+    j = i - 1
+    while j >= 0 and code[j].isspace():
+        j -= 1
+    if j < 0 or code[j] != ')':
+        return False
+    d = 0
+    while j >= 0:
+        d += (code[j] == ')') - (code[j] == '(')
+        if d == 0:
+            break
+        j -= 1
+    return j > 0 and bool(re.search(r'\bnew\s+[\w.$]+(?:\s*<[^;{}()]*>)?\s*$', code[max(0, j - 160):j]))
+
+
 def structure(code):
     """One forward pass over stripped code; returns the classes as dicts with name, open,
-    close, iface, fields and parent (index of the enclosing class). A class name is read
-    FORWARD and held as `pending` until the next `{` (a `;` first means it was no
-    declaration); a `{` with nothing pending is a plain block, whatever it opens."""
-    classes, stack, pending, iface = [], [], None, False
+    close, iface, anon, inherits, fields (static), inst (instance) and parent (index of
+    the enclosing class). A class name is read FORWARD and held as `pending` until the
+    next `{` (a `;` first means it was no declaration); everything between the keyword and
+    that `{` is its header, searched for an extends/implements clause once generics are
+    stripped. A `{` with nothing pending is an ANONYMOUS class when it follows
+    `new Type(args)` and a plain block otherwise."""
+    classes, stack, pending, iface, kw_end = [], [], None, False, 0
     i, n = 0, len(code)
+
+    def add(name, anon, inherits, ifc):
+        classes.append({'name': name, 'open': i, 'close': n, 'iface': ifc, 'anon': anon,
+                        'inherits': inherits, 'fields': set(), 'inst': set(),
+                        'parent': next((stack[j] for j in range(len(stack) - 1, -1, -1)
+                                        if stack[j] is not None), None)})
+        stack.append(len(classes) - 1)
+
     while i < n:
         c = code[i]
         if c == '{':
             if pending:
-                classes.append({'name': pending, 'open': i, 'close': n, 'depth': len(stack) + 1,
-                                'iface': iface, 'fields': set(),
-                                'parent': next((stack[j] for j in range(len(stack) - 1, -1, -1)
-                                                if stack[j] is not None), None)})
-                stack.append(len(classes) - 1)
+                add(pending, False,
+                    bool(re.search(r'\b(?:extends|implements)\b', without_angles(code[kw_end:i]))), iface)
+            elif anonymous_before(code, i):
+                add(None, True, True, False)
             else:
                 stack.append(None)
             pending, iface = None, False
@@ -253,6 +308,7 @@ def structure(code):
             if m:
                 pending = m.group(2) or m.group(3)
                 iface = m.group(1) == 'interface'
+                kw_end = m.end()
                 i = m.end(); continue
         i += 1
     return classes
@@ -292,6 +348,22 @@ def member_start(code, classes, k, off):
     return last + 1
 
 
+def still_open(code, d, at):
+    """A declaration at `d` is still in scope at `at` unless a `}` between them closed the
+    block it sits in, i.e. the running brace depth from `d` ever goes below zero. (A `for`
+    header's variable, declared outside the loop's braces, is the one case this keeps
+    alive too long; a method's parameters and any local of an enclosing block are right.)"""
+    depth = 0
+    for ch in code[d:at]:
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth < 0:
+                return False
+    return True
+
+
 def unqualified():
     sites, excluded, unresolved = [], [], []
     qualified_recv = collections.defaultdict(set)      # field -> receiver texts seen qualified
@@ -317,15 +389,15 @@ def unqualified():
         for at, form, fld in sorted(hits):
             if classes is None:
                 classes = structure(code)
-                for fm in STATIC_DECL.finditer(code):
-                    k = innermost_class(classes, fm.start(1))
-                    if k is not None and enclosing_is_class(code, classes, k, fm.start(1)):
-                        classes[k]['fields'].add(fm.group(1))
-                for k, cl in enumerate(classes):
-                    if cl['iface']:
-                        for fm in IFACE_DECL.finditer(code, cl['open'], cl['close']):
-                            if enclosing_is_class(code, classes, k, fm.start(1)):
-                                cl['fields'].add(fm.group(1))
+                for dm in DECLARATOR.finditer(code):
+                    k = innermost_class(classes, dm.start(1))
+                    if k is None or not enclosing_is_class(code, classes, k, dm.start(1)):
+                        continue
+                    seg = code[member_start(code, classes, k, dm.start(1)):dm.start(1)]
+                    if seg.count('(') > seg.count(')'):      # inside a parameter list
+                        continue
+                    static = classes[k]['iface'] or re.search(r'\bstatic\b', seg)
+                    classes[k]['fields' if static else 'inst'].add(dm.group(1))
             line = code.count('\n', 0, at) + 1
             k0 = innermost_class(classes, at)
             owner = None
@@ -334,20 +406,50 @@ def unqualified():
                 local = re.compile(r'(?<![\w.$])([\w$.]+(?:\s*<[^;(){}=]*?>)?(?:\s*\[\s*\])*)\s+'
                                    + re.escape(fld) + r'\s*[=;,:)]')
                 shadow = [lm for lm in local.finditer(code, ms, at)
-                          if lm.group(1).split('.')[-1] not in NOT_TYPE]
-                # a declaration inside the member only shadows if it is NOT the class-level field itself
+                          if lm.group(1).split('.')[-1] not in NOT_TYPE
+                          and still_open(code, lm.start(1), at)]
                 if shadow:
                     excluded.append((p, line, fld, 'local'))
                     continue
+                # an untyped lambda parameter shadows for the extent of its own body
+                lam_hit = False
+                for lm in re.finditer(LAMBDA.pattern.replace('FLD', fld), code[ms:at]):
+                    e = ms + lm.end()
+                    while code[e].isspace():
+                        e += 1
+                    if code[e] == '{':
+                        d, z = 0, e
+                        while z < len(code):
+                            d += (code[z] == '{') - (code[z] == '}')
+                            if d == 0:
+                                break
+                            z += 1
+                        body_end = z
+                    else:
+                        body_end = e + len(statement_at(code, e))
+                    lam_hit = lam_hit or ms + lm.start() < at <= body_end
+                if lam_hit:
+                    excluded.append((p, line, fld, 'local'))
+                    continue
+                verdict = None
                 for k in reversed(chain_of(classes, k0)):
                     if fld in classes[k]['fields']:
-                        owner = k
+                        owner, verdict = k, 'class'
                         break
+                    if fld in classes[k]['inst']:
+                        verdict = 'instance'
+                        break
+                    if classes[k]['inherits']:
+                        verdict = 'inherited'
+                        break
+                if verdict == 'instance':
+                    excluded.append((p, line, fld, 'instance-field'))
+                    continue
             if owner is None:
                 unresolved.append((p, line, fld))
                 continue
             key = '.'.join(([pkg] if pkg else []) +
-                           [classes[k]['name'] for k in chain_of(classes, owner)] + [fld])
+                           [classes[k]['name'] for k in chain_of(classes, owner) if classes[k]['name']] + [fld])
             # the arguments of every `.register(` in the statement the anchor starts: form 1
             # anchors at the field, form 2 at the closing paren of getCodecRegistry(FIELD)
             start = at if form == 1 else code.index(')', at) + 1

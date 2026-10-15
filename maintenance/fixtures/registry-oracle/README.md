@@ -95,9 +95,14 @@ receiver, excludes the call). The recount binds them by a different route. Fixtu
   **recount's** figures, never the miner's. The pre-existing `independent` figures are
   unchanged and are checked against **qualified** sites only.
 - `synthetic` + `synthetic/src/`: a hand-written tree with one instance of every binding rule
-  (see the comments in `Outer.java`). Both scripts run on it; the expected figures were read
+  (see the comments in `alpha/Outer.java` and, for the cases where Java binds a bare name differently from "innermost declaring class" — inherited, anonymous, instance field, lambda parameter, enclosing-block local — `beta/Host.java`). Both scripts run on it; the expected figures were read
   off the source, not produced by either script.
 - The runner also compares miner and recount **live** on each tree (`AGREEMENT` line), pins
   `UNRESOLVED` at 0, and counts what neither spelling covers (`residue`).
 - `check-registry-fixture.py --mutations` removes each guard in a patched copy of the scripts and
-  requires named checks to go red (~20 s).
+  requires named checks to go red (26 mutations, ~45 s).
+
+The two scripts share the decision table and six patterns (field character class, class
+keyword, not-a-type keywords, typed-local regex, cast-literal regex, lambda-parameter regex),
+so their agreement does not vouch for those; the hand-read synthetic expectations do. They
+implement the scope walk separately, which is what the agreement does vouch for.

@@ -56,8 +56,8 @@ sys.path.insert(0, str(HERE))
 import registry_miner as rm
 
 FIXDIR = pathlib.Path(a.fixtures)
-MIN_MUTATIONS = 12
-MIN_CHECKS = 400
+MIN_MUTATIONS = 26     # = len(MUTATIONS); a deleted mutation fails the floor instead of shrinking the run
+MIN_CHECKS = 300       # what runs when the previous-build snapshot is NOT the recorded build (321 today)
 
 fails, checks = [], 0
 agree_checks = 0
@@ -102,6 +102,12 @@ def run_recount(root, label):
         return json.loads(out.read_text())
 
 
+def names_of(sites):
+    """Names as the miner itself defines them (Registry.names), so a decision made there
+    (the empty id is not a name) is pinned here rather than recomputed."""
+    return rm.Registry('', '', list(sites)).names
+
+
 def figures(regs, skipped):
     """The miner's unqualified figures, in the shape the recount reports."""
     unq = {}
@@ -126,7 +132,7 @@ def check_agreement(tag, regs, skipped, rc):
             continue
         lab = f"{tag} agreement: {short(k)}"
         check(f"{lab} sites", len(ss), rr['sites'])
-        check(f"{lab} names", sorted({s.name for s in ss if s.name}), rr['names'])
+        check(f"{lab} names", names_of(ss), rr['names'])
         check(f"{lab} no-name sites", sum(1 for s in ss if s.name is None), len(rr['no_name']))
         check(f"{lab} empty-id sites", sum(1 for s in ss if s.name == ''), rr['empty_id_sites'])
     miner_new = sorted(k for k, r in regs.items() if not r.of_spelling('qualified'))
@@ -169,7 +175,7 @@ def check_unqualified_block(tag, regs, skipped, block):
         check(f"{lab} sites", len(ss), want['sites'])
         check(f"{lab} form-1/form-2", [sum(1 for s in ss if s.form == 1), sum(1 for s in ss if s.form == 2)],
               [want['form1'], want['form2']])
-        check(f"{lab} names", sorted({s.name for s in ss if s.name}), want['names'])
+        check(f"{lab} names", names_of(ss), want['names'])
         check(f"{lab} no-name sites", sum(1 for s in ss if s.name is None), want['no_name'])
         check(f"{lab} empty-id sites", sum(1 for s in ss if s.name == ''), want['empty_id_sites'])
 
@@ -356,8 +362,8 @@ else:
         r, lab = sregs.get(k), f"synthetic {short(k)}"
         us = r.of_spelling('unqualified') if r else []
         qs = r.of_spelling('qualified') if r else []
-        check(f"{lab}: unqualified names", sorted({s.name for s in us if s.name}), want['unqualified_names'])
-        check(f"{lab}: qualified names", sorted({s.name for s in qs if s.name}), want['qualified_names'])
+        check(f"{lab}: unqualified names", names_of(us), want['unqualified_names'])
+        check(f"{lab}: qualified names", names_of(qs), want['qualified_names'])
         check(f"{lab}: unqualified sites", len(us), want['unqualified_sites'])
         check(f"{lab}: no-name sites", sum(1 for s in us if s.name is None), want['no_name'])
         if 'form2' in want:
@@ -476,7 +482,8 @@ MUTATIONS += [
      {"synthetic: registry set", "synthetic Own.CODEC: unqualified names",
       "synthetic Outer.CODEC: unqualified names", "synthetic agreement: unqualified registry set"}),
     ("property exclusion removed: a local or parameter shadowing the field is admitted", P,
-     [("                    return 'local', None", "                    continue")],
+     [("                if self._owner(lm.start(1)) is sc:\n                    return 'local', None",
+       "                if self._owner(lm.start(1)) is sc:\n                    continue")],
      {"synthetic: calls excluded by property", "synthetic Outer.CODEC: unqualified names",
       "synthetic agreement: excluded calls by reason"}),
     ("property exclusion removed: a this./super. receiver is admitted", P,
@@ -490,14 +497,15 @@ MUTATIONS += [
      {"0.7.2 Schema.CODEC no-name sites", "0.7.2 Schema.CODEC names",
       "synthetic Outer.CODEC: unqualified names", "0.7.2 agreement: Schema.CODEC no-name sites"}),
     ("an unresolvable owner is guessed (the outermost lexical class) instead of reported", P,
-     [("        return 'unresolved', None\n", "        return 'class', [c.cls for c in chain if c.cls][:1]\n")],
+     [("                    return 'local', None\n        return 'unresolved', None\n",
+       "                    return 'local', None\n        return 'class', [c.cls for c in chain if c.cls][:1]\n")],
      {"synthetic: unresolved owners", "synthetic: registry set"}),
     ("interface fields no longer implicitly static", P,
-     [("            if sc.iface:          # interface fields are implicitly static",
-       "            if False:          # interface fields are implicitly static")],
-     {"synthetic: registry set", "synthetic: unresolved owners"}),
+     [("                static = sc.iface or bool(re.search(r'\\bstatic\\b', head))",
+       "                static = bool(re.search(r'\\bstatic\\b', head))")],
+     {"synthetic: registry set", "synthetic: calls excluded by property"}),
     ("comments and string literals not masked before reading braces", P,
-     [("        m = self.masked = _mask(src)", "        m = self.masked = src")],
+     [("        m = self.masked = masked if masked is not None else _mask(src)", "        m = self.masked = src")],
      {"synthetic: registry set"}),
     ("recount: cast-literal ids unresolved", R,
      [("        m = re.fullmatch(r'\"([^\"]*)\"', a) or re.fullmatch(CAST_LIT, a)",
@@ -506,6 +514,48 @@ MUTATIONS += [
     ("recount: local shadow not looked for", R,
      [("                if shadow:\n", "                if False:\n")],
      {"synthetic agreement: excluded calls by reason", "synthetic agreement: Outer.CODEC sites"}),
+    ("inheritance guard removed: a class that may inherit the name is walked past", P,
+     [("                if sc.inherits:\n                    return 'unresolved', None",
+       "                if False:\n                    return 'unresolved', None")],
+     {"synthetic: unresolved owners", "synthetic Host.CODEC: unqualified names"}),
+    ("anonymous-class guard removed: `new Base() { … }` is walked past", P,
+     [("            if sc.anon:\n                return 'unresolved', None",
+       "            if False:\n                return 'unresolved', None")],
+     {"synthetic: unresolved owners", "synthetic Host.CODEC: unqualified names"}),
+    ("instance-field guard removed: an inner instance CODEC binds to the outer static one", P,
+     [("                if fld in sc.inst:\n                    return 'instance', None",
+       "                if False:\n                    return 'instance', None")],
+     {"synthetic: calls excluded by property", "synthetic: registry set"}),
+    ("lambda-parameter shadow not looked for", P,
+     [("            for lm in lam.finditer(self.masked, sc.header, off):", "            for lm in ():")],
+     {"synthetic Host.CODEC: unqualified names", "synthetic: calls excluded by property"}),
+    ("only the innermost block is searched for a shadowing local", P,
+     [("            for lm in local.finditer(self.masked, sc.header, off):",
+       "            for lm in (local.finditer(self.masked, sc.header, off) if k == len(chain) - 1 else ()):")],
+     {"synthetic Host.CODEC: unqualified names", "synthetic: calls excluded by property"}),
+    ("anchors read from unmasked text: a registration in a comment counts", P,
+     [("        mstmt = masked[off:off + len(stmt)]", "        mstmt = stmt")],
+     {"synthetic Host.CODEC: unqualified names", "synthetic Host.CODEC: unqualified sites"}),
+    ("second declarator of a static declaration not seen", P,
+     [("                names += _FIELD_DECLARATOR.findall(seg)", "                pass")],
+     {"synthetic: unresolved owners", "synthetic: registry set"}),
+    ("a `}` followed by `;` ends a field member (lambda in a field initialiser)", P,
+     [("                if depth == 0 and not re.match(r'\\s*[;,).\\]]', m[i + 1:i + 40]):",
+       "                if depth == 0:")],
+     {"0.7.2 unqualified sites", "0.7.2 agreement: unqualified site count"}),
+    ("the empty id counted as a vocabulary name", P,
+     [("        return sorted({s.name for s in self.sites if s.name})",
+       "        return sorted({s.name for s in self.sites if s.name is not None})")],
+     {"0.7.2 Schema.CODEC names", "synthetic Registry.CODEC: unqualified names"}),
+    ("recount: an inheriting class is walked past", R,
+     [("                    if classes[k]['inherits']:", "                    if False:")],
+     {"synthetic agreement: unresolved owners"}),
+    ("recount: an instance field is not recognised", R,
+     [("                    if fld in classes[k]['inst']:", "                    if False:")],
+     {"synthetic agreement: excluded calls by reason"}),
+    ("recount: a local in a closed sibling block still shadows", R,
+     [("\n                          and still_open(code, lm.start(1), at)]", "]")],
+     {"synthetic agreement: Host.CODEC sites"}),
     ("recount: registries held in a variable not counted", R,
      [("    for m in re.finditer(r'=\\s*[\\w.()]*getCodecRegistry\\s*\\(', code):",
        "    for m in re.finditer(r'(?!)', code):")],
@@ -517,23 +567,26 @@ MUTATIONS += [
 ]
 
 # ----------------------------------------------------------------------------
+# The previous-build note rides on THE SUMMARY LINE, not an INFO line of its own:
+# verify-docs.sh shows only the lines starting INDEPENDENT/MUTATIONS/..., so a separate
+# INFO line explaining why the check count fell was invisible exactly when it mattered.
 print(f"\nINDEPENDENT {checks} check(s) against hand-derived §1/§2 figures, the recount's unqualified "
-      f"figures and the synthetic tree: {checks - len(fails)} reproduced, {len(fails)} failed")
+      f"figures and the synthetic tree: {checks - len(fails)} reproduced, {len(fails)} failed"
+      + (f"; {prev_note}" if prev_note else ""))
 print(f"AGREEMENT   {agree_checks} of those compare the miner with hand-registry-recount.py live "
       f"(sites, registry set, names and no-name sites per registry)")
-if prev_note:
-    print(f"  INFO {prev_note}")
 print(f"BASELINE    {len(regs)} registries, {sum(len(r.sites) for r in regs.values())} registrations, "
       f"{sum(1 for r in regs.values() if r.verdict == 'open')} open"
       + ("" if not drift else "  — DRIFT:"))
 for d in drift:
     print(f"  drift {d}")
 if checks < MIN_CHECKS:
-    fails.append(f"floor: only {checks} check(s) ran, floor is {MIN_CHECKS}")
+    fails.append(f"floor: only {checks} check(s) ran, floor is {MIN_CHECKS}"
+                 + (f" ({prev_note})" if prev_note else ""))
 if a.mutations:
     ran, bad = mutate()
-    if ran < MIN_MUTATIONS:
-        bad.append(f"only {ran} mutation(s) ran, floor is {MIN_MUTATIONS}")
+    if ran < MIN_MUTATIONS or len(MUTATIONS) < MIN_MUTATIONS:
+        bad.append(f"only {ran} of {len(MUTATIONS)} mutation(s) ran, floor is {MIN_MUTATIONS}")
     print(f"MUTATIONS {ran} guard(s) removed, "
           f"{ran - len([b for b in bad if 'still green' in b or 'stayed green' in b])} turned their checks red")
     fails += bad

@@ -22,17 +22,23 @@ Everything here is shaped by measurements in maintenance/registry-oracle-notes.m
     non-literal in position one while the id is a literal in position two, and a
     shape test reading only argument one calls a dozen closed registries open.
   * The receiver is not always spelled. `CODEC.register("Box", …)` inside the class
-    that declares CODEC has NO `Receiver.` before the field (68 sites in 19 classes at
-    0.7.2, 17 of those registries invisible to the first version of this miner, and
+    that declares CODEC has NO `Receiver.` before the field (69 sites in 20 classes at
+    0.7.2: 18 registries invisible to the first version of this miner, and
     `Condition.CODEC` short by 15 names), and `getCodecRegistry(PAGE_CODEC)` is its
-    form-2 analogue. Such a site is bound by LEXICAL SCOPE (class `_Lexical`): the
-    innermost enclosing class that declares a static field of that name. There is no
-    superclass rule — a site with no declaring enclosing class is reported as
-    UNRESOLVED, never guessed — and a call is excluded only by a PROPERTY of its
-    receiver (a local or parameter shadowing the field, a `this.`/`super.` receiver),
-    never by package or file. Every `Site` records its `spelling`, so a figure can be
-    checked against the qualified population alone (the hand-derived fixture
-    figures) or the unqualified one (derived by hand-registry-recount.py).
+    form-2 analogue. Such a site is bound by LEXICAL SCOPE (class `_Lexical`), walking
+    outward from the call and stopping at the first scope that decides the name: a local,
+    parameter or lambda parameter (excluded), a class declaring a static field of that
+    name (bound), a class declaring an instance field of it (excluded), a class that
+    declares neither but extends/implements something, or an anonymous `new X() {…}` body
+    (UNRESOLVED — it may inherit the name and Java would bind it there first). There is
+    no superclass rule that finds out, so such a site is reported, never guessed, and the
+    fixture pins UNRESOLVED at 0 on the real trees. A call is excluded only by a PROPERTY
+    of its receiver (a `this.`/`super.` receiver too), never by package or file. Every
+    `Site` records its `spelling`, so a figure can be checked against the qualified
+    population alone (the hand-derived fixture figures) or the unqualified one (derived
+    by hand-registry-recount.py).
+  * Anchors and `.register(` calls are read from comment- and string-masked text: a
+    registration spelled in a comment or a string is not one.
   * Key a registry by its FULLY-QUALIFIED declaring type. Keying on the simple
     name collapses distinct `Config` / `Content` / `Context` / `Op` / `Shape`
     registries into single bogus rows.
@@ -223,9 +229,38 @@ def _mask(src: str) -> str:
 
 
 _CLASS_HEADER = re.compile(r'(?<![\w.$])(?:(class|interface|enum)\s+(\w+)|(record)\s+(\w+)\s*[(<])')
-_STATIC_FIELD = re.compile(r'\bstatic\b[^;(){}=]*?(?<![\w.$])(' + CODEC_FIELD + r')\s*[=;,]')
-_IFACE_FIELD = re.compile(r'[\w>\]]\s+(' + CODEC_FIELD + r')\s*=')
+_NEW_TYPE = re.compile(r'\bnew\s+[\w.$<>?, ]+?\s*$')
+_INHERITS = re.compile(r'\b(?:extends|implements)\b')
+_FIELD_NAME = re.compile(r'(?<![\w.$])(' + CODEC_FIELD + r')\s*$')
+_FIELD_DECLARATOR = re.compile(r',\s*(' + CODEC_FIELD + r')\s*(?:=|$)')
 _NOT_A_TYPE = frozenset('return throw new else case assert yield instanceof in do'.split())
+
+
+def _is_anonymous(head: str) -> bool:
+    """`… new Base(args) ` — the text before a `{` ends in the argument list of a `new`.
+    The `(` is found by walking back from the final `)`, so `if (new Foo().ok()) {` (whose
+    last paren group is not the constructor's) is not mistaken for one."""
+    h = head.rstrip()
+    if not h.endswith(')'):
+        return False
+    depth = 0
+    for j in range(len(h) - 1, -1, -1):
+        if h[j] == ')':
+            depth += 1
+        elif h[j] == '(':
+            depth -= 1
+            if depth == 0:
+                return bool(_NEW_TYPE.search(h[:j]))
+    return False
+
+
+def _drop_generics(text: str) -> str:
+    """`class Foo<T extends Bar<U>> extends Base` -> `class Foo extends Base`: the bound
+    inside <> is not an inheritance clause."""
+    prev = None
+    while prev != text:
+        prev, text = text, re.sub(r'<[^<>]*>', '', text)
+    return text
 
 
 @dataclass
@@ -235,7 +270,10 @@ class _Scope:
     close: int = -1
     cls: str | None = None    # class/interface/enum/record NAME, or None for a plain block
     iface: bool = False
+    anon: bool = False        # `new Base() { … }`: a class body with no name
+    inherits: bool = False    # may inherit members: extends/implements clause, or anonymous
     fields: set = field(default_factory=set)   # static CODEC-shaped fields declared directly in this class body
+    inst: set = field(default_factory=set)     # INSTANCE CODEC-shaped fields declared directly in it
 
 
 class _Lexical:
@@ -243,23 +281,27 @@ class _Lexical:
 
     An unqualified `CODEC.register(` means "the CODEC visible from here", and Java's
     rule for that is lexical: a local or parameter first, then each enclosing class
-    outward (its own static fields, and — which is the rule deliberately NOT
-    implemented — its superclass's). So the lookup walks the scopes enclosing the call
-    site from the inside out and stops at the first that declares the name:
+    outward — each class contributing its OWN members and the ones it INHERITS. So the
+    lookup walks the scopes enclosing the call site from the inside out and stops at
+    the first that decides the name:
 
-      * a block that declares a LOCAL/PARAMETER of that name  -> the call is EXCLUDED
-        (it is not the registry field);
-      * a class that declares a STATIC FIELD of that name     -> the call is bound to it;
-      * nothing                                                -> UNRESOLVED.
+      * a block that declares a LOCAL/PARAMETER (or a lambda parameter) of that name
+        -> the call is EXCLUDED (it is not the registry field);
+      * a class declaring a STATIC field of that name       -> the call is bound to it;
+      * a class declaring an INSTANCE field of that name    -> EXCLUDED (not the static registry);
+      * a class that declares none but has an extends/implements clause, or an anonymous
+        class body       -> UNRESOLVED: the name may be inherited, and Java would bind it
+        there before looking outward. There is NO superclass rule that finds out, so the
+        site is listed rather than guessed; the fixture pins UNRESOLVED at 0 on the real
+        trees. Skipping such a class and binding to the outer field was the first
+        version's guess (review, 2026-10-15).
+      * nothing                                              -> UNRESOLVED.
 
-    A superclass rule would resolve an inherited `CODEC` and is left out on purpose:
-    guessing a registry is worse than listing a site nobody could place, and the
-    fixture pins UNRESOLVED at 0. Anonymous-class bodies, lambdas and array
-    initialisers are plain blocks — only a header naming class/interface/enum/record
-    makes a scope a class.
+    Lambdas and array initialisers are plain blocks — only a header naming
+    class/interface/enum/record makes a scope a class, and `new X(…) {` an anonymous one.
     """
-    def __init__(self, src: str):
-        m = self.masked = _mask(src)
+    def __init__(self, src: str, masked: str | None = None):
+        m = self.masked = masked if masked is not None else _mask(src)
         self.scopes: list[_Scope] = []
         stack, last = [], -1
         for i, c in enumerate(m):
@@ -270,6 +312,9 @@ class _Lexical:
                 if ch:
                     sc.cls = ch.group(2) or ch.group(4)
                     sc.iface = ch.group(1) == 'interface'
+                    sc.inherits = bool(_INHERITS.search(_drop_generics(head[ch.end():])))
+                elif _is_anonymous(head):
+                    sc.anon = sc.inherits = True
                 self.scopes.append(sc); stack.append(sc); last = i
             elif c == '}':
                 if stack: stack.pop().close = i
@@ -278,22 +323,43 @@ class _Lexical:
                 last = i
         for sc in self.scopes:
             if sc.close < 0: sc.close = len(m)
-        for fm in _STATIC_FIELD.finditer(m):
-            inner = self._innermost(fm.start(1))
-            if inner is not None and inner.cls:
-                inner.fields.add(fm.group(1))
         for sc in self.scopes:
-            if sc.iface:          # interface fields are implicitly static
-                for fm in _IFACE_FIELD.finditer(m, sc.open, sc.close):
-                    if self._innermost(fm.start(1)) is sc:
-                        sc.fields.add(fm.group(1))
+            if sc.cls:
+                self._members(sc)
 
-    def _innermost(self, off):
-        best = None
-        for sc in self.scopes:
-            if sc.open < off < sc.close and (best is None or sc.open > best.open):
-                best = sc
-        return best
+    def _members(self, sc: _Scope):
+        """The CODEC-shaped fields declared directly in class `sc`, split static/instance.
+        A member is the text between boundaries at the class's own depth; a field member
+        ends in `;`, its HEAD (up to the first `=`) carries the modifiers and the first
+        declarator, and further declarators follow commas (`static X A_CODEC = …, CODEC = …;`)."""
+        m, depth, start = self.masked, 0, sc.open + 1
+        for i in range(sc.open + 1, sc.close):
+            c = m[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0 and not re.match(r'\s*[;,).\]]', m[i + 1:i + 40]):
+                    # a method, nested class or initialiser block ends the member — but a
+                    # `}` followed by `;` or `)` closes a lambda or anonymous body INSIDE a
+                    # field initialiser (`CODEC = new AssetCodecMapCodec<…>(…, (t, k) -> {…});`),
+                    # and the member goes on to its `;`
+                    start = i + 1
+            elif c == ';' and depth == 0:
+                seg = m[start:i]
+                start = i + 1
+                eq = seg.find('=')
+                head = seg if eq < 0 else seg[:eq]
+                if '(' in head:           # a method declaration, not a field
+                    continue
+                names = []
+                hm = _FIELD_NAME.search(head)
+                if hm:
+                    names.append(hm.group(1))
+                names += _FIELD_DECLARATOR.findall(seg)
+                static = sc.iface or bool(re.search(r'\bstatic\b', head))
+                for n in names:
+                    (sc.fields if static else sc.inst).add(n)
 
     def _owner(self, off):
         """The scope a declaration at `off` belongs to: the innermost scope whose body
@@ -305,21 +371,37 @@ class _Lexical:
         return best
 
     def resolve(self, off: int, fld: str):
-        """('class', [outer..declaring class names]) | ('local', None) | ('unresolved', None)."""
+        """('class', [outer..declaring class names]) | ('local' | 'instance', None) |
+        ('unresolved', None)."""
         chain = [sc for sc in self.scopes if sc.open < off < sc.close]
         chain.sort(key=lambda sc: sc.open)
         local = re.compile(r'(?<![\w.$])([\w$.]+(?:\s*<[^;(){}=]*?>)?(?:\s*\[\s*\])*)\s+'
                            + re.escape(fld) + r'\s*[=;,:)]')
+        lam = re.compile(r'(?<![\w.$])' + re.escape(fld) + r'\s*->|\((?:[^()]*,)?\s*'
+                         + re.escape(fld) + r'\s*(?:,[^()]*)?\)\s*->')
         for k in range(len(chain) - 1, -1, -1):
             sc = chain[k]
             if sc.cls:
                 if fld in sc.fields:
                     return 'class', [c.cls for c in chain[:k + 1] if c.cls]
+                if fld in sc.inst:
+                    return 'instance', None
+                if sc.inherits:
+                    return 'unresolved', None
                 continue
+            if sc.anon:
+                return 'unresolved', None
             for lm in local.finditer(self.masked, sc.header, off):
                 if lm.group(1).split('.')[-1] in _NOT_A_TYPE:
                     continue
                 if self._owner(lm.start(1)) is sc:
+                    return 'local', None
+            for lm in lam.finditer(self.masked, sc.header, off):
+                # a lambda parameter is in scope for the lambda's own body: the block it
+                # heads (match inside this block's header), or the rest of its statement
+                in_header = lm.start() < sc.open
+                if in_header or (self._owner(lm.start()) is sc
+                                 and not re.search(r'[;{}]', self.masked[lm.end():off])):
                     return 'local', None
         return 'unresolved', None
 
@@ -445,11 +527,18 @@ def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
     consts = dict(_CONST.findall(src))
     out = []
     lexical = None
+    # Anchors and `.register(` calls are looked for in the MASKED text (comments and string
+    # contents blanked, offsets kept), the ids are read from the original. A registration
+    # spelled in a `//` comment or a string is not a registration: check-type-values mines
+    # docs java fences with this, and a commented-out example there supplied a page-local
+    # name (review, 2026-10-15).
+    masked = _mask(src)
 
     for stmt, off in _statement_spans(src):
-        if '.register(' not in stmt:
+        mstmt = masked[off:off + len(stmt)]
+        if '.register(' not in mstmt:
             continue
-        anc = _anchor(stmt)
+        anc = _anchor(mstmt)
         if anc is None:
             continue
         form, recv, fld, at = anc
@@ -463,11 +552,12 @@ def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
             declaring = _resolve_type(recv, imports, pkg)
         else:
             if lexical is None:
-                lexical = _Lexical(src)
+                lexical = _Lexical(src, masked)
             how, names = lexical.resolve(off + at, fld)
-            if how == 'local':                                 # property: a local shadows the field
+            if how in ('local', 'instance'):       # property: not the static registry field
                 if skipped is not None:
-                    skipped.append(Skip(str(path), first_line, fld, form, 'local', fld))
+                    skipped.append(Skip(str(path), first_line, fld, form,
+                                        'local' if how == 'local' else 'instance-field', fld))
                 continue
             if how == 'class':
                 declaring = '.'.join(([pkg] if pkg else []) + names)
@@ -476,7 +566,7 @@ def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
                 if skipped is not None:
                     skipped.append(Skip(str(path), first_line, fld, form, 'unresolved', fld))
 
-        for rm in _REGISTER.finditer(stmt):
+        for rm in _REGISTER.finditer(mstmt):
             opener = rm.end() - 1
             try:
                 body = stmt[opener + 1:_scan(stmt, opener) - 1]

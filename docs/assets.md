@@ -7,7 +7,7 @@ seo:
 
 # Assets API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 The assets system loads, registers, and looks up data-driven game content (items, blocks, models, and custom plugin types) backed by JSON files and codec serialization.
 
@@ -713,7 +713,7 @@ The `JavaPlugin` module that owns common-asset loading, file monitoring, and cli
 | `addCommonAsset(String pack, T asset)` | `void` | Register (or hot-reload) a `CommonAsset` under a pack name; broadcasts the change to connected clients and shows a reload notification |
 | `addCommonAsset(String pack, T asset, boolean log)` | `void` | Same, optionally without the log line |
 | `getRequiredAssets()` | `Asset[]` | Packet forms of every registered asset (what a joining client is told about) |
-| `sendAssetsToPlayer(PacketHandler, Asset[], boolean forceRebuild)` | `void` | Stream specific assets (by hash) to one client; `null` array = all assets |
+| `sendAssetsToPlayer(PacketHandler, Asset[], boolean forceRebuild)` | `void` | Stream specific assets (by hash) to one client; `null` array = all assets. As of 0.7.2 a hash that names no registered asset logs a warning and **disconnects** that client |
 | `sendAsset(CommonAsset, boolean forceRebuild)` | `void` | Broadcast one asset to all clients |
 | `sendAssets(List<CommonAsset>, boolean forceRebuild)` | `void` | Broadcast several assets |
 

@@ -7,7 +7,7 @@ seo:
 
 # UI Elements Reference
 
-**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.8**
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.7.2**
 
 Comprehensive reference for all UI element types in Hytale's DSL.
 
@@ -91,7 +91,7 @@ Basic container for grouping and laying out child elements.
 | `Background` | Background | Background color/texture |
 | `Visible` | Boolean | Visibility state |
 | `FlexWeight` | Number | Flex layout weight |
-| `Opacity` | Number | Opacity (0.0 to 1.0) |
+| `Opacity` | Number | Opacity (0.0 to 1.0). Unverified: no shipped `.ui` file sets it, and nothing in the server jar names it as a UI property |
 | `HitTestVisible` | Boolean | Whether the element takes part in pointer hit-testing; set `false` on purely decorative overlays (see [Java API → Gotchas](ui-api.md#gotchas--errors)) |
 
 **Example:**
@@ -130,7 +130,7 @@ Static or dynamic text display.
 | `Style` | Style | Text styling |
 | `Anchor` | Anchor | Position and size |
 | `Visible` | Boolean | Visibility state |
-| `Opacity` | Number | Opacity (0.0 to 1.0) |
+| `Opacity` | Number | Opacity (0.0 to 1.0). Unverified: no shipped `.ui` file sets it, and nothing in the server jar names it as a UI property |
 
 **Example:**
 ```

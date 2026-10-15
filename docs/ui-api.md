@@ -7,7 +7,7 @@ seo:
 
 # UI Java API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 Server-side Java API reference for Hytale's UI system.
 
@@ -318,11 +318,13 @@ void openCustomPage(Ref<EntityStore> ref, Store<EntityStore> store, CustomUIPage
 boolean setPageWithWindows(Ref<EntityStore> ref, Store<EntityStore> store, Page page, boolean animate, Window... windows)
 boolean openCustomPageWithWindows(Ref<EntityStore> ref, Store<EntityStore> store, CustomUIPage page, Window... windows)
 
-// Update
-void updateCustomPage(CustomPage page)
+// Close whatever page is open (0.7.2+); resetPages(PlayerRef) clears page state
+void closePage(Ref<EntityStore> ref, Store<EntityStore> store)
+void resetPages(PlayerRef playerRef)
 
-// Event handling
-void handleEvent(Ref<EntityStore> ref, Store<EntityStore> store, CustomPageEvent event)
+// Update / event handling — renamed in 0.7.2 from updateCustomPage / handleEvent
+void updateLegacyCustomPage(CustomPage page)
+void handleLegacyCustomPageEvent(Ref<EntityStore> ref, Store<EntityStore> store, CustomPageEvent event)
 ```
 
 ### Page Enum
@@ -341,6 +343,8 @@ Built-in page types.
 | `ContentCreation` | Content creation tools |
 | `Custom` | Custom plugin-defined page |
 | `Serverside` | Server-driven page slot (engine-internal) |
+| `Chapters` / `ChapterRewards` | Chapter pages (0.7.2+) |
+| `PortalSummon` / `PortalActive` / `PortalError` | Portal-device pages (0.7.2+). The portal device now opens native client pages through `OpenPortalSummonPage` / `OpenPortalActivePage` / `OpenPortalErrorPage` packets; its `PortalDevice*.ui` custom pages were removed |
 
 ```java
 static Page[] values()
@@ -518,21 +522,36 @@ single player, a whole world, or the universe.
 ```java
 import com.hypixel.hytale.server.core.util.EventTitleUtil;
 
+import com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle;
+
 // To one player (short form):
-EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor /*boolean*/);
+EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, EventTitleStyle.Major);
 
 // To one player (full timing control) / to a world / to everyone:
-EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, isMajor,
+EventTitleUtil.showEventTitleToPlayer(playerRef, title, subtitle, EventTitleStyle.Major,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);   // floats, in seconds
-EventTitleUtil.showEventTitleToWorld(title, subtitle, isMajor,
+EventTitleUtil.showEventTitleToWorld(title, subtitle, EventTitleStyle.Major,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut, world);   // World, not Store, as of 0.6.3
-EventTitleUtil.showEventTitleToUniverse(title, subtitle, isMajor,
+EventTitleUtil.showEventTitleToUniverse(title, subtitle, EventTitleStyle.Major,
         EventTitleUtil.DEFAULT_ZONE, duration, fadeIn, fadeOut);
+
+// Or pass a whole EventTitleConfig (0.7.2+):
+EventTitleUtil.showEventTitleToPlayer(playerRef, config);
+EventTitleUtil.showEventTitleToWorld(config, world);
+EventTitleUtil.showEventTitleToUniverse(config);
 
 // Clear early:
 EventTitleUtil.hideEventTitleFromPlayer(playerRef, fade);
 EventTitleUtil.hideEventTitleFromWorld(fade, world);
 ```
+
+> **Changed in 0.7.2:** the `boolean isMajor` overloads of `showEventTitleToPlayer` / `ToWorld` / `ToUniverse` are
+> `@Deprecated(forRemoval = true)`. Pass an `EventTitleStyle` instead (`Default`, `Major`, `GoblinBreach`,
+> `VoidEviction`; `isMajor = true` maps to `Major`), or an `EventTitleConfig` — a codec-backed bundle
+> (`EventTitleConfig.CODEC`, keys `PrimaryTitle`, `SecondaryTitle`, `Style`, `Icon`, `DurationS`, `FadeInDurationS`,
+> `FadeOutDurationS`, `SoundEventId`) that the instances module reads from world config. The short
+> `(playerRef, title, subtitle, style)` form uses `getDefaultFadeInDuration(style)` — `0.75f` for `GoblinBreach`,
+> `1.5f` otherwise.
 
 The world forms take a `World` as of 0.6.3 (0.5.9 took a `Store<EntityStore>`): use the `World`
 parameter a command's `execute(...)` hands you, or `store.getExternalData().getWorld()` from inside a
@@ -552,7 +571,7 @@ cadence (`1.0f` for a per-second countdown) so each title plays exactly until th
 
 ```java
 EventTitleUtil.showEventTitleToWorld(
-    Message.raw("Next round in " + secondsLeft), subtitle, /*isMajor*/ true,
+    Message.raw("Next round in " + secondsLeft), subtitle, EventTitleStyle.Major,
     EventTitleUtil.DEFAULT_ZONE, /*duration*/ 1.0f, /*fadeIn*/ 0f, /*fadeOut*/ 0f, world);
 ```
 
@@ -745,6 +764,11 @@ protected void setup() {
 supplier's own codec (`Server/Item/Items/Electrum/Portal/Teleporter.json` shows the shipped form:
 `"Id": "Teleporter"` alongside `"Mode"`, `"ActiveState"` and `"WarpNameWordList"`).
 
+0.7.2 adds two built-in page ids that need no plugin code, both registered by `InteractionModule`:
+`"Confirmation"` (`ConfirmationPage`; required `TitleKey`, `MessageKey` and `Success`, optional `ConfirmKey` /
+`CancelKey` button labels and `Fail` — `Success` / `Fail` are root interactions run as a `Use` on the block when the
+player confirms or the page closes any other way) and `"BlockLore"` (`BlockLorePage`; optional `TextAlignment`, default `Center`).
+
 ---
 
 ## WindowManager
@@ -820,10 +844,10 @@ EventRegistration registerCloseEvent(EventPriority priority, Consumer<Window.Win
 
 | Class | Description |
 |-------|-------------|
-| `ContainerWindow` | Container-based windows |
-| `ItemContainerWindow` | Item container windows |
-| `BlockWindow` | Block interaction windows |
-| `ValidatedWindow` | Windows with validation |
+| `ContainerWindow` | Container-based windows (implements `ItemContainerWindow`) |
+| `ItemStackContainerWindow` | Window over an item stack's own container (implements `ItemContainerWindow`) |
+| `BlockWindow` | Abstract block interaction window (implements `ValidatedWindow`) |
+| `ItemContainerWindow` / `ValidatedWindow` | *Interfaces*, not subclasses: `getItemContainer()` / `validate(Ref, ComponentAccessor)` |
 
 ### WindowType Enum
 **Package:** `com.hypixel.hytale.protocol.packets.window`
@@ -837,6 +861,7 @@ EventRegistration registerCloseEvent(EventPriority priority, Consumer<Window.Win
 | `StructuralCrafting` | Building/structural crafting |
 | `Processing` | Processing bench (smelting, etc.) |
 | `Memories` | Memories/journal window |
+| `AbilityBench` | Ability bench window (0.7.2+; `AbilityBenchWindow`) |
 
 ```java
 static WindowType[] values()

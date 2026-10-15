@@ -7,7 +7,7 @@ seo:
 
 # UI Templates, Variables & Localization
 
-**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.6.8**
+**Doc type:** UI DSL · **Assets:** `Common/UI` · **Verified against 0.7.2**
 
 Advanced DSL features for reusable UI components and localization.
 
@@ -184,7 +184,7 @@ These are real templates available via `$C.@Name` after `$C = "../Common.ui";`:
 | `@TextButton` / `@SecondaryTextButton` / `@TertiaryTextButton` | Styled text buttons (parameters: `@Anchor`, `@Text`, `@Sounds`) |
 | `@Button` / `@SecondaryButton` / `@CancelButton` | Styled icon buttons |
 | `@Title` / `@Subtitle` | Title and subtitle labels (parameter: `@Text`, `@Alignment`) |
-| `@CheckBox` / `@CheckBoxWithLabel` | Checkbox (parameters: `@Checked`, `@Text`, `@LabelStyle`) |
+| `@CheckBox` / `@CheckBoxWithLabel` | Checkbox; the labelled variant takes `@Checked`, `@Text`, `@LabelStyle` |
 | `@TextField` / `@NumberField` / `@MultilineTextField` | Input fields (parameter: `@Anchor`) |
 | `@DropdownBox` | Dropdown (parameter: `@Anchor`) |
 | `@Slider` / `@FloatSlider` | Sliders (parameter: `@Anchor`) |

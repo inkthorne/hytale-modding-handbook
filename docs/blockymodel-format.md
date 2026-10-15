@@ -7,7 +7,7 @@ seo:
 
 # Block Model Format (.blockymodel)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.7.2**
 
 This document describes the `.blockymodel` file format used for defining 3D geometry in Hytale.
 
@@ -27,6 +27,7 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 .blockymodel (JSON)
 ├── lod                "auto" | "off" | "disappear" | "billboard"
 ├── format             optional: "character" | "prop"
+├── attachments[]      optional, editor-only attachment list (3 NPC models)
 └── nodes[]            hierarchical node tree
     └── node           id, name, position, orientation
         ├── shape       mesh geometry
@@ -50,16 +51,16 @@ Blockymodel files work closely with `.blockyanim` files - the model defines geom
 
 ## File Location
 
-Models live under `Common/`, grouped by what they are for (counts are the shipped `.blockymodel` files as of 0.6.8, 2,830 in total):
+Models live under `Common/`, grouped by what they are for (counts are the shipped `.blockymodel` files as of 0.7.2, 3,183 in total):
 
 | Category | Location | Shipped files |
 |----------|----------|---------------|
-| Block models | `Common/Blocks/<Category>/` — `Decorative_Sets/`, `Structures/`, `Foliage/`, `Benches/`, `Miscellaneous/`, `Dungeons/`, `Tinkering/`, `Stone/`, `Farming/` … | 1,151 |
-| NPC models | `Common/NPC/` | 669 |
-| Item models | `Common/Items/` | 454 |
-| Cosmetics (haircuts, etc.) | `Common/Cosmetics/` | 285 |
-| Character models | `Common/Characters/` | 168 |
-| Resource/ingredient models | `Common/Resources/` | 101 |
+| Block models | `Common/Blocks/<Category>/` — `Decorative_Sets/`, `Structures/`, `Foliage/`, `Benches/`, `Miscellaneous/`, `Dungeons/`, `Tinkering/`, `Stone/`, `Farming/` … | 1,221 |
+| NPC models | `Common/NPC/` | 762 |
+| Item models | `Common/Items/` | 485 |
+| Cosmetics (haircuts, etc.) | `Common/Cosmetics/` | 409 |
+| Character models | `Common/Characters/` | 195 |
+| Resource/ingredient models | `Common/Resources/` | 109 |
 | Effect models | `Common/VFX/` | 2 |
 
 There is no `Common/Blocks/Models/` folder — block models sit beside their textures and animations inside a category
@@ -90,11 +91,12 @@ a model whose every shape is invisible yields `null`. A file it cannot parse log
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `nodes` | array | Yes | Array of root-level node objects defining the model hierarchy (688 shipped models have more than one root) |
-| `lod` | string | No | Level-of-detail mode: `"auto"` (2,673 files), `"off"` (132), `"disappear"` (6 — foliage such as `Blocks/Foliage/Plants/Mushroom.blockymodel`) or `"billboard"` (6 — leaves such as `Blocks/Foliage/Leaves/PineShape.blockymodel`). 13 files omit it |
-| `format` | string | No | Model kind tag written by the editor: `"character"` (272 files — mostly `Characters/` (120), `Cosmetics/` (76) and `NPC/` (39), but also `Items/` (26), `Resources/` (6) and `Blocks/` (5)) or `"prop"` (93 files, all under `Blocks/`). Absent from 2,465 of the 2,830 files |
+| `nodes` | array | Yes | Array of root-level node objects defining the model hierarchy (792 shipped models have more than one root) |
+| `lod` | string | No | Level-of-detail mode: `"auto"` (3,049 files), `"off"` (110), `"disappear"` (6 — foliage and rubble such as `Blocks/Foliage/Plants/Mushroom.blockymodel`) or `"billboard"` (5 — leaves such as `Blocks/Foliage/Leaves/PineShape.blockymodel`). 13 files omit it |
+| `format` | string | No | Model kind tag written by the editor: `"character"` (681 files — mostly `Cosmetics/` (227), `NPC/` (182) and `Characters/` (156), but also `Items/` (72), `Resources/` (34) and `Blocks/` (10)) or `"prop"` (235 files — 228 under `Blocks/`, plus 3 `Items/`, 3 `NPC/` and 1 `Resources/`). Absent from 2,267 of the 3,183 files |
 | `lodFriendly` | boolean | No | Rare editor flag (3 files) |
 | `editor` | string | No | Rare provenance tag, e.g. `"blockbench"` (15 files) |
+| `attachments` | array | No | Editor attachment list — entries carry `name`, `path`, `textures`, `primaryTexture` and `unloaded` (3 NPC models, e.g. `NPC/Boss/Goblin_Gobliterator/Models/Model.blockymodel`). `BlockyModelBoundsParser` reads only `nodes` |
 
 ## Node Structure
 
@@ -123,7 +125,7 @@ Each node in the hierarchy can contain geometry and/or child nodes:
 | `children` | array | No | Array of child node objects |
 
 In practice every node in the shipped assets carries all of `id`, `name`, `position`, `orientation` and `shape`
-(39,440 of 39,440 nodes); only `children` is ever omitted. Write all five to match the editor's output.
+(47,268 of 47,268 nodes); only `children` is ever omitted. Write all five to match the editor's output.
 
 ### Position and Orientation
 
@@ -172,8 +174,8 @@ full span, so the corners sit at ±`size/2` before `stretch` is applied.
 | Field | Type | Description |
 |-------|------|-------------|
 | `settings.size` | object | Box dimensions in model units `{x, y, z}` (always present) |
-| `settings.isPiece` | boolean | Optional editor flag (3,564 boxes; also on every `none` shape) |
-| `settings.isStaticBox` | boolean | Optional editor flag (931 boxes) |
+| `settings.isPiece` | boolean | Optional editor flag (8,496 boxes; also on every `none` shape) |
+| `settings.isStaticBox` | boolean | Optional editor flag (3,502 boxes) |
 
 ### Quad Shape
 
@@ -194,8 +196,8 @@ Flat 2D planes, commonly used for foliage and flat decorations:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `settings.size` | object | Width and height in model units — `{x, y}` on 10,980 shipped quads, `{x, y, z}` on 319 (the `z` is ignored) |
-| `settings.normal` | **string** | Axis the quad lies on: `"+Z"` (9,385 shipped quads), `"-Z"` (767), `"+Y"` (295), `"+X"` (263), `"-X"` (167), `"-Y"` (52). Present on 10,929 of 11,299 quads; `BlockyModelBoundsParser` defaults a missing one to `"+Z"`. It is **not** a `{x, y, z}` vector |
+| `settings.size` | object | Width and height in model units — `{x, y}` on 12,649 shipped quads, `{x, y, z}` on 306 (the `z` is ignored) |
+| `settings.normal` | **string** | Axis the quad lies on: `"+Z"` (10,774 shipped quads), `"-Z"` (903), `"+Y"` (338), `"+X"` (295), `"-X"` (192), `"-Y"` (83). Present on 12,585 of 12,955 quads; `BlockyModelBoundsParser` defaults a missing one to `"+Z"`. It is **not** a `{x, y, z}` vector |
 | `settings.isPiece` / `settings.isStaticBox` | boolean | Optional editor flags, as for boxes |
 
 The `±X` / `±Y` / `±Z` pairs each select the same corner set, so the sign only affects which way the face is lit and
@@ -230,18 +232,20 @@ Structural nodes without visible geometry. Used for grouping, attachment points,
 
 | Mode | Shipped shapes | Description |
 |------|----------------|-------------|
-| `"flat"` | 29,722 | Flat/unlit shading, no shadows — the most common value |
-| `"standard"` | 8,844 | Normal lighting and shading |
-| `"fullbright"` | 765 | Always fully lit (emissive-looking) |
-| `"reflective"` | 106 | Reflective surface rendering |
+| `"flat"` | 37,182 | Flat/unlit shading, no shadows — the most common value |
+| `"standard"` | 9,046 | Normal lighting and shading |
+| `"fullbright"` | 885 | Always fully lit (emissive-looking) |
+| `"reflective"` | 152 | Reflective surface rendering |
+
+Three box shapes (in `Blocks/Structures/Fences/Dev_Fence_Cross` and `Dev_Fence_T`) omit `shadingMode` altogether.
 
 ### Unwrap Modes
 
 | Mode | Shipped shapes | Description |
 |------|----------------|-------------|
-| `"custom"` | 38,587 | Use the explicit `textureLayout` for UV coordinates — effectively the default |
-| `"full"` | 613 | Automatic unwrap of the whole shape |
-| `"collapsed"` | 240 | Automatic unwrap with all faces collapsed onto one region |
+| `"custom"` | 46,428 | Use the explicit `textureLayout` for UV coordinates — effectively the default |
+| `"full"` | 606 | Automatic unwrap of the whole shape |
+| `"collapsed"` | 234 | Automatic unwrap with all faces collapsed onto one region |
 
 There is **no** `"standard"` unwrap mode — it appears in no shipped model.
 
@@ -268,7 +272,7 @@ Boxes have six faces that can each be configured:
 
 ### Quad Texture Layout
 
-Quads have a single `front` face (a `back` entry appears on only 16 of 11,299 shipped quads):
+Quads have a single `front` face (a `back` entry appears on only 16 of 12,955 shipped quads):
 
 ```json
 {
@@ -285,6 +289,7 @@ Quads have a single `front` face (a `back` entry appears on only 16 of 11,299 sh
 | `offset` | object | Texture coordinates `{x, y}` in pixels from top-left of texture |
 | `mirror` | object | Flip texture on X and/or Y axis `{x: bool, y: bool}` |
 | `angle` | integer | Rotation angle in degrees (0, 90, 180, 270) |
+| `transparent` | boolean | Optional; `true` on 168 shipped faces (window panes, crystals, a spyglass lens). It first appears in the 0.7.2 assets — every file carrying it was added or changed in that build |
 
 ## Examples
 
@@ -524,10 +529,10 @@ Blocks reference models through `CustomModel` in their definition (from
 }
 ```
 
-`CustomModelTexture` is an array of `{Texture: string, Weight: integer}` entries (of the 2,884 shipped entries, 2,835
-carry `Weight` and 49 omit it); several entries make the game pick a texture variant by weight. The texture path is
+`CustomModelTexture` is an array of `{Texture: string, Weight: integer}` entries (of the 3,170 shipped entries, 3,087
+carry `Weight` and 83 omit it); several entries make the game pick a texture variant by weight. The texture path is
 relative to `Common/` — usually beside the model (`Blocks/…`), sometimes under `BlockTextures/`. `CustomModelScale`
-(float, e.g. `0.5`–`1`) is optional and appears 319 times across 235 shipped asset files (block-state definitions can
+(float, e.g. `0.5`–`1`) is optional and appears 349 times across 265 shipped asset files (block-state definitions can
 each set their own). Animated blocks add `CustomModelAnimation` — see
 [Block Animation Format](blockyanim-format.md#integration-with-blocks).
 
@@ -545,7 +550,7 @@ Model paths are relative to `Common/` and include the `.blockymodel` extension.
 
 ## Best Practices
 
-1. **Root node naming is free for blocks** - `R-Attachment` is the character/NPC convention (the root of the player and most NPC rigs, where attachments hang off named nodes), and 234 of the 1,151 shipped block models use it too — but `Node`, `Origin`, `Block` and `Base` are just as common for blocks, and the server code never references the name
+1. **Root node naming is free for blocks** - `R-Attachment` is the character/NPC convention (the root of the player and most NPC rigs, where attachments hang off named nodes), and 272 of the 1,221 shipped block models use it too — but `Node`, `Origin`, `Block` and `Base` are just as common for blocks, and the server code never references the name
 
 2. **Name nodes for animation** - Use clear, descriptive names that match what you'll reference in `.blockyanim` files
 

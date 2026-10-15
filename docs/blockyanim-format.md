@@ -7,7 +7,7 @@ seo:
 
 # Block Animation Format (.blockyanim)
 
-**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Common` · **Verified against 0.7.2**
 
 This document describes the `.blockyanim` file format used for animating block states in Hytale.
 
@@ -47,20 +47,20 @@ Blockyanim files define animations for block models, controlling how individual 
 
 ## File Location
 
-Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Distribution of the 6,736 shipped files under `Common/` (0.6.8):
+Despite the "block animation" name, `.blockyanim` files animate any blockymodel — and in the shipped assets they are overwhelmingly used for **characters and NPCs**, not blocks. Distribution of the 7,123 shipped files under `Common/` (0.7.2):
 
 | Location | Files | Typical use |
 |----------|-------|-------------|
-| `NPC/` | 4,310 | NPC/creature animations |
-| `Characters/` | 2,309 | Player and character animations |
-| `Blocks/` | 77 | Doors, chests, benches, lights, mechanical blocks |
-| `Items/` | 37 | Item animations |
-| `VFX/`, `Resources/` | 3 | Effect animations |
+| `NPC/` | 4,636 | NPC/creature animations |
+| `Characters/` | 2,339 | Player and character animations |
+| `Blocks/` | 101 | Doors, chests, benches, lights, mechanical blocks |
+| `Items/` | 40 | Item animations |
+| `VFX/`, `Resources/` | 7 | Effect animations |
 
 The generic block clips live under `Common/Blocks/Animations/`, one folder per block kind: `Door/` (6 — `Door_Open_In`,
 `Door_Open_Out`, `Door_Close_In`, `Door_Close_Out`, `Door_Open_Slide_In`, `Door_Open_Slide_Out`), `Chest/` (`Chest_Open`,
 `Chest_Close`), `Trapdoor/`, `Wardrobe/`, `Coffin/`, `Light/`, `Fire/`, `Candle/`. The remaining block animations sit
-beside their models — `Blocks/Benches/` (20), `Blocks/Decorative_Sets/<Set>/`, `Blocks/Tinkering/Traps/`, etc.
+beside their models — `Blocks/Benches/` (31), `Blocks/Decorative_Sets/<Set>/`, `Blocks/Tinkering/Traps/`, etc.
 
 The server validates a block's `CustomModelAnimation` path with `CommonAssetValidator.ANIMATION_ITEM_BLOCK`: it must start
 with `Blocks/`, `Items/`, `Resources/`, `NPC/`, `VFX/` or `Consumable/`, end in `.blockyanim`, and exist in the
@@ -99,14 +99,14 @@ client.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `formatVersion` | integer | Usually | Schema version, currently `1`. Present in 6,732 of 6,736 shipped files |
-| `duration` | integer | Yes | Total animation length in frames (at 60 FPS). Shipped range 9–600; block clips 21–180 (median 50) |
-| `holdLastKeyframe` | boolean | Yes in practice | If `true`, animation holds the final keyframe values when complete; if `false` it loops. Every shipped file sets it explicitly (5,741 `false`, 995 `true`) — do not rely on a default |
+| `formatVersion` | integer | Usually | Schema version, currently `1`. Present in 7,119 of 7,123 shipped files |
+| `duration` | integer | Yes | Total animation length in frames (at 60 FPS). Shipped range 9–600; block clips 21–600 (median 60) |
+| `holdLastKeyframe` | boolean | Yes in practice | If `true`, animation holds the final keyframe values when complete; if `false` it loops. Every shipped file sets it explicitly (6,015 `false`, 1,108 `true`) — do not rely on a default |
 | `nodeAnimations` | object | Yes | Map of node names to their animation tracks |
 
 ## Node Animations
 
-The `nodeAnimations` object maps node names (as defined in the block's `.blockymodel`) to animation data. Each node can use any combination of the five track types — but the editor always writes **all five keys**, with `[]` for unused tracks (every one of the 129,603 shipped node entries lists all five), so do the same.
+The `nodeAnimations` object maps node names (as defined in the block's `.blockymodel`) to animation data. Each node can use any combination of the five track types — but the editor always writes **all five keys**, with `[]` for unused tracks (every one of the 142,263 shipped node entries lists all five), so do the same.
 
 ### Animation Track Types
 
@@ -116,7 +116,7 @@ The `nodeAnimations` object maps node names (as defined in the block's `.blockym
 | `orientation` | `{"x", "y", "z", "w"}` | Rotates the node using quaternion values |
 | `shapeStretch` | `{"x", "y", "z"}` | Scales the node along each axis |
 | `shapeVisible` | `boolean` | Shows or hides the node |
-| `shapeUvOffset` | `{"x", "y"}` | Offsets the shape's texture-atlas origin in **texture pixels** (e.g. `{"x": 160, "y": 0}` to swap a face to the next sprite); used for mouth/eye sprite swaps and scrolling. The keys are `x`/`y`, **not** `u`/`v` — all 651 shipped keyframes use `x`/`y` |
+| `shapeUvOffset` | `{"x", "y"}` | Offsets the shape's texture-atlas origin in **texture pixels** (e.g. `{"x": 160, "y": 0}` to swap a face to the next sprite); used for mouth/eye sprite swaps and scrolling. The keys are `x`/`y`, **not** `u`/`v` — all 709 shipped keyframes use `x`/`y` |
 
 ## Keyframe Structure
 
@@ -136,7 +136,7 @@ Each track contains an array of keyframes. Keyframe structure varies by track ty
 |-------|------|-------------|
 | `time` | integer | Frame number (at 60 FPS) when this keyframe occurs |
 | `delta` | object | The value at this keyframe (format depends on track type) |
-| `interpolationType` | string | How to interpolate to this keyframe. Optional — omitted on 936 shipped keyframes (most of them `shapeUvOffset`, which is a sprite swap rather than a blend) |
+| `interpolationType` | string | How to interpolate to this keyframe. Optional — omitted on 891 shipped keyframes (most of them `shapeUvOffset`, which is a sprite swap rather than a blend) |
 
 ### ShapeVisible Keyframes
 
@@ -281,9 +281,10 @@ A chest whose lid rotates while a button sinks, then pops back — trimmed from 
 ## Integration with Blocks
 
 Blocks reference animations through the `CustomModelAnimation` property of their `BlockType`. It can sit directly on
-the `BlockType` (28 of the 367 shipped references — always-on loops such as fires and lights), but the usual place is a
-**block-state definition** under `BlockType.State.Definitions.<State>` (338, six of them nested one level deeper), so
-that each state — open, closed — plays its own clip. Abridged from
+the `BlockType` (36 of the 405 shipped references — always-on loops such as fires and lights), but the usual place is a
+**block-state definition** under `BlockType.State.Definitions.<State>` (368, six of them nested one level deeper), so
+that each state — open, closed — plays its own clip. (The one remaining reference sits on an item-level state's
+`BlockType`, in `Deco_Mug.json`.) Abridged from
 `Server/Item/Items/Furniture/Desert/Furniture_Desert_Door.json`:
 
 ```json
@@ -308,8 +309,8 @@ that each state — open, closed — plays its own clip. Abridged from
 }
 ```
 
-The animation path is relative to `Common/` and **includes** the `.blockyanim` extension — all 367 shipped references
-do, and `CommonAssetValidator.ANIMATION_ITEM_BLOCK` rejects a path without it (`Common Asset '<path>' must have the
+The animation path is relative to `Common/` and **includes** the `.blockyanim` extension — all 404 shipped string references
+do (the 405th is a `null` that clears the clip for one state of `Deco_Scarak_Eggsacks.json`), and `CommonAssetValidator.ANIMATION_ITEM_BLOCK` rejects a path without it (`Common Asset '<path>' must have the
 extension blockyanim`).
 
 | `BlockType` key | Type | Description |
@@ -326,8 +327,8 @@ extension blockyanim`).
 
 ## Best Practices
 
-1. **Keep durations short** - Shipped block clips run 21–180 frames (median 50, i.e. ⅓–3 s at 60 FPS); doors and chests finish their motion within the first 20–35 frames and hold
-2. **Use smooth for mechanical motion** - Doors and lids feel more natural with smooth interpolation (429,461 of the shipped keyframes are `smooth`, 18,339 `linear`)
+1. **Keep durations short** - Shipped block clips run 21–600 frames (median 60, i.e. ⅓–10 s at 60 FPS); doors and chests finish their motion within the first 20–35 frames and hold
+2. **Use smooth for mechanical motion** - Doors and lids feel more natural with smooth interpolation (488,740 of the shipped keyframes are `smooth`, 36,904 `linear`)
 3. **Match node names exactly** - Node names must match those in the `.blockymodel` file
 4. **Consider reverse animations** - Doors need both open and close animations (the shipped set pairs `Door_Open_Out`/`Door_Close_Out`, `Chest_Open`/`Chest_Close`)
 5. **Time at 60 FPS** - Remember the fixed frame rate when timing animations (60 frames = 1 second)

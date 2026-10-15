@@ -7,7 +7,7 @@ seo:
 
 # Codecs API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 Hytale uses a codec-based serialization system for data persistence, configuration, and asset loading. It is built on **BSON** (`org.bson.BsonValue` / `org.bson.BsonDocument`) and can also read JSON directly.
 
@@ -531,6 +531,8 @@ public static final BuilderCodec<RangeVector3f> RANGE_VECTOR3F;
 public static final BuilderCodec<InitialVelocity> INITIAL_VELOCITY;
 public static final BuilderCodec<UVMotion> UV_MOTION;
 public static final BuilderCodec<ItemAnimation> ITEM_ANIMATION_CODEC;
+public static final EnumCodec<EventTitleStyle> EVENT_TITLE_STYLE_CODEC;        // 0.7.2+
+public static final EnumCodec<MapMarkerIconSize> MAP_MARKER_ICON_SIZE_CODEC;   // 0.7.2+
 public static final EnumCodec<EasingType> EASING_TYPE_CODEC;
 public static final EnumCodec<ChangeStatBehaviour> CHANGE_STAT_BEHAVIOUR_CODEC;
 public static final EnumCodec<AccumulationMode> ACCUMULATION_MODE_CODEC;
@@ -665,7 +667,14 @@ public static void extractZip(InputStream zip, Path target) throws IOException;
 public static void writeStringAtomic(Path path, String content) throws IOException;  // backup = true
 public static void writeStringAtomic(Path path, String content, boolean backup) throws IOException; // backup: keep old file as .bak
 public static void atomicMove(Path from, Path to) throws IOException;
+public static void copyToBackup(Path file);   // 0.7.2+: copy (not move) file to <file>.bak, best-effort
 ```
+
+As of 0.7.2 a backup write **copies** the existing file to `<name>.bak` (through a `.bak.tmp` and an atomic move)
+instead of moving it, so the original stays in place until the new content replaces it; `copyToBackup` logs a
+failure at FINE and keeps the older backup rather than throwing. `BsonUtil.writeDocument(..., backup)` goes through
+the same path. On Windows, `atomicMove` and the backup copy retry up to five times when another process holds the
+file locked.
 
 ### MemorySegmentUtil
 

@@ -7,7 +7,7 @@ seo:
 
 # Audio System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Audio` · **Verified against 0.7.2**
 
 Hytale's audio system is defined through JSON assets in `Server/Audio/`. The system supports multi-layer sound events, hierarchical audio categories for mixing, ambient soundscapes with environmental conditions, and spatial audio effects.
 
@@ -34,6 +34,8 @@ Server/Audio/
 │   └── Conditions    Environment/Weather tag patterns, light/time/altitude/walls
 ├── MusicContainers/  composable music graph (Update 5): SingleTrack / Random / Sequence / Horizontal / Segment
 ├── AudioStates/      named state axes (Values, DefaultTransition) that Segment layers/StateBindings react to
+├── MusicTransitions/ rules for how one music container hands over to another (0.7.2+)
+├── Stingers/         short musical accents played in answer to a music event (0.7.2+)
 ├── EQ/               equalizer presets (4-band parametric)
 ├── Reverb/           environment reverb presets
 ├── ItemSounds/       ISS_* inventory drag/drop sound sets
@@ -51,6 +53,8 @@ Server/Audio/
 | Music | `Server/Audio/AmbienceFX/Music/*.json` | Background music track playlists (legacy — see MusicContainer) |
 | Music Container | `Server/Audio/MusicContainers/*.json` | Composable music graph (Update 5): single track, random/sequence playlists, horizontal/segment layering |
 | Audio State | `Server/Audio/AudioStates/*.json` | Named state axis (`Values`, `DefaultValue`, `DefaultTransition`) driving `StateBindings` |
+| Music Transition | `Server/Audio/MusicTransitions/*.json` | Handover rule between two music containers (0.7.2+) |
+| Stinger | `Server/Audio/Stingers/*.json` | Musical accent played when a music event is posted (0.7.2+) |
 | EQ Preset | `Server/Audio/EQ/*.json` | 4-band parametric equalizer settings |
 | Reverb Preset | `Server/Audio/Reverb/*.json` | Acoustic environment reverb settings |
 | Item Sounds | `Server/Audio/ItemSounds/ISS_*.json` | Inventory drag/drop sound set (`ItemSoundSetId`) |
@@ -60,17 +64,19 @@ Server/Audio/
 
 | Section | Directory | Files | Description |
 |---------|-----------|-------|-------------|
-| [SoundEvents](#soundevents) | `SoundEvents/` | 1,213 | Individual sound definitions with layers |
-| [AudioCategories](#audiocategories) | `AudioCategories/` | 103 | Volume/mixing groups with inheritance |
-| [AmbienceFX](#ambiencefx) | `AmbienceFX/` | 206 | Ambient soundscapes with conditions |
-| [MusicContainer](#musiccontainer) | `MusicContainers/` | 212 | Composable music graph (Update 5) |
-| [AudioState](#audiostate-transitions) | `AudioStates/` | 2 | Named state axes for music/ambience bindings |
+| [SoundEvents](#soundevents) | `SoundEvents/` | 1,569 | Individual sound definitions with layers |
+| [AudioCategories](#audiocategories) | `AudioCategories/` | 119 | Volume/mixing groups with inheritance |
+| [AmbienceFX](#ambiencefx) | `AmbienceFX/` | 232 | Ambient soundscapes with conditions |
+| [MusicContainer](#musiccontainer) | `MusicContainers/` | 275 | Composable music graph (Update 5) |
+| [MusicTransition](#transitions-and-stingers) | `MusicTransitions/` | 5 | Container-to-container handover rules (0.7.2+) |
+| [Stinger](#transitions-and-stingers) | `Stingers/` | 2 | Accents answering music events (0.7.2+) |
+| [AudioState](#audiostate-transitions) | `AudioStates/` | 9 | Named state axes for music/ambience bindings |
 | [EQ](#eq-equalizer) | `EQ/` | 2 | Equalizer presets |
 | [Reverb](#reverb) | `Reverb/` | 28 | Environment reverb settings |
 | [ItemSounds](#itemsounds) | `ItemSounds/` | 36 | Inventory drag/drop sounds |
 | [SoundSets](#soundsets) | `SoundSets/` | 1 | Named sound event collections |
 
-**Total: 1,803 audio asset files** (counts as of 0.6.8)
+**Total: 2,278 audio asset files** (counts as of 0.7.2)
 
 ---
 
@@ -86,11 +92,15 @@ Sound events are the core audio units. Each defines one or more sound layers, vo
 SoundEvents/
 ├── BlockSounds/     - Per-material break/build/hit/harvest/walk/land sounds
 ├── SFX/             - Player, NPC, weapons, UI, effects, etc.
+│   ├── Abilities/
 │   ├── Chests/
 │   ├── Crafting/
 │   ├── CreativePlay/
+│   ├── Debris/
 │   ├── Deployables/
 │   ├── Effects/
+│   ├── Events/
+│   ├── Explosives/
 │   ├── Items/
 │   ├── Magic/
 │   ├── NPC/
@@ -100,7 +110,8 @@ SoundEvents/
 │   ├── Tools/
 │   ├── UI/
 │   ├── Utility/
-│   └── Weapons/
+│   ├── Weapons/
+│   └── WorldEvents/
 ├── Environments/    - Environmental emitters
 └── SFX_Attn_*.json  - Shared attenuation parent presets (see Parent Inheritance)
 ```
@@ -113,8 +124,8 @@ Top-level keys (`SoundEvent.CODEC`):
 |----------|------|-------------|
 | `Layers` | array | One or more concurrent sound layers (see below). Sound files are referenced only via `Files` inside a layer — there is no top-level `Files` field |
 | `Volume` | float | Base volume adjustment in dB (−100 … 10; default: 0) |
-| `Pitch` | float | Base pitch adjustment in **semitones** (−12 … 12; rare — 23 assets) |
-| `SpatialBlend` | float | Spatial blend, 0–1: `1.0` = fully 3D point source, `0.0` = fully diffuse/centred on the player. Only applies in Stereo Headphone mode (125 assets) |
+| `Pitch` | float | Base pitch adjustment in **semitones** (−12 … 12; rare — 43 assets) |
+| `SpatialBlend` | float | Spatial blend, 0–1: `1.0` = fully 3D point source, `0.0` = fully diffuse/centred on the player. Only applies in Stereo Headphone mode (162 assets) |
 | `PreventSoundInterruption` | boolean | Don't interrupt if already playing |
 | `MaxInstance` | int | Maximum concurrent instances (1–100) |
 | `Parent` | string | Inherit from another sound event (generic asset inheritance) |
@@ -181,8 +192,8 @@ Every sound event holds its files in one or more layers. Each layer has its own
 Sound file paths are rooted at `Common/Sounds/`. Real top-level prefixes include
 `Sounds/Blocks`, `Sounds/Weapons`, `Sounds/NPC`, `Sounds/Environments`,
 `Sounds/PlayerActions`, `Sounds/Items`, `Sounds/Movement`, `Sounds/Projectiles`,
-`Sounds/UI`, `Sounds/Tools`, `Sounds/Magic`, `Sounds/Effects`, `Sounds/Deployables`,
-`Sounds/CreativePlay`, `Sounds/Crafting`, and `Sounds/TEST` (plus two files directly at
+`Sounds/UI`, `Sounds/Tools`, `Sounds/Abilities`, `Sounds/Magic`, `Sounds/Effects`, `Sounds/Debris`,
+`Sounds/Deployables`, `Sounds/Events`, `Sounds/CreativePlay`, `Sounds/Crafting`, and `Sounds/TEST` (plus two files directly at
 `Sounds/`: `Silence.ogg` and `00a1_Silence_Stereo.ogg`). There is no `SFX/` segment in any
 sound file path — the `SoundEvents/SFX/` folder organizes the *definitions*, not the audio files.
 
@@ -228,7 +239,7 @@ files at the root of `SoundEvents/`:
 }
 ```
 
-Real attenuation presets (quietest to loudest), with their distances as shipped in 0.6.8:
+Real attenuation presets (quietest to loudest), with their distances as shipped in 0.7.2:
 
 | Preset | `StartAttenuationDistance` | `MaxDistance` |
 |--------|---------------------------|---------------|
@@ -240,8 +251,8 @@ Real attenuation presets (quietest to loudest), with their distances as shipped 
 | `SFX_Attn_VeryLoud` | 25 | 70 |
 
 All six presets also set `"AudioCategory": "AudioCat_SFX"`, so a child that omits `AudioCategory`
-inherits the SFX mix bus. `SFX_Attn_Moderate` (519) and `SFX_Attn_Quiet` (397) account for the large
-majority of the ~1,000 `Parent` references. A sound event may also inherit from another concrete
+inherits the SFX mix bus. `SFX_Attn_Moderate` (695) and `SFX_Attn_Quiet` (454) account for the large
+majority of the ~1,350 `Parent` references. A sound event may also inherit from another concrete
 sound event (e.g. `SFX_Stone_Break`, `SFX_Mud_Walk`).
 
 ### Examples
@@ -260,12 +271,10 @@ sound event (e.g. `SFX_Stone_Break`, `SFX_Mud_Walk`).
         "Sounds/Blocks/Glass/Glass_Break_04.ogg",
         "Sounds/Blocks/Glass/Glass_Break_05.ogg"
       ],
-      "Volume": 6.0,
       "RoundRobinHistorySize": 2,
       "RandomSettings": {
         "MinPitch": -1,
-        "MaxPitch": 1,
-        "MinVolume": -1
+        "MaxPitch": 1
       }
     }
   ],
@@ -287,8 +296,7 @@ sound event (e.g. `SFX_Stone_Break`, `SFX_Mud_Walk`).
         "MinPitch": 0,
         "MaxPitch": 0,
         "MinVolume": 0
-      },
-      "Volume": 6.0
+      }
     }
   ],
   "Volume": 0,
@@ -415,14 +423,14 @@ into `com.hypixel.hytale.server.core.asset.type.audiocategory.config.AudioCatego
 | `Curve` / `ReleaseCurve` | `FadeCurve` | `Linear` (default), `Logarithmic`, `Exponential`, `SCurve`, `EqualPowerSine` — applied to the attack and release tweens respectively |
 | `Priority` | short | 0 … 32767. Only rules at the **highest active priority** on a target contribute; within one priority class the most-negative dB wins |
 
-Twelve shipped sound events carry `DuckingRules`, and exactly one category does
-(`AudioCat_AmbientMusic`). The clearest example is `SFX/SFX_Memories_Bench_Ducker.json` — a silent
+59 shipped sound events carry `DuckingRules`, and two categories do
+(`AudioCat_AmbientMusic` and `AudioCat_NPC_Goblin_Gobliterator_Attack`). The clearest example is `SFX/SFX_Memories_Bench_Ducker.json` — a silent
 looping event whose only job is to duck music, NPC and block sounds while it plays:
 
 ```json
 {
   "AudioCategory": "AudioCat_Ambient",
-  "Layers": [{ "Files": ["Sounds/Silence.ogg"], "Looping": true, "Volume": 6.0 }],
+  "Layers": [{ "Files": ["Sounds/Silence.ogg"], "Looping": true }],
   "Volume": 0,
   "MaxDistance": 7,
   "PreventSoundInterruption": true,
@@ -457,9 +465,10 @@ Ambient audio defines soundscapes that play based on environmental conditions. I
 AmbienceFX/
 ├── Ambience/      - Ambient soundscapes (beds + emitters)
 │   ├── Global/      - Cave, Dungeon, Interior, Lava, Mage_Tower, Mineshaft, Underwater, Weather
+│   ├── Dungeons/    - Per-dungeon ambiences (Dungeon_Goblin)
 │   ├── Zone1/ ... Zone4/  - Per-zone Environments/ and Global/
 │   └── Unique/      - Named locations (Forgotten_Temple, Dread_Wade, ...)
-├── Music/         - Music selectors (Global/, Zone0/ ... Zone4/, Unique/) — Conditions + a MusicContainer reference
+├── Music/         - Music selectors (Dungeons/, Global/, Zone0/ ... Zone4/, Unique/) — Conditions + a MusicContainer reference
 ├── ReverbZones/   - Reverb zone definitions (Cave/, Exterior/, Interior/, Prefabs/ — Rev_Zone_*.json)
 ├── States/        - Ambience definitions that only write AudioStates (SetStates)
 ├── AmbFX_*.json   - Top-level ambience definitions (AmbFX_Void, AmbFX_Placeholder)
@@ -550,7 +559,7 @@ Continuous looping background sound. The bed references an `.ogg` file directly 
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Track` | string | Path to the looping `.ogg` file. All 87 shipped beds use a `Sounds/…` path (i.e. `Common/Sounds/`), but unlike a layer's `Files` this key carries **no** root validator |
+| `Track` | string | Path to the looping `.ogg` file. All 98 shipped beds use a `Sounds/…` path (i.e. `Common/Sounds/`), but unlike a layer's `Files` this key carries **no** root validator |
 | `Volume` | float | Volume in dB |
 | `TransitionSpeed` | string | Crossfade speed when the bed changes — `AmbienceTransitionSpeed`, exactly `Default`, `Fast` or `Instant` |
 | `StateBindings` | array | Per-[AudioState](#audiostate-transitions) deltas |
@@ -609,7 +618,7 @@ Music selectors under `AmbienceFX/Music/` pair `Conditions` and a `Priority` wit
 **`MusicContainer`** reference. The value is either a container id string or an inline container
 object that inherits one through `Parent` (both forms decode through `MusicContainer.CHILD_ASSET_CODEC`);
 the inline form lets the selector override `AudioCategory`/`LoopCount` without a new container file.
-`AmbienceFX/Music/Zone3/Mus_Zone3_Dungeon.json` as shipped in 0.6.8:
+`AmbienceFX/Music/Zone3/Mus_Zone3_Dungeon.json` as shipped in 0.7.2:
 
 ```json
 {
@@ -640,7 +649,7 @@ The string form is equally common (`"MusicContainer": "MC_Zone4_Jungle"`). On th
 > `Music/` — plus optional `Volume` in dB, −100 to 10) is
 > **deprecated** (the codec's own documentation string reads "Deprecated: Use MusicContainer instead.")
 > and is **auto-migrated at runtime** into a generated `RandomMusicContainer`
-> (`RandomMusicContainer.fromLegacy(...)`, fed by `AmbienceFX.consumeLegacyMusic()`). As of 0.6.3 only
+> (`RandomMusicContainer.fromLegacy(...)`, fed by `AmbienceFX.consumeLegacyMusic()`). As of 0.7.2 only
 > one shipped asset still uses it (`AmbFX_Void.json`, `"Music": { "Tracks": ["Music/Unique/Silence.ogg"], "Volume": -10 }`).
 > It decodes into `com.hypixel.hytale.server.core.asset.type.ambiencefx.config.AmbienceFXMusic`
 > (`AmbienceFXMusic.CODEC`; both fields inherit through `Parent`) — `getTracks()`, `getDecibels()` (raw dB),
@@ -683,9 +692,9 @@ a weighted-random or sequential playlist, or layered/segmented arrangements that
 `.json` file is one container, keyed by its **id** (the filename without `.json`); containers reference each other
 by id, so you compose larger arrangements from smaller ones. This replaces the flat
 [AmbienceFX `Music` block](#music-configuration), which is now auto-migrated into a generated `RandomMusicContainer`;
-an ambience selects music with its `MusicContainer` key. **212 container files** ship in 0.6.8, holding 273
-container nodes in total — 232 `SingleTrack`, 21 `Segment`, 19 `Random` and 1 `Sequence` (nodes outnumber files
-because a `Segment`'s layers hold inline `SingleTrack` containers). No shipped container uses `Horizontal`.
+an ambience selects music with its `MusicContainer` key. **275 container files** ship in 0.7.2, holding 364
+container nodes in total — 302 `SingleTrack`, 35 `Segment`, 19 `Random`, 5 `Sequence` and 3 `Horizontal` (nodes
+outnumber files because a `Segment`'s layers hold inline `SingleTrack` containers).
 
 > The folder layout (`Tracks/`, `Playlists/`, …) is just organization — every `.json` under `MusicContainers/`
 > loads as a container regardless of subfolder.
@@ -699,7 +708,7 @@ The object's `"Type"` field selects the container kind:
 | `SingleTrack` | `SingleTrackMusicContainer` | One audio file (`Track`, an `.ogg` path under `Common/Music/` — **not** `Common/Sounds/`; the `Music/` root is enforced by `CommonAssetValidator.MUSIC`) |
 | `Random` | `RandomMusicContainer` | A `Children` list picked by weight; `Mode` is `Random` or `Shuffle` |
 | `Sequence` | `SequenceMusicContainer` | A `Children` list in order |
-| `Horizontal` | `HorizontalMusicContainer` | Phases (`Children`) transitioned horizontally with a default phase transition |
+| `Horizontal` | `HorizontalMusicContainer` | Phases (`Children`) transitioned horizontally with a default phase transition; an `AudioState` can pick the phase |
 | `Segment` | `SegmentMusicContainer` | Simultaneous `Layers` mixed/crossfaded by audio state (bar/beat aligned) |
 
 ### Common fields
@@ -709,19 +718,22 @@ All container types share these (from the `MusicContainer` base; omit any you do
 | Field | Type | Description |
 |-------|------|-------------|
 | `Type` | string | Discriminator — one of the types above |
-| `AudioCategory` | string | Mixing category (commonly `AudioCat_Music_In_Game`) |
+| `AudioCategory` | string | Mixing category (commonly `AudioCat_Music_In_Game`); honoured on any container, and the nearest one above a playing leaf wins |
 | `NameTranslationKey` | string | i18n key for the displayed track name |
 | `Volume` | float | Volume in dB |
 | `LoopCount` | int | Times to loop (`0` = forever) |
 | `Weight` | float | Selection weight when this container is a child of a `Random` container |
 | `SilenceAfter` / `ExitSilence` | range | `{ "Min": s, "Max": s }` silence (seconds) after playing / on exit |
 | `FadeInDuration` / `FadeOutDuration` | float | Fades (seconds) |
-| `TransitionType` | enum | `Crossfade`, `FadeOutFadeIn`, or `Immediate` |
+| `TransitionType` | enum | `Crossfade`, `FadeOutFadeIn` (the default as of 0.7.2), or `Immediate` — how a switch into this container behaves when no [MusicTransition](#transitions-and-stingers) matches |
 | `TransitionDuration` | float | Transition length (seconds) |
+| `ExitAt` | object | When the playing container hands over to this one, as a [sync point](#transitions-and-stingers) (0.7.2+) |
+| `Align` / `AlignMarker` | enum / string | Where this container starts on its own timeline: `EntryMarker`, `NamedMarker` (names a marker in `AlignMarker`) or `SamePosition` (0.7.2+) |
 | `PlayToCompletion` | bool | Finish the current track before transitioning |
 | `ResumeMemoryDuration` | float | How long (seconds) the container remembers its position to resume from |
 | `Tempo` | object | `Bpm` (1–1000), `BeatsPerBar` (1–32), `BeatValue` (1–32) — all three required inside the object; needed for bar/beat-aligned markers |
 | `StateBindings` | array | Per-[AudioState](#audiostate-transitions) deltas |
+| `Stingers` | array | Music-event → stinger bindings, inherited by descendants (0.7.2+; see [Transitions and stingers](#transitions-and-stingers)) |
 
 ### SingleTrack
 
@@ -761,15 +773,20 @@ same `CHILD_ASSET_CODEC` an ambience's `MusicContainer` key uses). `Random` shuf
 
 Phases that transition horizontally (e.g. exploration → combat) sharing a tempo. Adds
 `DefaultPhaseTransitionType` (a `MusicTransitionType`) and `DefaultPhaseTransitionDuration`; `Children` are the phase
-containers.
+containers. As of 0.7.2 an `AudioState` key plus a `Phases` array (`{ "Value": <state value>, "Phase": <index into
+Children> }`) lets an audio state choose the phase — `Tracks/Zone1/Track_Z1D_Goblin_Boss.json` maps the five values of
+`AudioState_Goblin_Boss_Phase` onto its five children. Without `AudioState` the container only advances sequentially.
 
 ### Segment (layered)
 
 Simultaneous **layers** mixed by **audio state** — the engine's cave music uses this to crossfade between shallow /
 volcanic / deep beds as the player moves. Each `LayerPlacement` has a `Name`, a nested `Container`, an optional
 `ClipStart`, and `StateBindings` that adjust each layer's volume (`VolumeDb`), pitch (`PitchSemitones`) or
-`Mute` per audio-state value. `EntryMarker` / `ExitMarker` are bar/beat-aligned points, each a
-`BarBeatDuration` object with the keys `Bars`, `Beats` and `Ms`.
+`Mute` per audio-state value (as of 0.7.2 a delta may also carry its own `Fade` — `Duration`, `Curve`, `Delay` —
+overriding the axis transition for that subscriber). `EntryMarker` / `ExitMarker` are bar/beat-aligned points, each a
+`BarBeatDuration` object with the keys `Bars` (int), `Beats` (a float as of 0.7.2, so `0.5` is half a beat) and `Ms`.
+A Segment may also declare named `Markers` (`{ "Name": …, "At": { "Bar": 1, "Beat": 1, "Ms": 0 } }`, 1-indexed from the
+downbeat) that sync points and stingers can target.
 
 ```json
 {
@@ -803,11 +820,31 @@ plugin can build one in Java via the `*MusicContainer` config classes
 (`com.hypixel.hytale.server.core.asset.type.musiccontainer.config`) — each has a `getChildIds()` and a `CODEC`;
 `MusicContainer.getAssetMap()` resolves ids. The legacy migration path is `RandomMusicContainer.fromLegacy(...)`.
 
-> The 0.6.8 wire format (`com.hypixel.hytale.protocol.MusicContainer`) carries extra per-container fields — `exitAt`
-> (`MusicSync`), `align` (`DestinationAlign`), `alignMarkerName`, `stingers` (`StingerBinding[]`), and `markers`
-> (`MusicMarker[]`) on segments — but the server config codecs expose **no JSON keys** for them yet, so they cannot be
-> authored in assets. The same is true of `protocol.StateTransition.postEvent`, added in 0.6.3 with no
-> `StateTransitionConfig` key behind it.
+### Transitions and stingers
+
+Two asset types arrived in 0.7.2 alongside the container keys above:
+
+- **`MusicTransition`** (`Server/Audio/MusicTransitions/`, 5 shipped, all for the Goblin boss fight) — a rule for one
+  container handing over to another. `From` / `To` each match a `Container` id or a `TagPattern` (omit to match any);
+  `ExitAt`, `Align` / `AlignMarker` override the incoming container's own; `FadeOutDuration` / `FadeOutDelay` /
+  `FadeInDuration` are `BarBeatDuration`s with `FadeOutCurve` / `FadeInCurve`; plus `PlayPostExit`, `PostEvent` and
+  `Priority` (higher wins).
+- **`Stinger`** (`Server/Audio/Stingers/`, 2 shipped) — a short accent: a `MusicContainer` (id or inline), with
+  `AudioCategory`, `Volume`, `Priority`, `ExclusionGroup`, `MaxInstance` and `DuckingRules`. A container's `Stingers`
+  array binds a free-form `MusicEvent` name to a `Stinger` id, with optional `PlayAt`, `MinRepeatIntervalSeconds` and
+  `ShortLead` (`DropPickup`, `Skip`, `Defer`, `TrimPickup`).
+
+A **sync point** (`ExitAt`, `PlayAt`, an audio state's `SyncTo`/`DefaultSyncTo`; `MusicSyncConfig.CODEC`) is an object:
+`Point` (`Immediate`, `NextBeat`, `NextBar`, `ExitMarker`, `NextMarker`), optional `Marker` (with `NextMarker`), a signed
+`Offset` (`BarBeatDuration`) and `BarMultiple` (with `NextBar`; `4` waits for four-bar phrase boundaries).
+`Tracks/Dungeons/Track_Z1D_The_Deepworks.json` binds two stingers to the events an audio-state edge posts:
+
+```json
+"Stingers": [
+  { "MusicEvent": "Combat_Enter", "Stinger": "Stinger_Z1D_The_Deepworks_Combat", "PlayAt": { "Point": "NextBar" } },
+  { "MusicEvent": "Combat_Exit",  "Stinger": "Stinger_Z1D_The_Deepworks_Explore", "PlayAt": { "Point": "NextBar" } }
+]
+```
 
 ---
 
@@ -817,16 +854,22 @@ plugin can build one in Java via the `*MusicContainer` config classes
 
 `AudioState` assets define the named state axes (e.g. `AudioState_CaveRegion` with values
 `Shallow` / `Volcanic` / `Deep`) that a [Segment container's](#segment-layered) `StateBindings`
-react to (and that an ambience's `SetStates` writes). Two ship in 0.6.8: `AudioState_CaveRegion`
-(client-authoritative) and `AudioState_Test_EncounterIntensity` (server-authoritative):
+react to (and that an ambience's `SetStates` writes). Nine ship in 0.7.2 — two client-authoritative
+(`AudioState_CaveRegion`, `AudioState_Void_Escalation`) and seven server-authoritative (among them
+`AudioState_Combat`, `AudioState_Dungeon_Intensity` and `AudioState_Goblin_Boss_Phase`).
+`AudioStates/AudioState_Combat.json`:
 
 ```json
 {
-  "Authority": "Client",
-  "Values": ["Shallow", "Volcanic", "Deep"],
-  "DefaultValue": "Shallow",
-  "DefaultSyncTo": "Immediate",
-  "DefaultTransition": { "DurationMs": 2000.0, "Curve": "SCurve" }
+  "Authority": "Server",
+  "Values": ["Explore", "Combat"],
+  "DefaultValue": "Explore",
+  "DefaultSyncTo": { "Point": "NextBeat" },
+  "DefaultTransition": { "Duration": { "Beats": 1 }, "Curve": "SCurve" },
+  "Transitions": [
+    { "From": "Explore", "To": "Combat", "Duration": { "Beats": 0.75 }, "Curve": "SCurve", "SyncTo": { "Point": "NextBeat" } },
+    { "From": "Combat", "To": "Explore", "Duration": { "Beats": 3 }, "Curve": "SCurve", "SyncTo": { "Point": "NextBar" } }
+  ]
 }
 ```
 
@@ -835,7 +878,7 @@ react to (and that an ambience's `SetStates` writes). Two ship in 0.6.8: `AudioS
 | `Authority` | `Server` / `Client` | Which side owns the value (`AudioState.getAuthority()`) |
 | `Values` | array | Ordered value names (`getValues()`) |
 | `DefaultValue` | string | Initial value (`getDefaultValue()` / `getDefaultValueIndex()`) |
-| `DefaultSyncTo` | `SyncPoint` | Default musical sync point for switches |
+| `DefaultSyncTo` | object | Default [sync point](#transitions-and-stingers) (`{ "Point": … }`) for edges with no `SyncTo`; omit to switch immediately |
 | `DefaultTransition` | object | Fallback edge (a `StateTransitionConfig` without `From`/`To`) |
 | `Transitions` | array | Per-edge overrides (below) |
 | `RevertWhenInactive` | boolean | Return to `DefaultValue` when nothing is writing the state |
@@ -847,9 +890,15 @@ decodes into a **`StateTransitionConfig`** (`StateTransitionConfig.CODEC`):
 |----------|------|-------------|
 | `From` | string | State value name this edge transitions from; `"*"` for wildcard |
 | `To` | string | State value name this edge transitions to; `"*"` for wildcard |
-| `DurationMs` | float | Transition duration in milliseconds (≥ 0) |
-| `Curve` | `FadeCurve` | `Linear`, `Logarithmic`, `Exponential`, `SCurve`, `EqualPowerSine` |
-| `SyncTo` | `SyncPoint` | `Immediate`, `NextBeat`, `NextBar`, `ExitMarker`, or `NextMarker` (0.6.3+) |
+| `Duration` | object | `BarBeatDuration` — `{ "Bars": …, "Beats": …, "Ms": … }`, summed against each subscribed voice's tempo; a voice with no tempo takes `Ms` alone. Must be non-negative. Omit to fall back to `DefaultTransition` |
+| `Curve` | `FadeCurve` | `Linear` (default), `Logarithmic`, `Exponential`, `SCurve`, `EqualPowerSine`; read only alongside a `Duration` |
+| `SyncTo` | object | [Sync point](#transitions-and-stingers) at which the transition begins; omit to use `DefaultSyncTo` |
+| `Delay` | object | `BarBeatDuration` a voice holds its old level past the boundary before ramping (non-negative) |
+| `PostEvent` | string | Music event posted when the edge is taken — what a container's `Stingers` binding answers |
+
+> **Changed in 0.7.2:** `DurationMs` (a float) was replaced by `Duration`, a `BarBeatDuration` object — write
+> `"Duration": { "Ms": 2000 }` where 0.6.8 took `"DurationMs": 2000.0` — and `SyncTo` / `DefaultSyncTo` changed from a
+> bare `SyncPoint` string to an object (`{ "Point": "NextBar" }`). `Delay` and `PostEvent` are new.
 
 ```java
 public class StateTransitionConfig {
@@ -985,7 +1034,7 @@ The 28 presets are biome/zone and location based:
 **Location:** `Server/Audio/ItemSounds/`
 
 Item sounds define drag and drop sounds for inventory interactions. Items reference
-these via `ItemSoundSetId` (1,656 references across the server assets). The files are
+these via `ItemSoundSetId` (1,868 references across the server assets). The files are
 named `ISS_*.json` (e.g. `ISS_Armor_Cloth.json`, `ISS_Items_Metal.json`,
 `ISS_Weapons_Wood.json`, `ISS_Default.json`).
 
@@ -1060,8 +1109,8 @@ index, not the string id** — `SoundUtil` is the wrapper that resolves, builds,
 
 ### Resolving a sound-event index
 
-Every method takes the sound event as an `int` index. Resolve a string id to its index through the
-sound-event asset map:
+Every method except the two string-id conveniences added in 0.7.2 (see the table below) takes the sound event as an
+`int` index. Resolve a string id to its index through the sound-event asset map:
 
 ```java
 import com.hypixel.hytale.server.core.asset.type.soundevent.config.SoundEvent;
@@ -1105,6 +1154,8 @@ Every play call takes a `com.hypixel.hytale.protocol.SoundCategory` for mixing �
 | `playSoundEvent2d(int idx, SoundCategory[, float vol, float pitch], ComponentAccessor<EntityStore>)` | every player in the world, non-spatial | a world-wide stinger/announcement (a `Ref<EntityStore>`-first overload targets one entity's viewer) |
 | `playSoundEventEntity(int idx, int entityId[, float vol, float pitch], ComponentAccessor<EntityStore>)` | nearby, follows the entity | a sound attached to a moving entity |
 | `playItemSoundEvent(Ref<EntityStore>, Store<EntityStore>, Item, ItemSoundEvent)` | — | an item's `Drag`/`Drop` inventory sound |
+| `playSoundEvent2dToPlayer(PlayerRef, String id, SoundCategory)` | one player, non-spatial | 0.7.2+: takes the **string id** and resolves it, returning silently for a `null` or unknown id |
+| `playSoundEvent2dToWorld(World, String id, SoundCategory)` | every player in the world, non-spatial | 0.7.2+: string-id convenience over `world.getPlayerRefs()` |
 
 `Vector3d` is `org.joml.Vector3d` (see [math.md](math.md)). `vol`/`pitch` default to `1.0f` when
 omitted and are **multipliers** layered on top of the sound event's own `Volume`/`RandomSettings`,
@@ -1167,8 +1218,8 @@ The `has a looping layer and is not a oneshot sound` load error in
 
 ### Block Sounds
 
-A block type names a **block sound set** with `BlockSoundSetId` (1,595 block definitions do); the set is a
-`Server/Item/Block/Sounds/<SetId>.json` (57 sets) that maps action keys to sound events, and decodes into
+A block type names a **block sound set** with `BlockSoundSetId` (1,758 files under `Server/Item/Items/` do); the set is a
+`Server/Item/Block/Sounds/<SetId>.json` (58 sets) that maps action keys to sound events, and decodes into
 `com.hypixel.hytale.server.core.asset.type.blocksound.config.BlockSoundSet`:
 
 ```json
@@ -1183,7 +1234,8 @@ A block type names a **block sound set** with `BlockSoundSetId` (1,595 block def
 ```
 
 Keys seen across the shipped sets: `Break`, `Build`, `Hit`, `Walk`, `Land`, `Harvest`, `MoveIn`, `MoveOut`,
-`Clone` (plus a top-level `MoveInRepeatRange` and `Parent` inheritance). By convention the referenced sound
+`Clone`, plus `Parent` inheritance. The codec also accepts a top-level `MoveInRepeatRange` (a `FloatRange`), which
+no shipped set uses. By convention the referenced sound
 events live under `SoundEvents/BlockSounds/<Material>/`:
 
 ```
@@ -1249,6 +1301,7 @@ used for timing footstep sound effects on movement animations. From
         {
           "Animation": "Characters/Animations/Roll/Roll.blockyanim",
           "BlendingDuration": 0.1,
+          "Speed": 1.0,
           "Looping": false,
           "SoundEventId": "SFX_Player_Roll"
         }
@@ -1312,6 +1365,8 @@ All audio assets use JSON format:
 | Music | `AmbienceFX/Music/*.json` | Music selectors (Conditions + `MusicContainer`) |
 | Music Container | `MusicContainers/**/*.json` | Music graph nodes |
 | Audio State | `AudioStates/*.json` | State axes for bindings |
+| Music Transition | `MusicTransitions/*.json` | Container handover rules (0.7.2+) |
+| Stinger | `Stingers/*.json` | Music-event accents (0.7.2+) |
 | EQ Preset | `EQ/*.json` | Equalizer settings |
 | Reverb Preset | `Reverb/*.json` | Reverb environments |
 | Item Sounds | `ItemSounds/ISS_*.json` | Inventory sounds |
@@ -1328,4 +1383,5 @@ Backtick-quoted error strings below are literal message fragments thrown by the 
 - **`has a looping layer and is not a oneshot sound`** → a sound event used as a one-shot contains a layer marked `"Looping": true`. Fix: a one-shot sound's layers must not loop; clear `Looping` on those layers, or play it as a continuous/ambient sound instead.
 - **`Each source can have at most one rule per target.`** → a sound event or audio category lists two [`DuckingRules`](#ducking) entries with the same `TargetCategory`. Fix: merge them into one rule — the full message names the duplicated id.
 - **`AudioState value name '*' is reserved for wildcard matching in transitions`** → an [`AudioState`](#audiostate-transitions) asset put the literal `*` in its `Values` array. Fix: `*` is only legal as a `From`/`To` wildcard inside a `Transitions` edge; rename the value.
+- **`Duration is in bars or beats, which this subscriber has no tempo to resolve. Use Ms`** → a `StateBindings` delta's `Fade` on a sound event, audio category or ambience gave its `Duration` (or `Delay`, with the matching message) in `Bars`/`Beats`. Fix: only music containers have a tempo; author those fades as `{ "Ms": … }`.
 - **Symptom:** a referenced `.ogg` plays as silence or fails to load → the `Files`/`Track` path is wrong or the file is missing. Fix: sound files live under `Common/Sounds/`; reference them by their path relative to that root (e.g. `Sounds/Items/Candle/Candle_Loop_01.ogg`).

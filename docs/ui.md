@@ -7,7 +7,7 @@ seo:
 
 # UI System
 
-**Doc type:** Guide · **Verified against 0.6.8**
+**Doc type:** Guide · **Verified against 0.7.2**
 
 Hytale provides a comprehensive UI system for creating custom interfaces. UIs are defined using a curly-brace DSL format and managed through server-side Java APIs.
 
@@ -33,6 +33,13 @@ The UI system consists of:
 - **DSL Files** (`.ui`) - Define UI structure and styling
 - **Java API** - Build commands, handle events, manage pages/windows/HUD
 - **Asset Pack** - Textures and resources for UI elements
+
+> **0.7.2 preview, not usable yet:** the jar also carries a second, server-driven UI stack in
+> `com.hypixel.hytale.server.core.modules.ui` (`UIModule`, `UIPage`, `UIHudWidget`; client side `Common/UI/Noesis/*.xaml`).
+> It is gated behind the `-Dhytale.serverside_ui_preview` JVM property; without it, `UIModule.requireServersideNoesisUi()`
+> throws `Serverside Noesis UI is disabled. This feature is still in development and not available yet.` Everything on
+> these pages is the current `.ui` system, which the engine now calls the *legacy* custom UI (hence
+> `PageManager.updateLegacyCustomPage`).
 
 ### Architecture
 

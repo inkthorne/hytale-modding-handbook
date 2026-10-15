@@ -155,6 +155,23 @@ def _resolve_type(simple: str, imports: dict[str, str], pkg: str) -> str:
     return '.'.join([base, *rest])
 
 
+def _text_block_end(src: str, i: int) -> int:
+    """Offset just past the text block opening at src[i:i+3] (`\"\"\"`). A text block holds
+    newlines and bare quotes, so the single-quote string rule below would pair its quotes
+    wrongly; it ends at the next triple quote not preceded by a backslash."""
+    j = i + 3
+    while True:
+        j = src.find('"""', j)
+        if j < 0:
+            return len(src)
+        k = j
+        while k > i + 3 and src[k - 1] == '\\':
+            k -= 1
+        if (j - k) % 2 == 0:
+            return j + 3
+        j += 1
+
+
 def _delimiters(src: str) -> list[int]:
     """Offsets of every `;`, `{`, `}` outside strings and comments, at ANY depth.
 
@@ -166,6 +183,8 @@ def _delimiters(src: str) -> list[int]:
     out, i, n = [], 0, len(src)
     while i < n:
         c = src[i]
+        if src.startswith('"""', i):          # a text block: closes at the next unescaped """
+            i = _text_block_end(src, i); continue
         if c in '"\'':
             q, i = c, i + 1
             while i < n and src[i] != q:
@@ -209,6 +228,11 @@ def _mask(src: str) -> str:
     i, n = 0, len(src)
     while i < n:
         c = src[i]
+        if src.startswith('"""', i):
+            j = _text_block_end(src, i)
+            for k in range(i + 3, j - 3):
+                if out[k] != '\n': out[k] = ' '
+            i = j; continue
         if c in '"\'':
             q, j = c, i + 1
             while j < n and src[j] != q:
@@ -361,6 +385,21 @@ class _Lexical:
                 for n in names:
                     (sc.fields if static else sc.inst).add(n)
 
+    def _lambda_parameter(self, at: int) -> bool:
+        """Is the declarator whose terminator is at `at` a parameter of a lambda, i.e. does
+        the parameter list it sits in close with a `)` followed by `->`?"""
+        m, depth = self.masked, 0
+        for j in range(at, min(len(m), at + 200)):
+            if m[j] == '(':
+                depth += 1
+            elif m[j] == ')':
+                if depth == 0:
+                    return bool(re.match(r'\s*->', m[j + 1:j + 12]))
+                depth -= 1
+            elif m[j] in ';{}':
+                return False
+        return False
+
     def _owner(self, off):
         """The scope a declaration at `off` belongs to: the innermost scope whose body
         contains it, or the block whose HEADER contains it (a method's parameters)."""
@@ -377,8 +416,21 @@ class _Lexical:
         chain.sort(key=lambda sc: sc.open)
         local = re.compile(r'(?<![\w.$])([\w$.]+(?:\s*<[^;(){}=]*?>)?(?:\s*\[\s*\])*)\s+'
                            + re.escape(fld) + r'\s*[=;,:)]')
-        lam = re.compile(r'(?<![\w.$])' + re.escape(fld) + r'\s*->|\((?:[^()]*,)?\s*'
+        lam = re.compile(r'(?<![\w.$])' + re.escape(fld) + r'\s*->|\((?:[^()]*[,\s])?'
                          + re.escape(fld) + r'\s*(?:,[^()]*)?\)\s*->')
+        # An expression-bodied lambda ahead of the site in its own statement shadows it
+        # wherever that statement sits — a method body, or a FIELD INITIALISER, where no
+        # block scope exists to carry the check (`static Consumer<X> c = CODEC -> CODEC.register(…)`).
+        # It lasts until a `)` that closes the call the lambda is an argument of.
+        st = max(self.masked.rfind(ch, 0, off) for ch in ';{}') + 1
+        for lm in lam.finditer(self.masked, st, off):
+            depth = 0
+            for ch in self.masked[lm.end():off]:
+                depth += (ch == '(') - (ch == ')')
+                if depth < 0:
+                    break
+            else:
+                return 'local', None
         for k in range(len(chain) - 1, -1, -1):
             sc = chain[k]
             if sc.cls:
@@ -394,6 +446,8 @@ class _Lexical:
             for lm in local.finditer(self.masked, sc.header, off):
                 if lm.group(1).split('.')[-1] in _NOT_A_TYPE:
                     continue
+                if self._lambda_parameter(lm.end() - 1):
+                    continue      # `(T CODEC) -> …`: scoped to the lambda body, handled below
                 if self._owner(lm.start(1)) is sc:
                     return 'local', None
             for lm in lam.finditer(self.masked, sc.header, off):

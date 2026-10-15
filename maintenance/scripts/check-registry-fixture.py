@@ -56,7 +56,7 @@ sys.path.insert(0, str(HERE))
 import registry_miner as rm
 
 FIXDIR = pathlib.Path(a.fixtures)
-MIN_MUTATIONS = 26     # = len(MUTATIONS); a deleted mutation fails the floor instead of shrinking the run
+MIN_MUTATIONS = 32     # = len(MUTATIONS); a deleted mutation fails the floor instead of shrinking the run
 MIN_CHECKS = 300       # what runs when the previous-build snapshot is NOT the recorded build (321 today)
 
 fails, checks = [], 0
@@ -556,6 +556,27 @@ MUTATIONS += [
     ("recount: a local in a closed sibling block still shadows", R,
      [("\n                          and still_open(code, lm.start(1), at)]", "]")],
      {"synthetic agreement: Host.CODEC sites"}),
+    ("expression-lambda parameters ahead of the site in its statement not looked for", P,
+     [("        for lm in lam.finditer(self.masked, st, off):", "        for lm in ():")],
+     {"synthetic Scopes.CODEC: unqualified names", "synthetic: calls excluded by property"}),
+    ("a typed lambda parameter is read as a local of the whole enclosing block", P,
+     [("                if self._lambda_parameter(lm.end() - 1):\n                    continue",
+       "                if False:\n                    continue")],
+     {"synthetic Scopes.CODEC: unqualified names", "synthetic agreement: Scopes.CODEC names"}),
+    ("text blocks not masked", P,
+     [("        if src.startswith('\"\"\"', i):\n            j = _text_block_end(src, i)\n            for k",
+       "        if False:\n            j = _text_block_end(src, i)\n            for k")],
+     {"synthetic Scopes.CODEC: unqualified names", "synthetic agreement: Scopes.CODEC names"}),
+    ("recount: a catch/for/parameter name outlives the block that follows its parentheses", R,
+     [("        if k < len(code) and code[k] == '{':\n            return k < at <= block_end(code, k)",
+       "        if False:\n            return k < at <= block_end(code, k)")],
+     {"synthetic agreement: Scopes.CODEC names"}),
+    ("recount: a typed lambda parameter outlives the lambda", R,
+     [("        if code.startswith('->', k):", "        if False:")],
+     {"synthetic agreement: Scopes.CODEC names"}),
+    ("recount: text blocks not masked", R,
+     [('|\\"\\"\\"(?:\\\\.|[^\\\\])*?\\"\\"\\"', "")],
+     {"synthetic agreement: Scopes.CODEC names"}),
     ("recount: registries held in a variable not counted", R,
      [("    for m in re.finditer(r'=\\s*[\\w.()]*getCodecRegistry\\s*\\(', code):",
        "    for m in re.finditer(r'(?!)', code):")],

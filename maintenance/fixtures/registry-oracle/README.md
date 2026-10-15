@@ -87,9 +87,12 @@ A review of the 0.7.2 pass found that the miner and the recount both required a
 `Receiver.` before the codec field, so `CODEC.register("Box", ...)` inside the class that
 declares `CODEC` was invisible to both: 69 sites in 20 classes at 0.7.2 (68 at 0.6.8),
 18 registries absent from the miner and `Condition.CODEC` short by 15 names. The miner now
-binds such a site by lexical scope (innermost enclosing class that declares a static field
-of that name; no superclass rule; a local or parameter that shadows it, or a `this.`/`super.`
-receiver, excludes the call). The recount binds them by a different route. Fixture changes:
+binds such a site the way Java does, walking outward from the call: a local, parameter or lambda
+parameter of that name excludes it; a class declaring a static field of that name binds it; a class
+declaring an instance field of it excludes it; a class that declares neither but extends or
+implements something, or an anonymous body, leaves the site UNRESOLVED (it may inherit the name; no
+superclass rule finds out); a `this.`/`super.` receiver is excluded. The recount implements the scope
+walk separately. Fixture changes:
 
 - `independent.unqualified` (0.7.2) and `independent.unqualified_previous_build` (0.6.8) are the
   **recount's** figures, never the miner's. The pre-existing `independent` figures are

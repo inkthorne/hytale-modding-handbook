@@ -234,7 +234,7 @@ def strip_noncode(t):
         if x[0] in '"\'':
             return x[0] + re.sub(r'[^\n]', ' ', x[1:-1]) + x[-1]
         return re.sub(r'[^\n]', ' ', x)
-    return re.sub(r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", blank, t, flags=re.S)
+    return re.sub(r"//[^\n]*|/\*.*?\*/|\"\"\"(?:\\.|[^\\])*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", blank, t, flags=re.S)
 
 
 def without_angles(text):
@@ -348,11 +348,44 @@ def member_start(code, classes, k, off):
     return last + 1
 
 
+def block_end(code, i):
+    """Offset of the `}` matching the `{` at code[i]."""
+    d = 0
+    for z in range(i, len(code)):
+        d += (code[z] == '{') - (code[z] == '}')
+        if d == 0:
+            return z
+    return len(code)
+
+
 def still_open(code, d, at):
-    """A declaration at `d` is still in scope at `at` unless a `}` between them closed the
-    block it sits in, i.e. the running brace depth from `d` ever goes below zero. (A `for`
-    header's variable, declared outside the loop's braces, is the one case this keeps
-    alive too long; a method's parameters and any local of an enclosing block are right.)"""
+    """Is the declaration at `d` in scope at `at`?
+    A name declared inside a PARENTHESISED HEADER — a method's parameters, a `catch (E x)`,
+    a `for (T x : xs)`, a lambda's `(T x) ->` — lives exactly as long as what follows the
+    closing paren: the `{…}` block, or the lambda's body (a block or one expression).
+    Anything else is a plain local, in scope until a `}` closes the block it sits in
+    (the running brace depth from `d` never goes below zero)."""
+    pd, j = 0, d
+    while j < at:
+        if code[j] == '(':
+            pd += 1
+        elif code[j] == ')':
+            if pd == 0:
+                break
+            pd -= 1
+        j += 1
+    if j < at and code[j] == ')':
+        k = j + 1
+        while k < len(code) and code[k].isspace():
+            k += 1
+        if code.startswith('->', k):
+            k += 2
+            while code[k].isspace():
+                k += 1
+            body_end = (block_end(code, k) if code[k] == '{' else k + len(statement_at(code, k)))
+            return at <= body_end
+        if k < len(code) and code[k] == '{':
+            return k < at <= block_end(code, k)
     depth = 0
     for ch in code[d:at]:
         if ch == '{':

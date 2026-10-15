@@ -23,7 +23,7 @@ import java.util.*;
  *   class <TAB> status <TAB> detail
  *   status: KEYS (detail = failing keys, comma separated; empty = decodes clean),
  *           THROW (decode threw before validation finished; detail = type: message),
- *           NOCODEC (no public static CODEC that is a BuilderCodec),
+ *           NOCODEC (no static field of that name holding a BuilderCodec),
  *           ABSTRACT (BuilderCodec without a supplier),
  *           INIT (class initialisation failed; detail = cause)
  * Exit 0 always: classification is data, not a verdict (effective-required.py judges).
@@ -57,7 +57,12 @@ public class EffectiveRequired {
                 if (hash >= 0) { field = name.substring(hash + 1); cn = name.substring(0, hash); }
                 Class<?> cls = load(cn);
                 Object f;
-                try { f = cls.getField(field).get(null); }
+                try {
+                    // private/protected codecs exist (SpawnNPCInteraction.WeightedNPCSpawn.CODEC)
+                    java.lang.reflect.Field fld = cls.getDeclaredField(field);
+                    fld.setAccessible(true);
+                    f = fld.get(null);
+                }
                 catch (NoSuchFieldException e) { f = null; }
                 if (!(f instanceof BuilderCodec<?> c)) {
                     System.out.println(name + "\tNOCODEC\t"); continue;

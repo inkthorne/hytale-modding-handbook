@@ -3,7 +3,7 @@
 effective-required — which codec keys does the ENGINE say are required? Measured, then
 compared with what codec_parser.py predicts statically.
 
-For every top-level class that declares `CODEC` and a `new KeyedCodec`, EffectiveRequired.java
+For every top-level class that declares a BuilderCodec `CODEC`, EffectiveRequired.java
 decodes an EMPTY document through the real codec with a collecting ExtraInfo and lists the
 keys that failed. That set is the ground truth for "a key is required" (decode fails when it
 is omitted), reached by running the jar rather than reading it, so it cannot share a failure
@@ -28,7 +28,7 @@ import argparse, collections, os, pathlib, re, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
-from codec_parser import find_source
+from codec_parser import find_source, parse_chain
 import defaults_probe as dp
 
 ap = argparse.ArgumentParser()
@@ -46,7 +46,8 @@ for label, p in (('decompiled source', src), ('HytaleServer.jar', pathlib.Path(a
 # Parser blind spots, recorded so a NEW unexplained key is a failure and these are not:
 # the codec's parent or keys are attached in a `static {}` block the parser cannot read.
 KNOWN_UNEXPLAINED = {('SelectInteraction', 'Selector'),   # first `CODEC` in the file is a nested class's
-                     ('WorldNPCSpawn', 'NPCs')}           # parent NPCSpawn.BASE_CODEC is built in a static block
+                     ('WorldNPCSpawn', 'NPCs'),           # parent NPCSpawn.BASE_CODEC is built in a static block
+                     ('LaunchAbilityProjectileInteraction', 'Projectile')}  # CODEC = createCodec(): a factory method
 # Negative controls: one class that MUST report a failing key, one with a nonNull key that
 # MUST decode clean. If either flips, the harness is not measuring what this file says.
 MUST_FAIL = ('com.hypixel.hytale.common.plugin.PluginManifest', {'Name'})
@@ -55,7 +56,10 @@ MUST_PASS = 'com.hypixel.hytale.builtin.augmentblocks.AugmentConditionInteractio
 names = []
 for jp in sorted(src.rglob('*.java')):
     t = jp.read_text(errors='replace')
-    if 'KeyedCodec' in t and re.search(r'\bstatic\s+final\s+[\w.<>?, ]+\s+CODEC\s*=', t):
+    # `CODEC;` too: 22 classes finish their codec in a `static {}` block, which the parser cannot
+    # read but the engine can decode. They are measured, and counted apart (see `unparsed` below).
+    # `BuilderCodec`, not `KeyedCodec`: a class with no keys of its own still inherits its parent's.
+    if 'BuilderCodec' in t and re.search(r'\bstatic\s+final\s+[\w.<>?, ]+\s+CODEC\s*(?:=|;)', t):
         names.append(str(jp.relative_to(src))[:-5].replace('/', '.'))
 
 with tempfile.TemporaryDirectory() as t:
@@ -92,13 +96,19 @@ if s != 'KEYS' or got:
     sys.exit(2)
 
 pred_fail = pass_nonnull = 0
-pass_null, unresolved, unexplained = [], [], []
+pass_null, unresolved, unexplained, unparsed = [], [], [], []
 classes_failing = 0
 for name, (st, M) in sorted(measured.items()):
     if st != 'KEYS':
         continue
     classes_failing += bool(M)
     keys = {}
+    chain0 = parse_chain(find_source(name, src).read_text(errors='replace'))
+    if chain0 is None:
+        # The parser reads no chain here (codec finished in a static block): nothing to
+        # compare against, so these are counted, not judged.
+        unparsed.append((name.split('.')[-1], sorted(M)))
+        continue
     for p, txt, ch in dp.hops(find_source(name, src), src):
         if ch is not None:
             for k in ch.keys:
@@ -127,6 +137,8 @@ print(f"PREDICTED {npred} null_validated key(s) in {status['KEYS']} decodable cl
 print(f"  {pass_nonnull} accept omission because the field already holds a non-null default")
 print(f"  {len(pass_null)} accept omission although the initialiser reads null (assigned elsewhere, e.g. the constructor)")
 print(f"  {len(unresolved)} accept omission, default not resolvable by defaults_probe")
+print(f"UNPARSED {len(unparsed)} decodable class(es) have no chain the parser can read (static-block codecs); the engine "
+      f"rejects omitted keys in {sum(1 for _, m in unparsed if m)} of them")
 print(f"UNEXPLAINED {len(unexplained)} key(s) failed that the parser does not mark null_validated "
       f"(known blind spots: {len(KNOWN_UNEXPLAINED)})")
 if a.verbose:

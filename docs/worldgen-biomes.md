@@ -101,20 +101,23 @@ name** (without extension), which is what a world structure's `Biome` entries re
 Biome files use these top-level keys (counts reflect how common each is across the
 shipped biomes):
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| `Name` | yes | Display name (defaults to `"DefaultName"` if omitted — one shipped biome does) |
-| `Terrain` | yes | A `DAOTerrain` node wrapping a `Density` graph — the heightfield |
-| `MaterialProvider` | yes | A material graph (usually `Solidity`) choosing blocks |
-| `Props` | optional | Array of prop-placement entries |
-| `EnvironmentProvider` | optional | Sky/ambient environment selection |
-| `TintProvider` | optional | Block color tint selection |
-| `FloatingFunctionNodes` | optional | Array of free-standing density nodes (typically carrying `ExportAs`) that are built but not wired into `Terrain`; unused by the shipped biomes |
-| `Tags` | optional | Generic asset tags (`{"Template": []}` on 17 of the 75 shipped biomes); a `Map<String, String[]>` read by `AssetBuilderCodec.TAGS_CODEC` for every asset type, not by the generator |
+| Key | If omitted | Description |
+|-----|------------|-------------|
+| `Name` | `"DefaultName"` | Display name (one shipped biome omits it) |
+| `Terrain` | a default `DensityTerrainAsset` | A `DAOTerrain` node wrapping a `Density` graph — the heightfield |
+| `MaterialProvider` | a default `Constant` provider | A material graph (usually `Solidity`) choosing blocks |
+| `Props` | empty | Array of prop-placement entries |
+| `EnvironmentProvider` | a default `Constant` provider | Sky/ambient environment selection |
+| `TintProvider` | a default `Constant` provider | Block color tint selection |
+| `FloatingFunctionNodes` | empty | Array of free-standing density nodes (typically carrying `ExportAs`) that are built but not wired into `Terrain`; unused by the shipped biomes |
+| `Tags` | none | Generic asset tags (`{"Template": []}` on 17 of the 75 shipped biomes); a `Map<String, String[]>` read by `AssetBuilderCodec.TAGS_CODEC` for every asset type, not by the generator |
 
 The first seven are exactly the keys of the biome codec
 (`com.hypixel.hytale.builtin.hytalegenerator.assets.biomes.BiomeAsset.CODEC`); `Tags` comes
-from the shared `AssetBuilderCodec` every JSON asset inherits. There is no top-level
+from the shared `AssetBuilderCodec` every JSON asset inherits. No key is required at load: each
+field has an initialiser, and the `true` third argument all seven carry in `KeyedCodec` changes
+only how an explicit `null` is decoded in 0.7.2. A biome without `Terrain` or `MaterialProvider`
+loads with the defaults above. There is no top-level
 `Density` key — shared fields are exported from inside `Terrain` (or from a `Density/` file)
 with `ExportAs`.
 

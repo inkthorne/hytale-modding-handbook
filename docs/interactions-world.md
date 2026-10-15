@@ -211,7 +211,7 @@ Fires projectiles from an entity.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `ProjectileId` | string | Projectile config ID |
+| `ProjectileId` | string | **Required** (`Validators.nonNull()`). Projectile config ID |
 | `IgnorePitch` | boolean | 0.6.3+. Codec doc: "If true, the shooter's pitch is set to 0 before the launch direction is computed, so the projectile's pitch is fixed by RotationOffset." |
 | `IgnoreYaw` | boolean | 0.6.3+. Same for yaw |
 | `IgnoreRoll` | boolean | 0.6.3+. Same for roll |

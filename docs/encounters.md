@@ -191,7 +191,7 @@ declare `Hytale:Rewards` as a dependency, and `GrantReward` is the only shipped 
 
 | `Type` | Class | Keys | Effect |
 |--------|-------|------|--------|
-| `Entitlement` | `EntitlementReward` | `EntitlementId` (string) — required: `Validators.nonNull()` plus `nonEmptyString()` | Sends the player's client a `SelfGrantEntitlement` packet carrying the id, asking it to grant itself that entitlement. That packet is the whole effect on the server side |
+| `Entitlement` | `EntitlementReward` | `EntitlementId` (string) — required: `Validators.nonNull()` on a field that starts null, plus `nonEmptyString()`; declared with `appendInherited`, so a `Parent` reward can supply it | Sends the player's client a `SelfGrantEntitlement` packet carrying the id, asking it to grant itself that entitlement. That packet is the whole effect on the server side |
 
 The one shipped reward is `Server/Rewards/Reward_Cosmetics_Chapter1.json`:
 

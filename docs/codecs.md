@@ -186,6 +186,22 @@ MyData data = stamped.getFromMetadataOrNull(MY_DATA);
 `ItemStack` also offers `withMetadata(String key, Codec<T>, T)` and
 `getFromMetadataOrNull(String key, Codec<T>)` if you prefer not to keep a `KeyedCodec`.
 
+#### What `required` means
+
+The `required` parameter (what `isRequired()` reports) is easy to misread. In 0.7.2 a `true`
+third argument leaves an omitted key optional: a `BuilderCodec` decodes a document that lacks the
+key, on every decode path, and the field keeps its initial value. The flag's one effect is on an
+explicit JSON `null` along the BSON inherit path (`KeyedCodec.getAndInherit`), where the `null` is
+decoded instead of being treated as absent, and so fails.
+
+What makes an omitted key fail is a `NonNullValidator` on the field — `Validators.nonNull()`,
+`nonEmptyArray()` or `nonEmptyMap()`, added with `addValidator` after `append(...)` — **and** a
+field that is still null after construction. A `nonNull()` key whose field has a default (an enum
+constant, an empty array, any primitive) accepts its own omission and takes that default. For an
+asset, a key declared with `appendInherited` is also satisfied by its `Parent`; a key declared with
+plain `append` is checked on the child alone. A nested object's keys are checked only when that
+object is present.
+
 ---
 
 ## BuilderCodec — codecs for objects

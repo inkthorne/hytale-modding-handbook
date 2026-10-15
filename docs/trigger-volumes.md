@@ -194,7 +194,7 @@ Codec doc: "Shows an event title to the players of one world or of the whole uni
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `Target` | enum | `World` | **Required** (`Validators.nonNull()`) *despite having a default* — the field initialises to `World`, but the key must still be written. `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
+| `Target` | enum | `World` | Carries `Validators.nonNull()`, but the field initialises to `World`, so an omitted key passes and takes that default. `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
 | `PrimaryTitle` | message | — | **Required** (`Validators.nonNull()`). The main line |
 | `SecondaryTitle` | message | *empty* | The line below it; omit for a one-line title |
 | `Style` | enum | `Default` | 0.7.2+. *"The style the client uses to present the event title."* `EventTitleStyle`: `Default`, `Major`, `GoblinBreach`, `VoidEviction` |
@@ -228,7 +228,7 @@ One more trap for anyone mining these keys: the interaction's `PrimaryTitle` and
 are declared with the **raw** `KeyedCodec` form rather than the parameterised one, so a pattern
 matching `KeyedCodec<T>` sees seven of its nine keys and misses both title fields.
 
-> **Gotcha — `Target` is required and `Universe` is not scoped to anything.** There is no radius,
+> **Gotcha — `Universe` is not scoped to anything.** There is no radius,
 > no player filter and no volume: `Universe` reaches every player of every live world on the server.
 > The narrower option is `World`, and it is still every player in that world.
 

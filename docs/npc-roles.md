@@ -1171,9 +1171,10 @@ Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
 | `ExpirationTime` | double | `1.0` | Seconds the message stays live on each receiver. `-1` is infinite |
 | `TargetGroups` | string[] | — | [NPC group](#groups) names to restrict delivery to. Omit to reach every listener in range |
 
-`Message`'s requiredness comes from a validator attached after `append(...)` closes rather than from
-a `true` third argument to `KeyedCodec`; both forms mean required, and
-[SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) has a key with both.
+`Message`'s requiredness comes from the `Validators.nonNull()` attached after `append(...)` closes,
+together with a field that starts null, so an omitted key fails at load. A `true` third argument to
+`KeyedCodec` would add nothing here: in 0.7.2 it changes only how an explicit `null` is decoded.
+[SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) shows the contrast.
 
 Fourteen shipped files use it as of 0.7.2: thirteen boss and hunt interactions (the Goblin Gobliterator
 and Feastmaster fights, `Hunt_Bait_Spawn`, `Hunt_Request_Predator`) and the debug item

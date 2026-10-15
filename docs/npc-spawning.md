@@ -136,10 +136,20 @@ exist to exercise both match modes.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `SpawnerBlockTypeKey` | string | **Required, validated.** Block type key of the block that hosts the companion |
+| `SpawnerBlockTypeKey` | string | **Required in effect** (see below). Block type key of the block that hosts the companion; a written value is validated non-empty and against the loaded block types |
 | `Radius` | number | **> 0.** Search radius in blocks for the required blocks (default `1.0`) |
-| `RequiredBlocks` | array | **Required, non-empty.** The requirement blocks and their counts |
-| `SpawnMarker` | string | **Required, validated.** Id of a `Server/NPC/Spawn/Markers/` asset defining the companion |
+| `RequiredBlocks` | array | **Required in effect, non-empty** (see below). The requirement blocks and their counts |
+| `SpawnMarker` | string | **Required in effect** (see below). Id of a `Server/NPC/Spawn/Markers/` asset defining the companion; a written value is validated non-empty and against the loaded markers |
+
+"Required in effect" means the recipe *loads* without the key and is then dropped. Decode rejects
+none of the three: `SpawnerBlockTypeKey` and `SpawnMarker` carry only value validators
+(`nonEmptyString()` and an asset-key check), which a missing key never reaches, and
+`RequiredBlocks` carries `Validators.nonNull()` on a field that starts as an empty array. The check
+comes later, when `CompanionBlockSpawnerRecipeCompendium` indexes the loaded recipes: a recipe with
+no spawner block, no required blocks, or no known spawn marker is logged at `SEVERE` (for example
+`Companion block spawner recipe %s defines no required blocks - skipping`) and skipped, as is one
+with a `RequiredBlocks` entry whose `Value` is missing or empty. An entry's `MatchBy` is different:
+it is required at decode (below), so an entry without it fails the load itself.
 
 Each `RequiredBlocks` entry — *"A required block - how it is matched (MatchBy) and the value
 to match (Value) - plus the minimum count of it within the recipe radius."*
@@ -147,7 +157,7 @@ to match (Value) - plus the minimum count of it within the recipe radius."*
 | Key | Type | Description |
 |-----|------|-------------|
 | `MatchBy` | enum | **Required.** `BlockId` (exact block type key) or `Tag` (block tag) |
-| `Value` | string | The block key, or a tag such as `"Bed"` / `"Family=Crude"` |
+| `Value` | string | **Required in effect** (see above). The block key, or a tag such as `"Bed"` / `"Family=Crude"` |
 | `Count` | integer | **> 0.** Minimum matching blocks within `Radius` (default `1`) |
 
 The four top-level keys are inheritable, so a family of recipes can share a `Parent` template
@@ -252,7 +262,7 @@ spellbook all use it. Codec doc: "Spawns an NPC on the block that is being inter
 Extends [SimpleBlockInteraction](interactions.md#simpleblockinteraction), so the spawn is
 positioned relative to the **targeted block**, not the interacting entity.
 
-**None of its 14 keys is required** — neither by a `true` third argument nor by
+**None of its 14 keys is required**: an empty `SpawnNPC` decodes, and none of the 14 carries
 `Validators.nonNull()`. That is deliberate rather than lax: `EntityId` can be omitted because
 `WeightedEntityIds` supplies the role instead. Several keys are still validated at load, so
 "optional" does not mean "unconstrained".
@@ -277,17 +287,19 @@ positioned relative to the **targeted block**, not the interacting entity.
 ### WeightedEntityIds entries
 
 Each entry is a `WeightedNPCSpawn` with **three** keys, and it is the clearest example in the
-codebase of requiredness arriving in two different forms within one chain:
+codebase of why `Validators.nonNull()` alone does not decide requiredness:
 
-| Property | Type | Required by | Description |
-|----------|------|-------------|-------------|
-| `Id` | string | `Validators.nonNull()` **only** | Role id of the NPC. Also validated by `NPCRoleValidator` |
-| `Weight` | double | **both** a `true` third argument to `KeyedCodec` *and* `Validators.nonNull()` | Relative weight against the sum of all weights. Validated `greaterThan(0.0)` |
-| `CountRange` | int[2] | not required | `[min, max]` of *this* entry to spawn when picked. Validated: 2 entries, each `1..100`, weakly monotonic |
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `Id` | string | **yes** | Role id of the NPC. Carries `Validators.nonNull()` on a field that starts null, so an entry without it fails at load. Also validated by `NPCRoleValidator` |
+| `Weight` | double | no (default `0.0`) | Relative weight against the sum of all weights. Carries a `true` third argument to `KeyedCodec` *and* `Validators.nonNull()`, yet an omitted `Weight` passes: the field is a primitive `double`, never null, and `greaterThan(0.0)` checks only a written value. Write it |
+| `CountRange` | int[2] | no (`[1,1]`) | `[min, max]` of *this* entry to spawn when picked. Validated: 2 entries, each `1..100`, weakly monotonic |
 
-Both forms have to be read: a key can be required by the codec's third argument, by a
-`Validators.nonNull()` that attaches *after* `append(...)` closes, or — as `Weight` shows — by
-both at once.
+Requiredness takes two facts, and the codec chain shows only one. A key fails when omitted only if
+it carries `Validators.nonNull()` (attached *after* `append(...)` closes) **and** its field is
+still null after construction; `Id` has both, `Weight` has the validator on a field that is
+already `0.0`. The `true` third argument is beside the point for omission: in 0.7.2 it changes only
+how an explicit `null` is decoded.
 
 The simplest shipped use pins one role and lifts it half a block off the target
 (`Server/Item/Items/EggSpawner/Egg_Spawner_Trork.json`):
@@ -383,7 +395,7 @@ Fires manual spawn markers around the **entity running the interaction**. It ext
 | `Range` | double | `10.0` | Search radius in blocks. Validated `greaterThan(0.0)` |
 | `Count` | int | `0` | Maximum number of markers to fire. Validated `greaterThanOrEqual(0)` |
 
-**None of the three is required** — neither by a `true` third argument to `KeyedCodec` nor by
+**None of the three is required**: an empty `TriggerSpawnMarkers` decodes, and no key carries
 `Validators.nonNull()`. The defaults are a live configuration, not a degenerate one: with no keys at
 all the interaction fires every manual marker within 10 blocks.
 

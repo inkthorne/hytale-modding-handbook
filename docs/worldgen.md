@@ -252,10 +252,10 @@ by terrain biomes is `Solidity` (it has separate `Solid` and `Empty` branches).
 
 | Type | Description |
 |------|-------------|
-| `Solidity` | Splits placement into `Solid` and `Empty` (required) branches |
+| `Solidity` | Splits placement into `Solid` and `Empty` branches (each defaults to a `Constant` provider when omitted) |
 | `Constant` | Always places one `Material` |
 | `Queue` | Tries providers in order; first match wins |
-| `SimpleHorizontal` | Applies a nested `Material` provider within a Y band (`TopY`/`BottomY`, all three required; optional `TopBaseHeight`/`BottomBaseHeight` name the reference heights the band is measured from) |
+| `SimpleHorizontal` | Applies a nested `Material` provider within a Y band (`TopY`/`BottomY`, both `0` when omitted, and `Material` defaults to a `Constant` provider; optional `TopBaseHeight`/`BottomBaseHeight` name the reference heights the band is measured from) |
 | `SpaceAndDepth` | Layers materials by depth into the floor (`Layers`, `LayerContext`, `MaxExpectedDepth`, `Condition`) |
 | `FieldFunction` | Selects materials by sampling a density `FieldFunction` against `Delimiters` (each `From`/`To`/`Material`) |
 
@@ -435,7 +435,7 @@ your provider; at runtime it is reachable via
 ### FlatWorldGenProvider (`Type: "Flat"`)
 
 Generates a flat world from a list of layers. Codec fields: `Tint` (a color, default
-`DEFAULT_TINT`) and `Layers` (required array). Each `Layer` carries:
+`DEFAULT_TINT`) and `Layers` (an array; omitted, it keeps the constructor's single `Soil_Grass` layer from Y 0 to 1). Each `Layer` carries:
 
 | JSON key | Field | Meaning |
 |----------|-------|---------|

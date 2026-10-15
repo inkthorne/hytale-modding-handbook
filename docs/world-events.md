@@ -193,7 +193,7 @@ that to another event's location; `0` disables the filter.
 | `MessageAction` | `Message` (a `Message` JSON, e.g. `{"RawText": "…"}`) | Broadcasts to the world |
 | `PrefabPasteAction` | `PrefabKey`, `Permanent` | Pastes the prefab chosen by the spawner under `PrefabKey`; if `Permanent` is false "the prefab and its entities will be removed and the world rolled back to its previous state when the event ends" (the snapshot is a `PrefabRemoveContext`) |
 | `PrefabRemoveAction` | `PrefabKey` | Removes a pasted prefab now |
-| `ShowEventTitleAction` | `LocationKey`, `PrimaryTitle` (required), `Radius`, `SecondaryTitle`, `Style`, `Icon`, `Duration` (`4.0`), `FadeInDuration` / `FadeOutDuration` (`1.5`), `SoundFX`, `CameraFX` | 0.7.2+. Shows an event title to players within `Radius` of the location; both titles are translation keys. The class is `@Deprecated(forRemoval=true)` in the same build that adds it, so expect it to go |
+| `ShowEventTitleAction` | `LocationKey` (required), `PrimaryTitle` (required), `Radius`, `SecondaryTitle`, `Style`, `Icon`, `Duration` (`4.0`), `FadeInDuration` / `FadeOutDuration` (`1.5`), `SoundFX`, `CameraFX` | 0.7.2+. Shows an event title to players within `Radius` of the location; both titles are translation keys. The class is `@Deprecated(forRemoval=true)` in the same build that adds it, so expect it to go |
 
 An action returning `false` from `apply(...)` fails the fork (see *Runtime* below).
 

@@ -212,12 +212,14 @@ Shared keys (`BreakShape.BASE_CODEC`, descriptions quoted from the codec's own `
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `Width` | int | — (**required**) | "The size of the shape along the user's horizontal view axis (right)." Range 1–32 |
-| `Height` | int | — (**required**) | "The size of the shape along the user's vertical view axis (up)." Range 1–32 |
+| `Width` | int | `1` | "The size of the shape along the user's horizontal view axis (right)." Range 1–32 |
+| `Height` | int | `1` | "The size of the shape along the user's vertical view axis (up)." Range 1–32 |
 | `Depth` | int | `1` | "How many blocks deep the shape extends into the targeted surface." Range 1–32 |
 | `Centered` | boolean | `true` | "Whether the shape's width/height are centered on the targeted block." |
 | `Offset` | Vector3d | `(0,0,0)` | "Shifts the shape's center off the targeted block, in the view basis (x = right, y = up, z = into the surface). Rounded to whole blocks." Magnitude ≤ 32 per axis |
 | `Orientation` | enum | `View` | "How the shape is oriented: 'View' (the dominant axis of the look direction, the default) or 'Surface' (into the targeted block face that the look ray hits)." |
+
+`Width` and `Height` carry a `true` third argument to `KeyedCodec`, which in 0.7.2 changes only how an explicit `null` decodes, so either may be omitted and keeps its `1`.
 
 Limits are enforced on decode (`BreakShape.validateShape`): `Width × Height × Depth` must not exceed
 **1024** cells (`MAX_TOTAL_CELLS`), each dimension must be 1–32 (`MAX_DIMENSION`), and each offset axis

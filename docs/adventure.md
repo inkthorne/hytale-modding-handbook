@@ -648,7 +648,7 @@ the **Player** to the named instance, creating it if required." Extends
 |----------|------|---------|-------------|
 | `InstanceName` | string | — | **Required** (`Validators.nonNull()`), and validated by `InstanceValidator`, so an unknown instance fails at load |
 | `InstanceKey` | string | — | Chooses **where the instance's identity is stored**, not whether it persists — see below. Set it and identity is a global world name shared by every block using that key; omit it and identity lives on the triggering block |
-| `OriginSource` | enum | `ENTITY` | **Required** (`Validators.nonNull()`) despite having a default. `ENTITY` takes the return position from the interacting entity, `BLOCK` from the targeted block. Those two are the whole enum |
+| `OriginSource` | enum | `ENTITY` | Carries `Validators.nonNull()`, but the field starts as `ENTITY`, so an omitted key passes and takes that default. `ENTITY` takes the return position from the interacting entity, `BLOCK` from the targeted block. Those two are the whole enum |
 | `PositionOffset` | vec3 | — | Offset applied to the return point, "used to prevent repeated interactions when returning from the instance". **Effectively required when `OriginSource` is `ENTITY`** — see below |
 | `Rotation` | rotation | — | Rotation to set on the player when they return |
 | `PersonalReturnPoint` | boolean | `false` | Give this player their own return point at the current location, overriding the world's |

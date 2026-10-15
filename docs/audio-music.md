@@ -168,7 +168,7 @@ The leaf — points at one audio file:
 
 **Package:** `com.hypixel.hytale.server.core.asset.type.musiccontainer.config.RandomMusicContainer` (and `SequenceMusicContainer`)
 
-A playlist of child containers under `Children` — a non-empty array whose entries are container ids or inline
+A playlist of child containers under `Children` — a **required**, non-empty array (a `Parent` can supply it) whose entries are container ids or inline
 containers (usually an inline container that inherits a track via `Parent`, plus per-child overrides such as
 `SilenceAfter` / `Weight` — the same `CHILD_ASSET_CODEC` an ambience's `MusicContainer` key uses). `Sequence` plays
 in order. `Random` adds two keys:
@@ -205,7 +205,7 @@ Phases that hand over horizontally (exploration → combat, boss phase 1 → pha
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Children` | array | — | The phases, in order — container ids or inline containers; non-empty |
+| `Children` | array | — | **Required** (`Validators.nonEmptyArray()`; a `Parent` can supply it). The phases, in order — container ids or inline containers; non-empty |
 | `DefaultPhaseTransitionType` | enum | `Crossfade` | `MusicTransitionType` for every phase change. A child overrides it with its own `TransitionType` only when that child also sets a `TransitionDuration`, since `TransitionType` has no "unset" value |
 | `DefaultPhaseTransitionDuration` | float | `0.0` | Default phase-transition length (seconds) |
 | `AudioState` | string | — | Axis that selects the phase (0.7.2+). Omitted, the container only advances sequentially |
@@ -255,7 +255,7 @@ to `ExitMarker` (the loop point, or for a play-once Segment inside a `Sequence`,
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `Layers` | array | — | `LayerPlacement`s (below); non-empty, layer names unique |
+| `Layers` | array | — | **Required** (`Validators.nonEmptyArray()`; a `Parent` can supply it). `LayerPlacement`s (below); non-empty, layer names unique |
 | `EntryMarker` | `BarBeatDuration` | — | Downbeat position from segment-time 0. Layers without a `ClipStart` get this much pre-entry material (a stinger's "pickup") |
 | `ExitMarker` | `BarBeatDuration` | — | Exit / loop position from segment-time 0; must resolve after `EntryMarker` |
 | `Markers` | array | — | Named positions (0.7.2+): `{ "Name": …, "At": { "Bar": 1, "Beat": 1, "Ms": 0 } }`, counted from the downbeat, that `NextMarker` sync points and `Align: NamedMarker` target |
@@ -550,7 +550,7 @@ server-authoritative (among them `AudioState_Combat`, `AudioState_Dungeon_Intens
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Authority` | `Server` / `Client` | `Server` | Which side writes the value (`AudioState.getAuthority()`): server-authority axes are set by server logic and broadcast; client-authority axes are written locally by an ambience's `SetStates` |
-| `Values` | array | — | Ordered value names (`getValues()`); non-empty, unique, and `*` is reserved |
+| `Values` | array | — | **Required** (`Validators.nonEmptyArray()`). Ordered value names (`getValues()`); non-empty, unique, and `*` is reserved |
 | `DefaultValue` | string | — | Initial value (`getDefaultValue()` / `getDefaultValueIndex()`); must be one of `Values` |
 | `DefaultSyncTo` | object | — | Default [sync point](#sync-points-and-musical-time) for edges with no `SyncTo`; omit to switch immediately |
 | `DefaultTransition` | object | — | Fallback edge (a `StateTransitionConfig` without `From`/`To`) |

@@ -553,8 +553,11 @@ Because each entry is a root, an entry takes one of two forms:
    plain interaction. The namespaces are separate, so an id that names a file under `Interactions/`
    does not resolve here.
 
-An inline object written as a plain interaction (`{ "Type": "ApplyEffect", … }`) is **not** a root body:
-`RootInteraction`'s `Interactions` key is required and non-empty, so such an entry fails validation.
+An inline object written as a plain interaction (`{ "Type": "ApplyEffect", … }`) is **not** a root body,
+and it does not fail validation either. `RootInteraction`'s `Interactions` key carries `nonNull()` and
+`nonEmptyArray()`, but the field starts as an empty array, so an omitted key passes both checks (they
+reject only an explicit `null` or `[]`). The entry loads as a root with nothing to run, and the plain
+interaction's keys are unknown to it; the asset loader logs an unknown key as unused and carries on.
 
 **Inline root bodies:**
 
@@ -1609,7 +1612,7 @@ plugin is loaded.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `RequiredAugmentTags` | string[] | — | **Required** (`Validators.nonNull()`). Every tag listed must be granted by an augment block in range |
+| `RequiredAugmentTags` | string[] | — | Every tag listed must be granted by an augment block in range. Carries `Validators.nonNull()`, but the field starts as an empty array, so an omitted key passes and behaves as `[]` (see the gotcha below) |
 | `Radius` | double | `100.0` | Sphere radius, centred on the target block, within which augment blocks are collected |
 
 This is the interaction-side twin of the bench mechanism: the tags come from `AugmentBlock`
@@ -1642,11 +1645,11 @@ opens a message page):
 - **`Radius` defaults to 100 blocks**, which is not a neighbourhood — it is effectively "anywhere in
   the loaded area". Set it deliberately.
 
-> **Gotcha — the key is required to write, but an empty array passes wherever there is a target
-> block.** `Validators.nonNull()` makes `RequiredAugmentTags` mandatory, and
-> `AugmentBlocksUtils.requirementsMet` returns true immediately when the array is empty, before
-> collecting anything. So `"RequiredAugmentTags": []` never fails on a targeted block, and it looks
-> exactly like a configured condition. It is not unconditional, though: with no target block at all
+> **Gotcha — an empty or omitted array passes wherever there is a target block.** The key carries
+> `Validators.nonNull()`, yet its field starts as an empty array, so omitting it passes load exactly
+> as `[]` does, and `AugmentBlocksUtils.requirementsMet` returns true immediately when the array is
+> empty, before collecting anything. So a condition with an empty or absent `RequiredAugmentTags`
+> passes on every targeted block, and it looks exactly like a configured condition. It is not unconditional, though: with no target block at all
 > the check fails first, and nothing structurally supplies one — see the bullet above. The bench side behaves
 > the same way — [items-crafting.md](items-crafting.md#benchrequirement) records that an empty or
 > absent array always passes — so this is the subsystem's convention rather than a slip here.
@@ -2434,7 +2437,7 @@ Loop execution of interactions with timing control and optional interruption.
 | Property | Type | Description |
 |----------|------|-------------|
 | `Repeat` | int | Codec doc: "The number of times to repeat. -1 is considered as infinite, be careful when using this value." Default `1`; validated as ≥ 1 **or** exactly `-1`, so `0` fails validation |
-| `ForkInteractions` | object | Codec doc: "The interactions to run in the forks created by this interaction." A **root** interaction reference or inline root; validated non-null |
+| `ForkInteractions` | object | Codec doc: "The interactions to run in the forks created by this interaction." A **root** interaction reference or inline root. **Required** (`Validators.nonNull()`) |
 | `Next` | interaction | From `SimpleInteraction`. Runs after the last iteration finishes successfully |
 | `Failed` | interaction | From `SimpleInteraction`. Runs when a forked chain **fails** — remaining repetitions are abandoned |
 | `HorizontalSpeedMultiplier` | float | From the `Interaction` base. Movement speed modifier while the repeat runs (e.g. `0.6` for 60% speed) |
@@ -2630,11 +2633,14 @@ it searches from the **entity's** position rather than a targeted block.
 | `MaxCount` | int | Maximum block positions to act on. Validated `greaterThan(0)` |
 | `Interactions` | interaction | The chain to run per matched block — inline or a root-interaction reference. Late-validated against the `RootInteraction` assets |
 
-**All four are required, and all four by the same mechanism**: a `true` third argument to
-`KeyedCodec`. Three of them *also* carry validators, but those constrain the value, not its
-presence — none is a `Validators.nonNull()`, which is the other way a key becomes required (compare
-[SendBeacon's `Message`](npc-roles.md#sendbeacon); `SpawnNPC`'s `Weight` carries both forms at once).
-There is therefore no useful "minimal" form of this interaction: every key must be written.
+**None of the four is required at load**: an empty `RunOnBlockTypes` decodes. All four carry a `true`
+third argument to `KeyedCodec`, which in 0.7.2 changes only how an explicit `null` is decoded; an
+omitted key still passes. The validators check a written value: `Range` and `MaxCount` fall back to
+`0` when omitted, and `BlockSets`' `nonEmptyArray()` is satisfied by its field's initial empty array.
+A key is required only when it carries `Validators.nonNull()` (or `nonEmptyArray()`) **and** its
+field is still null after construction, as [SendBeacon's `Message`](npc-roles.md#sendbeacon) is.
+Write all four anyway. With `BlockSets` omitted the search matches nothing, and with `Interactions`
+omitted there is nothing to fork; either way the interaction ends `Failed`.
 
 Two of the four are also the **raw** `KeyedCodec` form rather than the parameterised one —
 `new KeyedCodec("Interactions", RootInteraction.CHILD_ASSET_CODEC, true)` and the array-codec

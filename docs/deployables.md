@@ -78,11 +78,11 @@ registered type of its own, and has two keys:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Max` | float | **Required** (`Validators.nonNull()`), and additionally validated `greaterThan` |
+| `Max` | float | Carries `Validators.nonNull()`, but the field is a primitive `float` (default `0`), so an omitted `Max` passes that check. A written value is validated `greaterThan` 0 |
 | `Initial` | float | Starting value; optional |
 
-A key table for `Stats` alone would miss both the requiredness and the range constraint, which is
-why it is spelled out here. The shipped turret uses `"Stats": { "Health": { "Initial": 25, "Max": 25 } }`.
+A key table for `Stats` alone would miss the range constraint, which is why it is spelled out here.
+Write `Max` anyway: an omitted one leaves the stat's maximum at `0`, and the range check applies only to a written value. The shipped turret uses `"Stats": { "Health": { "Initial": 25, "Max": 25 } }`.
 
 ### `"Type": "Aoe"`
 
@@ -130,9 +130,11 @@ An auto-targeting shooter.
 > **Gotcha — `ProjectileSpawnOffsets` is *not* required, and its declaration looks as if it is.**
 > It is written `new KeyedCodec("ProjectileSpawnOffsets", new MapCodec<Vector3d, Object2ObjectOpenHashMap>(…, true))`
 > — two arguments, with the trailing `true` belonging to the inner `MapCodec`, not to the
-> `KeyedCodec`. The visually identical three-argument form *would* make a key required. Reading
-> the trailing `true` as the outer codec's third argument is a documented trap in both directions;
-> only `ProjectileConfig`, which carries `Validators.nonNull()`, is required here.
+> `KeyedCodec`. Even the three-argument form would leave it optional: in 0.7.2 a `true` third
+> argument only changes how an explicit `null` decodes, and an omitted key still passes. What makes
+> a key required is `Validators.nonNull()` on a field that is still null after construction. Of the
+> turret's own keys only `ProjectileConfig` has that; `Model`, from the shared keys, is the turret's
+> other required key.
 
 ### `"Type": "Trap"` and `"Type": "TrapSpawner"`
 
@@ -159,10 +161,11 @@ Each carries the same `Config`; they differ only in where the deployable lands.
 |--------|-----------|----------|
 | `SpawnDeployableFromRaycast` | Where the player is aiming, client-supplied | `Config` (**required**), `PreviewStatConditions`, `MaxPlacementDistance` |
 | `SpawnDeployableAtHitLocation` | The chain's `hitLocation` / `hitNormal` | `Config` (**required**) |
-| `SpawnDeployableAtLocation` | A fixed offset from the entity or the target block | `Config`, `Offset`, `RotationYaw`, `OriginSource`, `OffsetRotationMode`, `DeployableRotationMode` — **all six required** |
+| `SpawnDeployableAtLocation` | A fixed offset from the entity or the target block | `Config` (**required**), `Offset` (`0,0,0`), `RotationYaw` (`None`), `OriginSource` (`ENTITY`), `OffsetRotationMode` (`NONE`), `DeployableRotationMode` (`NONE`) |
 
-`SpawnDeployableAtLocation` is unusual in requiring every one of its keys: all six carry
-`Validators.nonNull()`. `OriginSource`, `OffsetRotationMode` and `DeployableRotationMode` are the
+All six of `SpawnDeployableAtLocation`'s keys carry `Validators.nonNull()`, but only `Config` is
+required: the other five hold the defaults shown in the table from construction, so an omitted key
+passes the check and takes its default. `OriginSource`, `OffsetRotationMode` and `DeployableRotationMode` are the
 enums documented in [interactions.md](interactions.md#originsource-enum).
 
 `SpawnDeployableFromRaycast` does the most work of the three:

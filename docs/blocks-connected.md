@@ -157,7 +157,7 @@ Each rule in `RulesToMatch` (`ConnectedBlockPatternRule`):
 | Property | Type | Description |
 |----------|------|-------------|
 | `Position` | object | `{X, Y, Z}` block offset from the block being solved (default `0,0,0`) |
-| `IncludeOrExclude` | enum | **Required.** `Include` (the neighbor must match) or `Exclude` (must not) |
+| `IncludeOrExclude` | enum | `Include` (the neighbor must match) or `Exclude` (the neighbor must fail to match). Write it: an omitted key loads, and the rule then acts as `Exclude`, since `ConnectedBlockPatternRule.isInclude()` compares the field with `INCLUDE` |
 | `FaceTags` | object | Face tags the neighbor must expose toward this block |
 | `BlockTypes` | array | Block type keys the neighbor may be |
 | `BlockTypeLists` | array | `Server/BlockTypeList/` asset ids the neighbor must belong to |
@@ -219,7 +219,7 @@ shape locally.
 | Key | Type | Description |
 |-----|------|-------------|
 | `RuleSetId` | string | **Required.** Id of a `PatternedConnectedBlockRuleSetAsset`; codec doc: *"The name of a ConnectedBlockRuleSetAsset asset"* |
-| `TemplatedShapes` | object | **Required.** Shape name → `ConnectedBlockOutput`. `State` picks a state definition on this block (`"default"` = the base block); `Block` names a different block type entirely. Both are optional and may be combined |
+| `TemplatedShapes` | object | Shape name → `ConnectedBlockOutput`; defaults to an empty map. `State` picks a state definition on this block (`"default"` = the base block); `Block` names a different block type entirely. Both are optional and may be combined |
 
 `PatternedConnectedBlockRuleSet` resolves this map in both directions when block types load
 (`updateCachedBlockTypes`): shape name → concrete block index for output, and block index →
@@ -270,7 +270,7 @@ currently playing. Unlike the other rule-set types it always returns `false` fro
 | Key | Type | Description |
 |-----|------|-------------|
 | `Patterns` | array | **Required.** `ConnectedBlockPatternConfig[]`, tried in array order; the first pattern whose rule passes wins |
-| `Shapes` | object | **Required.** Shape name → `ConnectedBlockShapeConfig` (`Type`-tagged, see below) |
+| `Shapes` | object | Shape name → `ConnectedBlockShapeConfig` (`Type`-tagged, see below). Carries `Validators.nonNull()`, but the field starts as an empty map, so an omitted key passes |
 | `UpdateMode` | enum | `PlaceUpdate` (default), `UpdatePlaceUpdate`, or `IgnoreUpdates`. Overrides `ConnectedBlockRuleSet.getUpdateMode()` for every block using the asset |
 
 The asset supports `Parent` inheritance, and the shipped pipes use it: `MetalSimplePipe` is

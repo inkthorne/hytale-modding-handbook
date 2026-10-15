@@ -843,7 +843,7 @@ These four keys are all `ApplyEffectInteraction` adds to the base interaction:
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `EffectId` | string/object | - | The effect to apply. A `ContainedAssetCodec`, so it takes either an `Server/Entity/Effects/**` asset id (e.g. `Stun`, `Root`, `Red_Flash`) **or an inline effect definition** |
+| `EffectId` | string/object | - | **Required** (`Validators.nonNull()`). The effect to apply. A `ContainedAssetCodec`, so it takes either an `Server/Entity/Effects/**` asset id (e.g. `Stun`, `Root`, `Red_Flash`) **or an inline effect definition** |
 | `Entity` | string | `User` | Who receives the effect — `Target`, `User`, or `Owner` (`InteractionTarget`; there is no `Self` — `User` is the entity running the chain) |
 | `Duration` | float | `0` | Seconds; overrides the effect asset's duration, applied with the asset's own `OverlapBehavior`. `0` or absent keeps the asset's duration (0.7.2+; 45 shipped uses, 35 of them in ability chains) |
 | `DurationAttribute` | string | - | Name of an [ability attribute](#ability-attribute-keys) whose value, when the acting entity carries one, replaces `Duration` (0.7.2+) |
@@ -897,7 +897,7 @@ Removes a status effect from an entity, identified by its entity-effect id.
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Entity` | string | `User` | Whose effect to remove — typically `Target` |
-| `EntityEffectId` | string | - | The single effect id to remove |
+| `EntityEffectId` | string | - | **Required** (`Validators.nonNull()`). The single effect id to remove |
 
 > ⚠️ **`ClearEntityEffect` clears exactly one effect — there is no `EntityEffectIds` array.**
 > `ClearEntityEffectInteraction`'s codec has only `EntityEffectId` and `Entity`; a plural key is

@@ -81,22 +81,23 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 
 Every world structure file uses the same small set of top-level keys:
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| `Type` | yes | Always `"NoiseRange"` in the shipped files |
-| `Biomes` | yes* | Array of biome assignments by density range (may be empty) |
-| `DefaultBiome` | yes | Fallback biome, used outside any range. Also a `ContainedAssetCodec` — a biome id or an inline biome definition. |
-| `DefaultTransitionDistance` | yes | Default blend width in blocks between biomes (clamped to `>= 1` at build time) |
-| `MaxBiomeEdgeDistance` | yes | Maximum distance over which biome edges are resolved |
-| `Density` | yes | Density graph whose value selects the biome (the "biome map") |
-| `Framework` | optional | Array of world-constant / positions blocks (see [Framework](#framework)); the codec flags it non-required, but all 22 shipped files carry it. A `BaseHeight` node whose `BaseHeightName` matches no declared constant silently reads `0` (`BaseHeightDensityAsset.build`), so in a structure without a `Base` constant every biome graph that measures from `Base` measures from Y 0 instead |
-| `SpawnPositions` | optional | Where players spawn (flagged non-required, like `Framework`; present on 17 of the 22 shipped files) |
-| `Tags` | optional | Generic asset tags (the 8 files that carry them — `Basic.json`, the five `Debug/Debug_*.json` and the two `Portals_Goblins_Encounters*.json` — all have `{"Template": []}`); a `Map<String, String[]>` from the shared `AssetBuilderCodec`, not read by the generator |
+| Key | If omitted | Description |
+|-----|------------|-------------|
+| `Type` | (discriminator) | Always `"NoiseRange"` in the shipped files |
+| `Biomes` | `[]`* | Array of biome assignments by density range (may be empty) |
+| `DefaultBiome` | `""` | Fallback biome, used outside any range. Also a `ContainedAssetCodec` — a biome id or an inline biome definition. |
+| `DefaultTransitionDistance` | `32` | Default blend width in blocks between biomes (clamped to `>= 1` at build time) |
+| `MaxBiomeEdgeDistance` | `0` | Maximum distance over which biome edges are resolved |
+| `Density` | a default `Constant` density | Density graph whose value selects the biome (the "biome map") |
+| `Framework` | `[]` | Array of world-constant / positions blocks (see [Framework](#framework)); all 22 shipped files carry it. A `BaseHeight` node whose `BaseHeightName` matches no declared constant silently reads `0` (`BaseHeightDensityAsset.build`), so in a structure without a `Base` constant every biome graph that measures from `Base` measures from Y 0 instead |
+| `SpawnPositions` | a default `List` position provider | Where players spawn (present on 17 of the 22 shipped files) |
+| `Tags` | none | Generic asset tags (the 8 files that carry them — `Basic.json`, the five `Debug/Debug_*.json` and the two `Portals_Goblins_Encounters*.json` — all have `{"Template": []}`); a `Map<String, String[]>` from the shared `AssetBuilderCodec`, not read by the generator |
 
-"Required" above records the codec's `required` flag (a `true` third argument to the key's
-`KeyedCodec`). In 0.7.2 that flag governs how an explicit `null` is decoded; it does not make
-the loader reject a file that omits the key — the field keeps its default, as `Default.json`
-shows by omitting `Biomes`.
+No key above is required at load. `Biomes`, `DefaultBiome`, `DefaultTransitionDistance`,
+`MaxBiomeEdgeDistance` and `Density` carry the codec's `required` flag (a `true` third argument to
+the key's `KeyedCodec`), and `Framework` and `SpawnPositions` do not. In 0.7.2 that flag governs
+how an explicit `null` is decoded; it does not make the loader reject a file that omits the key —
+the field keeps the default shown, as `Default.json` shows by omitting `Biomes`.
 
 \* `Biomes` is present on most files; `Default_Flat`, `Default_Void`, `Basic`, the five
 `Debug_*` structures and the two `Portals_Goblins_Encounters*` structures ship it empty, and

@@ -76,7 +76,31 @@ Like the assets cache, the script **wipes the cache first**, so classes removed 
 
 ## Verifying documentation
 
-The `docs/` were fact-checked against game **0.6.8** (build-31) — `HytaleServer.jar`'s `Implementation-Version` is `0.6.8` (API docs via `javap` on the jar and the decompiled source cache; JSON-asset/DSL docs against the extracted `Assets.zip`). They are only known-accurate as of that build — a game update can silently invalidate them.
+The `docs/` were fact-checked against game **0.7.2** (build-34). `HytaleServer.jar`'s `Implementation-Version` is `0.7.2`. API docs were checked with `javap` on the jar and against the decompiled source cache; JSON-asset and DSL docs against the extracted `Assets.zip`. They are only known-accurate as of that build — a game update can silently invalidate them.
+
+The 0.6.8 → 0.7.2 pass (2026-10-14/15, diffed from build-31 as one step) was the largest since 0.6.3:
+- **Drift:**
+  - Common assets: 1,158 modified, 3,971 added, 576 removed.
+  - `Server/`+`Cosmetics/`: 2,121 modified, 5,350 added, 681 removed.
+  - API: 504 classes added, 72 removed, 850 changed.
+  - Source: 259 body-only changes and 59 `@Deprecated` lines added or removed.
+- **Scale of the edit:** 72 pages changed across the pass's commits, and every topic page was re-read and re-stamped.
+- **Two structural breaks:**
+  - The treasure-map objective was **removed outright**, with no replacement: its task, chest block, event, two interactions and nine assets are gone.
+  - **Block access moved from `World`/`WorldChunk` to section ECS.** Both lost their block APIs. Reads now go through `SectionReader` or the `BlockSection` component, after resolving a section ref with `ChunkStore.getChunkSectionReferenceAtBlockAsync`; writes go through the static `BlockOperations.setBlock`. The new `docs/block-access.md` documents this, and `world-chunks.md` and `blocks-java-api.md` were rescoped around it.
+- **Pipeline changes:**
+  - `triage_drift.py` now folds anonymous and local classes (`Foo$1`) onto their enclosing class; before that, their drift matched no page. The fixture is at 181 checks and 32 mutations.
+  - The registry and codec fixtures were re-derived by hand. The recount came from `maintenance/scripts/hand-registry-recount.py`, which shares no code with the miner and reproduced the 0.6.8 figures first (`registry-oracle-notes.md` §15).
+
+**As in the 0.6.3 pass, much of what was corrected was not drift.** It was pre-existing error that no gate checks:
+- About 80 invented asset ids and invalid array-entry shapes in the interactions pages.
+- About 25 wrong claims across the items pages.
+- About 20 `UPPER_SNAKE` enum lists in `trigger-volumes.md` that could never decode.
+- Keyed-event examples built on `PlayerInteractEvent`, which nothing in the jar dispatches.
+- A `setCustomHud` that never existed.
+- A `getQuery()`-returns-`null` idiom that throws at registration.
+
+None of these was in a form a gate reads: enum values, array-entry shapes, requiredness, and asset ids inside JSON fences are all unchecked. That is the measured case for gate 3 below.
 
 The 0.6.3 → 0.6.8 pass (2026-09-23; builds 27–30 were never installed locally, so it was diffed as one step) was small:
 - **Assets:** translation-only drift. 4 `Server/Languages` files changed (`pt-BR`/`uk-UA`/`zh-CN` `server.lang` plus `uk-UA/wordlists.lang`), none added or removed. Common was content-identical; Hytale only re-ordered its index.

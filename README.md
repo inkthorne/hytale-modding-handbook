@@ -54,6 +54,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [NPC Spawning](./docs/npc-spawning.md) - Spawn beacons, companion spawners, manual markers
 - [NPC Combat](./docs/npc-combat.md) - Melee attacks and the Combat Action Evaluator
 - [Encounters](./docs/encounters.md) - Encounter managers and their core components
+- [Abilities and Runes](./docs/abilities.md) - Rune abilities: core/support runes, ability slots and rune bag, keywords, elements and the ability interactions (0.7.2+)
 - [Mounts](./docs/mounts.md) - Mount subsystem
 - [Deployables](./docs/deployables.md) - Deployable subsystem
 - [Drops](./docs/drops.md) - Drop system and loot tables
@@ -94,6 +95,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Blockymodel Format](./docs/blockymodel-format.md) - Model file format
 - [Blockyanim Format](./docs/blockyanim-format.md) - Animation file format
 - [Audio](./docs/audio.md) - Audio system
+- [Music](./docs/audio-music.md) - Music containers, audio states, music transitions, stingers and music events
 - [Events](./docs/events.md) - Event system overview
 - [Adventure](./docs/adventure.md) - Adventure gameplay events
 - [Singleplayer](./docs/singleplayer.md) - Singleplayer events

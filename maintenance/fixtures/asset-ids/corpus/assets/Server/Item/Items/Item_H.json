@@ -27,6 +27,7 @@
     "Build": "SFX_H"
   },
   "Pick": "Item_H",
+  "Loot": "D_H",
   "Bag": {
     "B0": "Sword_A",
     "B1": "Sword_B",

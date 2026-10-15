@@ -36,26 +36,26 @@ CHECKER = HERE / 'check-asset-ids.py'
 
 # The healthy corpus, stated exactly. Each line is asserted verbatim: a value leaving the
 # corpus, a fence no longer scanned, a class no longer typed all move one of them.
-SWEEP = ('asset sweep: 58 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
+SWEEP = ('asset sweep: 66 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
          'Prefabs, World); 1 failed to parse; 8 store(s) declared in the jar, 7 present with ids '
-         '(1 absent from this build), 52 distinct id(s)')
-TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 69 classes, L1 13 of 43, '
-          'LW 8 of 19; 7 of 7 store(s) are the target of at least one typed class; 2 tied class(es)')
+         '(1 absent from this build), 56 distinct id(s)')
+TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 70 classes, L1 13 of 43, '
+          'LW 8 of 20; 7 of 7 store(s) are the target of at least one typed class; 2 tied class(es)')
 DRIFT = 'typing drift vs typing-snapshot.txt: 1 class(es) added, 1 removed, 1 retargeted (28 in the snapshot)'
-SCAN = ('docs scan: 9 page(s); 33 ```json fence(s) (30 strict-parse, 3 unparseable and read tolerantly); '
+SCAN = ('docs scan: 9 page(s); 37 ```json fence(s) (34 strict-parse, 3 unparseable and read tolerantly); '
         '2 untagged fence(s), of which 1 parse as JSON and 1 hold JSON pairs (scanned); 1 more hold only a '
         'quoted-key fragment inside a tree or sample (not scanned); 3 other-language fence(s) not scanned; '
         '2 fence(s) sit inside a blockquote, 1 of them ```json (all counted and scanned)')
-PAIRS = ('pairs: 95 string value(s) extracted, 86 at a typed position (9 untyped, not checkable); of the typed: '
+PAIRS = ('pairs: 99 string value(s) extracted, 90 at a typed position (9 untyped, not checkable); of the typed: '
          '18 resolved, 15 exempt (shape 6, shipped-use 1, shipped-excerpt 1, placeholder 3, pack 2, '
-         'page-defined 2), 53 failed; resolved in 7 distinct store(s)')
+         'page-defined 2), 57 failed; resolved in 7 distinct store(s)')
 RECOVERED = 'recovered from the unparseable fences: 4 pair(s), 3 at a typed position, 3 failed'
-N_FLAG_LINES = 55       # 53 failed pairs and the 2 declarations in declared.md
+N_FLAG_LINES = 59       # 57 failed pairs and the 2 declarations in declared.md
 
 # Floors, same shape as every other fixture in this directory: raise freely, lower only
 # with a reason in the commit message.
-MIN_CASES = 34
-MIN_MUTATIONS = 32
+MIN_CASES = 38
+MIN_MUTATIONS = 36
 
 PAIR_RE = re.compile(r'^  PAIR  (\S+?):\d+\t([^\t]*)\t([^\t]*)\t(\S+)$')
 FLAG_RE = re.compile(r'^  FLAG  (\S+?):\d+: "([^"]*)": "([^"]*)" is not an id in (\S+) \((.*)\)$')
@@ -130,7 +130,7 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('healthy corpus: every denominator is exact', rc, t, want_rc=1,
              must=(SWEEP, TYPING, DRIFT, SCAN, PAIRS, RECOVERED), must_not=('PASS', 'FAIL'))
         case('the flag set is exactly the invented, wrong-kind and unexcused ids', rc, t, want_rc=1,
-             must=('53 failed',))
+             must=('57 failed',))
         n_flags = sum(1 for ln in t.split('\n') if ln.startswith('  FLAG  '))
         if n_flags != N_FLAG_LINES:
             out['the flag set is exactly the invented, wrong-kind and unexcused ids'].append(
@@ -193,12 +193,17 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('an id of ANOTHER store that ships under the key somewhere is still the wrong kind', rc, t,
              want_rc=1, flagged={(F, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
         X = 'excerpt.md'
-        case('an excerpt of a real shipped file passes only for ids that file contains', rc, t, want_rc=1,
-             verdicts={}, flagged={(X, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
-        v = pairs_of(t).get((X, 'Next', 'Fx_A'), [])
-        if v != ['shipped-excerpt', 'failed', 'failed']:
-            out['an excerpt of a real shipped file passes only for ids that file contains'].append(
-                f'verdicts for the three Fx_A fences are {v}, wanted [shipped-excerpt, failed, failed]')
+        case('an excerpt of a real shipped file passes only for the pair that file ships', rc, t, want_rc=1,
+             flagged={(X, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
+        got_x = pairs_of(t)
+        for key, want in (((X, 'Next', 'Fx_A'), ['shipped-excerpt', 'failed', 'failed']),
+                          ((X, 'Next', 'Fx_D'), ['failed', 'failed']),    # ships under EffectId; and an unrelated sentence
+                          ((X, 'Next', 'B0'), ['failed'])):               # occurs in the file only as a map KEY
+            if got_x.get(key) != want:
+                out['an excerpt of a real shipped file passes only for the pair that file ships'].append(
+                    f'verdicts for {key} are {got_x.get(key)}, wanted {want}')
+        case('a pair mixed below P but mostly of the class\'s kind is still checked as that kind', rc, t,
+             want_rc=1, verdicts={(F, 'Mixed.Loot', 'Sword_A'): 'failed'})
         case('a generated-state id resolves by its base', rc, t, want_rc=1, verdicts={
             (F, 'Solid', '*Sword_A_State_Broken'): 'resolved', (F, 'Solid', '*Ghost_State_X'): 'failed'})
         case('a value not shaped like an id is exempt as shape and counted', rc, t, want_rc=1, verdicts={
@@ -347,7 +352,7 @@ MUTATIONS = {
         None, {'a mixture key does not speak where the exact position shows the other field, and still speaks '
                'for an unseen parent'}),
     'the exact pair no longer wins over parent.*': (
-        E("        if EXACT_WINS and ex is not None and not (ex & lw):", "        if False:"),
+        E("        if EXACT_WINS and sh is not None and sh < EXACT_SHARE:\n            pass        # this", "        if False:\n            pass        # this"),
         None, {'a parent.* class does not speak for a pair the assets show holding another kind, and still does '
                'for an unseen key'}),
     'the placeholder note is the whole page, not a paragraph': (
@@ -357,8 +362,20 @@ MUTATIONS = {
         E("PARENT_K = 3\n", "PARENT_K = 2\n"),
         None, {'two parents are not enough to speak for a third (PARENT_K = 3)'}),
     'an excerpt exempts any id, whether or not the named file holds it': (
-        E("any(('\"%s\"' % core) in t for t in excerpts.get(fi, ()))", "bool(excerpts.get(fi))"),
-        None, {'an excerpt of a real shipped file passes only for ids that file contains'}),
+        E("elif excerpt_holds(path, val, excerpts.get(fi, ())):", "elif bool(excerpts.get(fi)):"),
+        None, {'an excerpt of a real shipped file passes only for the pair that file ships'}),
+    'an excerpt ignores the key position (any key of the file will do)': (
+        E("if v == val and (fp[-len(path):] == path or path[-len(fp):] == fp):", "if v == val:"),
+        None, {'an excerpt of a real shipped file passes only for the pair that file ships'}),
+    'an excerpt matches any quoted string in the file, map keys included (the b4365d8 test)': (
+        E("                                parsed[rp] = list(strict_pairs(json.loads(\n                                    (assets / 'Server' / rp).read_text(encoding='utf-8-sig'))))",
+          "                                parsed[rp] = [((), q) for q in re.findall(r'\"((?:[^\"\\\\]|\\\\.)*)\"', (assets / 'Server' / rp).read_text(encoding='utf-8-sig'))]") +
+        E("if v == val and (fp[-len(path):] == path or path[-len(fp):] == fp):", "if v == val:"),
+        None, {'an excerpt of a real shipped file passes only for the pair that file ships'}),
+    'a mixed-below-P pair counts as contradicted: no store reaches P (the b4365d8 test)': (
+        E("        if EXACT_WINS and sh is not None and sh < EXACT_SHARE:\n            pass        # the shipped assets show this (parent, key) holding something else",
+          "        if EXACT_WINS and sh is not None and sh < 0.9:\n            pass        # the shipped assets show this (parent, key) holding something else"),
+        None, {'a pair mixed below P but mostly of the class\'s kind is still checked as that kind'}),
     'a table row or list item counts as a placeholder note': (
         E("        elif LIST_OR_TABLE.match(ln):", "        elif False:"),
         None, {'placeholder: a table row or a list item that says "placeholder" is not a note'}),
@@ -425,10 +442,11 @@ EXPECT = {
     'IDENTITY (no change - the harness control)': set(),
     "typing disabled: resolve against every store, not the key's family": {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
+        "a pair mixed below P but mostly of the class's kind is still checked as that kind",
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
-        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an excerpt of a real shipped file passes only for the pair that file ships',
         'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
@@ -475,13 +493,14 @@ EXPECT = {
         'a map value is typed by its parent, whatever its key',
         'a missing typing snapshot is reported, not fatal',
         'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        "a pair mixed below P but mostly of the class's kind is still checked as that kind",
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a real id in each covered family passes',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
         'a tie passes in either store; the stem, not the path or extension, is the id',
         'a value not shaped like an id is exempt as shape and counted',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
-        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an excerpt of a real shipped file passes only for the pair that file ships',
         'an id inside an array is checked',
         'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'an invented id in each covered family fails',
@@ -515,7 +534,7 @@ EXPECT = {
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     "verbatim of another store's id accepted (VERBATIM_STRICT = False)": {
-        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an excerpt of a real shipped file passes only for the pair that file ships',
         'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
@@ -524,7 +543,7 @@ EXPECT = {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
-        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an excerpt of a real shipped file passes only for the pair that file ships',
         'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
@@ -553,7 +572,22 @@ EXPECT = {
         'two parents are not enough to speak for a third (PARENT_K = 3)',
     },
     'an excerpt exempts any id, whether or not the named file holds it': {
-        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an excerpt of a real shipped file passes only for the pair that file ships',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'an excerpt ignores the key position (any key of the file will do)': {
+        'an excerpt of a real shipped file passes only for the pair that file ships',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'an excerpt matches any quoted string in the file, map keys included (the b4365d8 test)': {
+        'an excerpt of a real shipped file passes only for the pair that file ships',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a mixed-below-P pair counts as contradicted: no store reaches P (the b4365d8 test)': {
+        "a pair mixed below P but mostly of the class's kind is still checked as that kind",
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },

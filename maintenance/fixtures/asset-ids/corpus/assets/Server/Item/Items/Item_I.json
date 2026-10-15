@@ -27,5 +27,15 @@
       "Rock_F"
     ]
   },
-  "Pick": "Item_I"
+  "Pick": "Item_I",
+  "Loot": "D_I",
+  "Mixed": {
+    "Loot": [
+      "D_A",
+      "D_B",
+      "D_C",
+      "D_D",
+      "Loot_Junk"
+    ]
+  }
 }

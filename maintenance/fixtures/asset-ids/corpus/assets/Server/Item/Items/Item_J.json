@@ -42,5 +42,6 @@
   "Pick": "Item_J",
   "Tags": {
     "Pick": "Melee"
-  }
+  },
+  "Loot": "D_J"
 }

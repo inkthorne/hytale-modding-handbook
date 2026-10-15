@@ -81,3 +81,9 @@ wherever it is seen), and a key the map has not seen:
 ```json
 { "Bag": { "Loot": "Sword_A" }, "Tones": { "Inner": "text" } }
 ```
+
+A pair the assets show mixed below the threshold, but mostly of the class's own kind, is still that kind:
+
+```json
+{ "Mixed": { "Loot": "Sword_A" } }
+```

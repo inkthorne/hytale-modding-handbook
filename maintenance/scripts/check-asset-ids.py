@@ -129,6 +129,11 @@ IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 WIDEN = True
 VERBATIM_STRICT = True
 EXACT_WINS = True
+# ...and "holding something else" means FEWER THAN HALF of the values shipped at that exact pair resolve in
+# the class's family. Not "no store reaches P there": Breaking.DropList is 58/71 drop lists (82%) and
+# Soft.DropList 222/248 (89.5%), mixed but plainly drop lists, and treating them as contradicted made 3 live
+# pairs unchecked (found by the verify pass of b4365d8). Tags.Attack (Block/Melee/Ranged) has 0 of 3.
+EXACT_SHARE = 0.5
 PARENT_K = 3
 EXEMPT_CLASSES = ('shape', 'shipped-use', 'shipped-excerpt', 'placeholder', 'pack', 'page-defined')
 
@@ -452,30 +457,49 @@ def page_defined(text, stores):
     return defs
 
 
-def excerpt_files(claims, sweep, assets):
-    """Per fence index: the text of every REAL shipped file its introduction names (the two lines
-    before it, or its first comment). A path that matches no swept file names nothing."""
+def excerpt_pairs(claims, sweep, assets):
+    """Per fence index: the (path, value) string pairs of every REAL shipped file its introduction
+    names (the two lines before it, or its first comment). A path that matches no swept file, or a
+    file that does not parse, names nothing."""
     by_base = sweep.__dict__.get('_by_base')
     if by_base is None:
         by_base = collections.defaultdict(list)
         for rp in sweep.relpaths:
             by_base[rp.rsplit('/', 1)[-1]].append(rp)
         sweep._by_base = by_base
+    parsed = sweep.__dict__.setdefault('_parsed', {})
     out = {}
     for i, (lang, prev, comment) in enumerate(claims):
         if lang not in ('json', ''):
             continue
-        texts = []
+        pairs = []
         for c in (prev + ([comment] if comment else [])):
             for pm in PATH_FULL.finditer(c):
                 tok = pm.group()
                 tok = tok[len('Server/'):] if tok.startswith('Server/') else tok
                 for rp in by_base.get(tok.rsplit('/', 1)[-1], ()):
                     if rp == tok or rp.endswith('/' + tok):
-                        texts.append((assets / 'Server' / rp).read_text(encoding='utf-8-sig', errors='replace'))
-        if texts:
-            out[i] = texts
+                        if rp not in parsed:
+                            try:
+                                parsed[rp] = list(strict_pairs(json.loads(
+                                    (assets / 'Server' / rp).read_text(encoding='utf-8-sig'))))
+                            except Exception:
+                                parsed[rp] = []
+                        pairs += parsed[rp]
+        if pairs:
+            out[i] = pairs
     return out
+
+
+def excerpt_holds(path, val, pairs):
+    """True when the named file ships `val` at this position: the same string under the same key path,
+    one path being a suffix of the other (a fence quotes a fragment, so it may lose its parents).
+    The claim a fence makes by naming a file is about the PAIR, so the sentence that names it does not
+    matter: a path in an unrelated sentence excuses nothing the file does not itself ship there."""
+    for fp, v in pairs:
+        if v == val and (fp[-len(path):] == path or path[-len(fp):] == fp):
+            return True
+    return False
 
 
 def scan_docs(docs: pathlib.Path):
@@ -535,17 +559,17 @@ def scan_docs(docs: pathlib.Path):
     return pages
 
 
-def exact_stores(sweep, idx, p, k):
-    """The stores in which >= P of the shipped values at exactly (parent, key) resolve, at any N;
-    None when the assets never show that pair."""
+def exact_share(sweep, idx, p, k, fams):
+    """The fraction of the shipped values at exactly (parent, key) that resolve in `fams`; None when
+    the assets never show that pair."""
     if p is None or (p, k) not in sweep.L2:
         return None
-    cache = sweep.__dict__.setdefault('_exact', {})
-    if (p, k) not in cache:
+    cache = sweep.__dict__.setdefault('_share', {})
+    key = (p, k, frozenset(fams))
+    if key not in cache:
         vs = sweep.L2[(p, k)]
-        c = collections.Counter(s for v in vs for s in set(resolves(v, idx)))
-        cache[(p, k)] = {s for s, n in c.items() if n / len(vs) >= P_MIN}
-    return cache[(p, k)]
+        cache[key] = sum(1 for v in vs if set(resolves(v, idx)) & set(fams)) / len(vs)
+    return cache[key]
 
 
 def lookup_families(path, typed, sweep, idx):
@@ -558,8 +582,8 @@ def lookup_families(path, typed, sweep, idx):
         fams |= typed['L2'][(p, k)][0]; via.append('L2')
     if (k,) in typed['L1'] and (p in sweep.parents.get(k, ()) or len(sweep.parents.get(k, ())) >= PARENT_K):
         l1 = typed['L1'][(k,)][0]
-        ex = exact_stores(sweep, idx, p, k)
-        if EXACT_WINS and ex is not None and not (ex & l1):
+        sh = exact_share(sweep, idx, p, k, l1)
+        if EXACT_WINS and sh is not None and sh < EXACT_SHARE:
             pass        # the shipped assets show this (parent, key) holding something else
         else:
             fams |= l1; via.append('L1')
@@ -567,8 +591,8 @@ def lookup_families(path, typed, sweep, idx):
         # LW is for maps with free-form keys. If this exact (parent, key) is a FIELD
         # the shipped assets use and no class types it, it is not an id slot.
         lw = typed['LW'][(p, '*')][0]
-        ex = exact_stores(sweep, idx, p, k)
-        if EXACT_WINS and ex is not None and not (ex & lw):
+        sh = exact_share(sweep, idx, p, k, lw)
+        if EXACT_WINS and sh is not None and sh < EXACT_SHARE:
             pass        # this (parent, key) is a field of its own that the parent.* class does not describe
         elif k not in sweep.children.get(p, ()) or (p, k) in typed['L2'] or (k,) in typed['L1']:
             fams |= lw; via.append('LW')
@@ -637,7 +661,7 @@ def evaluate(pages, ctx: Ctx, packs, assets=None):
             else:
                 pre_ids[x] = n
         pdef = page_defined(text, stores_set)
-        excerpts = excerpt_files(fence_claims(text), ctx.sweep, assets) if assets is not None else {}
+        excerpts = excerpt_pairs(fence_claims(text), ctx.sweep, assets) if assets is not None else {}
         pack_ids = {}
         for pk, ids in packs.items():
             if pk in text:
@@ -664,7 +688,7 @@ def evaluate(pages, ctx: Ctx, packs, assets=None):
             verb = shipped_values(path, ctx.sweep, ctx.idx, via) if WIDEN else set()
             if val in verb or core in verb:
                 rec['verdict'] = 'shipped-use'
-            elif any(('"%s"' % core) in t for t in excerpts.get(fi, ())):
+            elif excerpt_holds(path, val, excerpts.get(fi, ())):
                 rec['verdict'] = 'shipped-excerpt'
             elif val in pre_ids or core in pre_ids or any(core.startswith(p) for p in pre_prefixes):
                 rec['verdict'] = 'placeholder'

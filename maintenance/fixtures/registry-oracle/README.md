@@ -18,21 +18,32 @@ reported a clean run forever.
 ## `tail-44.json`
 
 The 44 interaction types of `registry-oracle-notes.md` §11 — key counts, key
-names and required-sets. §11 is the best fixture material in the repo because
+names and, per type, two sets: `null_validated` (the field carries a
+`NonNullValidator` instance; the only thing that makes an omitted key fail) and
+`strict_null` (a `true` third `KeyedCodec` argument; it does not). The old single
+`required` list was their union. Both sets were re-derived by hand from the 0.7.2
+source and every key cites the line it was read on; `required_from_key_table` is
+what the docs claimed, not a measurement. The measurement that separates the two
+is `maintenance/probes/requiredness/run.sh`. §11 is the best fixture material in the repo because
 its figures were derived independently **twice**, by two sessions with separately
 written parsers, and reconciled. Extracting them here also machine-checks that
 §11's own two tables agree with each other, which had never been verified.
 
 ## `known-traps.json`
 
-Four cases CLAUDE.md invariant 7 and §11 name as the documented ways to be
-confidently wrong. Each defeated some plausible parser:
+Cases CLAUDE.md invariant 7 and §11 name as the documented ways to be
+confidently wrong, plus the requiredness pass's (subclass validators, `.addField()`
+bleed, RecordCodec). Each defeated some plausible parser. `--mutations` reintroduces
+each guard's defect and requires the named cases to go red:
 
 | Case | What it defeats |
 |---|---|
-| `CustomConnectedBlockTemplateAsset.Shapes` | raw `KeyedCodec` (a `KeyedCodec<T>` pattern skips it) **and** required by a `true` third argument (stopping at the first balanced paren keeps the key, loses the requirement) |
-| `ConnectedBlockPatternRule.Shapes` | the symmetric inverse — same key name, also raw, but the `true` is inside the inner constructor, so attributing it outward **manufactures** a requirement. Invariant 7 calls this the dangerous direction: a fabricated *required* can never be contradicted by a shipped asset |
-| `PluginManifest` | requiredness via `Validators.nonNull()` attached after `append(...)` closes. Parse to the first balanced paren and this reports *no required keys at all* |
+| `CustomConnectedBlockTemplateAsset.Shapes` | raw `KeyedCodec` (a `KeyedCodec<T>` pattern skips it) **and** `strict_null` by a `true` third argument (stopping at the first balanced paren keeps the key, loses the flag). It is **not** required: the live probe decodes a shipped asset with `Shapes` deleted |
+| `ConnectedBlockPatternRule.Shapes` | the symmetric inverse — same key name, also raw, but the `true` is inside the inner constructor, so attributing it outward **manufactures** a `strict_null` that is not there. The key that really is `strict_null` in that class is `IncludeOrExclude` |
+| `PluginManifest` | `null_validated` via `Validators.nonNull()` attached after `append(...)` closes. Parse to the first balanced paren and this reports *no null-validated keys at all* |
+| `RunOnBlockTypesInteraction`, `ModelAsset.AnimationSet` | `Validators.nonEmptyArray()` is a `NonNullValidator` subclass; the literal-text match missed 21 keys |
+| `ModelAsset.Animation` | `.addField()` keys have no `.add()`, so a bracket-aware tail scan ran into the next append's validators |
+| `MessageAction` and three inline cases | `RecordCodec` puts the validator inside the append group, and a synthetic source covers shapes with no real instance (a key with only `nonEmptyMap()` does not exist at 0.7.2) |
 | `objectiveshop.StartObjectiveInteraction` | same simple name as a registered type, same key **count**, different key name and requiredness — so a count cross-check agrees while both facts are wrong |
 
 Add a case here whenever a parse turns out to have been confidently wrong. Per

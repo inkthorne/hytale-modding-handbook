@@ -1,52 +1,56 @@
 {
- "note": "Cases CLAUDE.md invariant 7 and registry-oracle-notes.md \u00a711 name as the known ways to be confidently wrong. Each defeated some plausible parser. The last two cases assert STRUCTURE (were the keys found at all) rather than required/raw sets: those would have to be filled from the parser's own output, and a fixture that copies the parser cannot test it. Their key counts come from counting `new KeyedCodec` in the file independently.",
+ "note": "Cases CLAUDE.md invariant 7 and registry-oracle-notes.md \u00a711 name as the known ways to be confidently wrong, plus the requiredness pass's (maintenance/probes/requiredness/). Each defeated some plausible parser. `expect_null_validated` / `expect_strict_null` are the two sets the old single `expect_required` conflated. `occurrence` picks the Nth `CODEC` field in a file with nested codecs; `inline` cases are synthetic sources for shapes with no real instance. The last two real cases assert STRUCTURE (were the keys found at all) rather than copying the parser's output: their key counts come from counting `new KeyedCodec` in the file independently.",
  "build": "0.6.3 (build-26); Item count updated for 0.7.2 (build-34)",
  "cases": [
   {
-   "label": "raw KeyedCodec + true THIRD ARGUMENT = required",
+   "label": "raw KeyedCodec + true THIRD ARGUMENT = strict_null, NOT required",
    "path": "com/hypixel/hytale/server/core/universe/world/connectedblocks/CustomConnectedBlockTemplateAsset.java",
-   "why": "`new KeyedCodec(\"Shapes\", new MapCodec<...>(...), true)` - raw, so a pattern expecting KeyedCodec<T> skips it and undercounts; and required by the third argument, so stopping at the first balanced paren keeps the key but loses its requiredness. Its four keys include exactly one required.",
+   "why": "`new KeyedCodec(\"Shapes\", new MapCodec<...>(...), true)` - raw, so a pattern expecting KeyedCodec<T> skips it and undercounts; and strict_null by the third argument, so stopping at the first balanced paren keeps the key but loses the flag. Its four keys include exactly one strict_null and NONE null_validated: deleting `Shapes` from a shipped asset still decodes, measured live (maintenance/probes/requiredness/run.sh, R1 rows).",
    "expect_keys": 4,
-   "expect_required": [
-    "Shapes"
-   ],
    "expect_raw": [
     "Shapes"
-   ]
+   ],
+   "expect_strict_null": [
+    "Shapes"
+   ],
+   "expect_null_validated": []
   },
   {
-   "label": "raw KeyedCodec + true INSIDE the inner constructor = NOT required",
+   "label": "raw KeyedCodec + true INSIDE the inner constructor = not strict_null",
    "path": "com/hypixel/hytale/server/core/universe/world/connectedblocks/ConnectedBlockPatternRule.java",
-   "why": "Same key NAME `Shapes`, also raw, but `new KeyedCodec(\"Shapes\", new SetCodec<...>(..., true))` - two arguments, the true inside the inner constructor. Attributing it to the outer codec manufactures a requirement, and invariant 7 calls that the dangerous direction: a fabricated *required* can never be contradicted by a shipped asset.",
+   "why": "Same key NAME `Shapes`, also raw, but `new KeyedCodec(\"Shapes\", new SetCodec<...>(..., true))` - two arguments, the true inside the inner constructor. Attributing it to the outer codec manufactures strict_null on a key that has none. The key that IS strict_null here is `IncludeOrExclude` (a genuine third argument), so the pair discriminates by which paren the `true` sits in.",
    "expect_keys": 7,
-   "expect_required": [
+   "expect_raw": [
+    "Shapes"
+   ],
+   "expect_strict_null": [
     "IncludeOrExclude"
    ],
-   "expect_raw": [
-    "Shapes"
-   ]
+   "expect_null_validated": []
   },
   {
-   "label": "requiredness by Validators.nonNull() attached AFTER append(...) closes",
+   "label": "null_validated by Validators.nonNull() attached AFTER append(...) closes",
    "path": "com/hypixel/hytale/common/plugin/PluginManifest.java",
-   "why": "CLAUDE.md: `Name` is the sole key carrying Validators.nonNull(). Parsing to the first balanced paren reports NO required keys at all, because the validator attaches on the builder two calls further along, before .add().",
+   "why": "`Name` is the sole key carrying Validators.nonNull() (PluginManifest.java:53), so it is the only key whose omission fails decode. Parsing to the first balanced paren reports NO null_validated keys at all, because the validator attaches on the builder two calls further along, before .add(). No key is strict_null.",
    "expect_keys": 13,
-   "expect_required": [
-    "Name"
-   ],
    "expect_raw": [
     "Dependencies",
     "OptionalDependencies",
     "LoadBefore"
-   ]
+   ],
+   "expect_null_validated": [
+    "Name"
+   ],
+   "expect_strict_null": []
   },
   {
    "label": "same simple name, different file, different key and requiredness",
    "path": "com/hypixel/hytale/builtin/adventure/objectiveshop/StartObjectiveInteraction.java",
-   "why": "The twin of the `StartObjective` interaction in the 44. Both declare exactly ONE key, so a count cross-check agrees while the key name and its requiredness are both wrong: this one is `ObjectiveId`, not required; the registered interaction is `Setup`, required.",
+   "why": "The twin of the `StartObjective` interaction in the 44. Both declare exactly ONE key, so a count cross-check agrees while the key name and its requiredness are both wrong: this one is `ObjectiveId`, validated by nothing; the registered interaction is `Setup`, null_validated.",
    "expect_keys": 1,
-   "expect_required": [],
-   "expect_raw": []
+   "expect_raw": [],
+   "expect_null_validated": [],
+   "expect_strict_null": []
   },
   {
    "label": "chain on a *_BUILDER field, .build()-ed into the public codec",
@@ -72,6 +76,97 @@
    "expect_keys": 4,
    "expect_parent": "SimpleInstantInteraction.CODEC",
    "expect_covered": true
+  },
+  {
+   "label": "nonEmptyArray() is a NonNullValidator subclass: the literal `nonNull()` text misses it",
+   "path": "com/hypixel/hytale/server/core/modules/interaction/interaction/config/server/RunOnBlockTypesInteraction.java",
+   "why": "RunOnBlockTypesInteraction.java:63 attaches Validators.nonEmptyArray() to BlockSets, and NonEmptyArrayValidator extends NonNullValidator, so BuilderField.nonNullValidator is set and an omitted BlockSets fails decode (probe config `e`). The parser matched only the literal `Validators.nonNull()`, so it called this key unvalidated - 21 keys at 0.7.2 were missed that way. All four keys are strict_null (flag at :55/:59/:63/:67), which makes none of them required: the old union listed all four.",
+   "expect_keys": 4,
+   "expect_null_validated": [
+    "BlockSets"
+   ],
+   "expect_strict_null": [
+    "BlockSets",
+    "Interactions",
+    "MaxCount",
+    "Range"
+   ]
+  },
+  {
+   "label": "nonEmptyArray() alone, then an .addField() key after it",
+   "path": "com/hypixel/hytale/server/core/asset/type/model/config/ModelAsset.java",
+   "occurrence": 1,
+   "why": "AnimationSet.CODEC (ModelAsset.java:400-404): `Animations` carries only nonEmptyArray() and no nonNull(); `NextAnimationDelay` is an .addField() with no validator. The old tail scan, bracket-aware but not call-aware, ran past an addField (no `.add()` terminates it) into the next append's validators.",
+   "expect_keys": 2,
+   "expect_null_validated": [
+    "Animations"
+   ],
+   "expect_strict_null": []
+  },
+  {
+   "label": ".addField() keys do not inherit the next append's validators",
+   "path": "com/hypixel/hytale/server/core/asset/type/model/config/ModelAsset.java",
+   "why": "Animation.CODEC (ModelAsset.java:446-451): `Looping` and `Weight` are .addField() keys followed by an .append() whose validator chain is later; the old parser credited both with it (they showed as validator-required). Only `Animation` carries nonNull() here.",
+   "expect_has_key": "Looping",
+   "expect_null_validated_contains": [
+    "Animation"
+   ],
+   "expect_null_validated_excludes": [
+    "Looping",
+    "Weight"
+   ],
+   "occurrence": 2
+  },
+  {
+   "label": "RecordCodec: the validator is INSIDE the append group, not after it",
+   "path": "com/hypixel/hytale/builtin/adventure/worldevents/action/MessageAction.java",
+   "why": "RecordCodec.builder(..).append(new KeyedCodec(\"Message\", Message.CODEC, true), accessor, opts -> opts.documentation(..).addValidator(Validators.nonNull())). There is no `.add()`, so the tail scan that works for BuilderCodec never sees the validator; the old parser called this key validator-less and, worse, let a record's earlier keys swallow later keys' validators (WorldEventRecord.Id was shown validator-required). Probe rows rS-b/rS-c: omission of such a key fails decode.",
+   "expect_keys": 1,
+   "expect_null_validated": [
+    "Message"
+   ],
+   "expect_strict_null": [
+    "Message"
+   ]
+  }
+ ],
+ "inline": [
+  {
+   "label": "inline: subclass-only, explicit INSTANCE, composite and element validators",
+   "src": "public static final BuilderCodec<X> CODEC = ((BuilderCodec.Builder)((BuilderCodec.Builder)((BuilderCodec.Builder)((BuilderCodec.Builder)((BuilderCodec.Builder)((BuilderCodec.Builder)((BuilderCodec.Builder)BuilderCodec.builder(X.class, X::new).append(new KeyedCodec<Map>(\"MapOnly\", Codec.X), (o, v) -> {\n}, o -> o.a).addValidator(Validators.nonEmptyMap()).add()).append(new KeyedCodec<T[]>(\"ArrayOnly\", Codec.Y), (o, v) -> {\n}, o -> o.b).addValidator(Validators.nonEmptyArray()).add()).append(new KeyedCodec<String>(\"Explicit\", Codec.STRING), (o, v) -> {\n}, o -> o.c).addValidator(NonNullValidator.INSTANCE).add()).append(new KeyedCodec<String>(\"Composite\", Codec.STRING), (o, v) -> {\n}, o -> o.d).addValidator(Validators.or(Validators.nonNull(), Validators.min(1))).add()).append(new KeyedCodec<T[]>(\"Elements\", Codec.Y), (o, v) -> {\n}, o -> o.e).addValidator(Validators.nonNullArrayElements()).add()).append(new KeyedCodec<String>(\"Plain\", Codec.STRING, true), (o, v) -> {\n}, o -> o.f).add()).append(new KeyedCodec<String>(\"Both\", Codec.STRING, true), (o, v) -> {\n}, o -> o.g).documentation(\"d\").addValidator(Validators.nonNull()).add()).build();",
+   "expect_keys": 7,
+   "expect_null_validated": [
+    "ArrayOnly",
+    "Both",
+    "Explicit",
+    "MapOnly"
+   ],
+   "expect_strict_null": [
+    "Both",
+    "Plain"
+   ]
+  },
+  {
+   "label": "inline: addField followed by an append that has nonNull",
+   "src": "public static final BuilderCodec<X> CODEC = ((BuilderCodec.Builder)((BuilderCodec.Builder)BuilderCodec.builder(X.class, X::new).addField(new KeyedCodec<Boolean>(\"Field\", Codec.BOOLEAN), (o, v) -> {\n}, o -> o.a)).append(new KeyedCodec<String>(\"Next\", Codec.STRING), (o, v) -> {\n}, o -> o.b).addValidator(Validators.nonNull()).add()).build();",
+   "expect_keys": 2,
+   "expect_null_validated": [
+    "Next"
+   ],
+   "expect_strict_null": []
+  },
+  {
+   "label": "inline: RecordCodec with lambda, direct and absent validators",
+   "src": "public static final RecordCodec<R> CODEC = RecordCodec.builder(R.class).append(new KeyedCodec(\"Lam\", Codec.STRING, true), R::a, opts -> opts.documentation(\"d\").addValidator(Validators.nonNull())).append(new KeyedCodec(\"None\", Codec.STRING, false), R::b).append(new KeyedCodec(\"Direct\", Codec.STRING), R::c, Validators.nonNull()).append(new KeyedCodec(\"Doc\", Codec.STRING), R::d, opts -> opts.documentation(\"only\")).build(R::new);",
+   "expect_keys": 4,
+   "expect_null_validated": [
+    "Direct",
+    "Lam"
+   ],
+   "expect_strict_null": [
+    "Lam"
+   ],
+   "expect_kind": "record"
   }
  ]
 }

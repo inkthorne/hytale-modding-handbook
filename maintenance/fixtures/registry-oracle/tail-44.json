@@ -5,9 +5,14 @@
     "AddItem": {
       "class": "AddItemInteraction",
       "own_keys": 2,
-      "required": [
+      "null_validated": [
         "ItemId"
       ],
+      "null_validated_cites": {
+        "ItemId": "AddItemInteraction.java:31"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "interactions-world.md",
       "keys": [
@@ -21,9 +26,14 @@
     "AugmentCondition": {
       "class": "AugmentConditionInteraction",
       "own_keys": 2,
-      "required": [
+      "null_validated": [
         "RequiredAugmentTags"
       ],
+      "null_validated_cites": {
+        "RequiredAugmentTags": "AugmentConditionInteraction.java:31"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "blocks.md",
       "keys": [
@@ -37,16 +47,24 @@
     "BuilderTool": {
       "class": "config.none.BuilderToolInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-tools.md"
     },
     "CameraShake": {
       "class": "CameraShakeInteraction",
       "own_keys": 1,
-      "required": [
+      "null_validated": [
         "CameraEffect"
       ],
+      "null_validated_cites": {
+        "CameraEffect": "CameraShakeInteraction.java:28"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "camera.md",
       "keys": [
@@ -59,14 +77,20 @@
     "CanBreakRespawnPoint": {
       "class": "CanBreakRespawnPointInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "player.md"
     },
     "CarryBlock": {
       "class": "CarryBlockInteraction",
       "own_keys": 1,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md",
       "keys": [
@@ -77,21 +101,30 @@
     "CarryDroppedBlock": {
       "class": "CarryDroppedBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "CarryPlaceBlock": {
       "class": "CarryPlaceBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "ChangeActiveSlot": {
       "class": "config.none.ChangeActiveSlotInteraction",
       "own_keys": 1,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "inventory.md",
       "keys": [
@@ -102,7 +135,10 @@
     "ChangeFarmingStage": {
       "class": "ChangeFarmingStageInteraction",
       "own_keys": 4,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "items-blocks.md",
       "keys": [
@@ -116,44 +152,64 @@
     "CheckUniqueItemUsage": {
       "class": "CheckUniqueItemUsageInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items.md"
     },
     "DestroyBlock": {
       "class": "DestroyBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "DragEraseBlock": {
       "class": "config.client.DragEraseBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "ExitInstance": {
       "class": "ExitInstanceInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "world.md"
     },
     "ExtrudePlaceBlock": {
       "class": "config.client.ExtrudePlaceBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "HubPortal": {
       "class": "HubPortalInteraction",
       "own_keys": 3,
-      "required": [
+      "null_validated": [
         "WorldName"
       ],
+      "null_validated_cites": {
+        "WorldName": "HubPortalInteraction.java:55"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "world.md",
       "keys": [
@@ -168,7 +224,10 @@
     "IncreaseBackpackCapacity": {
       "class": "IncreaseBackpackCapacityInteraction",
       "own_keys": 2,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "inventory.md",
       "keys": [
@@ -180,7 +239,10 @@
     "IncrementCooldown": {
       "class": "config.client.IncrementCooldownInteraction",
       "own_keys": 5,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "interactions-flow.md",
       "keys": [
@@ -195,9 +257,14 @@
     "OpenBenchPage": {
       "class": "OpenBenchPageInteraction",
       "own_keys": 1,
-      "required": [
+      "null_validated": [
         "Page"
       ],
+      "null_validated_cites": {
+        "Page": "OpenBenchPageInteraction.java:58"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-crafting.md",
       "keys": [
@@ -210,56 +277,80 @@
     "OpenItemStackContainer": {
       "class": "OpenItemStackContainerInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "inventory.md"
     },
     "OpenProcessingBench": {
       "class": "OpenProcessingBenchInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-crafting.md"
     },
     "PickBlock": {
       "class": "config.client.PickBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "PickupItem": {
       "class": "PickupItemInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-tools.md"
     },
     "Portal": {
       "class": "EnterPortalInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "world.md"
     },
     "PortalReturn": {
       "class": "ReturnPortalInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "world.md"
     },
     "PrefabSelectionInteraction": {
       "class": "PrefabSelectionInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-tools.md"
     },
     "RevealMapMarkersInView": {
       "class": "RevealMapMarkersInViewInteraction",
       "own_keys": 6,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "world.md",
       "keys": [
@@ -275,12 +366,24 @@
     "RunOnBlockTypes": {
       "class": "RunOnBlockTypesInteraction",
       "own_keys": 4,
-      "required": [
-        "Range",
-        "BlockSets",
-        "MaxCount",
-        "Interactions"
+      "null_validated": [
+        "BlockSets"
       ],
+      "null_validated_cites": {
+        "BlockSets": "RunOnBlockTypesInteraction.java:63 (Validators.nonEmptyArray(), a NonNullValidator subclass)"
+      },
+      "strict_null": [
+        "BlockSets",
+        "Interactions",
+        "MaxCount",
+        "Range"
+      ],
+      "strict_null_cites": {
+        "Range": "RunOnBlockTypesInteraction.java:55",
+        "BlockSets": "RunOnBlockTypesInteraction.java:59",
+        "MaxCount": "RunOnBlockTypesInteraction.java:63",
+        "Interactions": "RunOnBlockTypesInteraction.java:67"
+      },
       "verdict": "section",
       "target_page": "interactions-flow.md",
       "keys": [
@@ -299,9 +402,14 @@
     "RunRootInteraction": {
       "class": "config.none.RunRootInteraction",
       "own_keys": 1,
-      "required": [
+      "null_validated": [
         "RootInteraction"
       ],
+      "null_validated_cites": {
+        "RootInteraction": "RunRootInteraction.java:26"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "trigger-volumes.md",
       "keys": [
@@ -314,9 +422,14 @@
     "SendBeacon": {
       "class": "SendBeaconInteraction",
       "own_keys": 4,
-      "required": [
+      "null_validated": [
         "Message"
       ],
+      "null_validated_cites": {
+        "Message": "SendBeaconInteraction.java:30"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "npc-spawning.md",
       "keys": [
@@ -332,7 +445,10 @@
     "SetMemoriesCapacity": {
       "class": "SetMemoriesCapacityInteraction",
       "own_keys": 1,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "adventure.md",
       "keys": [
@@ -343,10 +459,16 @@
     "ShowEventTitle": {
       "class": "ShowEventTitleInteraction",
       "own_keys": 9,
-      "required": [
-        "Target",
-        "PrimaryTitle"
+      "null_validated": [
+        "PrimaryTitle",
+        "Target"
       ],
+      "null_validated_cites": {
+        "Target": "ShowEventTitleInteraction.java:34",
+        "PrimaryTitle": "ShowEventTitleInteraction.java:38"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "world.md",
       "keys": [
@@ -368,9 +490,14 @@
     "StartObjective": {
       "class": "objectives.interactions.StartObjectiveInteraction",
       "own_keys": 1,
-      "required": [
+      "null_validated": [
         "Setup"
       ],
+      "null_validated_cites": {
+        "Setup": "StartObjectiveInteraction.java:38"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "adventure.md",
       "keys": [
@@ -383,9 +510,14 @@
     "StatsConditionWithModifier": {
       "class": "StatsConditionWithModifierInteraction",
       "own_keys": 1,
-      "required": [
+      "null_validated": [
         "InteractionModifierId"
       ],
+      "null_validated_cites": {
+        "InteractionModifierId": "StatsConditionWithModifierInteraction.java:38"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-flow.md",
       "keys": [
@@ -398,24 +530,36 @@
     "SurfaceDrawPlaceBlock": {
       "class": "config.client.SurfaceDrawPlaceBlockInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
     "TeleportConfigInstance": {
       "class": "TeleportConfigInstanceInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "world.md"
     },
     "TeleportInstance": {
       "class": "TeleportInstanceInteraction",
       "own_keys": 8,
-      "required": [
+      "null_validated": [
         "InstanceName",
         "OriginSource"
       ],
+      "null_validated_cites": {
+        "InstanceName": "TeleportInstanceInteraction.java:59",
+        "OriginSource": "TeleportInstanceInteraction.java:75"
+      },
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "world.md",
       "keys": [
@@ -436,7 +580,10 @@
     "Teleporter": {
       "class": "TeleporterInteraction",
       "own_keys": 3,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "world.md",
       "keys": [
@@ -449,14 +596,20 @@
     "ToggleGlider": {
       "class": "config.client.ToggleGliderInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "player.md"
     },
     "TriggerSpawnMarkers": {
       "class": "TriggerSpawnMarkersInteraction",
       "own_keys": 3,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "section",
       "target_page": "npc-spawning.md",
       "keys": [
@@ -469,17 +622,24 @@
     "UseCoop": {
       "class": "UseCoopInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "items-blocks.md"
     },
     "UseNPC": {
       "class": "UseNPCInteraction",
       "own_keys": 0,
-      "required": [],
+      "null_validated": [],
+      "null_validated_cites": {},
+      "strict_null": [],
+      "strict_null_cites": {},
       "verdict": "row",
       "target_page": "npc-spawning.md"
     }
   },
-  "rederived": "0.7.2 (2026-10-14): DestroyTreasureCondition and OpenTreasureContainer removed, their classes deleted with the treasure-map objective (42 types remain). ShowEventTitle re-read whole from the 0.7.2 source: 9 keys, `Style` added after SecondaryTitle, `IsMajor` kept but now Validators.deprecated() and mapped onto style; required set unchanged. The other 42 reproduce unchanged."
+  "rederived": "0.7.2 (2026-10-14): DestroyTreasureCondition and OpenTreasureContainer removed, their classes deleted with the treasure-map objective (42 types remain). ShowEventTitle re-read whole from the 0.7.2 source: 9 keys, `Style` added after SecondaryTitle, `IsMajor` kept but now Validators.deprecated() and mapped onto style; required set unchanged. The other 42 reproduce unchanged.",
+  "requiredness": "Re-derived by hand from the decompiled 0.7.2 source; the old single `required` list was the union of two different facts. `null_validated`: the field's validator chain holds an instance of NonNullValidator (the only thing that makes an omitted key fail; measured by maintenance/probes/requiredness/run.sh). `strict_null`: a `true` third KeyedCodec argument (never makes an omitted key fail). Every kept key cites the line it was read on. `required_from_key_table` is what the docs' key tables claimed and is NOT a measurement."
 }

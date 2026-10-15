@@ -1,0 +1,16 @@
+{
+  "Solid": "Item_I",
+  "Mix": {
+    "Build": "SFX_I"
+  },
+  "Holder": {
+    "Lonely": [
+      "Sword_A",
+      "Sword_B",
+      "Axe_C",
+      "Potion_D",
+      "Gem_E",
+      "Rock_F"
+    ]
+  }
+}

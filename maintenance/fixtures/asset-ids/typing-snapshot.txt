@@ -1,0 +1,30 @@
+# Asset-id typing table: position class -> store(s) reaching P>=0.9 over N>=5 distinct shipped values.
+# Derived by check-asset-ids.py from the shipped assets; a PRE-REGISTRATION SNAPSHOT of the
+# typing taken before the docs were first resolved against it. The gate diffs its live table
+# against this file and reports drift as INFO; regenerate with --dump-typing after a game
+# update, once the docs have been re-verified. Not otherwise an input.
+# 10 L1 / 7 L2 / 7 LW class(es).
+L1 Bogus	Item/Items
+L1 DropListId	Drops,Item/Block/Spawners
+L1 EffectId	Entity/Effects
+L1 Interactions	Item/Interactions
+L1 ItemId	Item/Items
+L1 LocalSoundEventId	Audio/SoundEvents
+L1 Lonely	Item/Items
+L1 Next	Item/Interactions
+L1 Solid	Audio/SoundEvents
+L1 SystemId	Particles
+L2 Container.ItemId	Item/Items
+L2 Cues.Id	Audio/SoundEvents
+L2 Effects.LocalSoundEventId	Audio/SoundEvents
+L2 Holder.Lonely	Item/Items
+L2 Particles.SystemId	Particles
+L2 Rewards.Id	Item/Items
+L2 SoundEvents.Build	Audio/SoundEvents
+LW Container.*	Item/Items
+LW Effects.*	Audio/SoundEvents
+LW Holder.*	Item/Items
+LW Particles.*	Particles
+LW SoundEvents.*	Audio/SoundEvents
+LW SoundMap.*	Audio/SoundEvents
+LW Tones.*	Audio/SoundEvents

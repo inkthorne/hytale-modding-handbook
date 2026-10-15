@@ -817,6 +817,7 @@ FIXTURE_RUNNERS='check-codec-fixture.py
 check-registry-fixture.py
 check-section-binder-fixture.py
 check-type-values-fixture.py --mutations
+check-asset-ids-fixture.py --mutations
 check-defaults-fixture.py --mutations
 check-links-fixture.py --mutations
 check-update-build-fixture.py'
@@ -907,6 +908,37 @@ else
     echo "$OUT" | grep -E '^  (FAIL|SKIP)|^        ' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /; s/^        /    /'
   else
     fail "stale skiplist entr(y/ies) above — no fabricated values, but the exemption list no longer matches the corpus"
+  fi
+fi
+
+# =====================================================================
+section "[INFO] Every asset id in a JSON fence names an asset of the family its key refers to"
+# Queued gate 3. A string under `Next` is checked against Item/Interactions, one under
+# `SoundEventId` against Audio/SoundEvents, and so on, with the key->store typing derived
+# from the shipped assets (maintenance/scripts/check-asset-ids.py states the rule, what is
+# exempt and what is NOT covered). It reports INFO, not WARN or FAIL, until the flags it
+# found at its first run are fixed in the docs: a gate that hard-fails on known findings
+# is invariant-1 wallpaper in the other direction. Promote to [HARD] in the commit that
+# clears the list, not before. Exit codes: 0 clean, 1 flags, 2 an input is missing,
+# 3 a zero denominator (the gate examined nothing - that one IS a failure of the gate).
+# ~14 s, nearly all of it the shipped-asset sweep; the docs scan is under a second.
+if [ ! -d "$SRC_CACHE" ]; then
+  warn "skipped (no decompiled source cache at $SRC_CACHE — build-jar-cache.sh)"
+elif [ ! -d "$ASSETS" ]; then
+  warn "skipped (no asset cache)"
+else
+  OUT="$(python3 maintenance/scripts/check-asset-ids.py --src "$SRC_CACHE" --assets "$ASSETS")"
+  RC=$?
+  echo "$OUT" | grep -E '^  INFO'
+  if [ "$RC" -eq 0 ]; then
+    pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+  elif [ "$RC" -eq 1 ]; then
+    NF="$(echo "$OUT" | grep -cE '^  FLAG')"
+    info "$NF asset id(s) do not resolve in the family their key refers to (advisory; not yet promoted to HARD):"
+    echo "$OUT" | grep -E '^  FLAG' | sed 's/^  FLAG  /    /'
+  else
+    fail "check-asset-ids.py exited $RC (2 = missing input, 3 = nothing examined):"
+    echo "$OUT" | grep -E '^  (FAIL|SKIP)' | sed 's/^  /    /'
   fi
 fi
 

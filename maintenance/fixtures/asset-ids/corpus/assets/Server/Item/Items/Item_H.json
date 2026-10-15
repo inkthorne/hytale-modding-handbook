@@ -1,0 +1,26 @@
+{
+  "Solid": "Item_H",
+  "SoundMap": {
+    "Walk": "SFX_A",
+    "Run": "SFX_B",
+    "Jump": "SFX_C",
+    "Land": "SFX_D",
+    "Swim": "SFX_E"
+  },
+  "Tones": {
+    "T0": "SFX_A",
+    "T1": "SFX_B",
+    "T2": "SFX_C",
+    "T3": "SFX_D",
+    "T4": "SFX_E",
+    "T5": "SFX_F",
+    "T6": "SFX_G",
+    "T7": "SFX_H",
+    "T8": "SFX_I",
+    "T9": "SFX_J",
+    "Style": "loud"
+  },
+  "Mix": {
+    "Build": "SFX_H"
+  }
+}

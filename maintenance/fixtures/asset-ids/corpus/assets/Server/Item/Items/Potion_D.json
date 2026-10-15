@@ -1,0 +1,11 @@
+{
+  "Interactions": [
+    "Int_D",
+    "Int_E"
+  ],
+  "DropListId": "D_D",
+  "Solid": "Potion_D",
+  "SoundEvents": {
+    "Build": "SFX_D"
+  }
+}

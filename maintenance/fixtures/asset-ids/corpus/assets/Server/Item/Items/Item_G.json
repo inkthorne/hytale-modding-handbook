@@ -1,0 +1,50 @@
+{
+  "Solid": "Item_G",
+  "Rewards": [
+    {
+      "Id": "Sword_A",
+      "Kind": "reward0"
+    },
+    {
+      "Id": "Sword_B",
+      "Kind": "reward1"
+    },
+    {
+      "Id": "Axe_C",
+      "Kind": "reward2"
+    },
+    {
+      "Id": "Potion_D",
+      "Kind": "reward3"
+    },
+    {
+      "Id": "Gem_E",
+      "Kind": "reward4"
+    }
+  ],
+  "Cues": [
+    {
+      "Id": "SFX_A",
+      "Kind": "cue0"
+    },
+    {
+      "Id": "SFX_B",
+      "Kind": "cue1"
+    },
+    {
+      "Id": "SFX_C",
+      "Kind": "cue2"
+    },
+    {
+      "Id": "SFX_D",
+      "Kind": "cue3"
+    },
+    {
+      "Id": "SFX_E",
+      "Kind": "cue4"
+    }
+  ],
+  "Mix": {
+    "Build": "SFX_G"
+  }
+}

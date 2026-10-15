@@ -1,0 +1,39 @@
+{
+  "Solid": "Empty",
+  "Alpha": {
+    "ItemId": "Sword_A",
+    "Next": "Int_A",
+    "LocalSoundEventId": "SFX_A",
+    "EffectId": "Fx_A",
+    "SystemId": "P_A",
+    "DropListId": "D_A",
+    "Interactions": [
+      "Int_A"
+    ],
+    "Solid": "Sword_A"
+  },
+  "Beta": {
+    "ItemId": "Sword_A",
+    "Next": "Int_A",
+    "LocalSoundEventId": "SFX_A",
+    "EffectId": "Fx_A",
+    "SystemId": "P_A",
+    "DropListId": "D_A",
+    "Interactions": [
+      "Int_A"
+    ],
+    "Solid": "Sword_A"
+  },
+  "Gamma": {
+    "ItemId": "Sword_A",
+    "Next": "Int_A",
+    "LocalSoundEventId": "SFX_A",
+    "EffectId": "Fx_A",
+    "SystemId": "P_A",
+    "DropListId": "D_A",
+    "Interactions": [
+      "Int_A"
+    ],
+    "Solid": "Sword_A"
+  }
+}

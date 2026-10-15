@@ -13,7 +13,8 @@ changed thing that some file mentions:
 
 kind is "asset", "class" (signature changed) or "body" (source changed with no
 signature change on the top-level class, or a bytecode-only change inside a
-method the decompiler could not render). The last line is
+method the decompiler could not render). An anonymous or local class is reported
+under its enclosing class, as "body" (see ANON). The last line is
 "#SUMMARY <checked> changed thing(s) checked, <n> referenced in docs/examples".
 
 Asset keys. A doc names an asset in one of four ways, and each needs its own key:
@@ -41,6 +42,14 @@ import collections, os, re, sys
 # stem is a generic name (Walk_Backward names 143 animation files) and falls back
 # to the parent/name key.
 MAX_ID_FILES = 5
+
+# An anonymous class (`World$1`) or a local one (`World$1Helper`), and anything
+# nested in either, has no name a doc can cite: searched by its simple name, `1`,
+# `World$1` flagged every gradlew and deploy.bat in the 0.7.2 triage (59 such
+# rows). Such a class is part of its enclosing class's body, so its row is folded
+# onto that class as a "body" change; a signature change on the enclosing class
+# itself still wins.
+ANON = re.compile(r"\$\d.*$")
 
 
 def load_corpus(root):
@@ -99,7 +108,11 @@ def main(report, assets, root="."):
     for l in lines("api-changed-classes.txt"):
         m = re.match(r"(?:ADDED|REMOVED|CHANGED) +(\S+)", l)
         if m:
-            classes[m.group(1)] = "class"
+            outer = ANON.sub("", m.group(1))
+            if outer == m.group(1):
+                classes[outer] = "class"
+            else:
+                classes.setdefault(outer, "body")
     for l in lines("src-changed-classes.txt"):
         m = re.match(r"(?:BODY|BYTECODE|BLIND) +(\S+)", l)
         if m:

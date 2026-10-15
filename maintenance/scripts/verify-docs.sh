@@ -800,10 +800,10 @@ section "[HARD] The gates' own fixtures pass"
 # Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
 # included rather than deferred behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
-# update-build.sh end to end against generated jars: 175 checks in ~27s, which
+# update-build.sh end to end against generated jars: 181 checks in ~27s, which
 # is kept here because those scripts run only at a game update, and their
 # defects would otherwise surface only then, on the one run whose previous-build
-# snapshot cannot be regenerated. Its --mutations pass (28 mutations, ~13 min)
+# snapshot cannot be regenerated. Its --mutations pass (32 mutations, ~13 min)
 # is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
 # or triage_drift.py changes.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.

@@ -31,14 +31,15 @@ v1 -> v2:
     PluginManager      a returned string changes inside a method CFR cannot
                        decompile (a sealed-interface pattern switch in nested In)
     Gone / Fresh       removed / added
-Part 2 unit-tests triage_drift.AssetMatcher on a synthetic corpus.
+Part 2 unit-tests triage_drift.AssetMatcher on a synthetic corpus, and runs
+triage_drift.main on a synthetic report to test how class rows are keyed.
 
 Needs javac, jar, zip, javap and CFR at ~/.cache/hytale-jar-tools/cfr.jar.
 
 Usage: python3 maintenance/scripts/check-update-build-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, hashlib, importlib.util, os, pathlib, re, shutil, stat, subprocess, sys, tempfile
+import argparse, contextlib, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -50,7 +51,7 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 
 MIN_CHECKS = 150
-MIN_MUTATIONS = 28
+MIN_MUTATIONS = 32
 
 
 class Run:
@@ -423,6 +424,31 @@ def part2():
     check(m.rule('Characters/Anim0/Walk_Backward.blockyanim')[0] == 'parent', "rule: an id-shaped stem shared by 6 files is generic")
     check(h('Characters/Anim0/Walk_Backward.blockyanim') == [], "parent: a generic shared name does not match its bare word")
 
+    # Class rows. An anonymous class's simple name is a number: `World$1` searched
+    # as the word `1` flagged every gradlew and deploy.bat in the 0.7.2 triage
+    # (59 rows). Docs cannot name one, so its change is the enclosing class's body.
+    with tempfile.TemporaryDirectory() as t:
+        t = pathlib.Path(t)
+        (t / 'report').mkdir(); (t / 'assets').mkdir()
+        (t / 'report/api-changed-classes.txt').write_text(
+            'CHANGED a.b.World$1\nCHANGED a.b.Outer$Named\nCHANGED a.b.Lonely$2Local$In\n'
+            'CHANGED a.b.Mixed\nCHANGED a.b.Mixed$1\n')  # outer first: its row must survive
+        (t / 'report/src-changed-classes.txt').write_text('BODY a.b.Mixed\n')
+        for rel, text in {'docs/x.md': 'The `World` guide, step 1.', 'docs/y.md': 'A `Named` thing.',
+                          'examples/gradlew': 'exit 1', 'docs/z.md': 'Use `2Local` or `In`.',
+                          'docs/m.md': 'The `Mixed` class.'}.items():
+            (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            mod.main(str(t / 'report'), str(t / 'assets'), str(t))
+        out = buf.getvalue()
+    check('body a.b.World → docs/x.md\n' in out, "triage: an anonymous class is folded onto its enclosing class, as a body change")
+    check(not re.search(r'\$\d', out), "triage: no row names an anonymous or local class")
+    check('gradlew' not in out and 'docs/z.md' not in out, "triage: a numeric simple name does not flag every file")
+    check('class a.b.Outer$Named → docs/y.md\n' in out, "triage: a named nested class is still matched by its simple name")
+    check('class a.b.Mixed → docs/m.md\n' in out, "triage: a folded row keeps the enclosing class's own signature change")
+    check('#SUMMARY 4 changed' in out, "triage: folded rows are counted once, under the enclosing class")
+
 
 def one_pass(scripts, verbose=False):
     global R
@@ -518,6 +544,20 @@ MUTATIONS = [
      {"relative UPDATE_SNAPSHOT: store created under the caller's cwd"}),
     ("r2 LOW-3: interrupted-copy leftovers kept", B, '  rm -rf "$SNAP".new.* 2>/dev/null\n', '',
      {"leftover snapshot.new.* from an interrupted copy is removed"}),
+    ("0.7.2 triage: anonymous classes matched by their numeric name", T,
+     'ANON = re.compile(r"\\$\\d.*$")', 'ANON = re.compile(r"(?!)")',
+     {"triage: no row names an anonymous or local class", "triage: a numeric simple name does not flag every file",
+      "triage: an anonymous class is folded onto its enclosing class, as a body change",
+      "triage: folded rows are counted once, under the enclosing class"}),
+    ("0.7.2 triage: every nested class folded", T,
+     'ANON = re.compile(r"\\$\\d.*$")', 'ANON = re.compile(r"\\$.*$")',
+     {"triage: a named nested class is still matched by its simple name"}),
+    ("0.7.2 triage: a folded row reported as a signature change", T,
+     'classes.setdefault(outer, "body")', 'classes.setdefault(outer, "class")',
+     {"triage: an anonymous class is folded onto its enclosing class, as a body change"}),
+    ("0.7.2 triage: a folded row overrides the enclosing class's own row", T,
+     'classes.setdefault(outer, "body")', 'classes[outer] = "body"',
+     {"triage: a folded row keeps the enclosing class's own signature change"}),
 ]
 
 

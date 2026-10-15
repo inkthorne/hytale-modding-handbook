@@ -337,7 +337,7 @@ The `builtin.audio` plugin registers two chunk-store components, by the names `M
 A block that carries a `MusicEmitterBlock` plays a container at the block's position. The server sends `SetBlockMusicEmitter`
 (packet 169, on the chunks channel) holding the block position, the emitter settings and a playback offset to every
 player whose chunk tracker has the chunk loaded. It sends one when the chunk's data goes to a player, when the
-component is added or replaced, and, with an empty emitter, when the component or its block is removed. The server
+block is placed (the block entity spawns with the component), when the component is added or replaced, and, with an empty emitter, when the component or its block is removed. The server
 stamps `Origin` the first time the emitter starts, and the offset it sends is the time elapsed since then, so a
 player who arrives later is told how far into playback the emitter already is.
 

@@ -899,8 +899,9 @@ else
     printf '%s\n' "$OUT" | sed 's/^/    /'
   else
     printf '%s\n' "$OUT" | grep -E '^(MEASURED|PREDICTED|UNEXPLAINED)' | sed 's/^/        /'
+    RQ_PINNED="$(printf '%s\n' "$OUT" | sed -n 's/^PINNED //p' | sed -n 1p)"
   fi
-  [ "$RQ_OK" -eq 1 ] && pass "requiredness probes hold: the true flag never rejects an omitted key; every key the engine rejected was predicted by the parser, and the 11 pinned figures are unchanged (258 of 545 predicted keys rejected on omission)"
+  [ "$RQ_OK" -eq 1 ] && pass "requiredness probes hold: the true flag never rejects an omitted key; every key the engine rejected was predicted by the parser; ${RQ_PINNED:-pinned summary line missing}"
 fi
 
 # =====================================================================

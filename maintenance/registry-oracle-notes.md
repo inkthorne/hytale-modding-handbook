@@ -1224,7 +1224,7 @@ progress.
 ## 15. Re-deriving the independent figures after a game update (0.7.2, 2026-10-14)
 
 The registry fixture's `independent` block is only evidence while its figures are
-re-derived by a route that shares nothing with `registry_miner.py`. At 0.7.2 that route
+re-derived by a route that is independent of `registry_miner.py` (independent in its walk; the unqualified-binding patterns it later gained are copied from the miner, see the end of this section). At 0.7.2 that route
 is `maintenance/scripts/hand-registry-recount.py`: plain text sweeps (statement = text to
 the next depth-0 `;`, args split on top-level commas, `static final String` constants
 resolved per file, `category()` found by walking `extends`). It is a review tool, not a
@@ -1273,5 +1273,4 @@ Found and fixed in the same round:
 - a registration spelled in a `//` comment supplied check-type-values with a page-local name. Miner anchors are now read from masked text; 0 real sites changed.
 
 Still not handled, stated so it is not rediscovered:
-- in the recount, a `for` header's variable stays in scope after its loop closes;
 - a multi-declarator that follows a lambda-bodied initialiser is read as UNRESOLVED. That fails loudly, never as a wrong binding.

@@ -7,7 +7,7 @@ seo:
 
 # Projectiles API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers spawning and simulating projectiles: the module, asset-based configuration, physics, ECS components, and impact/bounce callbacks.
 
@@ -16,7 +16,7 @@ This page covers spawning and simulating projectiles: the module, asset-based co
 Implemented in `com.hypixel.hytale.server.core.modules.projectile` (and its `config`, `component`, and `interaction` subpackages) and provides:
 - `ProjectileModule` for spawning and managing projectiles
 - `ProjectileConfig`, asset-based ballistic and visual configuration
-- Physics via `PhysicsConfig` / `StandardPhysicsConfig` and `StandardPhysicsProvider`
+- Physics via `PhysicsConfig` / `StandardPhysicsConfig` (and its 0.7.2 subclass `GroundFollowPhysicsConfig`) and `StandardPhysicsProvider`
 - ECS components: `Projectile` and `PredictedProjectile` (client prediction)
 - `ImpactConsumer` / `BounceConsumer` callbacks for impacts and bounces
 - `ProjectileInteraction` for launching projectiles from interactions
@@ -28,6 +28,7 @@ ProjectileModule  (spawnProjectile, component-type accessors)
 │   └── BallisticData        (muzzle velocity, gravity, shot adjustments)
 ├── Physics
 │   ├── PhysicsConfig → StandardPhysicsConfig  (bounce, rolling, fluid)
+│   │                    └── GroundFollowPhysicsConfig  (0.7.2+: terrain following)
 │   └── StandardPhysicsProvider (per-tick simulation, collision, fluid state)
 ├── Components
 │   ├── Projectile           (marks entity as a projectile)
@@ -47,6 +48,7 @@ ProjectileModule  (spawnProjectile, component-type accessors)
 | `BallisticData` | `modules.projectile.config` | Interface for ballistic properties |
 | `PhysicsConfig` | `modules.projectile.config` | Interface for projectile physics behavior |
 | `StandardPhysicsConfig` | `modules.projectile.config` | Default physics implementation (bounce, fluid, rolling) |
+| `GroundFollowPhysicsConfig` | `modules.projectile.config` | 0.7.2+: `Standard` physics that follows the terrain |
 | `StandardPhysicsProvider` | `modules.projectile.config` | ECS component running physics simulation |
 | `ImpactConsumer` | `modules.projectile.config` | Callback for projectile impacts |
 | `BounceConsumer` | `modules.projectile.config` | Callback for projectile bounces |
@@ -61,7 +63,8 @@ ProjectileConfig (asset-based configuration)
   implements JsonAssetWithMap, NetworkSerializable, BallisticData
 
 PhysicsConfig (interface)
-  └── StandardPhysicsConfig (default implementation)
+  └── StandardPhysicsConfig (default implementation, "Type": "Standard")
+        └── GroundFollowPhysicsConfig ("Type": "GroundFollow", 0.7.2+)
 
 Projectile (ECS component)
   implements Component<EntityStore>
@@ -80,10 +83,10 @@ Pick based on whether you need on-hit logic (effects, AOE, despawn handling).
 |---|---|---|
 | Maps to | (native projectile asset) | `ProjectileConfig` |
 | Damage | top-level `Damage` (int) | via an on-hit `DamageEntity` interaction |
-| Physics | flat fields (`MuzzleVelocity`, `Gravity`, `Bounciness`, `TimeToLive`, …) | typed `Physics` object (`"Type": "Standard"`, …) + `LaunchForce`, `SpawnOffset` |
+| Physics | flat fields (`MuzzleVelocity`, `Gravity`, `Bounciness`, `TimeToLive`, …) | typed `Physics` object (`"Type": "Standard"` or, 0.7.2+, `"GroundFollow"`) + `LaunchForce`, `SpawnOffset` |
 | Particles/despawn | native (`HitParticles`, `MissParticles`, `TimeToLive`, `DeadTime`) — "just work", world-oriented | **none native** — you spawn particles and despawn from interactions |
 | Interactions | **none** | **`Interactions`** (`ProjectileSpawn` / `ProjectileHit` / `ProjectileMiss`) |
-| Launched via | the `LaunchProjectile` interaction (`ProjectileId`, plus `RotationOffset` and, as of 0.6.3, `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` — no on-hit hook) | `{ "Type": "Projectile", "Config": "<id>" }` (also accepts `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` as of 0.6.3) |
+| Launched via | the `LaunchProjectile` interaction (`ProjectileId`, plus `RotationOffset` and, as of 0.6.3, `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` — no on-hit hook) | `{ "Type": "Projectile", "Config": "<id>" }` (also accepts `IgnorePitch`/`IgnoreYaw`/`IgnoreRoll` as of 0.6.3, and `Lifetime` as of 0.7.2) |
 
 Only the **config** schema can run interactions, so it's the one you need to apply effects, AOE, or
 custom on-hit logic. Hit routing: a **terrain/wall** hit fires **`ProjectileMiss`**; a **direct entity**
@@ -97,12 +100,19 @@ hit fires **`ProjectileHit`** (confirmed in vanilla `Projectile_Config_Ice_Ball`
   `BuilderCodec` objects; a `Map` container, like an array, is replaced wholesale.) Restate **every**
   handler you want — omit `ProjectileMiss` and terrain hits never despawn, so the projectile sticks in
   the wall forever.
-- **No native `TimeToLive`** on config projectiles — they despawn via a `RemoveEntity` interaction
-  (`"Entity": "User"`). Run the effect-bearing interaction **before** `RemoveEntity` so impact effects
-  dispatch before the entity is destroyed: vanilla `Projectile_Config_Ice_Ball` puts a
+- **No `TimeToLive` key** on config projectiles. On impact they despawn via a `RemoveEntity`
+  interaction (`"Entity": "User"`); otherwise `ProjectileModule` gives every projectile it spawns a
+  `DespawnComponent` that removes it **5 minutes** after spawn. As of 0.7.2 the `Projectile`
+  interaction's `Lifetime` key (seconds, `>= 0`) replaces that timer for the projectiles it launches;
+  `0`, the default, keeps the 5 minutes.
+- Run the effect-bearing interaction **before** `RemoveEntity` so impact effects dispatch before the
+  entity is destroyed: vanilla `Projectile_Config_Ice_Ball` puts a
   `{ "Type": "Simple", "RunTime": 0, "Effects": { … } }` ahead of `RemoveEntity` in `ProjectileMiss`, and
   the `DamageEntityParent` interaction (whose `DamageEffects` carry the particles/sound) ahead of it in
-  `ProjectileHit`.
+  `ProjectileHit`. Copy the miss branch's sound, though, and leave its particles: the shipped file also
+  writes `WorldParticles` into that `Effects` block, and the `InteractionEffects` codec declares
+  only `Particles` (model-attached), so the `WorldParticles` entry is an unused key. `WorldParticles`
+  is a `DamageEffects` key, which is why the hit branch's particles do render.
 
 ## ProjectileModule
 **Package:** `com.hypixel.hytale.server.core.modules.projectile`
@@ -126,10 +136,22 @@ Ref<EntityStore> spawnProjectile(
     Vector3d direction
 )
 
-// Spawn with a client-prediction UUID and a model-scale seed (both nullable).
-// `scaleSeed` feeds ProjectileConfig.createSpawnModel(Long) when the config sets
-// "UseModelScale": true; null picks a random scale.
-// (the 6-arg (UUID, Ref, …) overload was replaced by this 7-arg form as of 0.6.3)
+// 0.7.2+: the same, with a model-scale multiplier (also scales a DirectionalHitBox) and a
+// launch-speed multiplier applied on top of LaunchForce.
+Ref<EntityStore> spawnProjectile(
+    Ref<EntityStore> creatorRef,
+    CommandBuffer<EntityStore> commandBuffer,
+    ProjectileConfig config,
+    Vector3d position,
+    Vector3d direction,
+    float scaleMultiplier,
+    float speedMultiplier
+)
+
+// The full form. `predictionId` (client prediction) and `scaleSeed` are nullable; `scaleSeed`
+// feeds ProjectileConfig.createSpawnModel(Long, float) when the config sets
+// "UseModelScale": true, and null picks a random scale. `despawnDelay` is in milliseconds;
+// 0 or less keeps the default 5-minute despawn.
 Ref<EntityStore> spawnProjectile(
     UUID predictionId,
     Long scaleSeed,
@@ -137,14 +159,32 @@ Ref<EntityStore> spawnProjectile(
     CommandBuffer<EntityStore> commandBuffer,
     ProjectileConfig config,
     Vector3d position,
-    Vector3d direction
+    Vector3d direction,
+    float scaleMultiplier,
+    float speedMultiplier,
+    long despawnDelay
 )
+// Shorter prediction overloads also exist: (…, direction, long despawnDelay) and
+// (…, direction, float scaleMultiplier, float speedMultiplier).
 
 // Get component types
 ComponentType<EntityStore, Projectile> getProjectileComponentType()
 ComponentType<EntityStore, StandardPhysicsProvider> getStandardPhysicsProviderComponentType()
 ComponentType<EntityStore, PredictedProjectile> getPredictedProjectileComponentType()
+// 0.7.2+, all in modules.projectile.component:
+ComponentType<EntityStore, ImpactModifiers> getImpactModifiersComponentType()
+ComponentType<EntityStore, PierceProjectile> getPierceProjectileComponentType()
+ComponentType<EntityStore, SpectralProjectile> getSpectralProjectileComponentType()
+ComponentType<EntityStore, ProjectileHitExclusions> getProjectileHitExclusionsComponentType()
+ComponentType<EntityStore, ProjectileLaunchContext> getProjectileLaunchContextComponentType()
+ComponentType<EntityStore, GroundFollowProjectile> getGroundFollowProjectileComponentType()
+ComponentType<EntityStore, DirectionalHitBox> getDirectionalHitBoxComponentType()
 ```
+
+> **0.7.2 removed the 7-argument prediction overload**
+> `spawnProjectile(UUID, Long, Ref, CommandBuffer, ProjectileConfig, Vector3d, Vector3d)`. A plugin
+> compiled against it fails to link; call the `(…, direction, long despawnDelay)` overload with `0`
+> for the old behaviour.
 
 > **See also:** [ECS Components](components.md#core-types)
 
@@ -195,6 +235,11 @@ PhysicsConfig getPhysicsConfig()
 Model getModel()
 ModelAsset getModelAsset()              // 0.6.3+
 Model createSpawnModel(Long scaleSeed)  // 0.6.3+: scaled per "UseModelScale" (random when seed is null)
+Model createSpawnModel(Long scaleSeed, float scaleMultiplier)  // 0.7.2+: that scale times the multiplier
+
+// Piercing hit shape (0.7.2+, JSON "DirectionalHitBox": { "Width", "Depth" }, both required);
+// null when unset
+DirectionalHitBoxConfig getDirectionalHitBox()
 
 // Sound events
 int getLaunchWorldSoundEventIndex()
@@ -288,6 +333,24 @@ void apply(
 
 ---
 
+## GroundFollowPhysicsConfig
+**Package:** `com.hypixel.hytale.server.core.modules.projectile.config`
+
+Added in 0.7.2 and registered on `PhysicsConfig.CODEC` as `"Type": "GroundFollow"`. It extends
+`StandardPhysicsConfig`, so it takes every `Standard` key, and adds two integers, each default `1`
+and validated `>= 0`:
+
+| Key | Meaning |
+|-----|---------|
+| `MaxClimb` | Blocks the projectile may step up in one move; a taller wall ends its course |
+| `MaxDrop` | Blocks it may drop in one move; a deeper drop ends its course |
+
+`apply(...)` adds a `GroundFollowProjectile` component, and the tick system then snaps the
+projectile to the ground ahead instead of casting it against blocks. The one shipped user is
+`Projectile_Config_GroundSlam` (`"MaxClimb": 1, "MaxDrop": 1, "Gravity": 0`).
+
+---
+
 ## ImpactConsumer
 **Package:** `com.hypixel.hytale.server.core.modules.projectile.config`
 
@@ -304,7 +367,7 @@ void onImpact(
     CommandBuffer<EntityStore> buffer  // Command buffer for responses
 )
 ```
-The tick system fires this twice over: on an entity contact (`targetRef` set, state → `INACTIVE`) and when a bounce settles into rest (`targetRef`/`collisionDetailName` null, state → `RESTING`).
+The tick system fires this on an entity contact (`targetRef` set, state → `INACTIVE`) and when a bounce settles into rest (`targetRef`/`collisionDetailName` null, state → `RESTING`). Two 0.7.2 additions change that for some projectiles. A piercing projectile (one carrying the `PierceProjectile` component, which the abilities launcher adds) fires it once per newly hit entity and keeps flying. A projectile whose course ends fires it once more with `impactBlock`, `targetRef` and `collisionDetailName` all null, state → `INACTIVE`, and despawns 300 ms later. A course ends when a piercing projectile expires, passes its maximum distance, stalls or runs out of bounces, or when a `GroundFollow` projectile meets a wall or drop it cannot take.
 
 ---
 
@@ -576,6 +639,17 @@ WaitForDataFrom getWaitForDataFrom()   // Client/server data sync mode
 boolean needsRemoteSync()              // Whether to sync across network
 ```
 
+JSON keys (`"Type": "Projectile"`): `Config` (the `ProjectileConfig` id), `IgnorePitch`,
+`IgnoreYaw`, `IgnoreRoll`, and, as of 0.7.2, `Lifetime` (seconds, `>= 0`; `0` keeps the
+5-minute default despawn).
+
+As of 0.7.2 a launch also puts a `ProjectileLaunchContext` component (the `InteractionType` and
+whether the held item is a weapon) and, when the shooter has any, an `ImpactModifiers` component
+on the new projectile. It then invokes a `ProjectileLaunchEvent` (an `EcsEvent` in
+`modules.projectile.event`, with `getProjectileRef()`, `getInteractionType()` and
+`isLaunchedByWeapon()`) on the **shooter**, so an `EntityEventSystem` over players can react to
+each shot.
+
 ---
 
 ## Usage Examples
@@ -584,8 +658,8 @@ boolean needsRemoteSync()              // Whether to sync across network
 ```java
 ProjectileModule module = ProjectileModule.get();
 
-// Get projectile config from assets
-ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset("arrow");
+// Get projectile config from assets (the id is the file name under Server/ProjectileConfigs/)
+ProjectileConfig config = ProjectileConfig.getAssetMap().getAsset("Projectile_Config_Arrow_Crossbow");
 
 // Spawn position (mutated in place by the config's spawn offset) and aim direction.
 // Only the direction's yaw/pitch matter: the module rebuilds a unit vector from them,
@@ -623,13 +697,14 @@ overloads; the general one:
 ```java
 ParticleUtil.spawnParticleEffect(
     String systemId, Vector3dc pos,       // any Vector3d works (position parameters are Vector3dc as of 0.6.3)
-    float pitch, float yaw, float roll,   // ROTATION IN RADIANS — (0,0,0) = world-aligned
-    float scale, float duration,
+    float yaw, float pitch, float roll,   // ROTATION IN RADIANS — (0,0,0) = world-aligned
+    float scale, float maxDuration,
     ComponentAccessor<EntityStore> accessor);   // a CommandBuffer works here
 ```
 
-The three rotation floats are pitch/yaw/roll in **radians** (the `PlayVfxEffect` trigger calls this
-after `Math.toRadians(...)` on its degree fields). Simpler overloads exist —
+The three rotation floats are yaw/pitch/roll, in that order, in **radians** (the `PlayVfxEffect`
+trigger calls this after `Math.toRadians(...)` on its degree fields). The overload sends the effect
+to players within 75 blocks of `pos`. Simpler overloads exist —
 `spawnParticleEffect(String, Vector3dc, ComponentAccessor)`,
 `spawnParticleEffect(WorldParticle, Vector3dc, ...)`, and `Rotation3f`/`List<Ref>`/`Color` variants.
 
@@ -638,8 +713,9 @@ effect. A `ModelParticle` placed in JSON attaches to an `EntityPart` (`Self`, `E
 or `SecondaryItem` — there is **no world-space anchor**) and inherits that entity's transform, so a
 particle on a pitched projectile tilts with the shot — a flat ground decal looks wrong. `DetachedFromModel: true`
 only makes the system *persist* after the entity despawns; it does **not** change spawn orientation
-(0.6.3 adds a sibling `ClearParticlesOnRemove` boolean on `ModelParticle`; by its name it does the opposite — the
-flag is only serialized to the client, so the effect is inferred).
+(0.6.3 adds a sibling `ClearParticlesOnRemove` boolean on `ModelParticle`, the opposite switch: its codec
+documentation says that when the owning entity is removed, the effect's already-emitted particles are
+cleared at once instead of finishing their lifespan. The server only forwards the flag to the client).
 For a world-oriented effect, use a `WorldParticle` (only available via `DamageEffects`, i.e. entity
 hits) or spawn from code with rotation `(0,0,0)`. As with JSON particles, pass a non-zero `scale` —
 the field is a primitive `float` and `0` renders invisibly.
@@ -651,8 +727,8 @@ the field is a primitive `float` and `0` renders invisibly.
 Backtick-quoted error strings below are the literal messages thrown by the projectile subsystem (verified against `HytaleServer.jar`).
 
 - **`has no valid ProjectileConfig`** → an entity/interaction tried to launch a projectile whose `ProjectileConfig` could not be resolved. Fix: pass a config obtained from `ProjectileConfig.getAssetMap().getAsset(id)` and verify the id exists.
-- **`No projectile config typeName provided`** → a `ProjectileInteraction` (or launch config) omitted the projectile config type name. Fix: set the projectile config reference in the interaction JSON.
-- **Symptom:** `ProjectileConfig.getAssetMap().getAsset("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive). Fix: use the exact asset-file id and null-check before spawning.
+- **`No projectile config typeName provided`** → a simple-schema projectile was launched with an empty asset name: `ProjectileComponent.assembleDefaultProjectile(...)`, which the `LaunchProjectile` interaction calls, throws it when `ProjectileId` is empty. Fix: set `ProjectileId` to a `Server/Projectiles/` asset id.
+- **Symptom:** `ProjectileConfig.getAssetMap().getAsset("arrow")` returns `null` → the asset id didn't match (ids are case-sensitive file names, e.g. `Projectile_Config_Arrow_Crossbow`). Fix: use the exact asset-file id and null-check before spawning.
 - **Symptom:** a projectile bounces forever or never stops → bounce limits come from `StandardPhysicsConfig`. Fix: compare `physics.getBounces()` against `config.getBounceCount()` and check `getBounceLimit()`/`getBounciness()` (see [StandardPhysicsProvider](#standardphysicsprovider)).
 - **Symptom:** an `AOECircle`/`AOECylinder` selector in a projectile's `ProjectileHit`/`ProjectileMiss` affects only the directly-hit entity, never a radius → projectile-hosted selectors don't sweep (unlike melee). Fix: use `Type: "Explode"`, a trigger volume, or the Java radius query `Selector.selectNearbyEntities(...)` (see [interactions-combat.md → AOECircle](interactions-combat.md#aoecircle-area-of-effect)).
 

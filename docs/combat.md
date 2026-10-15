@@ -7,7 +7,7 @@ seo:
 
 # Combat API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Interactions` · **Verified against 0.7.2**
 
 This document covers damage events, combat systems, and kill feed customization.
 
@@ -22,7 +22,7 @@ This document covers damage events, combat systems, and kill feed customization.
 
 Implemented mainly in `com.hypixel.hytale.server.core.modules.entity.damage` (with JSON-driven combat config) and provides:
 - The `Damage` ECS event and `DamageEventSystem` base class for handling damage
-- Damage source types (`EntitySource`, `EnvironmentSource`, `ProjectileSource`, `CommandSource`)
+- Damage source types (`EntitySource`, `ProjectileSource`, `EntityEffectSource`, `EnvironmentSource`, `CommandSource`)
 - `DamageCause` constants and `DamageDataComponent` for damageable entities
 - Kill feed events (`KillFeedEvent.Display`, `KillerMessage`, `DecedentMessage`)
 - A component-based `KnockbackComponent` system with armor/wielding reduction
@@ -33,7 +33,7 @@ Implemented mainly in `com.hypixel.hytale.server.core.modules.entity.damage` (wi
 Combat
 ├── Damage Pipeline
 │   ├── Damage (event, fires on victim) + DamageEventSystem
-│   ├── Damage.Source → EntitySource / EnvironmentSource / ProjectileSource / CommandSource
+│   ├── Damage.Source → EntitySource (→ ProjectileSource, EntityEffectSource) / EnvironmentSource / CommandSource
 │   ├── DamageCause (PHYSICAL, FALL, DROWNING, ...)
 │   └── DamageDataComponent (marks damageable entities)
 ├── Kill Feed (KillFeedEvent)
@@ -75,8 +75,9 @@ Handle damage events when entities receive damage. Extend `DamageEventSystem` (n
 | `DamageEventSystem` | Abstract base class for handling Damage events |
 | `Damage.Source` | Interface for damage sources |
 | `Damage.EntitySource` | Source when damage comes from an entity (player/mob) |
-| `Damage.EnvironmentSource` | Source for environmental damage (fall, drowning) |
+| `Damage.EnvironmentSource` | Source carrying a fixed death message (the engine uses it for explosions) |
 | `Damage.ProjectileSource` | Source for projectile damage (arrows) |
+| `Damage.EntityEffectSource` | Source for damage-over-time ticks of an effect whose applier is known (0.7.2+) |
 | `Damage.CommandSource` | Source for damage from commands |
 | `DamageCause` | Asset type for damage cause (FALL, DROWNING, PHYSICAL, etc.) |
 | `DamageDataComponent` | Component on entities that can receive damage |
@@ -116,7 +117,7 @@ void setCancelled(boolean)
 `Damage` also implements `IMetaStore<Damage>`, so per-hit extras ride along as `MetaKey`s rather than
 fields: `Damage.HIT_LOCATION` (`Vector4d`), `HIT_ANGLE`, `IMPACT_PARTICLES`, `IMPACT_SOUND_EFFECT`,
 `PLAYER_IMPACT_SOUND_EFFECT`, `CAMERA_EFFECT`, `DEATH_ICON`, `BLOCKED`, `STAMINA_DRAIN_MULTIPLIER`,
-`CAN_BE_PREDICTED` and `KNOCKBACK_COMPONENT`. `DeathSystems.KillFeed`, for instance, reads
+`CAN_BE_PREDICTED`, `INTERACTION_TYPE` (an `InteractionType`, 0.7.2+) and `KNOCKBACK_COMPONENT`. `DeathSystems.KillFeed`, for instance, reads
 `deathInfo.getIfPresentMetaObject(Damage.DEATH_ICON)` to seed `KillFeedEvent.Display.getIcon()`.
 
 ### Important Notes
@@ -132,9 +133,13 @@ fields: `Damage.HIT_LOCATION` (`Vector4d`), `HIT_ANGLE`, `IMPACT_PARTICLES`, `IM
 
 ### Damage.Source (Interface)
 
-Base interface for all damage sources. Its one member is a default
+Base interface for all damage sources. It has two default members:
 `getDeathMessage(Damage, Ref<EntityStore>, ComponentAccessor<EntityStore>)`, which each subtype
-overrides to phrase the kill; `Damage.NULL_SOURCE` is the no-attacker instance.
+overrides to phrase the kill, and (0.7.2+) `getSourceType()`, returning a `DamageSourceType` —
+`Combat` for `EntitySource` and its `ProjectileSource` subtype, `DoT` for effect ticks, and the
+default `Environment` for everything else. `Damage.NULL_SOURCE` is the no-attacker instance, and it
+is what the engine uses for fall, drowning, suffocation and out-of-world damage (the `DamageCause`
+tells those apart).
 
 ### Damage.EntitySource
 
@@ -144,29 +149,50 @@ Source when damage comes from another entity (player or mob).
 |--------|-------------|-------------|
 | `getRef()` | `Ref<EntityStore>` | Reference to the attacking entity (the attacker for melee, the shooter for projectiles) |
 
-> **`ProjectileSource extends EntitySource`** (verified in the jar). A single
-> `if (source instanceof Damage.EntitySource es)` therefore catches **both melee and
-> projectile** kills, and `es.getRef()` returns the **attacker/shooter** in both cases —
-> which is what you want for attributing kills in a shooter. Only add a separate
-> [`Damage.ProjectileSource`](#damageprojectilesource) branch if you need the projectile
-> entity itself; check it **before** the `EntitySource` branch (subtype first).
+> **`ProjectileSource` and `EntityEffectSource` both extend `EntitySource`** (verified in the
+> jar). A single `if (source instanceof Damage.EntitySource es)` therefore catches **melee,
+> projectile and damage-over-time** hits, and `es.getRef()` returns the **attacker, shooter or
+> effect applier** — which is what you want for attributing kills in a shooter. Add a separate
+> [`Damage.ProjectileSource`](#damageprojectilesource) branch if you need the projectile entity
+> itself, and test `es.getSourceType() == DamageSourceType.Combat` (or exclude
+> `Damage.EntityEffectSource`) if a burn or poison tick must not count as a hit. Check subtypes
+> **before** the `EntitySource` branch.
 
 ### Damage.EnvironmentSource
 
-Source for environmental damage (fall damage, drowning, lava, etc.).
+A no-attacker source that carries a fixed death message. Its constructor,
+`new Damage.EnvironmentSource(String deathMessageKey)`, takes a **translation key**, and
+`getDeathMessage(...)` returns `Message.translation(deathMessageKey)` whatever the victim. The
+engine's one use is `ExplodeInteraction.DAMAGE_SOURCE_EXPLOSION`, built from
+`"server.general.deathCause.explosion"` ("You were killed by an explosion!" in `en-US/server.lang`),
+for explosions with no projectile behind them. Fall, drowning and other environmental damage use
+`Damage.NULL_SOURCE` instead, so test the cause (`event.getCause()`), not the source, for those.
 
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `getType()` | `String` | The free-form environment tag the source was constructed with (`new Damage.EnvironmentSource(String)`). The engine's explosion source, for example, is `ExplodeInteraction.DAMAGE_SOURCE_EXPLOSION` = `new Damage.EnvironmentSource("explosion")`. It is **not** the `DamageCause` id — read the cause from `event.getCause()` |
+The class exposes no getter. **0.7.2 removed `getType()`**, and the constructor argument changed
+meaning from a free-form tag to a translation key, so a plugin that read `getType()` must switch to
+the `DamageCause` or to `getSourceType()`.
 
 ### Damage.ProjectileSource
 
 Source for projectile damage (arrows, thrown items). **Extends [`Damage.EntitySource`](#damageentitysource)**, so it inherits `getRef()` (the shooter) and adds `getProjectile()`.
 
+As of 0.7.2 a `DamageEntity` interaction run by a projectile (a config projectile's `ProjectileHit`
+handler) builds a `ProjectileSource(shooter, projectile)`; in 0.6.8 the same hit arrived as a plain
+`EntitySource`. Exploding projectiles and the legacy `ProjectileComponent` also use it.
+
 | Method | Return Type | Description |
 |--------|-------------|-------------|
 | `getRef()` | `Ref<EntityStore>` | The shooter (inherited from `EntitySource`) |
 | `getProjectile()` | `Ref<EntityStore>` | The projectile entity (arrow, etc.) |
+
+### Damage.EntityEffectSource
+
+Added in 0.7.2. Source for a damage-over-time tick of an active entity effect whose applier is
+still valid. **Extends `EntitySource`**: `getRef()` is the entity that applied the effect, and
+`getEffect()` returns the `ActiveEntityEffect`. Its `getSourceType()` is `DoT`. When the applier is
+unknown or gone, the tick's source is the `ActiveEntityEffect` itself, which also reports `DoT`.
+Blocking (`DamageSystems.WieldingDamageReduction`) skips damage from this source, so a guard does
+not reduce a burn or poison tick.
 
 ### Damage.CommandSource
 
@@ -183,7 +209,7 @@ Asset type representing the cause/type of damage. Returned by `Damage.getCause()
 ### Predefined Constants (all `@Deprecated`)
 
 > **⚠️ All eight `DamageCause.*` static fields carry `@Deprecated` + `@Nullable`** (a bare
-> `@Deprecated`; the 0.6.8 jar records no `since` element on it). `DamageCause`
+> `@Deprecated`; the 0.7.2 jar records no `since` element on it). `DamageCause`
 > is now an asset-store-backed type — the causes live as JSON assets under `Server/Entity/Damage/`,
 > and the static convenience fields are deprecated in favor of looking the cause up by id. See
 > [Obtaining a cause](#obtaining-a-cause-non-deprecated) below for the current API.
@@ -210,7 +236,7 @@ Asset type representing the cause/type of damage. Returned by `Damage.getCause()
 
 Look the cause up by id from the asset map instead of referencing the deprecated static field. The id
 is the asset filename — e.g. `Physical`, `Fall`, `Drowning`, `Projectile`, `Environment`, `Command`,
-`OutOfWorld`, `Suffocation` (plus `Bludgeoning`, `Elemental`, `Environmental`, `Fire`, `Ice`, `Poison`, `Slashing` — the files under `Server/Entity/Damage/`).
+`OutOfWorld`, `Suffocation` (plus `Bludgeoning`, `Crush`, `Earth`, `Elemental`, `Environmental`, `Fire`, `Ice`, `Lightning`, `Poison`, `Slashing`, `Water`, `Wind` — the 20 files under `Server/Entity/Damage/` as of 0.7.2).
 
 > **Gotcha:** the map is an `IndexedLookupTableAssetMap`, which exposes `getIndex(String)` and
 > `getAsset(int)` but **no `getAsset(String)`** (unlike some other asset maps). Go id → index → cause:
@@ -242,6 +268,9 @@ String getDeathAnimationId()      // Animation to play on death
 boolean isDurabilityLoss()        // Does this cause item durability loss?
 boolean isStaminaLoss()           // Does this cause stamina loss?
 boolean doesBypassResistances()   // Does this ignore damage resistances?
+String getDeathMessageKey()       // 0.7.2+: translation key for deaths by this cause
+boolean isOrInherits(DamageCause) // 0.7.2+: true if the argument is this cause or an Inherits ancestor
+Color resolveDamageTextColor()    // 0.7.2+: combat-text colour, from the nearest cause up the Inherits chain that sets one (nullable)
 ```
 
 ### Usage Example
@@ -272,10 +301,10 @@ public void handle(int index, ArchetypeChunk<EntityStore> chunk,
 import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.damage.DamageDataComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.Damage;
 import com.hypixel.hytale.server.core.modules.entity.damage.DamageEventSystem;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 public class MyDamageSystem extends DamageEventSystem {
@@ -295,10 +324,10 @@ public class MyDamageSystem extends DamageEventSystem {
             // Get the attacker's entity reference
             Ref<EntityStore> attackerRef = entitySource.getRef();
 
-            // Check if attacker is a player
-            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+            // Players carry a PlayerRef component; mobs return null here
+            PlayerRef attacker = store.getComponent(attackerRef, PlayerRef.getComponentType());
             if (attacker != null) {
-                attacker.getPlayerRef().sendMessage(Message.raw("You hit something for " + event.getAmount() + " damage!"));
+                attacker.sendMessage(Message.raw("You hit something for " + event.getAmount() + " damage!"));
             }
         }
     }
@@ -670,8 +699,8 @@ public class DamageModifierSystem extends DamageEventSystem {
         Damage.Source source = event.getSource();
 
         if (source instanceof Damage.EnvironmentSource) {
-            // Could log environmental damage
-            System.out.println("Environmental damage: " + event.getAmount());
+            // Explosions with no projectile behind them
+            System.out.println("Explosion damage: " + event.getAmount());
         } else if (source instanceof Damage.ProjectileSource) {
             // Could modify projectile damage
             System.out.println("Projectile damage: " + event.getAmount());
@@ -698,11 +727,11 @@ public class HitNotificationSystem extends DamageEventSystem {
                        Damage event) {
         if (event.getSource() instanceof Damage.EntitySource entitySource) {
             Ref<EntityStore> attackerRef = entitySource.getRef();
-            Player attacker = store.getComponent(attackerRef, Player.getComponentType());
+            PlayerRef attacker = store.getComponent(attackerRef, PlayerRef.getComponentType());
 
             if (attacker != null) {
                 float damage = event.getAmount();
-                attacker.getPlayerRef().sendMessage(Message.raw("Dealt " + damage + " damage!").color("#FF6600"));
+                attacker.sendMessage(Message.raw("Dealt " + damage + " damage!").color("#FF6600"));
             }
         }
     }
@@ -882,7 +911,11 @@ it is an `Interaction.CHILD_ASSET_CODEC`), not a list. The shipped guards use on
   "Type": "Replace",
   "Var": "Guard_Break",
   "DefaultOk": true,
-  "DefaultValue": { "Interactions": [ { "Type": "Simple", "Effects": { } } ] }
+  "DefaultValue": {
+    "Interactions": [
+      { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "Shield_Shatter" } ] } }
+    ]
+  }
 }
 ```
 
@@ -1027,8 +1060,8 @@ A temporary ECS component that manages knockback state on entities.
 #### Lifecycle
 
 1. **Added**: When an entity takes damage from an attack with a `Knockback` configuration
-2. **Active**: The `ApplyKnockback` system applies velocity each tick while `timer < duration`
-3. **Removed**: Automatically removed when `timer >= duration`
+2. **Active**: The `ApplyKnockback` system (non-players) or `ApplyPlayerKnockback` (players) applies velocity each tick, advancing `timer` when `duration > 0`
+3. **Removed**: After the tick in which `timer` exceeds `duration`, or after the first tick when `duration` is `0`
 
 #### Fields
 
@@ -1040,6 +1073,7 @@ A temporary ECS component that manages knockback state on entities.
 | `modifiers` | `DoubleList` | Reduction multipliers (armor, wielding, etc.) |
 | `duration` | `float` | Total knockback duration in seconds |
 | `timer` | `float` | Elapsed time since knockback started |
+| `preMultiplier` | `float` | 0.7.2+: scale already applied to the horizontal velocity, passed on to the velocity instruction (default `1`; `DamageSystems.HackKnockbackValues` sets it to its player scale, `25`) |
 
 ### JSON Configuration
 
@@ -1109,9 +1143,8 @@ The `DamageSystems.ArmorKnockbackReduction` system reduces knockback based on eq
 
 The `DamageSystems.WieldingKnockbackReduction` system reduces knockback when blocking or wielding items. Shields and weapons can provide knockback resistance while held.
 
-#### Status Effects
-
-Certain status effects can modify knockback resistance, either increasing or decreasing the final knockback applied.
+These two systems are the only ones that add knockback modifiers: no entity-effect key scales
+knockback.
 
 ### Related Systems
 
@@ -1136,7 +1169,7 @@ knockback.setVelocity(new Vector3d(0, 5, -10));  // Up and backward
 knockback.setDuration(0.5f);  // Half second duration
 knockback.setTimer(0f);
 
-buffer.setComponent(entityRef, KnockbackComponent.getComponentType(), knockback);
+buffer.putComponent(entityRef, KnockbackComponent.getComponentType(), knockback);  // add, or replace an existing one
 ```
 
 > **Note:** Knockback applied via code bypasses the armor/wielding reduction systems unless you manually calculate and apply modifiers.

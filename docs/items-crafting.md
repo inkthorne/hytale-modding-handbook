@@ -7,7 +7,7 @@ seo:
 
 # Crafting System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 > Part of the [Items API](items.md). For inventory management, see [Inventory Reference](inventory.md).
 
@@ -218,7 +218,7 @@ Armor bench for crafting armor pieces and shields.
 
 Alchemy bench for crafting potions, seeds, and bombs. Requires Workbench Tier 2 to craft.
 As of 0.6.3 it has **four** categories (`Alchemy_Seeds` was added) and **four** tiers
-(0 / 20 / 40 / 60 % time reduction), each of the first three with an `UpgradeRequirement`
+(0 / 20 / 40 / 60 % time reduction), each with an `UpgradeRequirement`
 (abridged below to the first tier's materials):
 
 ```json
@@ -707,7 +707,7 @@ Accepts any item matching the resource type:
 | `Fruits` | Any fruit item |
 | `Vegetables` | Any vegetable item |
 
-Resource types are themselves assets — 181 files under `Server/Item/ResourceTypes/`, each typically just an `Icon` (`Rock.json` is `{ "Icon": "Icons/ResourceTypes/Any_Rock.png" }`). The most-used across shipped recipes are `Wood_Trunk` (113 references), `Wood_Hardwood`, `Rock_Shale`, `Rock_Quartzite`, `Rock_Sandstone`, `Rock_Marble` and `Rock`.
+Resource types are themselves assets — 183 files under `Server/Item/ResourceTypes/`, each typically just an `Icon` (`Rock.json` is `{ "Icon": "Icons/ResourceTypes/Any_Rock.png" }`). Counting `ResourceTypeId` references in recipe `Input` lists, the most-used are `Wood_Trunk` (113), `Wood_Hardwood` (36), `Rock_Shale` (28), `Rock_Quartzite` (26), `Rock_Sandstone` (25) and `Rock_Marble` (24), followed by `Soils` and `Wood_Darkwood` (21 each) and `Rock` (20).
 
 Items register their resource types via `ResourceTypes`:
 
@@ -740,9 +740,9 @@ Specifies which bench(es) can craft the recipe:
 | `Id` | string | Specific bench ID |
 | `Categories` | array | Bench categories where recipe appears |
 | `RequiredTierLevel` | int | Minimum bench tier required (1-indexed) |
-| `RequiredAugmentTags` | string[] | Tags that must be granted to the bench by nearby augment blocks (added as of 0.6.3; no shipped recipe sets it yet) |
+| `RequiredAugmentTags` | string[] | Tags that must be granted to the bench by nearby augment blocks (added as of 0.6.3; 50 shipped recipes set it, all for the Goblin lab's `GoblinLab_Workbench`) |
 
-`RequiredAugmentTags` is checked by `CraftingManager` when it lists recipes for an open bench: it reads the tags the bench block currently has granted to it by `AugmentBlock` block entities within their radius, and *silently skips* any recipe whose required tags are not all present — the recipe simply does not appear. An empty or absent array always passes. The augment-block side of the mechanism (`GrantsAugmentTags`, `Radius`, upgrade levels) is documented on [Blocks → Block Entity Components](items-blocks.md#block-entity-components).
+`RequiredAugmentTags` gates a recipe on tags granted by `AugmentBlock` block entities near the bench. A bench only collects tags if it carries an `AugmentBlock` component itself: `AugmentBlocksUtils.syncBenchAugmentTags` returns without granting anything when that component is absent, and otherwise gathers the tags of every `AugmentBlock` within the bench's own `AugmentBlock` radius. The granted set travels to the client in the bench window's data (`grantedAugmentTags`, written by `BenchWindow`), and `CraftingManager.isValidBenchForRecipe` checks it again when a craft is attempted: a requirement whose tags are not all granted does not match, and if no other requirement on the recipe matches the craft is refused with a `WARNING` log. An empty or absent array always passes. The shipped user is the Goblin lab bench (`Server/Item/Items/Puzzles/Goblins/Lab/GoblinLab_Tinkering_Bench.json`), whose recipes require `goblin_lab_power` (granted by `GoblinLab_Generator`) and, for the three recipe sets, `goblin_lab_recipe_a`/`_b`/`_c`. The augment-block side of the mechanism (`GrantsAugmentTags`, `Radius`, upgrade levels) is documented on [Blocks → Block Entity Components](items-blocks.md#block-entity-components).
 
 Multiple bench requirements allow crafting at different stations:
 
@@ -934,7 +934,7 @@ Both shapes ship. `Server/Item/Items/Recipe/Recipe_Page.json` is the generic scr
 }
 ```
 
-The 13 fixed recipe items pin the id instead, and bind it to *both* input slots so either click
+The 19 fixed recipe items pin the id instead, and bind it to *both* input slots so either click
 works (from `Server/Item/Items/Recipe/Food/Recipe_Food_Pie_Apple.json`):
 
 ```json
@@ -1115,7 +1115,7 @@ list it explicitly do so as a plain `MaterialQuantity`:
 ```
 
 The `MaterialQuantity` codec also accepts a `Metadata` document on an output entry, but
-**no shipped recipe uses it** as of 0.6.8 — do not copy a `Metadata.BlockState` shape from
+**no shipped recipe uses it** as of 0.7.2 — do not copy a `Metadata.BlockState` shape from
 older references; the furnace recipe that once carried one is now a bare `ItemId`.
 
 ### Multiple Bench Options
@@ -1153,8 +1153,9 @@ Allow crafting at different benches:
 | Bench_Loom | Crafting | `Loombench` | `All` (`Quality: Developer`) |
 | Bench_Armory | DiagramCrafting | `Armory` | Blueprint-based weapons/armor (`Quality: Developer`) |
 | Bench_Builders | StructuralCrafting | `Builders` | Block variants (28 block-group categories) |
+| GoblinLab_Tinkering_Bench | Crafting | `GoblinLab_Workbench` | `GoblinLab_Gadgets`, `GoblinLab_Fragments`, `GoblinLab_Decoration`, `GoblinLab_Runes` (`Quality: Developer`; lives under `Items/Puzzles/Goblins/Lab/`, and its recipes need augment tags, see [BenchRequirement](#benchrequirement)) |
 
-`Bench_Lumbermill` and `Bench_Memories` also live under `Items/Bench/` but carry no
+`Bench_Abilities`, `Bench_Lumbermill` and `Bench_Memories` also live under `Items/Bench/` but carry no
 `BlockType.Bench` — they are not crafting benches.
 
 ---
@@ -1163,7 +1164,8 @@ Allow crafting at different benches:
 
 Backtick-quoted error strings below are the literal messages thrown by the crafting/recipe loaders (verified against `HytaleServer.jar`).
 
-- **`KnowledgeRequired in recipe can't be set for non crafting recipes`** → `KnowledgeRequired: true` was set on a recipe whose bench `Type` is not `Crafting` (e.g. `Processing` or a salvage recipe). Fix: only set `KnowledgeRequired` on standard `Crafting` recipes; remove it from processing/salvage recipes.
+- **`KnowledgeRequired in recipe can't be set for non crafting recipes`** → `KnowledgeRequired: true` was set on a recipe with a `BenchRequirement` whose `Type` is neither `Crafting` nor `DiagramCrafting` (e.g. `Processing` or a salvage recipe). Fix: only set `KnowledgeRequired` on `Crafting`/`DiagramCrafting` recipes; remove it from processing/salvage recipes.
+- **`DiagramCrafting in recipe can only have 1 output`** → a recipe with a `DiagramCrafting` bench requirement lists more than one `Output` entry. Fix: give it a single output.
 - **`CraftingRecipe can't be null!`** → a recipe reference resolved to nothing — typically a recipe id or `Parent` that does not match a loaded recipe asset. Fix: confirm the recipe asset loaded and the referenced id matches exactly (case-sensitive).
 - **Symptom:** a recipe loads but never appears at the bench → the `BenchRequirement` `Id`/`Categories` do not match the target bench's configured categories, or `RequiredTierLevel` exceeds the bench's tier. Fix: match `Id`/`Categories` to the bench (see [BenchRequirement](#benchrequirement)) and lower `RequiredTierLevel`.
 - **Symptom:** a recipe declares no usable input or output and fails to register → `Input`/`Output` resolved empty (every `MaterialQuantity` must carry an `ItemId`, `ResourceTypeId`, or tag). Fix: give the recipe at least one valid input and a `PrimaryOutput`/`Output`.

@@ -7,7 +7,7 @@ seo:
 
 # Item Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 Item definitions configure every item in Hytale, from weapons and armor to food, potions, and placeable blocks. Items use a template-based inheritance system where child items inherit properties from parent templates and override specific values.
 
@@ -57,10 +57,10 @@ Item definition (Server/Item/Items/*.json)
 
 | Category | File | Description |
 |----------|------|-------------|
-| [Weapons](items-weapons.md) | `items-weapons.md` | Swords, daggers, bows, shields, maces (108 items) |
-| [Tools](items-tools.md) | `items-tools.md` | Pickaxes, hatchets, shovels, farming tools (40+ items) |
-| [Consumables](items-consumables.md) | `items-consumables.md` | Food, potions, healing items (60+ items) |
-| [Blocks](items-blocks.md) | `items-blocks.md` | Furniture, lighting, doors, containers, benches (200+ items) |
+| [Weapons](items-weapons.md) | `items-weapons.md` | Swords, daggers, bows, shields, maces (255 files under `Items/Weapon/`) |
+| [Tools](items-tools.md) | `items-tools.md` | Pickaxes, hatchets, shovels, farming tools (59 files under `Items/Tool/`) |
+| [Consumables](items-consumables.md) | `items-consumables.md` | Food, potions, healing items (71 files under `Items/Food/` and `Items/Potion/`) |
+| [Blocks](items-blocks.md) | `items-blocks.md` | Furniture, lighting, doors, containers, benches (3,178 items carry a `BlockType`) |
 | [Block System](blocks.md) | `blocks.md` | Block rendering, hitboxes, sounds, particles, fluids |
 | [Connected Blocks](blocks-connected.md) | `blocks-connected.md` | `ConnectedBlockRuleSet` types and patterned rule sets |
 | [Blocks Java API](blocks-java-api.md) | `blocks-java-api.md` | `BlockType`, block events, world block access |
@@ -92,10 +92,11 @@ All items support these core properties:
 | `Tags` | object | Classification tags for filtering |
 | `MaxStack` | int | Maximum stack size (default: 1 for weapons/tools) |
 | `Consumable` | boolean | Whether the item is consumed on use |
-| `Utility` | object | Utility-slot flag (`Compatible` or `Usable` boolean) |
+| `Utility` | object | Utility-slot behaviour (`Compatible` / `Usable` booleans, plus stat modifiers) |
 | `MaxDurability` | int | Maximum durability points |
 | `DurabilityLossOnHit` | float | Durability lost per use |
-| `PortalKey` | object | Makes the item a portal key (`PortalType` + `TimeLimitSeconds`, see [Adventure API](adventure.md#portalkey)) |
+| `PortalKey` | object | Makes the item a portal key (`PortalType`, plus optional `TimeLimitSeconds` and — 0.7.2+ — `AllowedEntryCount` overrides of the portal type's values; see [Adventure API](adventure.md#portalkey)) |
+| `Ability` | object | 0.7.2+: makes the item an ability rune (a `Slot`-keyed codec map, `Core` or `Support`; shipped runes live under `Items/Rune/`) |
 
 ### TranslationProperties
 
@@ -137,13 +138,14 @@ Controls how the item renders in the inventory:
 
 Controls which animation set the player uses when holding or using the item. Can be a string referencing a predefined animation set, or an object for custom overrides.
 
-**String format** (values used by the 0.6.8 item set; `Block` and `Item` account for ~90% of items):
+**String format** (common values in the 0.7.2 item set; `Block` and `Item` account for ~90% of items that set it):
 
 | Category | Values |
 |----------|--------|
 | Generic | `Item`, `Block`, `Stick`, `Torch` |
 | Weapons | `Sword`, `Longsword`, `Dagger`, `Daggers`, `Daggers_Claw`, `Shield`, `Axe`, `Battleaxe`, `Club`, `Club_Flail`, `Mace`, `Spear`, `Bow`, `Crossbow`, `Rifle`, `Handgun`, `Throwing_Knife`, `Staff`, `Wand`, `Spellbook` |
-| Tools | `Pickaxe`, `Hatchet`, `Shovel`, `Hoe`, `Shears`, `Watering_Can`, `Sickle` |
+| Tools | `Pickaxe`, `Hatchet`, `Shovel`, `Hoe`, `Shears`, `Watering_Can`, `Sickle`, `Drill`, `Hookshot` |
+| Traversal | `Glider` |
 
 ```json
 {
@@ -226,11 +228,12 @@ Marks how an item behaves with the player's utility slot. The `Utility` object h
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Compatible` | boolean | Item may be placed in the utility slot (117 items in 0.6.8) |
-| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (26 items in 0.6.8) |
+| `Compatible` | boolean | Item may be placed in the utility slot (121 items set it `true` in 0.7.2) |
+| `Usable` | boolean | Item can be activated/used from the utility slot, e.g. torches and candles (30 items set it `true` in 0.7.2) |
+| `StatModifiers` | object | Stat modifiers applied while the item is in the utility slot (9 shipped utility items) |
 | `EntityStatsToClear` | string[] | Stats reset when the item leaves the utility slot (accepted by the codec; unused by shipped items) |
 
-Either `Compatible` or `Usable` is present; both are plain booleans.
+`Compatible` and `Usable` are plain booleans; most items set one of them, and 5 shipped items set both.
 
 ---
 
@@ -240,7 +243,7 @@ Quality determines an item's rarity tier, affecting its UI border color and sort
 
 Each tier is its own asset under `Server/Item/Qualities/<Quality>.json` (`QualityValue`, slot/tooltip textures,
 `TextColor`, `LocalizationKey`, `VisibleQualityLabel`, …); the `Quality` string on an item must match one of those
-filenames. 0.6.8 ships eleven:
+filenames. 0.7.2 ships eleven:
 
 | Quality | Description | Usage |
 |---------|-------------|-------|
@@ -291,8 +294,8 @@ Items use a `Parent` field to inherit all properties from a template, then overr
     "Type": ["Weapon"],
     "Family": ["Sword"]
   },
-  "MaxDurability": 80,
-  "DurabilityLossOnHit": 0.21
+  "MaxDurability": 120,
+  "DurabilityLossOnHit": 0.13
 }
 ```
 
@@ -309,7 +312,7 @@ Items use a `Parent` field to inherit all properties from a template, then overr
   "Icon": "Icons/ItemsGenerated/Weapon_Sword_Iron.png",
   "Quality": "Uncommon",
   "ItemLevel": 20,
-  "MaxDurability": 120,
+  "MaxDurability": 250,
   "InteractionVars": {
     "Swing_Left_Damage": {
       "Interactions": [{
@@ -324,7 +327,7 @@ Items use a `Parent` field to inherit all properties from a template, then overr
 ```
 
 The child item:
-- Inherits `PlayerAnimationsId`, `Interactions`, `Tags`, `DurabilityLossOnHit` from template
+- Inherits `PlayerAnimationsId`, `Interactions`, `Tags` from template (the shipped file also sets its own `DurabilityLossOnHit` and `Recipe`, omitted above)
 - Overrides `Quality`, `ItemLevel`, `MaxDurability`, visual properties
 - Adds `InteractionVars` to customize damage values
 
@@ -345,7 +348,7 @@ The child item:
    }
    ```
 
-2. **Root interaction chains** use `Replace` to inject item-specific values:
+2. **The template's interaction chain** (here `Weapon_Sword_Primary_Swing_Left_Selector`, reached from the root) uses `Replace` to inject item-specific values:
    ```json
    {
      "Type": "Replace",
@@ -473,6 +476,7 @@ Additional `Items.*` category IDs appear directly on item files even though they
 | `Items.Utility` | 3 |
 | `Items.Consumables` | 1 |
 | `Items.Debug` | 4 |
+| `Items.CombatMilestone2` | 1 |
 
 ---
 
@@ -482,7 +486,7 @@ ResourceTypes group items for recipe input flexibility. Instead of requiring a s
 
 **Location:** `Server/Item/ResourceTypes/*.json` — the resource-type id **is the filename** (`Foods.json` → `Foods`).
 The file body carries only an optional `Icon` (shown in recipe UIs when a recipe input is a resource type); most of
-the 181 shipped files are simply `{}`.
+the 183 shipped files are simply `{}`.
 
 ### Example ResourceType
 
@@ -554,7 +558,8 @@ Defines what happens when the player uses the item:
 | `Primary` | Left click | Main attack/action |
 | `Secondary` | Right click | Block/guard/alternate action |
 | `Ability1` | Q key | Signature ability |
-| `Ability3` | R key | Reload/special action |
+| `Ability2` / `Ability3` | - | Ability-bench slots: a core rune's `Ability.Cast` fires from these |
+| `Ability4` | - | Added in 0.7.2; `Template_Weapon_Crossbow` binds its reload (`Root_Common_StatAmmoReload_Entry`) here |
 | `SwapFrom` | - | Triggered when switching away from item |
 
 See [Interactions API](interactions.md) for full interaction documentation.
@@ -621,8 +626,8 @@ Defines crafting requirements:
 | `Input[].ResourceTypeId` | string | Any item of this type accepted |
 | `Input[].Quantity` | int | Amount required |
 | `BenchRequirement` | array | Required crafting station |
-| `BenchRequirement[].RequiredTierLevel` | int | Minimum bench tier (1-3) |
-| `BenchRequirement[].RequiredAugmentTags` | string[] | Augment-block tags the bench must carry (0.6.3+; accepted by the codec, no shipped recipe uses it yet) |
+| `BenchRequirement[].RequiredTierLevel` | int | Minimum bench tier (shipped recipes use 0–8; the bench's own `TierLevels` sets how many tiers exist) |
+| `BenchRequirement[].RequiredAugmentTags` | string[] | Augment-block tags the bench must carry (0.6.3+; 50 shipped bench requirements use it as of 0.7.2) |
 
 ---
 
@@ -652,6 +657,7 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
 | `Condition` | [min, max] | Stat range to trigger (e.g., `[100, 100]` = exactly 100%) |
 | `ConditionValueType` | string | `"Percent"` or absolute value |
 | `Particles` | array | Particle effects to display |
+| `FirstPersonParticles` | array | Particle effects for the first-person view |
 | `Model` | string | Alternative model to use |
 | `Texture` | string | Alternative texture to use |
 | `ModelVFXId` | string | VFX shader to apply |
@@ -727,7 +733,7 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
 
 Fieldcraft categories are the tabs of the pocket ("fieldcraft") crafting window — the bench-free crafting a
 player always has. Each category is a JSON asset under `Server/Item/Category/Fieldcraft/*.json` (asset id =
-filename; 0.5.9 ships only `Tools`):
+filename; 0.7.2 ships only `Tools`):
 
 ```json
 {
@@ -762,7 +768,7 @@ categories are sent to the client as item-category packets.
 ## Builder Tool Item References
 
 `Server/Item/PlayerToolsMenuConfig/*.json` assets list which items are **builder tools** — the editor tools
-(paint, sculpt, selection, …) that populate a creative player's Tools inventory section. 0.5.9 ships one
+(paint, sculpt, selection, …) that populate a creative player's Tools inventory section. 0.7.2 ships one
 file, `PlayerToolsMenuDropdownFilter.json`:
 
 ```json

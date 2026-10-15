@@ -7,14 +7,14 @@ seo:
 
 # Block Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 >
 > **See also:** [Drop System](drops.md) for `DropList` loot tables
 >
 > All structures and examples below are taken directly from real asset files under
-> `Server/Item/Items/`. Counts cited are from the shipped assets: 2,952 item files carry a `BlockType` in 0.6.8.
+> `Server/Item/Items/`. Counts cited are from the shipped assets: 3,178 item files carry a `BlockType` in 0.7.2.
 
 This page documents the `BlockType` property an item carries to become a placeable block — rendering, collision, gathering, states, connections, interactions, and block-entity components.
 
@@ -41,7 +41,7 @@ BlockType (item property)
 └── BlockEntity.Components
     ├── ItemContainerBlock  (containers)
     ├── BenchBlock / ProcessingBenchBlock  (benches)
-    └── FarmingBlock, RespawnBlock, TreasureChest, SpawnMarkerBlock, …
+    └── FarmingBlock, RespawnBlock, SpawnMarkerBlock, AugmentBlock, …
 ```
 
 ## Key Classes
@@ -93,7 +93,7 @@ a given file may only specify the fields it overrides.
 | `Gathering` | object | How the block is broken/harvested and what it drops |
 | `PhysicalMaterialId` | string | Physical material for hit/impact response (e.g. `Wood`, `Wool`, `Glass`, `Foliage`) |
 | `TextureComputedColor` | string | Hex average colour of the block's texture (generated; present on most shipped blocks) |
-| `ExplosionReactionState` | string | State to switch to when an explosion reaches the block (as of 0.6.3; only `Debug_Explosive` uses it, with `"Exploding"`) |
+| `ExplosionReactionState` | string | State to switch to when an explosion reaches the block (as of 0.6.3; 11 shipped blocks set it, all to `"Exploding"` — explosive barrels, traps, Boomshroom crops and the `Debug_Explosive` blocks) |
 
 ### Material
 
@@ -131,7 +131,7 @@ a given file may only specify the fields it overrides.
 
 ### HitboxType
 
-`HitboxType` (1,277 of the 2,952 shipped block items) selects a named, predefined collision/selection shape rather
+`HitboxType` (1,414 of the 3,178 shipped block items) selects a named, predefined collision/selection shape rather
 than describing one inline. `Full` is the standard whole-block hitbox; the rest are
 shape- or asset-specific names.
 
@@ -142,13 +142,13 @@ shape- or asset-specific names.
 Common values include `Full`, `Block_Half`, `Block_Vertical_Flat`, `Stairs`, `Door`,
 `Ladder`, `Window`, `Chest_Small`, `Chest_Large`, `Fence`, `Branch`, `Plant_Full`,
 `Plant_Medium`, `Torch`, and many model-specific names (e.g. `Door_Temple_Wind_Large`).
-244 hitbox assets ship under `Server/Item/Block/Hitboxes/`; `Full` is the exception with no
+258 hitbox assets ship under `Server/Item/Block/Hitboxes/`; `Full` is the exception with no
 file of its own — it is `BlockBoundingBoxes.DEFAULT`, id `0`, and is also what a block that omits
 `HitboxType` gets.
 
 ### Flags
 
-`Flags` (1,285 blocks) is usually `{}` but may carry boolean behavior flags:
+`Flags` (1,403 blocks) is usually `{}` but may carry boolean behavior flags:
 
 ```json
 { "BlockType": { "Flags": { "IsStackable": false } } }
@@ -156,15 +156,15 @@ file of its own — it is `BlockBoundingBoxes.DEFAULT`, id `0`, and is also what
 
 | Flag | Type | Description |
 |------|------|-------------|
-| `IsStackable` | boolean | Whether the builder tool's scatter may stack this block on a like block (default `true`; 73 blocks set it to `false`, 42 set it to `true` explicitly) |
+| `IsStackable` | boolean | Whether the builder tool's scatter may stack this block on a like block (default `true`; 74 blocks set it to `false`, 42 set it to `true` explicitly) |
 
-`IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.6.8 (the
+`IsStackable` is the **only** key the `BlockFlags` codec accepts as of 0.7.2 (the
 `IsUsable` flag was removed by 0.6.3 — whether a block responds to Use is decided solely
 by `BlockType.Interactions.Use`, see [Block Interactions](#block-interactions)).
 
 ### ParticleColor
 
-`ParticleColor` (2,725 blocks) is a hex string used to tint break/impact particles:
+`ParticleColor` (2,869 blocks) is a hex string used to tint break/impact particles:
 
 ```json
 { "BlockType": { "ParticleColor": "#969696" } }
@@ -265,7 +265,7 @@ For `DrawType: Model`, a `.blockymodel` is referenced and textured via
 
 ## Gathering & Drops
 
-`Gathering` (2,311 blocks) defines how a block is broken/harvested and what it produces.
+`Gathering` (2,460 blocks) defines how a block is broken/harvested and what it produces.
 It groups by interaction mode; `Breaking` is the most common.
 
 ```json
@@ -294,15 +294,18 @@ Inside a gathering mode:
 
 | Field | Description |
 |-------|-------------|
-| `GatherType` | Required gathering category (see below) |
+| `GatherType` | Gathering category (see below), matched against the held tool's `Tool.Specs[].GatherType`. The codec does not require it, but a `Breaking` entry without one resolves no tool spec when hit (`BlockHarvestUtils.getSpecPowerDamageBlock` returns early) |
 | `ItemId` | Item produced directly |
 | `DropList` | Drop table reference (string) or inline drop definition (object) — see [Drop System](drops.md) |
-| `Quality` | Integer quality override on the produced item (`Breaking` only) |
-| `IsWeaponBreakable` | `Soft` only — `false` stops weapons breaking the block (170 blocks, e.g. `Deco_Lantern`) |
+| `Quality` | Integer (`Breaking` only): the minimum `Quality` a tool spec of the same `GatherType` must have — a lower-quality spec resolves no damage |
+| `Quantity` | Integer (`Breaking` only), default `1`: the drop quantity passed along with `ItemId` / `DropList` when the block breaks |
+| `IsWeaponBreakable` | `Soft` only — `false` stops weapons breaking the block (285 blocks, e.g. `Deco_Lantern`) |
 
-**`GatherType` values:** `Rocks`, `Woods`, `SoftBlocks`, `Soils`, `VolcanicRocks`,
-`Benches`, `SoftWoods`, `Unbreakable`, and ore tiers (`OreIron`, `OreGold`, `OreCopper`,
-`OreSilver`, `OreThorium`, `OreCobalt`, `OreAdamantite`, `OreMithril`).
+**`GatherType` values:** a free-form string (`Codec.STRING`), so a mod may invent one as long as
+some tool spec names it. Shipped blocks use `Rocks`, `Woods`, `SoftBlocks`, `Soils`,
+`VolcanicRocks`, `Metals`, `GoblinMetal`, `Benches`, `SoftWoods`, `Unbreakable`, and ore tiers
+(`OreIron`, `OreGold`, `OreCopper`, `OreSilver`, `OreThorium`, `OreCobalt`, `OreAdamantite`);
+tool specs additionally name `OreMithril`.
 
 > Java side: `Breaking` / `Harvest` / `Soft` decode into `BlockBreakingDropType` /
 > `HarvestingDropType` / `SoftBlockDropType` — see
@@ -387,6 +390,7 @@ Controls which rotation variants a block supports.
 | `UpDown` | Vertical orientation only |
 | `Wall` | Wall-mounted orientations |
 | `Pipe` / `DoublePipe` | Pipe-style connections |
+| `Debug` | Server-side debug set, sent to the client as `UpDownNESW` (3 shipped debug blocks) |
 | `All` | All orientations |
 
 ### PlacementSettings
@@ -404,7 +408,7 @@ Controls which rotation variants a block supports.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `RotationMode` | string | `Default`, `FacingPlayer`, `BlockNormal`, or `StairFacingPlayer` (shipped blocks use only the last two: 127 `StairFacingPlayer`, 25 `BlockNormal`) |
+| `RotationMode` | string | `Default`, `FacingPlayer`, `BlockNormal`, or `StairFacingPlayer` (shipped blocks use only the last two: 127 `StairFacingPlayer`, 27 `BlockNormal`) |
 | `PlaceInEmptyBlocks` | boolean | Allow placement into empty/air blocks |
 | `AllowBreakReplace` | boolean | Allow replacing a breakable block on placement |
 | `AllowRotationKey` | boolean | Allow the player to rotate while placing |
@@ -457,9 +461,10 @@ block offers to neighbours (e.g. a chest's `"Supporting": { "Up": [ { "FaceType"
 **`FaceType` is a free-form string, not an enum** — codec doc: *"Can be any string. Compared with
 FaceType in \"Supporting\" of other blocks. A LOT of blocks use 'Full'."* A custom block may invent
 its own face type as long as the supporting block advertises the same string. The 17 used by shipped
-blocks: `Full` (834 uses), `Branch` (168), `Rock_Beam` (76), `Shelf` (51), `Window` (46), `Wall`
-(45), `Fence` (39), `Platform` (34), `Rope` (29), `Wood_Beam` (29), `Fence_Corner` (23),
-`Wall_Corner` (23), `Bushes` (20), `Rail` (8), `Barrel` (6), `Vines` (3), `BushBase` (1).
+blocks (uses inside `Support` and `Supporting`): `Full` (895), `Branch` (178), `Rock_Beam` (76),
+`Shelf` (51), `Window` (48), `Wall` (45), `Fence` (41), `Rope` (35), `Platform` (34), `Wood_Beam`
+(30), `Fence_Corner` (23), `Wall_Corner` (23), `Bushes` (20), `Barrel` (12), `Rail` (8), `Vines`
+(3), `BushBase` (1).
 
 A `Support` entry (`RequiredBlockFaceSupport`) accepts more than the four forms above — the full key
 set is `FaceType`, `SelfFaceType`, `BlockSetId`, `BlockTypeId`, `FluidId`, `TagId`, `MatchSelf`,
@@ -564,7 +569,7 @@ shape states (`Corner_Left`, `Corner_Right`, `Inverted_Corner_Left`,
 ## Connected Blocks
 
 Blocks that connect to neighbors (stairs, roofs, walls/bars, doors) use
-`ConnectedBlockRuleSet` (554 blocks). Its shape depends on `Type`.
+`ConnectedBlockRuleSet` (581 blocks, counting rule sets declared inside state definitions). Its shape depends on `Type`.
 
 ### Stair
 
@@ -635,7 +640,7 @@ block IDs (a `*` prefix references another block's state definitions):
 
 | Key | Description |
 |-----|-------------|
-| `Type` | `Stair` (~163 blocks), `Roof` (~241), or `CustomTemplate` (~135). A fourth type, `Patterned`, is registered as of 0.6.3 but no shipped block uses it — see [Patterned Connected Block Rule Sets](blocks-connected.md#patterned-connected-block-rule-sets) |
+| `Type` | `Stair` (167 blocks), `Roof` (250), `CustomTemplate` (141), or `Patterned` (8 — the copper, iron and goblin-iron pipe blocks, e.g. `Metal_Orbis_Iron_Pipe_Long`; see [Patterned Connected Block Rule Sets](blocks-connected.md#patterned-connected-block-rule-sets)). Counts are top-level rule sets |
 | `Regular` / shape keys | Per-shape `{ "State": "<state name>" }` mappings |
 | `MaterialName` | Material/group name (Roof) |
 | `Topper` | Top-piece state (Roof) |
@@ -659,10 +664,10 @@ A block's primary use is configured via `BlockType.Interactions.Use`. It is eith
 | `Use` value | Behavior | Example |
 |-------------|----------|---------|
 | `Open_Container` | Open a container UI | Chests |
-| `Open_Treasure_Container` | Open a treasure container | Treasure chests |
 | `Door` | Toggle a door | Doors |
 | `Door_Horizontal` | Toggle a horizontal door/trapdoor | Trapdoors |
 | `Block_Seat` | Sit on the block | Chairs, stools |
+| `Block_Bed` | Run a `Bed` interaction (a root interaction only, in `RootInteractions/Block/`) | Beds |
 | `Open_Processing_Bench` | Open a processing bench UI | Benches |
 
 ### Inline Use (ChangeState)
@@ -705,7 +710,7 @@ The top-level item also wires placement interactions in its own `Interactions` m
 ## Block Entity Components
 
 Blocks with server-side state (containers, benches, farming soil, spawners, etc.) declare
-it under `BlockType.BlockEntity.Components` (164 blocks).
+it under `BlockType.BlockEntity.Components` (181 blocks).
 
 ```json
 {
@@ -720,13 +725,27 @@ it under `BlockType.BlockEntity.Components` (164 blocks).
 ```
 
 **Component types seen in assets:** `FarmingBlock`, `ItemContainerBlock`, `BenchBlock`,
-`ProcessingBenchBlock`, `RespawnBlock`, `MusicEmitterBlock`, `TreasureChest`,
-`SpawnMarkerBlock`, `BlockSpawner`, `PrefabSpawner`, `Teleporter`, `Portal`, `LaunchPad`,
-`Coop`, `TilledSoil`, `TrackedPlacement`, `BlockMapMarker`, `InstanceConfig`. As of 0.6.3
-the jar also registers `AugmentBlock` (`GrantsAugmentTags`, `Radius`, upgrade levels) —
-a bench near an augment block collects its tags, which recipes can demand via
-`BenchRequirement.RequiredAugmentTags` (see [Crafting](items-crafting.md#benchrequirement));
-no shipped block declares it yet.
+`ProcessingBenchBlock`, `RespawnBlock`, `BlockExplosive`, `AugmentBlock`, `BlockMapMarker`,
+`Portal`, `MusicEmitterBlock`, `MusicPlayerBlock`, `SpawnMarkerBlock`, `BlockSpawner`,
+`PrefabSpawner`, `Teleporter`, `LaunchPad`, `Coop`, `TilledSoil`, `TrackedPlacement`,
+`InstanceConfig`. `AugmentBlock` (keys `Upgrades`, `CurrentLevel`, `GrantsAugmentTags`, `Radius`,
+`ProgressionKey`, `ProgressionLevelOffset`) is registered as of 0.6.3 — a bench near an augment
+block collects its tags, which recipes can demand via `BenchRequirement.RequiredAugmentTags` (see
+[Crafting](items-crafting.md#benchrequirement)); as of 0.7.2 the eight Goblin Lab puzzle blocks
+under `Server/Item/Items/Puzzles/Goblins/Lab/` declare it.
+
+> **Removed in 0.7.2:** the `TreasureChest` block component and the `Open_Treasure_Container`
+> interaction (the treasure-map objective) are gone with no replacement. A block that still
+> declares `"TreasureChest"` under `Components` names a component the server no longer registers.
+
+`ItemContainerBlock` accepts four keys:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `Capacity` | short | `20` | Slot count; must be greater than 0 |
+| `Droplist` | string | *unset* | Drop list the stash system rolls into random slots of the container (`StashPlugin.stash`) |
+| `ItemContainer` | object | *unset* | The container itself (`SimpleItemContainer`) — the contents a placed block entity saves |
+| `StayOpenWhenEmpty` | boolean | `false` | Codec doc: "If true, the container keeps its OpenWindow block state when the last window closes on an empty container." Added in 0.7.2; set (alongside a `Droplist`) by the seven `Portals_*` chest block-spawner assets under `Server/Item/Block/Spawners/` |
 
 > Note: container capacity lives at
 > `BlockType.BlockEntity.Components.ItemContainerBlock.Capacity` — not under a
@@ -739,7 +758,7 @@ no shipped block declares it yet.
 
 ### IsDoor
 
-Marks a block as a door (46 blocks), used together with the `Door` Use interaction and
+Marks a block as a door (48 blocks), used together with the `Door` Use interaction and
 the directional door states:
 
 ```json
@@ -850,8 +869,9 @@ client is targeting. It is the most-used of the farming interaction types — 25
 | `RequireNotBroken` | boolean | `false` | Codec doc: "If true, the interaction will fail if the held item is broken (durability = 0)." |
 
 Two shapes ship. A crop block harvests itself from its own `Use` chain, with no properties —
-this is the bare-hand pick, and the 22 crop blocks all look like this (from
-`Plant_Crop_Wheat_Block_Eternal.json`):
+this is the bare-hand pick. Twenty-one crop files use this form (20 `Plant_Crop_*` blocks plus
+`Template_Crop_Berry_Block`), as do `Tool_Fishing_Trap` and `Tree_Sap_Glob` (from the `StageFinal`
+state of `Plant_Crop_Wheat_Block_Eternal.json`):
 
 ```json
 {
@@ -1270,19 +1290,6 @@ broken (abridged — model, texture, support and sound keys omitted).
 }
 ```
 
-Treasure chests add a `TreasureChest` component and use the `Open_Treasure_Container`
-interaction:
-
-```json
-{
-  "BlockType": {
-    "BlockEntity": {
-      "Components": { "ItemContainerBlock": { "Capacity": 36 }, "TreasureChest": {} }
-    }
-  }
-}
-```
-
 ---
 
 ## Benches
@@ -1430,7 +1437,7 @@ with a cooldown (`BlockInteraction`, 0.278 s, `ClickBypass`) and creative settin
 
 Backtick-quoted strings below are literal messages from `HytaleServer.jar`.
 
-- **`Block type not found`** (`TeleportConfigInstanceInteraction`) → a `BlockType` key referenced for placement/lookup does not resolve to a loaded block. Fix: confirm the owning item loaded and the key matches the item's id exactly (case-sensitive).
+- **`Block type not found`** (`TeleportBlockUtil.makeBlockReturnPoint`, used by the `TeleportInstance` and `TeleportConfigInstance` interactions) → the block an instance teleporter builds its return point from has no loaded `BlockType`. Fix: confirm the teleporter block's owning item loaded and its id matches exactly (case-sensitive).
 - **`does not have an associated item!`** (`BenchWindow`) → a block type exists but no item carries it, so it cannot be obtained or placed. Fix: define the `BlockType` inside an item file rather than as a standalone block — `BlockType.CODEC`'s own documentation says *"The definition for a block in the game. Can only be defined within an **Item** and not standalone."*
 - **`itemId cannot be BlockTypeKey.EMPTY!`** → an item/block operation was handed the empty block-type key. Fix: pass a real block-bearing item id, not an empty/placeholder key.
 - **Symptom:** a placeable block fails to register even though the JSON parses → the `BlockType` block was placed in a standalone block file instead of under an item's `BlockType` property. Fix: nest `BlockType` inside the item definition under `Server/Item/Items/`.

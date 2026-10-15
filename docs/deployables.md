@@ -7,7 +7,7 @@ seo:
 
 # Deployables
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/ProjectileConfigs` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/ProjectileConfigs` · **Verified against 0.7.2**
 
 A **deployable** is a temporary, player-owned entity placed into the world by an interaction — the
 crossbow turret, the healing and slowness totems, the fire trap. `DeployablesPlugin`
@@ -147,7 +147,7 @@ An auto-targeting shooter.
 | `TrapSpawner` | `DeployableConfig` | **Required.** The nested config this spawner deploys |
 
 > **Neither has a shipped use.** Of the four registered types, only `Aoe` and `Turret` appear in
-> 0.6.8 assets — the fire trap is an `Aoe`, despite its name and file path. `Trap` and
+> 0.7.2 assets — the fire trap is an `Aoe`, despite its name and file path. `Trap` and
 > `TrapSpawner` are registered, loadable and undocumented by example, so treat the key lists above
 > as the codec's word rather than as patterns validated by shipped content.
 
@@ -209,7 +209,7 @@ The fire trap shows the whole pattern, config inline
 
 The turret arrives differently — its config rides on a **projectile's** `ProjectileMiss` chain, so
 the turret is deployed where the thrown item lands
-(`Server/ProjectileConfigs/Weapons/Deployables/Projectile_Config_Turret_Deploy.json`):
+(`Server/ProjectileConfigs/Weapons/Deployables/Projectile_Config_Turret_Deploy.json`, abridged):
 
 ```json
 {
@@ -250,8 +250,9 @@ firing), `DeployableRegisterer` (registration on spawn) and `DeployableOwnerTick
 bookkeeping and expiry).
 
 The shipped items that use all this are `Weapon_Deployable_Healing_Totem`,
-`Weapon_Deployable_Slowness_Totem` and `Weapon_Deployable_Turret`, plus the debug
-`Debug_Stick_Spawn_Deployable`.
+`Weapon_Deployable_Slowness_Totem` and `Weapon_Deployable_Turret`; `Weapon_Staff_Crystal_Flame`,
+whose `InteractionVars` entry `Fire_Trap_Config` takes `Weapon_Stick_Fire_Spawn_Trap` as its `Parent` and adds the
+three trap sounds; and the debug `Debug_Stick_Spawn_Deployable`.
 
 ## Related
 

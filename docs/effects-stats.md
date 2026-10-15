@@ -7,7 +7,7 @@ seo:
 
 # Effects & Stats Reference
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Entity` · **Verified against 0.7.2**
 
 This document covers the JSON asset structure for status effects and entity stats.
 
@@ -72,7 +72,7 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 | `StatusEffectIcon` | string | UI icon path for effect display |
 | `RemovalBehavior` | string | `Complete`, `Infinite`, or `Duration` |
 | `Name` | string | Localization key for the effect's UI name (a key, not literal text) |
-| `DeathMessageKey` | string | Localization key used on the death screen when this effect kills a player (`Locale` is the deprecated predecessor) |
+| `DeathMessageKey` | string | Localization key used on the death screen when this effect kills a player. (The deprecated `Locale` key was removed from the codec in 0.7.2 — rename it to `DeathMessageKey`) |
 | `ApplyConditions` | array | [Conditions](#condition-types) that must **all** hold for the effect to stay active; if any fails the effect is removed |
 | `ModelOverride` | object | Replaces the entity's model while active — `Model`, `Texture`, `AnimationSets` (see `Status/Root.json`). Distinct from `ModelChange`, which names another creature model |
 | `WorldRemovalSoundEventId` · `LocalRemovalSoundEventId` | string | Sounds played when the effect ends (nearby / affected entity only) |
@@ -83,11 +83,12 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 | Property | Type | Description |
 |----------|------|-------------|
 | `Invulnerable` | boolean | Grants complete damage immunity |
-| `DamageResistance` | object | Per-damage-type resistance modifiers |
+| `DamageResistance` | object | Per-damage-type resistance modifiers (damage *taken*) |
+| `OutgoingDamage` | object | **0.7.2+.** Same shape as `DamageResistance`, but scales damage *dealt* by the carrier — see [Outgoing damage](#outgoing-damage) |
 
 **DamageResistance example:**
 
-`DamageResistance` maps each damage cause (a file under `Server/Entity/Damage/` — `Fire`, `Physical`, `Poison`, …) to an array of modifier objects (`{ CalculationType, Amount }`). Each entry is a `ResistanceModifier` (`com.hypixel.hytale.server.core.modules.entity.damage.ResistanceModifier`), whose `CalculationType` is **`Percent`** or **`Flat`** — *not* the `Additive`/`Multiplicative` pair used by [`RawStatModifiers`](#rawstatmodifiers) below. (Those are the only two values the enum has ever had in the versions this handbook has covered; across the whole of `Server/`, 237 shipped entries use `Percent` and 12 use `Flat`.)
+`DamageResistance` maps each damage cause (a file under `Server/Entity/Damage/` — `Fire`, `Physical`, `Poison`, …) to an array of modifier objects (`{ CalculationType, Amount }`). Each entry is a `ResistanceModifier` (`com.hypixel.hytale.server.core.modules.entity.damage.ResistanceModifier`), whose `CalculationType` is **`Percent`** or **`Flat`** — *not* the `Additive`/`Multiplicative` pair used by [`RawStatModifiers`](#rawstatmodifiers) below. (Those are the only two values the enum has ever had in the versions this handbook has covered; across the whole of `Server/` in 0.7.2, 303 shipped `DamageResistance` entries use `Percent` and 12 use `Flat`.)
 
 ```json
 {
@@ -102,7 +103,25 @@ Status effects are temporary modifications applied to entities - buffs, debuffs,
 }
 ```
 
-For `Percent`, `Amount` is the fraction of damage removed (1.0 = immune, 0.05 = 5% reduction, 0 = no resistance — the jar's own doc string: "0.25 equals 25% reduction"). `Flat` subtracts a flat amount of damage instead. The engine sums all `Flat` entries and all `Percent` entries per damage cause (armor and active effects together — `ArmorDamageReduction` in `DamageSystems`) before applying them.
+For `Percent`, `Amount` is the fraction of damage removed (1.0 = immune, 0.05 = 5% reduction, 0 = no resistance — the jar's own doc string: "0.25 equals 25% reduction"). `Flat` subtracts a flat amount of damage instead. The engine sums all `Flat` entries and all `Percent` entries per damage cause (armor and active effects together — `ArmorDamageReduction` in `DamageSystems`) before applying them. A **negative** `Percent` makes the carrier take *more* damage: `Abilities/Ability_Enrage_Buff.json` sets `-0.2` on ten causes (+20% damage taken), as the price of its `OutgoingDamage` bonus below.
+
+### Outgoing damage
+
+`OutgoingDamage` (0.7.2+) uses the `DamageResistance` shape — a map of damage cause to `{ CalculationType, Amount }` arrays — but applies to damage the effect's carrier **deals**. The codec's own doc string: *"Positive Percent amounts increase the damage (0.25 = +25%); Flat amounts add before the percent scaling."* The `DamageSystems.ScaleOutgoingDamageFromEntityEffects` filter system sums every active effect's matching entries and sets the hit to `max(0, (amount + flat) × (1 + percent))`. A key matches the hit's cause **or any parent cause** (`DamageCause.isOrInherits`), so `Physical` also covers `Slashing`/`Bludgeoning`. It only fires when the damage source is an entity (`Damage.EntitySource`). Three shipped effects use it — `Abilities/Ability_Enrage_Buff.json`, `Abilities/Wither.json`, `Dungeon/Dungeon_Goblin_Enraged.json`:
+
+```json
+{
+  "Duration": 8.0,
+  "OverlapBehavior": "Overwrite",
+  "OutgoingDamage": {
+    "Physical":   [ { "CalculationType": "Percent", "Amount": 0.3 } ],
+    "Elemental":  [ { "CalculationType": "Percent", "Amount": 0.3 } ],
+    "Projectile": [ { "CalculationType": "Percent", "Amount": 0.3 } ]
+  }
+}
+```
+
+(An excerpt of `Ability_Enrage_Buff.json`; the real file also carries particles, an icon and the negative `DamageResistance` described above.)
 
 ### Model Transformation
 
@@ -192,7 +211,7 @@ Effects applied when the status effect starts (one-time application):
 |----------|------|-------------|
 | `EntityTopTint` | string | Hex color tint applied to top of entity model |
 | `EntityBottomTint` | string | Hex color tint applied to bottom of entity model |
-| `HorizontalSpeedMultiplier` | float | Movement speed modifier (0.0-1.0) |
+| `HorizontalSpeedMultiplier` | float | Movement-speed multiplier: below `1` slows, above `1` speeds up (shipped values run from `0` to `3.5`) |
 | `LocalSoundEventId` | string | Sound played for the affected entity only |
 | `WorldSoundEventId` | string | Sound played for all nearby entities |
 | `Particles` | array | `ModelParticle[]` attached to the entity model — each entry takes `SystemId`, optional `TargetEntityPart` / `TargetNodeName` (the model node to attach to), `Color`, `Scale`, `PositionOffset`, `RotationOffset`, `DetachedFromModel`, `ClearParticlesOnRemove`. There is no `Bone` key |
@@ -201,6 +220,7 @@ Effects applied when the status effect starts (one-time application):
 | `ScreenEffect` | string | Screen overlay effect for the affected player |
 | `ModelVFXId` | string | Model VFX asset applied to the entity while the effect lasts (e.g. `"Freeze"` in `Status/Freeze.json`, `"Intangible_Dark"` in `Status/Slow.json`) |
 | `KnockbackMultiplier` | float | Scales knockback received while the effect is active (`0` = immune to knockback — `Status/Root.json`) |
+| `MouseSensitivityAdjustmentTarget` · `MouseSensitivityAdjustmentDuration` | float | Scales the affected player's mouse sensitivity toward the target (validated to `0`–`1`) over the given duration — e.g. `Weapons/Battleaxe_Whirlwind.json` |
 
 **Movement restriction:**
 
@@ -208,13 +228,13 @@ Effects applied when the status effect starts (one-time application):
 |----------|------|-------------|
 | `MovementEffects.DisableAll` | boolean | Completely disable all movement |
 | `MovementEffects.DisableForward` · `DisableBackward` · `DisableLeft` · `DisableRight` · `DisableSprint` · `DisableJump` · `DisableCrouch` | boolean | Per-direction/per-action movement locks (all present since 0.5.9) |
-| `MovementEffects.SpeedMultiplier` | float | Movement-speed multiplier, default `1.0` — **new in 0.6.3** (the only field added to `MovementEffects`). No shipped effect sets it; vanilla slows still use the top-level `HorizontalSpeedMultiplier` |
+| `MovementEffects.SpeedMultiplier` | float | Movement-speed multiplier, default `1.0` — **new in 0.6.3** (the only field added to `MovementEffects`). Five shipped effects set it in 0.7.2, among them `Npc/Goblin/Dungeon_Feastmaster_Vomit_Slow.json` (`0.7`) and `Health_Pack/Health_Pack.json` (`1.2`); `Status/Slow.json` still uses the top-level `HorizontalSpeedMultiplier` |
 
 **Ability restriction:**
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `AbilityEffects.Disabled` | array | Set of `InteractionType` names to disable while the effect is active — any of `Primary`, `Secondary`, `Ability1`–`Ability3`, `Use`, `Dodge`, `Wielding`, … (the full `com.hypixel.hytale.protocol.InteractionType` enum) |
+| `AbilityEffects.Disabled` | array | Set of `InteractionType` names to disable while the effect is active — any of `Primary`, `Secondary`, `Ability1`–`Ability4`, `Use`, `Dodge`, `Wielding`, … (`Ability4` is new in 0.7.2) (the full `com.hypixel.hytale.protocol.InteractionType` enum) |
 
 **Example (`Server/Entity/Effects/Status/Stun.json`):**
 
@@ -296,7 +316,7 @@ From `Server/Entity/Effects/Food/Buff/Meat_Buff_T1.json`:
     ]
   },
   "OverlapBehavior": "Overwrite",
-  "Duration": 45,
+  "Duration": 360,
   "StatusEffectIcon": "UI/StatusEffects/AddHealth/Tiny.png"
 }
 ```
@@ -331,7 +351,7 @@ From `Server/Entity/Effects/Potion/Potion_Health_Regen_Lesser.json`:
         "PositionOffset": { "Y": 1.0 }
       }
     ],
-    "WorldSoundEventId": "SFX_Deployable_Totem_Heal_Despawn"
+    "WorldSoundEventId": "SFX_Potion_Drink_Success_02"
   }
 }
 ```
@@ -436,6 +456,11 @@ ctrl.clearEffects(ref, accessor);   // remove everything
 ```
 
 - **Duration is in seconds** (a `float`), not ticks.
+- 0.7.2 adds `addEffect` overloads with a trailing `Ref<EntityStore>` **owner** — the entity credited as
+  the effect's source. A damage-over-time effect with an owner deals its ticks as
+  `Damage.EntityEffectSource` (an `EntitySource` naming that owner, new in 0.7.2), so damage systems see
+  the owner as the attacker and the owner's own [`OutgoingDamage`](#outgoing-damage) effects scale them;
+  without one, the active effect itself is the source.
 - Effects **auto-clear on respawn** (the engine's `ClearEntityEffectsRespawnSystem`), so you don't
   need to strip CC from a player you're about to respawn.
 - **Freezing players vs NPCs uses two different mechanisms — each a no-op on the other kind.**
@@ -539,12 +564,12 @@ Conditions control when regeneration rules apply. Each condition object is keyed
 | `Suffocating` | - | Entity is suffocating in a block |
 | `Sprinting` | - | Entity is sprinting |
 | `Gliding` | - | Entity is gliding |
-| `Wielding` | - | Entity is wielding/blocking |
-| `Charging` | - | Entity is charging an interaction |
+| `Wielding` | `UseIgnoreFlag` | Entity is wielding/blocking. With `UseIgnoreFlag: true` (0.7.2+), a wielding interaction that sets `IgnoreForFlaggedConditions` does not count |
+| `Charging` | `Delay`, `UseIgnoreFlag` | Entity is charging an interaction, or charged one within `Delay`; `UseIgnoreFlag` (0.7.2+) works as for `Wielding` |
 | `RegenHealth` | - | Health regeneration is enabled |
 | `HasEffect` | `EffectId` | Entity has the named status effect active |
 | `InFluid` | `FluidIds`, `Tags` | Entity is in one of the listed fluids (by id or tag) |
-| `OutOfCombat` | - | Entity is out of combat |
+| `OutOfCombat` | `DelaySeconds` | Entity is out of combat (`DelaySeconds` overrides the gameplay config's out-of-combat delay) |
 | `Environment` | `Environments` | Entity is in one of the listed environments |
 | `LogicCondition` | `Conditions`, `Operator` | Combines nested conditions with a logical operator |
 
@@ -603,7 +628,7 @@ two assets (`Stamina.json`, `GlidingActive.json`) and `MaxValueEffects` in five
 bound at all — all under `Server/Entity/Stats/`.
 
 None of them kills the entity, and **there is no `Kill` interaction**: `Interaction.CODEC`
-registers 124 names and none of them is `Kill`. The `Kill` you may find in the jar is an
+registers 135 names in 0.7.2 and none of them is `Kill`. The `Kill` you may find in the jar is an
 NPC *sensor* core-component type, registered into a different registry entirely — see
 [NPC Roles](npc-roles.md). To end an entity from a stat bound, reach for `DamageEntity`,
 `RemoveEntity` or a `ChangeStat` on `Health`.
@@ -726,7 +751,7 @@ From `Server/Entity/Stats/Stamina.json`:
       "Conditions": [
         { "Id": "Stat", "Stat": "StaminaRegenDelay", "Amount": 0 },
         { "Id": "Stat", "Stat": "Stamina", "Amount": 0, "Comparison": "Gte" },
-        { "Id": "Wielding", "Inverse": true },
+        { "Id": "Wielding", "Inverse": true, "UseIgnoreFlag": true },
         { "Id": "Sprinting", "Inverse": true },
         { "Id": "Gliding", "Inverse": true }
       ]
@@ -770,8 +795,8 @@ From `Server/Entity/Stats/Stamina.json`:
 
 This stamina stat (the real file includes additional creative-mode, overdrawn, and gliding-drain rules, omitted here for brevity):
 - Caps at 10 with a `-4` overdrawn floor
-- Regenerates 0.3/tick when stamina is non-negative, the `StaminaRegenDelay` gate has elapsed, and the entity is not wielding, sprinting, or gliding
-- Drains 0.1/tick while sprinting
+- Regenerates 0.3/tick when stamina is non-negative, the `StaminaRegenDelay` gate has elapsed, and the entity is not wielding (a wielding interaction flagged `IgnoreForFlaggedConditions`, such as the spyglass zoom, does not count — `UseIgnoreFlag`), sprinting, or gliding
+- Drains 0.1/tick while sprinting (the omitted rules drain gliding the same way)
 - On hitting zero, flashes the bar, runs the broken check, and sets a regen delay
 - Clears the `Stamina_Broken` effect when reaching full
 
@@ -781,29 +806,37 @@ From `Server/Entity/Stats/Mana.json`:
 
 ```json
 {
-  "InitialValue": 0,
+  "InitialValue": 100,
   "Min": 0,
-  "Max": 0,
+  "Max": 100,
   "Shared": false,
   "ResetType": "MaxValue",
   "Regenerating": [
     {
-      "Interval": 0.2,
+      "Interval": 0.3,
       "Amount": 1,
       "RegenType": "Additive",
       "Conditions": [
+        { "Id": "Alive" }
+      ]
+    },
+    {
+      "Interval": 0.5,
+      "Amount": 1.0,
+      "RegenType": "Percentage",
+      "Conditions": [
         { "Id": "Alive" },
-        { "Id": "NoDamageTaken", "Delay": 6 },
-        { "Id": "Charging", "Inverse": true }
+        { "Id": "CheckPlayerGameMode", "GameMode": "Creative" }
       ]
     }
   ]
 }
 ```
 
-This mana stat:
-- Defaults to a 0 cap (raised by gear/effects that grant max mana)
-- Regenerates 1/0.2s when alive, not damaged for 6 seconds, and not charging
+This mana stat (reworked in 0.7.2 — it previously started at a `0` cap and paused regeneration after damage and while charging):
+- Starts full at 100 and refills there on respawn
+- Regenerates 1/0.3s whenever the entity is alive
+- Refills instantly for players in Creative mode
 
 #### Oxygen Stat
 
@@ -939,6 +972,6 @@ Backtick-quoted error strings below are the literal messages thrown by the effec
 - **Symptom:** a `DamageResistance` of `0` lets full damage through and `1.0` blocks everything (feels inverted) → for `Percent`, `Amount` is the *fraction removed* (`1.0` = immune, `0` = no resistance). Fix: use `Amount` as the removed fraction, not the surviving fraction.
 - **Symptom:** a `DamageResistance` entry with `"CalculationType": "Multiplicative"` or `"Additive"` fails to load → those are `RawStatModifiers` calculation types; `DamageResistance` entries are `ResistanceModifier`s whose enum is only `Flat` / `Percent`. Fix: use `Percent` for fractional reduction, `Flat` for a flat subtraction.
 - **Symptom:** a `Multiplicative` `RawStatModifiers` `Amount` of `1.15` doesn't add 15% → for `Multiplicative` the value is a factor (`1.15` ≈ +15%, `1.0` = no change), not an additive bonus. Fix: use `Additive` with the flat delta if you want a plain add.
-- **Symptom:** a stat with `Max: 0` (e.g. Mana) never holds any value → its cap starts at 0 and is meant to be raised by gear/effects granting max. Fix: grant a max-stat modifier rather than only adding current value.
+- **Symptom:** a stat with `Max: 0` (e.g. `Ammo`, `MagicCharges`) never holds any value → its cap starts at 0 and is meant to be raised by gear/effects granting max. Fix: grant a max-stat modifier rather than only adding current value.
 - **Symptom:** a `Regenerating` rule never ticks → one of its `Conditions` is unmet, and all conditions in the array must be true. Fix: check each `Id` (and any `Inverse`), since e.g. `NoDamageTaken`/`CheckPlayerGameMode` silently gate the whole rule.
 - **Symptom:** an effect doesn't refresh/stack as expected → behavior is set by `OverlapBehavior` (`Overwrite` replaces, `Extend` adds duration). Fix: set `OverlapBehavior` explicitly for re-application.

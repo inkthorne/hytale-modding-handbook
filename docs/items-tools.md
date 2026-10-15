@@ -7,7 +7,7 @@ seo:
 
 # Tool Items
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
@@ -63,16 +63,18 @@ Tool item (inherits Tool_<Family>_Crude base)
 | [Shears](#shears) | 1 | Shearing | Collecting wool from animals |
 | [Watering Can](#watering-can) | 2 | Watering | Irrigating crops (template + item) |
 | [Sickle](#sickle) | 4 | Harvesting | Cutting plants and crops |
-| [Repair Kit](#repair-kit) | 3 | Repair | Restoring item durability |
+| [Repair Kit](#repair-kit) | 4 | Repair | Restoring item durability |
 | [Capture Crate](#capture-crate) | 1 | Capture | Capturing animals |
 | [Feedbag](#feedbag) | 1 | Feeding | Attracting livestock |
 | [Fertilizer](#fertilizer) | 2 | Growing | Accelerating plant growth |
 
-("Files" = JSON files belonging to that family as of 0.6.8. It is not always the folder count: the
+("Files" = JSON files belonging to that family as of 0.7.2. It is not always the folder count: the
 `Pickaxe/_Debug/` break-shape test items are excluded, and Feedbag and Fertilizer share the one
-`Feedbag/` folder (3 files). `Server/Item/Items/Tool/` also holds five loose tools outside these
-families — `Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map` —
-and a `Prototype/` folder with three mana items.)
+`Feedbag/` folder (3 files). `Server/Item/Items/Tool/` also holds six loose tools outside these
+families — `Tool_Fishing_Trap`, `Tool_Trap_Bait`, `Tool_Growth_Potion`, `Tool_Sap_Shunt`, `Tool_Map`,
+`Tool_Spyglass` — a `Prototype/` folder with three mana items, and two single-item folders:
+`Drill/Tool_Drill_Scrap` (a goblin-lab mining drill, see [BreakShape](#breakshape-063)) and
+`Hookshot/Tool_Hookshot` (a projectile tool).)
 
 ---
 
@@ -82,7 +84,7 @@ Unlike weapons which use formal Templates with signature abilities, tools inheri
 
 ### Tool.Specs
 
-Defines power and efficiency for different block types. Each tool lists a spec for every gather type it can affect; this example is taken from `Tool_Pickaxe_Iron`:
+Defines power and efficiency for different block types. Each tool lists a spec for every gather type it can affect; this example is the first nine of the sixteen specs in `Tool_Pickaxe_Iron`:
 
 ```json
 {
@@ -93,6 +95,7 @@ Defines power and efficiency for different block types. Each tool lists a spec f
       { "Power": 0.05, "GatherType": "Woods" },
       { "Power": 0.5, "GatherType": "Rocks", "Quality": 3 },
       { "Power": 0.5, "GatherType": "Benches" },
+      { "Power": 0.001, "GatherType": "Metals", "IsIncorrect": true, "HitSoundLayer": "SFX_Pickaxe_Impact_Poor" },
       { "Power": 0.17, "GatherType": "VolcanicRocks" },
       { "Power": 0.5, "GatherType": "OreCopper" },
       { "Power": 0.25, "GatherType": "OreIron" }
@@ -121,8 +124,16 @@ Defines power and efficiency for different block types. Each tool lists a spec f
 | `SoftBlocks` | All tools (1.0) | Soft blocks like grass, leaves |
 | `VolcanicRocks` | Pickaxe (low power) | Volcanic stone, obsidian |
 | `Benches` | Most tools | Crafting stations, furniture |
+| `Metals` | Scrap drill, Mithril pickaxe | Goblin iron building blocks (the `Metal_Goblin_Iron_*` family) |
+| `GoblinMetal` | Pickaxes, scrap drill | A handful of goblin furniture and deco blocks (e.g. `Furniture_Goblin_Door_Medium`, `Deco_Scrap_Pile_Shiny`) |
 | `SoftWoods` | — | Rare variant, on two blocks only |
 | `Unbreakable` | — | Marks a block no tool can gather |
+
+As of 0.7.2 almost every stock gathering tool (pickaxes, hatchets, shovels, shears) carries a
+`Metals` spec of `{ "Power": 0.001, "IsIncorrect": true, "HitSoundLayer": "SFX_Pickaxe_Impact_Poor" }`
+— the "wrong tool" entry, which plays the poor-impact sound over a near-zero break rate. The
+exceptions are `Tool_Pickaxe_Mithril` and `Tool_Drill_Scrap` (both 0.5) and `Tool_Hatchet_Mithril`
+(0.05), which carry a plain `Metals` spec.
 
 Ore deposits use granular per-metal gather types (there is no single `Ores` gather type in tool specs):
 
@@ -162,7 +173,7 @@ Configures durability loss per block set. This example is taken from `Tool_Picka
 
 ### Tool.Speed
 
-Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Tool_Shears_Basic` is the **only** item in the shipped 0.6.8 assets that sets it:
+Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Tool_Shears_Basic` is the **only** item in the shipped 0.7.2 assets that sets it:
 
 ```json
 {
@@ -174,7 +185,7 @@ Optional speed multiplier (a double in the codec, a `float` on `ItemTool`). `Too
 
 ### Other Tool Keys
 
-The full `Tool` (`ItemTool`) codec, as of 0.6.8:
+The full `Tool` (`ItemTool`) codec, as of 0.7.2:
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -213,8 +224,9 @@ Limits are enforced on decode (`BreakShape.validateShape`): `Width × Height × 
 at most 32 (`MAX_OFFSET`). Exceeding either throws `IllegalArgumentException` at asset load
 ("Break shape volume … exceeds the maximum of 1024").
 
-`BreakShape` is used only by the two debug items under `Tool/Pickaxe/_Debug/` in stock 0.6.8 assets
-(excerpt from `Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`):
+In stock 0.7.2 assets `BreakShape` is used by three items: the two debug items under
+`Tool/Pickaxe/_Debug/` and the goblin-lab mining drill `Tool_Drill_Scrap`. Excerpt from
+`Debug_Pickaxe_Shaped.json`, which inherits `Tool_Pickaxe_Adamantite`:
 
 ```json
 {
@@ -232,7 +244,26 @@ at most 32 (`MAX_OFFSET`). Exceeding either throws `IllegalArgumentException` at
 ```
 
 `Debug_Pickaxe_Shaped_Cylinder.json` is the same item with `"Id": "Cylinder"`, `Width`/`Height` 5 and
-`"BreakShapeDurabilityMode": "PerBlock"`.
+`"BreakShapeDurabilityMode": "PerBlock"`. `Tool_Drill_Scrap` is the one non-debug user, and the only
+stock shape that sets `Centered` and `Offset` — a 2×2 box anchored at the targeted block and shifted
+one block down:
+
+```json
+{
+  "Tool": {
+    "BreakShape": {
+      "Id": "Box",
+      "Centered": false,
+      "Depth": 1,
+      "Height": 2,
+      "Width": 2,
+      "Orientation": "View",
+      "Offset": { "X": 0, "Y": -1, "Z": 0 }
+    },
+    "BreakShapeDurabilityMode": "PerBlock"
+  }
+}
+```
 
 On the Java side, `ItemTool.getBreakShape()` and `ItemTool.getBreakShapeDurabilityMode()` expose both
 (new as of 0.6.3); `BreakShape.forEachLocalOffset(TriIntConsumer)` enumerates the shape's cells and
@@ -242,20 +273,20 @@ On the Java side, `ItemTool.getBreakShape()` and `ItemTool.getBreakShapeDurabili
 
 ## Material Tiers
 
-Pickaxes and hatchets share one material progression (values read from the 0.6.8 `Tool_Pickaxe_*` /
+Pickaxes and hatchets share one material progression (values read from the 0.7.2 `Tool_Pickaxe_*` /
 `Tool_Hatchet_*` files; "inherits" means the variant doesn't set the key and takes the Crude base's
 value). Breaking power is per gather type, never a single number — see each family's scaling table.
 
 | Tier | Quality | ItemLevel (Pickaxe / Hatchet) | MaxDurability |
 |------|---------|-------------------------------|---------------|
-| Wood | Common | inherits (5 / 4) | inherits (150) |
-| Crude | Common | 5 / 4 | 150 |
+| Wood | Common | inherits (5 / 4) | inherits (200) |
+| Crude | Common | 5 / 4 | 200 |
 | Scrap (pickaxe only) | Uncommon | inherits (5) | 60 |
-| Copper | Common | 12 / 11 | 200 |
-| Iron | Uncommon | 20 / 20 | 250 |
-| Thorium | Rare | 30 / 30 | 325 |
-| Cobalt | Rare | 35 / 35 | 325 |
-| Adamantite | Rare | 40 / 40 | 400 |
+| Copper | Common | 12 / 11 | 300 |
+| Iron | Uncommon | 20 / 20 | 500 |
+| Thorium | Rare | 30 / 30 | 700 |
+| Cobalt | Rare | 35 / 35 | 700 |
+| Adamantite | Rare | 40 / 40 | 1000 |
 | Mithril | Epic | 50 / 50 | 400 |
 | Onyxium | Epic | inherits (5 / 4) | 450 |
 
@@ -274,7 +305,7 @@ Mining tool optimized for rocks, stone, and ore extraction.
 | `Quality` | Common |
 | `ItemLevel` | 5 |
 | `PlayerAnimationsId` | Pickaxe |
-| `MaxDurability` | 150 |
+| `MaxDurability` | 200 |
 | `Categories` | Items.Tools |
 
 ### Tool.Specs (Tool_Pickaxe_Crude)
@@ -286,9 +317,11 @@ Mining tool optimized for rocks, stone, and ore extraction.
 | `Woods` | 0.05 | Wood (very inefficient) |
 | `Rocks` | 0.25 | Primary use - stone blocks (`Quality: 1`) |
 | `Benches` | 0.5 | Crafting stations |
+| `Metals` | 0.001 | Goblin iron blocks — marked `IsIncorrect` |
 | `VolcanicRocks` | 0.084 | Volcanic/obsidian (reduced) |
 | `OreCopper` | 0.125 | Copper ore |
 | `OreIron` | 0.084 | Iron ore |
+| `GoblinMetal` | 0.12 | Goblin furniture and deco |
 
 (Crude also defines low-power specs for `OreSilver`, `OreGold`, `OreThorium`, `OreCobalt`, `OreAdamantite`, and `OreMithril`.)
 
@@ -342,6 +375,7 @@ Mining tool optimized for rocks, stone, and ore extraction.
       { "Power": 0.05, "GatherType": "Woods" },
       { "Power": 0.5, "GatherType": "Rocks", "Quality": 3 },
       { "Power": 0.5, "GatherType": "Benches" },
+      { "Power": 0.001, "GatherType": "Metals", "IsIncorrect": true, "HitSoundLayer": "SFX_Pickaxe_Impact_Poor" },
       { "Power": 0.17, "GatherType": "VolcanicRocks" },
       { "Power": 0.5, "GatherType": "OreCopper" },
       { "Power": 0.25, "GatherType": "OreIron" },
@@ -350,7 +384,8 @@ Mining tool optimized for rocks, stone, and ore extraction.
       { "Power": 0.125, "GatherType": "OreThorium" },
       { "Power": 0.125, "GatherType": "OreCobalt" },
       { "Power": 0.084, "GatherType": "OreAdamantite" },
-      { "Power": 0.063, "GatherType": "OreMithril" }
+      { "Power": 0.063, "GatherType": "OreMithril" },
+      { "Power": 0.34, "GatherType": "GoblinMetal" }
     ],
     "DurabilityLossBlockTypes": [
       {
@@ -359,26 +394,29 @@ Mining tool optimized for rocks, stone, and ore extraction.
       }
     ]
   },
-  "MaxDurability": 250
+  "MaxDurability": 500
 }
 ```
 
 ### Power Scaling by Tier
 
-`Rocks` spec values from every 0.6.8 `Tool_Pickaxe_*` file ("inherits" = not set by the variant, so the Crude value applies):
+`Rocks` spec values from every 0.7.2 `Tool_Pickaxe_*` file ("inherits" = not set by the variant, so the Crude value applies):
 
 | Pickaxe | Quality | ItemLevel | Rocks (Power / Quality) | Durability |
 |---------|---------|-----------|-------------------------|------------|
-| Wood | Common | inherits (5) | 0.1 / 1 | inherits (150) |
-| Crude | Common | 5 | 0.25 / 1 | 150 |
-| Scrap | Uncommon | inherits (5) | 0.1 / 1 | 60 |
-| Copper | Common | 12 | 0.35 / 2 | 200 |
-| Iron | Uncommon | 20 | 0.5 / 3 | 250 |
-| Thorium | Rare | 30 | 0.5 / 4 | 325 |
-| Cobalt | Rare | 35 | 0.5 / 4 | 325 |
-| Adamantite | Rare | 40 | 1 / 5 | 400 |
+| Wood | Common | inherits (5) | 0.1 / 1 | inherits (200) |
+| Crude | Common | 5 | 0.25 / 1 | 200 |
+| Scrap | Uncommon | inherits (5) | 0.001 / 1, `IsIncorrect` | 60 |
+| Copper | Common | 12 | 0.35 / 2 | 300 |
+| Iron | Uncommon | 20 | 0.5 / 3 | 500 |
+| Thorium | Rare | 30 | 0.5 / 4 | 700 |
+| Cobalt | Rare | 35 | 0.5 / 4 | 700 |
+| Adamantite | Rare | 40 | 1 / 5 | 1000 |
 | Mithril | Epic | 50 | 1.0 / 6 | 400 |
 | Onyxium | Epic | inherits (5) | 1 / 6 | 450 |
+
+`Tool_Pickaxe_Scrap` is the odd one out: in 0.7.2 every one of its specs except `Benches` is a 0.001
+`IsIncorrect` entry with the poor-impact `HitSoundLayer`, so it gathers almost nothing.
 
 Higher-tier pickaxes raise the `Rocks` spec `Quality` (gating which ore tiers are mineable) and increase individual `Ore*` powers rather than scaling a single number (Iron's `VolcanicRocks` is 0.17 vs Crude's 0.084, for example).
 
@@ -401,7 +439,7 @@ Woodcutting tool optimized for trees and wood blocks.
 | `Quality` | Common |
 | `ItemLevel` | 4 |
 | `PlayerAnimationsId` | Hatchet |
-| `MaxDurability` | 150 |
+| `MaxDurability` | 200 |
 | `Categories` | Items.Tools |
 
 ### Tool.Specs (Tool_Hatchet_Crude)
@@ -413,6 +451,7 @@ Woodcutting tool optimized for trees and wood blocks.
 | `Woods` | 0.15 | Primary use - wood blocks |
 | `Rocks` | 0.05 | Stone (very inefficient) |
 | `Benches` | 0.5 | Crafting stations |
+| `Metals` | 0.001 | Goblin iron blocks — marked `IsIncorrect` |
 | `VolcanicRocks` | 0.017 | Volcanic/obsidian |
 | `OreCopper` | 0.036 | Copper ore |
 
@@ -436,7 +475,8 @@ Woodcutting tool optimized for trees and wood blocks.
 
 ### Example Child: Iron Hatchet
 
-The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound override (taken from the real `Tool_Hatchet_Iron`):
+The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound override (taken from the
+real `Tool_Hatchet_Iron`; its eight trailing `Ore*` specs are omitted here):
 
 ```json
 {
@@ -449,7 +489,7 @@ The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound o
   "Icon": "Icons/ItemsGenerated/Tool_Hatchet_Iron.png",
   "Quality": "Uncommon",
   "ItemLevel": 20,
-  "MaxDurability": 250,
+  "MaxDurability": 500,
   "Tool": {
     "Specs": [
       { "Power": 1, "GatherType": "SoftBlocks" },
@@ -457,6 +497,7 @@ The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound o
       { "Power": 0.3, "GatherType": "Woods", "HitSoundLayer": "SFX_Hatchet_T2_Impact_Nice" },
       { "Power": 0.05, "GatherType": "Rocks" },
       { "Power": 0.5, "GatherType": "Benches", "HitSoundLayer": "SFX_Hatchet_T2_Impact_Nice" },
+      { "Power": 0.001, "GatherType": "Metals", "IsIncorrect": true, "HitSoundLayer": "SFX_Pickaxe_Impact_Poor" },
       { "Power": 0.017, "GatherType": "VolcanicRocks" }
     ]
   },
@@ -478,17 +519,17 @@ The `Woods` and `Benches` specs carry an optional `HitSoundLayer` impact-sound o
 
 ### Power Scaling by Tier
 
-`Woods` spec power from every 0.6.8 `Tool_Hatchet_*` file; higher tiers raise the `Woods` power (it plateaus at 0.5 from Thorium up) and add `HitSoundLayer` overrides.
+`Woods` spec power from every 0.7.2 `Tool_Hatchet_*` file; higher tiers raise the `Woods` power (it plateaus at 0.5 from Thorium up) and add `HitSoundLayer` overrides.
 
 | Hatchet | Quality | ItemLevel | Woods | Durability |
 |---------|---------|-----------|-------|------------|
-| Wood | Common | inherits (4) | 0.2 | inherits (150) |
-| Crude | Common | 4 | 0.15 | 150 |
-| Copper | Common | 11 | 0.2 | 200 |
-| Iron | Uncommon | 20 | 0.3 | 250 |
-| Thorium | Rare | 30 | 0.5 | 325 |
-| Cobalt | Rare | 35 | 0.5 | 325 |
-| Adamantite | Rare | 40 | 0.5 | 400 |
+| Wood | Common | inherits (4) | 0.2 | inherits (200) |
+| Crude | Common | 4 | 0.15 | 200 |
+| Copper | Common | 11 | 0.2 | 300 |
+| Iron | Uncommon | 20 | 0.3 | 500 |
+| Thorium | Rare | 30 | 0.5 | 700 |
+| Cobalt | Rare | 35 | 0.5 | 700 |
+| Adamantite | Rare | 40 | 0.5 | 1000 |
 | Mithril | Epic | 50 | 0.5 | 400 |
 | Onyxium | Epic | inherits (4) | 0.5 | 450 |
 
@@ -520,7 +561,7 @@ Digging tool optimized for soil, sand, and dirt blocks.
 |------------|-------|-------------|
 | `Soils` | 0.4 | Primary use - dirt, sand |
 
-(Crude also defines `SoftBlocks` (1), `Woods` (0.05), `Rocks` (0.05), `Benches` (0.5), `VolcanicRocks` (0.017) and low-power specs for the various `Ore*` types. Its `DurabilityLossOnHit` for the standard block sets is 0.05, not the pickaxe/hatchet 0.25.)
+(Crude also defines `SoftBlocks` (1), `Woods` (0.05), `Rocks` (0.05), `Benches` (0.5), an `IsIncorrect` `Metals` (0.001), `VolcanicRocks` (0.017) and low-power specs for the various `Ore*` types. Its `DurabilityLossOnHit` for the standard block sets is 0.05, not the pickaxe/hatchet 0.25.)
 
 ### Interactions
 
@@ -583,7 +624,7 @@ Farming tool that converts soil blocks for planting.
 
 The `Hoe_Till` root interaction (`RootInteractions/Weapons/Hoe/Attacks/Till/Hoe_Till.json`, a 0.233s
 `BlockInteraction` cooldown per game mode) wraps the `Hoe_Till` interaction, which uses `ChangeBlock`.
-Its `Changes` is a map of source block to result block — 16 entries as of 0.6.8, covering the dirt,
+Its `Changes` is a map of source block to result block — 16 entries as of 0.7.2, covering the dirt,
 grass, mud, leaves, needles and pathway soil variants (abridged excerpt):
 
 ```json
@@ -723,7 +764,7 @@ The single shears item is `Tool_Shears_Basic` (`Shears/Tool_Shears_Basic.json`).
 | `ItemLevel` | 16 |
 | `PlayerAnimationsId` | Shears |
 | `Set` | Tool_Iron |
-| `Tool` | `Specs: [{ Power 1.0, SoftBlocks }]`, `Speed: 1.0` |
+| `Tool` | `Specs: [{ Power 1.0, SoftBlocks }, { Power 0.001, Metals, IsIncorrect }]`, `Speed: 1.0` |
 | `Categories` | Items.Tools |
 
 (No `MaxDurability` is set.)
@@ -762,7 +803,7 @@ decided on the NPC side — the tamed livestock roles under `Server/NPC/Roles/Cr
 
 The `Shears_Attack` fallback is a `Chaining` step (`ChainingAllowance: 0.5`) whose `Next` is
 `Shears_Snip`, a `Simple` step whose own `Next` is `Shears_Block_Break` — a `BreakBlock` with
-`"Tool": "Shears"`, which is why the shears can cut blocks despite having only a `SoftBlocks` spec
+`"Tool": "Shears"`, which is why the shears can cut blocks with only a `SoftBlocks` spec (plus the `IsIncorrect` `Metals` one)
 (see [BreakBlock Interaction](#breakblock-interaction)).
 
 ### Tags
@@ -1015,6 +1056,11 @@ Both `Primary` and `Secondary` are the same inline `OpenCustomUI` interaction. T
 | `Tool_Repair_Kit_Crude` | — | Common | 0.2 |
 | `Tool_Repair_Kit_Iron` | `Tool_Repair_Kit_Crude` | Common (`ItemLevel` 1) | 0.1 |
 | `Tool_Repair_Kit_Rare` | — (standalone; borrows the Thorium pickaxe model) | not set | 0.15 |
+| `Tool_Repair_Kit_Goblin` | — (standalone) | Uncommon (`ItemLevel` 16) | 0.0 |
+
+`Tool_Repair_Kit_Goblin` (0.7.2) is the penalty-free kit: crafted two at a time at the
+`GoblinLab_Workbench` (category `GoblinLab_Gadgets`) from scraps, gadget assemblies, spider silk and a
+deep resource.
 
 ### Tags
 
@@ -1028,7 +1074,7 @@ Both `Primary` and `Secondary` are the same inline `OpenCustomUI` interaction. T
 
 ### All Repair Kit Variants
 
-Tool_Repair_Kit_Crude, Tool_Repair_Kit_Iron, Tool_Repair_Kit_Rare
+Tool_Repair_Kit_Crude, Tool_Repair_Kit_Iron, Tool_Repair_Kit_Rare, Tool_Repair_Kit_Goblin
 
 ---
 
@@ -1081,7 +1127,7 @@ The crate sets no `Quality`, `Categories` or `Tags`, and is not `Consumable`. Cr
 (`UseCaptureCrateInteraction`, `com.hypixel.hytale.builtin.adventure.farming.interactions`; those two are
 its only keys.) There is no separate "filled crate" item id: on capture, the NPC is stored on the crate
 item itself as `CapturedEntity` metadata (`CapturedNPCMetadata`, keyed `CapturedEntity`, with
-`IconPath`, `NpcNameKey`, `FullItemIcon`, `AlarmStore` and `CapturedEntity` fields), and capture range
+`IconPath`, `NpcNameKey`, `FullItemIcon` and `AlarmStore` fields), and capture range
 comes from the interaction chain's targeting, not a `Range` property on this interaction.
 
 ### Tags
@@ -1225,7 +1271,7 @@ Unlike `Tool_Fertilizer` it sets no `MaxDurability` and has `ItemLevel: 0`.)
 Block-breaking tools point their `Primary` slot at a `*_Attack` interaction (e.g. `Pickaxe_Attack`, a
 `Chaining` step with `ChainingAllowance: 1.25` whose `Next` is `Pickaxe_Mine`) whose chain falls through
 to a `BreakBlock` step. Which blocks a tool can break, and how fast, is normally driven by the item's
-`Tool.Specs` gather types. This excerpt is from the real `Block_Break` interaction
+`Tool.Specs` gather types. This is the real `Block_Break` interaction
 (`Server/Item/Interactions/Weapons/Block_Break.json`):
 
 ```json
@@ -1235,21 +1281,28 @@ to a `BreakBlock` step. Which blocks a tool can break, and how fast, is normally
     "Type": "BreakBlock",
     "UseLatestTarget": true,
     "Next": {
-      "Type": "Replace",
-      "Var": "Block_Hit_Camera_Effects",
-      "DefaultOk": true,
-      "DefaultValue": {
-        "Interactions": [
-          { "Type": "Simple", "Effects": { "CameraEffect": "Unarmed_Block_Impact" } }
-        ]
-      }
+      "Type": "Serial",
+      "Interactions": [
+        "Trigger_Explosion_State_Generic",
+        {
+          "Type": "Replace",
+          "Var": "Block_Hit_Camera_Effects",
+          "DefaultOk": true,
+          "DefaultValue": {
+            "Interactions": [
+              { "Type": "Simple", "Effects": { "CameraEffect": "Unarmed_Block_Impact" } }
+            ]
+          }
+        }
+      ]
     }
   }
 }
 ```
 
-(`Block_Hit_Camera_Effects` is the `InteractionVars` hook the pickaxe uses to swap in its own
-`Pickaxe_Mine_Impact` camera effect.)
+(`Trigger_Explosion_State_Generic` is a `ChangeState` interaction whose `Changes` map the block's
+`default` state to `Exploding`. `Block_Hit_Camera_Effects` is the `InteractionVars`
+hook the pickaxe uses to swap in its own `Pickaxe_Mine_Impact` camera effect.)
 
 The `BreakBlock` interaction itself (`BreakBlockInteraction`, "Attempts to break the target block.")
 does take four keys of its own:
@@ -1385,7 +1438,7 @@ Every arg entry carries `Type` (the discriminator), `Id`, an optional `Default`,
 | `BrushOrigin` | `BrushOriginArg` | `BrushOrigin` | — |
 
 (Those nine are the names registered on `ToolArg.CODEC` by `BuilderToolsPlugin`. The package also contains
-`BrushAxisArg` and `BrushRotationArg`, but as of 0.6.8 neither is registered under a JSON `Type`, so they
+`BrushAxisArg` and `BrushRotationArg`, but as of 0.7.2 neither is registered under a JSON `Type`, so they
 cannot be declared from an item file.)
 
 ### ToolArg (Base Class)

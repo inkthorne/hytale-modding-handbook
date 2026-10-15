@@ -7,7 +7,7 @@ seo:
 
 # Consumable Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
@@ -62,7 +62,7 @@ Consumption interactions
 | Category | Template | Count | Description |
 |----------|----------|-------|-------------|
 | [Food](#food-system) | Template_Food | 30 files in `Items/Food/` | Healing and stat buffs |
-| [Fruit / Crops](#template_fruit) | Template_Fruit, Template_Crop_Item | 10 fruit + 14 crop items | Foraged and farmed edibles |
+| [Fruit / Crops](#template_fruit) | Template_Fruit, Template_Crop_Item | 9 fruit + 14 crop items | Foraged and farmed edibles |
 | [Potions](#potion-system) | Potion_Template | 19 children (+ `Potion_Antidote`) | Instant effects and transformations |
 | [Potion props](#regeneration-potions-decorative-not-drinkable) | Decorative_Potion_Template | 16 children | Placeable, non-drinkable potion scenery |
 
@@ -185,7 +185,9 @@ also a placeable block.
 | `ItemSoundSetId` | ISS_Items_Foliage |
 | `PlayerAnimationsId` | Item |
 
-It sets no `MaxStack` of its own (children inherit the engine default or set their own).
+It sets no `MaxStack` of its own (children inherit the engine default or set their own). Its
+`Effect` var applies `Food_Instant_Heal_T1` and then chains `HealthRegen_TierCheck_Raw` (see
+[Food Buff System](#food-buff-system)).
 
 #### Interactions
 
@@ -237,7 +239,8 @@ Base template for harvested vegetables and crops.
 | `PlayerAnimationsId` | Item |
 
 Like `Template_Fruit`, it sets no `MaxStack`. Its only `InteractionVars` entry is `Effect`
-(chaining `HealthRegen_TierCheck_T1`); the SFX vars fall through to the shared defaults.
+(`Food_Instant_Heal_T1`, then `HealthRegen_TierCheck_Raw`); the SFX vars fall through to the
+shared defaults.
 
 #### Interactions
 
@@ -270,20 +273,27 @@ Like `Template_Fruit`, it sets no `MaxStack`. Its only `InteractionVars` entry i
 
 ### Food Tiers
 
-Food items follow a tiered progression. The tier is chosen by which
-`Root_Secondary_Consume_Food_T*` the item puts in its `Secondary` slot; that root's charge
-interaction (`Consume_Charge_Food_T*_Inner`) sets how long the eat animation must be held:
+Food items follow a tiered progression. The tier is named by which
+`Root_Secondary_Consume_Food_T*` the item puts in its `Secondary` slot, and in 0.7.2 the tier
+decides **only which buffs the food grants**. Eat time and instant heal are the same at every
+tier:
 
 | Tier | Typical Quality | Consume Time | Instant Heal | Buff tier |
 |------|-----------------|--------------|--------------|-----------|
-| T1 | Common | 2.0s | 5% (`Food_Instant_Heal_T1`) | `*_TierCheck_T1` |
-| T2 | Uncommon | 2.5s | 10% (`Food_Instant_Heal_T2`) | `*_TierCheck_T2` |
-| T3 | Rare | 3.0s | 15% (`Food_Instant_Heal_T3`) | `*_TierCheck_T3` |
+| T1 | Common | 2.5s | 5% (`Food_Instant_Heal_T1`) | `*_TierCheck_T1` |
+| T2 | Uncommon | 2.5s | 5% (`Food_Instant_Heal_T1`) | `*_TierCheck_T2` |
+| T3 | Rare | 2.5s | 5% (`Food_Instant_Heal_T1`) | `*_TierCheck_T3` |
 
-All three charge interactions use `"FailOnDamage": true` and
-`"HorizontalSpeedMultiplier": 0.4` — taking a hit cancels the meal, and eating slows you to
-40% speed. Instant-heal effects apply their `StatModifiers` as a `Percent` of max health over
-a `Duration` of `0.1`s, which is what makes them read as instant.
+The three charge interactions `Consume_Charge_Food_T{1,2,3}_Inner` are identical: a `"2.5"`
+hold threshold, `"FailOnDamage": false` and `"HorizontalSpeedMultiplier": 0.75`, so taking a
+hit does not cancel the meal and eating slows you to 75% speed. (Every stock food also
+overrides `Consume_Charge` with `"Parent": "Consume_Charge_Food_T1_Inner"`, so the T2 and T3
+inner charges only run for a food that leaves that var alone.) 0.7.2 also removed the
+`Food_Instant_Heal_T2`, `Food_Instant_Heal_T3` and `Food_Instant_Heal_Bread` effects, so every
+stock food's instant heal is `Food_Instant_Heal_T1`; a custom food that still names one of the
+removed ids points at an effect that no longer ships. `Food_Instant_Heal_T1` applies its
+`StatModifiers` as a `Percent` of max health over a `Duration` of `0.1`s, which is what makes
+it read as instant.
 
 ---
 
@@ -292,9 +302,9 @@ a `Duration` of `0.1`s, which is what makes them read as instant.
 Prepared foods layer a longer buff on top of the instant heal. Rather than applying the buff
 effect directly, they chain a **tier-check interaction** from
 `Server/Item/Interactions/Consumables/Food/` — `HealthRegen_TierCheck_T{1,2,3}`,
-`Meat_TierCheck_T{1,2,3}`, `FruitVeggie_TierCheck_T{1,2,3}`. Each is an `EffectCondition`
-that refuses to downgrade an already-active higher tier, clears the lower tiers, and then
-applies its own:
+`Meat_TierCheck_T{1,2,3}`, `FruitVeggie_TierCheck_T{1,2,3}`, plus `HealthRegen_TierCheck_Raw`
+(0.7.2), which fruits and crops chain. Each is an `EffectCondition` that refuses to downgrade
+an already-active higher tier, clears the lower tiers, and then applies its own:
 
 ```json
 {
@@ -319,9 +329,13 @@ health per regen tick** (`DamageCalculatorCooldown` = 2s between ticks), not HP/
 
 | Buff | Duration | Effect |
 |------|----------|--------|
-| `HealthRegen_Buff_T1` | 45s | +1% max health / 2s |
-| `HealthRegen_Buff_T2` | 150s | +1.5% max health / 2s |
+| `HealthRegen_Buff_Raw` | 60s | +1% max health / 2s |
+| `HealthRegen_Buff_T1` | 360s | +1% max health / 2s |
+| `HealthRegen_Buff_T2` | 360s | +1.5% max health / 2s |
 | `HealthRegen_Buff_T3` | 360s | +2% max health / 2s |
+
+`HealthRegen_Buff_Raw` is new in 0.7.2. `HealthRegen_TierCheck_Raw` applies it only while none
+of T1–T3 is active, and each of T1–T3 clears it.
 
 #### Meat Buffs
 
@@ -330,8 +344,8 @@ Cooked meats raise maximum health via a `Multiplicative` `RawStatModifiers` entr
 
 | Buff | Duration | Effect |
 |------|----------|--------|
-| `Meat_Buff_T1` | 45s | ×1.05 Max Health |
-| `Meat_Buff_T2` | 150s | ×1.10 Max Health |
+| `Meat_Buff_T1` | 360s | ×1.05 Max Health |
+| `Meat_Buff_T2` | 360s | ×1.10 Max Health |
 | `Meat_Buff_T3` | 360s | ×1.15 Max Health, plus 5% Physical and Projectile `DamageResistance` |
 
 #### Fruit/Vegetable Buffs
@@ -340,8 +354,8 @@ Plant-based foods boost maximum stamina, and the higher tiers also add flat stam
 
 | Buff | Duration | Effect |
 |------|----------|--------|
-| `FruitVeggie_Buff_T1` | 45s | ×1.10 Max Stamina |
-| `FruitVeggie_Buff_T2` | 150s | ×1.20 Max Stamina, +0.025 Stamina regen |
+| `FruitVeggie_Buff_T1` | 360s | ×1.10 Max Stamina |
+| `FruitVeggie_Buff_T2` | 360s | ×1.20 Max Stamina, +0.025 Stamina regen |
 | `FruitVeggie_Buff_T3` | 360s | ×1.30 Max Stamina, +0.05 Stamina regen |
 
 ---
@@ -397,7 +411,7 @@ Abridged from `Server/Item/Items/Food/Food_Bread.json` (the real file also carri
     "Effect": {
       "Interactions": [{
         "Type": "ApplyEffect",
-        "EffectId": "Food_Instant_Heal_Bread"
+        "EffectId": "Food_Instant_Heal_T1"
       }]
     }
   }
@@ -427,7 +441,8 @@ they inherit `Root_Secondary_Consume_Food_T1` from `Template_Food`.
 | `Food_Egg` | Common | `Food_Instant_Heal_T1` |
 
 `Food_Fish_Raw_Uncommon` / `_Rare` / `_Epic` / `_Legendary` are `Parent: "Food_Fish_Raw"`
-rarity re-skins that override only cosmetics, so they eat exactly like plain raw fish.
+rarity re-skins that override only `Variant`, `ItemLevel` and `Recipe`, so they eat exactly like
+plain raw fish.
 
 #### Cooked Foods
 
@@ -441,11 +456,11 @@ Cooked at a campfire; T1 timing plus a tier-1 buff pair.
 
 #### Prepared Foods
 
-Crafted at a cooking bench; T2/T3 timing and the matching buff tier.
+Crafted at a cooking bench; the T2/T3 root and the matching buff tier.
 
 | Item | Quality | Tier | Buff checks |
 |------|---------|------|-------------|
-| `Food_Bread` | Uncommon | T2 | none (`Food_Instant_Heal_Bread`, 15%) |
+| `Food_Bread` | Uncommon | T2 | none |
 | `Food_Kebab_Meat` | Uncommon | T2 | `HealthRegen_TierCheck_T2`, `Meat_TierCheck_T2` |
 | `Food_Kebab_Fruit` | Uncommon | T2 | `HealthRegen_TierCheck_T2`, `FruitVeggie_TierCheck_T2` |
 | `Food_Kebab_Vegetable` | Uncommon | T2 | `HealthRegen_TierCheck_T2`, `FruitVeggie_TierCheck_T2` |
@@ -458,9 +473,6 @@ Crafted at a cooking bench; T2/T3 timing and the matching buff tier.
 | `Food_Pie_Apple` | Rare | T3 | `HealthRegen_TierCheck_T3`, `FruitVeggie_TierCheck_T3` |
 | `Food_Pie_Pumpkin` | Rare | T3 | `HealthRegen_TierCheck_T3`, `FruitVeggie_TierCheck_T3` |
 | `Food_Salad_Caesar` | Rare | T3 | `HealthRegen_TierCheck_T3`, `FruitVeggie_TierCheck_T3` |
-
-`Food_Bread` is the only stock food with its own bespoke heal effect
-(`Food_Instant_Heal_Bread`, 15% — T3-strength healing on a T2 eat time).
 
 ---
 
@@ -511,8 +523,21 @@ Base template for all **drinkable** potion items. (Placeable potion scenery uses
 |------|------------------|-------------|
 | `Secondary` | Root_Secondary_Consume_Potion | Consumption via `Condition_Consume_Potion` → `Consume_Charge_Potion_Fast` (1.5s hold) |
 
-Morph potions swap this for `Root_Secondary_Consume_Potion_Morph`, which additionally
-refuses the drink while another morph is active.
+Most drinkable children replace that root with a family-specific one:
+
+| Family | `Secondary` root | Chain |
+|--------|------------------|-------|
+| Health | `Root_Secondary_Consume_Potion_Health` (0.7.2) | `Condition_Consume_Potion_Health`: a `CooldownCondition` on `Potion_Consume_Health`, then `Consume_Charge_Potion_Fast` (1.5s) |
+| Stamina | `Root_Secondary_Consume_Potion_Stamina` | `Condition_Consume_Potion_Stamina`: a `CooldownCondition` on `Potion_Consume_Stamina`, then `Consume_Charge_Potion_Fastest` (0.5s) |
+| Signature | `Root_Secondary_Consume_Potion_Slow` | `Condition_Consume_Potion_Slow` → `Consume_Charge_Potion_Slow` (3.0s) |
+| Morph | `Root_Secondary_Consume_Potion_Morph` | `Condition_Consume_Potion_Morph`, which refuses the drink while a potion morph is active, then `Consume_Charge_Potion_Fast` |
+
+The cooldowns are new in 0.7.2. `Consume_Charge_Potion_Fast` and `_Fastest` `Replace` a
+`ConsumeCooldown` var after the drink completes (default: a no-op), and the health and stamina
+potions fill it with `Consume_Potion_Health_Cooldown` (a `TriggerCooldown` of 15s on
+`Potion_Consume_Health`) or `Consume_Potion_Stamina_Cooldown` (30s on `Potion_Consume_Stamina`).
+While that cooldown runs, the `CooldownCondition` fails and the potion cannot be drunk. All five
+health tiers share one cooldown id, and so do all five stamina tiers.
 
 #### Tags
 
@@ -553,7 +578,8 @@ Potions define a `BlockType` so they can be placed and emit colored light:
 
 #### InteractionVars
 
-`Potion_Template` defines exactly four vars:
+`Potion_Template` defines exactly four vars (the health and stamina children add a fifth,
+`ConsumeCooldown`, described above):
 
 | Variable | Purpose |
 |----------|---------|
@@ -587,7 +613,10 @@ A `StatsCondition` interaction can gate a consume on a stat threshold — the sh
 | `Costs` | object | Stat to check and threshold |
 | `ValueType` | string | `"Percent"` or `"Absolute"` |
 | `LessThan` | boolean | If true, the stat must be below the threshold |
-| `Lenient` | boolean | Accept a partial match rather than requiring the full cost |
+| `Lenient` | boolean | Codec doc: "the interaction can run even if the stat cost is not met, providing that the value is greater than zero" |
+
+`Costs` stopped being required in 0.7.2 (ability cast chains can supply their costs another
+way); in an ordinary item chain, omitting it makes the condition always fail.
 
 Example: `Health: 100` with `LessThan: true` means "only drink if health < 100%".
 
@@ -608,7 +637,9 @@ Example: `Health: 100` with `LessThan: true` means "only drink if health < 100%"
 
 Restore health instantly. Waste is avoided with an `EffectCondition` (`"Match": "None"`) that
 refuses to drink while a stronger regen effect is already running, then clears the weaker
-tiers before applying its own.
+tiers before applying its own. `Potion_Health_Large`, the top tier, skips the condition and
+always drinks. Drinking any health potion starts the shared 15s `Potion_Consume_Health`
+cooldown.
 
 Listed weakest first — that is also the order in which each tier clears the ones below it:
 
@@ -632,6 +663,9 @@ Listed weakest first — that is also the order in which each tier clears the on
   "Quality": "Common",
   "ItemLevel": 7,
   "Icon": "Icons/ItemsGenerated/Potion_Health.png",
+  "Interactions": {
+    "Secondary": "Root_Secondary_Consume_Potion_Health"
+  },
   "Recipe": {
     "KnowledgeRequired": false,
     "Input": [
@@ -672,25 +706,33 @@ Listed weakest first — that is also the order in which each tier clears the on
         },
         "Failed": { "Type": "Simple" }
       }]
+    },
+    "ConsumeCooldown": {
+      "Interactions": ["Consume_Potion_Health_Cooldown"]
     }
   }
 }
 ```
 
+(Abridged: the real file also carries `IconProperties`, the `ConsumeSFX` / `ConsumedSFX` vars,
+a `BlockType`, and `DropOnDeath`.)
+
 ---
 
 ### Stamina Potions
 
-Restore stamina instantly. Every tier also applies `Potion_Stamina_Cooldown`, which is what
-stops a player chain-drinking stamina potions:
+Restore stamina instantly. What stops a player chain-drinking them is the shared 30s
+`Potion_Consume_Stamina` cooldown (see [Potion_Template](#potion_template)). 0.7.2 removed the
+`Potion_Stamina_Cooldown` effect that earlier builds applied for the same purpose, so an item
+that still applies it names an effect that no longer ships:
 
-| Potion | Quality | EffectId(s) Applied |
-|--------|---------|---------------------|
-| `Potion_Stamina_Lesser` | Common | Potion_Stamina_Cooldown, Potion_Stamina_Instant_Lesser |
-| `Potion_Stamina_Small` | Uncommon | Potion_Stamina_Cooldown, Potion_Stamina_Instant_Small |
-| `Potion_Stamina` | Common | Potion_Stamina_Cooldown, Potion_Stamina_Instant_Small |
-| `Potion_Stamina_Greater` | Uncommon | Potion_Stamina_Cooldown, Potion_Stamina_Instant_Greater |
-| `Potion_Stamina_Large` | Rare | Potion_Stamina_Cooldown, Potion_Stamina_Instant_Large |
+| Potion | Quality | EffectId Applied |
+|--------|---------|------------------|
+| `Potion_Stamina_Lesser` | Common | Potion_Stamina_Instant_Lesser |
+| `Potion_Stamina_Small` | Uncommon | Potion_Stamina_Instant_Small |
+| `Potion_Stamina` | Common | Potion_Stamina_Instant_Small |
+| `Potion_Stamina_Greater` | Uncommon | Potion_Stamina_Instant_Greater |
+| `Potion_Stamina_Large` | Rare | Potion_Stamina_Instant_Large |
 
 (`Potion_Stamina` reusing `Potion_Stamina_Instant_Small` looks like a content oversight —
 `Potion_Stamina_Instant` exists as an effect asset but no item applies it.)
@@ -767,8 +809,10 @@ The corresponding effect (`Server/Entity/Effects/Potion/Potion_Morph_Dog.json`) 
 
 Morph potions also route through their own condition, `Root_Secondary_Consume_Potion_Morph` →
 `Condition_Consume_Potion_Morph`, which adds an `EffectCondition` refusing the drink while any
-morph is already active. A fifth morph effect, `Potion_Morph_Mosshorn`, exists with no potion
-item — it is applied by drinking `Container_Bucket` in its `Filled_Mosshorn_Milk` state.
+of the four potion morphs (`Potion_Morph_Dog` / `_Frog` / `_Mouse` / `_Pigeon`) is already
+active. A fifth morph effect, `Potion_Morph_Mosshorn`, exists with no potion item — it is
+applied by drinking `Container_Bucket` or `Deco_Bucket` in its `Filled_Mosshorn_Milk` state,
+and the morph condition does not check for it.
 
 ---
 
@@ -778,7 +822,7 @@ Special-purpose potions — but note that most of this family ships as scenery:
 
 | Potion | Quality | Effect |
 |--------|---------|--------|
-| `Potion_Antidote` | Common | Clears `Poison_T1`/`T2`/`T3`, applies `Antidote` |
+| `Potion_Antidote` | Common | Clears `Poison_T1`/`T2`/`T3` and `Ability_Poison_Stack_A`/`B`/`C`, applies `Antidote` |
 | `Potion_Purify` | - | **Decorative only** — `Parent: "Decorative_Potion_Template"`, no effect |
 | `Potion_Poison` / `Potion_Poison_Minor` / `Potion_Poison_Large` | - | **Decorative only** |
 | `Potion_Mana` / `Potion_Mana_Small` / `Potion_Mana_Large` | - | **Decorative only** |
@@ -789,7 +833,7 @@ that wires up `Root_Secondary_Consume_Potion` itself and re-uses a bomb model/te
 
 #### Example: Potion_Antidote
 
-The antidote clears each poison tier in sequence (via chained `ClearEntityEffect.Next`), then applies the `Antidote` effect (abridged — the real file also carries `Model`, `Texture`, `Light`, `IconProperties`, and a `Recipe`):
+The antidote clears each poison tier in sequence (via chained `ClearEntityEffect.Next`), then applies the `Antidote` effect. 0.7.2 added the three `Ability_Poison_Stack_*` effects to the chain (abridged — the real file also carries `PlayerAnimationsId`, `Model`, `Texture`, `Light`, `Tags`, the SFX vars, and a `Recipe`):
 
 ```json
 {
@@ -816,8 +860,17 @@ The antidote clears each poison tier in sequence (via chained `ClearEntityEffect
             "Type": "ClearEntityEffect",
             "EntityEffectId": "Poison_T3",
             "Next": {
-              "Type": "ApplyEffect",
-              "EffectId": "Antidote"
+              "Type": "ClearEntityEffect",
+              "EntityEffectId": "Ability_Poison_Stack_A",
+              "Next": {
+                "Type": "ClearEntityEffect",
+                "EntityEffectId": "Ability_Poison_Stack_B",
+                "Next": {
+                  "Type": "ClearEntityEffect",
+                  "EntityEffectId": "Ability_Poison_Stack_C",
+                  "Next": { "Type": "ApplyEffect", "EffectId": "Antidote" }
+                }
+              }
             }
           }
         }
@@ -841,7 +894,9 @@ Potions that affect signature energy/charges.
 | `Potion_Signature_Greater` | Uncommon | Potion_Signature_Regen_Greater |
 | `Potion_Signature_Large` | Rare | Potion_Signature_Regen_Large |
 
-Like the health line, each tier clears the weaker regen effects before applying its own.
+Like the health line, each tier clears the weaker regen effects before applying its own, and
+`Potion_Signature_Large` skips the stronger-effect check. Signature potions drink through
+`Root_Secondary_Consume_Potion_Slow` (a 3.0s hold) and have no consume cooldown.
 
 ---
 
@@ -896,10 +951,17 @@ The standard way to grant buffs from consumables:
 }
 ```
 
-`ApplyEffect` takes only `EffectId` and an optional `Entity` (which entity in the interaction
-context receives it) on top of the common interaction fields — **there is no `Duration` key**.
-Duration lives on the effect asset under `Server/Entity/Effects/`, so a "same buff, shorter
-timer" variant means a second effect asset, not an item-side override.
+`ApplyEffect` takes these keys on top of the common interaction fields:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `EffectId` | string or object | Effect asset id (required). An inline effect object also decodes, as `Food_Candy_Cane` does |
+| `Entity` | enum | Which entity in the interaction context receives it; defaults to the user |
+| `Duration` | float | 0.7.2: overrides the effect asset's duration, in seconds. `0` or absent keeps the asset's own |
+
+Before 0.7.2 there was no `Duration` key, and a "same buff, shorter timer" variant needed a
+second effect asset. From 0.7.2 an item can override the timer in place:
+`{ "Type": "ApplyEffect", "EffectId": "Meat_Buff_T1", "Duration": 60 }`.
 
 ### ChangeStat Interaction
 
@@ -916,7 +978,7 @@ For instant stat modifications without buff effects:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `StatModifiers` | object | Stat ID to value mapping (required, non-empty) |
+| `StatModifiers` | object | Stat ID to value mapping. Required and non-empty before 0.7.2; the codec stops enforcing that in 0.7.2, but in an ordinary item chain the interaction does nothing without it |
 | `ValueType` | enum | `Absolute` (default) or `Percent`. With `Absolute`, `100` means the stat's max |
 | `Behaviour` | enum | `Add` (default), `Set`, `Min`, or `Max` — how the modifier combines with the current value |
 | `Entity` | enum | Which entity in the interaction context to modify; defaults to the user |
@@ -938,7 +1000,7 @@ Food items handle timed consumption by extending a shared charge interaction thr
 }
 ```
 
-The food tier templates (`Consume_Charge_Food_T1` / `_T2` / `_T3`) compose this via `Type: "Serial"` interactions that `Replace` the `ConsumeSFX` and `Consume_Charge` vars with their defaults. The `_Inner` charge interaction then hangs the payload off its hold-time threshold (`"2.0"` / `"2.5"` / `"3.0"`), which fires a `ModifyInventory` to eat the item and then `Replace`s `ConsumedSFX` and `Effect`.
+The food tier templates (`Consume_Charge_Food_T1` / `_T2` / `_T3`) compose this via `Type: "Serial"` interactions that `Replace` the `ConsumeSFX` and `Consume_Charge` vars with their defaults. The `_Inner` charge interaction then hangs the payload off its hold-time threshold (`"2.5"` for all three tiers as of 0.7.2), which fires a `ModifyInventory` to eat the item and then `Replace`s `ConsumedSFX` and `Effect`.
 
 Potions use the same shape with the charge inline rather than in a `*_Inner` file:
 `Consume_Charge_Potion_Fastest` (0.5s), `Consume_Charge_Potion_Fast` (1.5s, the default), and
@@ -957,7 +1019,8 @@ Removes the consumed item from the stack in hand:
 
 This is what the shipped consume chains actually use. `ModifyInventory` accepts
 `ItemToRemove` / `ItemToAdd` (each an `ItemStack` object with `Id`, `Quantity`, `Durability`,
-`MaxDurability`, `Quality`, `Metadata`, …), `AdjustHeldItemQuantity`,
+`MaxDurability`, `QualityOverride`, `Metadata`, `OverrideDroppedItemAnimation`; 0.7.2 renamed
+the `ItemStack` key `Quality` to `QualityOverride`), `AdjustHeldItemQuantity`,
 `AdjustHeldItemDurability`, `BrokenItem`, `NotifyOnBreak`, `NotifyOnBreakMessage`, and
 `RequiredGameMode`. There is **no** `"Self": true` shorthand — use
 `AdjustHeldItemQuantity: -1` to consume the held stack.
@@ -1007,7 +1070,7 @@ Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "
       "Interactions": [
         {
           "Type": "ApplyEffect",
-          "EffectId": "Food_Instant_Heal_T2"
+          "EffectId": "Food_Instant_Heal_T1"
         },
         {
           "Type": "ApplyEffect",
@@ -1051,8 +1114,9 @@ Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "
 
 Two things to note against older examples of this pattern: the stat gate goes **inside the
 `Effect` var** (the stock consume chain never `Replace`s a `Stat_Check` var — see the gotcha
-[above](#stat-check-condition)), and `ApplyEffect` has no `Duration` key — set the duration on
-`My_Custom_Buff`'s own effect asset under `Server/Entity/Effects/`.
+[above](#stat-check-condition)), and the buff's duration normally lives on `My_Custom_Buff`'s
+own effect asset under `Server/Entity/Effects/`. From 0.7.2 an `ApplyEffect` `Duration` can
+override it per item.
 
 ---
 

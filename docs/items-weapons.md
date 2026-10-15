@@ -7,7 +7,7 @@ seo:
 
 # Weapon Items
 
-**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 > Part of the [Items API](items.md). For common item properties, see [Items Reference](items.md#common-properties).
 
@@ -58,8 +58,8 @@ Weapon item (inherits a Template_Weapon_* template)
 | Template | Children | Signature Ability | Description |
 |----------|----------|-------------------|-------------|
 | [Template_Weapon_Sword](#template_weapon_sword) | 24 | Vortexstrike | One-handed blade with combo swings |
-| [Template_Weapon_Daggers](#template_weapon_daggers) | 17 | Razorstrike | Dual-wielded fast attacks |
-| [Template_Weapon_Shield](#template_weapon_shield) | 16 | - | Defensive blocking with bash |
+| [Template_Weapon_Daggers](#template_weapon_daggers) | 18 | Razorstrike | Dual-wielded fast attacks |
+| [Template_Weapon_Shield](#template_weapon_shield) | 17 | - | Defensive blocking with bash |
 | [Template_Weapon_Battleaxe](#template_weapon_battleaxe) | 16 | Whirlwind | Heavy two-handed sweeping attacks |
 | [Template_Weapon_Shortbow](#template_weapon_shortbow) | 20 | Volley | Charged arrow shots |
 | [Template_Weapon_Mace](#template_weapon_mace) | 13 | Groundslam | Heavy blunt weapon |
@@ -70,9 +70,10 @@ Weapon item (inherits a Template_Weapon_* template)
 These seven are the **only** `Template_Weapon_*` assets in the game. The other weapon
 directories under `Server/Item/Items/Weapon/` — `Axe`, `Blowgun`, `Bomb`, `Claws`, `Club`,
 `Dart`, `Deployable`, `Flamethrower`, `Gun`, `Kunai`, `Longsword`, `Spear`, `Spellbook`,
-`Staff`, `Wand`, plus `Arrow` and `_Debug` — have no `Template_Weapon_*` parent: each item
-declares its own `Interactions` and stats directly (a few chain off a sibling item via a
-top-level `Parent`, e.g. `Weapon_Longsword_Praetorian`).
+`Staff`, `Wand`, plus `Arrow` and `_Debug` — have no `Template_Weapon_*` parent, with one
+exception: `Weapon_Blowgun_Tribal` inherits `Template_Weapon_Sword`. The rest declare their own
+`Interactions` and stats directly (a few chain off a sibling item via a top-level `Parent`, e.g.
+`Weapon_Longsword_Praetorian_NPC` off `Weapon_Longsword_Praetorian`).
 
 ---
 
@@ -109,8 +110,8 @@ One-handed sword with a 4-hit combo chain (left swing, right swing, down swing, 
 | `ItemLevel` | 15 |
 | `PlayerAnimationsId` | Sword |
 | `Reticle` | DefaultMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.21 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.13 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapons_Blade_Large |
 
@@ -175,10 +176,9 @@ Child items must provide these variables to customize damage:
   },
   "Model": "Items/Weapons/Sword/Iron.blockymodel",
   "Texture": "Items/Weapons/Sword/Iron_Texture.png",
-  "Icon": "Icons/ItemsGenerated/Weapon_Sword_Iron.png",
   "Quality": "Uncommon",
+  "Icon": "Icons/ItemsGenerated/Weapon_Sword_Iron.png",
   "ItemLevel": 20,
-  "MaxDurability": 120,
   "Recipe": {
     "TimeSeconds": 3.5,
     "KnowledgeRequired": false,
@@ -239,7 +239,6 @@ Child items must provide these variables to customize damage:
       "Interactions": [{
         "Parent": "Weapon_Sword_Signature_Vortexstrike_Spin_Damage",
         "DamageCalculator": { "BaseDamage": { "Physical": 19 } },
-        "EntityStatsOnHit": [],
         "DamageEffects": {
           "WorldSoundEventId": "SFX_Sword_T2_Impact",
           "LocalSoundEventId": "SFX_Sword_T2_Impact"
@@ -250,7 +249,6 @@ Child items must provide these variables to customize damage:
       "Interactions": [{
         "Parent": "Weapon_Sword_Signature_Vortexstrike_Stab_Damage",
         "DamageCalculator": { "BaseDamage": { "Physical": 56 } },
-        "EntityStatsOnHit": [],
         "DamageEffects": {
           "WorldSoundEventId": "SFX_Sword_T2_Impact",
           "LocalSoundEventId": "SFX_Sword_T2_Impact"
@@ -264,8 +262,8 @@ Child items must provide these variables to customize damage:
       }]
     }
   },
-  "MaxDurability": 120,
-  "DurabilityLossOnHit": 0.21
+  "MaxDurability": 250,
+  "DurabilityLossOnHit": 0.13
 }
 ```
 
@@ -279,10 +277,11 @@ Child items must provide these variables to customize damage:
 |-------|---------|-----------|-----------|------------|--------|-------------|-------------|
 | Crude | Common | 3 | 6/6 | 11 | 16 | 12 | 35 |
 | Copper | Common | 10 | 8/8 | 14 | 21 | 15 | 44 |
-| Scrap / Steel_Rusty / Bronze | Uncommon | 15-25 | 9/9 | 16 | 24 | 17 | 50 |
+| Steel_Rusty | Common | 15 | 9/9 | 16 | 24 | 17 | 50 |
+| Scrap / Bronze / Bronze_Ancient | Uncommon | 15-25 | 9/9 | 16 | 24 | 17 | 50 |
 | Iron | Uncommon | 20 | 10/10 | 18 | 26 | 19 | 56 |
 | Stone_Trork | Uncommon | 25 | 11/11 | 20 | 30 | 21 | 63 |
-| Bone / Cobalt / Doomed / Thorium | Rare | 25-30 | 12/12 | 22 | 32 | 23 | 70 |
+| Bone / Cobalt / Doomed / Thorium | Rare | 25-35 | 12/12 | 22 | 32 | 23 | 70 |
 | Adamantite | Rare | 40 | 14/14 | 28 | 41 | 29 | 87 |
 | Mithril / Onyxium | Epic | 50 | 18/18 | 34 | 51 | 37 | 110 |
 
@@ -309,8 +308,8 @@ Dual-wielded daggers with fast attacks and the Razorstrike signature ability.
 | `ItemLevel` | 30 |
 | `PlayerAnimationsId` | Daggers |
 | `Reticle` | DefaultMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.1 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.06 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapon_Blade_Small |
 
@@ -470,14 +469,7 @@ Shield templates define guard behavior directly in the template:
     "Guard_Bash": {
       "Interactions": [
         { "Type": "ApplyEffect", "EffectId": "Stamina_Broken_Immune" },
-        {
-          "Parent": "Weapon_Shield_Secondary_Guard_Bash",
-          "Effects": {
-            "WorldSoundEventId": "SFX_Shield_T2_Swing",
-            "LocalSoundEventId": "SFX_Shield_T2_Swing_Local"
-          },
-          "StatModifiers": { "Stamina": -2 }
-        }
+        { "Parent": "Weapon_Shield_Secondary_Guard_Bash" }
       ]
     },
     "Guard_Bash_Damage": {
@@ -509,8 +501,8 @@ Heavy two-handed axe with sweeping attacks and the Whirlwind signature ability.
 | `ItemLevel` | 15 |
 | `PlayerAnimationsId` | Battleaxe |
 | `Reticle` | DefaultMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.45 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.27 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapon_Blunt_Large |
 
@@ -527,12 +519,11 @@ Heavy two-handed axe with sweeping attacks and the Whirlwind signature ability.
 ```json
 {
   "Tags": {
-    "Type": ["Weapon"]
+    "Type": ["Weapon"],
+    "Family": ["Battleaxe"]
   }
 }
 ```
-
-Note: Battleaxe only has `Type` tag, no `Family` tag in the template.
 
 ### Weapon Stats
 
@@ -566,8 +557,8 @@ Ranged bow with charge-based damage scaling and the Volley signature ability.
 | `ItemLevel` | 5 |
 | `PlayerAnimationsId` | Bow |
 | `Reticle` | DefaultMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.58 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.35 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapons_Wood |
 
@@ -630,7 +621,9 @@ removes one `Weapon_Arrow_Crude` and banks it as `Ammo: 1`; the chain ends in a
 `StatsCondition` that refunds any `Ammo` still held (the shot never fired) as an arrow item.
 With no arrow in the inventory the `ModifyInventory` fails and the `No_Ammo_Effects` var
 runs instead (default `Common_Bow_No_Ammo`). The template's `SwapFrom` performs the same
-refund when the player switches weapons mid-draw:
+refund when the player switches weapons mid-draw. A second `StatsCondition` (present as of 0.7.2)
+also clears `StaminaRegenDelay` when a `SignatureCharges` is held (a `StatsCondition` only tests
+its `Costs`; it does not deduct them):
 
 ```json
 {
@@ -648,6 +641,15 @@ refund when the player switches weapons mid-draw:
             "Behaviour": "Set",
             "StatModifiers": { "StaminaRegenDelay": -1 }
           }
+        }
+      },
+      {
+        "Type": "StatsCondition",
+        "Costs": { "SignatureCharges": 1 },
+        "Next": {
+          "Type": "ChangeStat",
+          "Behaviour": "Set",
+          "StatModifiers": { "StaminaRegenDelay": -1 }
         }
       },
       { "Type": "ChangeActiveSlot" }
@@ -668,10 +670,10 @@ hold time in seconds; each entry replaces the `Primary_Shoot_Strength_N` var:
 | Charge Level | Charge Time | Damage (Template) |
 |--------------|-------------|-------------------|
 | *(none)* | 0.0s | released too early — no shot |
-| Strength_0 | 0.1s | 6 Projectile |
-| Strength_1 | 0.3s | 10 Projectile |
-| Strength_2 | 0.6s | 12 Projectile |
-| Strength_3 | 0.9s | 14 Projectile |
+| Strength_0 | 0.1s | 1 Projectile |
+| Strength_1 | 0.3s | 2 Projectile |
+| Strength_2 | 0.6s | 3 Projectile |
+| Strength_3 | 0.9s | 5 Projectile |
 | Strength_4 | 1.2s+ (full) | 15 Projectile |
 | Signature Volley | - | 25 Projectile |
 
@@ -739,8 +741,8 @@ Heavy blunt weapon with the Groundslam signature ability.
 | `ItemLevel` | 40 |
 | `PlayerAnimationsId` | Mace |
 | `Reticle` | MaceMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.5 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.3 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapon_Blunt_Large |
 
@@ -794,8 +796,8 @@ Ammo-based ranged weapon with reload mechanics and the BigArrow signature abilit
 | `Quality` | Template |
 | `PlayerAnimationsId` | Crossbow |
 | `Reticle` | DefaultMelee |
-| `MaxDurability` | 80 |
-| `DurabilityLossOnHit` | 0.28 |
+| `MaxDurability` | 120 |
+| `DurabilityLossOnHit` | 0.17 |
 | `Categories` | Items.Weapons |
 | `ItemSoundSetId` | ISS_Weapons_Wood |
 | `Consumable` | false |
@@ -809,7 +811,10 @@ Ammo-based ranged weapon with reload mechanics and the BigArrow signature abilit
 | `Primary` | Root_Weapon_Crossbow_Primary_Signature | Fire loaded bolt |
 | `Secondary` | Root_Weapon_Crossbow_Secondary_Guard | Blocking stance |
 | `Ability1` | Root_Weapon_Crossbow_Signature_BigArrow | Powerful charged shot |
-| `Ability3` | Root_Common_StatAmmoReload_Entry | Reload ammo |
+| `Ability4` | Root_Common_StatAmmoReload_Entry | Reload ammo |
+
+The stock template moved reload from `Ability3` to `Ability4` in 0.7.2, the build that added
+the `Ability4` interaction type.
 
 ### Tags
 
@@ -883,7 +888,7 @@ Displays the Ammo stat on the HUD when wielding.
 | `Standard_Projectile_Impact` | Normal shot hit effects |
 | `Standard_Projectile_Miss` | Normal shot miss effects |
 | `No_Ammo_Effects` | Effects when firing with no ammo |
-| `Combo_Projectile_Damage` | Combo shot damage (9 Projectile) |
+| `Combo_Projectile_Damage` | Combo shot damage (3.75 Projectile) |
 | `Overcharge_Start` | Overcharge ability startup |
 | `Overcharge_Projectile_Launch` | Overcharge shot launch |
 | `Reload_Start` | Begin reload sequence |
@@ -953,14 +958,17 @@ The crossbow consumes `Weapon_Arrow_Crude` items from inventory (Adventure mode 
 
 Gates an interaction chain on the **held item's** durability. Codec doc: "Gates the interaction
 chain on the held item's durability." Extends `SimpleInstantInteraction`. Documented here rather
-than with the other conditions because all eight shipped uses are weapon chains — the crossbow
-and shortbow reload and signature paths, plus the shared `Common_StatAmmoReload_Entry`.
+than with the other conditions because most shipped uses are weapon chains — the crossbow and
+shortbow reload and signature paths, plus the shared `Common_StatAmmoReload_Entry`. As of 0.7.2
+the glider template (`Template_Glider`) and `Tool_Hookshot` use it too, both gating on
+`"Operator": "GreaterThan"` at `0` (the item is unbroken); 11 occurrences in 10 files in all,
+counting one debug and one test interaction.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Threshold` | float | `0` | Value compared against. Interpreted per `ValueType` |
 | `ValueType` | string | `Absolute` | `Absolute` (raw durability) or `Percent` (`durability / maxDurability * 100`) |
-| `Operator` | string | `LessOrEqual` | `LessThan`, `LessOrEqual`, `GreaterThan`, `GreaterOrEqual`, `Equal`, `NotEqual` |
+| `Operator` | string | `LessOrEqual` | `LessThan`, `LessOrEqual`, `GreaterThan`, `GreaterOrEqual`, `Equal`, `NotEqual` (the shared `ComparisonOperator` enum as of 0.7.2) |
 
 None of the three is required; the defaults mean a bare `{ "Type": "DurabilityCondition" }`
 succeeds only while durability is `<= 0`.
@@ -1016,6 +1024,12 @@ first and falls through to the entity (from `Server/Item/Unarmed/Interactions/Em
 That three-step ladder — block, then entity, then break — is the whole of what an empty hand does
 on `Use`, and each step's `Failed` is what advances it.
 
+As of 0.7.2 `UseEntity` also fails when the target's root interaction carries a tag listed in
+the world's gameplay config under `World.BlockedRootInteractionTags` (it calls
+`WorldConfig.isRootInteractionAllowed` before firing `UseEntityEvent.Pre`). The shipped
+`TheDeepworks` and `ForgottenTemple` gameplay configs block `Type=Bed`, and `TheDeepworks`
+also blocks `Type=Rail_Kart`.
+
 > **Counting note.** Four shipped assets contain `"Type": "UseEntity"`, but only two are this
 > interaction. The other two are under `Server/Objective/Objectives/` and are `UseEntity`
 > **objective tasks** — a separate registry that happens to share the string. See the
@@ -1048,9 +1062,10 @@ All weapon damage uses `DamageCalculator` with `BaseDamage`:
 | `RandomPercentageModifier` | float | Random ± spread applied to the rolled damage |
 
 The `BaseDamage` keys are `DamageCause` asset ids from `Server/Entity/Damage/`
-— `Bludgeoning`, `Command`, `Drowning`, `Elemental`, `Environment`, `Environmental`, `Fall`,
-`Fire`, `Ice`, `OutOfWorld`, `Physical`, `Poison`, `Projectile`, `Slashing`, `Suffocation`.
-Weapons overwhelmingly use two:
+— `Bludgeoning`, `Command`, `Crush`, `Drowning`, `Earth`, `Elemental`, `Environment`,
+`Environmental`, `Fall`, `Fire`, `Ice`, `Lightning`, `OutOfWorld`, `Physical`, `Poison`,
+`Projectile`, `Slashing`, `Suffocation`, `Water`, `Wind` (20 as of 0.7.2; `Crush`, `Earth`,
+`Lightning`, `Water` and `Wind` are new in that build). Weapons overwhelmingly use two:
 - `Physical` - Melee weapon damage
 - `Projectile` - Ranged weapon damage
 
@@ -1115,8 +1130,8 @@ interaction's `DamageEffects` carries `WorldSoundEventId` (spatial, heard by all
 
 The shared `Weapon_Sword_Primary_*_Damage` interactions (and the common `DamageEntityParent`) carry
 **no** sound of their own, so a weapon that doesn't override `DamageEffects` in its `InteractionVars`
-is **silent on hit**. As of 0.6.8 eight stock swords ship with an empty `InteractionVars`
-block — so they also get no `BaseDamage` — Cutlass, Frost, Nexus, Runic, Silversteel, Steel,
+is **silent on hit**. As of 0.7.2 eight stock swords ship with no `InteractionVars` key at
+all — so they also get no `BaseDamage` — Cutlass, Frost, Nexus, Runic, Silversteel, Steel,
 Steel_Incandescent, and Wood. If you base a weapon on one of those and want an impact sound
 (or any tier damage at all), add a `DamageEffects` and `DamageCalculator` block per combo
 hit. (The exact list is version-specific.)

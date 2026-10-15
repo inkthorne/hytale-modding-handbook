@@ -281,6 +281,16 @@ public class RequirednessProbe {
         }
 
 
+        // The same parent, but the key declared with plain append (no inherit function): the Parent's
+        // value is NOT copied, so a nonNull key stays unsatisfied. Only appendInherited keys inherit.
+        System.out.println("## P1p: asset JSON with a Parent that carries A, key declared with append (not appendInherited)");
+        for (Config c : cfgs) {
+            if (c.kind != Kind.STRING || c.preset) continue;
+            AssetBuilderCodec<String, Doc> ac = (AssetBuilderCodec<String, Doc>) build(c, true, false);
+            Doc parent = new Doc(); parent.s = "fromParent";
+            record(c.id, "P1p", "missing", p1(ac, "{}", Kind.STRING, parent));
+        }
+
         // ---- RecordCodec: a different class with its own machinery (RecordField.validateRequiredArg) ----
         System.out.println("## RecordCodec: `true` flag / nonNull via Options lambda / nonNull as direct Validator arg");
         Object[][] recCfgs = {
@@ -432,6 +442,8 @@ public class RequirednessProbe {
             for (String cfg : new String[] {"aS", "aI", "bS", "bI", "cS", "cI", "dS", "dI", "e", "f", "g", "dA", "hS", "iS", "jA"})
                 expect(!threw(CELLS.get(cfg + "|" + p + "|value")), cfg + " " + p + " valid value must pass");
         }
+        expect(!threw(CELLS.get("bS|P1i|missing")), "bS P1i: a Parent's value satisfies an appendInherited nonNull key");
+        expect(threw(CELLS.get("bS|P1p|missing")), "bS P1p: a Parent does NOT satisfy a plain-append nonNull key");
         for (String p : new String[] {"P2", "P4"}) {
             for (String cfg : new String[] {"rS-b", "rS-bv", "rS-c"})
                 expect(threw(CELLS.get(cfg + "|" + p + "|missing")), cfg + " " + p + " missing must fail");

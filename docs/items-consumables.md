@@ -1046,6 +1046,10 @@ Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "
 
 ## Creating Custom Consumables
 
+In both examples, a name that starts with `My_` is a placeholder for content of your own: the
+translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset you add under
+`Server/Entity/Effects/`. The parents, interactions and effects that carry other names are shipped.
+
 ### Custom Food Item
 
 ```json

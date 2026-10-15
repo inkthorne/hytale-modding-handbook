@@ -110,7 +110,7 @@ into its own file under `Server/WorldEvent/Stage/` and referenced by id — usef
     {
       "Conditions": [ { "Type": "IntervalCondition", "IntervalKey": "warmup", "MinSeconds": 30, "MaxSeconds": 60 } ],
       "Actions":    [ { "Type": "None" } ],
-      "Next": "MyEvent_Stage2"
+      "Next": "MyMod_Stage2"
     }
   ]
 }
@@ -132,7 +132,8 @@ decode. The same applies to every enum on this page.
 
 > **Shipped stage files.** 0.7.2 ships its first standalone stages under `Server/WorldEvent/Stage/` — `Hunt_Breach_Stage1`–`3`,
 > `Goblin/Coffer/Coffer_Goblin_Cleanup` and the `Goblin/Breach/…` chains. The example above is constructed from the
-> codec; the shipped files are referenced by id from their events' `Root` exactly as shown.
+> codec, and its `Next` is a placeholder: an id that starts with `MyMod_` names a stage file of your own under
+> `Server/WorldEvent/Stage/`. The shipped files are referenced by id from their events' `Root` exactly as shown.
 
 ---
 

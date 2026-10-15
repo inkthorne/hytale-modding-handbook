@@ -1156,6 +1156,10 @@ Sets the override on the block the caller is looking at (max 10 blocks, via
 
 ## Quick Start Examples
 
+Every name in these examples that starts with `My_` is a placeholder for content of your own: the
+item id (the file's basename under `Server/Item/Items/`, which a breaking drop such as `My_Chest`'s
+names), its translation key, and the model and texture files it cites.
+
 ### Simple Cube Block
 
 ```json

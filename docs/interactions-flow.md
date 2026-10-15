@@ -13,11 +13,11 @@ seo:
 
 This page covers the control-flow interactions: composing interactions in sequence or parallel, branching on game state, looping, variable substitution, and target selection.
 
-> **Reading the examples.** An example that names its source file is taken from the shipped assets.
-> In the others, effect, sound, particle, block and animation ids are real shipped ids, but a bare
-> string that stands for another interaction (`"Attack_Damage_Logic"`, `"Execute_Ability"`, …) is a
-> placeholder for an interaction asset you write yourself. References resolve by basename, so such a
-> string fails validation until an asset of that name exists.
+> **Reading the examples.** An example that names a shipped source file is taken from the shipped
+> assets. In the others, every id that starts with `MyMod_` is a placeholder for an interaction (or,
+> in a slot that takes one, a root interaction) that you write yourself; all other interaction,
+> effect, sound, particle, block and animation ids are real shipped ids. References resolve by
+> basename, so a `MyMod_` string fails validation until an asset of that name exists.
 
 ## Overview
 
@@ -130,15 +130,15 @@ The `Interactions` property accepts an array where each entry can be:
 {
   "Type": "Serial",
   "Interactions": [
-    "Attack_Windup",
-    "Attack_Damage_Logic",
-    "Attack_Visual_Effects"
+    "MyMod_Attack_Windup",
+    "MyMod_Attack_Damage_Logic",
+    "MyMod_Attack_Visual_Effects"
   ]
 }
 ```
 
-> **References resolve by basename, scoped per namespace — not by path.** `Sword_Damage_Light` matches
-> the file of that basename regardless of which subfolder it sits in. `Interactions/` and
+> **References resolve by basename, scoped per namespace — not by path.** `Dodge_Left` matches
+> the file of that basename regardless of which subfolder it sits in (shipped, it is `Interactions/Dodge/Dodge_Left.json`). `Interactions/` and
 > `RootInteractions/` are independent namespaces (the same basename may exist once in each), but within
 > a namespace basenames must be unique. A custom interaction therefore just needs a unique basename in
 > its namespace; the subfolder is organizational. (`Parent` is also supported on root interactions, not
@@ -150,9 +150,9 @@ The `Interactions` property accepts an array where each entry can be:
 {
   "Type": "Serial",
   "Interactions": [
-    "Prepare_Animation",
+    "MyMod_Prepare_Animation",
     { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 10 } } },
-    "Cleanup_Effects"
+    "MyMod_Cleanup_Effects"
   ]
 }
 ```
@@ -242,7 +242,7 @@ Serial interactions can be nested within other control flow structures for compl
       { "Type": "Simple", "Effects": { "LocalSoundEventId": "SFX_Creative_Play_Error" } }
     ]
   },
-  "Next": { "1.0": "Consume_Complete" }
+  "Next": { "1.0": "MyMod_Consume_Complete" }
 }
 ```
 
@@ -255,15 +255,15 @@ Serial interactions can be nested within other control flow structures for compl
     {
       "Type": "Serial",
       "Interactions": [
-        "Prepare_Phase_1",
-        "Execute_Phase_1"
+        "MyMod_Prepare_Phase_1",
+        "MyMod_Execute_Phase_1"
       ]
     },
     {
       "Type": "Serial",
       "Interactions": [
-        "Prepare_Phase_2",
-        "Execute_Phase_2"
+        "MyMod_Prepare_Phase_2",
+        "MyMod_Execute_Phase_2"
       ]
     }
   ]
@@ -407,7 +407,7 @@ the forked chain, because a `Repeat`'s own `RunTime` does not pace its iteration
   "Type": "Charging",
   "AllowIndefiniteHold": true,
   "Next": {
-    "0": "Bow_Cancel",
+    "0": "MyMod_Bow_Cancel",
     "1.5": {
       "Type": "Serial",
       "Interactions": [
@@ -507,7 +507,7 @@ Serial is commonly used with [Replace](#replace) to create reusable templates:
       "Var": "EffectToApply",
       "DefaultOk": true,
       "DefaultValue": {
-        "Interactions": ["No_Effect"]
+        "Interactions": ["MyMod_No_Effect"]
       }
     }
   ]
@@ -645,8 +645,8 @@ one branch is not seen by the other.
     {
       "Type": "Parallel",
       "Interactions": [
-        "Root_Attack_Damage_Logic",
-        "Root_Attack_Visual_Effects"
+        "MyMod_Root_Attack_Damage_Logic",
+        "MyMod_Root_Attack_Visual_Effects"
       ]
     },
     { "Type": "Simple", "Effects": { "ClearAnimationOnFinish": true } }
@@ -655,7 +655,7 @@ one branch is not seen by the other.
 ```
 
 Stamina is spent first, then damage and visuals start together. The closing `Simple` runs when
-`Root_Attack_Damage_Logic` (branch 1) ends; the visuals fork may still be running then.
+`MyMod_Root_Attack_Damage_Logic` (branch 1) ends; the visuals fork may still be running then.
 
 **Parallel inside `Next` (StatsCondition):**
 
@@ -801,7 +801,7 @@ Using [Replace](#replace) inside the branches for customizable attack templates:
           "Type": "Replace",
           "Var": "DamageBranch",
           "DefaultOk": true,
-          "DefaultValue": { "Interactions": ["Default_Damage"] }
+          "DefaultValue": { "Interactions": ["MyMod_Default_Damage"] }
         }
       ]
     },
@@ -811,7 +811,7 @@ Using [Replace](#replace) inside the branches for customizable attack templates:
           "Type": "Replace",
           "Var": "EffectsBranch",
           "DefaultOk": true,
-          "DefaultValue": { "Interactions": ["Default_Effects"] }
+          "DefaultValue": { "Interactions": ["MyMod_Default_Effects"] }
         }
       ]
     }
@@ -988,7 +988,7 @@ Special attack that only works while jumping:
       }
     ]
   },
-  "Failed": "Ground_Attack_Normal"
+  "Failed": "MyMod_Ground_Attack_Normal"
 }
 ```
 
@@ -1047,7 +1047,7 @@ Momentum-based damage scaling:
       }
     ]
   },
-  "Failed": "Attack_Normal"
+  "Failed": "MyMod_Attack_Normal"
 }
 ```
 
@@ -1079,8 +1079,8 @@ All specified conditions must be true:
   "RequiredGameMode": "Adventure",
   "Running": true,
   "Jumping": false,
-  "Next": "Sprint_Slide_Start",
-  "Failed": "Movement_Normal"
+  "Next": "MyMod_Sprint_Slide_Start",
+  "Failed": "MyMod_Movement_Normal"
 }
 ```
 
@@ -1131,8 +1131,8 @@ When `Lenient` is `true`, a stat that is *below* its amount still passes provide
   "Type": "StatsCondition",
   "Costs": { "Stamina": 10 },
   "Lenient": true,
-  "Next": "Execute_Ability",
-  "Failed": "Out_Of_Stamina"
+  "Next": "MyMod_Execute_Ability",
+  "Failed": "MyMod_Out_Of_Stamina"
 }
 ```
 
@@ -1207,7 +1207,7 @@ override `Costs`:
 {
   "Type": "StatsCondition",
   "Costs": { "SignatureEnergy": 100 },
-  "Next": "Signature_Ability_Execute",
+  "Next": "MyMod_Signature_Ability_Execute",
   "Failed": {
     "Type": "Simple",
     "Effects": { "LocalSoundEventId": "SFX_Creative_Play_Error" }
@@ -1224,8 +1224,8 @@ Interpret the cost as a percentage of the stat's maximum:
   "Type": "StatsCondition",
   "Costs": { "Health": 20 },
   "ValueType": "Percent",
-  "Next": "Apply_Blood_Magic",
-  "Failed": "Apply_Normal_Effect"
+  "Next": "MyMod_Apply_Blood_Magic",
+  "Failed": "MyMod_Apply_Normal_Effect"
 }
 ```
 
@@ -1240,7 +1240,7 @@ Multiple resource requirements, each checked in turn:
   "Next": {
     "Type": "StatsCondition",
     "Costs": { "SignatureEnergy": 30 },
-    "Next": "Hybrid_Ability_Execute",
+    "Next": "MyMod_Hybrid_Ability_Execute",
     "Failed": { "Type": "SendMessage", "Message": "Not enough energy!" }
   },
   "Failed": { "Type": "SendMessage", "Message": "Not enough stamina!" }
@@ -1356,7 +1356,7 @@ Combo system requiring multiple debuffs:
       { "Type": "Simple", "Effects": { "Particles": [ { "SystemId": "Impact_Critical" } ] } }
     ]
   },
-  "Failed": "Normal_Attack"
+  "Failed": "MyMod_Normal_Attack"
 }
 ```
 
@@ -1398,12 +1398,12 @@ Check for food buff tiers:
       "EntityEffectIds": ["FruitVeggie_Buff_T1"],
       "Match": "None",
       "Entity": "User",
-      "Next": "Apply_Tier1_Buff",
-      "Failed": "Upgrade_To_Tier2"
+      "Next": "MyMod_Apply_Tier1_Buff",
+      "Failed": "MyMod_Upgrade_To_Tier2"
     },
-    "Failed": "Upgrade_To_Tier3"
+    "Failed": "MyMod_Upgrade_To_Tier3"
   },
-  "Failed": "Refresh_Tier3"
+  "Failed": "MyMod_Refresh_Tier3"
 }
 ```
 
@@ -1585,13 +1585,19 @@ Succeed if the target matches any of several block types:
     { "Block": { "Id": "Soil_Grass" } },
     { "Block": { "Id": "Soil_Dirt" } }
   ],
-  "Next": "Plant_Seed",
+  "Next": "MyMod_Plant_Seed",
   "Failed": {
     "Type": "SendMessage",
     "Message": "Cannot plant here!"
   }
 }
 ```
+
+The shipped seeds use the same shape: `Interactions/Crops/Seed_Condition.json` matches `Soil_Dirt_Tilled`
+or a block tagged `SubType=Planter` on its `Up` face, and its `Next` is a `Replace` on the `SeedId`
+variable whose `DefaultValue` is the shipped `Seed_Place` interaction. A seed item supplies its own
+`SeedId`: `Plant_Seeds_Carrot` sets it to an interaction with `"Parent": "Seed_Place"` and
+`"BlockTypeToPlace": "Plant_Crop_Carrot_Block"`, so one condition serves every crop.
 
 ### Related Interactions
 
@@ -1934,10 +1940,10 @@ TriggerCooldown is typically used inside the `Next` branch of a CooldownConditio
           "Cooldown": 10
         }
       },
-      "Execute_Ability"
+      "MyMod_Execute_Ability"
     ]
   },
-  "Failed": "Ability_NotReady_Feedback"
+  "Failed": "MyMod_Ability_NotReady_Feedback"
 }
 ```
 
@@ -2177,9 +2183,9 @@ standing still (`Failed`) are left out, which does nothing either:
       { "Type": "DamageEntity", "DamageCalculator": { "BaseDamage": { "Physical": 15 } } }
     ]
   },
-  "Left": "Slash_Left",
-  "Right": "Slash_Right",
-  "Failed": "Slash_Neutral"
+  "Left": "MyMod_Slash_Left",
+  "Right": "MyMod_Slash_Right",
+  "Failed": "MyMod_Slash_Neutral"
 }
 ```
 
@@ -2249,11 +2255,11 @@ Only handle cardinal directions. Note the diagonals are **not** routed to `Faile
   "Costs": { "Stamina": 15 },
   "Next": {
     "Type": "MovementCondition",
-    "Forward": "Lunge_Attack",
-    "Back": "Retreating_Slash",
-    "Left": "Sidestep_Left_Attack",
-    "Right": "Sidestep_Right_Attack",
-    "Failed": "Standing_Attack"
+    "Forward": "MyMod_Lunge_Attack",
+    "Back": "MyMod_Retreating_Slash",
+    "Left": "MyMod_Sidestep_Left_Attack",
+    "Right": "MyMod_Sidestep_Right_Attack",
+    "Failed": "MyMod_Standing_Attack"
   },
   "Failed": {
     "Type": "SendMessage",
@@ -2469,8 +2475,8 @@ repeating is ignored and the interactions `Failed` are run instead."
   "HorizontalSpeedMultiplier": 0.6,
   "ForkInteractions": {
     "Interactions": [
-      "Whirlwind_Spin_Effect",
-      "Whirlwind_Damage_Selector"
+      "MyMod_Whirlwind_Spin_Effect",
+      "MyMod_Whirlwind_Damage_Selector"
     ]
   }
 }
@@ -2552,7 +2558,7 @@ Variable substitution for creating reusable interaction templates. Looks up a va
   "Type": "Replace",
   "Var": "EffectName",
   "DefaultValue": {
-    "Interactions": ["Fallback_Effect"]
+    "Interactions": ["MyMod_Fallback_Effect"]
   },
   "DefaultOk": true
 }
@@ -2582,7 +2588,7 @@ The SEVERE line is `Missing replacement interactions for interaction: %s for var
 
 Create a generic consume template that items can customize:
 
-**Consume_Template.json:**
+**MyMod_Consume_Template.json** (an interaction of your own):
 ```json
 {
   "Type": "Serial",
@@ -2602,7 +2608,7 @@ Create a generic consume template that items can customize:
               "Type": "Replace",
               "Var": "Effect",
               "DefaultValue": {
-                "Interactions": ["No_Effect"]
+                "Interactions": ["MyMod_No_Effect"]
               }
             }
           ]

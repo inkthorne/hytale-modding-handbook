@@ -703,11 +703,14 @@ inherited `Next` / `Failed` branches work the same way as on the other `*Conditi
     "Key": "Campaign_GateOpened",
     "Value": 1,
     "Raise": true,
-    "Next": "Gate_Open_Anim"
+    "Next": "MyMod_Gate_Open_Anim"
   },
-  "Failed": "Gate_Locked_Message"
+  "Failed": "MyMod_Gate_Locked_Message"
 }
 ```
+
+The two ids that start with `MyMod_` are placeholders for interactions you write yourself, and the
+two flag keys are names of your choosing.
 
 As of 0.7.2 the Goblin Lab puzzle content uses both: `GoblinLab_Generator.json` writes
 `goblin_lab_generator_found` with `"Raise": true`, and five `GoblinLab_*` items plus

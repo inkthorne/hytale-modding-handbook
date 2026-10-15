@@ -944,14 +944,13 @@ else
 fi
 
 # =====================================================================
-section "[INFO] Every asset id in a JSON fence names an asset of the family its key refers to"
+section "[HARD] Every asset id in a JSON fence names an asset of the family its key refers to"
 # Queued gate 3. A string under `Next` is checked against Item/Interactions, one under
 # `SoundEventId` against Audio/SoundEvents, and so on, with the key->store typing derived
 # from the shipped assets (maintenance/scripts/check-asset-ids.py states the rule, what is
-# exempt and what is NOT covered). It reports INFO, not WARN or FAIL, until the flags it
-# found at its first run are fixed in the docs: a gate that hard-fails on known findings
-# is invariant-1 wallpaper in the other direction. Promote to [HARD] in the commit that
-# clears the list, not before. Exit codes: 0 clean, 1 flags, 2 an input is missing,
+# exempt and what is NOT covered). It reported INFO until the 43 flags of its first run
+# were fixed in the docs, and was promoted to [HARD] in the commit that cleared them
+# (2026-10-15): all 43 were real (42 invented ids, one id of the wrong kind). Exit codes: 0 clean, 1 flags, 2 an input is missing,
 # 3 a zero denominator (the gate examined nothing - that one IS a failure of the gate).
 # ~14 s, nearly all of it the shipped-asset sweep; the docs scan is under a second.
 if [ ! -d "$SRC_CACHE" ]; then
@@ -966,7 +965,7 @@ else
     pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
   elif [ "$RC" -eq 1 ]; then
     NF="$(echo "$OUT" | grep -cE '^  FLAG')"
-    info "$NF asset id(s) do not resolve in the family their key refers to (advisory; not yet promoted to HARD):"
+    fail "$NF asset id(s) do not resolve in the family their key refers to:"
     echo "$OUT" | grep -E '^  FLAG' | sed 's/^  FLAG  /    /'
   else
     fail "check-asset-ids.py exited $RC (2 = missing input, 3 = nothing examined):"

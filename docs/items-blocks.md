@@ -1326,6 +1326,11 @@ the tier/upgrade keys.
 
 ## Block Item Patterns
 
+In these patterns, a name that starts with `My_` is a placeholder for content of your own: the item
+id (the file's basename under `Server/Item/Items/`, which the cube block's `Gathering.Breaking.ItemId`
+names so that breaking the block drops the item itself), its translation key, and the icon, texture
+and model files it cites.
+
 ### Custom solid cube block
 
 ```json

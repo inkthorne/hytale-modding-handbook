@@ -200,16 +200,20 @@ shape locally.
 
 ### The per-block binding
 
+The fence in these examples is illustrative: an id that starts with `MyMod_` is a placeholder for a
+rule-set asset or block of your own. The shipped patterned rule sets are the three pipe assets in
+`Server/Item/ConnectedBlockRuleSets/` (`SimplePipe`, `MetalSimplePipe`, `LargeMetalSimplePipe`).
+
 ```json
 {
   "BlockType": {
     "ConnectedBlockRuleSet": {
       "Type": "Patterned",
-      "RuleSetId": "MyFenceRuleSet",
+      "RuleSetId": "MyMod_FenceRuleSet",
       "TemplatedShapes": {
         "Straight": { "State": "default" },
         "Corner": { "State": "Corner" },
-        "Gate": { "Block": "My_Fence_Gate" }
+        "Gate": { "Block": "MyMod_Fence_Gate" }
       }
     }
   }

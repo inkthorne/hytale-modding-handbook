@@ -21,10 +21,18 @@ that binding was measured and is unsound — see the note at the foot of this fi
 FOUR ORACLE SOURCES, and the gate reports how many values each one carried,
 because a source that silently stops contributing is how this check would rot:
 
-  1. registry_miner over the decompiled jar — all three registration forms, in their
-     qualified spelling only. An unqualified in-class `CODEC.register(` (68 sites in 19
-     classes at 0.7.2; registry-oracle-notes.md §15) is missed, so this oracle can only
-     under-resolve: a value registered there fails here unless another oracle covers it.
+  1. registry_miner over the decompiled jar — all three registration forms, in BOTH
+     spellings: `Receiver.CODEC.register(…)` and the unqualified in-class
+     `CODEC.register(…)` / `getCodecRegistry(PAGE_CODEC)` (69 sites in 20 classes at
+     0.7.2), the latter bound to the class that declares the field by lexical scope
+     (registry_miner._Lexical; registry-oracle-notes.md §15). Until 2026-10-15 only the
+     qualified spelling was mined, so this oracle could only under-resolve. This oracle
+     is UNSCOPED, and the unqualified registries widened it with names that are common
+     words — UIEditor's `Text`/`Number`/`Icon`, Schema's `string`/`number`/`object`, and
+     `Single`/`Random`/`Switch`/`Weighted` — so a docs `"Type": "Number"` now resolves
+     here whatever slot it is in. None of the UIEditor or Schema names is a docs value today (measured
+     2026-10-15), and `-v` lists the docs values that ONLY an unqualified registration
+     supplies, which is the exposure this change added.
   2. `"Type"` values observed in the shipped asset tree. Covers vocabularies
      whose registration mechanism the miner does not model at all (drop-table
      types, recipe types); an id in this set is real by demonstration.
@@ -157,8 +165,18 @@ def main():
             return 2
 
     registered = set()
-    for r in rm.mine(src).values():
+    mined = rm.mine(src)
+    for r in mined.values():
         registered.update(r.names)
+    # Names supplied ONLY by an unqualified registration: the part of this oracle that
+    # did not exist before the miner learned that spelling (reported under -v).
+    qualified_names = {s.name for r in mined.values() for s in r.sites
+                       if s.name and s.spelling == 'qualified'}
+    unqualified_only = collections.defaultdict(set)
+    for r in mined.values():
+        for s in r.sites:
+            if s.name and s.spelling == 'unqualified' and s.name not in qualified_names:
+                unqualified_only[s.name].add(r.key)
 
     asset_types = set()
     n_assets = 0
@@ -278,6 +296,12 @@ def main():
         print(f"  INFO  oracle sizes: {len(registered)} registered name(s), "
               f"{len(asset_types)} asset \"Type\" value(s) over {n_assets} json file(s), "
               f"{n_java} java fence(s) mined")
+        shifted = sorted(v for v in values if v in unqualified_only)
+        print(f"  INFO  docs value(s) that ONLY an unqualified registration supplies to the "
+              f"registry oracle: {len(shifted)} of {len(values)}")
+        for v in shifted:
+            regs_ = sorted(k.replace('com.hypixel.hytale.', '') for k in unqualified_only[v])
+            print(f"          {v}  <- {', '.join(regs_)}")
 
     rc = 0
     if missed:

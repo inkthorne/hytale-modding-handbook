@@ -141,7 +141,7 @@ The workbench is the primary crafting station with multiple categories and tier 
 |----------|------|-------------|
 | `Type` | string | Bench type: `Crafting`, `Processing`, `DiagramCrafting`, `StructuralCrafting` |
 | `Id` | string | Unique bench identifier referenced by recipes |
-| `Categories` | array | Crafting categories with icons and localization |
+| `Categories` | array | **Required** on `Crafting` and `DiagramCrafting` benches (`Validators.nonNull()`). Crafting categories with icons and localization |
 | `TierLevels` | array | Upgrade tiers with time reduction and requirements |
 | `DescriptiveLabel` | string | Optional label shown in the bench UI |
 | `Icon` | string | Optional bench icon |
@@ -648,7 +648,7 @@ Recipes are typically embedded within item JSON files under the `Recipe` propert
 | Property | Type | Description |
 |----------|------|-------------|
 | `TimeSeconds` | float | Crafting duration in seconds |
-| `Input` | array | Required materials (ItemId or ResourceTypeId) |
+| `Input` | array | **Required**, non-empty (`Validators.nonNull()`, `Validators.nonEmptyArray()`). The materials consumed (ItemId or ResourceTypeId) |
 | `BenchRequirement` | array | Required crafting benches |
 | `Output` | array | Output items (optional, defaults to the item containing the recipe) |
 | `PrimaryOutput` | object | Main output item |

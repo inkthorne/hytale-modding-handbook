@@ -214,9 +214,9 @@ The Goblin Gobliterator boss fight grants it on a win, from
 ```
 
 **Granting from Java.** `RewardModule.get().grantReward(rewardId, playerRef)` looks the id up in
-`RewardAsset.getAssetMap()` and calls the asset's `grant(PlayerRef)`. It returns `false`, logging a WARNING, for a
-`null` id, an unknown id (`Unknown reward %s requested for %s`), or a `grant` that throws (`Reward %s failed for %s`;
-the exception is caught there). The module keeps no record of what it granted, and `GrantReward` grants again each
+`RewardAsset.getAssetMap()` and calls the asset's `grant(PlayerRef)`. It returns `false` silently for a `null` id,
+and returns `false` with a WARNING for an unknown id (`Unknown reward %s requested for %s`) or a `grant` that throws
+(`Reward %s failed for %s`; the exception is caught there). The module keeps no record of what it granted, and `GrantReward` grants again each
 time the action runs. The shipped boss fight runs it in the same action list that sets its `Encounter_Live` flag to
 `false`, which is what keeps it to one grant per win. The chapter-complete page
 ([`OpenChapterRewards`](interactions.md#openchapterrewards)) only displays reward tiles and grants nothing.

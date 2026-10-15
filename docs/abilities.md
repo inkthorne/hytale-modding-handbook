@@ -965,7 +965,10 @@ ComponentType<EntityStore, AbilityProjectileSplit> getAbilityProjectileSplitComp
 
 Of the six components only `AbilityBenchIntro` has a codec and persists. The other five are runtime
 state, registered with a supplier that throws, so they are created only by the systems that own them.
-`AbilityCharges` and `AbilityBenchIntro` also expose a static `getComponentType()`.
+Each of the six also exposes a static `getComponentType()`: `AbilityCharges.getComponentType()`,
+`AbilityBenchIntro.getComponentType()`, `AbilityEntityRepeat.getComponentType()`,
+`AbilityProjectileTrail.getComponentType()`, `PulledByAbility.getComponentType()` and
+`AbilityProjectileSplit.getComponentType()`.
 
 ### ImpactModifiers
 

@@ -13,6 +13,9 @@ seo:
 
 This page covers the combat and effects interactions: target selection, dealing damage, applying forces and status effects, modifying stats, and interrupting other entities.
 
+Examples taken from shipped assets name their file. In the others, an id that starts with `MyMod_` is a
+placeholder for an asset of your own.
+
 ## Overview
 
 Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
@@ -348,7 +351,7 @@ Target selection for combat interactions. Defines hitbox shapes and detection ar
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `RunTime` | float | `0` | Duration of the selection window in seconds. The selector runs **every tick** and may sweep its search area across that window (e.g. tracing a sword arc) |
-| `Selector` | object | - | Hitbox configuration; `Id` picks the shape (see Selector Types below) |
+| `Selector` | object | - | **Required** (`Validators.nonNull()`; a `Parent` can supply it). Hitbox configuration; `Id` picks the shape (see Selector Types below) |
 | `HitEntity` | string/object | - | **Root interaction** forked once per hit entity (hence the `{ "Interactions": [...] }` shape, not a bare interaction) |
 | `HitBlock` | string/object | - | **Root interaction** forked once per hit block |
 | `HitEntityRules` | array | - | Conditional hit handling with matchers; **overrides `HitEntity`** for any entity that matches |
@@ -1143,7 +1146,7 @@ This stops any ongoing:
 > on the **root interaction asset** that started the chain, e.g.
 >
 > ```json
-> { "Interactions": ["Boss_Slam"], "Tags": { "Attack": ["Uninterruptable"] } }
+> { "Interactions": ["MyMod_Boss_Slam"], "Tags": { "Attack": ["Uninterruptable"] } }
 > ```
 >
 > Putting `Uninterruptable` on a *mob* does nothing; you must tag the root interaction whose chain

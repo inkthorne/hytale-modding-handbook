@@ -16,7 +16,7 @@ Hytale's music is a small graph of JSON assets. A **selector** or a gameplay sys
 crossfade layers and pick phases; **music transitions** shape the handover from one container to the
 next; and **stingers** are short accents that answer named **music events**. All of it is resolved and
 played on the client — the server loads and validates the assets, sends them, and drives the
-per-player inputs (forced music and server-authority audio states).
+inputs: forced music and server-authority audio states per player, and music emitters placed at blocks.
 
 ## Overview
 
@@ -88,8 +88,9 @@ The string form is equally common (`"MusicContainer": "MC_Zone4_Jungle"`). On th
 > `getVolume()` (linear gain), and an `AmbienceFXMusic(String[] tracks, float decibels)` constructor.
 > Author new music as MusicContainer assets.
 
-Ambience selection is one of two ways music starts. The other is **forced music**, a per-player
-container the server sets — see [Who starts music](#who-starts-music).
+Ambience selection is one of three ways music starts. The others are **forced music**, a per-player
+container the server sets, and **music blocks**, which play a container at a position in the world — see
+[Who starts music](#who-starts-music).
 
 ---
 
@@ -102,9 +103,11 @@ a weighted-random or sequential playlist, or layered/segmented arrangements that
 `.json` file is one container, keyed by its **id** (the filename without `.json`); containers reference each other
 by id, so you compose larger arrangements from smaller ones. This replaces the flat
 [AmbienceFX `Music` block](#music-selectors), which is now auto-migrated into a generated `RandomMusicContainer`;
-an ambience selects music with its `MusicContainer` key. **275 container files** ship in 0.7.2, holding 364
-container nodes in total — 302 `SingleTrack`, 35 `Segment`, 19 `Random`, 5 `Sequence` and 3 `Horizontal` (nodes
-outnumber files because a `Segment`'s layers hold inline `SingleTrack` containers).
+an ambience selects music with its `MusicContainer` key. **275 container files** ship in 0.7.2, holding 650
+container nodes in total. 364 of them name their `Type`: 302 `SingleTrack`, 35 `Segment`, 19 `Random`, 5 `Sequence`
+and 3 `Horizontal`. The other 286 are inline playlist children that name only a `Parent` and take its type (261
+resolve to `SingleTrack`, 25 to `Segment`). Nodes outnumber files because a `Segment`'s layers and a playlist's
+`Children` hold inline containers.
 
 > The folder layout (`Tracks/`, `Playlists/`, …) is just organization — every `.json` under `MusicContainers/`
 > loads as a container regardless of subfolder.
@@ -303,7 +306,7 @@ Each **`LayerPlacement`**:
 ### Who starts music
 
 Containers are referenced by id — by other containers (`Children` / `Parent`, layer `Container`, a stinger's
-`MusicContainer`) and by gameplay. Two channels start music for a player:
+`MusicContainer`) and by gameplay. Three channels start music:
 
 - **Ambience selection** — the [music selectors](#music-selectors) above.
 - **Forced music** — one container index per player, held server-side in the `ForcedMusicTracker` component
@@ -313,9 +316,146 @@ Containers are referenced by id — by other containers (`Children` / `Parent`, 
   [`SetMusic` effect](trigger-volumes.md#built-in-effect-types) (`MusicContainer`, or `ClearMusic`), a void-event
   stage's `MusicContainer`, and the `/audio music force <musicContainerId>` / `/audio music clear` commands. A
   plugin writes it the same way — see [Driving Music from Java](#driving-music-from-java).
+- **Music blocks** — a block whose block entity carries a `MusicEmitterBlock` plays a container at that block, for
+  every player whose client has the chunk loaded. A `MusicPlayerBlock` turns a one-slot container block into a
+  jukebox that plays the `Music` of the item put in it. See [Music blocks and music items](#music-blocks-and-music-items).
 
 The config classes in `com.hypixel.hytale.server.core.asset.type.musiccontainer.config` each have a
 `getChildIds()` and a `CODEC`; `MusicContainer.getAssetMap()` resolves ids.
+
+### Music blocks and music items
+
+The `builtin.audio` plugin registers two chunk-store components, by the names `MusicEmitterBlock` and
+`MusicPlayerBlock`. A block declares them under `BlockType.BlockEntity.Components` like any other
+[block-entity component](blocks.md#blockentity-components), and both are saved with the chunk. In Java,
+`MusicEmitterBlock.getComponentType()` and `MusicPlayerBlock.getComponentType()` return their types.
+
+#### MusicEmitterBlock
+
+**Package:** `com.hypixel.hytale.builtin.audio.components.MusicEmitterBlock`
+
+A block that carries a `MusicEmitterBlock` plays a container at the block's position. The server sends `SetBlockMusicEmitter`
+(packet 169, on the chunks channel) holding the block position, the emitter settings and a playback offset to every
+player whose chunk tracker has the chunk loaded. It sends one when the chunk's data goes to a player, when the
+component is added or replaced, and, with an empty emitter, when the component or its block is removed. The server
+stamps `Origin` the first time the emitter starts, and the offset it sends is the time elapsed since then, so a
+player who arrives later is told how far into playback the emitter already is.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `MusicContainer` | string | — | The container to play, checked against the container store. The engine accepts an emitter without one, which sends the empty container and plays nothing |
+| `AudioCategoryOverride` | string | — | An `AudioCategory` id that routes this emitter in place of the container's own category |
+| `ReferenceDistance` | float | `8.0` | Distance within which it plays at full volume; minimum 0 |
+| `MaxDistance` | float | `25.0` | Distance beyond which it is inaudible; minimum 0 |
+| `SpatialBlend` | float | `0.6` | `0` is fully 2D, `1` fully 3D-positioned |
+| `ReverbSend` | float | `0.35` | Fraction routed to environment reverb, 0–1; lower keeps sustained music from washing out in reverberant spaces |
+| `Volume` | float | 0 dB | Volume adjustment in dB, −80 to 24 (usually to make up for a quiet mono downmix) |
+| `Loop` | boolean | `true` | Loop the container indefinitely, overriding its `LoopCount` |
+| `Origin` | long | `0` | Epoch milliseconds the emitter first started, written by the server; `0` means unstamped. Leave it out when authoring |
+
+The four shipped emitters are debug blocks,
+`Server/Item/Items/_Debug/Debug_MusicEmitter_{CaveEncounter,DeepJungles,ForgottenTemple,HowlingSands}.json`.
+`Debug_MusicEmitter_HowlingSands.json` as shipped:
+
+```json
+{
+  "TranslationProperties": {
+    "Name": "server.items.Debug_MusicEmitter_HowlingSands.name"
+  },
+  "Parent": "Wood_Wisteria_Wild_Trunk_Full",
+  "BlockType": {
+    "BlockEntity": {
+      "Components": {
+        "MusicEmitterBlock": {
+          "MusicContainer": "Track_Z2AD_Howling_Sands",
+          "AudioCategoryOverride": "AudioCat_AmbientMusic",
+          "ReferenceDistance": 8,
+          "MaxDistance": 25,
+          "SpatialBlend": 0.6
+        }
+      }
+    }
+  }
+}
+```
+
+#### MusicPlayerBlock
+
+**Package:** `com.hypixel.hytale.builtin.audio.components.MusicPlayerBlock`
+
+A `MusicPlayerBlock` is a jukebox. The block must also carry an `ItemContainerBlock`, since both of the
+component's systems select blocks holding the two together, and it reads slot 0 of that container only. When the
+block is set up, the slot is filtered so that only an item with a `Music` block can go in. Each tick, when the item
+in slot 0 changes:
+
+- an inserted item plays `InsertSound` at once, and after `StartDelaySeconds` the block gains a `MusicEmitterBlock`
+  built from the item's `MusicContainer` and `AudioCategoryOverride` and the player block's own spatial settings
+  (`MusicPlayerBlock.buildEmitter`);
+- a removed item removes the emitter at once, and `RemoveSound` plays after `StopDelaySeconds`.
+
+Because the music is an ordinary emitter, everything above about `SetBlockMusicEmitter` and `Origin` applies to it.
+When the block entity enters the world (placed, or loaded with its chunk), the block adds the emitter if a music
+item is in the slot and the emitter is missing, and removes a leftover emitter if the slot is empty.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `InsertSound` | string | — | Sound event played at the block when a music item goes in, before the start delay. Must be mono and one-shot (`SoundEventValidators.MONO`, `SoundEventValidators.ONESHOT`) |
+| `RemoveSound` | string | — | Sound event played after the item comes out and the stop delay has passed; mono and one-shot |
+| `StartDelaySeconds` | float | `2.0` | Seconds from the insert sound to the track starting; minimum 0 |
+| `StopDelaySeconds` | float | `0.5` | Seconds from removal to the remove sound; minimum 0 |
+| `ReferenceDistance`, `MaxDistance`, `SpatialBlend`, `ReverbSend`, `Volume`, `Loop` | | as on the emitter | Copied onto the emitter the block builds, with the same meanings and defaults as on `MusicEmitterBlock` |
+
+The one shipped player is `Server/Item/Items/_Debug/Debug_MusicPlayer.json`. Its block entity, as shipped (the
+block also sets `"Interactions": { "Use": "Open_Container" }`, so players open the slot with Use):
+
+```json
+"BlockEntity": {
+  "Components": {
+    "ItemContainerBlock": {
+      "Capacity": 1
+    },
+    "MusicPlayerBlock": {
+      "InsertSound": "SFX_Workbench_Craft",
+      "RemoveSound": "SFX_Chest_Wooden_Close",
+      "StartDelaySeconds": 2.5,
+      "StopDelaySeconds": 0.5,
+      "ReferenceDistance": 8,
+      "MaxDistance": 25,
+      "SpatialBlend": 0.6,
+      "ReverbSend": 0.35,
+      "Volume": 0,
+      "Loop": true
+    }
+  }
+}
+```
+
+#### The item `Music` key
+
+**Package:** `com.hypixel.hytale.server.core.asset.type.item.config.ItemMusic`
+
+An item's `Music` block (`ItemMusic`, read with `Item.getMusic()`) makes it playable in a music player. The block
+inherits through the item's `Parent`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `MusicContainer` | string | — | The container the item plays in a music player, checked against the container store. The engine accepts a `Music` block without one: the item still fits the slot, and the player builds no emitter for it |
+| `AudioCategoryOverride` | string | — | An `AudioCategory` id the resulting emitter routes to in place of the container's own category |
+
+Two debug items ship it, `Debug_MusicItem_DeepJungles` and `Debug_MusicItem_ForgottenTemple` (also under
+`Server/Item/Items/_Debug/`). From `Debug_MusicItem_DeepJungles.json`:
+
+```json
+"Music": {
+  "MusicContainer": "Track_Z4J_Deep_Jungles",
+  "AudioCategoryOverride": "AudioCat_AmbientMusic"
+}
+```
+
+A plugin can build an emitter directly with `MusicEmitterBlock.create(musicContainerId, audioCategoryOverrideId,
+referenceDistance, maxDistance, spatialBlend, reverbSend, volume, loop)`, where `volume` is a linear gain (the JSON
+`Volume` is in dB), and add it to the block's chunk-store entity as the player block does, with
+`commandBuffer.addComponent(ref, MusicEmitterBlock.getComponentType(), emitter)`.
 
 ---
 
@@ -477,8 +617,8 @@ descendants and the deepest binding for an event wins, so a parent can give a de
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `MusicEvent` | string | — | The event this binding answers — a free-form name, matched against what a state edge, a transition rule or a `PostMusicEvent` posts |
-| `Stinger` | string | — | The `Stinger` id to play |
+| `MusicEvent` | string | — | **Required** (the container's validator fails a binding without it). The event this binding answers — a free-form name, matched against what a state edge, a transition rule or a `PostMusicEvent` posts |
+| `Stinger` | string | — | **Required** (the container's validator fails a binding without it). The `Stinger` id to play |
 | `PlayAt` | [sync point](#sync-points-and-musical-time) | — | Where on the playing music's grid the stinger lands; omit to play immediately |
 | `MinRepeatIntervalSeconds` | float | `0.0` | Window in which the named stinger will not play again — counted per stinger asset, so binding one stinger from two events cannot bypass it |
 | `ShortLead` | enum | `DropPickup` | When the sync point is closer than the stinger's own pickup: `DropPickup` plays from the entry marker so the accent still lands on the boundary; `Skip` drops it; `Defer` waits for the next occurrence (arrives late); `TrimPickup` keeps whatever pickup fits |
@@ -636,8 +776,11 @@ session with no forced music and every axis at its default.
 - **`AudioStateComponent`** — `setValue(int axisIndex, int valueIndex, StateTransition transitionOverride)`. It
   ignores axes whose `Authority` is `Client`, out-of-range values, and a repeat of the current value with the same
   override. A tick system sends one `SetAudioState` per changed axis. Pass `null` as the override to let the
-  axis's own `Transitions` apply (the path the shipped encounters take, and the one that posts an edge's
-  `PostEvent`); `AudioStateSetCommand` builds an override from a bare fade length when one is wanted.
+  axis's own `Transitions` apply (the one that posts an edge's `PostEvent`); `AudioStateSetCommand` builds an
+  override from a bare fade length when one is wanted. An encounter's `SetEncounterAudioState` passes `null` when it
+  omits `FadeMs` and an override when it sets one. 15 of the 21 shipped actions omit it; the other six set it, five in
+  the Gobliterator template on `AudioState_Gobliterator_Saw_Charge_Pitch`, which only sound events subscribe to
+  (`"FadeMs": 0`), and one in `Example_Boss` (`"FadeMs": 1500`).
 
 The helper below is assembled from `AudioMusicForceCommand` and `AudioStateSetCommand`. It touches the entity
 store, so call it on the world thread (inside `world.execute(...)` from elsewhere).
@@ -719,4 +862,5 @@ an axis that encounter drives.
 - **`maps phases but names no AudioState`** → a `Horizontal` container has `Phases` without `AudioState`.
 - **A stinger never plays.** The event must be bound on a container that is *playing* when the event is posted (or on one of its ancestors), the `Stinger` id must resolve (an unknown one only logs "the binding will do nothing" when the container is sent), and `MinRepeatIntervalSeconds` or an outranking stinger in the same `ExclusionGroup` may be suppressing it.
 - **A container without `TransitionType` switches differently than in 0.6.8.** The default moved from `Crossfade` to `FadeOutFadeIn`; set `"TransitionType": "Crossfade"` to keep the old behaviour.
+- **A music player block stays silent.** The block needs an `ItemContainerBlock` beside its `MusicPlayerBlock`, the item must carry a `Music` block (any other item is refused by the slot filter), and that `Music` block needs a `MusicContainer`. The track starts only after `StartDelaySeconds`.
 - **Forced music or an axis set from a plugin snaps back.** An encounter tracking that player re-applies its own values every tick — see [Driving Music from Java](#driving-music-from-java).

@@ -122,7 +122,7 @@ Top-level keys (`SoundEvent.CODEC`):
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Layers` | array | One or more concurrent sound layers (see below). Sound files are referenced only via `Files` inside a layer — there is no top-level `Files` field |
+| `Layers` | array | **Required** (`Validators.nonNull()`, 1–8 layers; a `Parent` can supply it). One or more concurrent sound layers (see below). Sound files are referenced only via `Files` inside a layer |
 | `Volume` | float | Base volume adjustment in dB (−100 … 10; default: 0) |
 | `Pitch` | float | Base pitch adjustment in **semitones** (−12 … 12; rare — 43 assets) |
 | `SpatialBlend` | float | Spatial blend, 0–1: `1.0` = fully 3D point source, `0.0` = fully diffuse/centred on the player. Only applies in Stereo Headphone mode (162 assets) |
@@ -141,7 +141,7 @@ Top-level keys (`SoundEvent.CODEC`):
 
 | Layer property | Type | Description |
 |----------------|------|-------------|
-| `Files` | array | `.ogg` paths rooted at `Common/Sounds/` (the `Sounds/` root is enforced by the validator); one is picked per play |
+| `Files` | array | **Required**, non-empty (`Validators.nonEmptyArray()`). `.ogg` paths rooted at `Common/Sounds/` (the `Sounds/` root is enforced by the validator); one is picked per play |
 | `Volume` | float | Layer volume offset in dB (−100 … 10) |
 | `StartDelay` | float | Delay before the layer starts (seconds) |
 | `FadeIn` | float | Seconds over which the layer ramps from silence to full volume once it begins, after any `StartDelay` (0.6.3+; `getFadeIn()`) |
@@ -598,7 +598,7 @@ object with `Min`/`Max`):
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `SoundEventId` | string | Sound event to trigger |
+| `SoundEventId` | string | **Required** (`Validators.nonNull()`). Sound event to trigger |
 | `Frequency` | object | `Min`/`Max` range controlling how often the sound triggers |
 | `Radius` | object | `Min`/`Max` spawn distance range from the player. With `Play3D: LocationNameRandom` it only bounds position selection, and it is **ignored entirely** when `Play3D` is `LocationName` |
 | `Play3D` | string | Emitter placement (`AmbienceFXSoundPlay3D`): `Random` (anywhere in `Radius`, the default), `LocationNameRandom` / `LocationName` (on a block whose sound set matches `BlockSoundSetId`), or `No` (non-positional) |

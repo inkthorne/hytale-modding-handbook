@@ -697,7 +697,7 @@ are emitted (`BlockParticleSet.CODEC`):
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Particles` | object | Map of `BlockParticleEvent` → particle-system id. **The events do not sit at the top level.** |
+| `Particles` | object | **Required** (`Validators.nonNull()`; a `Parent` can supply it). Map of `BlockParticleEvent` → particle-system id. **The events go inside this map, one level below the set's top level.** |
 | `Color` / `Scale` / `PositionOffset` / `RotationOffset` | — | Emission defaults applied to the set's particles |
 
 ### Particle Event Types
@@ -943,7 +943,7 @@ registered name. The names shipped blocks actually use, with counts:
 | `RespawnBlock` (16) | Bed spawn point |
 | `AugmentBlock` (8) | Augmentable blocks (the augment-blocks plugin) |
 | `BlockMapMarker` (5) | A world-map marker carried by the block |
-| `MusicEmitterBlock` (4) / `MusicPlayerBlock` (1) | Ambient music sources |
+| `MusicEmitterBlock` (4) / `MusicPlayerBlock` (1) | Music played at the block, and a jukebox that plays an inserted item's music (see [Music blocks](audio-music.md#music-blocks-and-music-items)) |
 | `BlockSpawner` (2) / `SpawnMarkerBlock` (1) / `Coop` (1) | Entity spawners |
 | `Portal` (2) | Portal blocks |
 | `LaunchPad`, `Teleporter`, `TilledSoil`, `TrackedPlacement`, `InstanceConfig`, `PrefabSpawner` | One shipped block each |

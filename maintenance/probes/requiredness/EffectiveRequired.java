@@ -22,6 +22,8 @@ import java.util.*;
  * classes). Output, one TSV line per entry:
  *   class <TAB> status <TAB> detail
  *   status: KEYS (detail = failing keys, comma separated; empty = decodes clean),
+ *           CODEC_LEVEL (validation failed with no key attached: a codec-level validator or
+ *             afterDecode hook rejected the empty document, which no per-key attribute can see),
  *           THROW (decode threw before validation finished; detail = type: message),
  *           NOCODEC (no static field of that name holding a BuilderCodec),
  *           ABSTRACT (BuilderCodec without a supplier),
@@ -78,7 +80,7 @@ public class EffectiveRequired {
                     for (String ln : e.getMessage().split("\n"))
                         if (ln.startsWith("Key: ")) keys.add(ln.substring(5).trim());
                     status = "KEYS"; detail = String.join(",", keys);
-                    if (keys.isEmpty()) { status = "THROW"; detail = "CodecValidationException without a Key line: " + e.getMessage().replace('\n', ' '); }
+                    if (keys.isEmpty()) { status = "CODEC_LEVEL"; detail = e.getMessage().replace('\n', ' '); }
                 }
             } catch (ExceptionInInitializerError | NoClassDefFoundError e) {
                 status = "INIT"; detail = String.valueOf(e.getCause() != null ? e.getCause() : e).replace('\n', ' ');

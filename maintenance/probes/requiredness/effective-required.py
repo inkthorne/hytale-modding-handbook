@@ -137,6 +137,9 @@ print(f"PREDICTED {npred} null_validated key(s) in {status['KEYS']} decodable cl
 print(f"  {pass_nonnull} accept omission because the field already holds a non-null default")
 print(f"  {len(pass_null)} accept omission although the initialiser reads null (assigned elsewhere, e.g. the constructor)")
 print(f"  {len(unresolved)} accept omission, default not resolvable by defaults_probe")
+codec_level = sorted(n.split('.')[-1] for n, (st, _) in measured.items() if st == 'CODEC_LEVEL')
+print(f"CODEC-LEVEL {len(codec_level)} class(es) reject an empty document through a codec-level validator or afterDecode hook "
+      f"with no key attached - outside every per-key attribute" + (f": {', '.join(codec_level)}" if a.verbose else ''))
 print(f"UNPARSED {len(unparsed)} decodable class(es) have no chain the parser can read (static-block codecs); the engine "
       f"rejects omitted keys in {sum(1 for _, m in unparsed if m)} of them")
 print(f"UNEXPLAINED {len(unexplained)} key(s) failed that the parser does not mark null_validated "

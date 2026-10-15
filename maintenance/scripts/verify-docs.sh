@@ -797,8 +797,9 @@ section "[HARD] The gates' own fixtures pass"
 # runs the fixture by hand and meets a wall of red at the worst possible moment,
 # which is precisely when "delete the failing mutations" is the cheap repair.
 #
-# Cost is ~4s against a run that compiles six Gradle projects, so --mutations is
-# included rather than deferred behind a flag. The exception is
+# Cost is ~1 min against a run that compiles six Gradle projects (codec ~26s and
+# registry ~21s of it, both added 2026-10-15), so --mutations is included rather
+# than deferred behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
 # update-build.sh end to end against generated jars: 181 checks in ~27s, which
 # is kept here because those scripts run only at a game update, and their
@@ -813,8 +814,8 @@ section "[HARD] The gates' own fixtures pass"
 # runners as literals in the `for`, the loop always executed at least once, so
 # FIX_RAN could not reach 0 and its floor below was untestable. Folding them in was
 # the obvious tidy-up and would have removed that guarantee silently.
-FIXTURE_RUNNERS='check-codec-fixture.py
-check-registry-fixture.py
+FIXTURE_RUNNERS='check-codec-fixture.py --mutations
+check-registry-fixture.py --mutations
 check-section-binder-fixture.py
 check-type-values-fixture.py --mutations
 check-asset-ids-fixture.py --mutations
@@ -850,7 +851,7 @@ while IFS= read -r R; do
     FIX_OK=0
     fail "${R%% *} exited 0 but printed no summary line — it ran, or did it?"
   else
-    printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|MUTATIONS)\b' | sed 's/^/        /'
+    printf '%s\n' "$OUT" | grep -E '^(FIXTURE|TRAPS|INDEPENDENT|AGREEMENT|MUTATIONS)\b' | sed 's/^/        /'
   fi
 done <<< "$FIXTURE_RUNNERS"
 # The count is DERIVED from the loop. It used to read "all 3" as a literal while the
@@ -867,6 +868,37 @@ elif [ "$FIX_OK" -eq 1 ]; then
   # the number derived and the list beside it still naming three, which is the same
   # defect one field over and was visible only because the derived count moved.
   pass "all $FIX_RAN gate fixtures pass: $FIX_NAMES"
+fi
+
+# =====================================================================
+section "[HARD] Requiredness probes run against the jar"
+# CLAUDE.md invariant 7: "required" is two facts, and only the engine settles
+# which keys reject their omission. Both probes decode real documents through the
+# installed jar's codec library. run.sh --self-test first sabotages its own
+# negative control and requires the run to report itself VOID, then pins the
+# measured matrix (exit 1 if an expectation moved). effective-required.py decodes
+# {} through every CODEC in the jar and compares with codec_parser (exit 2 = its
+# controls flipped, the run is void). ~6s together. They need a JDK; without one
+# the section says so rather than passing silently.
+if ! command -v javac >/dev/null 2>&1; then
+  warn "javac not found — requiredness probes skipped (invariant 7's measurements are unchecked this run)"
+else
+  RQ_OK=1
+  OUT="$(maintenance/probes/requiredness/run.sh --self-test 2>&1)"; RC=$?
+  if [ "$RC" -ne 0 ]; then
+    RQ_OK=0; fail "requiredness probe failed (rc $RC):"
+    printf '%s\n' "$OUT" | grep -E 'VOID|PINNED|NEGATIVE|FAIL|Exception' | sed 's/^/    /'
+  else
+    printf '%s\n' "$OUT" | grep -E '^(NEGATIVE CONTROL|true flag alone|PINNED)' | sed 's/^/        /'
+  fi
+  OUT="$(python3 maintenance/probes/requiredness/effective-required.py 2>&1)"; RC=$?
+  if [ "$RC" -ne 0 ]; then
+    RQ_OK=0; fail "effective-required.py failed (rc $RC):"
+    printf '%s\n' "$OUT" | sed 's/^/    /'
+  else
+    printf '%s\n' "$OUT" | grep -E '^(MEASURED|PREDICTED|UNEXPLAINED)' | sed 's/^/        /'
+  fi
+  [ "$RQ_OK" -eq 1 ] && pass "requiredness probes hold: the true flag never rejects an omitted key; engine verdicts match the parser"
 fi
 
 # =====================================================================

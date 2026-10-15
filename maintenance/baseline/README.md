@@ -78,4 +78,5 @@ against the new build:
 ```bash
 cp ~/.cache/hytale-assets/CommonAssetsIndex.hashes maintenance/baseline/
 maintenance/scripts/hash-server-assets.sh > maintenance/baseline/ServerAssetsIndex.hashes
+python3 maintenance/scripts/check-asset-ids.py --report-typing --dump-typing maintenance/baseline/AssetIdTyping.txt   # the asset-id gate's typing snapshot
 ```

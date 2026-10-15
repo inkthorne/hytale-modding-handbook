@@ -80,7 +80,7 @@
   {
    "label": "nonEmptyArray() is a NonNullValidator subclass: the literal `nonNull()` text misses it",
    "path": "com/hypixel/hytale/server/core/modules/interaction/interaction/config/server/RunOnBlockTypesInteraction.java",
-   "why": "RunOnBlockTypesInteraction.java:63 attaches Validators.nonEmptyArray() to BlockSets, and NonEmptyArrayValidator extends NonNullValidator, so BuilderField.nonNullValidator is set and an omitted BlockSets fails decode (probe config `e`). The parser matched only the literal `Validators.nonNull()`, so it called this key unvalidated - 21 keys at 0.7.2 were missed that way. All four keys are strict_null (flag at :55/:59/:63/:67), which makes none of them required: the old union listed all four.",
+   "why": "RunOnBlockTypesInteraction.java:63 attaches Validators.nonEmptyArray() to BlockSets, and NonEmptyArrayValidator extends NonNullValidator, so BuilderField.nonNullValidator is set: BlockSets is null_validated (probe config `e`: a nonEmptyArray key on a null field rejects its omission). It does NOT reject omission here, because the field starts as EMPTY_BLOCKSETS - `RunOnBlockTypesInteraction.CODEC.decode({})` succeeds (probe R3); null_validated is what the parser reports, not a promise of rejection. The parser matched only the literal `Validators.nonNull()`, so it called this key unvalidated - 21 keys at 0.7.2 were missed that way. All four keys are strict_null (flag at :55/:59/:63/:67), which makes none of them required: the old union listed all four.",
    "expect_keys": 4,
    "expect_null_validated": [
     "BlockSets"

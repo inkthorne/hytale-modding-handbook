@@ -12,6 +12,7 @@ while [ $# -gt 0 ]; do
   case "$1" in --jar) jar="$2"; shift 2;; --assets) assets="$2"; shift 2;; --self-test) self_test=1; shift;; *) echo "unknown arg $1" >&2; exit 3;; esac
 done
 [ -f "$jar" ] || { echo "FAIL  HytaleServer.jar not found at $jar" >&2; exit 3; }
+[ -d "$assets/Server/Item/CustomConnectedBlockTemplates" ] || { echo "FAIL  extracted assets not found at $assets (need Server/Item/CustomConnectedBlockTemplates)" >&2; exit 3; }
 command -v javac >/dev/null || { echo "FAIL  javac not on PATH" >&2; exit 3; }
 out="$(mktemp -d)"; trap 'rm -rf "$out"' EXIT
 echo "jar: $jar ($(unzip -p "$jar" META-INF/MANIFEST.MF | tr -d '\r' | /usr/bin/grep -i '^Implementation-Version'))"

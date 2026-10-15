@@ -89,6 +89,11 @@ FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
 PATH_TOKEN = re.compile(r'[\w./\-]*?/([\w.\-]+?)\.(?:json|particlesystem|particlespawner)\b')
 PATH_FULL = re.compile(r'[\w./\-]+\.(?:json|particlesystem|particlespawner)\b')
 IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+# The two position-evidence widenings (see position_evidence). They were added AFTER the first
+# docs run, which flagged 60 pairs without them; WIDEN = False reproduces that first setting so the
+# change is always reportable under both.
+WIDEN = True
+EXEMPT_CLASSES = ('shape', 'position-evidence', 'shipped-use', 'placeholder', 'pack', 'page-defined')
 
 
 def stem_of(name: str):
@@ -448,6 +453,105 @@ def lookup_families(path, typed, sweep):
     return fams, via
 
 
+def position_evidence(path, sweep, idx):
+    """What the shipped assets show at THIS position, beyond the typed classes.
+
+    A bare-key class can be a mixture of two codec fields that happen to share a
+    name (`Build` is 9 sound ids and 1 particle id: typed to sounds at 0.90 by that
+    margin). Two monotone widenings, each read from the shipped assets at the exact
+    position and neither able to type a position that was not already typed:
+      stores    the stores in which >= P of the values at exactly (parent, key)
+                resolve, at ANY N — a path with little data still says where its
+                few values live;
+      verbatim  the shipped values themselves, from every class the position matches:
+                a value the game ships under this key is real by demonstration even
+                when it resolves nowhere (`Empty`, a built-in; `Full`; the
+                `Melee`/`Ranged` tag values under `Attack`)."""
+    k = path[-1]
+    p = path[-2] if len(path) > 1 else None
+    stores, verb = set(), set()
+    if p is not None and (p, k) in sweep.L2:
+        vs = sweep.L2[(p, k)]
+        c = collections.Counter(s for v in vs for s in set(resolves(v, idx)))
+        stores |= {s for s, n in c.items() if n / len(vs) >= P_MIN}
+        verb |= vs
+    verb |= sweep.L1.get((k,), set())
+    if p is not None:
+        verb |= sweep.LW.get((p, '*'), set())
+    return stores, verb
+
+
+# ---------------------------------------------------------------- evaluation
+class Ctx:
+    """Everything derived from the shipped assets (reusable across doc trees)."""
+
+
+def build_context(assets: pathlib.Path, src: pathlib.Path) -> Ctx:
+    c = Ctx()
+    c.declared = mine_store_paths(src)
+    c.stores, c.idx, c.absent = build_stores(assets, c.declared)
+    c.sweep = Sweep()
+    c.sweep.run(assets)
+    c.typed, c.excl, c.ratios = {}, {}, {}
+    for lvl, table in (('L1', c.sweep.L1), ('L2', c.sweep.L2), ('LW', c.sweep.LW)):
+        c.typed[lvl], c.excl[lvl], c.ratios[lvl] = type_classes(table, c.idx)
+    c.covered = set()
+    for lvl in c.typed:
+        for fams, _, _ in c.typed[lvl].values():
+            c.covered |= fams
+    return c
+
+
+def evaluate(pages, ctx: Ctx, packs):
+    """One verdict per extracted pair. verdict is one of 'untyped', 'resolved',
+    'failed' or an exemption class in EXEMPT_CLASSES. Order of the checks is the
+    order of the cheapest-and-most-structural first; an exemption is only reached
+    for a value that did NOT resolve, so an exemption count is a count of things it
+    actually excused."""
+    stores_set = set(ctx.stores)
+    out = []
+    for r in pages:
+        text = r['text']
+        pre_prefixes, pre_ids = placeholder_note(text)
+        pdef = page_defined(text, stores_set)
+        pack_ids = {}
+        for pk, ids in packs.items():
+            if pk in text:
+                for i in ids:
+                    pack_ids[i] = pk
+        for line, path, val in r['pairs']:
+            rec = dict(page=r['name'], line=line, path=path, val=val, fams=(), hit=(), verdict=None)
+            out.append(rec)
+            fams, via = lookup_families(path, ctx.typed, ctx.sweep)
+            rec['fams'] = tuple(sorted(fams))
+            if not fams:
+                rec['verdict'] = 'untyped'
+                continue
+            core, gen = norm_value(val)
+            if not core or not ID_SHAPE.match(core) or NUMERIC.match(core):
+                rec['verdict'] = 'shape'
+                continue
+            hit = resolves(val, ctx.idx)
+            rec['hit'] = tuple(sorted(set(hit)))
+            if set(hit) & fams:
+                rec['verdict'] = 'resolved'
+                continue
+            ev_stores, verb = position_evidence(path, ctx.sweep, ctx.idx) if WIDEN else (set(), set())
+            if set(hit) & ev_stores:
+                rec['verdict'] = 'position-evidence'
+            elif val in verb or core in verb:
+                rec['verdict'] = 'shipped-use'
+            elif val in pre_ids or core in pre_ids or any(core.startswith(p) for p in pre_prefixes):
+                rec['verdict'] = 'placeholder'
+            elif core in pack_ids:
+                rec['verdict'] = 'pack'
+            elif core in pdef and (pdef[core] & fams):
+                rec['verdict'] = 'page-defined'
+            else:
+                rec['verdict'] = 'failed'
+    return out
+
+
 # -------------------------------------------------------------------- main
 def load_snapshot(path: pathlib.Path):
     out = {}
@@ -498,15 +602,9 @@ def main():
         return 2
 
     # ---- the asset sweep ------------------------------------------------
-    declared = mine_store_paths(src)
-    stores, idx, absent = build_stores(assets, declared)
-    sweep = Sweep()
-    sweep.run(assets)
-    typed = {}
-    excl = {}
-    ratios = {}
-    for lvl, table in (('L1', sweep.L1), ('L2', sweep.L2), ('LW', sweep.LW)):
-        typed[lvl], excl[lvl], ratios[lvl] = type_classes(table, idx)
+    ctx = build_context(assets, src)
+    declared, stores, idx, absent = ctx.declared, ctx.stores, ctx.idx, ctx.absent
+    sweep, typed, excl, ratios = ctx.sweep, ctx.typed, ctx.excl, ctx.ratios
     t_sweep = time.time() - t0
 
     n_stores_present = len(stores)
@@ -517,10 +615,7 @@ def main():
               f"{sum(len(v) for v in typed.values())} typed class(es)")
         return 3
 
-    covered = set()
-    for lvl in typed:
-        for fams, _, _ in typed[lvl].values():
-            covered |= fams
+    covered = ctx.covered
     ties = sum(1 for lvl in typed for fams, _, _ in typed[lvl].values() if len(fams) > 1)
 
     print(f"  INFO  asset sweep: {sweep.files} JSON-bodied file(s) swept under Server/ "
@@ -572,50 +667,17 @@ def main():
             tot[k] += r[k]
     bad_extract = [(r['name'], ln, d) for r in pages for ln, d in r['strict_disagree']]
 
-    stores_set = set(stores)
-    checked = collections.Counter()
-    exempt = collections.Counter()
-    flags = []
-    typed_pairs = 0
-    untyped_pairs = 0
-    fam_checked = collections.Counter()
-    for r in pages:
-        text = r['text']
-        pre_prefixes, pre_ids = placeholder_note(text)
-        pdef = page_defined(text, stores_set)
-        pack_ids = {}
-        for pk, ids in packs.items():
-            if pk in text:
-                for i in ids:
-                    pack_ids[i] = pk
-        for line, path, val in r['pairs']:
-            fams, via = lookup_families(path, typed, sweep)
-            if not fams:
-                untyped_pairs += 1
-                continue
-            typed_pairs += 1
-            core, gen = norm_value(val)
-            if not core or not ID_SHAPE.match(core) or NUMERIC.match(core):
-                exempt['shape'] += 1
-                continue
-            hit = resolves(val, idx)
-            if set(hit) & fams:
-                checked['resolved'] += 1
-                for f in fams & set(hit):
-                    fam_checked[f] += 1
-                continue
-            if val in pre_ids or core in pre_ids or any(core.startswith(p) for p in pre_prefixes):
-                exempt['placeholder'] += 1
-                continue
-            if core in pack_ids:
-                exempt['pack'] += 1
-                continue
-            if core in pdef and (pdef[core] & fams):
-                exempt['page-defined'] += 1
-                continue
-            checked['failed'] += 1
-            kind = ('exists only as ' + ', '.join(sorted(set(hit)))) if hit else 'absent from every store'
-            flags.append((r['name'], line, path, val, sorted(fams), kind))
+    records = evaluate(pages, ctx, packs)
+    verdicts = collections.Counter(r['verdict'] for r in records)
+    exempt = collections.Counter({k: verdicts[k] for k in EXEMPT_CLASSES})
+    checked = collections.Counter(resolved=verdicts['resolved'], failed=verdicts['failed'])
+    untyped_pairs = verdicts['untyped']
+    typed_pairs = len(records) - untyped_pairs
+    fam_checked = collections.Counter(f for r in records if r['verdict'] == 'resolved'
+                                      for f in set(r['fams']) & set(r['hit']))
+    flags = [(r['page'], r['line'], r['path'], r['val'], list(r['fams']),
+              ('exists only as ' + ', '.join(r['hit'])) if r['hit'] else 'absent from every store')
+             for r in records if r['verdict'] == 'failed']
 
     t_docs = time.time() - t1
     n_pairs = tot['tolerant_pairs']
@@ -631,7 +693,7 @@ def main():
     n_exempt = sum(exempt.values())
     print(f"  INFO  pairs: {n_pairs} string value(s) extracted, {typed_pairs} at a typed position "
           f"({untyped_pairs} untyped, not checkable); of the typed: {checked['resolved']} resolved, "
-          f"{n_exempt} exempt (" + ', '.join(f"{k} {exempt[k]}" for k in ('shape', 'placeholder', 'pack', 'page-defined'))
+          f"{n_exempt} exempt (" + ', '.join(f"{k} {exempt[k]}" for k in EXEMPT_CLASSES)
           + f"), {checked['failed']} failed; resolved in {len(fam_checked)} distinct store(s)")
     print(f"  INFO  timing: asset sweep {t_sweep:.1f}s, docs scan {t_docs:.1f}s")
     if typed_pairs != checked['resolved'] + n_exempt + checked['failed']:

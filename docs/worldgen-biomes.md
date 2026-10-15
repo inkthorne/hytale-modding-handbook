@@ -7,7 +7,7 @@ seo:
 
 # Biome System
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.7.2**
 
 A biome is a node-graph file under `Server/HytaleGenerator/Biomes/`. It defines the
 terrain heightfield, the materials that fill solid and empty space, optional scattered
@@ -75,12 +75,13 @@ These are JSON worldgen node types (not Java classes); the table lists the key n
 
 ```
 Server/HytaleGenerator/Biomes/
-├── Plains1/        Plains1_Oak.json, Plains1_River.json, Plains1_Shore.json, ...
+├── Plains1/        Plains1_Oak.json, Plains1_Gorges.json, Plains1_Hills.json, Plains1_River.json, Plains1_Trork.json
 ├── Desert1/        Desert1_Oasis.json, Desert1_River.json, ...
 ├── Taiga1/         Taiga1_Redwood.json, Taiga1_Mountains.json, ...
 ├── Volcanic1/      Volcanic1_Jungle.json, Volcanic1_Caldera.json, ...
 ├── Boreal1/        Boreal1_Hedera.json, Boreal1_Henges.json
 ├── Ocean1/         Oceans.json
+├── Portal_Goblin/  Portal_Goblin_Biome.json, Portal_Goblin_Biome_Edge.json, two Debug_* biomes
 ├── Examples/       single-concept demo graphs
 ├── Experimental/   work-in-progress biomes
 ├── Generative/     generative structure biomes
@@ -109,7 +110,7 @@ shipped biomes):
 | `EnvironmentProvider` | optional | Sky/ambient environment selection |
 | `TintProvider` | optional | Block color tint selection |
 | `FloatingFunctionNodes` | optional | Array of free-standing density nodes (typically carrying `ExportAs`) that are built but not wired into `Terrain`; unused by the shipped biomes |
-| `Tags` | optional | Generic asset tags (`{"Template": []}` on 11 of the 75 shipped biomes); a `Map<String, String[]>` read by `AssetBuilderCodec.TAGS_CODEC` for every asset type, not by the generator |
+| `Tags` | optional | Generic asset tags (`{"Template": []}` on 17 of the 75 shipped biomes); a `Map<String, String[]>` read by `AssetBuilderCodec.TAGS_CODEC` for every asset type, not by the generator |
 
 The first seven are exactly the keys of the biome codec
 (`com.hypixel.hytale.builtin.hytalegenerator.assets.biomes.BiomeAsset.CODEC`); `Tags` comes
@@ -118,9 +119,9 @@ from the shared `AssetBuilderCodec` every JSON asset inherits. There is no top-l
 with `ExportAs`.
 
 Across the 75 shipped biome files: `Terrain` and `MaterialProvider` appear in all 75, `Name`
-in 74 (`Volcanic1/Volcanic1_Shore.json` is the one that omits it and falls back to
-`"DefaultName"`), `TintProvider` in 60, `EnvironmentProvider` in 59, `Props` in 47, and
-`FloatingFunctionNodes` in none.
+in 73 (`Volcanic1/Volcanic1_Shore.json` and `Examples/Example_Runtime.json` omit it and fall
+back to `"DefaultName"`), `TintProvider` and `EnvironmentProvider` in 59 each, `Props` in 51,
+and `FloatingFunctionNodes` in none.
 
 > There is **no** `TileBiome` / `CustomBiome` distinction, no `LayerContainer`,
 > `CoverContainer`, `PrefabContainer`, `WaterContainer`, `FadeContainer`,
@@ -129,8 +130,8 @@ in 74 (`Volcanic1/Volcanic1_Shore.json` is the one that omits it and falls back 
 
 A biome file may be serialized in one of two equivalent styles (see
 [worldgen.md](worldgen.md#the-node-graph-model)): with `$NodeId` plus a
-`$NodeEditorMetadata` block, or with `$Title` / `$Position` editor keys. The
-generation-relevant content is identical.
+`$NodeEditorMetadata` block (53 of the 75 shipped files), or with `$Title` / `$Position`
+editor keys (the other 22). The generation-relevant content is identical.
 
 ---
 
@@ -182,10 +183,12 @@ with a base-height curve:
 ```
 
 Production biomes (e.g. `Plains1/Plains1_Oak.json`) nest many `Min`/`Max`/`Sum`/`Mix`,
-`Normalizer`, `Pow`, `Cache`, and `YOverride` nodes over several `SimplexNoise2D`
-sources, and pull in shared fields with `Imported` (e.g. a cave terrain field). A node can
-publish an intermediate result with `ExportAs` (e.g. `"ExportAs": "Plains1_Oak_Terrain_Field"`)
-so the material provider and prop graphs can sample the same field by `Imported` name.
+`Normalizer`, `Cache`, `YSampled` and `YOverride` nodes over several `SimplexNoise2D`
+sources, and combine the surface with a cave field — a shared field pulled in with
+`Imported`, or (in the Plains1 biomes) a `Graph` node reading the `Plains1_Caves` graph
+generator; see [worldgen-caves.md](worldgen-caves.md). A node can publish an intermediate
+result with `ExportAs` (e.g. `Plains1_Oak.json`'s `"ExportAs": "Plains1_Oak_Dips"`) so the
+material provider and prop graphs can sample the same field by `Imported` name.
 
 `BaseHeight` references a named world constant defined by the world structure's
 `Framework` (commonly `"Base"`); see [worldgen-zones.md](worldgen-zones.md#framework).
@@ -195,10 +198,14 @@ so the material provider and prop graphs can sample the same field by `Imported`
 ## MaterialProvider
 
 `MaterialProvider` decides which block id occupies each cell. Terrain biomes use
-`Type` `Solidity`, which has two required branches:
+`Type` `Solidity` (at the top level, or as the last entry of a top-level `Queue`), which has
+two branches:
 
 - `Solid` — materials placed where terrain is solid.
 - `Empty` — materials placed in open space (air, and any fluids such as water).
+  `Plains1_Oak`'s `Solidity` ships without an `Empty` branch at all, which leaves the
+  asset's default (a `Constant` provider) in place; `Plains1_Gorges` and `Plains1_Hills`
+  put a `SimpleHorizontal` there rather than the usual `Queue`.
 
 A `Material` leaf carries a block id: `{"Solid": "Soil_Dirt"}`, `{"Solid": "Rock_Stone"}`,
 `{"Solid": "Empty"}`, or a fluid `{"Fluid": "Water_Source"}`.
@@ -242,8 +249,10 @@ The `SpaceAndDepth` node itself may carry a `Condition` — `AlwaysTrueCondition
 `EqualsCondition` (`ContextToCheck` + `Value`), `GreaterThanCondition` /
 `SmallerThanCondition` (`ContextToCheck` + `Threshold`), `AndCondition` / `OrCondition`
 (`Conditions`) or `NotCondition` (`Condition`); `ContextToCheck` is
-`SPACE_ABOVE_FLOOR` or `SPACE_BELOW_CEILING`. `LayerContext` is `"DEPTH_INTO_FLOOR"` in
-every shipped biome; the enum's other value is `"DEPTH_INTO_CEILING"`.
+`SPACE_ABOVE_FLOOR` or `SPACE_BELOW_CEILING`. `LayerContext` is `"DEPTH_INTO_FLOOR"` on 117
+of the 120 shipped `SpaceAndDepth` nodes; the other three (in `Volcanic1_Jungle`,
+`Volcanic1_River` and `Experimental/Zone4`) use the enum's other value,
+`"DEPTH_INTO_CEILING"`.
 
 Surface layering example — grass on top, dirt below (from `Default_Flat/Default_Flat.json`):
 
@@ -266,8 +275,9 @@ Surface layering example — grass on top, dirt below (from `Default_Flat/Defaul
 ```
 
 Water is placed by the `Empty` branch as a fluid material within a Y band — e.g.
-`Plains1_Oak`'s empty queue places `{"Fluid": "Water_Source"}` between two `Base`-relative
-Y values, then falls through to `{"Solid": "Empty"}`.
+`Taiga1_River`'s empty queue places `{"Fluid": "Water_Source"}` with a `SimpleHorizontal`
+from 8 blocks below up to the `Water` height (`BottomY: -8`, `TopY: 0`, both relative to
+`"Water"`), then falls through to `{"Solid": "Empty"}`.
 
 ---
 
@@ -277,7 +287,7 @@ Y values, then falls through to `{"Solid": "Empty"}`.
 `Assignments` to place there, and may carry `Skip` and a `Runtime` ordering value.
 (Alternatively an entry carries a single `PropDistribution` node — e.g. a `Union` of
 `Assigned` distributions — instead of the `Positions`/`Assignments` pair; `Taiga1_River.json`
-does this.)
+and every Plains1 biome do this.)
 
 ```json
 "Props": [
@@ -290,25 +300,27 @@ does this.)
       "PointGenerator": {
         "Type": "Mesh",
         "Jitter": 0.4,
-        "ScaleX": 20, "ScaleY": 20, "ScaleZ": 20,
+        "ScaleX": 8, "ScaleY": 8, "ScaleZ": 8,
         "Seed": "A"
       }
     },
     "Assignments": {
       "Type": "Imported",
-      "Name": "Plains1_Oak_Pillars"
+      "Name": "Desert1_River_Rubbles"
     }
   }
 ]
 ```
+
+(From `Desert1/Desert1_River.json`.)
 
 - `Positions` defines candidate points. `Mesh2D` lays out a jittered grid via its
   `PointGenerator` (`Mesh`, with `Jitter`, `ScaleX/Y/Z`, `Seed`). An `Occurrence` node may
   wrap positions to gate them by a probability `FieldFunction`.
 - `Assignments` decides what to place. Most biomes use `{"Type":"Imported","Name":"..."}`
   to reference a graph in `Assignments/` (see
-  [worldgen-zones.md](worldgen-zones.md) and the assignment files such as
-  `Assignments/Plains1/Plains1_Oak_Trees.json`).
+  [worldgen-prefabs.md](worldgen-prefabs.md) and the assignment files such as
+  `Assignments/Plains1/Oak/Plains1_Oak_Trees.json`).
 
 Assignment graphs themselves use `FieldFunction` (mapping a density to placement via
 `Delimiters` with `Min`/`Max`), `Weighted` (weighted random among `WeightedAssignments`),
@@ -330,11 +342,12 @@ Selects the ambient environment for the biome. Two forms occur:
 }
 ```
 
-Observed environment names include `Env_Zone1_Plains`, `Env_Zone1_Shores`, `Env_Zone0`,
-`Env_Void`, `Env_Default_Flat`, `Env_Zone3_Glacial_Henges` (files live in zone subfolders,
-e.g. `Server/Environments/Zone1/Env_Zone1_Plains.json`).
+Observed environment names include `Env_Zone1_Plains`, `Env_Zone0`, `Env_Void`,
+`Env_Default_Flat`, `Env_Zone3_Glacial_Henges` (files live in zone subfolders, e.g.
+`Server/Environments/Zone1/Env_Zone1_Plains.json`). 40 of the 59 shipped providers are
+`Constant`.
 
-**DensityDelimited** — chooses among environments by where a `Density` value falls,
+**DensityDelimited** (the other 19) — chooses among environments by where a `Density` value falls,
 using `Delimiters` each carrying an `Environment` (itself a `Constant` provider) and a
 `Range` (`MinInclusive`/`MaxExclusive`). Used where the environment should vary within the
 biome — `Volcanic1/Volcanic1_Jungle.json` switches between `Env_Zone4_Wastes` and
@@ -375,10 +388,12 @@ single-entry map.
 
 ## TintProvider
 
-Selects a block tint color. Two forms occur:
+Selects a block tint color. Three forms occur (of the 59 shipped providers: `Constant` 32,
+`DensityDelimited` 26, `Mix` 1):
 
-**Constant** — one color for the whole biome (from `Void.json`). A third form, `Mix`,
-blends tint providers (registered as of 0.6.8; unused by the shipped biomes).
+**Constant** — one color for the whole biome (from `Void.json`). **Mix** (`Density`,
+`TintA`, `TintB`) blends two tint providers by a density; `Plains1/Plains1_Trork.json` is
+the one shipped user.
 
 ```json
 "TintProvider": {
@@ -419,7 +434,7 @@ holds a `Tint` (`{"Type":"Constant","Color":"#..."}`) and a `Range`
 
 ## Minimal Biome Example
 
-The smallest complete shape — flat-ish terrain, dirt fill, required empty branch:
+The smallest complete shape — flat-ish terrain, dirt fill, an explicit empty branch (carrying the `"$Comment": "REQUIRED"` many shipped biomes put there):
 
 ```json
 {

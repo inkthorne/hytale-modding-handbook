@@ -7,7 +7,7 @@ seo:
 
 # NPC API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This document covers NPC loading events and AI sensor systems.
 
@@ -53,7 +53,7 @@ NPC System
 
 | Category | File | Description |
 |----------|------|-------------|
-| [NPC Roles](npc-roles.md) | `npc-roles.md` | Asset definitions: templates, variants, behaviors, spawning (1,000 roles) |
+| [NPC Roles](npc-roles.md) | `npc-roles.md` | Asset definitions: templates, variants, behaviors, spawning (1,148 role files) |
 
 ---
 
@@ -306,8 +306,8 @@ protected void setup() {
 
 Backtick-quoted error strings below are the literal messages thrown by the NPC subsystem (verified against `HytaleServer.jar`).
 
-- **`Map of all NPCs must not be empty in AllNPCsLoadedEvent`** → the event was constructed/fired with an empty NPC map. Fix: this is an internal invariant — if you see it, NPC assets failed to load; check the server log for earlier role-load failures rather than the event handler.
-- **`Roles do not have component indexes!`** → NPC role component indexes were queried before roles finished loading. Fix: do role/component work from inside an `AllNPCsLoadedEvent` handler (which fires once all NPCs are loaded), not at plugin `setup()` time.
+- **`Map of all NPCs must not be empty in AllNPCsLoadedEvent`** (and its sibling `Map of loaded NPCs must not be empty in AllNPCsLoadedEvent`) → despite the wording, these are `Objects.requireNonNull` messages: the event's constructor was handed a `null` map, and the result is a `NullPointerException`. An empty map passes. Fix: only reachable by constructing the event yourself; pass both maps, empty if need be.
+- **`Roles do not have component indexes!`** → `Role.getIndex()` throws this `UnsupportedOperationException` unconditionally. A `Role` is the root of its NPC's annotated-component tree (it implements `IAnnotatedComponent`), so it has no index within a parent; `Role.setContext` throws the sibling `Roles do not have parent contexts!`. Fix: when walking a component's parent chain, stop at the `Role` rather than asking it for an index.
 - **Symptom:** an `AllNPCsLoadedEvent` listener registered with `register(...)` never fires → it is a **non-keyed** event. Fix: register it without a key (as shown above); a keyed `register(class, "key", ...)` overload will not match.
 - **Symptom:** sensor/`EventSearchType` configuration in plugin code has no effect → sensors are driven by NPC definition JSON, not plugin code; the Java events are read-only hooks. Fix: configure detection in the role's `Instructions`/`Component_Sensor_*` (see [NPC Roles](npc-roles.md#sensors)).
 

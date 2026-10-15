@@ -7,7 +7,7 @@ seo:
 
 # Drop System
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Drops` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Drops` · **Verified against 0.7.2**
 
 Drop files define loot tables for blocks, NPCs, containers, and world prefabs. They use a hierarchical container system that supports guaranteed drops, weighted random selection, and modular composition through references.
 
@@ -57,17 +57,17 @@ they load into — and how to roll a droplist from a plugin — see [Java API](#
 | Category | Directory | Files | Description |
 |----------|-----------|-------|-------------|
 | [Crops](#crop-drops) | `Crop/` | 231 | Growth stage and harvest drops |
-| [NPCs](#npc-drops) | `NPCs/` | 270 | Creature loot tables |
-| [Mining](#mining-drops) | `Rock/` | 67 | Ore and crystal drops |
+| [NPCs](#npc-drops) | `NPCs/` | 290 | Creature loot tables |
+| [Mining](#mining-drops) | `Rock/` | 69 | Ice, crystal and rubble drops |
 | [Plants](#plant-drops) | `Plant/` | 23 | Wild plant harvesting |
 | [Ingredients](#ingredient-drops) | `Ingredients/` | 9 | Sap, grass, and gatherables |
 | [Wood](#wood-drops) | `Wood/` | 8 | Tree, leaf, and branch drops |
-| [Containers](#container-drops) | `Items/` | 13 | Destructible container drops |
-| [Prefabs](#prefab-drops) | `Prefabs/` | 49 | Encounter loot by zone/tier |
-| [Objectives](#objective-drops) | `Objectives/` | 4 | Quest rewards |
+| [Containers](#container-drops) | `Items/` | 18 | Destructible container drops |
+| [Prefabs](#prefab-drops) | `Prefabs/` | 64 | Encounter, portal and world-event loot |
+| [Objectives](#objective-drops) | `Objectives/` | 2 | Objective rewards |
 | [Traps](#trap-drops) | `Traps/` | 2 | Fishing trap catches |
 
-**Location:** `Assets.zip > Server/Drops/` (678 total files, including two loose root-level
+**Location:** `Assets.zip > Server/Drops/` (718 total files, including two loose root-level
 files `Soil_Gravel.json` and `Soil_Gravel_Pickaxe.json`)
 
 ---
@@ -454,7 +454,7 @@ Defines what crops yield when harvested at different growth stages.
 
 **Organization:** Each crop has its own subdirectory (e.g. `Crop/Carrot/`), containing a file per growth stage and variant.
 
-**Naming Convention:** `Drops_Plant_Crop_{CropName}_{Stage}.json`, with optional biome and harvest qualifiers, e.g. `Drops_Plant_Crop_Carrot_StageFinal.json`, `Drops_Plant_Crop_Carrot_Eternal_StageFinal_Harvest.json`.
+**Naming Convention:** `Drops_Plant_Crop_{CropName}_{Stage}.json`, with optional biome and harvest qualifiers, e.g. `Drops_Plant_Crop_Carrot_StageFinal.json`, `Drops_Plant_Crop_Carrot_Eternal_StageFinal_Harvest.json`. The nine `Health1`–`3`, `Mana1`–`3` and `Stamina1`–`3` crops are the exception: their files are `Plant_Crop_{CropName}.json`, `Plant_Crop_{CropName}_Stage_{0-2}.json` and `Plant_Crop_{CropName}_Harvest.json`.
 
 **Example: Carrot Final Stage** (`Crop/Carrot/Drops_Plant_Crop_Carrot_StageFinal.json`)
 
@@ -492,7 +492,8 @@ Defines what crops yield when harvested at different growth stages.
 
 **Location:** `Server/Drops/NPCs/`
 
-Organized by creature category. NPC drop files use a `Drop_` prefix (e.g. `Drop_Bison.json`):
+Organized by creature category. NPC drop files use a `Drop_` prefix (e.g. `Drop_Bison.json`); the only
+exceptions are two loadout files, `Loadouts/Skeleton_Fighter_Random_Weapon.json` and `Loadouts/Test_Random_Hotbar.json`:
 
 ```
 Server/Drops/NPCs/
@@ -512,6 +513,7 @@ Server/Drops/NPCs/
 │   ├── Outlander/
 │   ├── Trork/
 │   └── Tuluk/
+├── Hunt/                   (Drop_Hunt)
 ├── Inventory/              (droplists used to stock an NPC's inventory, e.g. Drop_Arrows)
 ├── Livestock/
 ├── Loadouts/               (randomised weapon/hotbar loadouts)
@@ -559,9 +561,11 @@ Server/Drops/NPCs/
 
 **Location:** `Server/Drops/Rock/`
 
-Defines drops for ore blocks and crystals when mined.
+Defines drops for ice, crystals and rubble when mined (no ore drops ship here).
 
-**Naming Convention:** `Rock_{Material}.json`, `Crystal_{Type}.json`
+**Naming Convention:** `Rock_Ice.json` and `Rock_Ice_Blue.json` at the top level, 32 crystal files under
+`Crystal/` named `Rock_Crystal_{Colour}*.json`, and 33 `Rubble/Rubble_*.json` files. Two statue blocks, `Furniture_Goblin_Statue_Graffiti.json` and
+`Furniture_Temple_Emerald_Statue_Head.json`, also keep their drops here.
 
 **Example: Ice Rock Drop** (`Rock/Rock_Ice.json`)
 
@@ -579,7 +583,7 @@ Defines drops for ore blocks and crystals when mined.
 }
 ```
 
-**Example: Gem Crystal with Rarity**
+**Example: Gem Crystal with Rarity** (illustrative — the shipped crystal drops are simpler)
 
 ```json
 {
@@ -687,7 +691,7 @@ one that yields a single stick:
 
 **Location:** `Server/Drops/Items/`
 
-Defines what destructible containers (barrels, pots, coffins) drop when broken. Files include `Barrels.json`, `Container_Pot_Clay.json`, `Container_Coffins.json`, `Container_Trash.json`, `Spider_Cocoon.json`, and `Iron_Stack.json`. An `Empty.json` (literally `{}`) is also present for containers that drop nothing.
+Defines what destructible containers (barrels, pots, coffins, scrap piles) drop when broken. Files include `Barrels.json`, `Container_Pot_Clay.json`, `Container_Coffins.json`, `Container_Trash.json`, `Spider_Cocoon.json`, `Iron_Stack.json`, and `Scrap_Pile.json`. An `Empty.json` (literally `{}`) is also present for containers that drop nothing.
 
 **Example: Clay Pot Drop** (`Items/Container_Pot_Clay.json`, abridged — the real file has
 three more loot children)
@@ -726,9 +730,12 @@ A `Choice` with a heavily-weighted `Empty` child so most pots drop nothing:
 
 **Location:** `Server/Drops/Prefabs/`
 
-Loot tables for prefab encounters and structures, organized as a **flat directory** of files named by zone, faction/encounter, and tier.
+Loot tables for prefab encounters and structures, organized as a **flat directory** (no subdirectories).
 
-**Naming Convention:** `Zone{N}_{Faction|Encounters}_Tier{N}.json` (no subdirectories, no `Chest_*` files).
+**Naming Convention:** 48 of the 64 files are `Zone{N}_{Faction|Encounters}_Tier{N}.json`. The other 16 are
+`Portals_*` (portal-world loot, e.g. `Portals_Goblin_Chest_Tier1.json`, `Portals_Oasis.json`) and
+`Coffer_Goblin_Loot_Wave1.json` … `Wave5.json` (the goblin coffer's contents, bound through the
+`ItemContainerBlock` `Droplist` of `Furniture_Goblin_Coffer`'s block states).
 
 ```
 Server/Drops/Prefabs/
@@ -742,7 +749,8 @@ Server/Drops/Prefabs/
 └── ...
 ```
 
-**Example: Zone 1 Trork Tier 1** (`Prefabs/Zone1_Trork_Tier1.json`)
+**Example: Zone 1 Trork Tier 1** (`Prefabs/Zone1_Trork_Tier1.json`, abridged — the real `Choice` has 15
+children: more meats and fish, and the rest of the Trork armour and stone weapons)
 
 A weighted `Choice` of loot rolls combined with a shared zone-encounter droplist:
 
@@ -777,10 +785,12 @@ A weighted `Choice` of loot rolls combined with a shared zone-encounter droplist
 
 Fishing traps and other trap-based loot. The two shipped files are
 `Drops_Fishing_Trap_Crude.json` and `Drops_Fishing_Trap_Crude_Baited_Wild.json`. Both are a
-top-level `Choice` over `$Comment`-labelled rarity buckets — *Common Fish* (weight 100),
-*Common Resource* (99), *Common Junk* (98), *Uncommon Junk* (49), *Rare Junk* (9),
-*Epic Junk* (4), *Legendary Junk* (0.9), *Monster Fish* (0.01) — where each bucket is itself
-a `Choice` of equally-weighted items. Note that weights are `double`, so fractional weights
+top-level `Choice` over `$Comment`-labelled rarity buckets, where each bucket is itself a
+`Choice` of equally-weighted items. The unbaited trap mixes fish with junk — *Common Fish*
+(weight 100), *Common Resource* (99), *Common Junk* (98), *Uncommon Junk* (49), *Rare Junk* (9),
+*Epic Junk* (4), *Legendary Junk* (0.9), *Monster Fish* (0.01). The baited trap catches only
+fish — *Common Fish* (100), *Uncommon Fish* (50), *Rare Fish* (10), *Epic Fish* (5),
+*Legendary Fish* (1), *Monster Fish* (0.1). Note that weights are `double`, so fractional weights
 like `0.9` and `0.01` are the normal way to express very rare buckets.
 
 **Example: Fishing Trap** (illustrative, same shape as the shipped files)
@@ -824,8 +834,9 @@ like `0.9` and `0.01` are the normal way to express very rare buckets.
 
 **Location:** `Server/Drops/Objectives/`
 
-Quest completion rewards. The four files are `Treasure.json`, `Treasure_Map.json`,
-`Trork_Camp_Chest.json`, and `Trork_Camp_Inventory.json`.
+Objective rewards. The two files are `Trork_Camp_Chest.json` and `Trork_Camp_Inventory.json`,
+both referenced by the shipped `Server/Objective/Objectives/` assets. (The treasure-map objective
+was removed in 0.7.2, and its `Treasure.json` and `Treasure_Map.json` drop files with it.)
 
 ---
 
@@ -1240,7 +1251,8 @@ A predator with guaranteed meat and chance for rare drops:
 
 Prefab encounter loot files combine encounter-specific rolls with a shared zone droplist via the `Droplist` type. This is the real pattern used across `Prefabs/Zone*_*_Tier*.json`.
 
-**Zone3_Kweebec_Tier3.json (faction loot + shared zone droplist):**
+**Zone3_Kweebec_Tier3.json (faction loot + shared zone droplist; abridged — the real `Choice` has 34 children, and
+the `$Comment` is added here):**
 ```json
 {
   "Container": {

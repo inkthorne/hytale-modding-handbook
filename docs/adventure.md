@@ -7,20 +7,23 @@ seo:
 
 # Adventure API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item/Items` · **Verified against 0.7.2**
 
-This document covers adventure gameplay features like instance discovery and treasure chests.
+This document covers adventure gameplay features: instance and zone discovery, portal worlds and wilderness tracking.
+
+> **Removed in 0.7.2:** the treasure-map objective — `TreasureChestOpeningEvent`, the treasure-chest block and its
+> interactions — is gone from the jar and the assets, with no replacement. A plugin listening for that event no
+> longer compiles against 0.7.2.
 
 ## Overview
 
-Implemented across `com.hypixel.hytale.builtin` (instances, adventure objectives) and `com.hypixel.hytale.server.core.universe.world` and provides:
+Implemented across `com.hypixel.hytale.builtin` (instances, portals, wilderness) and `com.hypixel.hytale.server.core.universe.world` and provides:
 - ECS events for instance discovery (`DiscoverInstanceEvent` and its `.Display` variant)
 - ECS events for zone discovery (`DiscoverZoneEvent` and its `.Display` variant)
-- A keyed `TreasureChestOpeningEvent` fired when a player opens a treasure chest
 - `InstanceDiscoveryConfig` for controlling how discoveries are displayed
 - `WorldMapTracker` for querying and mutating per-player map/zone discovery state
 - Portal-world configuration assets (`PortalType`, `PortalDescription`, `PillTag`, `PortalSpawnConfig`)
-- The `PortalKey` item property and per-stack `AdventureMetadata` (cursed items)
+- The `PortalKey` item property and per-stack `AdventureMetadata` (ephemeral items)
 - Wilderness tracking (`WildernessConfig`, `WildernessTracker`) — which chunks are still "untouched"
 
 > **Scripted adventure timelines** (stages, forks, conditions, actions) are a separate
@@ -39,9 +42,6 @@ Zone discovery (com.hypixel.hytale.server.core.event.events.ecs)
       └── DiscoverZoneEvent.Display (cancellable)
             └── WorldMapTracker.ZoneDiscoveryInfo
 
-Objectives
-└── TreasureChestOpeningEvent (keyed by String)
-
 Player map state
 └── WorldMapTracker (discover/undiscover zones, teleport/view-radius rules)
 
@@ -50,11 +50,11 @@ Portal worlds (com.hypixel.hytale.server.core.asset.type.portalworld)
       ├── PortalDescription ("Description": name, flavor text, theme color)
       │     └── PillTag[] ("DescriptionTags": cosmetic UI tags)
       ├── PortalSpawnConfig ("Spawn": return-portal rules)
-      └── cursed item ids ("CursedItems")
+      └── ephemeral item ids ("EphemeralItems")
 
 Portal items (com.hypixel.hytale.server.core.asset.type.item.config)
 ├── PortalKey (item "PortalKey" property → portal type + time limit)
-└── metadata.AdventureMetadata (per-stack "Adventure" metadata: Cursed flag)
+└── metadata.AdventureMetadata (per-stack "Adventure" metadata: Ephemeral flag + world)
 
 Wilderness (com.hypixel.hytale.builtin.adventure.wilderness)
 ├── WildernessConfig (GameplayConfig plugin section "Wilderness")
@@ -70,7 +70,6 @@ Wilderness (com.hypixel.hytale.builtin.adventure.wilderness)
 | `DiscoverInstanceEvent.Display` | `builtin.instances.event` | Cancellable ECS event for instance-discovery UI display |
 | `DiscoverZoneEvent` | `server.core.event.events.ecs` | Base ECS event for zone discovery |
 | `DiscoverZoneEvent.Display` | `server.core.event.events.ecs` | Cancellable ECS event for zone-discovery UI display |
-| `TreasureChestOpeningEvent` | `builtin.adventure.objectives.events` | Keyed event fired when a player opens a treasure chest |
 | `InstanceDiscoveryConfig` | `builtin.instances.config` | Configuration for instance-discovery display |
 | `WorldMapTracker` | `server.core.universe.world` | Tracks and mutates per-player map discovery state |
 | `WorldMapTracker.ZoneDiscoveryInfo` | `server.core.universe.world` | Record of zone-discovery details |
@@ -79,7 +78,7 @@ Wilderness (com.hypixel.hytale.builtin.adventure.wilderness)
 | `PillTag` | `server.core.asset.type.portalworld` | Cosmetic UI tag pill shown on a portal description |
 | `PortalSpawnConfig` | `server.core.asset.type.portalworld` | Return-portal and spawn-override settings for a portal world |
 | `PortalKey` | `server.core.asset.type.item.config` | Item config block that turns an item into a portal key |
-| `AdventureMetadata` | `server.core.asset.type.item.config.metadata` | Per-`ItemStack` adventure metadata (the cursed flag) |
+| `AdventureMetadata` | `server.core.asset.type.item.config.metadata` | Per-`ItemStack` adventure metadata (the ephemeral flag) |
 | `WildernessConfig` | `builtin.adventure.wilderness` | `GameplayConfig` plugin section `"Wilderness"` (0.6.3+) |
 | `WildernessTracker` | `builtin.adventure.wilderness.resource` | Per-world `Resource<ChunkStore>`: home vs. wilderness chunks (0.6.3+) |
 | `Wilderness` | `builtin.adventure.wilderness.component` | Per-entity component holding a bitset of nearby wilderness chunks (0.6.3+) |
@@ -97,7 +96,6 @@ Events related to adventure gameplay features.
 | `DiscoverInstanceEvent.Display` | `com.hypixel.hytale.builtin.instances.event` | Instance discovery UI display (ECS, cancellable) |
 | `DiscoverZoneEvent` | `com.hypixel.hytale.server.core.event.events.ecs` | Base class for zone discovery (ECS) |
 | `DiscoverZoneEvent.Display` | `com.hypixel.hytale.server.core.event.events.ecs` | Zone discovery UI display (ECS, cancellable) |
-| `TreasureChestOpeningEvent` | `com.hypixel.hytale.builtin.adventure.objectives.events` | Player opens treasure chest (keyed by String) |
 
 ---
 
@@ -254,55 +252,14 @@ protected void setup() {
 
 ---
 
-## TreasureChestOpeningEvent
-
-**Package:** `com.hypixel.hytale.builtin.adventure.objectives.events`
-
-Fired when a player opens a treasure chest. Implements `IEvent<String>` (keyed by String).
-
-| Method | Return Type | Description |
-|--------|-------------|-------------|
-| `getObjectiveUUID()` | `UUID` | UUID of the adventure objective |
-| `getChestUUID()` | `UUID` | UUID of the treasure chest being opened |
-| `getPlayerRef()` | `Ref<EntityStore>` | Reference to the player opening the chest |
-| `getStore()` | `Store<EntityStore>` | Entity store for accessing components |
-
-> **See also:** [Inventory API](inventory.md#inventory)
-
-### Usage Example
-
-Since this is a keyed event (keyed by String), use `registerGlobal()` to catch all chest openings:
-
-```java
-import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
-import com.hypixel.hytale.server.core.Message;
-import com.hypixel.hytale.server.core.entity.entities.Player;
-
-@Override
-protected void setup() {
-    // Listen for all treasure chest openings
-    getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, event -> {
-        var store = event.getStore();
-        var playerRef = event.getPlayerRef();
-
-        Player player = store.getComponent(playerRef, Player.getComponentType());
-        if (player != null) {
-            player.getPlayerRef().sendMessage(Message.raw("You opened a treasure chest!"));
-        }
-
-        System.out.println("Chest " + event.getChestUUID() +
-                           " opened for objective " + event.getObjectiveUUID());
-    });
-}
-```
-
----
-
 ## InstanceDiscoveryConfig
 
 **Package:** `com.hypixel.hytale.builtin.instances.config`
 
 Configuration class for instance discovery display settings. Used by `DiscoverInstanceEvent` to control how discoveries appear to players.
+As of 0.7.2 the major/default distinction is one value of a `Style` (`EventTitleStyle`); the older boolean
+`Major` JSON key still loads and sets the style to `Major` or `Default`, but it is flagged deprecated
+(`Validators.deprecated()`), and so are the `isMajor()` / `setMajor(...)` accessors.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -318,8 +275,10 @@ Configuration class for instance discovery display settings. Used by `DiscoverIn
 | `setDiscoverySoundEventId(String)` | `void` | Set discovery sound |
 | `getIcon()` | `String` | Icon asset path |
 | `setIcon(String)` | `void` | Set icon |
-| `isMajor()` | `boolean` | Whether this is a major discovery |
-| `setMajor(boolean)` | `void` | Set major flag |
+| `getStyle()` | `EventTitleStyle` | How the client presents the title: `Default`, `Major`, `GoblinBreach` or `VoidEviction` (0.7.2+) |
+| `setStyle(EventTitleStyle)` | `void` | Set the title style |
+| `isMajor()` | `boolean` | Whether the style is `Major`. `@Deprecated(forRemoval=true)` as of 0.7.2 — use `getStyle()` |
+| `setMajor(boolean)` | `void` | Sets the style to `Major` (`true`) or `Default` (`false`). `@Deprecated(forRemoval=true)` as of 0.7.2 — use `setStyle(...)` |
 | `getDuration()` | `float` | Display duration in seconds |
 | `setDuration(float)` | `void` | Set display duration |
 | `getFadeInDuration()` | `float` | Fade-in time in seconds |
@@ -340,10 +299,10 @@ public void handle(int index, ArchetypeChunk<EntityStore> chunk,
 
     // Check discovery properties
     String title = config.getTitleKey();
-    boolean isMajor = config.isMajor();
+    EventTitleStyle style = config.getStyle();   // com.hypixel.hytale.protocol.packets.interface_.EventTitleStyle
     float duration = config.getDuration();
 
-    System.out.println("Discovery: " + title + " (major=" + isMajor + ", duration=" + duration + "s)");
+    System.out.println("Discovery: " + title + " (style=" + style + ", duration=" + duration + "s)");
 }
 ```
 
@@ -457,8 +416,8 @@ tracker.setViewRadiusOverride(500);  // Set custom view radius
 
 Portal destinations are JSON assets under `Server/PortalTypes/`, backed by the classes in
 `com.hypixel.hytale.server.core.asset.type.portalworld`. A portal key **item** references a portal type
-through its `PortalKey` property; while inside a portal world, item ids listed in the portal type's
-`CursedItems` become cursed via per-stack [AdventureMetadata](#adventuremetadata).
+through its `PortalKey` property; items listed in the portal type's `EphemeralItems` become ephemeral to that
+portal world via per-stack [AdventureMetadata](#adventuremetadata) and cannot be taken out of it.
 
 ---
 
@@ -467,7 +426,8 @@ through its `PortalKey` property; while inside a portal world, item ids listed i
 **Package:** `com.hypixel.hytale.server.core.asset.type.portalworld`
 
 JSON asset describing one portal destination. Loaded from `Server/PortalTypes/*.json`; the asset id is the
-filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taiga`, `Windsurf_Valley`).
+filename without `.json` (0.7.2 ships `Goblin_Breach`, `Hederas_Lair`, `Henges`, `Jungles`, `Taiga`,
+`The_Deepworks` and `Windsurf_Valley`).
 
 **JSON fields**
 
@@ -477,19 +437,27 @@ filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taig
 | `Description` | object | Display metadata — see [PortalDescription](#portaldescription) |
 | `GameplayConfig` | string | Gameplay config id for the portal world (defaults to `"Portal"`, i.e. `Server/GameplayConfigs/Portal.json`) |
 | `VoidInvasionEnabled` | boolean | Whether the void invasion is enabled for this portal |
-| `CursedItems` | string[] | Item ids that are cursed inside this portal world |
+| `EphemeralItems` | string[] | "Items that are considered ephemeral and can't be extracted from the portal instance" — see [AdventureMetadata](#adventuremetadata) |
 | `Spawn` | object | Return-portal spawn settings — see [PortalSpawnConfig](#portalspawnconfig) |
 | `CloseWhenEmpty` | boolean | Whether the portal and its world are closed once the last player leaves (default `true`, added in 0.6.3) |
+| `TimeLimitSeconds` | int | "How long the portal world stays open, in seconds. 0 or less means no time limit." Default `-1`; a `PortalKey` can override it |
+| `AllowedEntryCount` | int | "How many times a player can join the portal world before the world locks them out. 0 allows unlimited entries." Default `1`, validated `>= 0`; a `PortalKey` can override it |
+| `AllowPlayersToLeaveViaMap` | boolean | Whether players can leave the portal world via the map (default `false`) |
+
+`EphemeralItems`, `TimeLimitSeconds`, `AllowedEntryCount` and `AllowPlayersToLeaveViaMap` are new in 0.7.2.
+`EphemeralItems` replaces the earlier `CursedItems` key, which 0.7.2 removed.
 
 **Example** (`Server/PortalTypes/Jungles.json`):
 
 ```json
 {
   "InstanceId": "Portals/Portals_Jungles",
+  "TimeLimitSeconds": 720,
+  "AllowedEntryCount": 1,
   "Description": {
     "DisplayName": "server.portals.jungles",
     "FlavorText": "server.portals.jungles.description",
-    "ThemeColor": "#23970cec",
+    "ThemeColor": "#23970c",
     "SplashImage": "DefaultArtwork.png"
   }
 }
@@ -508,9 +476,12 @@ filename without `.json` (0.5.9 ships `Hederas_Lair`, `Henges`, `Jungles`, `Taig
 | `getGameplayConfigId()` | `String` | Gameplay config id |
 | `getGameplayConfig()` | `GameplayConfig` | Resolved gameplay config asset |
 | `isVoidInvasionEnabled()` | `boolean` | Whether the void invasion runs in this portal world |
-| `getCursedItems()` | `Set<String>` | Item ids cursed inside this portal world |
+| `getEphemeralItems()` | `Set<String>` | Item ids that become ephemeral in this portal world |
 | `getSpawn()` | `PortalSpawnConfig` | Return-portal spawn settings |
 | `isCloseWhenEmpty()` | `boolean` | Whether the portal world closes when empty (0.6.3+) |
+| `getTimeLimitSeconds()` | `int` | Time limit in seconds; `0` or less = none |
+| `getAllowedEntryCount()` | `int` | Entries allowed per player; `0` = unlimited |
+| `isAllowPlayersToLeaveViaMap()` | `boolean` | Whether players can leave via the map |
 
 ```java
 import com.hypixel.hytale.server.core.asset.type.portalworld.PortalType;
@@ -539,7 +510,6 @@ object of a [PortalType](#portaltype).
 | `ThemeColor` | string | Color associated with the portal (hex) |
 | `DescriptionTags` | array | Cosmetic UI tag pills — see [PillTag](#pilltag) |
 | `Objectives` | string[] | Translation keys for the portal's objectives |
-| `Tips` | string[] | Translation keys for wisdom/tips shown for this portal |
 | `SplashImage` | string | Splash artwork filename |
 
 **Methods**
@@ -553,7 +523,6 @@ object of a [PortalType](#portaltype).
 | `getThemeColor()` | `Color` | Theme color |
 | `getPillTags()` | `List<PillTag>` | Cosmetic UI tags (`DescriptionTags`) |
 | `getObjectivesKeys()` | `String[]` | Objective translation keys |
-| `getWisdomKeys()` | `String[]` | Tip translation keys (`Tips`) |
 | `getSplashImageFilename()` | `String` | Splash artwork filename |
 
 ---
@@ -611,23 +580,27 @@ The portal device UI requires a key whose portal type matches before it summons 
 ```json
 {
   "PortalKey": {
-    "PortalType": "Jungles",
-    "TimeLimitSeconds": 720
+    "PortalType": "Jungles"
   }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `PortalType` | string | Id of the [PortalType](#portaltype) this key opens |
-| `TimeLimitSeconds` | int | Time limit for the portal visit, in seconds |
+| `PortalType` | string | **Required** (`Validators.nonNull()`) id of the [PortalType](#portaltype) this key opens; an unknown id fails validation |
+| `TimeLimitSeconds` | int | Optional override of the portal type's `TimeLimitSeconds`; `0` or less = no time limit |
+| `AllowedEntryCount` | int | Optional override of the portal type's `AllowedEntryCount` (0.7.2+); `0` = unlimited, validated `>= 0` |
+
+As of 0.7.2 every shipped key sets only `PortalType`; the time limit and entry count live on the portal type.
 
 **Methods**
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
 | `getPortalTypeId()` | `String` | Portal type asset id |
-| `getTimeLimitSeconds()` | `int` | Visit time limit in seconds |
+| `getPortalType()` | `PortalType` | The resolved portal type (null if the id is unset or unknown) |
+| `getTimeLimitSeconds()` | `int` | The key's override, else the portal type's value (`-1` if the type is missing) |
+| `getAllowedEntryCount()` | `int` | The key's override, else the portal type's value (`1` if the type is missing) |
 
 ```java
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
@@ -680,22 +653,23 @@ the **Player** to the named instance, creating it if required." Extends
 
 Behavior notes:
 
-- **`InstanceKey` decides where identity lives, and both shipped assets take one branch each.** With
+- **`InstanceKey` decides where identity lives, and the shipped assets cover both branches.** With
   a key, the instance is looked up by that global world name, so every block naming the same key
   shares one instance — `Server/Item/Interactions/Tests/TeleportInstance.json` uses
   `"InstanceKey": "Persistent"`. Without one, an `InstanceBlock` component is created on the
   triggering block, the created world's UUID is written into it and the block is marked for saving,
   so **that block returns to its own instance on every later use** — which is what
-  `Forgotten_Temple_Portal_Enter.json` relies on for a dungeon portal you can re-enter. Neither
-  branch is "a fresh instance each time".
+  `Forgotten_Temple_Portal_Enter.json` and `Goblin/Goblin_Breach_Portal.json` rely on for portals you can
+  re-enter. Neither branch is "a fresh instance each time".
 - **Omitting `InstanceKey` requires a target block.** That branch opens with a bare `return` when
-  there is none — no `Failed` state, no message — so a keyless `TeleportInstance` fired with nothing
-  targeted does nothing at all.
+  there is none, or when the block's chunk section is not loaded — no `Failed` state, no message — so a
+  keyless `TeleportInstance` fired with nothing targeted does nothing at all.
 - **`OriginSource: BLOCK` throws rather than failing.** With no target block it raises
-  `Can't use OriginSource.BLOCK without a target block`, and an unloaded chunk raises
-  `Missing chunk` — exceptions out of `firstRun`, not an `InteractionState.Failed` a chain can
-  branch on. The one shipped `Block` use is a block interaction and therefore always has a target,
-  so it does not exercise either throw; both are read from the source alone.
+  `Can't use OriginSource.BLOCK without a target block`, and an unloaded chunk section raises
+  `Chunk section not loaded` (0.7.2 reads the block through the section, not the chunk) — exceptions out
+  of `firstRun`, not an `InteractionState.Failed` a chain can branch on. Both shipped `Block` uses are
+  block interactions and therefore always have a target, so they exercise neither throw; both are read
+  from the source alone.
 - **`PositionOffset` is dereferenced without a null check on the `ENTITY` path.** The `BLOCK` branch
   guards it (`positionOffset != null ? … : new Vector3d()`); the `ENTITY` branch, which is the
   default, calls `getPosition().add(this.positionOffset)` on a field with no initialiser. How often
@@ -704,23 +678,28 @@ Behavior notes:
   every re-entry into an instance that already exists. The one shipped asset on this path,
   `Forgotten_Temple_Portal_Enter.json`, carries all three conditions at once — it omits
   `OriginSource` (so the `ENTITY` default), sets `PersonalReturnPoint`, and writes `PositionOffset`
-  as `{0,0,0}`, which is what you write when omitting it is not an option. (The other shipped use
-  sets `"OriginSource": "Block"`, so it takes the guarded branch and says nothing about this one.)
+  as `{0,0,0}`, which is what you write when omitting it is not an option. (The other two shipped uses
+  set `"OriginSource": "Block"`, so they take the guarded branch and say nothing about this one.)
   Treat the key as required whenever `OriginSource` is `ENTITY`.
 
 > **Gotcha — `RemoveBlockAfter` cleans up outside the interaction chain, which is why it is a key at
 > all.** The codec's stated reason is that "all interactions being stopped once teleporting to
 > another world" makes a `Next` unsuitable. What is checkable without taking that on faith is the
-> mechanism: for a positive value the removal is scheduled on a `CompletableFuture` completing on a
-> timeout and then running `thenRunAsync(…, world)` on the world executor, entirely outside the
-> chain — and it re-checks that the block is unchanged before removing it. `0` is **not** "disabled":
+> mechanism: for a positive value the removal is scheduled with `world.scheduleAfter(…)`, which then
+> looks the chunk section up again and continues on the world executor, entirely outside the chain —
+> and it re-checks that the block id is unchanged before removing it. `0` is **not** "disabled":
 > it removes the block immediately, inline. Only a negative value disables it, and `-1` is the
 > default — so unlike [`TriggerSpawnMarkers`'](npc-spawning.md#triggerspawnmarkers) `Count`, where
 > the surprising value is also the default and you meet it by omission, this one has to be written
 > deliberately. The only shipped value is `RemoveBlockAfter: 5`, on the test interaction, so the
 > timed branch has a shipped example and the immediate one has none.
 
-Two shipped uses: `Forgotten_Temple_Portal_Enter.json` and a test interaction.
+Three shipped uses: `Forgotten_Temple_Portal_Enter.json`, `Goblin/Goblin_Breach_Portal.json` and a test
+interaction.
+
+0.7.2 also invokes an `EnterInstanceTeleporterEvent` each time the interaction runs: on the entity store in the
+keyed branch, and on the block entity in the keyless one. The world-event condition
+`EnterInstanceTeleporterCondition` listens for it (see [World Events](world-events.md#registered-by-other-plugins)).
 
 ### HubPortal
 
@@ -737,8 +716,9 @@ Sends the player to a **permanent** world rather than an instance, creating it i
 
 The mutual exclusion is stated in both codec descriptions and enforced by no validator, so an asset
 setting both loads — and the resolution is not arbitrary: **`InstanceTemplate` wins and
-`WorldGenType` is silently ignored**, because the branch tests the template first and only falls
-through to `addWorld(worldName, worldGenType, null)` when it is absent.
+`WorldGenType` is silently ignored**, because the branch tests the template first. Without a template it
+loads the world from disk when `Universe.isWorldLoadable(WorldName)` is true, and only otherwise calls
+`addWorld(worldName, worldGenType, null)` — so `WorldGenType` is read only for a world that exists nowhere yet.
 
 **Both keys only ever matter at first creation.** The whole creation path runs only when
 `Universe.getWorld(WorldName)` returns null; once that world exists the player is simply sent to it
@@ -784,9 +764,18 @@ Its one shipped use runs from `CollisionEnter`, not `Use`:
 **Package:** `com.hypixel.hytale.server.core.asset.type.item.config.metadata`
 
 Per-`ItemStack` adventure metadata, stored in the stack's metadata document under the key `"Adventure"`
-(`AdventureMetadata.KEY`). In 0.5.9 it carries a single flag: whether the stack is **cursed** (BSON field
-`Cursed`). Portal gameplay curses stacks whose item id appears in the active portal type's
-`getCursedItems()` set; cursed stacks are uncursed or deleted when the portal visit ends.
+(`AdventureMetadata.KEY`). As of 0.7.2 it marks a stack **ephemeral** to one world: BSON fields `Ephemeral`
+(boolean) and `EphemeralWorld` (that world's UUID). It replaces the 0.6.x "cursed" flag (`Cursed`,
+`isCursed()` / `setCursed(...)`), which 0.7.2 removed along with the portal type's `CursedItems`.
+
+How the portals plugin uses it:
+
+- **Marking.** When an item entity appears in a portal world and its id is in the portal type's
+  `EphemeralItems`, `EphemeralItemDropsSystem` sets `Ephemeral` and stamps the current world's UUID.
+- **Deleting.** When a player entity is added to a world, `DeleteEphemeralItemsOnSpawnSystem` removes every
+  ephemeral stack in the player's inventory whose `EphemeralWorld` is a different world.
+- **Using.** If a player starts an interaction chain while holding an ephemeral stack outside its world,
+  `CheckInteractionChainStartSystem` removes the stack and cancels the chain.
 
 **Constants**
 
@@ -800,8 +789,10 @@ Per-`ItemStack` adventure metadata, stored in the stack's metadata document unde
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `isCursed()` | `boolean` | Whether the stack is cursed |
-| `setCursed(boolean)` | `void` | Set the cursed flag |
+| `isEphemeral()` | `boolean` | Whether the stack is ephemeral |
+| `setEphemeral(boolean)` | `void` | Set the ephemeral flag |
+| `getEphemeralWorld()` | `UUID` | The world the stack belongs to |
+| `setEphemeralWorld(UUID)` | `void` | Set that world |
 
 ### Usage Example
 
@@ -811,14 +802,15 @@ Read and write it through the `ItemStack` metadata accessors:
 import com.hypixel.hytale.server.core.asset.type.item.config.metadata.AdventureMetadata;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 
-// Check whether a stack is cursed
+// Check whether a stack is ephemeral
 AdventureMetadata meta = stack.getFromMetadataOrNull(AdventureMetadata.KEYED_CODEC);
-boolean cursed = meta != null && meta.isCursed();
+boolean ephemeral = meta != null && meta.isEphemeral();
 
-// Curse a stack (ItemStack is immutable — withMetadata returns a new stack)
-AdventureMetadata cursedMeta = new AdventureMetadata();
-cursedMeta.setCursed(true);
-ItemStack cursedStack = stack.withMetadata(AdventureMetadata.KEYED_CODEC, cursedMeta);
+// Bind a stack to the current world (ItemStack is immutable — withMetadata returns a new stack)
+AdventureMetadata ephemeralMeta = new AdventureMetadata();
+ephemeralMeta.setEphemeral(true);
+ephemeralMeta.setEphemeralWorld(world.getWorldConfig().getUuid());
+ItemStack ephemeralStack = stack.withMetadata(AdventureMetadata.KEYED_CODEC, ephemeralMeta);
 ```
 
 > **See also:** [ItemStack → Metadata Access](inventory.md#metadata-access)
@@ -835,43 +827,45 @@ chunk containing (or near) a `RespawnBlock` as **home**; every other chunk is **
 location conditions use it through the `"WildernessLocation"` [`EventLocation`](world-events.md) type, and
 plugins can query it directly.
 
-It is **off by default** — `Enabled` is `false` in the shipped `Server/GameplayConfigs/Default.json`.
+It is **off by default in code** (`WildernessConfig.DEFAULT_ENABLED` is `false`), but as of 0.7.2 the shipped
+`Server/GameplayConfigs/Default.json` and `PortalsGoblins.json` both set `Enabled: true`. `/wilderness debug [enabled]`
+(0.7.2+) toggles debug visuals for a player: "Green marks wilderness chunks, red marks home chunks, on the world
+map and in the world."
 
 ### WildernessConfig
 
 `GameplayConfig` plugin section `"Wilderness"` (`WildernessConfig.ID`). Read it for a world with
 `WildernessConfig.getOrDefault(world)`.
 
-| Field | Type | Default (shipped `Default.json`) | Description |
-|-------|------|----------------------------------|-------------|
-| `Enabled` | boolean | `false` | Enable wilderness tracking in this world |
-| `OwnedHomeChunkRadius` | int | `8` | Horizontal chunk radius around an **owned** respawn marker (`-1` disables the radius) |
-| `OwnedHomeChunkRadiusY` | int | `4` | Vertical chunk radius around an owned marker |
-| `UnownedHomeChunkRadius` | int | `4` | Horizontal chunk radius around an **unowned** respawn marker |
-| `UnownedHomeChunkRadiusY` | int | `2` | Vertical chunk radius around an unowned marker |
-| `PlayerTrackerChunkRadius` | int | `2` | Horizontal chunk radius tracked around each player |
-| `PlayerTrackerChunkRadiusY` | int | `1` | Vertical chunk radius tracked around each player |
+| Field | Type | Compiled default | Shipped `Default.json` | Description |
+|-------|------|------------------|------------------------|-------------|
+| `Enabled` | boolean | `false` | `true` | Enable wilderness tracking in this world |
+| `OwnedHomeChunkRadius` | int | `8` | `3` | Horizontal chunk radius around an **owned** respawn marker (`-1` disables the radius) |
+| `OwnedHomeChunkRadiusY` | int | `2` | `3` | Vertical chunk radius around an owned marker |
+| `UnownedHomeChunkRadius` | int | `2` | `2` | Horizontal chunk radius around an **unowned** respawn marker |
+| `UnownedHomeChunkRadiusY` | int | `1` | `2` | Vertical chunk radius around an unowned marker |
+| `PlayerTrackerChunkRadius` | int | `2` | `8` | Horizontal chunk radius tracked around each player |
+| `PlayerTrackerChunkRadiusY` | int | `1` | `2` | Vertical chunk radius tracked around each player |
 
 ```json
 {
   "Plugin": {
     "Wilderness": {
-      "Enabled": false,
-      "OwnedHomeChunkRadius": 8,
-      "OwnedHomeChunkRadiusY": 4,
-      "UnownedHomeChunkRadius": 4,
+      "Enabled": true,
+      "OwnedHomeChunkRadius": 3,
+      "OwnedHomeChunkRadiusY": 3,
+      "UnownedHomeChunkRadius": 2,
       "UnownedHomeChunkRadiusY": 2,
-      "PlayerTrackerChunkRadius": 2,
-      "PlayerTrackerChunkRadiusY": 1
+      "PlayerTrackerChunkRadius": 8,
+      "PlayerTrackerChunkRadiusY": 2
     }
   }
 }
 ```
 
-> The compiled-in defaults are *not* the shipped ones: `WildernessConfig.DEFAULT_HOME_RADIUS_Y_CHUNKS_OWNED`
-> is `2`, `WildernessConfig.DEFAULT_HOME_RADIUS_CHUNKS_UNOWNED` is `2` and
-> `WildernessConfig.DEFAULT_HOME_RADIUS_Y_CHUNKS_UNOWNED` is `1`, while `Default.json` sets `4`, `4` and `2`.
-> Read the effective values with `WildernessConfig.getOrDefault(world)` rather than assuming either.
+> The compiled-in defaults (`WildernessConfig.DEFAULT_*`) are *not* the shipped ones, and the two shipped configs
+> differ from each other: `PortalsGoblins.json` uses `8`, `4`, `4`, `2`, `8`, `1`. Read the effective values with
+> `WildernessConfig.getOrDefault(world)` rather than assuming any of them.
 
 ### WildernessTracker
 
@@ -913,13 +907,13 @@ if (tracker.isEnabled() && tracker.isWilderness(x, y, z)) {
 ## Complete Adventure System Example
 
 ```java
-import com.hypixel.hytale.builtin.adventure.objectives.events.TreasureChestOpeningEvent;
 import com.hypixel.hytale.builtin.instances.event.DiscoverInstanceEvent;
 import com.hypixel.hytale.component.*;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.event.events.ecs.DiscoverZoneEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -932,24 +926,36 @@ public class AdventurePlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
-        // Register ECS system for instance discovery
+        // Register ECS systems for instance and zone discovery
         getEntityStoreRegistry().registerSystem(new InstanceDiscoverySystem());
-
-        // Register event listener for treasure chests
-        getEventRegistry().registerGlobal(TreasureChestOpeningEvent.class, this::onChestOpen);
+        getEntityStoreRegistry().registerSystem(new ZoneAnnounceSystem());
     }
 
-    private void onChestOpen(TreasureChestOpeningEvent event) {
-        var store = event.getStore();
-        var playerRef = event.getPlayerRef();
+    // Inner class for zone discovery handling
+    public static class ZoneAnnounceSystem
+            extends EntityEventSystem<EntityStore, DiscoverZoneEvent.Display> {
 
-        Player player = store.getComponent(playerRef, Player.getComponentType());
-        if (player != null) {
-            player.getPlayerRef().sendMessage(
-                Message.raw("Treasure found!")
-                    .bold(true)
-                    .color("#FFD700")
-            );
+        public ZoneAnnounceSystem() {
+            super(DiscoverZoneEvent.Display.class);
+        }
+
+        @Override
+        public void handle(int index, ArchetypeChunk<EntityStore> chunk,
+                           Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
+                           DiscoverZoneEvent.Display event) {
+            Player player = chunk.getComponent(index, Player.getComponentType());
+            if (player != null) {
+                player.getPlayerRef().sendMessage(
+                    Message.raw("New zone: " + event.getDiscoveryInfo().zoneName())
+                        .bold(true)
+                        .color("#FFD700")
+                );
+            }
+        }
+
+        @Override
+        public Query<EntityStore> getQuery() {
+            return Player.getComponentType();
         }
     }
 

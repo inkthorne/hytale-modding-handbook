@@ -7,7 +7,7 @@ seo:
 
 # World Generation
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.7.2**
 
 Hytale's world generator is a **node-graph system**. Terrain height, cave carving,
 material placement, biome selection, tinting, and prop scattering are all expressed as
@@ -45,12 +45,12 @@ Server/HytaleGenerator/
 │   ├── Props[]  -> Positions + Assignments
 │   ├── EnvironmentProvider / TintProvider
 │   └── pull shared fields via Imported
-├── Density/           shared density graphs (Biome-Map, cave fields)
+├── Density/           shared density graphs (biome maps under Maps/, Volcanic1 cave field)
 ├── Assignments/       prop/prefab placement graphs (imported by biome Props)
 ├── Positions/ · PropDistributions/ · Props/   standalone placement graphs
 ├── BlockMasks/        block-set placement filters
 ├── GraphGenerators/ · GraphPasses/ · GraphContentSuppliers/ · GraphContentPredicates/
-│                      graph-generator assets (roads, rivers, roots — see below)
+│                      graph-generator assets (caves, camps, roads, rivers, roots)
 └── Settings/          generator runtime settings (Settings.json)
 ```
 
@@ -92,12 +92,13 @@ Server/HytaleGenerator/
 │   ├── Examples/       #   small documented graphs demonstrating single node types
 │   └── Experimental/
 ├── WorldStructures/    # "Zone" equivalents: which biomes appear, keyed by a density value
-│   ├── Zone1_Plains1.json
-│   ├── Zone2_Desert1.json
-│   └── Portals_*.json
+│   ├── Default.json, Basic.json, Default_Flat.json, Default_Void.json, Portals_Goblins*.json
+│   ├── Regions/        #   Zone1_Plains1.json, Zone2_Desert1.json, Zone3_Taiga1.json, Zone4_Volcanic1.json
+│   ├── Portals/        #   Portals_Hedera.json, Portals_Henges.json, Portals_Jungles.json, …
+│   └── Debug/          #   Debug_*.json, Test_Features.json
 ├── Assignments/        # Prop / prefab placement graphs imported by biome `Props`
 │   └── Plains1/Plains1_Oak_Trees.json ...
-├── Density/            # Shared density graphs (e.g. the world `Biome-Map`, cave fields)
+├── Density/            # Shared density graphs (biome maps under `Maps/`, `Volcanic1_Caves_Terrain`, …)
 ├── BlockMasks/         # Block-set masks
 ├── Positions/          # Standalone position graphs
 ├── PropDistributions/  # Standalone prop-distribution graphs
@@ -110,8 +111,11 @@ Server/HytaleGenerator/
 ```
 
 (The former `Graphs/` folder — a single `ExampleGraph.json` — is gone as of 0.6.3,
-replaced by the four `Graph*/` folders above, each shipping one `Example*.json`.
-`Positions/`, `PropDistributions/` and `Props/` are unchanged single-example folders.)
+replaced by the four `Graph*/` folders above. As of 0.7.2 `GraphGenerators/` ships three production
+generators — `Plains1_Caves`, `Plains1_Trork_Camp` and `Portal_Goblin_Graph_Cave` — in place of its example,
+while `GraphPasses/`, `GraphContentSuppliers/` and `GraphContentPredicates/` still ship one `Example*.json`
+each. `Positions/`, `PropDistributions/` and `Props/` are unchanged single-example folders. 0.7.2 also moved
+the zone world structures into `WorldStructures/Regions/` and the portal ones into `WorldStructures/Portals/`.)
 
 How the pieces fit together:
 
@@ -121,8 +125,10 @@ How the pieces fit together:
   a `MaterialProvider` (which blocks fill solid vs. empty space), optional `Props`
   (which reference **assignment** graphs), and optional environment/tint providers.
 - **Density** graphs and **Assignments** can be shared and pulled in by name through
-  `Imported` nodes, so a biome can reuse the world `Biome-Map`, cave fields, or a prop
-  placement defined once elsewhere.
+  `Imported` nodes, so a biome can reuse the world `Biome-Map`, a cave field, or a prop
+  placement defined once elsewhere. As of 0.7.2 the Plains1 caves are a graph generator
+  (`GraphGenerators/Plains1_Caves.json`) that the biomes read through a `Graph` density node,
+  rather than a shared density field.
 
 ---
 
@@ -148,10 +154,10 @@ A minimal density node:
 {
   "Type": "SimplexNoise2D",
   "Skip": false,
-  "Lacunarity": 5,
-  "Persistence": 0.08,
+  "Lacunarity": 4.2,
+  "Persistence": 0.12,
   "Octaves": 3,
-  "Scale": 400,
+  "Scale": 200,
   "Seed": "Plains1_Oak"
 }
 ```
@@ -223,7 +229,7 @@ maps, prop probability, and tint/environment selection.
 | `Distance` | Distance-based falloff via a `Curve` |
 
 The tables above cover the types the shipped biomes lean on. The full density vocabulary
-registered by the generator (as of 0.6.8, `DensityAsset.CODEC` registrations in
+registered by the generator (as of 0.7.2, `DensityAsset.CODEC` registrations in
 `com.hypixel.hytale.builtin.hytalegenerator.assets.AssetManager`) is larger — comparators
 and logic (`Comparator`, `Equal`, `GreaterThan`, `GreaterOrEqual`, `LessThan`,
 `LessOrEqual`, `And`, `Or`, `Not`, `Nor`, `Xor`, `Selector`, `Switch`, `SwitchState`),
@@ -370,13 +376,28 @@ void shutdown()                                // default method, no-op
 - A sub-interface `IWorldGen.Cubic` (new as of 0.6.3) adds a per-*section* entry point,
   `generate(int seed, int x, int y, int z, IWorldGen.StillNeededSection,
   IWorldGen.SectionPriority)`, returning a `CompletableFuture<Holder<ChunkStore>>` for one
-  32³ section; the chunk store uses it when the world runs in cubic-section mode
-  (`ChunkStore.supportsCubicSections()`). Both callback interfaces are nested in
-  `IWorldGen`: `StillNeededSection.test(int x, int y, int z)` and
-  `SectionPriority.fetchPriority(int x, int y, int z)`.
+  32³ section. Both callback interfaces are nested in `IWorldGen`:
+  `StillNeededSection.test(int x, int y, int z)` and `SectionPriority.fetchPriority(int x, int y, int z)`.
+  0.7.2 adds two more abstract methods, so an existing `Cubic` implementation must add them:
+
+  ```java
+  CompletableFuture<GeneratedColumn> generateColumn(int seed, long index, int x, int z,
+                                                    LongPredicate stillNeeded,
+                                                    Long2FloatFunction priority)
+  int[] predictSurfaceTops(int seed, int x, int z)
+  ```
+
+  The cubic path is taken only when **both** the world's chunk loader is an `IChunkLoader.Cubic` and the
+  generator is an `IWorldGen.Cubic`. A new column is then built from one `generateColumn(...)` call (the
+  column-level data — a `GeneratedColumn` carries the per-column tint) plus one per-section `generate(...)`
+  for each of its 10 sections; otherwise the column-level `generate(...)` above is used and its
+  `GeneratedChunk` converted with `toHolder()`. For a newly generated column the chunk store also calls
+  `predictSurfaceTops(seed, x, z)` and seeds the column's tree heightmap with the result, one surface Y per
+  block column (1,024 entries). `ChunkStore.supportsCubicSections()` is true when either the loader or the
+  generator is cubic.
 - The world's active generator hangs off the chunk store:
   `world.getChunkStore()` → `ChunkStore.getGenerator()` / `setGenerator(IWorldGen)` /
-  `shutdownGenerator()`.
+  `shutdownGenerator()`. As of 0.7.2 these are declared on `ChunkGrid`, which `ChunkStore` now extends.
 
 ### IWorldGenProvider
 
@@ -388,14 +409,14 @@ static final BuilderCodecMapCodec<IWorldGenProvider> CODEC;   // keyed by "Type"
 IWorldGen getGenerator() throws WorldGenLoadException
 ```
 
-Registered `Type` values (as of 0.6.8):
+Registered `Type` values (as of 0.7.2):
 
 | `Type` | Provider class | Registered by |
 |--------|----------------|---------------|
 | `Flat` | `FlatWorldGenProvider` | core (`Universe`) |
 | `Void` | `VoidWorldGenProvider` | core (`Universe`) |
 | `Dummy` | `DummyWorldGenProvider` (internal no-op) | core (`Universe`) |
-| `CubicTest` | `CubicTestWorldGenProvider` (new as of 0.6.3; a fixed test platform with scattered prefabs, used by the shipped `Instances/CubicTest`) | core (`Universe`) |
+| `CubicTest` | `CubicTestWorldGenProvider` (new as of 0.6.3; "a cubic-aware test generator that tiles the world into colour-coded feature regions to exercise the heightmap and other cubic-chunk paths" — 0.7.2 replaced the earlier fixed test platform with hills, canyon, caves, floating islands, a water basin, a staircase and a tower, each with its own `*BlockType` key; used by the shipped `Instances/CubicTest`) | core (`Universe`) |
 | `HytaleGenerator` | the node-graph generator documented on this page | `HytaleGenerator` plugin |
 | `Hytale` | `HytaleWorldGenProvider` — the legacy folder-of-JSON generator; keys `Name` (default `"Default"`), `Version` (a semver, default `0.0.0`) and `Path` (defaults to the server's world-gen folder) | `WorldGenPlugin` |
 
@@ -444,8 +465,8 @@ Generates empty chunks, optionally applying a `Tint` (color) and an `Environment
 
 `generate(...)` resolves to a `GeneratedChunk`: a block buffer, an entity buffer, and the
 array of per-section `ChunkStore` holders (block-state entities such as chests and signs
-are written straight into those section holders), which the server converts into a live
-chunk:
+are written straight into those section holders), which the server converts into a
+chunk holder with `toHolder()`:
 
 ```java
 GeneratedChunk(GeneratedBlockChunk, GeneratedEntityChunk, Holder<ChunkStore>[] sections)
@@ -454,10 +475,14 @@ GeneratedEntityChunk getEntityChunk()
 Holder<ChunkStore>[] getSections()
 Holder<ChunkStore> getState(int x, int y, int z)            // @Nullable
 void setState(int x, int y, int z, Holder<ChunkStore> state) // state may be null (= remove)
-Holder<ChunkStore> toWorldChunk(World world)                // builds the live chunk holder
-Holder<ChunkStore> toHolder(World world)                    // alias of toWorldChunk
+Holder<ChunkStore> toHolder()                               // builds the chunk-column holder
 static Holder<ChunkStore>[] makeSections()                  // 10 fresh section holders
 ```
+
+`toHolder()` converts the block buffer (`toBlockChunk`), writes the entities into the section holders
+(`toEntitySections`), and returns a holder carrying the `WorldChunk` (flagged `NEWLY_GENERATED`),
+`BlockChunk` and `ChunkColumn` components. 0.7.2 replaced the earlier `toWorldChunk(World)` and
+`toHolder(World)` with this no-argument form; a generator that called either must switch to `toHolder()`.
 
 (`GeneratedBlockStateChunk` — the separate block-state buffer of 0.5.9, with its
 `toBlockComponentChunk()` — was removed by 0.6.3; `getState`/`setState` moved onto
@@ -479,9 +504,14 @@ int getEnvironment(int x, int y, int z)
 int getHeight(int x, int z)
 GeneratedChunkSection getSection(int sectionIndex)   // per-section block buffer
 void removeSection(int sectionIndex)
-EnvironmentChunk getEnvironmentChunk()
+GeneratedEnvironment getGeneratedEnvironment()       // 0.7.2+
 BlockChunk toBlockChunk(Holder<ChunkStore>[] sectionHolders)
 ```
+
+0.7.2 moved the environment buffer from an `EnvironmentChunk` (now `@Deprecated`; environments live in
+per-section `EnvironmentSection` components) to a `GeneratedEnvironment` (per-column environment data, sliced
+into per-section `EnvironmentSection`s on conversion), so the older `getEnvironmentChunk()` accessor is gone; use `getGeneratedEnvironment()` or the `setEnvironment` /
+`getEnvironment` methods above.
 
 **`GeneratedEntityChunk`** — entities to spawn with the chunk (e.g. from prefabs):
 
@@ -494,7 +524,7 @@ void toEntitySections(Holder<ChunkStore>[] sections)   // applies rotation, writ
 ```
 
 (`toEntityChunk()` was removed by 0.6.3 — entities are now written into the per-section
-holders by `toEntitySections`, which `GeneratedChunk.toWorldChunk` calls for you.)
+holders by `toEntitySections`, which `GeneratedChunk.toHolder` calls for you.)
 
 ### WorldGenTimingsCollector
 

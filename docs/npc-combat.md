@@ -7,7 +7,7 @@ seo:
 
 # NPC Combat
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.7.2**
 
 Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Hytale has **two** NPC melee paths and the choice matters; this page covers both, and the Combat Action Evaluator that drives the second. Role definitions, sensors and instructions stay in [npc-roles.md](npc-roles.md).
 
@@ -32,14 +32,14 @@ Neutral animals ship with this machinery **off by default**: `Template_Animal_Ne
 
 | Interaction | Sets var | Default | Overriding it customizes |
 |---|---|---|---|
-| `RootInteractions/NPCs/Root_NPC_Attack_Melee` | `Melee_Start` | `NPC_Attack_Melee_Simple` | the whole start (anim set + timing) |
+| `RootInteractions/NPCs/Root_NPC_Attack_Melee` | `Melee_Start` | `NPC_Attack_Melee_Simple` | the whole start (anim set + timing). As of 0.7.2 the root first skips the attack while the NPC has the `Hit_Interrupt_Stunned` effect, then runs `Hit_Interrupt_Begin_Protected_Attack` |
 | `Interactions/NPCs/NPC_Attack_Melee_Simple` | `Melee_Selector` | `NPC_Attack_Selector_Left` | the **hit geometry** (see below) |
 | `Interactions/NPCs/NPC_Attack_Selector_Left` (`HitEntity`) | `Melee_Damage` | `NPC_Attack_Melee_Damage` | **damage + DamageEffects** |
 | `Interactions/NPCs/NPC_Attack_Melee_Damage` | — (`Parent: DamageEntityParent`) | — | base: `DamageCalculator` (Physical 5) + `DamageEffects` (knockback, `WorldSoundEventId`, `WorldParticles`) |
 
 A role overrides any link by declaring the var in its interaction-vars block. The selector's `HitEntity` does `{"Type":"Replace","Var":"Melee_Damage","DefaultValue":{…}}`, so a role-level `Melee_Damage` wins (vanilla `Chicken_Undead` notes in its override: *"When NPC overrides the InteractionVars, this info in Template not applicable anymore"*).
 
-> **⚠️ The key name differs by role type.** `BuilderRole` reads **`InteractionVars`** at a role's top level — that is what the templates use (`Template_Animal_Neutral`, `Template_Predator`, `Template_Livestock`, `Template_Intelligent`, …), and it is what a `Generic` role uses. Inside a **`Variant`'s `Modify`** the same block is spelled **`_InteractionVars`** with the leading underscore, the same convention as `_CombatConfig`; every shipped variant that customises its bite (`Cow.json`, `Chicken_Undead.json`, ~94 files) uses `_InteractionVars`. Using the wrong one for the role type silently does nothing, or drops the role.
+> **⚠️ The key name differs by role type.** `BuilderRole` reads **`InteractionVars`** at a role's top level — that is what the templates use (`Template_Animal_Neutral`, `Template_Predator`, `Template_Livestock`, `Template_Intelligent`, …), and it is what a `Generic` role uses. Inside a **`Variant`'s `Modify`** the same block is spelled **`_InteractionVars`** with the leading underscore, the same convention as `_CombatConfig`; every shipped variant that customises its bite (`Cow.json`, `Chicken_Undead.json`, 120 files) uses `_InteractionVars`. Using the wrong one for the role type silently does nothing, or drops the role.
 
 Example — lighten the bite to 2 physical, keep the default start/selector (shown as a `Variant` would write it):
 
@@ -68,7 +68,7 @@ Example — lighten the bite to 2 physical, keep the default start/selector (sho
 }
 ```
 
-It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough: a head motion only blends the *body* when the active motion set no yaw and the head exceeds the camera yaw limit (see [Facing](npc-roles.md#facing-orientation-is-emergent-from-the-active-motion)), so over a yaw-setting attack motion it turns the head only. It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
+Its `Next` pads the swing by another 0.25 s and, as of 0.7.2, ends in `Hit_Interrupt_Finish_Protected_Attack`, which clears the protected-attack effects the root applied. It's a narrow (~30°), side-offset wedge swept over the interaction's `RunTime` (0.25 s) **in front of the NPC's body**, reaching 0.1–3.5 blocks, ±0.5 vertical, requiring line of sight. Because the arc is **body-relative**, a custom NPC **whiffs if its body isn't facing the target at strike time** — and `HeadMotion: Aim`/`Watch` alone is *not* enough: a head motion only blends the *body* when the active motion set no yaw and the head exceeds the camera yaw limit (see [Facing](npc-roles.md#facing-orientation-is-emergent-from-the-active-motion)), so over a yaw-setting attack motion it turns the head only. It also misses if the target leaves `EndDistance`, strafes out of the arc mid-sweep, or breaks line of sight.
 
 So "why does my NPC sometimes not connect?" has a real mechanical answer: melee is a swept directional hitbox, not a homing hit. Two fixes:
 
@@ -95,7 +95,7 @@ Practical combat-role lessons (all confirmed in-game):
 
 ## Combat Action Evaluator (CAE)
 
-The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the Goblin Scrapper variant above). For the lighter, non-CAE animal melee path, see [Melee attacks without a CAE](#melee-attacks-without-a-cae).
+The CAE system provides intelligent combat decision-making. Found in `Server/NPC/Balancing/`. A role references its CAE through the `_CombatConfig` field (see the [Goblin Glutton variant](npc-roles.md#variants)). For the lighter, non-CAE animal melee path, see [Melee attacks without a CAE](#melee-attacks-without-a-cae).
 
 ### CAE Structure
 
@@ -103,62 +103,70 @@ A CAE file has `"Type": "CombatActionEvaluator"` at the top and wraps its evalua
 
 - `RunConditions`: conditions that gate whether the evaluator runs at all.
 - `MinRunUtility` / `MinActionUtility`: utility thresholds.
-- `AvailableActions`: an object keyed by action name. Each action has a `Type` (commonly `Ability`), a `Target`, an `Ability` reference, an `AttackDistanceRange`, a `PostExecuteDistanceRange` (the distance to hold *after* the action), optional `Description`/`InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
+- `AvailableActions`: an object keyed by action name. Each action has a `Type` — one of the three registered on `CombatActionOption.CODEC`: `Ability` (fires an `Ability` root interaction), `State` (switches the role to a `State`/`SubState`, letting the role's instructions run the move) or `SelectBasicAttackTarget` — plus a `Target`, an `Ability` reference, an `AttackDistanceRange`, a `PostExecuteDistanceRange` (the distance to hold *after* the action), optional `Description`/`InteractionVars`/`ChargeFor`/`WeaponSlot`/`SubState`, and a `Conditions` array.
 - `ActionSets`: an object keyed by set name (not an array). Each set defines `BasicAttacks` (`Attacks`, `MaxRange`, `Timeout`, `CooldownRange`, optional `Randomise` and `InteractionVars`) and an `Actions` list of available action names.
+
+Abridged from `Balancing/Intelligent/Goblin_New/CAE_Goblin_Glutton.json` (two of its six actions, one of its three action sets, and the basic attacks' `InteractionVars` omitted):
 
 ```json
 {
     "Type": "CombatActionEvaluator",
-    "TargetMemoryDuration": 5,
+    "TargetMemoryDuration": 30,
     "CombatActionEvaluator": {
         "RunConditions": [
             {
                 "Type": "TimeSinceLastUsed",
-                "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 5 ] }
-            },
-            { "Type": "Randomiser", "MinValue": 0.9, "MaxValue": 1 }
+                "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 4 ] }
+            }
         ],
         "MinRunUtility": 0.5,
         "MinActionUtility": 0.01,
         "AvailableActions": {
-            "Melee": {
-                "Type": "Ability",
-                "WeaponSlot": 0,
-                "SubState": "Default",
-                "Ability": "Goblin_Scrapper_Attack",
-                "Target": "Hostile",
-                "AttackDistanceRange": [ 2.5, 2.5 ],
-                "Conditions": [
-                    {
-                        "Type": "TimeSinceLastUsed",
-                        "Curve": { "ResponseCurve": "Linear", "XRange": [ 0, 1 ] }
-                    }
-                ]
-            },
-            "Ranged": {
-                "Type": "Ability",
-                "WeaponSlot": 0,
-                "SubState": "Ranged",
-                "Ability": "Goblin_Scrapper_Rubble_Throw",
-                "Target": "Hostile",
-                "AttackDistanceRange": [ 15, 15 ],
+            "SelectTarget": {
+                "Type": "SelectBasicAttackTarget",
                 "Conditions": [
                     {
                         "Type": "TargetDistance",
-                        "Curve": { "ResponseCurve": "SimpleLogistic", "XRange": [ 0, 15 ] }
+                        "Curve": { "ResponseCurve": "SimpleDescendingLogistic", "XRange": [ 0, 6 ] }
                     }
+                ]
+            },
+            "Charge": {
+                "Type": "State",
+                "Description": "Charges towards the target",
+                "Target": "Hostile",
+                "State": "Combat",
+                "SubState": "Charge",
+                "PostExecuteDistanceRange": [ 3, 3 ],
+                "WeightCoefficient": 1.25,
+                "Conditions": [
+                    { "Type": "TimeSinceLastUsed", "Curve": { "Type": "Switch", "SwitchPoint": 8 } },
+                    { "Type": "TargetDistance", "Curve": { "Type": "Switch", "SwitchPoint": 4 } }
+                ]
+            },
+            "Slam": {
+                "Type": "Ability",
+                "Description": "Use charge attack",
+                "Target": "Hostile",
+                "AttackDistanceRange": [ 0, 4 ],
+                "PostExecuteDistanceRange": [ 2.25, 2.25 ],
+                "Ability": "Root_NPC_Goblin_Feastmaster_Slam",
+                "Conditions": [
+                    { "Type": "TimeSinceLastUsed", "Curve": { "Type": "Switch", "SwitchPoint": 20 } }
                 ]
             }
         },
         "ActionSets": {
             "Default": {
                 "BasicAttacks": {
-                    "Attacks": [ "Goblin_Scrapper_Attack" ],
-                    "MaxRange": 2.5,
-                    "Timeout": 0.5,
-                    "CooldownRange": [ 0.001, 0.001 ]
+                    "Attacks": [ "Root_NPC_Goblin_Feastmaster_Melee" ],
+                    "Randomise": false,
+                    "UseProjectedDistance": true,
+                    "MaxRange": 5,
+                    "Timeout": 0.001,
+                    "CooldownRange": [ 0.5, 0.5 ]
                 },
-                "Actions": [ "SwingDown", "Ranged" ]
+                "Actions": [ "Slam", "SelectTarget", "Charge" ]
             }
         }
     }
@@ -187,13 +195,14 @@ The object form is a `ScaledResponseCurve`, whose own `Type` selects between two
 | `Type` | Class | Keys |
 |--------|-------|------|
 | *(omitted)* / `Default` | `ScaledXResponseCurve` | `ResponseCurve` (asset id) + `XRange` `[min, max]` — rescales x into the named curve. |
-| `Switch` | `ScaledSwitchResponseCurve` | `SwitchPoint`, `InitialState` (y before it), `FinalState` (y at/after it) — a step function. Used by 22 shipped CAEs, not just tests. |
+| `Switch` | `ScaledSwitchResponseCurve` | `SwitchPoint`, `InitialState` (y before it), `FinalState` (y at/after it) — a step function. Used by 30 of the 34 shipped CAEs, 18 of them outside the test fixtures. |
 
 `ResponseCurve` values are **assets** under `Server/ResponseCurves/`, so the set is extensible. Each asset picks one of three families — `Exponential` (`Slope`, `Exponent`, `HorizontalShift`, `VerticalShift`), `Logistic` (`Ceiling`, `RateOfChange`, `HorizontalShift`, `VerticalShift`) or `SineWave` (`Amplitude`, `Frequency`, `HorizontalShift`, `VerticalShift`). Those that ship:
 
 | Response Curve | Family | Shape |
 |----------------|--------|-------|
 | `Linear` | Exponential | `y = x` (slope 1, exponent 1) |
+| `HalfRisingLinear` | Exponential | `y = 0.5 + 0.5x` (slope 0.5, y-shift 0.5). New in 0.7.2 |
 | `ReverseLinear` | Exponential | `y = 1 − x` (slope −1, x-shift 1) |
 | `Quadratic` / `TestExponential` | Exponential | `y = x²` — slow start, fast finish |
 | `InverseExponential` | Exponential | exponent `0.28` — a *root* curve: rises fast, then flattens (**not** a falloff) |
@@ -215,7 +224,7 @@ Conditions (in both `RunConditions` and per-action `Conditions`) use a `Type`. C
 | `Randomiser` | Random value between `MinValue` and `MaxValue` |
 | `OwnStatPercent` / `OwnStatAbsolute` | NPC's own stat as a percentage / absolute value |
 | `TargetStatPercent` / `TargetStatAbsolute` | Target's stat as a percentage / absolute value |
-| `RecentSustainedDamage` / `TotalSustainedDamage` | Damage taken recently / in total |
+| `RecentSustainedDamage` / `TotalSustainedDamage` | Damage taken recently / in total. 0.7.2 adds two optional filters: `Sources` (`DamageSourceType` values `Combat` / `DoT` / `Environment`) and `DamageCauses` (damage-cause ids, matching inheriting causes too); omitted or empty counts everything |
 | `NearbyCount` / `KnownTargetCount` | Counts of nearby / remembered entities |
 | `HasTarget` | Whether a target exists at all |
 | `IsInState` | Whether the NPC is in a given state |

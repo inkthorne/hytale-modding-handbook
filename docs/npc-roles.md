@@ -7,7 +7,7 @@ seo:
 
 # NPC Roles
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.7.2**
 
 This document covers NPC role asset definitions, including templates, variants, behaviors, and spawning configurations. These assets are found in `Assets.zip` under `Server/NPC/`.
 
@@ -60,7 +60,7 @@ The NPC system is organized into several directories:
 
 | Directory | Description |
 |-----------|-------------|
-| `Server/NPC/Roles/` | 1,000 NPC role definitions (templates and variants) |
+| `Server/NPC/Roles/` | 1,148 NPC role definitions (templates, variants and components) |
 | `Server/NPC/Attitude/` | Relationship definitions between NPC groups |
 | `Server/NPC/Groups/` | NPC group collections for spawning |
 | `Server/NPC/Flocks/` | Flock size configurations |
@@ -105,9 +105,9 @@ Templates define common behaviors and properties that concrete NPCs inherit from
 | `Template_Summoned_Ally` | Summoned allied NPC base |
 | `Template_Beasts_Passive_Cactee` | Passive cactus-creature base |
 | `Template_Flying_Aggressive` | Aggressive flier base (the `Fly` motion-controller exemplar) |
-| `Template_Temple` | Temple/structure guard base |
+| `Template_Boss_Proto` | Prototype boss base (new in 0.7.2; no shipped role references it yet) |
 
-Faction-specific templates live alongside their faction roles rather than in the shared `_Core/Templates/` folder. For example, Goblin templates are in `Roles/Intelligent/Aggressive/Goblin/Templates/` (`Template_Goblin`, `Template_Goblin_Scrapper`, `Template_Goblin_Ogre`, `Template_Goblin_Lobber`, and others). Trork, Kweebec, Feran, and Scarak templates follow the same convention under their own faction directories.
+Faction-specific templates live alongside their faction roles rather than in the shared `_Core/Templates/` folder. For example, Goblin templates are in `Roles/Intelligent/Faction/Goblin/Templates/` (`Template_Goblin_Scrapper`, `Template_Goblin_Lobber`, `Template_Goblin_Miner`, `Template_Goblin_Thief`, and others). Trork, Kweebec, Feran, and Scarak templates follow the same convention under their own `Intelligent/Faction/<faction>/Templates/` directories, and `Template_Temple` (a `_Core` template before 0.7.2) now lives in `Intelligent/Temple/Templates/`.
 
 ### Variants
 
@@ -144,25 +144,32 @@ Variants are concrete NPC definitions that inherit from a template. They use `"T
 }
 ```
 
-**Example: Goblin Scrapper (`Roles/Intelligent/Aggressive/Goblin/Goblin_Scrapper.json`)**
+**Example: Goblin Glutton (`Roles/Intelligent/Faction/Goblin/Goblin_Glutton.json`)**
 
-A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field; combat abilities, attack distances, and instructions all come from the referenced template and CAE rather than being inlined here.
+A combat NPC. Note that the CAE is referenced through the `_CombatConfig` field; combat abilities, attack distances, and instructions all come from the referenced template and CAE rather than being inlined here. (Before 0.7.2 the Goblin Scrapper was the usual example here; in 0.7.2 it no longer has a CAE, and its melee comes from `Attack` plus `_InteractionVars` overrides instead.)
 
 ```json
 {
     "Type": "Variant",
-    "Reference": "Template_Goblin_Scrapper",
+    "Reference": "Template_Goblin_Glutton",
     "Modify": {
-        "_CombatConfig": "CAE_Goblin_Scrapper",
-        "MaxHealth": 38,
+        "DropList": "Drop_Goblin_Glutton",
+        "MaxHealth": 700,
         "IsMemory": true,
         "MemoriesCategory": "Goblin",
-        "MemoriesNameOverride": "Goblin_Scrapper",
-        "NameTranslationKey": { "Compute": "NameTranslationKey" }
+        "MemoriesNameOverride": "Goblin_Glutton",
+        "NameTranslationKey": { "Compute": "NameTranslationKey" },
+        "ViewRange": 24,
+        "ViewSector": 160,
+        "HearingRange": 12,
+        "MaxSpeed": 2,
+        "AlertedRange": 25,
+        "_CombatConfig": "CAE_Goblin_Glutton",
+        "Appearance": "Goblin_Glutton"
     },
     "Parameters": {
         "NameTranslationKey": {
-            "Value": "server.npcRoles.Goblin_Scrapper.name",
+            "Value": "server.npcRoles.Goblin_Glutton.name",
             "Description": "Translation key for NPC name display"
         }
     }
@@ -224,7 +231,7 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 
 ## Key Properties
 
-> **Engine keys vs template parameters.** Only some of the names below are read directly by the role builder. `BuilderRole` reads 81 keys (`Appearance`, `MaxHealth`, `DropList`, `NameTranslationKey`, `MotionControllerList`, `Instructions`, `InteractionVars`, `CombatConfig`, `IsMemory`, `MemoriesCategory`, `Invulnerable`, `Armor`, `HotbarItems`, the whole `Separation*`/`Avoidance*`/`Collision*`/`Flock*` families, …) and `SupportConfigBuilder` reads a further ten (`StartState`, `DefaultSubState`, `AttitudeGroup`, `ItemAttitudeGroup`, `DefaultPlayerAttitude`, `DefaultNPCAttitude`, `BusyStates`, `DisableDamageFlock`, `DisableDamageGroups`, `Debug`). Everything else in the tables below — `Scale`, `MaxSpeed`, `WanderRadius`, `ClimbHeight`, `ViewRange`, `ViewSector`, `HearingRange`, `AbsoluteDetectionRange`, `Attack`, `AttackDistance`, `DayTimePeriod`, `FlockArray`, `IsTameable`, … — is a **template `Parameters` entry** that the template's own `Compute` expressions feed into a real key or component. That is why a `Variant` can set them from `Modify` even though no builder declares them, and why a `Generic` role that invents its own must declare them in `Parameters` first.
+> **Engine keys vs template parameters.** Only some of the names below are read directly by the role builder. `BuilderRole` reads 86 keys (`Appearance`, `MaxHealth`, `DropList`, `NameTranslationKey`, `MotionControllerList`, `Instructions`, `InteractionVars`, `CombatConfig`, `IsMemory`, `MemoriesCategory`, `MemoriesUnlockedBy`, `Invulnerable`, `Armor`, `HotbarItems`, the whole `Separation*`/`Avoidance*`/`Collision*`/`Flock*` families, …) and `SupportConfigBuilder` reads a further ten (`StartState`, `DefaultSubState`, `AttitudeGroup`, `ItemAttitudeGroup`, `DefaultPlayerAttitude`, `DefaultNPCAttitude`, `BusyStates`, `DisableDamageFlock`, `DisableDamageGroups`, `Debug`). Everything else in the tables below — `Scale`, `MaxSpeed`, `WanderRadius`, `ClimbHeight`, `ViewRange`, `ViewSector`, `HearingRange`, `AbsoluteDetectionRange`, `Attack`, `AttackDistance`, `DayTimePeriod`, `FlockArray`, `IsTameable`, … — is a **template `Parameters` entry** that the template's own `Compute` expressions feed into a real key or component. That is why a `Variant` can set them from `Modify` even though no builder declares them, and why a `Generic` role that invents its own must declare them in `Parameters` first.
 
 ### Basic Properties
 
@@ -265,7 +272,7 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 | `DefaultPlayerAttitude` | String | Default stance toward players (`Hostile`, `Ignore`, `Neutral`) |
 | `Attack` | String | Attack interaction reference |
 | `AttackDistance` | Number | Melee attack range |
-| `CombatConfig` / `_CombatConfig` | String | CAE file name for intelligent combat (e.g. `CAE_Goblin_Scrapper`). `CombatConfig` at a role's top level; `_CombatConfig` inside a `Variant`'s `Modify` |
+| `CombatConfig` / `_CombatConfig` | String | CAE file name for intelligent combat (e.g. `CAE_Goblin_Glutton`). `CombatConfig` at a role's top level; `_CombatConfig` inside a `Variant`'s `Modify` |
 
 ### Behavior Properties
 
@@ -279,8 +286,11 @@ Helper functions such as `isEmpty`, `isEmptyStringArray`, `makeRange`, and `rand
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `IsMemory` | Boolean | Whether NPC has memory system |
-| `MemoriesCategory` | String | Memory type category |
+| `IsMemory` | Boolean | Whether the NPC has a Memory entry to record |
+| `MemoriesCategory` | String | Memory type category (default `Other`) |
+| `MemoriesNameOverride` | String | Overrides the Memory name |
+| `MemoriesUnlockedBy` | Enum | `Proximity` (default; recorded when a player comes close) or `Kill` (recorded when the NPC dies near the player). 0.7.2+ |
+| `MemoriesKillRange` | Number | Radius for `Kill` unlocks; `0` (default) uses the server default. 0.7.2+ |
 
 ---
 
@@ -336,12 +346,13 @@ NPCs are organized into a hierarchical category structure:
 
 | Subcategory | Examples |
 |-------------|----------|
-| `Critter/` | Squirrel, Rabbit, Butterfly |
+| `Critter/` | Squirrel, Mouse, Frogs, Gecko |
+| `Hunt/` | The Voidtaken bear hunt (0.7.2+) |
 | `Livestock/` | Cow, Sheep, Pig, Chicken |
 | `Mammal/` | Wolf, Bear, Deer |
 | `Mythic/` | Unique fantasy creatures |
-| `Reptile/` | Lizards, Snakes |
-| `Vermin/` | Rats, Spiders |
+| `Reptile/` | Crocodile, Lizard, Toads, Tortoise |
+| `Vermin/` | Rats, Spiders, Snakes, Scorpion |
 
 ### Aquatic
 
@@ -361,26 +372,13 @@ NPCs are organized into a hierarchical category structure:
 
 ### Intelligent
 
-**Aggressive Factions:**
+0.7.2 regrouped this tree: the former `Aggressive/`, `Neutral/` and `Passive/` subdirectories are gone.
 
-| Faction | Description |
-|---------|-------------|
-| `Goblin/` | Goblins and variants (Scrapper, Archer, Shaman) |
-| `Outlander/` | Human outlaws |
-| `Scarak/` | Insectoid faction |
-| `Trork/` | Pig-like warriors |
-| `Hedera.json` | Standalone aggressive plant-creature role |
-
-**Neutral Factions:**
-
-| Faction | Description |
-|---------|-------------|
-| `Feran/` | Beast-folk traders |
-| `Kweebec/` | Small forest dwellers |
-| `Tuluk/` | Nomadic traders |
-| `Bramblekin*.json` | Standalone neutral bramble folk |
-
-There is also an `Intelligent/Passive/` directory alongside `Aggressive/` and `Neutral/`.
+| Directory | Contents |
+|-----------|----------|
+| `Faction/` | `Feran/`, `Goblin/` (Scrapper, Lobber, Miner, Glutton, Thief and others, plus a `Dungeon/` set), `Kweebec/`, `Outlander/`, `Scarak/`, `Trork/`, `Tuluk/` |
+| `Temple/` | The temple residents (`Temple_*`) and `Template_Temple` |
+| `Other/` | Standalone roles: `Bramblekin*`, `Hedera`, `Slothian`, `Quest_Master`, and the `Klops/` set |
 
 ### Other Categories
 
@@ -390,7 +388,7 @@ There is also an `Intelligent/Passive/` directory alongside `Aggressive/` and `N
 | `Elemental/Spirit/` | Elemental spirits |
 | `Undead/` | Zombies, skeletons, ghosts |
 | `Void/` | Void creatures |
-| `Boss/` | Boss encounters |
+| `Boss/` | Boss encounters (dragons, plus the `Dungeon_Feastmaster/` and `Goblin_Gobliterator/` sets) |
 
 ---
 
@@ -400,9 +398,9 @@ Motion controllers define how NPCs move through the world. They are listed in `M
 
 | Controller | Usage | Description |
 |------------|-------|-------------|
-| `Walk` | 357 | Ground-based movement (`MotionControllerWalk`) |
-| `Fly` | 19 | Aerial movement (`MotionControllerFly`) |
-| `Dive` | 5 | Swimming/diving movement (`MotionControllerDive`) — *"Provide diving abilities for NPC"* |
+| `Walk` | 417 | Ground-based movement (`MotionControllerWalk`) |
+| `Fly` | 22 | Aerial movement (`MotionControllerFly`) |
+| `Dive` | 6 | Swimming/diving movement (`MotionControllerDive`) — *"Provide diving abilities for NPC"* |
 
 Many controller fields accept `{ "Compute": "..." }` so they can read template parameters.
 
@@ -453,7 +451,7 @@ From `Template_Animal_Neutral` (abridged — the shipped block also carries `Des
 
 ## Separation & avoidance steering
 
-Two **independent** role-level steering forces keep NPCs from piling up. Both are off by default, both are toggled by their own boolean key, and both are applied per-tick by `com.hypixel.hytale.server.npc.systems.AvoidanceSystem`, which blends each into the NPC's body steering after the behaviour tick. **Neither is a flocking feature** — they act on solo, un-flocked NPCs and push against *any* nearby entity regardless of role or flock. This answers the common question *"why do my rats space out while my chickens walk through each other?"*: the rats' role sets `ApplySeparation: true`; the chickens' role omits it (it defaults `false`).
+Two **independent** role-level steering forces keep NPCs from piling up. Both are off by default, both are toggled by their own boolean key, and both are applied per-tick by `com.hypixel.hytale.server.npc.systems.AvoidanceSystem`, which blends each into the NPC's body steering after the behaviour tick. **Neither is a flocking feature** — they act on solo, un-flocked NPCs and push against *any* nearby entity regardless of role or flock. This answers the common question *"why do these NPCs space out while those walk through each other?"*: the first role (or the template it references) sets `ApplySeparation: true`; the second omits it, and it defaults `false`. In 0.7.2 the four big shared templates (`Template_Animal_Neutral`, `Template_Livestock`, `Template_Predator`, `Template_Flying_Aggressive`) all set it, so most stock wildlife separates.
 
 | Force | Key (default) | What it does |
 | --- | --- | --- |
@@ -511,7 +509,7 @@ A role that spaces out from its neighbours needs only the toggle plus a distance
 }
 ```
 
-Two roles identical except for `ApplySeparation` behave exactly as the rats-vs-chickens question describes — the one with it set spaces out, the one without it overlaps. Vanilla isolates this in `Server/NPC/Roles/_Core/Tests_Development/Test_Separation_*.json`: `Test_Separation_Stationary.json` is the snippet above verbatim, and `Test_Separation_Maintain.json` / `…_Flee.json` / `…_Wander.json` exercise it under different motions. For a production example, `Template_Livestock.json` drives the distance through a parameter:
+Two roles identical except for `ApplySeparation` behave exactly as that question describes — the one with it set spaces out, the one without it overlaps. Vanilla isolates this in `Server/NPC/Roles/_Core/Tests_Development/Test_Separation_*.json`: `Test_Separation_Stationary.json` is the snippet above verbatim, and `Test_Separation_Maintain.json` / `…_Flee.json` / `…_Wander.json` exercise it under different motions. For a production example, `Template_Livestock.json` drives the distance through a parameter:
 
 ```json
 "ApplySeparation": true,
@@ -555,13 +553,14 @@ A node's `Sensor` is an object with a `Type`. Sensors can be composed with `And`
 | `State` | Matches a given AI state (`"State": "Idle"`) |
 | `Any` | Always matches (optionally `"Once": true`) |
 | `Target` | A valid target exists in a [marked slot](#marked-targets-lockedtarget-and-the-target-sensor) within range (no line-of-sight required) |
-| `Damage` | Received damage (optionally `"Combat": true`) |
+| `Damage` | Received damage. `Combat` defaults `true`; `Drowning` / `Environment` / `Other` opt in further causes, and `IncludeDoT` (default `true`, 0.7.2+) counts effect damage-over-time as combat damage |
 | `Mob` | Other NPCs nearby (with `Filters`) |
 | `Leash` | Distance from home exceeds `Range` |
 | `Time` | Time of day within `Period` |
 | `Block` / `DroppedItem` | Nearby block set or dropped items |
 | `Beacon` / `Alarm` / `Timer` | Flock beacons, alarms, named timers (see [Alarms](#alarms-setalarm--alarm)) |
 | `Flag` | Tests a per-NPC boolean (see [Flags](#flags-setflag--flag)) |
+| `GameFlag` | Tests a universe-wide game flag: `Flag` (required), `Level` (default `0`), `Comparator` (default `Greater`; flag on the left). An unset flag reads `0`. Registered by `GameFlagsPlugin`, 0.7.2+ |
 
 ### Actions
 
@@ -580,7 +579,7 @@ Each entry in `Actions` is an object whose `Type` is the action. Common action t
 | `Role` | **Change the NPC's role** (`BuilderActionRole`): `Role` (required, must resolve), `ChangeAppearance` (`true`), `State`, `DetachFromSpawning` (`false`). This is the only meaning of `"Type": "Role"` — see [Role Types](#role-types). |
 | `Nothing` | No-op |
 
-**Encounter actions live on their own page.** The encounter-manager plugin registers a further set of NPC actions — `SignalWorldEvent`, `SetEncounterBossBar`, `ClearEncounterBossBar`, `StartEncounterMusic`, `StopEncounterMusic`, `SetEncounterAudioState`, `ChangeTargetRole`, `SetTargetNPCInvulnerable` and the `EncounterMembers` sensor collector — plus the `TriggerSpawners` action (`server.npc.corecomponents.world.ActionTriggerSpawners`, new in 0.6.3). They are usable in any role's `Actions` array, but are documented in **[encounters.md](encounters.md)** rather than duplicated here.
+**Encounter actions live on their own page.** The encounter-manager plugin registers a further set of NPC actions: `SignalWorldEvent`, `SetEncounterBossBar`, `ClearEncounterBossBar`, `StartEncounterMusic`, `StopEncounterMusic`, `SetEncounterAudioState`, `ChangeTargetRole`, `SetTargetNPCInvulnerable`, 0.7.2's `SetEncounterWeather`, `ClearEncounterWeather` and `GrantReward`, and the `EncounterMembers` sensor collector. Each builder calls `requireInstructionType` with `InstructionType.Encounter` (`SignalWorldEvent` also accepts `EncounterStateTransitions`), so they load only inside an encounter manager's instructions, and a role's `Actions` array rejects them. The `TriggerSpawners` action (`server.npc.corecomponents.world.ActionTriggerSpawners`, new in 0.6.3) carries no such restriction. All of them are documented in **[encounters.md](encounters.md)** rather than duplicated here.
 
 ### BodyMotion
 
@@ -673,7 +672,7 @@ The two **scanning** entity sensors — `"Type": "Player"` (`SensorPlayer`) and 
 }
 ```
 
-**The `Collector` slot** (`com.hypixel.hytale.server.npc.corecomponents.ISensorEntityCollector`) is the multi-target escape hatch. Under `Server/NPC/` exactly 17 sensor nodes declare one — all `Mob` (15) or `Player` (2), all of them `CombatTargets`; the two `EncounterMembers` uses live in `Server/EncounterManager/`. Its interface is `init` → `collectMatching` / `collectNonMatching` per candidate → `cleanup`, plus `terminateOnFirstMatch()`. That last method is the important one: the built-in `ISensorEntityCollector.DEFAULT` returns `true`, so **a sensor with no collector stops scanning at its first match**; a collector that returns `false` makes the sensor walk every candidate in range, which is how a single sensor feeds a whole group.
+**The `Collector` slot** (`com.hypixel.hytale.server.npc.corecomponents.ISensorEntityCollector`) is the multi-target escape hatch. Under `Server/NPC/` exactly 19 sensor nodes declare one — all `Mob` (16) or `Player` (3), all of them `CombatTargets`; the nine `EncounterMembers` uses live in `Server/EncounterManager/`. Its interface is `init` → `collectMatching` / `collectNonMatching` per candidate → `cleanup`, plus `terminateOnFirstMatch()`. That last method is the important one: the built-in `ISensorEntityCollector.DEFAULT` returns `true`, so **a sensor with no collector stops scanning at its first match**; a collector that returns `false` makes the sensor walk every candidate in range, which is how a single sensor feeds a whole group.
 
 ```json
 "Sensor": {
@@ -778,7 +777,7 @@ For the unbounded (no `ExecuteFor`) form, give the Random node a `Name` and have
 ]}
 ```
 
-Vanilla reference: `Server/NPC/Roles/_Core/Tests/Test_Random_Instruction.json` (both forms); production usage in `_Core/Templates/Template_{Livestock,Predator,Animal_Neutral,Intelligent}.json` and the reusable `_Core/Components/Steps/Component_Instruction_Combat_*.json` steps.
+Vanilla reference: `Server/NPC/Roles/_Core/Tests/Test_Random_Instruction.json` (both forms); production usage in `_Core/Templates/Template_{Livestock,Predator,Animal_Neutral,Intelligent}.json` and the reusable `_Core/Components/Instructions/Combat/` components (`…_Combat_Back_Off`, `…_Combat_Flock_Take_Turns`, `…_Ranged_When_Unreachable`).
 
 ### The `Attack` action
 
@@ -789,7 +788,7 @@ JSON params (from `BuilderActionAttack`):
 | Key | Type | Meaning |
 |-----|------|---------|
 | `Attack` | string | Attack interaction id (e.g. `Root_NPC_Attack_Melee`). Roles normally pass the role's own field through with `{ "Compute": "Attack" }`. |
-| `AttackType` | enum | `Primary` (default) / `Secondary` / `Ability1` / `Ability2` / `Ability3` (`ActionAttack$AttackType`). |
+| `AttackType` | enum | `Primary` (default) / `Secondary` / `Ability1` / `Ability2` / `Ability3` / `Ability4` (`ActionAttack$AttackType`; `Ability4` added in 0.7.2). |
 | `AttackPauseRange` | `[min, max]` | Pause **between** attacks — a throttle, in seconds; default `[0, 0]`. **Number array, not strings.** |
 | `AimingTimeRange` | `[min, max]` | How long to aim before striking, in seconds; default `[0, 0]`. Number array. |
 | `ChargeFor` / `ChargeDistance` | number | Charge-attack windup / distance (both default `0`; `ChargeFor` doubles as how long to block for). |
@@ -1064,9 +1063,9 @@ NPCPlugin.get().registerCoreComponentType("MyMod_FlockAttackToken", BuilderMyTok
 
 ## Components
 
-Reusable behavior components allow shared logic across NPCs. They are referenced by short name with `Reference`, optionally adjusted with `Modify` (whose fields commonly use `{ "Compute": ... }`). Component files live under `Server/NPC/Roles/_Core/Components/` (`Sensors/`, `Steps/`, `ActionLists/`, `Flock/`, `Paths/`, `Selectors/`) and use the prefixes `Component_Sensor_*`, `Component_Instruction_*`, and `Component_ActionList_*`.
+Reusable behavior components allow shared logic across NPCs. They are referenced by short name with `Reference`, optionally adjusted with `Modify` (whose fields commonly use `{ "Compute": ... }`). Component files live under `Server/NPC/Roles/_Core/Components/` (`Sensors/`, `Instructions/` with its `Combat/` `Detection/` `Interaction/` `Motion/` `State/` `Util/` subfolders, `ActionLists/`, `Flock/`, `Path/`; 0.7.2 folded the former `Steps/` and `Selectors/` into `Instructions/`) and use the prefixes `Component_Sensor_*`, `Component_Instruction_*`, and `Component_ActionList_*`.
 
-A component file declares which slot it fits with a top-level **`"Class"`** (`Sensor`, `Instruction`, or `ActionList`), an optional `"Type": "Component"`, a `Parameters` block, and a `Content` body. Callers override those parameters through `Modify`. Two parameter names are conventions rather than values: **`_ImportStates`** (declared by the component, listing the state names it expects) and **`_ExportStates`** (supplied by the caller in `Modify`, mapping the component's states onto the role's own).
+A component file declares which slot it fits with a top-level **`"Class"`** (`Sensor`, `Instruction`, or `ActionList`), a `"Type": "Component"` (all 164 shipped component files carry it), a `Parameters` block, and a `Content` body. Callers override those parameters through `Modify`. Two parameter names are conventions rather than values: **`_ImportStates`** (declared by the component, listing the state names it expects) and **`_ExportStates`** (supplied by the caller in `Modify`, mapping the component's states onto the role's own).
 
 ### Sensor Components
 
@@ -1122,7 +1121,7 @@ State transitions can reference shared action lists:
 
 Groups define named collections of NPC roles, referenced elsewhere (attitudes, flock filters, spawn filters). Found in `Server/NPC/Groups/`. The file name is the group name. Group files have no `Type` field; they directly contain an `IncludeRoles` array. Role names may use trailing-wildcard patterns (`Fox*`).
 
-The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and **`IncludeGroups` / `ExcludeGroups`**, which compose one group out of others. In practice 64 of the 72 shipped files use only `IncludeRoles`, and just one uses `ExcludeRoles`.
+The `NPCGroup` codec accepts four keys — `IncludeRoles`, `ExcludeRoles`, and **`IncludeGroups` / `ExcludeGroups`**, which compose one group out of others. In practice 94 of the 114 shipped files use only `IncludeRoles`, and just one uses `ExcludeRoles`.
 
 ### Group Definition
 
@@ -1176,8 +1175,10 @@ Extends [SimpleInstantInteraction](interactions.md#simpleinstantinteraction).
 a `true` third argument to `KeyedCodec`; both forms mean required, and
 [SpawnNPC's `WeightedEntityIds`](npc-spawning.md#weightedentityids-entries) has a key with both.
 
-The one shipped use is the debug item `Server/Item/Items/_Debug/Debug_Beacon_Horn.json`, which
-sends two different keys from its two interaction slots:
+Fourteen shipped files use it as of 0.7.2: thirteen boss and hunt interactions (the Goblin Gobliterator
+and Feastmaster fights, `Hunt_Bait_Spawn`, `Hunt_Request_Predator`) and the debug item
+`Server/Item/Items/_Debug/Debug_Beacon_Horn.json`, the simplest, which sends two different keys from
+its two interaction slots:
 
 ```json
 {
@@ -1219,8 +1220,8 @@ Behavior notes:
 > `SendBeacon`.** `Self` is a shipped group whose only entry is the `$self` sentinel, and
 > `isGroupMember` honours that sentinel through one shortcut: the candidate's role index must equal
 > the **sender's** role index. The `Beacon` action passes the sending NPC's real role index, so
-> there `["Self"]` means "NPCs sharing my role" — `Template_Goblin_Scavenger.json` relies on it to
-> squabble only with other scavengers, and four `Test_Kweebec_Playing.json` instructions do the same.
+> there `["Self"]` means "NPCs sharing my role" — four `Beacon` actions in `Test_Kweebec_Playing.json`
+> rely on it, the only shipped uses as of 0.7.2.
 > `SendBeacon` passes `-1`, hardcoded. No candidate ever resolves to `-1` — players resolve to index
 > `0` and NPCs to their own role index — so the shortcut cannot fire and the check falls through to a
 > plain tag test that the `$self` sentinel can never satisfy. Copying a working `["Self"]` out of a
@@ -1464,15 +1465,15 @@ The two NPC melee paths and the Combat Action Evaluator moved to their own page 
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Total Roles | 1,000 | NPC role definitions (`Server/NPC/Roles/**.json`) |
-| — by `Type` | 467 `Variant` · 320 `Generic` · 55 `Abstract` | the rest are components, templates-by-reference and test fixtures |
-| Templates (`Template_*`) | 51 | Abstract base templates (13 in `_Core/Templates/`, 3 more in its `Deprecated/`) |
-| Attitude Files | 26 | Relationship definitions (`Attitude/Roles/`) |
-| Group Files | 72 | NPC role collections |
+| Total Roles | 1,148 | NPC role definitions (`Server/NPC/Roles/**.json`) |
+| — by `Type` | 545 `Variant` · 350 `Generic` · 89 `Abstract` · 164 `Component` | every shipped file carries one of the four |
+| Templates (`Template_*`) | 84 | Abstract base templates (13 in `_Core/Templates/`, 3 more in its `Deprecated/`) |
+| Attitude Files | 29 | Relationship definitions (`Attitude/Roles/`) |
+| Group Files | 114 | NPC role collections |
 | Flock Files | 8 | Flock size configurations |
-| Spawn Beacons | 85 | Spawn configurations |
+| Spawn Beacons | 96 | Spawn configurations |
 | Companion Block Spawner Recipes | 2 | Both are `Debug_*` examples |
-| CAE Files | 28 | Combat balancing |
+| CAE Files | 34 | Combat balancing |
 
 ---
 

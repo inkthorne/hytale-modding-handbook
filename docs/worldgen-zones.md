@@ -7,16 +7,23 @@ seo:
 
 # World Structures (Zones)
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.7.2**
 
 The "zone" in Hytale's data is a **world structure** file under
 `Server/HytaleGenerator/WorldStructures/`. A world structure assigns biomes across the
 world by mapping a density value to **ranges**, names a default/fallback biome, controls
 transition widths, and declares world-wide constants and spawn data through a `Framework`.
 
-The shipped per-region structures are `Zone1_Plains1.json`, `Zone2_Desert1.json`,
-`Zone3_Taiga1.json`, `Zone4_Volcanic1.json`; there are also `Default.json`,
-`Default_Flat.json`, `Default_Void.json`, `Basic.json`, and several `Portals_*.json`.
+The shipped per-region structures are `Regions/Zone1_Plains1.json`, `Regions/Zone2_Desert1.json`,
+`Regions/Zone3_Taiga1.json` and `Regions/Zone4_Volcanic1.json`; the portal worlds are
+`Portals/Portals_Hedera.json`, `Portals_Henges`, `Portals_Jungles`, `Portals_Oasis` and
+`Portals_Taiga`; `Debug/` holds `Test_Features.json` and five single-biome `Debug_*.json`
+structures; and the folder root has `Default.json`, `Default_Flat.json`, `Default_Void.json`,
+`Basic.json`, `Portals_Goblins.json`, `Portals_Goblins_Encounters.json` and
+`Portals_Goblins_Encounters_Cave.json` — 22 files in all. The subfolders are only
+organisation: a structure's id is still its file name, so an instance config names
+`"WorldStructure": "Zone1_Plains1"`, not a path (0.7.2 moved the region and portal files into
+`Regions/` and `Portals/` without renaming them).
 
 See [worldgen.md](worldgen.md) for the node-graph vocabulary and
 [worldgen-biomes.md](worldgen-biomes.md) for what each referenced biome contains.
@@ -82,19 +89,25 @@ Every world structure file uses the same small set of top-level keys:
 | `DefaultTransitionDistance` | yes | Default blend width in blocks between biomes (clamped to `>= 1` at build time) |
 | `MaxBiomeEdgeDistance` | yes | Maximum distance over which biome edges are resolved |
 | `Density` | yes | Density graph whose value selects the biome (the "biome map") |
-| `Framework` | yes | Array of world-constant / positions blocks (see [Framework](#framework)) |
-| `SpawnPositions` | optional | Where players spawn (the only key the codec marks non-required; present on 8 of the 15 shipped files) |
-| `Tags` | optional | Generic asset tags (`Basic.json`, the only file that carries them, has `{"Template": []}`); a `Map<String, String[]>` from the shared `AssetBuilderCodec`, not read by the generator |
+| `Framework` | optional | Array of world-constant / positions blocks (see [Framework](#framework)); the codec flags it non-required, but all 22 shipped files carry it. A `BaseHeight` node whose `BaseHeightName` matches no declared constant silently reads `0` (`BaseHeightDensityAsset.build`), so in a structure without a `Base` constant every biome graph that measures from `Base` measures from Y 0 instead |
+| `SpawnPositions` | optional | Where players spawn (flagged non-required, like `Framework`; present on 17 of the 22 shipped files) |
+| `Tags` | optional | Generic asset tags (the 8 files that carry them — `Basic.json`, the five `Debug/Debug_*.json` and the two `Portals_Goblins_Encounters*.json` — all have `{"Template": []}`); a `Map<String, String[]>` from the shared `AssetBuilderCodec`, not read by the generator |
 
-\* `Biomes` is present on most files; `Default_Flat`, `Default_Void`, and `Basic` ship it
-empty, and `Default.json` omits it entirely — all four rely solely on `DefaultBiome`.
+"Required" above records the codec's `required` flag (a `true` third argument to the key's
+`KeyedCodec`). In 0.7.2 that flag governs how an explicit `null` is decoded; it does not make
+the loader reject a file that omits the key — the field keeps its default, as `Default.json`
+shows by omitting `Biomes`.
+
+\* `Biomes` is present on most files; `Default_Flat`, `Default_Void`, `Basic`, the five
+`Debug_*` structures and the two `Portals_Goblins_Encounters*` structures ship it empty, and
+`Default.json` omits it entirely — all of them rely solely on `DefaultBiome`.
 
 The seven non-`Tags` keys are exactly the keys of the `NoiseRange` codec
 (`com.hypixel.hytale.builtin.hytalegenerator.assets.worldstructures.basic.BasicWorldStructureAsset`;
 each `Biomes` entry is a `BiomeRangeAsset` with `Biome`/`Min`/`Max`); `Tags` is inherited
 from the shared `AssetBuilderCodec`. `NoiseRange` is also the *only* registered
-`WorldStructureAsset` type, and all 15 shipped files use it. A `BiomeTransitions` key
-documented for 0.5.9 appears in neither the 0.6.3 codec nor any shipped file.
+`WorldStructureAsset` type, and all 22 shipped files use it. A `BiomeTransitions` key
+documented for 0.5.9 appears in neither the 0.7.2 codec nor any shipped file.
 
 > There is **no** `ZonePatternGenerator`, `BiomePatternGenerator`, Voronoi `CellSize`,
 > `ZoneDiscoveryConfig`, `UniquePrefabContainer`, or `CaveGenerator` block. Biome
@@ -113,12 +126,11 @@ biomes blend over `DefaultTransitionDistance` blocks (clamped to a minimum of `1
 ```json
 "Type": "NoiseRange",
 "Biomes": [
-  { "Biome": "Plains1_Oak",      "Min": -1,    "Max": -0.82 },
-  { "Biome": "Plains1_Gorges",   "Min": -0.82, "Max": -0.66 },
-  { "Biome": "Plains1_Deeproot", "Min": -0.66, "Max": -0.5  },
-  { "Biome": "Plains1_River",    "Min": -0.5,  "Max": 0     },
-  { "Biome": "Plains1_Shore",    "Min": 0,     "Max": 0.15  },
-  { "Biome": "Oceans",           "Min": 0.15,  "Max": 2     }
+  { "Biome": "Plains1_Trork",  "Min": -1,     "Max": -0.875 },
+  { "Biome": "Plains1_Oak",    "Min": -0.875, "Max": -0.75  },
+  { "Biome": "Plains1_Gorges", "Min": -0.75,  "Max": -0.625 },
+  { "Biome": "Plains1_Hills",  "Min": -0.625, "Max": -0.5   },
+  { "Biome": "Plains1_River",  "Min": -0.5,   "Max": 0      }
 ]
 ```
 
@@ -128,8 +140,10 @@ biomes blend over `DefaultTransitionDistance` blocks (clamped to a minimum of `1
 | `Min` | Lower density bound (**inclusive**) |
 | `Max` | Upper density bound (**inclusive**) |
 
-Ranges are ordered low→high and typically over-extend their outer bounds (e.g. `-1`/`2`)
-so the field never falls outside coverage. `DefaultBiome` covers anything unmatched.
+Ranges are usually ordered low→high and typically over-extend their outer bounds (e.g.
+`-2`/`2` in `Zone2_Desert1`) so the field never falls outside coverage; the portal structures
+list theirs high→low, which is equally valid. `DefaultBiome` covers anything unmatched — in
+`Zone1_Plains1` that is everything above `0`, since its last band stops there.
 
 ---
 
@@ -146,41 +160,36 @@ in the shared world biome map by name:
 }
 ```
 
-`Biome-Map` is defined once in `Density/Map_Default.json` as an `Exported` density node
-(`"ExportAs": "Biome-Map"`, `"SingleInstance": true`). It mixes continent, river, and ocean
-fields built from several `SimplexNoise2D` sources through `Mix`/`Min`/`Normalizer`/`Clamp`/
-`Distance` nodes, and also exports the sub-fields `World-Continent-Map` and `World-River-Map`.
+The biome maps live in `Density/Maps/` (moved there from `Density/` in 0.7.2; the export
+names did not change). `Biome-Map` is defined in `Density/Maps/Map_Default.json` as an
+`Exported` density node (`"ExportAs": "Biome-Map"`, `"SingleInstance": true`). It builds a
+continent field from `SimplexNoise2D` sources through `Normalizer`/`Min`/`Clamp`/`Selector`
+nodes, exports it as `World-Continent-Map`, and combines it with the imported
+`Biome-Map-Tiles-Rivers`. The river sub-field `World-River-Map` is exported by
+`Map_Default_Tiles_Rivers.json`, which itself imports `Biome-Map-Tiles`.
 
-Which map each shipped structure reads (as of 0.6.8):
+Which map each shipped structure reads (as of 0.7.2):
 
 | Structure(s) | `Density` | Defined in |
 |--------------|-----------|------------|
-| `Zone1_Plains1`, `Zone2_Desert1`, `Zone3_Taiga1`, `Zone4_Volcanic1`, `Basic`, `Default` | `Imported "Biome-Map"` | `Density/Map_Default.json` |
-| `Portals_Hedera`, `Portals_Henges`, `Portals_Oasis` | `Imported "Biome-Map-Portals"` | `Density/Map_Portals.json` |
-| `Portals_Jungles` | `Imported "Biome-Map-Tiles"` | `Density/Map_Default_Tiles.json` (a cell-based layout that also exports `World-Biome-Cells`) |
-| `Portals_Taiga` | `Imported "Biome-Map-Tiles-Rivers"` | `Density/Map_Default_Tiles_Rivers.json` |
+| `Zone2_Desert1`, `Zone3_Taiga1`, `Zone4_Volcanic1`, `Basic`, `Default`, `Debug_River`, `Portals_Goblins_Encounters`, `Portals_Goblins_Encounters_Cave` | `Imported "Biome-Map"` | `Density/Maps/Map_Default.json` |
+| `Zone1_Plains1`, `Portals_Taiga` | `Imported "Biome-Map-Tiles-Rivers"` | `Density/Maps/Map_Default_Tiles_Rivers.json` |
+| `Portals_Jungles`, `Debug_Gorges`, `Debug_Hills`, `Debug_Oak`, `Debug_Trork` | `Imported "Biome-Map-Tiles"` | `Density/Maps/Map_Default_Tiles.json` (a cell-based layout) |
+| `Portals_Hedera`, `Portals_Henges`, `Portals_Oasis` | `Imported "Biome-Map-Portals"` | `Density/Maps/Map_Portals.json` |
+| `Portals_Goblins` | `Imported "Portal_Goblin_Biome_Distance"` | `Density/Portal_Goblin_Biome_Distance.json` |
 | `Default_Flat`, `Default_Void` | inline `Constant 0` | — |
 | `Test_Features` | inline `YOverride` → `Cache` → `PositionsCellNoise` | — |
-| `Dev/Interpolation` | inline `SimplexNoise2D` | — |
 
-`Map_Default.json` itself imports `Biome-Map-Tiles`, so the tile map feeds the main map as
-well as `Portals_Jungles`. The one map no structure reads is
-`Density/Map_Portals_Oasis.json` (`Biome-Map-Portals-Oasis`) — `Portals_Oasis.json` uses the
-plain `Biome-Map-Portals` despite the name.
+Two maps no structure reads: `Density/Maps/Map_Portals_Oasis.json`
+(`Biome-Map-Portals-Oasis`) — `Portals_Oasis.json` uses the plain `Biome-Map-Portals`
+despite the name — and `Density/Maps/Map_Default_Spawn.json` (`Biome-Map-Spawn`, which
+imports `Biome-Map` and `Global-Spawns`).
 
 Density can also be inline rather than imported. `Default_Flat.json` and
-`Default_Void.json` use a flat field, and `Dev/Interpolation.json` inlines a noise field:
+`Default_Void.json` use a flat field:
 
 ```json
 "Density": { "Type": "Constant", "Value": 0 }
-```
-
-```json
-"Density": {
-  "Type": "SimplexNoise2D",
-  "Skip": false,
-  "Lacunarity": 2, "Persistence": 0.5, "Octaves": 1, "Scale": 400, "Seed": "A"
-}
 ```
 
 ---
@@ -211,7 +220,10 @@ Named decimal constants. The three that every regional structure defines are `Ba
 
 `Base` varies per structure — e.g. `Default_Flat` uses `80`, `Zone4_Volcanic1` uses `120`.
 Biome terrain and material graphs reference these names through `BaseHeightName`
-(e.g. `"Base"`, `"Bedrock"`).
+(e.g. `"Base"`, `"Bedrock"`). The entries are not limited to heights: `Zone1_Plains1` and
+the five `Debug_*` structures also declare the ore budgets `Copper_Count` and `Iron_Count`,
+which the Plains1 biomes read through the same `BaseHeightName` mechanism, and all of them
+but `Debug_Trork` declare `Lava` (`20`).
 
 ### Positions
 
@@ -253,7 +265,9 @@ Position graph node types observed in world structures:
 | Type | Key fields | Purpose |
 |------|-----------|---------|
 | `List` | `Positions[]` of `{X,Y,Z}` | Explicit fixed points |
-| `Imported` | `Name` | Pull a named positions graph |
+| `Imported` | `Name` | Pull a positions graph published with `ExportAs` |
+| `Framework` | `Name` | Pull a `Framework` `Positions` entry by its entry `Name` (no `ExportAs` needed); a missing name logs `Couldn't find WorldStructure Framework Positions with name ` and yields no positions |
+| `BaseHeight` | `BedName`, `Positions` (plus `MinYRead`/`MaxYRead`) | Lift child positions by the named `DecimalConstants` value |
 | `Offset` | `OffsetX` / `OffsetY` / `OffsetZ` (plus a vector `Offset`), `Positions` | Shift child positions (e.g. lift spawns up) |
 | `Bound` | `Bounds.PointA`/`PointB`, `Positions` | Restrict positions to a box |
 | `FieldFunction` | `FieldFunction`, `Delimiters[]` (`Min`/`Max`), `Positions` | Keep points where a sampled field is in range |
@@ -282,35 +296,55 @@ grid — and the whole thing is lifted by an `Offset` of `OffsetY: 60`.
 
 ## Complete Examples
 
-### Regional zone — `WorldStructures/Zone1_Plains1.json`
+### Regional zone — `WorldStructures/Regions/Zone1_Plains1.json`
 
 ```json
 {
   "Type": "NoiseRange",
   "Biomes": [
-    { "Biome": "Plains1_Oak",      "Min": -1,    "Max": -0.82 },
-    { "Biome": "Plains1_Gorges",   "Min": -0.82, "Max": -0.66 },
-    { "Biome": "Plains1_Deeproot", "Min": -0.66, "Max": -0.5  },
-    { "Biome": "Plains1_River",    "Min": -0.5,  "Max": 0     },
-    { "Biome": "Plains1_Shore",    "Min": 0,     "Max": 0.15  },
-    { "Biome": "Oceans",           "Min": 0.15,  "Max": 2     }
+    { "Biome": "Plains1_Trork",  "Min": -1,     "Max": -0.875 },
+    { "Biome": "Plains1_Oak",    "Min": -0.875, "Max": -0.75  },
+    { "Biome": "Plains1_Gorges", "Min": -0.75,  "Max": -0.625 },
+    { "Biome": "Plains1_Hills",  "Min": -0.625, "Max": -0.5   },
+    { "Biome": "Plains1_River",  "Min": -0.5,   "Max": 0      }
   ],
   "DefaultBiome": "Basic",
   "DefaultTransitionDistance": 32,
   "MaxBiomeEdgeDistance": 32,
-  "Density": { "Type": "Imported", "Name": "Biome-Map" },
+  "Density": { "Type": "Imported", "Name": "Biome-Map-Tiles-Rivers" },
+  "SpawnPositions": {
+    "Type": "BaseHeight", "BedName": "Base",
+    "Positions": {
+      "Type": "Offset", "Offset": { "X": 0, "Y": 50, "Z": 0 },
+      "Positions": { "Type": "Framework", "Name": "Zone1-Forests-Spawns" }
+    }
+  },
   "Framework": [
+    {
+      "Type": "Positions",
+      "Entries": [
+        { "Name": "World-Biome-Cells", "Positions": { "...": "a jittered, scaled TriangularGrid2d" } },
+        { "Name": "Zone1-Forests-Spawns",
+          "Positions": { "Type": "List", "Positions": [ { "X": 0.5, "Y": 0, "Z": 290.5 } ] } }
+      ]
+    },
     {
       "Type": "DecimalConstants",
       "Entries": [
-        { "Name": "Base",    "Value": 100 },
-        { "Name": "Water",   "Value": 100 },
-        { "Name": "Bedrock", "Value": 0   }
+        { "Name": "Base",         "Value": 100 },
+        { "Name": "Water",        "Value": 100 },
+        { "Name": "Lava",         "Value": 20  },
+        { "Name": "Bedrock",      "Value": 0   },
+        { "Name": "Copper_Count", "Value": 30  },
+        { "Name": "Iron_Count",   "Value": 5   }
       ]
     }
   ]
 }
 ```
+
+(The shipped `Offset` also carries `OffsetX`/`OffsetY`/`OffsetZ` of `0` beside the vector, and
+most nodes carry `"Skip": false`; both are omitted above.)
 
 ### Fallback-only structure — `WorldStructures/Default_Flat.json`
 
@@ -342,7 +376,7 @@ No ranges; a flat density and a single default biome.
 ## Gotchas & Errors
 
 Backtick-quoted strings below are the literal messages `BasicWorldStructureAsset` and the
-`HytaleGenerator` plugin log (verified against `HytaleServer.jar` 0.6.8). All of them are
+`HytaleGenerator` plugin log (verified against `HytaleServer.jar` 0.7.2). All of them are
 **warnings** — the world still generates, just wrong — so watch the server log rather than
 waiting for a load failure.
 

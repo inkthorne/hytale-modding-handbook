@@ -7,7 +7,7 @@ seo:
 
 # Mounts & Seating
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/NPC` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item`, `Server/NPC` · **Verified against 0.7.2**
 
 Three different things in Hytale are the same system underneath: **riding an NPC**, **sitting on a
 block**, and **driving a minecart**. All three end with a `MountedComponent` on the rider and a
@@ -39,9 +39,10 @@ not a core one**, so everything on this page exists only when it is loaded — s
 > **`"Type": "Mount"` means two different things.** As an **interaction** it takes
 > `AttachmentOffset` and `Controller`. As an **NPC action** — a core component registered by
 > `NPCPlugin.registerCoreComponentType("Mount", …)` — it takes `AnchorX`, `AnchorY`, `AnchorZ`
-> and `MovementConfig`. Different registries, same string. Of the three shipped assets containing
-> `"Type": "Mount"`, **two are the NPC action** (`Template_Livestock.json`,
-> `Component_Instruction_Interaction_Mount.json`) and only `Rail_Kart.json` is the interaction.
+> and `MovementConfig`. Different registries, same string. Of the four shipped assets containing
+> `"Type": "Mount"`, **three are the NPC action** (`Template_Livestock.json`,
+> `Component_Instruction_Interaction_Mount.json`, and 0.7.2's `Goblin_Launcher.json`) and only
+> `Rail_Kart.json` is the interaction.
 
 ### Mount (interaction)
 

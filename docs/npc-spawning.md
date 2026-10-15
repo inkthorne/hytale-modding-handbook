@@ -7,7 +7,7 @@ seo:
 
 # NPC Spawning
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/NPC` · **Verified against 0.7.2**
 
 Split out of [npc-roles.md](npc-roles.md) at the 2026-09-04 seam. Four ways NPCs enter the world: **spawn beacons** (ambient, environment-filtered), **companion block spawners** (a block that keeps an NPC alive nearby), **manual spawn markers** (a placed marker that stays inert until an interaction fires it) and the **`SpawnNPC` interaction** (an item or block chain spawning on demand). Role definitions themselves stay in [npc-roles.md](npc-roles.md).
 
@@ -20,6 +20,7 @@ Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/
 | Property | Type | Description |
 |----------|------|-------------|
 | `Environments` | Array | Biome/environment filters (e.g. `Env_Zone1_Caves_Volcanic_T1`) |
+| `WeatherIds` | Array | Optional weather filter (0.7.2+): the beacon spawns only while the current weather (the world's forced weather, else the environment's) is one of these, and a placed beacon removes itself and despawns its NPCs when the weather stops matching. Omitted or empty means any weather |
 | `MinDistanceFromPlayer` | Number | Minimum player distance for spawning |
 | `MaxSpawnedNPCs` | Number | Maximum concurrent spawns |
 | `ConcurrentSpawnsRange` | Array | `[min, max]` NPCs spawned per cycle |
@@ -51,7 +52,7 @@ Spawn beacons configure where and how NPCs spawn in the world. Found in `Server/
     "NPCs": [
         { "Weight": 75, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Scrapper" },
         { "Weight": 15, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Lobber" },
-        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Hermit" },
+        { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Burner" },
         { "Weight": 5, "SpawnBlockSet": "Volcanic", "Id": "Goblin_Miner" }
     ],
     "LightRanges": {
@@ -75,7 +76,7 @@ A minimal beacon can also start an NPC in a chosen state:
 
 ### Zone-Based Organization
 
-Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories and a handful of loose beacons (`Edible_*`, `Goblin_Duke_Phase_*`) at the top level:
+Spawn beacons are organized by zone (`Zone1` through `Zone4`), with subfolders by tier and biome, plus `Portals` and `Tests` directories and a handful of loose beacons (`Edible_*`, `Goblin_Duke_Phase_*`, `Bear_Voidtaken_Beacon`) at the top level:
 
 ```
 Server/NPC/Spawn/Beacons/
@@ -319,10 +320,10 @@ Behavior notes:
 > **Gotcha — `SpawnYawOffset` is in degrees, and the engine's own codec documentation says
 > radians.** The implementation applies `Math.toRadians(spawnYawOffset)` before adding it to the
 > block's yaw, so the value is degrees; the codec's description string ("The yaw rotation offset
-> in radians…") is wrong, and it is the string an asset editor would surface. Both shipped assets
-> that use the key — `Block_Scarack_Eggsacks_Burst.json` and `Block_Coffin_Open.json` — pass
-> `"SpawnYawOffset": 180` to face the spawned NPC away from the block, and 2 of 2 uses only make
-> sense as degrees. Trusting the codec doc puts the NPC out by a factor of about 57.
+> in radians…") is wrong, and it is the string an asset editor would surface. All three shipped
+> assets that use the key — `Block_Scarack_Eggsacks_Burst.json`, `Block_Coffin_Open.json` and the
+> debug `Spawner_Rat.json` — pass `"SpawnYawOffset": 180` to face the spawned NPC away from the
+> block, and 3 of 3 uses only make sense as degrees. Trusting the codec doc puts the NPC out by a factor of about 57.
 
 ---
 
@@ -331,15 +332,40 @@ Behavior notes:
 Spawn markers are the fourth spawn source: assets under `Server/NPC/Spawn/Markers/`, placed by
 worldgen and prefabs, each carrying a weighted `NPCs` list. Most re-arm on their own timer. A marker
 that sets **`"ManualTrigger": true`** never does — it sits inert until something fires it, and
-`TriggerSpawnMarkers` is what fires it. **Nine of the shipped markers are manual**:
+`TriggerSpawnMarkers` is what fires it. **37 of the shipped markers are manual** as of 0.7.2, up
+from nine: the new dungeon, void and boss content added most of them (`Dungeon_Goblin_*_Manual`,
+`Void_Tentacle_Manual`, `Dungeon_Feastmaster_Boss`, …). The nine that predate it are
 `Skeleton_Knight_Manual`, `Spirit_Root_Manual`, `Trork_Chieftain_Backup`,
 `Outlander_Marauder_Backup`, `Welcome_Animal`, `Test_Boss_Marker`, `Test_Manual_Marker`,
 `Test_Objective_Spawn_Marker` and `Test_Skeleton_Stones`.
 
 The marker asset itself
-(`com.hypixel.hytale.server.spawning.assets.spawnmarker.config.SpawnMarker`) is not otherwise
-documented in this handbook — `ManualTrigger` is described here only because it is the key that
-decides whether the interaction can see a marker at all.
+(`com.hypixel.hytale.server.spawning.assets.spawnmarker.config.SpawnMarker`) is documented in this
+handbook only as far as this section needs: `ManualTrigger`, because it is the key that decides
+whether the interaction can see a marker at all, and the position-validation keys below, because a
+marker that fails validation ignores a trigger.
+
+### Marker position validation (0.7.2+)
+
+0.7.2 added eight `SpawnMarker` keys that control how a marker finds a spawn position and whether
+it counts as valid. None is required.
+
+| Key | Type | Default | Description / load-time validation |
+|-----|------|---------|-------------------------------------|
+| `ValidatePosition` | boolean | `true` | Whether the marker's position is validated at all |
+| `ValidateBelowPosition` | boolean | `true` | Whether to check that only empty space lies below the marker |
+| `RequireFitAtMarkerHeight` | boolean | `false` | The NPC must fit in a vertical span that contains the marker's Y. When false the search may use the nearest span tall enough |
+| `MaxVerticalSpawnOffset` | double | unset | Vertical search distance from the marker. Unset falls back to `MaxDropHeight`, and the effective value is the larger of the two. Validated `> 0`, `max(32)` |
+| `MaxHorizontalSpawnOffset` | double | `0` | Search distance along the marker's orientation. Validated `>= 0`, `max(16)` |
+| `SpawnPositionSearch` | enum | `LINE` | Search algorithm: `LINE` or `RANGE` |
+| `SpawnPositionSearchDebug` | enum set | empty | Diagnostic output for a `RANGE` search: `SUMMARY`, `MAP` |
+| `BlockOverlapHeightCompensation` | double | `1.0` | How far up a marker stuck inside a block may be auto-corrected and still count as valid. Validated `>= 0`, `max(4)` |
+
+What happens to a marker that fails is server configuration, not asset data: `SpawningPlugin`'s
+config keys `AutoRemoveInvalidMarkers` (default `true`) removes it, and `DebugInvalidMarkers`
+(default `false`) attaches a `SpawnMarkerDebug` component to every marker.
+`/spawning markers autoremoveinvalidmarkers [enabled]` and
+`/spawning markers debuginvalidmarkers [enabled]` report them, or set them when given the boolean.
 
 ### TriggerSpawnMarkers
 
@@ -389,6 +415,9 @@ Behavior notes:
 - **A marker that already has live NPCs will not re-fire.** `SpawnMarkerEntity.trigger()` returns
   false while its spawn count is above zero, so repeatedly using a summon item does not stack more
   NPCs onto the same marker — it re-arms only as the ones it spawned are removed.
+- **A marker whose position validation is pending or failed ignores the trigger** (0.7.2+).
+  `trigger()` checks the marker's `SpawnMarkerValidation` component and returns false, logging
+  `Marker %s ignored a manual trigger because validation is %s` (`pending` or `failed`) at `FINE`.
 
 > **Gotcha — `"Count": 0` means *all* markers, not *no* markers.** Zero is the default and the
 > "unlimited" sentinel at once: the implementation branches on `count == 0` into a loop over every

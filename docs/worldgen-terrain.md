@@ -7,7 +7,7 @@ seo:
 
 # Terrain Density Graphs
 
-**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/HytaleGenerator` · **Verified against 0.7.2**
 
 Hytale terrain is **not** built from a stack of fixed/variable "layers". It is produced by a
 **node graph of density functions**. Each biome owns a `DAOTerrain` node whose `Density` input is
@@ -94,15 +94,17 @@ top-level shape:
 {
   "$NodeId": "Biome-fb9c6a20-0178-4045-86db-b9c078e694bc",
   "Name": "Hills",
-  "Terrain":          { "...": "DAOTerrain node, see below" },
-  "MaterialProvider": { "...": "Solidity provider, see below" },
-  "Props":            [ "...prop placement entries..." ]
+  "Terrain":             { "...": "DAOTerrain node, see below" },
+  "MaterialProvider":    { "...": "material provider graph, see below" },
+  "Props":               [ "...prop placement entries..." ],
+  "EnvironmentProvider": { "...": "see worldgen-biomes.md" },
+  "TintProvider":        { "...": "see worldgen-biomes.md" }
 }
 ```
 
-The standalone files in `Density/` (such as `Map_Default.json`,
-`Plains1_Caves_Terrain.json`) are density graphs that are *exported by name* and then *imported*
-into biome terrain graphs.
+The standalone files in `Density/` (such as `Maps/Map_Default.json`,
+`Volcanic1_Caves_Terrain.json` and the `Base_Simplex/` noise bank) are density graphs that are
+*exported by name* and then *imported* into biome terrain graphs.
 
 ---
 
@@ -137,25 +139,31 @@ A biome's `Terrain` is a single node of `Type: "DAOTerrain"`. Its one meaningful
 
 ```json
 "Terrain": {
-  "$NodeId": "Terrain-d4edd770-d325-42c5-99b7-335d50d612de",
+  "$NodeId": "Terrain.Biome-d4edd770-d325-42c5-99b7-335d50d612de",
   "Type": "DAOTerrain",
   "Density": {
-    "$NodeId": "MinDensityNode-c9a8caa1-...",
     "Type": "Min",
     "Skip": false,
     "Inputs": [
-      { "Type": "Imported", "Name": "Plains1_Caves_Terrain" },
-      { "Type": "Mix", "ExportAs": "Plains1_Oak_Terrain_Field", "Inputs": [ ... ] }
+      { "Type": "Mix", "Inputs": [ "...the surface field..." ] },
+      { "Type": "YSampled", "SampleDistance": 3, "SampleOffset": 0, "Interpolate": true,
+        "Inputs": [ { "Type": "Mix", "Inputs": [
+          { "Type": "Constant", "Value": 1 },
+          { "Type": "Graph", "GraphGenerator": { "ImportName": "Plains1_Caves" }, "...": "..." },
+          { "Type": "CurveMapper", "...": "depth band over BaseHeight" }
+        ] } ] }
     ]
   }
 }
 ```
 
-The example above (from `Plains1_Oak.json`) is the canonical terrain pattern: take the biome's
-own surface field (a `Mix` exported as `Plains1_Oak_Terrain_Field`) and combine it via `Min`
-with an imported cave density (`Plains1_Caves_Terrain`). `Min` keeps whichever value is smaller,
-so wherever the cave field goes negative it carves the solid terrain away. See
-[worldgen-caves.md](worldgen-caves.md) for the cave side.
+The example above (abridged from `Plains1_Oak.json`) is the canonical terrain pattern: the
+biome's own surface field (a `Mix`) is combined via `Min` with a cave field. `Min` keeps
+whichever value is smaller, so wherever the cave field goes negative it carves the solid
+terrain away. In the Plains1 biomes the cave field is a `Graph` density node fed by the
+`Plains1_Caves` graph generator, faded to `Constant 1` (solid) outside a depth band; other
+biomes import a plain density field instead. See [worldgen-caves.md](worldgen-caves.md) for
+the cave side.
 
 ---
 
@@ -193,14 +201,15 @@ codec keys are the JSON keys.)
 | `Normalizer` | `FromMin`, `FromMax`, `ToMin`, `ToMax` | Linearly remaps `[FromMin,FromMax]` to `[ToMin,ToMax]`. |
 | `Clamp` | `WallA`, `WallB` | Clamps the input between the two walls. |
 
-Real `Normalizer` from `Map_Default.json`:
+Real `Normalizer` from `Density/Maps/Map_Default.json`:
 
 ```json
 {
   "Type": "Normalizer",
   "FromMin": -1, "FromMax": 1,
-  "ToMin": -0.85, "ToMax": 0.85,
-  "Inputs": [ { "Type": "SimplexNoise2D", "Scale": 1500, "Seed": "A" } ]
+  "ToMin": -0.5, "ToMax": 1,
+  "Inputs": [ { "Type": "SimplexNoise2D", "Lacunarity": 5, "Persistence": 0.3, "Octaves": 2,
+                "Scale": 1000, "Seed": "World-Continent-Map-B" } ]
 }
 ```
 
@@ -222,20 +231,22 @@ The workhorse. Produces a height-independent 2D noise field.
 
 ```json
 {
-  "$NodeId": "SimplexNoise2DDensityNode-f2c2a89e-...",
   "Type": "SimplexNoise2D",
-  "Lacunarity": 5,
-  "Persistence": 0.08,
+  "ExportAs": "Plains1_Oak",
+  "Lacunarity": 4.2,
+  "Persistence": 0.12,
   "Octaves": 3,
-  "Scale": 400,
+  "Scale": 200,
   "Seed": "Plains1_Oak"
 }
 ```
 
+(From `Plains1_Oak.json`, which exports it so later nodes in the same biome can `Imported` it.)
+
 ### SimplexNoise3D
 
-Volumetric noise (used for ore veins and 3D carving). Same parameters but with separate
-horizontal/vertical scale:
+Volumetric noise (used for ore veins, e.g. `Assignments/Desert1/Desert1_Iron.json`). Same
+parameters but with separate horizontal/vertical scale:
 
 ```json
 {
@@ -248,9 +259,9 @@ horizontal/vertical scale:
 
 ### CellNoise2D
 
-Voronoi/cellular noise, seen in material selection (e.g. `Plains1_Oak.json` boulder pebbles).
-Fields observed: `ScaleX`, `ScaleZ`, `Jitter`, `CellType` (e.g. `"Distance2Div"`), `Octaves`,
-`Seed`.
+Voronoi/cellular noise, seen in prop placement (e.g. a positions gate in `Plains1_Oak.json`'s
+`Props`) and in `Plains1_Hills.json`. Fields: `ScaleX`, `ScaleZ`, `Jitter`, `CellType`
+(e.g. `"Distance2Div"`), `Octaves`, `Seed`.
 
 ---
 
@@ -267,8 +278,8 @@ Maps an input value through a curve. The curve is a child object of `Type: "Manu
   "Curve": {
     "Type": "Manual",
     "Points": [
-      { "In": -5, "Out": 1 },
-      { "In": 40, "Out": -1 }
+      { "In": 0,   "Out": 1 },
+      { "In": 0.1, "Out": -1 }
     ]
   },
   "Inputs": [ { "Type": "BaseHeight", "BaseHeightName": "Base", "Distance": true } ]
@@ -276,12 +287,13 @@ Maps an input value through a curve. The curve is a child object of `Type: "Manu
 ```
 
 This is how terrain is shaped by altitude: feed `BaseHeight` into a `CurveMapper` so density
-falls off above some height, producing a surface.
+falls off above some height, producing a surface. The curve above (from `Plains1_Oak.json`)
+is a flat surface exactly at `Base`: solid below, empty above.
 
 ### Distance
 
-Seen in `Map_Default.json` as a continent-shaping node; it carries its own `Curve` (a `Manual`
-curve mapping distance-in to density-out).
+Seen in `Density/Maps/Map_Portals.json` as the island-shaping node of the portal worlds; it
+carries its own `Curve` (a `Manual` curve mapping distance-in to density-out).
 
 ---
 
@@ -291,7 +303,7 @@ curve mapping distance-in to density-out).
 
 | Field | Notes |
 |-------|-------|
-| `BaseHeightName` | Named reference declared by the world structure's `DecimalConstants` block. All three shipped names are used across the assets: `"Base"` (the terrain surface, 621 uses), `"Water"` (sea level, 99) and `"Bedrock"` (35). |
+| `BaseHeightName` | Named constant declared by the world structure's `DecimalConstants` block. The three height names are used across the assets: `"Base"` (the terrain surface, 461 uses), `"Water"` (sea level, 61) and `"Bedrock"` (44), counted on live nodes under `Server/HytaleGenerator` (orphan nodes kept in `$NodeEditorMetadata` excluded). Any constant can be read this way: the five Plains1 biomes read the non-height constants `"Copper_Count"` and `"Iron_Count"` (10 uses each). |
 | `Distance` | When `true`, yields signed distance from that reference rather than the raw height. |
 
 ```json
@@ -314,11 +326,13 @@ Large graphs avoid recomputation and share fields with three node types:
 | `Imported` | `Name` | Pulls in a previously exported field by name. |
 | `YOverride` | `Value` | Forces the Y coordinate to a constant (used to make a 3D field behave as a flat 2D field). |
 | `Scale` | `ScaleX`, `ScaleY`, `ScaleZ` | Scales the sampling coordinates. |
+| `YSampled` | `SampleDistance`, `SampleOffset`, `Interpolate` | Evaluates its input only on a Y grid (every `SampleDistance` blocks, shifted by `SampleOffset`) and, with `Interpolate: true`, interpolates linearly between the two nearest samples. A `SampleDistance` of `0` or less makes it a constant `0`. The Plains1 biomes wrap their surface and cave fields in it. |
 
-Example: `Plains1_Oak.json` imports the shared cave density and the map exports the biome map:
+Example: `Volcanic1_Caldera.json` imports the shared volcanic cave density, and
+`Density/Maps/Map_Default.json` exports the biome map:
 
 ```json
-{ "Type": "Imported", "Name": "Plains1_Caves_Terrain" }
+{ "Type": "Imported", "Name": "Volcanic1_Caves_Terrain" }
 ```
 
 ```json
@@ -330,8 +344,11 @@ Example: `Plains1_Oak.json` imports the shared cave density and the map exports 
 ## MaterialProvider
 
 The density graph decides *where* terrain is solid. The biome's `MaterialProvider` decides *what
-block* goes there. The top-level provider is `Type: "Solidity"`, splitting into a `Solid` provider
-and an `Empty` provider:
+block* goes there. In 66 of the 75 shipped biome files the top-level provider is
+`Type: "Solidity"`, splitting into a `Solid` provider and an `Empty` provider. Seven put a
+`Queue` on top that ends in a `Solidity` provider — in `Plains1_Oak`, `Plains1_Hills`,
+`Plains1_River` and `Plains1_Trork` the entry before it is a `Graph` provider supplying the
+cave materials — and two (`Void`, `Default_Void`) are a bare `Constant`:
 
 ```json
 "MaterialProvider": {
@@ -349,25 +366,27 @@ and an `Empty` provider:
 | `Queue` | `Queue[]` | Tries each provider in order; first match wins. |
 | `SimpleHorizontal` | `TopY`, `TopBaseHeight`, `BottomY`, `BottomBaseHeight`, `Material` | Applies its material only in a vertical band defined relative to a named base height. |
 | `SpaceAndDepth` | `LayerContext` (`DEPTH_INTO_FLOOR` or `DEPTH_INTO_CEILING`), `MaxExpectedDepth`, `Layers[]`, optional `Condition` | Stacks layers measured by depth into the floor (or up into the ceiling) — this is the closest real analogue to "soil layers". |
-| `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. The only layer type the shipped biomes use. |
-
-The other registered `Layers[]` entry types (as of 0.6.8) are `NoiseThickness`
-(`ThicknessFunctionXZ` + `Material` — thickness driven by a density field),
-`RangeThickness` (`RangeMin`, `RangeMax`, `Seed`, `Material` — a random thickness per
-column) and `WeightedThickness` (`PossibleThicknesses` of `Weight`/`Thickness`, plus
-`Seed`, `Material`). A `Condition` on the `SpaceAndDepth` gates the whole stack; its
-predicate types are `AlwaysTrueCondition`, `EqualsCondition`, `GreaterThanCondition`,
-`SmallerThanCondition`, `AndCondition`, `OrCondition` and `NotCondition`, reading the
-parameters `SPACE_ABOVE_FLOOR` / `SPACE_BELOW_CEILING`.
+| `ConstantThickness` (layer) | `Thickness`, `Material` | One band of material `Thickness` blocks deep. The layer type nearly every shipped biome uses (39 files). |
 | `FieldFunction` | `FieldFunction` (a density node), `Delimiters[]` | Selects material based on a noise/density value falling inside a `From`/`To` range. Used for scattered surface variation (pebbles, leaves, grass patches). |
 | `Constant` | `Material` | A single fixed material. |
 
-Also registered (as of 0.6.8, mostly unused by the shipped biomes): `Weighted`
+The other registered `Layers[]` entry types (as of 0.7.2) are `NoiseThickness`
+(`ThicknessFunctionXZ` + `Material` — thickness driven by a density field; used by
+`Plains1_Oak`, `Plains1_Hills` and `Plains1_River`), `RangeThickness` (`RangeMin`,
+`RangeMax`, `Seed`, `Material` — a random thickness per column; used only by
+`Experimental/BasicForest.json`) and `WeightedThickness` (`PossibleThicknesses` of
+`Weight`/`Thickness`, plus `Seed`, `Material`; unused). A `Condition` on the `SpaceAndDepth` gates the whole stack; its
+predicate types are `AlwaysTrueCondition`, `EqualsCondition`, `GreaterThanCondition`,
+`SmallerThanCondition`, `AndCondition`, `OrCondition` and `NotCondition`, reading the
+parameters `SPACE_ABOVE_FLOOR` / `SPACE_BELOW_CEILING`.
+
+Also registered (as of 0.7.2, mostly unused by the shipped biomes): `Weighted`
 (`WeightedMaterials` with `Weight`/`Material`, `SkipChance`, `Seed`), `Striped` (`Stripes`
 between `TopY`/`BottomY`), `UpwardDepth`/`DownwardDepth` (`Depth` + `Material`),
 `UpwardSpace`/`DownwardSpace` (`Space` + `Material`), `TerrainDensity` (`Delimiters` over the
-terrain density itself), `Transparent`, `Imported` (`Name`), and `Graph` (`GraphGenerator` +
-`ContentLayer`, for graph-generator content).
+terrain density itself), `Transparent`, `Imported` (`Name`), and `Graph` (`GraphGenerator`,
+`ContentLayer`, `QueryBufferCapacity` — materials supplied by a graph generator's content,
+which is how the Plains1 cave walls get their blocks).
 
 ### Materials
 
@@ -377,20 +396,27 @@ A `Material` node names a block via one of:
 |-----|---------|----------|
 | `Solid` | A solid block id | `Rock_Stone`, `Rock_Bedrock`, `Rock_Marble`, `Soil_Dirt`, `Soil_Grass`, `Soil_Grass_Sunny`, `Soil_Pebbles`, `Soil_Leaves`, `Soil_Pathway`, `Ore_Iron_Stone`, `Empty` |
 | `Fluid` | A fluid id | `Water_Source` |
+| `SolidBottomUp` | Optional boolean: place the solid block flipped upside down (default `false`; ignored when `SolidRotation` is set) | — |
+| `SolidRotation` | Optional orthogonal rotation for the solid block | — |
 
 `Empty` is itself a valid `Solid` value meaning "no block" — note the `"$Comment": "REQUIRED"`
-on the trailing `Empty` constant in the `Empty` queue of `Plains1_Oak.json`.
+on the trailing `Empty` constant in the `Empty` queue of `Biomes/Basic.json` (and most other
+biomes that end their `Empty` queue that way).
 
-Real soil stack from `Plains1_Oak.json` (a `SpaceAndDepth` with two `ConstantThickness` layers):
+Real soil stack from `Plains1_Oak.json` (a `SpaceAndDepth` with a one-block surface layer over a
+noise-driven dirt layer 1–6 blocks thick):
 
 ```json
 {
   "Type": "SpaceAndDepth",
   "LayerContext": "DEPTH_INTO_FLOOR",
-  "MaxExpectedDepth": 3,
+  "MaxExpectedDepth": 6,
   "Layers": [
     { "Type": "ConstantThickness", "Thickness": 1, "Material": { "...": "a grass/pebble Queue of FieldFunction providers" } },
-    { "Type": "ConstantThickness", "Thickness": 2, "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt" } } }
+    { "Type": "NoiseThickness",
+      "ThicknessFunctionXZ": { "Type": "Normalizer", "FromMin": -1, "FromMax": 1, "ToMin": 1, "ToMax": 6,
+        "Inputs": [ { "Type": "SimplexNoise2D", "Lacunarity": 2, "Persistence": 0.5, "Octaves": 1, "Scale": 20, "Seed": "Plains1_Dirt" } ] },
+      "Material": { "Type": "Constant", "Material": { "Solid": "Soil_Dirt" } } }
   ]
 }
 ```
@@ -405,18 +431,25 @@ from the real file — the actual graph is hundreds of nested nodes):
 ```
 DAOTerrain.Density
 └─ Min
-   ├─ Imported "Plains1_Caves_Terrain"          (carves caves)
-   └─ Mix  (ExportAs "Plains1_Oak_Terrain_Field")
-      └─ Max / Max / Min of several fields:
-         ├─ Sum of cached, normalized SimplexNoise2D fields
-         │   (Seeds "Plains1_Oak", "Plains1_Oak_Random", "Plains1_Oak_Plains", "Plains1_Oak_Cliifs")
-         ├─ CurveMapper( BaseHeight Base, Distance ) curves       (height falloff -> surface)
-         └─ Pow / Normalizer / Abs reshaping of the noise
+   ├─ Mix                                         (the surface)
+   │  ├─ A: Max / Min of YSampled Sums of normalized SimplexNoise2D fields
+   │  │      (Seeds "Plains1_Oak", "Plains1_Oak_Random", "Plains1_Oak_Random2",
+   │  │       "Plains1_Oak_Plains", "Plains1_Oak_Cliifs", "Plains1_Oak_Dips", …)
+   │  ├─ B: CurveMapper( BaseHeight Base, Distance )   flat surface at Base
+   │  └─ influence: CurveMapper( BaseHeight Base, Distance )
+   │        points -10→1, 0→0, 35→0, 45→1: the band 0–35 blocks above Base uses A
+   └─ YSampled → Mix                              (the caves)
+      ├─ Constant 1
+      ├─ Graph  (GraphGenerator ImportName "Plains1_Caves")
+      └─ CurveMapper( BaseHeight Base, Distance )  depth band -80…20 around Base
 ```
 
-The exported name `Plains1_Oak_Terrain_Field` is later imported by the `MaterialProvider`
-(via a `DensityGradient` vector provider) to compute slope and pick surface materials. This is the
-real mechanism that the old docs incorrectly described as "slope conditions" on layers.
+Slope-dependent surface materials come from the `MaterialProvider`, not from the terrain
+graph: a `FieldFunction` provider samples an `Angle` density (between the up vector and a
+`DensityGradient` vector provider over a `Terrain` density node, which reads the biome's own
+terrain field) and applies the grass/dirt `SpaceAndDepth` stack only where that angle is
+0–55°. This is the real mechanism that the old docs incorrectly described as "slope
+conditions" on layers.
 
 ---
 
@@ -436,13 +469,13 @@ in any asset file and they are not part of the format:
 ## Gotchas & Errors
 
 Backtick-quoted strings below are the literal messages the density-asset codecs emit
-(verified against `HytaleServer.jar` 0.6.8). Codec **validator failures** reject the asset
+(verified against `HytaleServer.jar` 0.7.2). Codec **validator failures** reject the asset
 at load; **warnings** let generation continue with a degraded node, so they are easy to
 miss — watch the server log.
 
 Validator failures (`Validators`/`results.fail`, asset is rejected):
 
-- **`FromMin must be less than FromMax. Given: `** / **`ToMin must be less than ToMax. Given: `** — assembled lines `FromMin must be less than FromMax. Given: <fromMin> and <fromMax>` (and the `ToMin`/`ToMax` twin) → a `Normalizer` node's range is **inverted** (`FromMin > FromMax`). Fix: order each pair strictly ascending. A *degenerate* pair (`FromMin == FromMax`) is only a warning today, with a different literal: **`FromMin must be less than FromMax. This will fail to load in future versions. Given: `** — so equal bounds still load in 0.6.8 but are on notice.
+- **`FromMin must be less than FromMax. Given: `** / **`ToMin must be less than ToMax. Given: `** — assembled lines `FromMin must be less than FromMax. Given: <fromMin> and <fromMax>` (and the `ToMin`/`ToMax` twin) → a `Normalizer` node's range is **inverted** (`FromMin > FromMax`). Fix: order each pair strictly ascending. A *degenerate* pair (`FromMin == FromMax`) is only a warning today, with a different literal: **`FromMin must be less than FromMax. This will fail to load in future versions. Given: `** — so equal bounds still load in 0.7.2 but are on notice.
 - **`Inputs can't be empty. Anchor offsets its first input.`** → an `Anchor` density node with no `Inputs`. Fix: give it at least one input.
 - **`Keys must have unique Value entries. Keys[`** — assembled line `Keys must have unique Value entries. Keys[<j>] and Keys[<i>] both use <value>` → two `MultiMix` `Keys` entries share a `Value`. Fix: make every key's `Value` distinct.
 - **`Vector must have all components greater than 0, got `** — assembled line appends the offending vector → a vector-valued parameter (e.g. a scale) has a zero or negative component (`VectorAssetValidatorUtil`).

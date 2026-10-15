@@ -7,7 +7,7 @@ seo:
 
 # Math / Vector API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 ## Overview
 
@@ -716,7 +716,7 @@ box.forEachBlock(offsetX, offsetY, offsetZ, scale, (x, y, z) -> {
 
 **Package:** `com.hypixel.hytale.math.block`
 
-A family of static utilities that enumerate the integer block coordinates forming a geometric shape — spheres, cubes, cones, cylinders, domes, pyramids, tori, and diamonds. These are the math behind builder-tool brushes: they generate coordinates only and have **no world dependency**, so you pair them with your own chunk/world block-set calls (see [World block access](blocks-java-api.md#world-block-access)) to actually place or inspect blocks.
+A family of static utilities that enumerate the integer block coordinates forming a geometric shape — spheres, cubes, cones, cylinders, domes, pyramids, tori, and diamonds. These are the math behind builder-tool brushes: they generate coordinates only and have **no world dependency**, so you pair them with your own block reads and writes (see [block-access.md](block-access.md), for example `SectionReader` for reads and `BlockOperations.setBlock` for writes) to actually place or inspect blocks.
 
 Each call is a zero-allocation visitor: it invokes a `TriIntObjPredicate<T>` once per block position, threading a caller-supplied context object `T` through every callback so no lambda capture is needed on hot paths.
 
@@ -786,7 +786,7 @@ forEachBlock(originX, originY, originZ, <dimensions…>, [thickness], [flags…]
 int[] count = {0};
 BlockSphereUtil.forEachBlock(cx, cy, cz, 5, count, (x, y, z, ctr) -> {
     ctr[0]++;
-    // place / inspect the block at (x, y, z) via your World or chunk accessor here
+    // place / inspect the block at (x, y, z) here, e.g. through a SectionReader (block-access.md)
     return true;   // return false to stop iterating early
 });
 ```
@@ -974,8 +974,10 @@ int abs = MathUtil.abs(int);
 ### Vector Rotation
 
 ```java
-Vector3i rotated = MathUtil.rotateVectorYAxis(vec3i, steps, clockwise);
-Vector3d rotated = MathUtil.rotateVectorYAxis(vec3d, steps, clockwise);
+// Rotate about the Y axis; the int argument is an angle in DEGREES
+Vector3i rotated = MathUtil.rotateVectorYAxis(vec3i, angleDeg, clockwise);   // components truncated to int
+Vector3d rotated = MathUtil.rotateVectorYAxis(vec3d, angleDeg, clockwise);
+Vector3d rotated = MathUtil.rotateVectorYAxis(vec3d, angleRad, clockwise);   // 0.7.2+: double = radians
 ```
 
 ### Hit-Normal Helpers

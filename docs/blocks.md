@@ -7,21 +7,22 @@ seo:
 
 # Block Definitions
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 Block definitions configure every placeable block in Hytale, from terrain and ores to furniture, doors, and fluids. Blocks are defined as items with a `BlockType` property that specifies rendering, collision, sounds, particles, and interaction behavior.
 
 This page is the **JSON** side. The Java classes behind it — `BlockType`, ticking, block
-events, world block access and custom block-entity components — are in
-[blocks-java-api.md](blocks-java-api.md), and the connected-block rule sets are in
-[blocks-connected.md](blocks-connected.md).
+events and custom block-entity components — are in [blocks-java-api.md](blocks-java-api.md),
+reading and writing blocks in the world is in [block-access.md](block-access.md), and the
+connected-block rule sets are in [blocks-connected.md](blocks-connected.md).
 
 ## Quick Navigation
 
 | Category | File | Description |
 |----------|------|-------------|
 | [Connected Blocks](blocks-connected.md) | `blocks-connected.md` | `ConnectedBlockRuleSet` types and patterned rule sets |
-| [Blocks Java API](blocks-java-api.md) | `blocks-java-api.md` | `BlockType`, ticking, block events, world block access |
+| [Blocks Java API](blocks-java-api.md) | `blocks-java-api.md` | `BlockType`, ticking, block events, block health |
+| [Block Access](block-access.md) | `block-access.md` | Reading and writing blocks through chunk sections |
 | [Items](items.md) | `items.md` | Parent item system and inheritance |
 | [Block Items](items-blocks.md) | `items-blocks.md` | Furniture, containers, crafting benches |
 | [Interactions](interactions.md) | `interactions.md` | Block use and break interactions |
@@ -43,49 +44,49 @@ Hytale separates block visual assets from game logic:
 
 | Location | Content |
 |----------|---------|
-| `Server/Item/Items/<Category>/` | Block item definitions (~2,950 item files carry a `BlockType` in 0.6.8) |
-| `Server/Item/Block/Fluids/` | Fluid block definitions (14 files) |
+| `Server/Item/Items/<Category>/` | Block item definitions (3,178 item files carry a `BlockType` in 0.7.2) |
+| `Server/Item/Block/Fluids/` | Fluid block definitions (17 files) |
 | `Server/Item/Block/Hitboxes/<Category>/` | Collision shape definitions |
-| `Server/Item/Block/Sounds/` | Sound set mappings (57 files) |
-| `Server/Item/Block/Particles/` | Particle set mappings (30 files) |
+| `Server/Item/Block/Sounds/` | Sound set mappings (58 files) |
+| `Server/Item/Block/Particles/` | Particle set mappings (31 files) |
 | `Server/Item/Block/BreakingDecals/` | Breaking texture effects |
 | `Server/Item/Block/FluidFX/` | Fluid visual effects |
 | `Server/Item/Block/PhysicalMaterials/` | Physical materials referenced by `BlockType.PhysicalMaterialId` (11 files) |
-| `Server/Item/Block/Sets/` | Block sets (`BlockSet` assets, 58 files) |
-| `Server/Item/Block/Spawners/` | Block-spawner configs (46 files) |
+| `Server/Item/Block/Sets/` | Block sets (`BlockSet` assets, 80 files) |
+| `Server/Item/Block/Spawners/` | Block-spawner configs (56 files) |
 | `Server/Item/CustomConnectedBlockTemplates/` | Connected block rules (11 templates) |
 | `Server/BlockTypeList/` | Block categorization lists (13 files) |
-| `Common/Blocks/` | Visual models and animations (~2,600 files) |
+| `Common/Blocks/` | Visual models and animations (2,836 files) |
 
 ### Block Categories
 
 Blocks are organized into categories for the Creative Library:
 
-| Category | Examples (block items using it in 0.6.8) |
+| Category | Examples (block items using it in 0.7.2) |
 |----------|----------|
-| `Blocks.Wood` | Planks, logs, bark (315 items) |
+| `Blocks.Wood` | Planks, logs, bark (323 items) |
+| `Blocks.Deco` | Rubble, scatter, decorative odds and ends (250) |
+| `Blocks.Plants` | Flowers, crops, leaves (190) |
 | `Blocks.Rocks` | Stone, sandstone, marble (189) |
-| `Blocks.Plants` | Flowers, crops, leaves (189) |
-| `Blocks.Deco` | Rubble, scatter, decorative odds and ends (172) |
+| `Blocks.Metal` | Metal blocks (159) |
 | `Blocks.Soils` | Dirt, grass, sand, gravel (138) |
 | `Blocks.Cloth` | Wool, fabric blocks (119) |
-| `Blocks.Metal` | Metal blocks (100) |
-| `Blocks.Ores` | Ore blocks (66) |
-| `Blocks.Portals` / `Blocks.Fluids` | Portal blocks (18) / fluid blocks (9) |
+| `Blocks.Ores` | Ore blocks (71) |
+| `Blocks.Portals` / `Blocks.Fluids` | Portal blocks (24) / fluid blocks (10) |
 
 Furniture is **not** under `Blocks.*` — it has its own top-level namespace, and so do the
 builder-tool blocks:
 
-| Category | Examples (block items using it in 0.6.8) |
+| Category | Examples (block items using it in 0.7.2) |
 |----------|----------|
-| `Furniture.Containers` | Chests, barrels, crates (89) |
-| `Furniture.Doors` | Doors, gates, trapdoors (83) |
-| `Furniture.Furniture` | Chairs, tables, stools (68) |
-| `Furniture.Lighting` | Lamps, braziers, torches (52) |
-| `Furniture.Shelves` / `Furniture.Signs` | Shelves (41) / signs (33) |
-| `Furniture.Benches` / `Furniture.Beds` | Crafting benches (22) / beds (15) |
+| `Furniture.Containers` | Chests, barrels, crates (95) |
+| `Furniture.Doors` | Doors, gates, trapdoors (87) |
+| `Furniture.Furniture` | Chairs, tables, stools (70) |
+| `Furniture.Lighting` | Lamps, braziers, torches (54) |
+| `Furniture.Shelves` / `Furniture.Signs` | Shelves (41) / signs (40) |
+| `Furniture.Benches` / `Furniture.Beds` | Crafting benches (23) / beds (16) |
 | `Tool.TechnicalBlocks` | Barrier and other technical blocks (74) |
-| `Tool.BrushFilters` / `Tool.PrefabEditing` / `Tool.Machinima` | Builder-tool blocks (13 / 8 / 1) |
+| `Tool.BrushFilters` / `Tool.PrefabEditing` / `Tool.Machinima` | Builder-tool blocks (13 / 10 / 1) |
 
 There is no `Blocks.Furniture`, `Blocks.Containers`, `Blocks.Doors` or `Blocks.Lighting` — use the
 `Furniture.*` names above. (One shipped block carries a singular `Blocks.Soil`; that is a typo in
@@ -112,7 +113,7 @@ Block definition (JSON item with a BlockType)
 Java runtime
 ├── BlockType (config accessors)
 ├── BlockMaterial / Rotation / RotationTuple (placement)
-├── World / WorldChunk (block read/write)
+├── ChunkStore section refs + BlockOperations (block read/write; see block-access.md)
 └── Block events (Place / Break / Damage / UseBlock — ECS)
 ```
 
@@ -124,7 +125,7 @@ Java runtime
 | `BlockMaterial` | `protocol` | Enum of physical material type (Empty / Solid) |
 | `Rotation` | `server.core.asset.type.blocktype.config` | Enum of 90-degree rotation increments |
 | `RotationTuple` | `server.core.asset.type.blocktype.config` | Record of yaw/pitch/roll; used for placement rotation |
-| `WorldChunk` | `server.core.universe.world.chunk` | Block read/write access (see [world-chunks.md](world-chunks.md#worldchunk)) |
+| `BlockOperations` | `server.core.universe.world.chunk` | Static block writes on a chunk-section reference (see [block-access.md](block-access.md#writing-with-blockoperations)); reads go through the section's `BlockSection` |
 | `PlaceBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is placed (cancellable) |
 | `BreakBlockEvent` | `server.core.event.events.ecs` | ECS event fired when a block is broken (cancellable) |
 | `DamageBlockEvent` | `server.core.event.events.ecs` | ECS event fired during mining progress (cancellable) |
@@ -132,7 +133,7 @@ Java runtime
 | `BlockBoundingBoxes` | `server.core.asset.type.blockhitbox` | Hitbox asset (`Server/Item/Block/Hitboxes`); see [BlockBoundingBoxes](blocks-java-api.md#blockboundingboxes) |
 | `BlockTickManager` | `server.core.asset.type.blocktick` | Static holder for the block-tick provider; see [Block Ticking](blocks-java-api.md#block-ticking) |
 | `BlockTypeModule` | `server.core.blocktype` | Core `JavaPlugin` module behind block types: registers the `Bench` codec variants and the block-physics component; `BlockTypeModule.get()` |
-| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`, singleton `BlockSetModule.getInstance()`); still carries `@Deprecated(forRemoval = true)` as of 0.6.8 |
+| `BlockSetModule` | `server.core.modules.blockset` | Core `JavaPlugin` module resolving named `BlockSet` assets to block-id sets (`blockInSet`, `getBlockSets`, singleton `BlockSetModule.getInstance()`); still carries `@Deprecated(forRemoval = true)` as of 0.7.2 |
 
 ---
 
@@ -282,7 +283,7 @@ Blocks can emit colored light:
 }
 ```
 
-`Light` decodes through `ProtocolCodecs.COLOR_LIGHT` (`com.hypixel.hytale.server.core.codec`) into a `ColorLight`: `Color` is a hex string (`"#RGB"` or `"#RRGGBB"`) and `Radius` a **byte** (so `0–127`); there is no `Intensity` key. Shipped fluids and lamps set only `Color` (e.g. `"Light": { "Color": "#765" }`).
+`Light` decodes through `ProtocolCodecs.COLOR_LIGHT` (`com.hypixel.hytale.server.core.codec`) into a `ColorLight`: `Color` is a hex string (`"#RGB"` or `"#RRGGBB"`) and `Radius` a **byte** (so `0–127`); there is no `Intensity` key. Most shipped lights set only `Color` (e.g. `"Light": { "Color": "#765" }`): in 0.7.2, 238 block items set `Light.Color` and 78 of them also set `Radius`.
 
 ### Collision Properties
 
@@ -303,7 +304,7 @@ Blocks can emit colored light:
 |----------|------|-------------|
 | `Gathering` | object | Tool type and drop configuration |
 | `VariantRotation` | string | Rotation support — see [VariantRotation](#variantrotation) |
-| `Flags` | object | Boolean flags (only `IsStackable` as of 0.6.8 — see [Flags](#flags)) |
+| `Flags` | object | Boolean flags (only `IsStackable` as of 0.7.2 — see [Flags](#flags)) |
 | `Interactions` | object | Primary, Use, Collision, OnBreak, … handlers |
 | `State` | object | State definitions (`Definitions` map) |
 | `IsDoor` | boolean | Marks a door block (`BlockType.isDoor()`; shipped doors set it) |
@@ -346,7 +347,7 @@ inline `ItemDropList` object, whose single key is `Container`:
 
 What `DropList` is **not** is a bare array of item entries — `[{ "ItemId": …, "Quantity": … }]` fails to decode.
 
-`GatherType` values used by shipped blocks (0.6.8): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Benches`, `OreCopper` / `OreIron` / `OreSilver` / `OreGold` / `OreCobalt` / `OreThorium` / `OreMithril` / `OreAdamantite`, `Unbreakable`, `SoftWoods`. The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
+`GatherType` values used by shipped blocks (0.7.2, most used first): `Rocks`, `Woods`, `Soils`, `SoftBlocks`, `VolcanicRocks`, `Metals` and `GoblinMetal` (new with 0.7.2's metal and goblin blocks), `Benches`, `Unbreakable`, `OreSilver` / `OreGold` / `OreIron` / `OreCopper` / `OreCobalt` / `OreThorium` / `OreAdamantite`, `SoftWoods`, and one `Pickaxe_Tier0`. (Mithril ore breaks as `Rocks`.) The string is matched against the tool's gathering capabilities (see [Items](items.md)); it is not an enum.
 
 ### VariantRotation
 
@@ -361,14 +362,15 @@ Enables directional placement based on player facing:
 | Value | Description |
 |-------|-------------|
 | `"None"` | No placement rotation |
-| `"NESW"` | 4 cardinal directions (North, East, South, West) — the common case (487 shipped items) |
-| `"UpDownNESW"` | Cardinal directions plus up/down facing (236) |
+| `"NESW"` | 4 cardinal directions (North, East, South, West) — the common case (626 shipped items) |
+| `"UpDownNESW"` | Cardinal directions plus up/down facing (260) |
 | `"Wall"` | Wall-mounted orientation (75) |
-| `"UpDown"` | Vertical axis only (44) |
-| `"Pipe"` / `"DoublePipe"` | Axis-aligned pipe orientations (58 / 128) |
+| `"UpDown"` | Vertical axis only (46) |
+| `"Pipe"` / `"DoublePipe"` | Axis-aligned pipe orientations (64 / 147) |
 | `"All"` | Every rotation (1) |
+| `"Debug"` | Debug variant set, used only by `_Debug` blocks (3) |
 
-(The `VariantRotation` enum; counts are shipped 0.6.8 usage.)
+(The `VariantRotation` enum; counts are shipped 0.7.2 usage of an explicit `VariantRotation` key, 20 of which set `"None"`.)
 
 ### Flags
 
@@ -419,7 +421,7 @@ Blocks can have multiple states with different models, hitboxes, and animations.
 `Definitions` is the **only** key `StateData.CODEC` accepts — there is no `Id` and no `Capacity` on
 `State`. A container's slot count lives on its block-entity component instead:
 `"BlockEntity": { "Components": { "ItemContainerBlock": { "Capacity": 36 } } }` (see
-[Block Items](items-blocks.md)). All 935 shipped blocks with a `State` use only `Definitions`.
+[Block Items](items-blocks.md)). All 994 shipped blocks with a `State` use only `Definitions`.
 
 State names are not free-form either: the engine looks up specific names (`OpenDoorIn`,
 `CloseWindow`, `Corner_Right`, `Topper`, `On`/`Off`, `Stage1`…) depending on which system drives the
@@ -429,22 +431,23 @@ stages. Copy the set a shipped block of the same kind uses.
 ### State Definition Properties
 
 Each entry is a **partial `BlockType`**: any [`BlockType` key](#blocktype-properties) may appear and
-overrides the base block for that state. The keys shipped blocks actually use, most common first:
+overrides the base block for that state. The most common keys in shipped state definitions (0.7.2 counts):
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `HitboxType` | string | Collision shape for this state (2,248 uses) |
-| `CustomModel` | string | Model for this state (2,016) |
-| `FlipType` | string | `ORTHOGONAL` or `SYMMETRIC` — the two `BlockFlipType` values (1,744) |
-| `Supporting` | object | Faces this state offers as support (1,696) |
-| `Gathering` | object | Per-state drops (597) |
-| `CustomModelAnimation` | string | Animation played on entering the state (333) |
-| `InteractionSoundEventId` | string | Sound when entering the state (331) |
-| `InteractionHitboxType` | string | Separate interaction hitbox (240) |
-| `InteractionHint` | string | Localization key for the interact prompt (180) |
+| `HitboxType` | string | Collision shape for this state (2,316 uses) |
+| `CustomModel` | string | Model for this state (2,107) |
+| `FlipType` | string | `ORTHOGONAL` or `SYMMETRIC` — the two `BlockFlipType` values (1,799) |
+| `Supporting` | object | Faces this state offers as support (1,754) |
+| `Gathering` | object | Per-state drops (613) |
+| `CustomModelTexture` | array | Model texture for this state (371) |
+| `CustomModelAnimation` | string | Animation played on entering the state (362) |
+| `InteractionSoundEventId` | string | Sound when entering the state (354) |
+| `InteractionHitboxType` | string | Separate interaction hitbox (244) |
+| `InteractionHint` | string | Localization key for the interact prompt (199) |
 | `SoundOcclusionOpacity` | float | How much this state muffles sound through it (75) |
 
-plus `CustomModelTexture`, `Textures`, `Material`, `DrawType`, `Light`, `BlockSoundSetId`,
+plus `Textures`, `Material`, `DrawType`, `Light`, `BlockSoundSetId`,
 `BlockParticleSetId`, `ParticleColor`, `Opacity`, `Interactions`, `Flags`, and the rest of the
 `BlockType` vocabulary.
 
@@ -571,7 +574,7 @@ Coordinates are in block units (0-1 range per block).
 
 ### Common Hitbox Types
 
-244 hitbox assets ship. A representative slice:
+258 hitbox assets ship. A representative slice:
 
 | Hitbox | Description |
 |--------|-------------|
@@ -622,7 +625,7 @@ Sound sets define audio events for block interactions.
 |----------|------|-------------|
 | `SoundEvents` | object | Map of `BlockSoundEvent` → sound-event id. **The events do not sit at the top level.** |
 | `MoveInRepeatRange` | `FloatRange` | Retrigger interval for the repeating `MoveIn` sound (no shipped set uses it) |
-| `Parent` | string | Inherit another sound set and override selected events (19 of the 57 shipped sets do this) |
+| `Parent` | string | Inherit another sound set and override selected events (20 of the 58 shipped sets do this) |
 
 ### Sound Event Types
 
@@ -745,7 +748,7 @@ Reference in BlockType with optional color:
 
 ### Particle Set IDs
 
-All 30 shipped sets: `Clay`, `Crystal`, `Dirt`, `Dust`, `Flower`, `Glass`, `GlassEmpty`,
+All 31 shipped sets: `Clay`, `Coins` (0.7.2), `Crystal`, `Dirt`, `Dust`, `Flower`, `Glass`, `GlassEmpty`,
 `GlassEmptySmall`, `GlassMagic`, `GlassPoison`, `GlassSmall`, `Grass`, `Grass_Earth`, `Ice`, `Lava`,
 `Leaves`, `Leaves_Branches`, `Leaves_Fir`, `Leaves_Fir_Snow`, `Leaves_Round`, `Leaves_Sharp`,
 `Metal`, `Mud`, `Ore`, `Sand`, `Snow`, `Stone`, `Tar`, `Water`, `Wood`.
@@ -895,16 +898,17 @@ Blocks can respond to player interactions via JSON configuration.
 
 `BlockType.Interactions` is a map keyed by [`InteractionType`](interactions.md#interactiontype-enum);
 a value is either a nested-interaction id or an inline interaction object. The keys shipped blocks
-use, with their usage counts in 0.6.8:
+use, with their usage counts in 0.7.2:
 
 | Slot | Trigger | Uses | Description |
 |------|---------|------|-------------|
-| `Use` | Interact (F) | 205 | Opening, seating, toggling |
-| `CollisionEnter` | Entity enters the block | 20 | Damage/effect on stepping in |
-| `Collision` | Entity overlapping the block | 19 | Continuous physics response |
-| `Primary` | Left click | 16 | Gate or replace the break |
-| `OnBreak` | Block broken | 1 | 0.6.3+ — fired by `BlockHarvestUtils.fireOnBreakInteraction` |
-| `OnBreakImpact` | Break impact resolved | 1 | 0.6.3+ — queued by `BlockHarvestUtils.queueOnBreakImpactInteraction` |
+| `Use` | Interact (F) | 246 | Opening, seating, toggling |
+| `Collision` | Entity overlapping the block | 27 | Continuous physics response |
+| `CollisionEnter` | Entity enters the block | 25 | Damage/effect on stepping in |
+| `Primary` | Left click | 21 | Gate or replace the break |
+| `OnBreak` | Block broken | 2 | 0.6.3+ — fired by `BlockHarvestUtils.fireOnBreakInteraction` |
+| `OnBreakImpact` | Break impact resolved | 2 | 0.6.3+ — queued by `BlockHarvestUtils.queueOnBreakImpactInteraction` |
+| `ProjectileHit` | A projectile hits the block | 2 | `InteractionType` new in 0.7.2; the two goblin `Throwable_Explosive_Barrel` blocks |
 
 ### Example: Interactive Block
 
@@ -912,16 +916,17 @@ use, with their usage counts in 0.6.8:
 {
   "BlockType": {
     "Interactions": {
-      "Primary": "Break_Treasure_Container",
-      "Use": "Open_Container"
+      "Use": "Block_Bed",
+      "Primary": "Check_Can_Break_Respawn"
     }
   }
 }
 ```
 
-(`Break_Treasure_Container` and `Open_Container` are shipped interaction ids under
-`Server/Item/Interactions/`; the other shipped `Primary` value is `Check_Can_Break_Respawn`, used by
-beds. There is no `Break_Container`.)
+(from `Furniture_Kweebec_Bed.json`; every shipped bed uses this pair. Both are root-interaction ids
+under `Server/Item/RootInteractions/Block/`, and containers use `"Use": "Open_Container"`. The
+treasure-chest `Break_Treasure_Container` / `Open_Treasure_Container` interactions were removed in
+0.7.2 together with the treasure-map objective.)
 
 ### BlockEntity Components
 
@@ -932,13 +937,18 @@ registered name. The names shipped blocks actually use, with counts:
 
 | Component | Usage |
 |-----------|-------|
-| `FarmingBlock` (70) | Crops and growth stages |
-| `ItemContainerBlock` (47) | Storage blocks — carries the `Capacity` |
-| `BenchBlock` (16) / `ProcessingBenchBlock` (4) | Crafting and processing stations |
-| `RespawnBlock` (15) | Bed spawn point |
+| `FarmingBlock` (72) | Crops and growth stages |
+| `ItemContainerBlock` (49) | Storage blocks — carries the `Capacity` |
+| `BenchBlock` (17) / `ProcessingBenchBlock` (4) | Crafting and processing stations |
+| `RespawnBlock` (16) | Bed spawn point |
+| `AugmentBlock` (8) | Augmentable blocks (the augment-blocks plugin) |
+| `BlockMapMarker` (5) | A world-map marker carried by the block |
 | `MusicEmitterBlock` (4) / `MusicPlayerBlock` (1) | Ambient music sources |
-| `SpawnMarkerBlock` (2) / `BlockSpawner` (2) / `Coop` (1) | Entity spawners |
-| `LaunchPad`, `Teleporter`, `Portal`, `TilledSoil`, `TrackedPlacement`, `InstanceConfig`, `BlockMapMarker`, `PrefabSpawner`, `TreasureChest` | One shipped block each |
+| `BlockSpawner` (2) / `SpawnMarkerBlock` (1) / `Coop` (1) | Entity spawners |
+| `Portal` (2) | Portal blocks |
+| `LaunchPad`, `Teleporter`, `TilledSoil`, `TrackedPlacement`, `InstanceConfig`, `PrefabSpawner` | One shipped block each |
+
+(Counts are 0.7.2 block items declaring the component directly. `TreasureChest` was removed in 0.7.2.)
 
 (There is no `Container` or `CraftingBench` component key — those are `ItemContainerBlock` and
 `BenchBlock`.)
@@ -966,7 +976,7 @@ All 13 shipped lists:
 | `Gravel.json` | Gravel blocks |
 | `Ores.json` | Ore blocks |
 | `TreeWood.json` / `TreeLeaves.json` / `TreeWoodAndLeaves.json` | Wood, leaves, and the two combined |
-| `PlantsAndTrees.json` | Plants and trees (620) |
+| `PlantsAndTrees.json` | Plants and trees (629) |
 | `AllScatter.json` | All scatter blocks |
 | `PlantScatter.json` | Plant scatter blocks |
 | `Snow.json` | Snow blocks |
@@ -1327,7 +1337,7 @@ block-entity component, not on `State`, and `DropList` is a drop-table id or an 
 }
 ```
 
-*(Illustrative: 2,159 shipped item files use `Parent`, but the real `Rock_Stone_Mossy.json` is
+*(Illustrative: 1,990 shipped item files set a top-level `Parent` in 0.7.2, but the real `Rock_Stone_Mossy.json` is
 standalone — it repeats the whole `BlockType`. `Parent` inheritance is an [item](items.md) feature and
 merges the parent's `BlockType` key-by-key, so a child only restates what it changes.)*
 
@@ -1335,7 +1345,7 @@ merges the parent's `BlockType` key-by-key, so a child only restates what it cha
 
 ## Notes
 - Block states persist additional data per-block instance
-- The Java-side notes that used to sit here — chunk accessors, chunk-load checks, async loading, ECS block events and shape iteration — moved with their subject to [Blocks Java API](blocks-java-api.md#notes)
+- The Java-side notes that used to sit here — block access, chunk-load checks, async loading, ECS block events and shape iteration — moved with their subject to [Blocks Java API](blocks-java-api.md#notes); reading and writing blocks is on [Block Access](block-access.md)
 
 ---
 
@@ -1346,13 +1356,14 @@ Backtick-quoted error strings below are the literal messages thrown by the block
 - **`One and only one of BlockTag or ItemId must be set!`** → a config entry set both `BlockTag` and `ItemId`, or neither. Fix: specify exactly one of the two.
 - **`Block entry cannot be empty`** → a block list/entry was left blank. Fix: provide a non-empty block type key.
 - **`Cannot select from empty blocks list`** → a block-selection operation ran against an empty list. Fix: ensure the list contains at least one block before selecting.
-- **Symptom:** a block listed in a `Server/BlockTypeList/<Category>.json` `Types[]` array is dropped at load (the loader reports it `contains invalid block … skipping`) → the key does not resolve to a real `BlockType`. Fix: use exact, correctly-cased block type keys (see [Block Type Lists](#block-type-lists)).
+- **Symptom:** a block listed in a `Server/BlockTypeList/<Category>.json` `Blocks[]` array is dropped at load (the loader reports it `contains invalid block … skipping`) → the key does not resolve to a real `BlockType`. Fix: use exact, correctly-cased block type keys (see [Block Type Lists](#block-type-lists)).
 
 ---
 
 ## Related Documentation
 
-- [Blocks Java API](blocks-java-api.md) - `BlockType`, block events, world block access
+- [Blocks Java API](blocks-java-api.md) - `BlockType`, block events, block health
+- [Block Access](block-access.md) - Reading and writing blocks in the world
 - [Connected Blocks](blocks-connected.md) - Connected and patterned rule sets
 - [Items](items.md) - Item system and inheritance
 - [Block Items](items-blocks.md) - Furniture, containers, crafting benches

@@ -7,7 +7,7 @@ seo:
 
 # Collision API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 This page covers block and character collision detection: the module, query results, the various collision-data types, configuration, and evaluators.
 
@@ -171,7 +171,7 @@ static boolean isBelowMovementThreshold(Vector3d movement)
 CollisionModuleConfig getConfig()
 ```
 
-> **See also:** [World API](world-chunks.md#worldchunk)
+> **See also:** [Block Access](block-access.md) for reading block and fluid data directly
 
 ```java
 // Find intersections with blocks
@@ -703,33 +703,37 @@ static boolean isEmptyOnlyBlock(BlockType blockType, int fluidId)  // Empty mate
 ```
 
 ### Fluid Queries
+
+0.7.2 rewrote these to take the world's `ChunkStore` and resolve the chunk **section** themselves, so
+the `ChunkColumn` / `BlockChunk` / chunk-`Ref` parameters were removed. Call them on the world thread
+with `world.getChunkStore()`.
+
 ```java
-// Fluid id at a block position (0 if none / out of range / chunk not loaded)
-static int getFluidIdAtPosition(ComponentAccessor<ChunkStore> chunkStore,
-        ChunkColumn column, int x, int y, int z)
+// Fluid id at a block position (0 if none, or if the block's section is not loaded)
+static int getFluidIdAtPosition(ChunkStore chunkStore, int x, int y, int z)
 
 // BlockMaterial ordinal + fluid id packed into one long (MathUtil.packLong);
-// a fluid whose surface is below the queried y counts as no fluid
-static long getPackedMaterialAndFluidAtPosition(Ref<ChunkStore> chunkRef,
-        ComponentAccessor<ChunkStore> chunkStore, double x, double y, double z)
+// a fluid whose surface is below the queried y counts as no fluid; Solid only inside the hitbox
+static long getPackedMaterialAndFluidAtPosition(ChunkStore chunkStore, double x, double y, double z)
 
-// Scan a column for fluid / the water surface level
-static int findFluidBlock(ComponentAccessor<ChunkStore> chunkStore, ChunkColumn column,
-        BlockChunk blocks, int x, int y, int z, boolean flag)
-static int getWaterLevel(ComponentAccessor<ChunkStore> chunkStore, ChunkColumn column,
-        BlockChunk blocks, int x, int y, int z)
+// First fluid at y, y+1 or y+2 (the higher two only with allowBubble, and y+2 only over a solid
+// block); returns the y above that fluid block, or -1
+static int findFluidBlock(ChunkStore chunkStore, int x, int y, int z, boolean allowBubble)
+// Surface of the fluid column found from startY, scanning up to maxY; -1 if no fluid
+static int getWaterLevel(ChunkStore chunkStore, int x, int z, int startY, int maxY)
 ```
 
 ### Empty-Space Scans
 ```java
-// Scan down/up from (x, y, z) for the farthest empty block within a limit
-static int findFarthestEmptySpaceBelow(ComponentAccessor<ChunkStore> chunkStore,
-        ChunkColumn column, BlockChunk blocks, int x, int y, int z, int limit)
-static int findFarthestEmptySpaceAbove(ComponentAccessor<ChunkStore> chunkStore,
-        ChunkColumn column, BlockChunk blocks, int x, int y, int z, int limit)
+// Scan down (to minY) / up (to maxY) from (x, y, z) through empty, fluid-free blocks; return the y of
+// the last empty block before an obstruction (or the range end), or yFail when y starts outside the range
+static int findFarthestEmptySpaceBelow(ChunkStore chunkStore, int x, int y, int z, int yFail, int minY)
+static int findFarthestEmptySpaceAbove(ChunkStore chunkStore, int x, int y, int z, int yFail, int maxY)
 ```
 
-> **Note:** Positions with `y < 0` or `y >= 320` read as empty with no fluid.
+> **Note:** A position whose chunk section is not loaded reads as empty with no fluid. (Before 0.7.2
+> the cut-off was a fixed `y < 0` / `y >= 320`; worlds can now have sections outside that range — see
+> [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections).)
 
 ---
 

@@ -7,7 +7,7 @@ seo:
 
 # Connected Blocks
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Item` · **Verified against 0.7.2**
 
 Split out of [blocks.md](blocks.md) at the seam recorded in `maintenance/page-size-arrears.txt`.
 Connected blocks pick their model and state from their neighbours: a block opts in through
@@ -27,10 +27,10 @@ registers four rule-set types:
 
 | `Type` | Java class | Notes |
 |--------|-----------|-------|
-| `Stair` | `StairConnectedBlockRuleSet` | Built-in stair corner/inverted-corner solver (~163 shipped blocks) |
-| `Roof` | `RoofConnectedBlockRuleSet` | Built-in roof solver, adds a `Topper` (~241) |
-| `CustomTemplate` | `CustomTemplateConnectedBlockRuleSet` | Data-driven; points at a template in `Server/Item/CustomConnectedBlockTemplates/` (~135) |
-| `Patterned` | `PatternedConnectedBlockRuleSet` | Data-driven rule/shape trees; see [Patterned Connected Block Rule Sets](#patterned-connected-block-rule-sets) (new in 0.6.3, no shipped block uses it yet) |
+| `Stair` | `StairConnectedBlockRuleSet` | Built-in stair corner/inverted-corner solver (167 shipped blocks) |
+| `Roof` | `RoofConnectedBlockRuleSet` | Built-in roof solver, adds a `Topper` (250) |
+| `CustomTemplate` | `CustomTemplateConnectedBlockRuleSet` | Data-driven; points at a template in `Server/Item/CustomConnectedBlockTemplates/` (141) |
+| `Patterned` | `PatternedConnectedBlockRuleSet` | Data-driven rule/shape trees; see [Patterned Connected Block Rule Sets](#patterned-connected-block-rule-sets) (new in 0.6.3; 8 shipped pipe blocks use it as of 0.7.2) |
 
 The `CustomTemplate` form is described below; 11 templates ship:
 
@@ -177,15 +177,14 @@ fixed shape vocabulary and matches neighbors by face tag, a **patterned** rule s
 composable rule tree: boolean `And` / `Or` / `Not` nodes over two leaf predicates (face tags
 and neighbor shapes), evaluated against a rotatable pattern of block offsets.
 
-> **Nothing in 0.6.8 ships as a patterned rule set.** `Server/Item/ConnectedBlockRuleSets/`
-> — the directory the asset store reads — does not exist in `Assets.zip`, and all ~554
-> connected blocks still use `Stair`, `Roof` or `CustomTemplate`. The system is fully wired
-> (assets, codecs, client packets) and available to plugins, but there is no shipped example
-> to copy. Read the JSON below accordingly: **key names, types and requiredness are
-> codec-certain** — they are taken from the codec builders and their own documentation strings,
-> the same normative source every JSON page here relies on. What is *not* corroborated is
-> **nesting and composition** (how deeply rules and shapes nest in practice) and **runtime
-> semantics** (what a given combination actually renders). Trust the keys; test the shapes.
+> **0.7.2 ships the first patterned rule sets**: three assets in `Server/Item/ConnectedBlockRuleSets/`
+> (`SimplePipe`, `MetalSimplePipe`, `LargeMetalSimplePipe`), used by 8 of the 566 connected blocks —
+> the `Metal_Goblin_Iron_Pipe_*` and `Metal_Orbis_*_Pipe_*` `Long` / `Large` / `Glowy` pipes. The rest
+> still use `Stair`, `Roof` or `CustomTemplate`. `SimplePipe.json` is the one to copy: two `Templated`
+> shapes, and two patterns built from `And` / `Not` / `Or` over `FaceTag` and `Shape` rules, each with
+> three rotation groups. The key tables below come from the codec builders and their own
+> documentation strings; the pipes now corroborate the nesting, and runtime semantics beyond what
+> they exercise remain untested.
 
 ### The two halves
 
@@ -273,6 +272,13 @@ currently playing. Unlike the other rule-set types it always returns `false` fro
 | `Patterns` | array | **Required.** `ConnectedBlockPatternConfig[]`, tried in array order; the first pattern whose rule passes wins |
 | `Shapes` | object | **Required.** Shape name → `ConnectedBlockShapeConfig` (`Type`-tagged, see below) |
 | `UpdateMode` | enum | `PlaceUpdate` (default), `UpdatePlaceUpdate`, or `IgnoreUpdates`. Overrides `ConnectedBlockRuleSet.getUpdateMode()` for every block using the asset |
+
+The asset supports `Parent` inheritance, and the shipped pipes use it: `MetalSimplePipe` is
+`{ "Parent": "SimplePipe", "Shapes": { "Chimney": … } }`. All three keys are inherited when omitted
+(so a child satisfies the required `Patterns` through its parent), and `Shapes` is **merged** — the
+codec `putAll`s the parent's map and then the child's, so a child adds shapes or overrides one by
+name (`LargeMetalSimplePipe` re-declares `Corner` with a `RelativeRotation`) without restating the
+rest. `Patterns` and `UpdateMode` are replaced wholesale when the child sets them.
 
 A pattern with **no** `Rule` matches unconditionally — put one last in `Patterns` as the
 fallback shape (the `CustomTemplate` equivalent of `DefaultShape`).
@@ -410,6 +416,7 @@ ConnectedBlockShapeConfig getShapeById(String shapeId)
 ## Related Documentation
 
 - [Block Definitions](blocks.md) - The `BlockType` JSON that opts a block in
-- [Blocks Java API](blocks-java-api.md) - `BlockType`, events and world block access
+- [Blocks Java API](blocks-java-api.md) - `BlockType`, ticking and events
+- [Block Access](block-access.md) - Reading and writing blocks in the world
 - [Block Items](items-blocks.md) - Furniture, containers, crafting benches
 - [Items](items.md) - Item system and inheritance

@@ -1,19 +1,19 @@
 ---
 title: "Blocks Java API"
-description: "The Java side of Hytale blocks — BlockType, BlockMaterial, Rotation and RotationTuple, block ticking and block events, world block access, block health and fragility, and authoring custom block-entity components."
+description: "The Java side of Hytale blocks — BlockType, BlockMaterial, Rotation and RotationTuple, block ticking and block events, block health and fragility, and authoring custom block-entity components."
 seo:
   type: TechArticle
 ---
 
 # Blocks Java API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 Split out of [blocks.md](blocks.md) at the seam recorded in `maintenance/page-size-arrears.txt`.
 Everything a plugin touches from Java: the `BlockType` configuration class and the enums and
-structures around it, the ticking and event systems, world block access, the block-health
-subsystem, and a full walkthrough for authoring custom block-entity components. The **JSON** that
-configures blocks is in [blocks.md](blocks.md), and the connected-block rule sets are in
+structures around it, the ticking and event systems, the block-health subsystem, and a full
+walkthrough for authoring custom block-entity components. Reading and writing blocks in the world is
+on [block-access.md](block-access.md). The **JSON** that configures blocks is in [blocks.md](blocks.md), and the connected-block rule sets are in
 [blocks-connected.md](blocks-connected.md).
 
 ---
@@ -438,9 +438,11 @@ public abstract class FallingBlockImpact {
     public static final CodecMapCodec<FallingBlockImpact> CODEC;   // dispatches on "Type"
     public static final BuilderCodec<FallingBlockImpact> BASE_CODEC;
 
-    // Signature changed in 0.6.3: the chunk argument is now a Ref<ChunkStore>, and the
-    // falling entity's own Ref plus an EntityStore CommandBuffer were added.
-    public abstract void apply(Ref<ChunkStore> chunkRef, World world, BlockType blockType,
+    // Signature changed in 0.6.3: the first argument became a Ref<ChunkStore>, and the
+    // falling entity's own Ref plus an EntityStore CommandBuffer were added. The ref is the
+    // SECTION at the landing position (FallingBlockTickingSystem resolves it with
+    // getChunkSectionReferenceAtBlock), ready for BlockOperations.setBlock.
+    public abstract void apply(Ref<ChunkStore> sectionRef, World world, BlockType blockType,
                                Vector3d position, RotationTuple rotation,
                                Store<EntityStore> store, Ref<EntityStore> fallingEntity,
                                CommandBuffer<EntityStore> buffer);
@@ -623,10 +625,13 @@ static final int NO_FILLER = 0;
 static void forEachFillerBlock(RotatedVariantBoxes boxes, TriIntConsumer consumer)
 static boolean testFillerBlocks(RotatedVariantBoxes boxes, TriIntPredicate predicate)
 
-// Multi-cell footprints (0.6.3+)
+// Multi-cell footprints (0.6.3+; 0.7.2 added Int3OpenHashSet overloads of the last two,
+// and packedMinCell / packedMaxCell, the box set's extreme cells packed like a filler offset)
 static RotatedVariantBoxes multiCellFootprint(int width, int height)
 static boolean isFootprintFree(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
 static void markFootprint(LongOpenHashSet occupied, int x, int y, int z, RotatedVariantBoxes boxes)
+static int packedMinCell(RotatedVariantBoxes boxes)
+static int packedMaxCell(RotatedVariantBoxes boxes)
 
 // Filler offsets are packed into one int
 static int pack(int x, int y, int z)
@@ -634,54 +639,34 @@ static int unpackX(int packed)
 static int unpackY(int packed)
 static int unpackZ(int packed)
 
-// Engine-side add/remove of the filler blocks around an anchor block.
+// Engine-side add/remove of the filler blocks around the block at world (x, y, z).
 // Both gained a BlockComponentSection parameter after the BlockSection in 0.6.3.
+// `ref` is the section reference; blockId / filler / rotation describe the block whose fillers these are.
 static void setFillerBlocksAt(ComponentAccessor<ChunkStore> accessor, Ref<ChunkStore> ref,
                               BlockSection section, BlockComponentSection componentSection,
                               int x, int y, int z,
-                              int anchorX, int anchorY, int anchorZ, ChangeReason reason)
+                              int blockId, int filler, int rotation, ChangeReason reason)
 static void removeFillerBlocksAt(ComponentAccessor<ChunkStore> accessor,
                                  BlockSection section, BlockComponentSection componentSection,
                                  int x, int y, int z,
-                                 int anchorX, int anchorY, int anchorZ, ChangeReason reason)
+                                 int blockId, int filler, int rotation, ChangeReason reason)
 ```
 
-`FillerBlockUtil.ChangeReason` enum: `NONE`, `NORMAL`, `BY_PHYSICS`. The higher-level entry point is `BlockTypeModule.breakOrSetFillerBlocks(...)`, which breaks or re-places a block's fillers from the asset maps.
+`FillerBlockUtil.ChangeReason` enum: `NONE`, `NORMAL`, `BY_PHYSICS`. In 0.7.2 the normal entry point is
+`BlockOperations.setBlock` ([block-access.md](block-access.md#writing-with-blockoperations)), which removes
+the old block's fillers and places the new block's unless `SetBlockSettings.NO_BREAK_FILLER` /
+`NO_SET_FILLER` say otherwise. (`BlockTypeModule.breakOrSetFillerBlocks` was removed in 0.7.2.)
 
 ---
 
 ### World Block Access
 
-#### Via World and Chunks
-```java
-// Get chunk key from block coordinates
-long chunkKey = ...; // Calculate from world position
-
-// Get chunk if loaded (returns null if not loaded)
-WorldChunk chunk = world.getChunkIfLoaded(chunkKey);
-
-// Get chunk if in memory (non-ticking)
-WorldChunk chunk = world.getChunkIfInMemory(chunkKey);
-
-// Get chunk asynchronously
-CompletableFuture<WorldChunk> futureChunk = world.getChunkAsync(chunkKey);
-futureChunk.thenAccept(chunk -> {
-    // Work with chunk
-});
-```
-
-#### Chunk Access Methods
-```java
-// Synchronous access
-WorldChunk loadChunkIfInMemory(long chunkKey)
-WorldChunk getChunkIfInMemory(long chunkKey)
-WorldChunk getChunkIfLoaded(long chunkKey)
-WorldChunk getChunkIfNonTicking(long chunkKey)
-
-// Asynchronous access
-CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)
-CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey)
-```
+Reading and writing blocks from Java is on its own page, [block-access.md](block-access.md). In 0.7.2
+the chunk getters this section used to list (`world.getChunkIfLoaded`, `getChunkAsync`, …) and every
+block method on `World` and `WorldChunk` were removed: blocks are reached through a section reference
+from `world.getChunkStore()`, read from its `BlockSection` component and written with
+`BlockOperations.setBlock`. The [migration table](block-access.md#migrating-from-06x) maps each removed
+call to its replacement.
 
 ---
 
@@ -693,7 +678,7 @@ The engine ticks blocks through two separate paths, both configured per block ty
 
 | Path | JSON key on `BlockType` | Java accessor | Runs |
 |------|--------------------------|---------------|------|
-| **Scheduled ticking** | `TickProcedure` | `BlockType.getTickProcedure()` | Every chunk tick, for blocks flagged as *ticking* in their chunk section |
+| **Scheduled ticking** | `TickProcedure` | `BlockType.getTickProcedure()` | Every tick of a ticking chunk section, for its blocks flagged as *ticking* |
 | **Random ticking** | `RandomTickProcedure` | `BlockType.getRandomTickProcedure()` | For a few randomly sampled blocks per chunk section per tick |
 
 Scheduled ticking is driven by the shipped block-tick plugin (`com.hypixel.hytale.builtin.blocktick.BlockTickPlugin`), random ticking by the random-tick plugin (`com.hypixel.hytale.builtin.randomtick.RandomTickPlugin`). Grass spreading is a random tick; both procedure kinds decode polymorphically on a `Type` key.
@@ -717,7 +702,7 @@ static IBlockTickProvider getBlockTickProvider()
 static boolean hasBlockTickProvider()
 ```
 
-The shipped provider is `BlockTickPlugin` itself: its `getTickProcedure(int)` simply returns `BlockType.getAssetMap().getAsset(blockId).getTickProcedure()`, i.e. the block's own `TickProcedure` JSON. A plugin that wants to route scheduled ticks differently (per-world logic, procedures not stored on the asset, …) can install its own provider with `BlockTickManager.setBlockTickProvider(...)` — note there is exactly one global provider, so replacing it takes over scheduled ticking entirely.
+The shipped provider is `BlockTickPlugin` itself: its `getTickProcedure(int)` simply returns `BlockType.getAssetMap().getAsset(blockId).getTickProcedure()`, i.e. the block's own `TickProcedure` JSON. There is exactly one global provider, but replacing it with `BlockTickManager.setBlockTickProvider(...)` does **not** change which procedure runs: the section tick system (`ChunkBlockTickSystem`) calls `BlockTickPlugin.get().getTickProcedure(blockId)` directly, and only checks `BlockTickManager.hasBlockTickProvider()` to decide whether to tick at all. The provider is consulted by `BlockOperations.setBlock`, which sets a written block's ticking bit when the provider returns a procedure for its id. To run your own logic, register a `TickProcedure` type (below) rather than a provider.
 
 ### BlockTickStrategy
 
@@ -732,7 +717,7 @@ public enum BlockTickStrategy {
 }
 ```
 
-A slept/ignored block is re-woken by flagging it again — `BlockChunk.setTicking(x, y, z, true)` (which delegates to the owning `ChunkSection` and marks it for saving; `isTicking(x, y, z)` reads the flag). The 0.5 `setNeighbourBlocksTicking(x, y, z)` 3×3×3 wake helper was **removed by 0.6.3** — wake neighbors with individual `setTicking` calls. `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's systems once the adjacent chunk is available.
+A slept/ignored block is re-woken by flagging it again on its section — `BlockSection.setTicking(x, y, z, true)`, then `ChunkSection.markNeedsSaving()` if it returned `true` (`isTicking(x, y, z)` reads the flag); see [block-access.md → Ticking](block-access.md#ticking). (`BlockChunk.setTicking` was removed in 0.7.2.) `BlockOperations.updateBlockArea(chunkStore, chunkSection, blockSection, x, y, z)` wakes the 3×3×3 neighbourhood, which is what `SetBlockSettings.PERFORM_BLOCK_UPDATE` does on a write. `WAIT_FOR_ADJACENT_CHUNK_LOAD` blocks are merged back into the ticking set by the block-tick plugin's `MergeWaitingBlocksSystem`.
 
 ### TickProcedure (scheduled ticks)
 
@@ -740,10 +725,16 @@ A slept/ignored block is re-woken by flagging it again — `BlockChunk.setTickin
 public abstract class TickProcedure {
     public static final CodecMapCodec<TickProcedure> CODEC;  // dispatches on "Type"
 
-    public abstract BlockTickStrategy onTick(World world, WorldChunk chunk,
+    // 0.7.2: was onTick(World, WorldChunk, x, y, z, blockId)
+    public abstract BlockTickStrategy onTick(CommandBuffer<ChunkStore> commandBuffer,
+                                             Ref<ChunkStore> sectionRef,
                                              int x, int y, int z, int blockId);
 }
 ```
+
+`sectionRef` is the ticking section and `x, y, z` are world coordinates, so a procedure writes with
+`BlockOperations.setBlock(commandBuffer.getExternalData(), sectionRef, x, y, z, ...)` — exactly what the
+shipped `BasicChanceBlockGrowthProcedure` does.
 
 The block-tick plugin registers two growth-style types, `"BasicChance"` (keys `NextId`, `Chance`, `ChanceMin`, `NextTicking`) and `"SplitChance"`. No shipped block asset sets `TickProcedure` in JSON in this build — plant growth ships through the farming system instead — but the codec key is live, and custom types registered here work the same way as random-tick types (below).
 
@@ -887,8 +878,8 @@ public class DamageBlockEvent extends CancellableEcsEvent {
     Vector3i getTargetBlock()
     void setTargetBlock(Vector3i position)
     BlockType getBlockType()
-    float getCurrentDamage()   // damage already accumulated on this block
-    float getDamage()          // damage this strike would add
+    float getCurrentDamage()   // despite the name: the block's current HEALTH, 1.0 = undamaged
+    float getDamage()          // damage this strike would subtract from that health
     void setDamage(float)      // scale or zero this strike without cancelling the event
     boolean isCancelled()
     void setCancelled(boolean)
@@ -1075,67 +1066,51 @@ public class BlockPlaceSystem extends EntityEventSystem<EntityStore, PlaceBlockE
 
 **Package:** `com.hypixel.hytale.server.core.modules.blockhealth`
 
-A separate runtime subsystem tracks per-block *durability* — how damaged a block is between hits, independent of the one-shot [`DamageBlockEvent`](#damageblockevent) fired on a single strike. It is shipped as a core `JavaPlugin` module (`BlockHealthModule`) that registers a `ChunkStore` component, so damage state is stored and persisted alongside the chunk rather than on individual block instances.
+A separate runtime subsystem tracks per-block *durability* — how damaged a block is between hits. It is
+the state behind [`DamageBlockEvent`](#damageblockevent): each strike reads it, fires the event, and
+subtracts the event's damage. It ships as the core `JavaPlugin` module `BlockHealthModule`.
 
-> [!NOTE]
-> Block health is stored on the **chunk**, not the block. A `BlockHealthChunk` component holds a sparse map keyed by `Vector3i` block position — only damaged or fragile blocks occupy entries; undamaged blocks have none.
+> **0.7.2 moved block health from the chunk column to the section.** `BlockHealthChunk` is
+> `@Deprecated(forRemoval=true)` (its `FragileBlock` class was removed), and `BlockHealthModule` now registers
+> `BlockHealthSection`, a component on every chunk section, keyed by block index instead of
+> `Vector3i`. `getBlockHealthChunkComponentType()` was removed; `BlockHealthSystems.MigrateBlockHealthChunk`
+> moves old saves over. The section API — `getHealth`, `damage`, `makeFragile`, … — is on
+> [block-access.md → BlockHealthSection](block-access.md#blockhealthsection).
 
-### Key Classes
+How it behaves, read from `BlockHealthSystems` and `BlockHarvestUtils.performBlockDamage`:
 
-| Class | Description |
-|-------|-------------|
-| `BlockHealthModule` | Core `JavaPlugin` module; singleton accessor `BlockHealthModule.get()` exposes the chunk-component type |
-| `BlockHealthChunk` | `Component<ChunkStore>` holding the position→health and position→fragility maps for one chunk; carries the damage/repair API |
-| `BlockHealth` | Per-block durability state: current health, last-damage game time, destroyed/full-health flags |
-| `FragileBlock` | Marks a block position as fragile and records how long (`durationSeconds`) the fragility lasts |
-
-### Accessing the component
-
-`BlockHealthModule.get().getBlockHealthChunkComponentType()` returns the `ComponentType<ChunkStore, BlockHealthChunk>`. Read the `BlockHealthChunk` off a loaded chunk's `ChunkStore` with that type using the standard component-access pattern (see [Components](components.md) and [World block access](#world-block-access)). All mutating calls take the world + block position so the change can be re-broadcast to clients.
-
-```java
-// Inside a system/handler that already has the World and a Vector3i block pos:
-BlockHealthChunk health = /* chunk's ChunkStore component, via the type above */;
-
-Instant gameTime = /* current game-time Instant */;          // damageBlock stamps this
-health.damageBlock(gameTime, world, pos, 5.0f);             // apply 5 damage
-float remaining = health.getBlockHealth(pos);               // query current health
-health.repairBlock(world, pos, 2.0f);                       // heal 2
-health.removeBlock(world, pos);                             // clear all tracked state
-```
-
-### BlockHealthChunk methods
-
-| Method | Description |
-|--------|-------------|
-| `damageBlock(Instant gameTime, World, Vector3i, float amount)` | Applies damage; returns the updated `BlockHealth`. Stamps the last-damage time |
-| `repairBlock(World, Vector3i, float amount)` | Heals the block; returns the updated `BlockHealth` |
-| `removeBlock(World, Vector3i)` | Drops all health/fragility tracking for the position |
-| `getBlockHealth(Vector3i)` | Current health value for the position |
-| `makeBlockFragile(Vector3i, float durationSeconds)` | Marks the position fragile for a duration |
-| `isBlockFragile(Vector3i)` | Whether the position is currently fragile |
-| `getBlockHealthMap()` | `Map<Vector3i, BlockHealth>` of all damaged blocks in the chunk |
-| `getBlockFragilityMap()` | `Map<Vector3i, FragileBlock>` of all fragile blocks in the chunk |
-| `createBlockDamagePackets(List<ToClientPacket>)` | Appends the chunk's damage-overlay packets (used to sync crack visuals to clients) |
+- **Health is a fraction.** `BlockHealth.FULL_HEALTH` is `1.0`; only damaged or fragile blocks have an
+  entry. `DamageBlockEvent.getCurrentDamage()` carries this current health (not accumulated damage).
+- **A strike** resolves the block's section, fires `DamageBlockEvent`, calls
+  `BlockHealthSection.damage(x, y, z, event.getDamage(), now)`, marks the section for saving, and
+  breaks the block when the result is destroyed (`BlockHealth.isDestroyed`) or the block is fragile.
+- **Regeneration** runs in `BlockHealthSystems.Tick`: 5 seconds after the last hit, health returns at
+  0.1 per second. Fragility counts down in the same system.
+- **Replacing a block** clears its entry (`BlockHealthModule.onBlockReplaced`, called by
+  `BlockOperations.setBlock`).
 
 ### BlockHealth methods
 
 | Member | Description |
 |--------|-------------|
-| `NO_DAMAGE_INSTANCE` (static) | Shared instance representing an undamaged block |
+| `FULL_HEALTH` (static) | `1.0`, an undamaged block |
+| `isDamaged(float)` / `isDestroyed(float)` (static) | Classify a health value: damaged is strictly between 0 and 1; destroyed is at or below 0 |
 | `getHealth()` / `setHealth(float)` | Current durability value |
 | `getLastDamageGameTime()` / `setLastDamageGameTime(Instant)` | When the block was last hit (drives regen timing) |
 | `isDestroyed()` | Health has reached zero |
-| `isFullHealth()` | Block is at maximum durability |
+
+0.7.2 removed `NO_DAMAGE_INSTANCE` and `isFullHealth()`; compare against `FULL_HEALTH` instead.
 
 > [!WARNING]
-> This is engine-internal infrastructure exposed publicly; re-surveyed against 0.6.8, no first-party *content plugin* references it — the only consumer outside its own package is the engine's own `BlockHarvestUtils`. The class/method surface above is verified against `HytaleServer.jar`, but the intended end-to-end authoring flow (how a custom block declares its max health and regen) is not exercised by any shipped plugin — treat the worked example as illustrative of the API shape, not a guaranteed recipe.
+> This is engine infrastructure exposed publicly. Re-surveyed against 0.7.2, no first-party *content
+> plugin* references it; the consumer outside its own package is the engine's `BlockHarvestUtils`. How a
+> custom block would author its own durability is not exercised by any shipped plugin.
 
 ---
 
 ## Custom Block-Entity Components
 
-The worked example below compiles against the 0.6.8 jar and is covered by the example-build gate, so the API surface is current. The end-to-end run against a live server was last exercised on an older build and has not been repeated for 0.6.8 — treat the runtime behaviour as unconfirmed rather than guaranteed. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
+The worked example below is an example project compiled by the example-build gate (the full `verify-docs.sh` run), and it uses none of the block API that 0.7.2 removed. The end-to-end run against a live server was last exercised on an older build and has not been repeated for 0.7.2 — treat the runtime behaviour as unconfirmed rather than guaranteed. Worked example: [`examples/item-respawner`](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/item-respawner), a placeable pedestal that drops an item, respawns it on an interval (Quake-style), and is edited in-world through a press-F settings GUI.
 
 A *block-entity component* is your own data attached to individual placed blocks. Unlike a [`DamageBlockEvent`](#damageblockevent) handler (which reacts to player actions), a block-entity component is **persistent per-block state** that you can tick on the server's heartbeat. The shipped `BlockSpawner`, `ItemContainerBlock`, and bed `RespawnBlock` all work this way; this section shows how to author your own.
 
@@ -1423,9 +1398,9 @@ Because the supplier reads the components off the targeted block's `Ref`, the pa
 Moved here with their subject when `blocks.md` was split — every one is about the
 Java side rather than the JSON.
 
-- Block manipulation typically goes through chunk accessors
-- Always check if chunk is loaded before accessing blocks
-- Use async chunk loading for non-critical operations to avoid blocking
+- Block reads and writes go through a chunk-section reference from `world.getChunkStore()` — see [block-access.md](block-access.md)
+- A synchronous section lookup returns `null` when the section is not loaded; check before reading
+- Use the async section lookup (continued on the world executor) when the area may not be loaded
 - Block events are ECS events; use `EntityEventSystem` to handle them
 - To place blocks in geometric shapes (spheres, cubes, cones, …), use the coordinate iterators in [Block Shape Iteration](math.md#block-shape-iteration)
 
@@ -1449,7 +1424,8 @@ block-type-list load skip — stay in [blocks.md](blocks.md#gotchas--errors).
 - [Connected Blocks](blocks-connected.md) - Connected and patterned rule sets
 - [Components](components.md) - ECS components including BlockEntity
 - [Events](events.md) - Event system overview
-- [World](world.md) - The `World` object these accessors hang off
+- [Block Access](block-access.md) - Reading and writing blocks through chunk sections
+- [World](world.md) - The `World` object and its `ChunkStore`
 - [Math](math.md) - `Vector3i`, `Vector3ic` and the block-position types
 
 ---

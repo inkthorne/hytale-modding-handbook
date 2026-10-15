@@ -7,9 +7,9 @@ seo:
 
 # Prefab Categories
 
-**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.8**
+**Doc type:** JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.7.2**
 
-Hytale ships 7,828 `.prefab.json` files under `Server/Prefabs`, organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
+Hytale ships 9,282 `.prefab.json` files under `Server/Prefabs` (7,828 in 0.6.8), organized into major categories for world generation. This reference documents the taxonomy of prefab types, naming conventions, and directory structures.
 
 > **See also:** [Prefabs API](prefabs.md) for Java API and file format documentation
 
@@ -25,19 +25,20 @@ Defined as JSON assets under `Server/Prefabs` (in `Assets.zip`) and covers:
 
 ## Architecture
 ```
-Server/Prefabs/                      (7,828 .prefab.json files; 5 sit at the root)
+Server/Prefabs/                      (9,282 .prefab.json files; 6 sit at the root)
 ├── Rock_Formations/  1676  (rocks by material, arches, pillars, fossils, mushrooms)
+├── Orbis/            1399  (0.7.2: the newer generator's prefab set — trees, goblin/void encounters, Trork, Enkindled)
 ├── Mineshaft/        1159  (modular mine components)
-├── Trees/            1126  (per-species → Stage_N subdirs, Stumps)
+├── Trees/            1150  (per-species → Stage_N subdirs, Stumps)
+├── Dungeon/           870  (modular dungeon rooms)
 ├── Npc/               856  (faction buildings, villages, outposts)
 ├── Monuments/         809  (towers, temples, encounters, camps)
-├── Dungeon/           853  (modular dungeon rooms)
-├── Plants/            555  (bushes, cacti, coral, driftwood)
+├── Plants/            562  (bushes, cacti, coral, driftwood)
 ├── Cave/              492  (formations, nests, nodes, stalagmites)
 ├── Testing/           156  (developer test assets)
 ├── Mineshaft_Drift/   117  (drift-mine variant of the mineshaft set)
 ├── Spawn/              20  (player spawn layouts)
-└── Blocksets/, TestTree/, Unique/   (1-2 files each)
+└── SFX_Emitters/, Blocksets/, TestTree/, Unique/, Hunt/   (1-4 files each)
 ```
 
 Note the singular directory names: `Mineshaft`, `Dungeon`, `Cave`, `Npc` — not the plural forms used in prose.
@@ -46,35 +47,37 @@ Note the singular directory names: `Mineshaft`, `Dungeon`, `Cave`, `Npc` — not
 
 | Class | Location | Description |
 |-------|----------|-------------|
-| Trees | `Server/Prefabs/Trees/` | Growth stages, species, biome variants (1,126) |
+| Trees | `Server/Prefabs/Trees/` | Growth stages, species, biome variants (1,150) |
 | Rock Formations | `Server/Prefabs/Rock_Formations/` | Rocks, arches, fossils, pillars, mushrooms (1,676) |
 | NPC Structures | `Server/Prefabs/Npc/` | Faction buildings, villages, outposts (856) |
 | Monuments | `Server/Prefabs/Monuments/` | Towers, temples, encounters, camps (809) |
 | Mineshafts | `Server/Prefabs/Mineshaft/` | Modular mine components (1,159) |
-| Dungeons | `Server/Prefabs/Dungeon/` | Modular dungeon rooms (853) |
+| Dungeons | `Server/Prefabs/Dungeon/` | Modular dungeon rooms (870) |
 | Caves | `Server/Prefabs/Cave/` | Formations, nests, nodes (492) |
-| Plants | `Server/Prefabs/Plants/` | Bushes, cacti, coral, driftwood (555) |
+| Plants | `Server/Prefabs/Plants/` | Bushes, cacti, coral, driftwood (562) |
+| Orbis | `Server/Prefabs/Orbis/` | 0.7.2: prefabs for the newer generator's biomes and world events (1,399) |
 | Spawn | `Server/Prefabs/Spawn/` | Player spawn layouts (20) |
 
 ---
 
 ## Quick Navigation
 
-Counts are exact file counts in the 0.6.8 `Assets.zip`.
+Counts are exact `.prefab.json` file counts in the 0.7.2 `Assets.zip`.
 
 | Category | Directory | Count | Description |
 |----------|-----------|-------|-------------|
 | [Rock Formations](#rock-formations) | `Rock_Formations/` | 1,676 | Rocks, arches, fossils, pillars, mushrooms |
 | [Mineshafts](#mineshafts) | `Mineshaft/` | 1,159 | Modular mine components |
-| [Trees](#trees) | `Trees/` | 1,126 | Growth stages, species, biome variants |
+| [Orbis](#orbis) | `Orbis/` | 1,399 | Newer-generator trees, encounters and world-event prefabs (0.7.2) |
+| [Trees](#trees) | `Trees/` | 1,150 | Growth stages, species, biome variants |
 | [NPC Structures](#npc-structures) | `Npc/` | 856 | Faction buildings, villages, outposts |
-| [Dungeons](#dungeons) | `Dungeon/` | 853 | Modular dungeon rooms |
+| [Dungeons](#dungeons) | `Dungeon/` | 870 | Modular dungeon rooms |
 | [Monuments](#monuments) | `Monuments/` | 809 | Towers, temples, encounters, camps |
-| [Plants](#plants) | `Plants/` | 555 | Bushes, cacti, coral, driftwood |
+| [Plants](#plants) | `Plants/` | 562 | Bushes, cacti, coral, driftwood |
 | [Caves](#caves) | `Cave/` | 492 | Formations, nests, nodes |
 | [Spawn](#spawn) | `Spawn/` | 20 | Player spawn layouts |
 
-Additional top-level directories: `Testing/` (156), `Mineshaft_Drift/` (117), `Blocksets/`, `TestTree/` and `Unique/` (1–2 files each), plus 5 loose prefabs at the root of `Server/Prefabs/` — one of them `Goblin_Thief_Chest.prefab.json` (see [Prefabs API](prefabs.md#prefab-file-format)).
+Additional top-level directories: `Testing/` (156), `Mineshaft_Drift/` (117), `SFX_Emitters/` (4, new in 0.7.2: goblin steam and bubbling sound emitters), `Blocksets/` and `TestTree/` (2 each), `Unique/` and `Hunt/` (1 each), plus 6 loose prefabs at the root of `Server/Prefabs/` — among them `Goblin_Thief_Chest.prefab.json` (see [Prefabs API](prefabs.md#prefab-file-format)) and, new in 0.7.2, `Debug_Cube.prefab.json`.
 
 **Location:** `Assets.zip > Server/Prefabs/`
 
@@ -92,7 +95,7 @@ Prefab files follow consistent naming patterns that encode category, type, varia
 
 ### Common Patterns
 
-Every example below is a real 0.6.8 filename (the `.prefab.json` suffix is omitted).
+Every example below is a real 0.7.2 filename (the `.prefab.json` suffix is omitted).
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
@@ -120,36 +123,58 @@ Each species directory contains one **subdirectory per growth stage** (`Stage_0`
 
 ### Biome Variant Suffixes
 
-Biome/theme tokens appear as an infix in the filename, not only at the end. These are the ones that actually occur across the shipped set (counts are matching files):
+Biome/theme tokens appear as an infix in the filename, not only at the end. These are the ones that actually occur across the shipped set (counts are 0.7.2 files whose name contains `_<Token>_`):
 
 | Token | Biome | Example |
 |-------|-------|---------|
 | `_Volcanic_` (231) | Volcanic/lava regions | `Arches_Wastes_Lava_Large_Rocks_Volcanic_Arch_001` |
-| `_Autumn_` (167) | Autumn foliage | `Fir_Autumn_Stage2_001` |
-| `_Dead_` (127) | Dead/decayed variants | `Ash_Dead_Stage2_001` |
-| `_Cave_` (87) | Underground variants | `Crypt_Cursed_C_Large_Cave_Corner_001` |
-| `_Swamp_` (54) | Wetland/swamp regions | `Arches_Swamp_Large_001` |
+| `_Autumn_` (179) | Autumn foliage | `Fir_Autumn_Stage2_001` |
+| `_Dead_` (245) | Dead/decayed variants | `Ash_Dead_Stage2_001` |
+| `_Cave_` (92) | Underground variants | `Crypt_Cursed_C_Large_Cave_Corner_001` |
+| `_Swamp_` (86) | Wetland/swamp regions | `Arches_Swamp_Large_001` |
 | `_Winter_` (40) | Cold/snow regions | `Bush_Winter_001` |
 | `_Jungle_` (30) | Tropical regions | `Bush_Jungle_Jungle_Bush_001` |
-| `_Moss_` (27) | Moss-covered | `Ash_Moss_Stage3_001` |
+| `_Moss_` (29) | Moss-covered | `Ash_Moss_Stage3_001` |
 | `_Desert_` (23) | Arid/desert regions | `Arches_Desert_Drylands_Pillars_006` |
 | `_Frozen_` (14) | Frozen variants | `Encounter_Shale_Monuments_EncounterOBJ_Shale_Frozen_001` |
 
-(`_Eternal` and `_Underwater` were documented for earlier builds but appear on no 0.6.8 prefab filename; aquatic content is instead grouped by directory — `Plants/Seaweed/`, `Plants/Coral/`, `Rock_Formations/Rocks/Ocean/`.)
+(`_Eternal` and `_Underwater` were documented for earlier builds but appear on no 0.7.2 prefab filename; aquatic content is instead grouped by directory — `Plants/Seaweed/`, `Plants/Coral/`, `Rock_Formations/Rocks/Ocean/`.)
+
+---
+
+## Orbis
+
+**Location:** `Server/Prefabs/Orbis/` (new in 0.7.2)
+**Count:** 1,399 files
+
+A second prefab tree, referenced by the newer `HytaleGenerator` biome assets (for example
+`Server/HytaleGenerator/Biomes/Portal_Goblin/Portal_Goblin_Biome.json`) and by world-event content,
+rather than by the classic `Trees/` / `Rock_Formations/` sets.
+
+| Subdirectory | Count | Contents |
+|--------------|-------|----------|
+| `Trees/` | 1,063 | 88 species directories with growth stages (`Oak`, `Beech`, `Bamboo`, `Sallow`, `Poisoned`, `Petrified_Roots_Hanging`, …) |
+| `Goblins/` | 208 | Goblin, spider, Enkindled and void encounters (`Encounter_Cave_*`, `Encounter_Surface_Objective_*`, `Encounter_Surface_VoidAnomaly_*`), incidental cave pieces, `Spawn/`, `Debug/` |
+| `Rocks/` | 67 | `Basalt/`, `Chalk/`, `Stone/` |
+| `Enkindled/` | 22 | A town set: `Town_Hall`, `Houses_Small` / `Houses_Large`, `Granaries`, `Windmills`, `Deco_*` |
+| `Trork/` | 19 | `Huts_*`, `Towers`, `Fires`, `Deco_Statues`, `Deco_Trees` |
+| `WorldEvent/` | 10 | `Goblins/` and `Void/` world-event pieces (the goblin coffer encounter managers) |
+| `Void/` | 7 | `Spikes/` |
+| `Plants/` | 3 | `Mushroom_Green_Stool/` |
 
 ---
 
 ## Trees
 
 **Location:** `Server/Prefabs/Trees/`
-**Count:** 1,126 files across 79 species directories
+**Count:** 1,150 files across 82 species directories (0.7.2 added `Ash_Deeproot_Boulders`, `Ash_Deeproot_Roots` and `Ash_Logs`)
 
 Trees are organized by species. Each species directory contains growth-stage subdirectories (`Stage_0`, `Stage_1`, ...), each holding numbered prefab files.
 
 ### Directory Structure
 
 ```
-Server/Prefabs/Trees/                 (79 species directories, 1,126 files)
+Server/Prefabs/Trees/                 (82 species directories, 1,150 files)
 ├── Oak/
 │   ├── Stage_00/
 │   ├── Stage_0/
@@ -168,7 +193,7 @@ Server/Prefabs/Trees/                 (79 species directories, 1,126 files)
 
 ### Tree Species
 
-There are 79 species directories under `Server/Prefabs/Trees/`. A representative selection:
+There are 82 species directories under `Server/Prefabs/Trees/`. A representative selection:
 
 | Species | Notes |
 |---------|-------|
@@ -196,7 +221,7 @@ Variants are separate *species directories*, not filename suffixes on a base spe
 | `*_Autumn` | Fall foliage | `Fir_Autumn` (plus the standalone `Autumn` / `Autumn_Stumps` species) |
 | `*_Snow` | Snow-covered branches | `Fir_Snow` |
 | `*_Stumps` | Cut/decayed stumps | `Oak_Stumps`, `Maple_Stumps`, `Redwood_Stumps`, `Stormbark_Stumps` |
-| `*_Logs` | Felled logs | `Cedar_Logs`, `Fir_Logs`, `Redwood_Logs`, `Petrified_Logs` |
+| `*_Logs` | Felled logs | `Ash_Logs`, `Cedar_Logs`, `Fir_Logs`, `Redwood_Logs`, `Petrified_Logs` |
 | `*_Burnt` | Burned | `Cedar_Burnt`, `Burnt`, `Burnt_Roots`, `Burnt_dead` |
 
 ### Example: Oak Tree at Stage 2
@@ -281,16 +306,16 @@ All 25 material directories, with their own sub-splits:
 
 ### Size Variants
 
-Size is a directory level under most materials, and repeats in the filename:
+Size is a directory level under most materials, and repeats in the filename. Counts are 0.7.2 files across the whole prefab set whose name contains `_<Size>_`:
 
 | Size | Files | Example |
 |------|-------|---------|
-| `Small` | 986 | `Rocks_Stone_Small_001` |
-| `Large` | 730 | `Arches_Aspen_Large_001` |
-| `Medium` | 184 | `Encounter_City_Oceans_Buildings_Medium_Blue_001` |
+| `Small` | 1,065 | `Rocks_Stone_Small_001` |
+| `Large` | 772 | `Arches_Aspen_Large_001` |
+| `Medium` | 213 | `Encounter_City_Oceans_Buildings_Medium_Blue_001` |
 | `Tiny` | 8 | rare |
 
-(No `Massive` tier ships in 0.6.8 — earlier builds of this page listed one.)
+(No `Massive` tier ships in 0.7.2 — earlier builds of this page listed one.)
 
 ### Example: Sandstone Arch
 
@@ -357,7 +382,7 @@ Building types are directory names one level below the faction theme, and are pl
 | `Chieftain` / `Grandfather` / `Throne` | Leader structures |
 | `Bridge` / `Lampposts` / `Seats` / `Braziers` / `Totems` | Props and connectors |
 
-(There are no `Workshop` or `Inn` directories in 0.6.8; `Temple` appears exactly once, under `Slothian/Disabled/`.)
+(There are no `Workshop` or `Inn` directories in 0.7.2; `Temple` appears exactly once, under `Slothian/Disabled/`.)
 
 ### Example: Kweebec Well
 
@@ -420,7 +445,7 @@ Server/Prefabs/Monuments/
 | `Zone1/` | 29 | `Encounter_Zone1_Tier1_001` |
 | `Shale/` | 9 | `Encounter_Shale_Monuments_EncounterOBJ_Shale_Frozen_001` |
 
-(There is no `Boss` encounter directory in 0.6.8.)
+(There is no `Boss` encounter directory in 0.7.2.)
 
 ### Incidental Structures
 
@@ -503,7 +528,7 @@ Contains:
 ## Dungeons
 
 **Location:** `Server/Prefabs/Dungeon/`
-**Count:** 853 files
+**Count:** 870 files
 
 Dungeons use modular room systems similar to mineshafts, creating varied dungeon layouts. Top-level directories mix themed dungeons and material variants.
 
@@ -521,9 +546,11 @@ Server/Prefabs/Dungeon/
 ├── Outlander_Temple/   71
 ├── Sandstone/          61
 ├── Cursed_Crypt/       58
+├── Deepworks/          17   (0.7.2: Gobliterator arena and Feastmaster props, all at the top level)
 ├── Rift/               10
 ├── Slate/              10
-└── Challenge_Gate/      4
+├── Challenge_Gate/      4
+└── Dungeon_Empty.prefab.json
 ```
 
 ### Dungeon Types
@@ -539,13 +566,14 @@ Server/Prefabs/Dungeon/
 | `Outlander_Temple` | 71 | Human ruins |
 | `Sandstone` | 61 | Material-themed |
 | `Cursed_Crypt` | 58 | Stone, dark |
+| `Deepworks` | 17 | Goblin boss-arena pieces (0.7.2) |
 | `Rift` | 10 | Magical |
 | `Slate` | 10 | Material-themed |
 | `Challenge_Gate` | 4 | Gated challenge entrances |
 
 ### Room Types
 
-Dungeon room prefabs use descriptive names rather than a fixed component set. The path usually encodes the role: `Goblin_Lair/Entrance_Goblin/Library/Layout/Goblin_Lair_Entrance_Library_Layout_001.prefab.json`, `Goblin_Lair/Entrance_Goblin/Library/Stairs/Long/Goblin_Lair_Entrance_Library_Stairs_Long_001.prefab.json`, `Stone/Entrance_Cave/Stone_Entrance_Cave_001.prefab.json`. Only `Goblin_Lair_Empty.prefab.json` sits directly in a dungeon directory.
+Dungeon room prefabs use descriptive names rather than a fixed component set. The path usually encodes the role: `Goblin_Lair/Entrance_Goblin/Library/Layout/Goblin_Lair_Entrance_Library_Layout_001.prefab.json`, `Goblin_Lair/Entrance_Goblin/Library/Stairs/Long/Goblin_Lair_Entrance_Library_Stairs_Long_001.prefab.json`, `Stone/Entrance_Cave/Stone_Entrance_Cave_001.prefab.json`. Apart from `Deepworks/`, only the empty placeholders sit directly in a dungeon directory: `Goblin_Lair/Goblin_Lair_Empty.prefab.json`, `Cursed_Crypt/Crypt_Empty.prefab.json`, and `Dungeon_Empty.prefab.json` at the top of `Dungeon/`.
 
 ### Example: Goblin Lair Room
 
@@ -605,7 +633,7 @@ Node prefabs encode material, depth, and feature in the *path and* the filename:
 ## Plants
 
 **Location:** `Server/Prefabs/Plants/`
-**Count:** 555 files
+**Count:** 562 files
 
 Plant prefabs include bushes, cacti, coral, and other vegetation beyond trees.
 
@@ -625,7 +653,10 @@ Server/Prefabs/Plants/
 ├── Mushroom_Large/ 24
 ├── Vines/          19
 ├── Twisted_Wood/   18
-└── Mushroom_Rings/  2
+├── Mushroom_Brown_Bracket/ 3   Small/ Medium/ Large/   (0.7.2)
+├── Mushroom_Green_Stool/   3   Small/ Medium/ Large/   (0.7.2)
+├── Mushroom_Rings/  2
+└── Brambles/        1   Plant_Brambles_Large_001   (0.7.2)
 ```
 
 ### Categories
@@ -641,7 +672,9 @@ Server/Prefabs/Plants/
 | `Mushroom_Large/` | 24 | Varied | Large mushroom formations |
 | `Vines/` | 19 | Varied | Hanging vines |
 | `Twisted_Wood/` | 18 | Corrupted | Dark, twisted plants |
+| `Mushroom_Brown_Bracket/`, `Mushroom_Green_Stool/` | 3 each | Varied | Mushroom clusters by size (0.7.2) |
 | `Mushroom_Rings/` | 2 | Varied | Mushroom ring clusters |
+| `Brambles/` | 1 | Varied | One large bramble (0.7.2) |
 
 ---
 

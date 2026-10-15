@@ -7,9 +7,11 @@ seo:
 
 # World & Chunk Lifecycle Events
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
-Split out of [world.md](world.md) at the 2026-09-04 seam. The event classes a plugin subscribes to for world and chunk lifecycle, from `com.hypixel.hytale.server.core.universe.world.events` and its `.ecs` subpackage. The registry, priorities and base types these plug into are in [events.md](events.md), which defers domain event classes to pages like this one.\n\n> **Not to be confused with [world-events.md](world-events.md).** That documents the **World Event** feature added in 0.6.3 — scripted stage/fork timelines authored as JSON under `Server/WorldEvent`. This page is the engine's world and chunk lifecycle events, which are Java classes on the event bus. The two share the phrase and nothing else.
+Split out of [world.md](world.md) at the 2026-09-04 seam. The event classes a plugin subscribes to for world and chunk lifecycle, from `com.hypixel.hytale.server.core.universe.world.events` and its `.ecs` subpackage. The registry, priorities and base types these plug into are in [events.md](events.md), which defers domain event classes to pages like this one.
+
+> **Not to be confused with [world-events.md](world-events.md).** That documents the **World Event** feature added in 0.6.3 — scripted stage/fork timelines authored as JSON under `Server/WorldEvent`. This page is the engine's world and chunk lifecycle events, which are Java classes on the event bus. The two share the phrase and nothing else.
 
 ---
 
@@ -141,7 +143,8 @@ Events related to chunk loading, saving, and unloading.
 | Class | Package | Description | Cancellable |
 |-------|---------|-------------|-------------|
 | `ChunkEvent` | `...universe.world.events` | Base class for chunk events | - |
-| `ChunkPreLoadProcessEvent` | `...universe.world.events` | Chunk pre-load processing | No |
+| `ChunkPreLoadProcessEvent` | `...universe.world.events` | Column pre-load processing | No |
+| `ChunkSectionPreLoadProcessEvent` | `...universe.world.events` | Section pre-load processing | No |
 | `ChunkSaveEvent` | `...universe.world.events.ecs` | Chunk is being saved (ECS) | Yes |
 | `ChunkUnloadEvent` | `...universe.world.events.ecs` | Chunk is being unloaded (ECS) | Yes |
 | `MoonPhaseChangeEvent` | `...universe.world.events.ecs` | Moon phase changed (ECS) | No |
@@ -156,7 +159,11 @@ Abstract base class for chunk-related events. Keyed by String.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `getChunk()` | `WorldChunk` | The chunk this event relates to |
+| `getChunk()` | `WorldChunk` | The chunk column this event relates to |
+
+`WorldChunk` has no block API in 0.7.2 — it is the column's flags, keep-alive and save state (see
+[world-chunks.md → WorldChunk](world-chunks.md#worldchunk)). To read blocks, resolve a section as on
+[block-access.md](block-access.md#resolving-a-section).
 
 ---
 
@@ -164,7 +171,9 @@ Abstract base class for chunk-related events. Keyed by String.
 
 **Package:** `com.hypixel.hytale.server.core.universe.world.events.ecs`
 
-ECS event fired when a chunk is being saved. Extends `CancellableEcsEvent`.
+ECS event fired when a chunk column is queued for saving. Extends `CancellableEcsEvent`. It is invoked
+on the **`ChunkStore`**, against the column's entity ref, by `ChunkSavingSystems`; cancelling it keeps
+the column out of this save pass.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -178,7 +187,10 @@ ECS event fired when a chunk is being saved. Extends `CancellableEcsEvent`.
 
 **Package:** `com.hypixel.hytale.server.core.universe.world.events.ecs`
 
-ECS event fired when a chunk is being unloaded. Extends `CancellableEcsEvent`.
+ECS event fired when a chunk column's keep-alive runs out and it is about to unload. Extends
+`CancellableEcsEvent`. It is invoked on the **`ChunkStore`**, against the column's entity ref, by
+`ChunkUnloadingSystem`. Cancelling keeps the column loaded; with `willResetKeepAlive()` still `true`
+(the default) its keep-alive timer is reset, so the unload is retried once the timer runs out again.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -195,6 +207,9 @@ ECS event fired when a chunk is being unloaded. Extends `CancellableEcsEvent`.
 **Package:** `com.hypixel.hytale.server.core.universe.world.events.ecs`
 
 ECS event fired when the moon phase changes. Extends `EcsEvent` (not cancellable).
+`WorldTimeResource.setMoonPhase` invokes it on the world's **`EntityStore`** with no entity ref, so it is
+handled by a `WorldEventSystem<EntityStore, MoonPhaseChangeEvent>` (as the spawning plugin's
+`MoonPhaseChangeEventSystem` does), not an `EntityEventSystem`.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
@@ -206,14 +221,23 @@ ECS event fired when the moon phase changes. Extends `EcsEvent` (not cancellable
 
 **Package:** `com.hypixel.hytale.server.core.universe.world.events`
 
-Extends `ChunkEvent`, implements `IProcessedEvent`. Fired before a chunk is fully loaded, allowing pre-processing.
+Extends `ChunkEvent`, implements `IProcessedEvent`. Fired once per chunk **column** after it is loaded
+or generated and before its entity is added to the `ChunkStore`, keyed by the world's name. Listeners
+can edit the column's `Holder` before it goes live.
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `isNewlyGenerated()` | `boolean` | Whether chunk is newly generated |
-| `getHolder()` | `Holder<ChunkStore>` | Chunk store holder |
+| `isNewlyGenerated()` | `boolean` | Whether the column was generated rather than loaded from storage |
+| `getHolder()` | `Holder<ChunkStore>` | The column's holder (not yet in the store) |
+| `getWorld()` | `World` | 0.7.2+: the world the column belongs to |
 | `processEvent(String)` | `void` | Process the event |
 | `didLog()` | `boolean` | Whether event was logged |
+
+0.7.2 added `World` as the constructor's first argument and the `getWorld()` accessor. The built-in
+per-block preprocessing (block-entity setup in `BlockModule`, ticking-block discovery in
+`BlockTickPlugin`, warp-marker spawning in the teleport plugin) moved off this event onto
+`ChunkSectionPreLoadProcessEvent` below; in 0.7.2 the fluid plugin is the only shipped listener left on
+this one, and it subscribes to both.
 
 **Usage Example:**
 ```java
@@ -226,38 +250,79 @@ getEventRegistry().registerGlobal(ChunkPreLoadProcessEvent.class, event -> {
 
 ---
 
+### ChunkSectionPreLoadProcessEvent
+
+**Package:** `com.hypixel.hytale.server.core.universe.world.events`
+
+Implements `IEvent<String>` and `IProcessedEvent` (it does **not** extend `ChunkEvent`, so there is no
+`getChunk()`). Fired once per chunk **section** before the section's entity is added to the
+`ChunkStore`, keyed by the world's name. For a classic column that is ten times per column load (sections
+0–9, right after `ChunkPreLoadProcessEvent`); on a cubic world it also fires for sections loaded on their
+own (see [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections)).
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `isNewlyGenerated()` | `boolean` | Whether the section was generated rather than loaded from storage |
+| `getHolder()` | `Holder<ChunkStore>` | The section's holder; its `ChunkSection` component gives the section coordinates, and its `BlockSection` the blocks |
+| `getWorld()` | `World` | The world the section belongs to |
+| `processEvent(String)` | `void` | Process the event |
+| `didLog()` | `boolean` | Whether event was logged |
+
+The shipped section listeners are `BlockModule` (ensures block entities), `BlockTickPlugin` (discovers
+ticking blocks in newly generated sections), the farming, fluid and teleport plugins.
+
+> **Both pre-load events run off the world thread.** The `ChunkGrid` load pipeline calls them from a
+> `thenApplyAsync` stage with no executor, before the column or section is in the store. Work on the
+> `Holder` you are given; do not read or write `ChunkStore` components from the listener. A listener that
+> takes longer than one world tick is logged as `Took too long to pre-load process chunk section`.
+
+---
+
 ### Chunk Events Usage Notes
 
-Chunk events (`ChunkSaveEvent`, `ChunkUnloadEvent`, `MoonPhaseChangeEvent`) extend `EcsEvent` rather than implementing `IEvent`. Handle them using an `EntityEventSystem`:
+The three ECS chunk events extend `EcsEvent` rather than implementing `IEvent`, so they are handled by
+systems, not by the event registry, and **on the store they are invoked on**:
+
+| Event | Store | Invoked against | System base |
+|-------|-------|-----------------|-------------|
+| `ChunkSaveEvent` | `ChunkStore` | the column's entity ref | `EntityEventSystem<ChunkStore, ChunkSaveEvent>` |
+| `ChunkUnloadEvent` | `ChunkStore` | the column's entity ref | `EntityEventSystem<ChunkStore, ChunkUnloadEvent>` |
+| `MoonPhaseChangeEvent` | `EntityStore` | no ref (store-wide) | `WorldEventSystem<EntityStore, MoonPhaseChangeEvent>` |
+
+A system registered on the wrong store never sees the event. For the chunk events, query on
+`WorldChunk` and register on `getChunkStoreRegistry()`. The unit below compiles against the 0.7.2 jar.
 
 ```java
-import com.hypixel.hytale.component.*;
+package com.example.chunkevents;
+
+import com.hypixel.hytale.component.ArchetypeChunk;
+import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.component.query.Query;
 import com.hypixel.hytale.component.system.EntityEventSystem;
+import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.events.ecs.ChunkUnloadEvent;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 
-public class ChunkUnloadSystem extends EntityEventSystem<EntityStore, ChunkUnloadEvent> {
+public class ChunkUnloadSystem extends EntityEventSystem<ChunkStore, ChunkUnloadEvent> {
 
     public ChunkUnloadSystem() {
         super(ChunkUnloadEvent.class);
     }
 
     @Override
-    public void handle(int index, ArchetypeChunk<EntityStore> chunk,
-                       Store<EntityStore> store, CommandBuffer<EntityStore> buffer,
+    public void handle(int index, ArchetypeChunk<ChunkStore> chunk,
+                       Store<ChunkStore> store, CommandBuffer<ChunkStore> buffer,
                        ChunkUnloadEvent event) {
-        var worldChunk = event.getChunk();
-        System.out.println("Chunk unloading: " + worldChunk);
-
-        // Optionally prevent unload
-        // event.setCancelled(true);
+        WorldChunk column = event.getChunk();
+        if (column.getX() == 0 && column.getZ() == 0) {
+            event.setCancelled(true);   // keep the origin column loaded; keep-alive is reset
+        }
     }
 
     @Override
-    public Query<EntityStore> getQuery() {
-        // Return appropriate query for entities you want to match
-        return null; // Or a specific component type
+    public Query<ChunkStore> getQuery() {
+        return WorldChunk.getComponentType();
     }
 }
 ```
@@ -267,7 +332,7 @@ Register it in your plugin:
 ```java
 @Override
 protected void setup() {
-    getEntityStoreRegistry().registerSystem(new ChunkUnloadSystem());
+    getChunkStoreRegistry().registerSystem(new ChunkUnloadSystem());
 }
 ```
 

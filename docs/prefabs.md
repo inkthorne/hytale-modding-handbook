@@ -7,7 +7,7 @@ seo:
 
 # Prefabs API
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/Prefabs` · **Verified against 0.7.2**
 
 Prefabs are pre-defined block/entity selections that can be loaded and placed into the world. They allow consistent structure creation with blocks, fluids, and entities.
 
@@ -68,7 +68,7 @@ PrefabStore  (load / save / locate)
 
 | Category | File | Description |
 |----------|------|-------------|
-| [Categories Reference](prefabs-categories.md) | `prefabs-categories.md` | Trees, Rocks, NPCs, Dungeons (~7,800 files) |
+| [Categories Reference](prefabs-categories.md) | `prefabs-categories.md` | Trees, Rocks, NPCs, Dungeons (~9,300 files) |
 | [File Format](#prefab-file-format) | Below | JSON schema, blocks, fluids, entities |
 | [Java API](#prefabstore) | Below | PrefabStore, BlockSelection, Events |
 | [Buffer Pipeline](#the-prefab-buffer-pipeline) | Below | PrefabLoader, PrefabBufferUtil, IPrefabBuffer, PrefabUtil |
@@ -197,7 +197,7 @@ BlockSelection house = store.getServerPrefab("buildings/house");
 house.place(commandSender, world);
 ```
 
-> **See also:** [World API](world-chunks.md#worldchunk)
+> **See also:** [Block Access](block-access.md) for reading and writing single blocks
 
 ---
 
@@ -318,10 +318,12 @@ void placeNoReturn(String id, CommandSender sender, World world, ComponentAccess
 void placeNoReturn(String id, CommandSender sender, FeedbackConsumer feedback, World world, ComponentAccessor<EntityStore> accessor)
 void placeNoReturn(String id, CommandSender sender, FeedbackConsumer feedback, World world, Vector3ic position, BlockMask mask, ComponentAccessor<EntityStore> accessor)
 
-// Check if placement is valid
-boolean canPlace(World world, Vector3i position, IntList invalidBlocks)
-boolean matches(World world, Vector3i position)
+// World-space bounds the placement would cover (0.7.2+): fills min/max, false when empty
+boolean computePlacementBounds(Vector3ic position, Vector3i minOut, Vector3i maxOut)
 ```
+
+0.7.2 removed `canPlace(World, Vector3i, IntList)` and `matches(World, Vector3i)`; for an
+`IPrefabBuffer` prefab, `PrefabUtil.canPlacePrefab` (below) is the placement test.
 
 `position` is a JOML `Vector3ic` (read-only view), so any `Vector3i` is accepted; `null` places at the selection's own position. `BlockSelection.DEFAULT_ENTITY_CONSUMER` is the no-op entity consumer the shorter overloads use.
 
@@ -351,8 +353,17 @@ void copyPropertiesFrom(BlockSelection other)
 ```
 
 ### Copying from World
+
+0.7.2 removed `copyFromAtWorld(int, int, int, WorldChunk, BlockPhysics)`. The builder tools now copy
+a world region through a `SectionReader` cursor, which appends block, rotation, filler, support,
+block-entity holder and fluid in one call — see
+[block-access.md → SectionReader](block-access.md#sectionreader):
+
 ```java
-void copyFromAtWorld(int x, int y, int z, WorldChunk chunk, BlockPhysics physics)
+SectionReader.SectionCursor cursor = new SectionReader(world.getChunkStore()).sectionCursor();
+if (cursor.moveTo(x, y, z)) {
+    cursor.copyInto(selection);   // addBlockAtWorldPos(...) + addFluidAtWorldPos(...)
+}
 ```
 
 ### Usage Example
@@ -685,9 +696,10 @@ BlockFilter.FilterType getBlockFilterType()
 String[] getBlocks()
 boolean isInverted()
 
-// the actual test (min/max are the selection bounds, used by the Selection type)
-boolean isExcluded(ChunkAccessor accessor, int x, int y, int z, Vector3i min, Vector3i max, int blockId)
-boolean isExcluded(ChunkAccessor accessor, int x, int y, int z, Vector3i min, Vector3i max, int blockId, int fluidId)
+// the actual test (min/max are the selection bounds, used by the Selection type).
+// 0.7.2: the first parameter is a BlockReader (e.g. a SectionReader) — it was a ChunkAccessor
+boolean isExcluded(BlockReader reader, int x, int y, int z, Vector3i min, Vector3i max, int blockId)
+boolean isExcluded(BlockReader reader, int x, int y, int z, Vector3i min, Vector3i max, int blockId, int fluidId)
 
 static final String BLOCK_SEPARATOR = "|"
 static final Codec<BlockFilter> CODEC
@@ -897,9 +909,9 @@ static final int NO_ENTITIES  = 8;   // *skip* entities
 static boolean test(int value, int flag)   // (value & flag) == flag
 ```
 
-The `blockEntityConsumer` / `entityConsumer` callbacks see every block-entity holder and entity holder the paste creates; `PasteRegion` (a `PrefabUtil` nested class) is an optional pre-resolved set of chunk refs so a paste on the world thread never has to look chunks up.
+The `blockEntityConsumer` / `entityConsumer` callbacks see every block-entity holder and entity holder the paste creates; `PasteRegion` (a `PrefabUtil` nested class) is an optional pre-resolved set of column and section refs over the paste's bounds, so a paste on the world thread never has to look them up.
 
-The 0.5.9-style boolean overloads — three `paste(...)` taking `boolean force` (the widest also taking `boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities`) and three `remove(...)` taking `boolean force` — still compile as of 0.6.8 but are all `@Deprecated(forRemoval = true, since = "2026-06-16")`. They just fold the booleans into `pasteFlags` (`force → FORCE`, `technicalPaste → TECHNICAL`, `pasteAnchorAsBlock → ANCHOR_BLOCK`, `!loadEntities → NO_ENTITIES`) and delegate. Write new code against the flag-based forms above.
+The 0.5.9-style boolean overloads — three `paste(...)` taking `boolean force` (the widest also taking `boolean technicalPaste, boolean pasteAnchorAsBlock, boolean loadEntities`) and three `remove(...)` taking `boolean force` — still compile as of 0.7.2 but are all `@Deprecated(forRemoval = true, since = "2026-06-16")`. They just fold the booleans into `pasteFlags` (`force → FORCE`, `technicalPaste → TECHNICAL`, `pasteAnchorAsBlock → ANCHOR_BLOCK`, `!loadEntities → NO_ENTITIES`) and delegate. Write new code against the flag-based forms above.
 
 Rotation here is the block-config `Rotation` enum (`None`, `Ninety`, `OneEighty`, `TwoSeventy`); it is converted internally via `PrefabRotation.fromRotation()`.
 
@@ -1168,14 +1180,14 @@ Prefabs are stored as `.prefab.json` files (JSON documents read through the BSON
 | **World Gen Prefabs** | `PrefabStore.getWorldGenPrefabsPath()` | Prefabs resolved through the world-gen root (default generator name `"Default"`) |
 | **Asset Pack Prefabs** | `{AssetPack}/Server/Prefabs/` | Custom prefabs from mods — `PrefabStore.getAssetPrefabsPathForPack(pack)` |
 
-**Binary format:** every one of the 7,828 prefabs shipped in the 0.6.8 `Assets.zip` is plain `.prefab.json` — no `.lpf` files ship. `.lpf` is the server's own packed buffer format (`BinaryPrefabBufferCodec`, format version 21; a raw block-column encoding, not a general-purpose compression container). It appears in two places: as an on-demand `<name>.prefab.json.lpf` conversion cache that `PrefabBufferUtil` writes the first time a JSON prefab is packed, and as `<name>.lpf` when a prefab is saved with `PrefabFormat.COMPRESSED` (or `AUTO` at ≥ 300,000 blocks — see [PrefabFormat](#prefabformat-063)). Loading is transparent either way.
+**Binary format:** every one of the 9,282 prefabs shipped in the 0.7.2 `Assets.zip` is plain `.prefab.json` — no `.lpf` files ship. `.lpf` is the server's own packed buffer format (`BinaryPrefabBufferCodec`, format version 22 in 0.7.2, up from 21; a raw block-column encoding, not a general-purpose compression container). It appears in two places: as an on-demand `<name>.prefab.json.lpf` conversion cache that `PrefabBufferUtil` writes the first time a JSON prefab is packed, and as `<name>.lpf` when a prefab is saved with `PrefabFormat.COMPRESSED` (or `AUTO` at ≥ 300,000 blocks — see [PrefabFormat](#prefabformat-063)). Loading is transparent either way.
 
 ### Root Schema (Version 8)
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `version` | int | Yes | - | Format version — must be exactly 8 (`Prefab version is too old/new` otherwise) |
-| `blockIdVersion` | int | No | 8 | Block-id migration version; `BlockMigration` assets from this version upward are applied to every `name` on load. Files written by 0.6.8 carry 11 |
+| `blockIdVersion` | int | No | 8 | Block-id migration version; `BlockMigration` assets from this version upward are applied to every `name` on load. A save writes the number of `BlockMigration` assets, which is 11 in 0.7.2 (as in 0.6.8) |
 | `anchorX` | int | Yes | - | Anchor X position (placement origin) |
 | `anchorY` | int | Yes | - | Anchor Y position (placement origin) |
 | `anchorZ` | int | Yes | - | Anchor Z position (placement origin) |
@@ -1232,8 +1244,9 @@ Block components attach block-entity (ECS `ChunkStore`) data to placed blocks. T
 | `Droplist` | string | Drop-table asset **id** — the flat filename under `Server/Drops/` (e.g. `Drop_Goblin_Thief`, `Zone1_Encounters_Tier1`); see [Drop System](drops.md). Rolled into the container when first opened |
 | `ItemContainer` | object | The serialized `SimpleItemContainer`: `Capacity` (slot count) and `Items` (slot → item stack map, `{}` for empty) |
 | `Capacity` | int | Container capacity (short) |
+| `StayOpenWhenEmpty` | bool | 0.7.2+: keep the block's `OpenWindow` state when the last window closes on an empty container (default `false`) |
 
-Of the 1,524 `ItemContainerBlock` blocks in the shipped 0.6.8 prefabs, exactly one — `Goblin_Thief_Chest` — sets a `Droplist`; the rest (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. The other block-component ids that appear in shipped prefabs, by frequency: `FarmingBlock` (7,715), `BlockSpawner` (3,027), `TilledSoil` (2,113), `PlacedByInteraction` (1,152 — a single `WhoPlacedUuid` binary field), `PrefabSpawner` (1,083 — see [PrefabSpawnerBlock](#prefabspawnerblock)), `RespawnBlock` (550), `BenchBlock` (170), `ProcessingBenchBlock` (150), `BlockMapMarker` (5).
+Of the 1,548 `ItemContainerBlock` blocks in the shipped 0.7.2 prefabs, exactly one — `Goblin_Thief_Chest` — sets a `Droplist`; the rest (chests, wardrobes, …) carry an empty `ItemContainer` and are filled by the encounter / loot systems at runtime. The other block-component ids that appear in shipped prefabs, by frequency: `FarmingBlock` (9,629), `PlacedByInteraction` (3,425 — a single `WhoPlacedUuid` binary field), `BlockSpawner` (3,378), `TilledSoil` (2,585), `PrefabSpawner` (1,083 — see [PrefabSpawnerBlock](#prefabspawnerblock)), `RespawnBlock` (767), `BenchBlock` (170), `ProcessingBenchBlock` (150), `BlockMapMarker` (10), `CompanionBlockSpawnerBlock` (9), `Portal` (1).
 
 ### Fluid Entry Properties
 
@@ -1436,16 +1449,17 @@ The `Droplist` property is a drop-table asset id (the flat filename of a `Server
 ### Interaction System Integration
 
 The `SpawnPrefab` interaction can paste a prefab into the world during an interaction
-chain — e.g. the Goblin Thief dropping its loot chest
-(`Server/Item/Interactions/NPCs/Intelligent/Goblin_Thief/Goblin_Thief_Chest.json`):
+chain. The only shipped use in 0.7.2 is the test interaction
+`Server/Item/Interactions/Tests/SpawnPrefab.json` (0.7.2 removed the Goblin Thief chest-drop
+interaction that used it; its `Goblin_Thief_Chest.prefab.json` still ships):
 
 ```json
 {
   "Type": "SpawnPrefab",
-  "PrefabPath": "Goblin_Thief_Chest.prefab.json",
-  "Offset": { "X": 0, "Y": 0, "Z": 0 },
+  "PrefabPath": "Example_Portal1.prefab.json",
+  "Offset": { "X": 6, "Y": 0, "Z": 3 },
   "RotationYaw": "OneEighty",
-  "OriginSource": "Entity",
+  "OriginSource": "Block",
   "Force": true
 }
 ```
@@ -1517,17 +1531,17 @@ Backtick-quoted error strings below are the literal messages thrown by the prefa
 - **`Invalid prefab name: `** / **`Invalid prefab path: `** → an empty or malformed prefab name/path was supplied. Fix: pass a non-empty, well-formed name/path.
 - **`PrefabList asset not found: `** → a referenced `PrefabList` asset id does not exist. Fix: confirm the `Server/PrefabList/*.json` file exists and the id matches exactly.
 - **`prefab pool contains list with null element`** → a weighted prefab pool was built with a null member. Fix: ensure every pool entry is populated and non-null. (An `empty list` sibling message existed through build-17 but was removed by 0.5.7 — an empty pool no longer throws that exact string.)
-- **`Cannot have a negative y level for pasting prefabs`** → a paste/placement was requested at a negative Y. Fix: place prefabs at a non-negative Y level.
+- **`Cannot have a negative y level for pasting prefabs`** → the prefab editor (`PrefabEditSessionManager`) was asked to lay prefabs out at a negative Y; its sibling `Cannot paste above or at the world height` rejects Y ≥ 320. Fix: pick a Y level in 0–319. (`BlockSelection.place` and `PrefabUtil.paste` do not throw this.)
 
 ---
 
 ## Related Documentation
 
-- [Prefab Categories](prefabs-categories.md) - Full taxonomy of all ~7,800 prefab files
+- [Prefab Categories](prefabs-categories.md) - Full taxonomy of all ~9,300 prefab files
 - [Drop System](drops.md) - Loot table configuration for containers
 - [SpawnPrefab Interaction](interactions-world.md#spawnprefab) - Spawning prefabs via interactions
 - [World API](world.md) - World operations
-- [World Chunks](world-chunks.md) - Chunk operations
+- [Block Access](block-access.md) - Reading and writing blocks through chunk sections
 - [Block System](blocks.md) - Block types and properties
 
 ---

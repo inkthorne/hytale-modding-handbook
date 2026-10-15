@@ -7,9 +7,11 @@ seo:
 
 # Fluids API
 
-**Doc type:** Java API · **Verified against 0.6.8**
+**Doc type:** Java API · **Verified against 0.7.2**
 
 Covers the `Fluid` asset type (water, lava, etc.) and how fluid data is surfaced through collision queries.
+The per-block fluid *state* in the world lives in each chunk section's `FluidSection` component — reading
+and writing it is on [block-access.md](block-access.md#fluidsection).
 
 ## Overview
 
@@ -96,7 +98,7 @@ Abstract base class for fluid tick behavior — what `Fluid.getTicker()` returns
 |--------------|-------|-----------------|
 | `Default` (used when `Type` is omitted) | `DefaultFluidTicker` | `Water_Source.json`, `Lava_Source.json` |
 | `Finite` | `FiniteFluidTicker` | `Water_Finite.json` |
-| `Fire` | `FireFluidTicker` | `Fire.json` |
+| `Fire` | `FireFluidTicker` | `Fire.json`, `Dungeon_Fire_NoSpread.json` (0.7.2) |
 
 ### Ticker JSON keys
 
@@ -104,7 +106,7 @@ Base keys (all ticker types):
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `FlowRate` | float | "The tick frequency for this fluid type, **in seconds**" — a tick *period*, so a larger value is a **slower** fluid. Default `0.5`; must be greater than `0`. Lava and fire set `2.0` |
+| `FlowRate` | float | "The tick frequency for this fluid type, **in seconds**" — a tick *period*, so a larger value is a **slower** fluid. Default `0.5`; must be greater than `0`. Lava and fire set `2.0`, tar `12.0` |
 | `CanDemote` | boolean | "If false then the fluid will stay at its level". Default `true` |
 | `SupportedBy` | string | Fluid key that keeps this fluid alive (e.g. flowing `Water` is `"SupportedBy": "Water_Source"`) |
 
@@ -229,7 +231,7 @@ if (collision.fluid != null && collision.fluid != Fluid.EMPTY) {
 }
 ```
 
-> **See also:** [World API](world-chunks.md#worldchunk)
+> **See also:** [Block Access → FluidSection](block-access.md#fluidsection)
 
 ## Usage with CollisionConfig
 

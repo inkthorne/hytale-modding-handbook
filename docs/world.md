@@ -7,19 +7,25 @@ seo:
 
 # World API
 
-**Doc type:** Java API + JSON asset format · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Verified against 0.7.2**
 
 Covers the runtime `World` object, its configuration classes, world time, game flags and the world map
-markers a plugin can add. Two halves were split out on 2026-09-04: the per-chunk API — `WorldChunk`,
-the chunk accessors, block-write settings flags and `ChunkTracker` — is in
-[world-chunks.md](world-chunks.md), and the world and chunk lifecycle event classes are in
+markers a plugin can add. The chunk side — loading columns and sections, `WorldChunk`, chunk flags and
+`ChunkTracker` — is in [world-chunks.md](world-chunks.md); reading and writing blocks is in
+[block-access.md](block-access.md); and the world and chunk lifecycle event classes are in
 [world-lifecycle-events.md](world-lifecycle-events.md).
+
+> **0.7.2 moved block access off `World`.** `World` no longer implements `ChunkAccessor` /
+> `IWorldChunks` (both removed), so `world.getBlock(...)`, `world.setBlock(...)`,
+> `world.breakBlock(...)`, `world.getChunkIfLoaded(...)` and the other chunk getters are gone, and
+> `WorldChunk` lost its block API too. Blocks are now read and written per 32×32×32 **section** through
+> `world.getChunkStore()` — see [block-access.md](block-access.md).
 
 ## Overview
 
 Implemented in `com.hypixel.hytale.server.core.universe.world` (and related asset/event subpackages) and provides:
-- A `World` tick thread exposing players, entities, chunks, and ECS stores
-- Direct block/state/terrain access per `WorldChunk`
+- A `World` tick thread exposing players, entities, and the two ECS stores
+- Block access through the `ChunkStore` (section references; see [block-access.md](block-access.md))
 - Per-player chunk loading and visibility control via `ChunkTracker`
 - Layered gameplay configuration (`GameplayConfig`, `WorldConfig`, `DeathConfig`)
 - Per-world client feature toggles (`ClientFeature`)
@@ -30,10 +36,9 @@ Implemented in `com.hypixel.hytale.server.core.universe.world` (and related asse
 World (tick thread)
 ├── Players (getPlayers / addPlayer / PlayerRef)
 │   └── ChunkTracker (per-player chunk loading + visibility)
-├── Chunks (getChunk* / WorldChunk)
-│   ├── Block + state + terrain access
-│   └── ChunkFlag (per-chunk state flags)
-├── ECS Stores (ChunkStore, EntityStore)
+├── ECS Stores
+│   ├── ChunkStore (extends ChunkGrid: column + section refs; blocks live on section entities)
+│   └── EntityStore
 ├── Configuration
 │   └── GameplayConfig
 │       ├── WorldConfig (block rules, day/night, sleep)
@@ -49,7 +54,7 @@ World (tick thread)
 | Class | Location | Description |
 |-------|----------|-------------|
 | `World` | `server.core.universe.world` | The game world; tick thread exposing players, entities, chunks, and config |
-| `WorldChunk` | `server.core.universe.world.chunk` | A loaded chunk; block, state, and terrain data access |
+| `WorldChunk` | `server.core.universe.world.chunk` | The chunk-column component: flags, keep-alive and save state (its block API was removed in 0.7.2) |
 | `ChunkFlag` | `server.core.universe.world.chunk` | Enum of per-chunk state flags |
 | `ChunkTracker` | `server.core.modules.entity.player` | Per-player chunk loading rate and visibility |
 | `GameplayConfig` | `server.core.asset.type.gameplay` | Master gameplay configuration; holds sub-configs |
@@ -60,10 +65,12 @@ World (tick thread)
 | `ChunkEvent` | `server.core.universe.world.events` | Base for chunk events |
 | `ChunkSaveEvent` / `ChunkUnloadEvent` | `server.core.universe.world.events.ecs` | ECS events for chunk save/unload |
 | `MoonPhaseChangeEvent` | `server.core.universe.world.events.ecs` | ECS event fired on moon phase change |
-| `SetBlockSettings` | `server.core.universe.world` | Bit flags controlling `setBlock`/`breakBlock` side effects |
-| `ChunkAccessor` / `LocalCachedChunkAccessor` | `server.core.universe.world.accessor` | World-coordinate block access; cached accessor for area edits |
+| `SetBlockSettings` | `server.core.universe.world` | Bit flags controlling the side effects of `BlockOperations.setBlock` and the block-break helpers |
+| `ChunkGrid` / `ChunkStore` | `server.core.universe.world.storage` | `ChunkStore` extends `ChunkGrid`: resolves column and section references by chunk or block coordinates |
+| `BlockOperations` | `server.core.universe.world.chunk` | Static block writes on a section reference (`setBlock`, `setBlockInteractionState`, `testPlaceBlock`) |
+| `SectionReader` | `server.core.universe.world.accessor` | Synchronous world-coordinate reads across already-loaded sections |
 | `ChunkColumn` / `ChunkSection` / `BlockSection` / `FluidSection` | `server.core.universe.world.chunk(.section)` | ECS chunk-column component, the per-section entity component, and per-section block/fluid storage |
-| `GetChunkFlags` | `server.core.universe.world.storage` | Bit flags for async chunk loading via `ChunkStore` |
+| `GetChunkFlags` | `server.core.universe.world.storage` | Bit flags for async column/section loading via `ChunkStore` |
 | `WorldTimeResource` | `server.core.modules.time` | Per-world game clock resource (time of day, moon phase, sun) |
 | `MapMarkerBuilder` / `MarkersCollector` | `server.core.universe.world.worldmap.markers` | Building and collecting world-map markers |
 | `PlayerUtil` | `server.core.universe.world` | Static broadcast helpers (messages/packets to players) |
@@ -110,8 +117,16 @@ void untrackPlayerRef(PlayerRef ref)
 // Adding players
 CompletableFuture<PlayerRef> addPlayer(PlayerRef ref)
 CompletableFuture<PlayerRef> addPlayer(PlayerRef ref, Transform position)
-CompletableFuture<PlayerRef> addPlayer(PlayerRef ref, Transform position, Boolean teleport, Boolean respawn)
-CompletableFuture<Void> drainPlayersTo(World targetWorld, Collection<PlayerRef> players)
+CompletableFuture<PlayerRef> addPlayer(PlayerRef ref, Transform position, Boolean clearWorldOverride, Boolean fadeInOutOverride)
+
+// 0.7.2: gained two parameters (the two-argument form was removed). Each player is moved through a
+// DrainPlayerFromWorldEvent, whose listeners may change the destination; `message` (nullable) is sent
+// to each player, and `isRemovalExceptional` is carried on the event
+CompletableFuture<Void> drainPlayersTo(World fallbackTargetWorld, Collection<PlayerRef> players,
+                                       Message message, boolean isRemovalExceptional)
+
+// 0.7.2: re-send the world's GameplayConfig packet (WorldGameplayConfig) to every player in it
+void resendGameplayConfig()
 ```
 
 ### Entities
@@ -122,26 +137,20 @@ Ref<EntityStore> getEntityRef(UUID uuid)
 <T extends Entity> T addEntity(T entity, Vector3d position, Rotation3f rotation, AddReason reason)
 ```
 
-### Chunks
-```java
-WorldChunk loadChunkIfInMemory(long chunkKey)
-WorldChunk getChunkIfInMemory(long chunkKey)                        // @Deprecated
-WorldChunk getChunkIfLoaded(long chunkKey)                          // @Deprecated
-WorldChunk getChunkIfNonTicking(long chunkKey)                      // @Deprecated
-CompletableFuture<WorldChunk> getChunkAsync(long chunkKey)          // @Deprecated
-CompletableFuture<WorldChunk> getNonTickingChunkAsync(long chunkKey) // @Deprecated
-```
-
-> As of 0.6.8 the five `@Deprecated` getters above carry a plain `@Deprecated` (no `forRemoval`), as does
-> the whole `IChunkAccessorSync` interface they come from — they still work. The un-deprecated route to a
-> chunk is the `ChunkStore` reference API: `world.getChunkStore().getChunkReferenceAsync(chunkKey, flags)`
-> (see [GetChunkFlags](world-chunks.md#getchunkflags)) and `getChunkComponent(chunkKey, WorldChunk.getComponentType())`.
-
 ### ECS Stores
 ```java
-ChunkStore getChunkStore()
+ChunkStore getChunkStore()     // chunk columns, sections and blocks — see world-chunks.md / block-access.md
 EntityStore getEntityStore()
 ```
+
+`World` has **no chunk or block methods** in 0.7.2: the `getChunkIfInMemory` / `getChunkIfLoaded` /
+`getChunkIfNonTicking` / `loadChunkIfInMemory` / `getChunkAsync` / `getNonTickingChunkAsync` getters
+were removed along with `getBlockBulkRelative` and the inherited `getBlock` / `setBlock` / `breakBlock`
+defaults. The replacements are on the `ChunkStore` (which extends `ChunkGrid`):
+`getChunkReferenceAsync(chunkIndex, flags)`, `getChunkComponent(chunkIndex, type)`, and the section
+lookups `getChunkSectionReferenceAtBlock` / `getChunkSectionReferenceAtBlockAsync` — see
+[block-access.md](block-access.md) and
+[GetChunkFlags](world-chunks.md#getchunkflags).
 
 ### Messaging
 ```java
@@ -297,7 +306,7 @@ static final GameplayConfig DEFAULT;          // Default config instance
 Configuration for world-specific gameplay settings like block rules and day/night cycle.
 
 > **Note: two distinct `WorldConfig` classes exist.** The gameplay settings below
-> (`isBlockBreakingAllowed`, `getSleepConfig`, day/night durations, `DEFAULT_*_DURATION_SECONDS`)
+> (`isBlockBreakingAllowed(BlockType)`, `getSleepConfig`, day/night durations, `DEFAULT_*_DURATION_SECONDS`)
 > live on `com.hypixel.hytale.server.core.asset.type.gameplay.WorldConfig`, reached via
 > `world.getGameplayConfig().getWorldConfig()`. The separate `World.getWorldConfig()` method
 > returns a *different* class, `com.hypixel.hytale.server.core.universe.world.WorldConfig`,
@@ -307,10 +316,13 @@ Configuration for world-specific gameplay settings like block rules and day/nigh
 #### Key Methods
 ```java
 // Block rules
-boolean isBlockBreakingAllowed()
+boolean isBlockBreakingAllowed(BlockType blockToBreak)   // 0.7.2: took no argument before (see below)
 boolean isBlockGatheringAllowed()
 boolean isBlockPlacementAllowed()
 float getBlockPlacementFragilityTimer()
+
+// 0.7.2: false when the root interaction carries any tag in BlockedRootInteractionTags
+boolean isRootInteractionAllowed(RootInteraction rootInteraction)
 
 // Day/night cycle
 int getDaytimeDurationSeconds()
@@ -340,6 +352,30 @@ if (config.isBlockBreakingAllowed()) {
 int dayLength = config.getDaytimeDurationSeconds();
 int nightLength = config.getNighttimeDurationSeconds();
 ```
+
+#### Tag-based exceptions (0.7.2)
+
+Two keys in the gameplay config's `World` block refine the all-or-nothing switches:
+
+| Key | Type | Effect |
+|-----|------|--------|
+| `BlockBreakingBypassTag` | string | With `AllowBlockBreaking: false`, blocks whose type carries this tag can still be broken. `isBlockBreakingAllowed(blockType)` returns `true` when `AllowBlockBreaking` is on, otherwise only for a block type with the tag; a `null` block type is refused |
+| `BlockedRootInteractionTags` | string[] | Codec doc: *Root interactions with any of these tags (for example "Type=Bed") cannot run in this world and show no interaction hint*. Checked by `isRootInteractionAllowed(rootInteraction)`: `UseBlock` and `UseEntity` end `Failed` when it returns `false`, and the interaction manager cancels a client-started chain whose root is blocked. The effect on each interaction is described on [items-blocks.md](items-blocks.md#block_secondary-interaction) (`UseBlock`) and [items-weapons.md](items-weapons.md#useentity-interaction) (`UseEntity`) |
+
+The shipped dungeon configs use both:
+
+```json
+"World": {
+  "AllowBlockBreaking": false,
+  "AllowBlockGathering": false,
+  "AllowBlockPlacement": false,
+  "BlockBreakingBypassTag": "Lore_Note",
+  "BlockedRootInteractionTags": ["Type=Bed"]
+}
+```
+
+(`Server/GameplayConfigs/ForgottenTemple.json`; `TheDeepworks.json` uses `"Dungeon_Breakable"` and
+blocks `"Type=Rail_Kart"` as well as beds.)
 
 ---
 
@@ -410,21 +446,24 @@ so there is no manual-teleport race.
 world.getWorldConfig().setSpawnProvider(provider);   // universe.world.WorldConfig
 ```
 
-The interface has several overloads, but the only one you must implement is
-`Transform getSpawnPoint(World, UUID)` — the default `getSpawnPoint(Ref, ComponentAccessor)` and
-`getSpawnPoint(Entity)` overloads resolve the UUID/World for you and delegate to it (`getSpawnPoint(Entity)`
-is `@Deprecated(forRemoval=true)`; `getSpawnPoints()` is `@Deprecated` but still abstract).
+**0.7.2 made the provider asynchronous.** The only abstract lookup is now
+`CompletableFuture<Transform> getSpawnPointAsync(World, UUID)`; the default
+`getSpawnPointAsync(Ref, ComponentAccessor)` resolves the UUID and world and delegates to it. The
+synchronous `getSpawnPoint(World, UUID)`, `getSpawnPoint(Ref, ComponentAccessor)` and
+`getSpawnPoint(Entity)` were removed, so a 0.6.x provider no longer compiles. `getSpawnPoints()` is
+`@Deprecated` but still abstract, and `isWithinSpawnDistance` is unchanged.
 
 ```java
 import com.hypixel.hytale.math.vector.Transform;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.spawn.ISpawnProvider;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class ArenaSpawnProvider implements ISpawnProvider {
     @Override
-    public Transform getSpawnPoint(World world, UUID player) {
-        return pickSpawn(player);   // your placement logic
+    public CompletableFuture<Transform> getSpawnPointAsync(World world, UUID player) {
+        return CompletableFuture.completedFuture(pickSpawn(player));   // your placement logic
     }
 
     @Override public Transform[] getSpawnPoints() { return new Transform[0]; } // deprecated, still abstract
@@ -436,46 +475,39 @@ Built-ins worth referencing instead of rolling your own:
 
 | Provider | Use |
 |----------|-----|
-| `GlobalSpawnProvider(Transform)` | One fixed spawn for everyone |
-| `IndividualSpawnProvider(Transform[])` | Round-robins / assigns from a set of points |
-| `FitToHeightMapSpawnProvider(ISpawnProvider)` | Wraps another provider and ground-snaps a sentinel `y < 0` to the terrain height |
+| `GlobalSpawnProvider(Transform)` | One fixed spawn for everyone (`getGlobalSpawnPoint()` returns it, 0.7.2+) |
+| `IndividualSpawnProvider(Transform[])` | Picks one of a set of points by hashing the player's UUID, so each player always gets the same point |
+| `FitToHeightMapSpawnProvider(ISpawnProvider)` | Wraps another provider and ground-snaps a sentinel height to the terrain. **0.7.2 changed the sentinel**: only `y == Integer.MIN_VALUE` is snapped now (any `y < 0` was snapped before, which is no longer safe once worlds can extend below 0). It loads the column with `getChunkReferenceAsync(index, GetChunkFlags.HIGH_PRIORITY)` and reads its `HeightmapColumn`, landing on height + 1, or on `y = 1` when no height is known |
 
-> **⚠️ `getSpawnPoint` is polled, not called once.** It can be invoked repeatedly while the death
-> screen is open, not only at the instant of respawn. A provider that returns a *fresh random* point
-> each call makes the spawn visibly jitter every tick. Compute once and **cache per player** (keyed on
-> the `UUID`), invalidating the cache on respawn (e.g. from a `RespawnSystems.OnRespawnSystem` — see
+> **⚠️ The lookup is repeated, not made once.** Besides joining a world and respawning, it is called by
+> the world map's spawn marker (`SpawnMarkerProvider`, on every map refresh, with a 10-second timeout),
+> by `/spawn`, by world and instance teleports, and by the creative-hub and portal code. A provider that
+> returns a *fresh random* point each call makes the spawn marker and the spawn itself disagree. Compute
+> once and **cache per player** (keyed on the `UUID`), invalidating the cache on respawn (e.g. from a
+> `RespawnSystems.OnRespawnSystem` — see
 > [combat.md → Reacting to Death & Respawn](combat.md#reacting-to-death--respawn)).
 
-> **⚠️ `getSpawnPoint` runs OFF the world thread — reading the `Store` there crashes the join.**
-> The engine invokes it from `World.addPlayer` (→ `SpawnUtil.applyFirstSpawnTransform`) on a
-> **`ServerWorkerGroup`** thread, not the world thread. Any `Store` read inside the provider —
-> `Store.forEachChunk(...)`, `World.getNonTickingChunk(...)`, component reads — hits
-> `Store.assertThread` and throws `IllegalStateException: Assert not in thread!`. The server then
-> logs `SEVERE … Exception when player adding to universe` and disconnects the client with
-> `client.general.disconnect.universeException`, which the client shows as a **blank loading screen**
-> (`Server closed connection (code=0)` after everything reports "Prepared"). If the provider caches
-> per-`UUID`, the *first* joiner populates the cache off-thread without reading the store and joins
-> fine, so the crash only fires on the **second** joiner — "works solo, kicks the 2nd player" is the
-> signature. To read the store from a provider, marshal onto the world thread (`World` implements
-> `Executor`; `Store.isInThread()` detects whether you are already on it — guard to avoid self-deadlock):
+> **⚠️ The lookup runs on whatever thread asks, and that is often not the world thread.**
+> `World.addPlayer` calls `getSpawnPointAsync` on the joining thread, and `SpawnMarkerProvider` calls
+> it on the world-map thread. Any `Store` read made directly inside the method — component reads, a
+> chunk lookup — then fails `Store.assertThread` with `IllegalStateException: Assert not in thread!`.
+> On the join path the server logs `SEVERE … Exception when player adding to universe` and disconnects
+> the client with `client.general.disconnect.universeException`, which the client shows as a **blank
+> loading screen**. If the provider caches per-`UUID`, the *first* joiner can populate the cache
+> without touching the store and join fine, so the failure surfaces on the **second** joiner. The
+> asynchronous signature makes the fix simple: do the store work on the world thread and return its
+> future, without blocking (`World` implements `Executor`):
 >
 > ```java
-> private Transform computeSpawn(World world, UUID uuid) {
->     if (world.getChunkStore().getStore().isInThread()) {
->         return computeOnThread(world, uuid);   // already on the world thread
->     }
->     CompletableFuture<Transform> r = new CompletableFuture<>();
->     world.execute(() -> {                       // queue onto the world thread, block for the result
->         try { r.complete(computeOnThread(world, uuid)); }
->         catch (Throwable t) { r.completeExceptionally(t); }
->     });
->     return r.join();
+> @Override
+> public CompletableFuture<Transform> getSpawnPointAsync(World world, UUID uuid) {
+>     return CompletableFuture.supplyAsync(() -> computeOnThread(world, uuid), world);
 > }
 > ```
 >
-> This applies more broadly: engine **callbacks** (spawn providers, and likely other connection/setup
-> hooks) may run on a `ServerWorkerGroup` thread, where touching a `Store` throws. Ticking **Systems**
-> always run on the world thread and are safe; engine callbacks are not.
+> Do not `join()` that future from the world thread itself — the task it waits for is queued behind
+> the caller. Ticking **Systems** always run on the world thread and may read the store directly;
+> engine callbacks like this one may not.
 
 Because no world exists at plugin `setup()` time, install the provider per-world from a
 `StartWorldEvent` handler — see [World Events](world-lifecycle-events.md#world-events) below.
@@ -672,7 +704,15 @@ inherited `Next` / `Failed` branches work the same way as on the other `*Conditi
 }
 ```
 
-No shipped asset uses either type yet — they exist for mod and campaign content.
+As of 0.7.2 the Goblin Lab puzzle content uses both: `GoblinLab_Generator.json` writes
+`goblin_lab_generator_found` with `"Raise": true`, and five `GoblinLab_*` items plus
+`Server/Item/RootInteractions/Forgotten_Temple_Persistance_Resync.json` gate on flags such as
+`goblin_lab_power` with `GameFlagCondition`.
+
+0.7.2 also wired the flags into two more systems from `GameFlagsPlugin.setup()`: a world-event
+condition (`GameFlagLevelCondition`, registered through `WorldEventsPlugin.registerCondition`) and an
+NPC sensor registered as core component type `GameFlag` (`BuilderSensorGameFlag`, used by the shipped
+`Template_Goblin_Scientist` role).
 
 ### `/gameflags`
 
@@ -718,12 +758,14 @@ Enum defining client-side features that can be enabled or disabled per world.
 | `SprintForce` | Sprint force mechanics |
 | `CrouchSlide` | Crouch sliding movement |
 | `SafetyRoll` | Safety roll on landing |
-| `DisplayHealthBars` | Show health bars over entities |
-| `DisplayCombatText` | Show combat damage numbers |
-| `CanHideHelmet` | Allow the client's hide-helmet cosmetic toggle (0.6.3+) |
-| `CanHideCuirass` | Allow hiding the cuirass (0.6.3+) |
-| `CanHideGauntlets` | Allow hiding the gauntlets (0.6.3+) |
-| `CanHidePants` | Allow hiding the pants (0.6.3+) |
+
+**0.7.2 removed six values** — `DisplayHealthBars`, `DisplayCombatText`, `CanHideHelmet`,
+`CanHideCuirass`, `CanHideGauntlets` and `CanHidePants`. They are no longer world feature toggles: the
+client now reads them from the world's gameplay config, which the server sends as a
+`WorldGameplayConfig` packet (`GameplayConfig.toPacket()`) when a player joins the world. Set them in
+the gameplay config asset instead: `DisplayHealthBars` / `DisplayCombatText` in its `Combat` block, and
+`ArmorVisibilityOption` in its `Player` block. A reload of that asset re-sends the packet to every world
+using it; `world.resendGameplayConfig()` does the same for one world.
 
 ### Methods
 ```java
@@ -738,12 +780,12 @@ static ClientFeature fromValue(int value)
 World world = ...;
 
 // Check if a feature is enabled
-if (world.isFeatureEnabled(ClientFeature.DisplayHealthBars)) {
-    // Health bars are visible
+if (world.isFeatureEnabled(ClientFeature.Mantling)) {
+    // Players can mantle
 }
 
 // Enable/disable features
-world.registerFeature(ClientFeature.DisplayCombatText, true);
+world.registerFeature(ClientFeature.SafetyRoll, true);
 world.registerFeature(ClientFeature.CrouchSlide, false);
 
 // Broadcast changes to all players
@@ -768,9 +810,10 @@ void addMarkerProvider(String key, WorldMapManager.MarkerProvider provider)
 Map<String, WorldMapManager.MarkerProvider> getMarkerProviders()
 
 // Marker overrides (0.6.3+): per-marker-id tweaks layered over what providers emit.
-// MapMarkerOverride is a record (server.core.universe.world.worldmap.markers):
-//   MapMarkerOverride(UUID id, String icon, Boolean global), or MapMarkerOverride(String icon, Boolean global)
-//   (nullable icon/global = leave that property untouched)
+// MapMarkerOverride is a record (server.core.universe.world.worldmap.markers); 0.7.2 added `name`:
+//   MapMarkerOverride(UUID id, String name, String icon, Boolean global), or
+//   MapMarkerOverride(String name, String icon, Boolean global)
+//   (nullable name/icon/global = leave that property untouched)
 Map<String, MapMarkerOverride> getMarkerOverridesView()
 boolean addMarkerOverride(String markerId, MapMarkerOverride override)
 boolean removeMarkerOverride(String markerId)
@@ -787,10 +830,18 @@ MapMarkerBuilder(String id, String image, Transform transform)   // image e.g. "
 
 MapMarkerBuilder withName(Message name)
 MapMarkerBuilder withCustomName(String name)
+MapMarkerBuilder withIconSize(MapMarkerIconSize size)      // 0.7.2+
+MapMarkerBuilder withCompassImage(String image)            // 0.7.2+: image shown on the compass
 MapMarkerBuilder withContextMenuItem(ContextMenuItem item)
 MapMarkerBuilder withComponent(MapMarkerComponent component)
 MapMarker build()
 ```
+
+**0.7.2 added compass alerts.** `MapMarkerAlert(String icon, float durationS, float timeoutS, Color tint)`
+(same package) describes an alert the compass shows for the marker; `DEFAULT_DURATION_S` is 5,
+`DEFAULT_TIMEOUT_S` 10 and `MAX_DURATION_S` 30. Its `toComponent()` returns a `CompassAlertComponent`, a
+`MapMarkerComponent`, so it attaches with `withComponent(alert.toComponent())` — which is how the
+block map-marker provider (`BlockMapMarker`) adds the `Alert` set on a block marker.
 
 ### MarkersCollector
 
@@ -846,7 +897,9 @@ discoverable world map markers that sit inside the view cone of the player." Ext
 | `RevealParticles` | particle[] | — | Particles spawned on a revealed marker's block, seen only by the player who revealed it |
 
 **None of the six is required**, so the interaction is usable with no properties at all — that form
-scans once, in a 30° cone, out to 128 blocks. No shipped asset uses the type.
+scans once, in a 30° cone, out to 128 blocks. As of 0.7.2 two shipped interactions use it:
+`Server/Item/Interactions/Tool/Spyglass_Marker_Scan.json` (a 30° cone out to 512 blocks, scanning every
+0.25 s while a `Wielding` condition holds) and `Server/Item/Interactions/Hunt/Hunt_Reveal_Site_Marker.json`.
 
 - **`MaxDistance` is not an occlusion test.** The codec says so: a marker behind terrain is still
   found. Distance and angle are the only filters.
@@ -897,7 +950,7 @@ float getObservationAngle()
 |-------|---------|-------------|
 | `ValidationOption` | `server.core.universe.world` | Enum of prefab-validation checks — `PHYSICS`, `BLOCKS`, `BLOCK_STATES`, `ENTITIES`, `BLOCK_FILLER`; consumed by `PrefabBufferValidator.validate` / `validateAllPrefabs` / `validatePrefabsInPath` |
 | `INonPlayerCharacter` | `server.core.universe.world.npc` | Minimal NPC handle — `getNPCTypeId()`, `getNPCTypeIndex()`; returned (paired with the entity `Ref`) by `NPCPlugin.spawnNPC` |
-| `WorldLocationCondition` | `server.core.universe.world.worldlocationcondition` | Abstract JSON-polymorphic position predicate — `test(World, x, y, z)`; subtypes register on its `CodecMapCodec` `CODEC` (the adventure plugin registers `"NeighbourBlockTags"` → `NeighbourBlockTagsLocationCondition`); consumed by treasure-map objectives, spawn-beacon objectives, and farming spread |
+| `WorldLocationCondition` | `server.core.universe.world.worldlocationcondition` | Abstract JSON-polymorphic position predicate — `test(World, x, y, z)`; subtypes register on its `CodecMapCodec` `CODEC` (the adventure plugin registers `"NeighbourBlockTags"` → `NeighbourBlockTagsLocationCondition`); consumed by spawn-beacon and bounty objectives and by farming spread |
 
 ---
 

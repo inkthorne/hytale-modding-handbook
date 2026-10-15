@@ -7,7 +7,7 @@ seo:
 
 # Trigger Volumes
 
-**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.6.8**
+**Doc type:** Java API + JSON asset format · **Assets:** `Server/TriggerVolumes` · **Verified against 0.7.2**
 
 New in Update 5, substantially extended in 0.6.3 (rules, signals, more events/effects). A **trigger volume** is a
 3D region (box, sphere, or cylinder) that runs a list of **effects** when something happens inside it — a player
@@ -35,7 +35,7 @@ com.hypixel.hytale.builtin.triggervolumes
 │   │                        VOLUME_CREATE / BLOCK_USED / SIGNAL_RECEIVED / ENTITY_DIED — an open registry, not an enum
 │   ├── EffectOrigin, SignalTag  (0.6.3+) origin selector for positional effects; key/value signal payload
 │   ├── TriggerVolumeCodecs  tolerant array codecs for the effect / condition / rule lists in JSON
-│   └── builtin.*            29 shipped effects, 10 conditions, 11 rules (Type names below)
+│   └── builtin.*            32 shipped effects, 10 conditions, 11 rules (Type names below)
 ├── asset.TriggerEffectAsset reusable effect bundle loaded from Server/TriggerVolumes/Effects/
 ├── component
 │   ├── TriggerVolume        ECS component: shape + effects + enabled flag (one placed volume)
@@ -69,8 +69,7 @@ launches and chimes when a player enters:
       "Type": "PlaySound",
       "Event": "ENTER",
       "SoundEvent": "SFX_Player_Pickup_Item",
-      "Volume": 1.0,
-      "Pitch": 1.5
+      "PitchSemitones": 7.01954984664917
     },
     {
       "Type": "SendMessage",
@@ -109,40 +108,49 @@ Every effect entry carries the base keys below (from `TriggerEffect`), plus its 
 ## Built-in effect types
 
 The `Type` value selects the effect. These are the names registered by the built-in `TriggerVolumesPlugin`
-(verified against the 0.6.8 jar). The JSON keys listed are each effect's codec keys (enum values in
-`UPPER_SNAKE`); for semantics read the corresponding `…effect.builtin.<Name>Effect` class or use the in-game inspector.
+(verified against the 0.7.2 jar). The JSON keys listed are each effect's codec keys; for semantics read the
+corresponding `…effect.builtin.<Name>Effect` class or use the in-game inspector.
+
+> **Enum values are written in PascalCase** — `"VolumeOrigin"`, `"AllPlayers"`, `"PercentMax"` — which is
+> how every shipped asset spells them. These keys use the default `EnumCodec`, which turns a Java constant
+> like `VOLUME_ORIGIN` into the key `VolumeOrigin` and accepts only that exact key, so the `UPPER_SNAKE`
+> constant name fails to decode. (The trigger `Event` names below are the exception: they are registry
+> names, written `"ENTER"`, `"SIGNAL_RECEIVED"`, ….)
 
 | `Type` | Effect | Type-specific JSON keys |
 |--------|--------|-------------------------|
-| `SetVelocity` | Launch/push the entity | `Velocity` (Vector3d), `Additive` (bool), `RelativeMode` (`ABSOLUTE` / `VOLUME_ORIGIN` / `HORIZONTAL_FACING` / `FULL_LOOK`) |
+| `SetVelocity` | Launch/push the entity | `Velocity` (Vector3d), `Additive` (bool), `RelativeMode` (`Absolute` / `VolumeOrigin` / `HorizontalFacing` / `FullLook`) |
 | `Teleport` | Move the entity | `Position`, `World`, `ResetVelocity`, `RelativeToEntity`, `RelativeToVolume`, `UseRotation`, `Rotation` |
-| `SendMessage` | Send a chat message | `Message` (i18n key or text), `Recipient` (`TRIGGERING_PLAYER` / `NEAREST_PLAYER` / `PLAYERS_IN_VOLUME` / `ALL_PLAYERS`) |
-| `PlaySound` | Play a sound | `SoundEvent`, `Volume`, `Pitch`, `Location` (`VOLUME_CENTER` / `ENTITY` / `EVENT` / `PLAYER`), `Offset` |
-| `PlayVfx` | Spawn a particle system | `ParticleSystem`, `Offset`, `Anchor` (`VOLUME` / `ENTITY` / `EVENT`), `Scale`, `Rotation`, `Duration` |
+| `SendMessage` | Send a chat message | `Message` (i18n key or text), `Recipient` (`TriggeringPlayer` / `NearestPlayer` / `PlayersInVolume` / `AllPlayers`) |
+| `PlaySound` | Play a sound | `SoundEvent`, `VolumeDb` (0.7.2+; decibels, `-100`…`0`, `0` = unity), `PitchSemitones` (0.7.2+; `-60`…`12`), `Location` (`VolumeCenter` / `Entity` / `Event` / `Player`), `Offset`. The linear `Volume` and `Pitch` multipliers still decode but are deprecated, and are ignored when the dB / semitone key is also set |
+| `PlayVfx` | Spawn a particle system | `ParticleSystem`, `Offset`, `Anchor` (`Volume` / `Entity` / `Event`), `Scale`, `Rotation`, `Duration` |
 | `CancelParticles` | 0.6.3+ — stop running particle systems | `ParticleSystems`, `Instant` |
 | `SetWeather` | Change weather | `Weather`, `PlayerOnly`, `ResetWeather` |
 | `SetMusic` | Set music | `MusicContainer`, `ClearMusic` |
-| `Time` | 0.6.3+ — pause/resume/set the world clock | `Mode` (`PAUSE` / `RESUME` / `SET`), `TargetHour`, `DurationSeconds`, `Forward`, `PauseOnComplete`, `PlayerOnly` |
-| `ShowEventTitle` | Show an on-screen title | `PrimaryTitle`, `SecondaryTitle`, `IsMajor`, `Icon`, `Duration`, `FadeInDuration`, `FadeOutDuration` |
-| `EntityEffect` | Apply/remove a status effect | `Effect` (the entity-effect id — **not** `EntityEffect`; see [effects-stats](effects-stats.md)), `Mode` (`APPLY` / `REMOVE`), `Duration` |
-| `DamageEntity` | Deal damage | `Mode` (`FLAT` / `PERCENT_MAX` / `PERCENT_CURRENT`), `Amount` |
-| `RemoveEntities` | 0.6.3+ — kill or delete entities in the volume | `Mode` (`KILL` / `REMOVE`), `IncludeNpcs`, `IncludePlayers`, `IgnoreInvulnerability`, `Roles`, `MaxCount` |
-| `GiveItem` | Give an item | `Item`, `Quantity`, `OverflowBehavior` (`DROP_REMAINDER` / `IGNORE_REMAINDER` / `REQUIRE_FULL_STACK`) |
-| `PlaceBlock` | Place a block | `BlockType`, `BlockState`, `Position`, `Origin`, `ReplaceMode` (`ALWAYS` / `ONLY_AIR`), `Rotation`, `Pitch`, `Roll` |
-| `ReplaceBlockType` | Swap block types in range | `FromBlockTypes`, `FromBlockState`, `ToBlockType`, `ToBlockState`, `Bounds` (`SHAPE` / `AABB`), `X`, `Y`, `Z`, `Offset`, `Origin`, `Rotation`, `Pitch`, `Roll` |
+| `Time` | 0.6.3+ — pause/resume/set the world clock | `Mode` (`Pause` / `Resume` / `Set`), `TargetHour`, `DurationSeconds`, `Forward`, `PauseOnComplete`, `PlayerOnly` |
+| `ShowEventTitle` | Show an on-screen title | `PrimaryTitle`, `SecondaryTitle`, `Style` (0.7.2+, `EventTitleStyle`: `Default` / `Major` / `GoblinBreach` / `VoidEviction`; default `Major`), `Icon`, `Duration`, `FadeInDuration`, `FadeOutDuration`, `Recipient` (0.7.2+, values as for `SendMessage`; default `TriggeringPlayer`). 0.7.2 dropped the `IsMajor` key from this codec with no fallback, so an old `"IsMajor": false` is ignored and the title shows in the default `Major` style |
+| `EntityEffect` | Apply/remove a status effect | `Effect` (the entity-effect id — **not** `EntityEffect`; see [effects-stats](effects-stats.md)), `Mode` (`Apply` / `Remove`), `Duration` |
+| `DamageEntity` | Deal damage | `Mode` (`Flat` / `PercentMax` / `PercentCurrent`), `Amount` |
+| `RemoveEntities` | 0.6.3+ — kill or delete entities in the volume | `Mode` (`Kill` / `Remove`), `IncludeNpcs`, `IncludePlayers`, `IgnoreInvulnerability`, `Roles`, `MaxCount` |
+| `GiveItem` | Give an item | `Item`, `Quantity`, `OverflowBehavior` (`DropRemainder` / `IgnoreRemainder` / `RequireFullStack`) |
+| `PlaceBlock` | Place a block | `BlockType`, `BlockState`, `Position`, `Origin`, `ReplaceMode` (`Always` / `OnlyAir`), `Rotation`, `Pitch`, `Roll` |
+| `ReplaceBlockType` | Swap block types in range | `FromBlockTypes`, `FromBlockState`, `ToBlockType`, `ToBlockState`, `Bounds` (`Shape` / `Aabb`), `X`, `Y`, `Z`, `Offset`, `Origin`, `Rotation`, `Pitch`, `Roll` |
 | `ControlDoors` | Open/close doors | `Action` |
 | `PastePrefab` | Paste a prefab | `Prefab` / `PrefabList`, `Position`, `Origin`, `Rotation`, `ShowParticles` |
 | `TriggerNpcMarkers` | Activate NPC spawn markers | `MarkerType`, `Range`, `MatchTag`, `Radius`, `Center` |
 | `SpawnNpc` | 0.6.3+ — spawn NPCs directly | `NpcType`, `GroupType`, `Origin`, `Offset`, `Count`, `Yaw` |
-| `PlayAnimation` | 0.6.3+ — play an NPC animation | `NpcType`, `Animation`, `Target` (`TRIGGERING_ENTITY` / `NPCS_IN_VOLUME`), `Duration`, `Stop` |
+| `PlayAnimation` | 0.6.3+ — play an NPC animation | `NpcType`, `Animation`, `Target` (`TriggeringEntity` / `NpcsInVolume`), `Duration`, `Stop` |
 | `RunRootInteraction` | Run an interaction graph | `RootInteraction`, `InteractionType`, `EquipSlot` (see [interactions](interactions.md)) |
 | `SetGameMode` | Change the entity's game mode | `GameMode` |
-| `ModifyTags` | Add/remove volume tags | `Operation` (`SET` / `REMOVE` / `INCREMENT` / `TOGGLE` / `REPLACE` / `APPEND`), `TagKey`, `TagValue`, `MatchKey`, `MatchValue`, `Radius`, `Center` |
+| `SetRespawnPoint` | 0.7.2+ — add a respawn point for the triggering player in this world | `Origin`, `Position`, `Yaw`, `Name`, `ClearExisting` (replace all of the player's points in this world instead of adding one) |
+| `SetWorldSpawn` | 0.7.2+ — move the world spawn: installs a `GlobalSpawnProvider` at the resolved position and marks the world config changed | `Origin`, `Position`, `Yaw`, `ClearPlayerRespawnPoints` (also clear every player's respawn points in this world) |
+| `ClearRespawnPoints` | 0.7.2+ — remove respawn points in this world | `Name` (only points with this name; blank = all), `AllPlayers` (every player instead of the triggering one) |
+| `ModifyTags` | Add/remove volume tags | `Operation` (`Set` / `Remove` / `Increment` / `Toggle` / `Replace` / `Append`), `TagKey`, `TagValue`, `MatchKey`, `MatchValue`, `Radius`, `Center` |
 | `SendSignal` | 0.6.3+ — raise `SIGNAL_RECEIVED` on matching volumes | `MatchKey`, `MatchValue`, `Radius`, `Center`, `SignalKeys`, `SignalValues` |
-| `ModifyRules` | 0.6.3+ — edit a volume's rule list at runtime | `Operation` (`SET` / `APPEND` / `SET_FIELD` / `REMOVE` / `SET_RULES_ACTIVE`), `Rule`, `FieldKey`, `Active` |
-| `EnableVolume` / `DisableVolume` / `DeleteVolume` | Toggle/remove other volumes | by tag: `MatchKey`, `MatchValue`, `Radius`, `Center` (`VOLUME` / `ENTITY` / `EVENT`); `DeleteVolume` adds `DeleteGroup` |
+| `ModifyRules` | 0.6.3+ — edit a volume's rule list at runtime | `Operation` (`Set` / `Append` / `SetField` / `Remove` / `SetRulesActive`), `Rule`, `FieldKey`, `Active` |
+| `EnableVolume` / `DisableVolume` / `DeleteVolume` | Toggle/remove other volumes | by tag: `MatchKey`, `MatchValue`, `Radius`, `Center` (`Volume` / `Entity` / `Event`); `DeleteVolume` adds `DeleteGroup` |
 
-`Origin` keys take an `EffectOrigin`: `VOLUME_ORIGIN`, `ENTITY`, `EVENT`, or `WORLD_ABSOLUTE` (0.6.3+).
+`Origin` keys take an `EffectOrigin`: `VolumeOrigin`, `Entity`, `Event`, or `WorldAbsolute` (0.6.3+).
 
 ### The `ShowEventTitle` interaction is a different type with the same name
 
@@ -153,30 +161,31 @@ and the `ShowEventTitleEffect` behind this page's row; they differ in their key 
 written for one will not decode as the other. It is documented here rather than beside the other
 interactions precisely because this is where the confusion happens.
 
-**The key sets nearly match, which is worse than differing.** Four of the eight names are shared
-verbatim; three differ only by a trailing `S`; and the interaction adds one the effect has no
-equivalent for:
+**The key sets nearly match, which is worse than differing.** Five names are shared verbatim; three
+differ only by a trailing `S`; the interaction alone has `Target` (and the deprecated `IsMajor`), and the
+effect alone has `Recipient`:
 
 | Effect (`ShowEventTitleEffect`) | Interaction (`ShowEventTitleInteraction`) |
 |---|---|
 | — | `Target` |
 | `PrimaryTitle` | `PrimaryTitle` |
 | `SecondaryTitle` | `SecondaryTitle` |
-| `IsMajor` | `IsMajor` |
+| `Style` (0.7.2+) | `Style` (0.7.2+) |
+| — (`IsMajor` removed in 0.7.2) | `IsMajor` (deprecated in 0.7.2) |
 | `Icon` | `Icon` |
 | `Duration` | `DurationS` |
 | `FadeInDuration` | `FadeInDurationS` |
 | `FadeOutDuration` | `FadeOutDurationS` |
+| `Recipient` (0.7.2+) | — |
 
-> **Gotcha — copying the effect block on this page into an interaction *works*, by coincidence, until
-> someone changes a timing value.** The four shared keys transfer. The three `…Duration` keys are
-> silently dropped as unknown, and the interaction falls back to its own defaults — which are `4.0`,
-> `1.5` and `1.5`, exactly the values the shipped effect block writes. So the title appears and
-> behaves correctly, and nothing indicates that three keys were discarded. The failure surfaces later
-> and somewhere else: an author edits `Duration` on what is now an interaction, sees no change, and
-> has no reason to suspect the key name. The reverse direction fails the same way. This is not the
-> usual "same string, different registry" collision — here the *keys* nearly match, and so do the
-> defaults.
+> **Gotcha — copying an effect block into an interaction *works*, by coincidence, until someone
+> changes a timing value.** The shared keys transfer. The three `…Duration` keys are silently dropped as
+> unknown, and the interaction falls back to its own defaults — `4.0`, `1.5` and `1.5`, the same values
+> as the effect's defaults. So the title appears and behaves correctly, and nothing indicates that three
+> keys were discarded. The failure surfaces later: an author edits `Duration` on what is now an
+> interaction, sees no change, and has no reason to suspect the key name. The reverse direction fails the
+> same way. Note also that the two **default styles differ**: an effect with no `Style` shows as `Major`,
+> an interaction with none as `Default`.
 
 **Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.ShowEventTitleInteraction`
 
@@ -188,23 +197,27 @@ Codec doc: "Shows an event title to the players of one world or of the whole uni
 | `Target` | enum | `World` | **Required** (`Validators.nonNull()`) *despite having a default* — the field initialises to `World`, but the key must still be written. `World` shows the title to every player of the world the interaction runs in; `Universe` to every player of every live world. Those two are the whole enum |
 | `PrimaryTitle` | message | — | **Required** (`Validators.nonNull()`). The main line |
 | `SecondaryTitle` | message | *empty* | The line below it; omit for a one-line title |
-| `IsMajor` | boolean | `false` | Whether the client presents this as a major event rather than a minor one |
+| `Style` | enum | `Default` | 0.7.2+. *"The style the client uses to present the event title."* `EventTitleStyle`: `Default`, `Major`, `GoblinBreach`, `VoidEviction` |
+| `IsMajor` | boolean | — | Deprecated in 0.7.2 (`Validators.deprecated()`) but still decoded: `true` sets `Style` to `Major`, `false` to `Default`. It is never written back |
 | `Icon` | string | — | Icon shown beside the title; omit for none |
 | `DurationS` | float | `4.0` | Seconds on screen **after** the fade in. Validated `>= 0` |
 | `FadeInDurationS` | float | `1.5` | Seconds to fade in. Validated `>= 0` |
 | `FadeOutDurationS` | float | `1.5` | Seconds to fade out. Validated `>= 0` |
 
-**No shipped asset uses the interaction**, so the table above rests on its codec alone. The single
-file in `Assets.zip` carrying `"Type": "ShowEventTitle"` is
-`Server/Prefabs/Testing/VolumeShowcase/Trigger_Volume_Showcase.prefab.json` — a trigger-volume
-prefab, so it is the *effect*, and it writes all seven of the effect's keys.
+**Shipped uses (0.7.2).** One item uses the interaction: `GoblinLab_Generator.json`, with
+`"Target": "Universe"` and a 15-second `DurationS`. Twelve shipped files use the **effect** — trigger
+effect assets such as `Server/TriggerVolumes/Effects/Dungeon_Checkpoint.json` (`"Style": "Major"`,
+`"Recipient": "AllPlayers"`) and trigger-volume prefabs such as
+`Server/Prefabs/Testing/VolumeShowcase/Trigger_Volume_Showcase.prefab.json`. Two of those prefabs
+(`Trigger_Volume_Showcase` and `Server/Prefabs/Hunt/Generic/Site.prefab.json`) still write the removed
+`"IsMajor": true`, which the effect now ignores; since the effect defaults to `Major`, they look the same.
 
-The **effect** is in the opposite position: it has two independent confirmations of its key set. That
-prefab is one; the other is `Server/Languages/*/server.lang`, whose
-`customUI.triggerVolumeEffectEditor.field.ShowEventTitle.<Key>` entries enumerate exactly those seven
-names for the in-game effect editor, in all five shipped language files. That pattern generalises —
-a `customUI.<editor>.field.<Type>.<Key>` block is a shipped key-set oracle for any type with an
-editor UI — and here it agrees with the codec.
+The **effect**'s key set has a second, independent confirmation: `Server/Languages/*/server.lang`, whose
+`customUI.triggerVolumeEffectEditor.field.ShowEventTitle.<Key>` entries enumerate exactly those eight
+names (with `Style` and `Recipient`, without `IsMajor`) for the in-game effect editor in `en-US`,
+`pt-BR`, `uk-UA` and `zh-CN`; the newer `es-ES`, `fr-FR` and `ru-RU` files are only partly translated.
+That pattern generalises — a `customUI.<editor>.field.<Type>.<Key>` block is a shipped key-set oracle for
+any type with an editor UI — and here it agrees with the codec.
 
 **Three things in the jar answer to this name**, so a lookup by simple name has three candidates:
 `Interaction.CODEC.register("ShowEventTitle", …)` in `InteractionModule`,
@@ -213,7 +226,7 @@ protocol packet class also called `ShowEventTitle`. Only the first two are `"Typ
 
 One more trap for anyone mining these keys: the interaction's `PrimaryTitle` and `SecondaryTitle`
 are declared with the **raw** `KeyedCodec` form rather than the parameterised one, so a pattern
-matching `KeyedCodec<T>` sees six of its eight keys and misses both title fields.
+matching `KeyedCodec<T>` sees seven of its nine keys and misses both title fields.
 
 > **Gotcha — `Target` is required and `Universe` is not scoped to anything.** There is no radius,
 > no player filter and no volume: `Universe` reaches every player of every live world on the server.
@@ -232,14 +245,14 @@ Conditions gate an asset's effects: list them under `Conditions`, and the effect
 | `ItemCondition` | Entity holds / has an item |
 | `RandomChanceCondition` | Random roll |
 | `PlayerCountCondition` | Number of players in the volume |
-| `TagCondition` | Volume has a tag (`Source`: `EVENT` / `SELF` / `GROUP` / `RADIUS`) |
-| `BlockTypeCondition` | Block at the event position is a given type (`PositionSource`: `EVENT` / `VOLUME_ORIGIN` / `ENTITY` / `WORLD_ABSOLUTE`) |
-| `EntityCountCondition` | 0.6.3+ — number of entities of `EntityType` in the volume (`Comparison`: `AT_LEAST` / `AT_MOST` / `EXACTLY` / `NOT_EQUALS` / `MORE_THAN` / `LESS_THAN`, `Count`) |
+| `TagCondition` | Volume has a tag (`Source`: `Event` / `Self` / `Group` / `Radius`). 0.7.2 added `CompareAgainst` (`Value`, the default, compares the tag against `TagValue`; `Tag` compares it against the volume's own tag named by `CompareTagKey`) |
+| `BlockTypeCondition` | Block at the event position is a given type (`PositionSource`: `Event` / `VolumeOrigin` / `Entity` / `WorldAbsolute`) |
+| `EntityCountCondition` | 0.6.3+ — number of entities of `EntityType` in the volume (`Comparison`: `AtLeast` / `AtMost` / `Exactly` / `NotEquals` / `MoreThan` / `LessThan`, `Count`) |
 | `TimeOfDay` | 0.6.3+ — world hour within `MinHour`…`MaxHour` (class `TimeOfDayCondition`; note the short `Type` name) |
 
 > Note the naming asymmetry: **effect** type names drop the `Effect` suffix (`SendMessageEffect` → `"SendMessage"`),
 > while **condition** type names keep the full class name (`PermissionCondition` → `"PermissionCondition"`) — except
-> `TimeOfDayCondition`, registered as plain `"TimeOfDay"` in 0.6.8.
+> `TimeOfDayCondition`, registered as plain `"TimeOfDay"` in 0.7.2.
 
 ## Rules
 
@@ -253,10 +266,10 @@ A `TriggerRule` is *passive*: rather than firing on an event it stays in force f
 | `NoBuild` / `NoDestroy` / `NoHarvest` / `NoUse` | Deny placing / breaking / harvesting / using blocks | `ExceptBlocks`, `ExceptBlockTags` (`NoDestroy` also `ExceptTools`, `ExceptToolTags`) |
 | `NoDamage` | Deny damage | `EntityFilter`, `Entities`, `PvpOnly` |
 | `NoDoorOpen` / `NoHeal` / `Fly` / `CreativePlacement` | Deny door use / deny healing / allow flight / creative-style placement | — |
-| `DamageMultiplier` | Scale damage | `Multiplier`, `Direction` (`RECEIVED` / `DEALT` / `BOTH`), `EntityFilter`, `Entities` |
+| `DamageMultiplier` | Scale damage | `Multiplier`, `Direction` (`Received` / `Dealt` / `Both`), `EntityFilter`, `Entities` |
 | `NoTick` | Suppress block ticking | `ScheduledTick`, `RandomTick` |
 
-The deny rules share `AbstractDenyRule` keys `Target` (`SELF` / `OTHER` / `BOTH`), `MatchKey`, `MatchValue`, `Radius`,
+The deny rules share `AbstractDenyRule` keys `Target` (`Self` / `Other` / `Both`), `MatchKey`, `MatchValue`, `Radius`,
 `SignalKeys`, `SignalValues` — a denied action can send a signal to matching volumes. Custom rules follow the
 effect pattern against `TriggerRule.CODEC` (`TriggerVolumesPlugin.registerRuleType(...)`).
 
@@ -281,8 +294,9 @@ and raise it via the manager's `enqueue*Event(...)` methods. `TriggerEventType.g
 
 ## EntityTargetType
 
-Which entity kinds a volume reacts to (`TargetTypes`): `PLAYER`, `NPC`, `ITEM_DROP`, `PROJECTILE`. (The sample pack
-writes `"Player"`; use the name matching the inspector/your target build.)
+Which entity kinds a volume reacts to (`TargetTypes`). The Java constants are `PLAYER`, `NPC`, `ITEM_DROP` and
+`PROJECTILE`; in JSON write them as the codec spells them — `"Player"`, `"Npc"`, `"ItemDrop"`, `"Projectile"` —
+as the shipped assets do (`"TargetTypes": ["Player"]`).
 
 ---
 

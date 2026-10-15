@@ -7,7 +7,7 @@ seo:
 
 # Universes & Save Format
 
-**Doc type:** Java API + Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.6.8**
+**Doc type:** Java API + Save / config file format · **Files:** `UserData/Saves/<save>/` · **Verified against 0.7.2**
 
 A Hytale **save is a universe of worlds**. When you host a dedicated server you point it at a
 save directory; that directory *is* the universe. This page documents the on-disk layout, the
@@ -168,8 +168,10 @@ Key fields:
 "WorldGen": { "Type": "HytaleGenerator", "WorldStructure": "Default_Flat" }
 ```
 Uses the procedural generator and a [WorldStructure](worldgen-zones.md) by name (here the
-shipped flat structure). This is the link from a runtime world to a
-`Server/HytaleGenerator/WorldStructures/*.json` file.
+shipped flat structure). This is the link from a runtime world to a file under
+`Server/HytaleGenerator/WorldStructures/`. The id is the file name, wherever the file sits: 0.7.2 moved
+the region structures into `WorldStructures/Regions/` (`Regions/Zone3_Taiga1.json` is still
+`"WorldStructure": "Zone3_Taiga1"`) and the portal structures into `WorldStructures/Portals/`.
 
 ```json
 "WorldGen": { "Type": "Hytale", "Name": "Default", "Version": "0.0.0" }
@@ -404,11 +406,13 @@ plugins can persist their own keyed records under `universe/` with a **data stor
 A world's `chunks/` data goes through the `IChunkStorageProvider` on its runtime `WorldConfig`
 (`world.getWorldConfig().getChunkStorageProvider()` / `setChunkStorageProvider(...)`). Providers
 are codec-registered by id; the ids `Universe` registers are `Hytale` (`DefaultChunkStorageProvider`,
-still the `Priority.DEFAULT` choice in 0.6.8), `IndexedStorage`, `RocksDb`, `Migration`, and `Empty`.
+still the `Priority.DEFAULT` choice in 0.7.2, which delegates to an `IndexedStorage` provider),
+`IndexedStorage`, `RocksDb`, `Migration`, and `Empty`.
 
 ```java
 // IChunkStorageProvider<Data>
-Data initialize(Store<ChunkStore> store)
+Data initialize(Store<ChunkStore> store, boolean readOnly)   // 0.7.2: gained readOnly (see below)
+boolean hasStoredChunks(Path savePath)                       // 0.7.2: does this world folder hold chunks?
 IChunkLoader getLoader(Data data, Store<ChunkStore> store)
 IChunkSaver getSaver(Data data, Store<ChunkStore> store)
 void close(Data data, Store<ChunkStore> store)
@@ -448,6 +452,26 @@ CompletableFuture<Void> resumeBackgroundSaving()                 // default; ret
 ```
 
 (`ChunkStore.resumeBackgroundSaving()` changed the same way — it now returns the `CompletableFuture<Void>`.)
+
+Each interface has a `Cubic` sub-interface for storage that keeps chunk **sections** individually
+(see [world-chunks.md → Cubic sections](world-chunks.md#cubic-sections)):
+`IChunkLoader.Cubic` adds `loadSectionHolder(x, y, z)`, `forEachSection(TriIntConsumer)` and
+`resolveTreeHeightmapColumns(...)`; `IChunkSaver.Cubic` adds `saveSection`, `saveEntitySection`,
+`saveBlockComponentSection`, `saveEntity` and `removeEntity`. In the 0.7.2 jar the `RocksDb` provider's
+loader and saver implement them; the default `IndexedStorage` does not.
+
+#### Read-only storage and validation (0.7.2)
+
+`ChunkStore.start(IResourceStorage, boolean readOnly)` opens a world's chunk storage without write
+access: the provider is initialized with `readOnly = true` and the saver is a `ReadOnlyChunkSaver`,
+whose writes fail with `UnsupportedOperationException("Chunk storage was opened read-only")`. A
+read-only store refuses a pending storage migration (`… needs a chunk storage migration from … to …,
+which a read-only store cannot run`). The shipped user is the instances plugin, which opens an instance
+world read-only and checks it with
+`ChunkStorageValidator.validate(World, Set<ValidationOption>, StringBuilder errors)`
+(`server.core.universe.world.validation`). That validator replaces the removed `World.validate(...)`;
+its `Summary` reports the columns and cubic sections it checked, and `BlockValidator.ValidateBlockEvent`
+is the global event it fires per block.
 
 ### ChunkSavingSystems
 

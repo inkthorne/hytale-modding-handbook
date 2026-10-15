@@ -414,7 +414,7 @@ rather than errors — the failure mode CLAUDE.md invariant 7 describes:
   constructor call instead. (Corrected 2026-10-15: all four of that codec's keys are `strict_null`, only `BlockSets` is null-validated, and none rejects its omission — `BlockSets` defaults to `EMPTY_BLOCKSETS`. The parsing lesson stands; the word "required" did not.)
 
 "Required" is two facts.
-- `null_validated`: a `NonNullValidator` instance (`nonNull()`, `nonEmptyArray()` or `nonEmptyMap()`), attaching to the builder after `append(...)` closes. It is the only thing that can make an omitted key fail, and only when the field is still null after construction.
+- `null_validated`: a `NonNullValidator` instance (`nonNull()`, `nonEmptyArray()` or `nonEmptyMap()`), attaching to the builder after `append(...)` closes. It is the only *per-key* attribute that can make an omitted key fail, and only when the field is still null after construction. A codec-level validator or `afterDecode` hook can also reject the empty document (7 classes at 0.7.2, listed in CLAUDE.md invariant 7).
 - `strict_null`: a `true` third `KeyedCodec` argument. It never makes an omitted key fail; it only changes how an explicit `null` decodes on the BSON inherit path.
 
 Both are measured by the live probes in `maintenance/probes/requiredness/` (2026-10-15).

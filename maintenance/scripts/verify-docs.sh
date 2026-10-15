@@ -877,28 +877,30 @@ section "[HARD] Requiredness probes run against the jar"
 # installed jar's codec library. run.sh --self-test first sabotages its own
 # negative control and requires the run to report itself VOID, then pins the
 # measured matrix (exit 1 if an expectation moved). effective-required.py decodes
-# {} through every CODEC in the jar and compares with codec_parser (exit 2 = its
-# controls flipped, the run is void). ~6s together. They need a JDK; without one
+# {} through every CODEC in the jar and compares with codec_parser: exit 1 if a key
+# the parser did not predict is rejected or a pinned figure moved, 2 if its controls
+# flipped (the run is void), 3 if an input is missing. Both are given this run's
+# $JAR/$ASSETS/$SRC_CACHE, so an override is honoured rather than silently ignored. ~6s together. They need a JDK; without one
 # the section says so rather than passing silently.
 if ! command -v javac >/dev/null 2>&1; then
   warn "javac not found — requiredness probes skipped (invariant 7's measurements are unchecked this run)"
 else
   RQ_OK=1
-  OUT="$(maintenance/probes/requiredness/run.sh --self-test 2>&1)"; RC=$?
+  OUT="$(maintenance/probes/requiredness/run.sh --self-test --jar "$JAR" --assets "$ASSETS" 2>&1)"; RC=$?
   if [ "$RC" -ne 0 ]; then
     RQ_OK=0; fail "requiredness probe failed (rc $RC):"
-    printf '%s\n' "$OUT" | grep -E 'VOID|PINNED|NEGATIVE|FAIL|Exception' | sed 's/^/    /'
+    printf '%s\n' "$OUT" | grep -E 'VOID|PINNED|NEGATIVE|FAIL|Exception|EXPECTATION CHANGED' | sed 's/^/    /'
   else
     printf '%s\n' "$OUT" | grep -E '^(NEGATIVE CONTROL|true flag alone|PINNED)' | sed 's/^/        /'
   fi
-  OUT="$(python3 maintenance/probes/requiredness/effective-required.py 2>&1)"; RC=$?
+  OUT="$(python3 maintenance/probes/requiredness/effective-required.py --jar "$JAR" --src "$SRC_CACHE" 2>&1)"; RC=$?
   if [ "$RC" -ne 0 ]; then
     RQ_OK=0; fail "effective-required.py failed (rc $RC):"
     printf '%s\n' "$OUT" | sed 's/^/    /'
   else
     printf '%s\n' "$OUT" | grep -E '^(MEASURED|PREDICTED|UNEXPLAINED)' | sed 's/^/        /'
   fi
-  [ "$RQ_OK" -eq 1 ] && pass "requiredness probes hold: the true flag never rejects an omitted key; engine verdicts match the parser"
+  [ "$RQ_OK" -eq 1 ] && pass "requiredness probes hold: the true flag never rejects an omitted key; every key the engine rejected was predicted by the parser, and the 11 pinned figures are unchanged (258 of 545 predicted keys rejected on omission)"
 fi
 
 # =====================================================================

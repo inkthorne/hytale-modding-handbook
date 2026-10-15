@@ -411,31 +411,25 @@ rather than errors — the failure mode CLAUDE.md invariant 7 describes:
 - **`[^)]*` to reach a `KeyedCodec`'s third argument** missed that `"BlockSets"` is
   required in `RunOnBlockTypesInteraction`, because its codec argument
   (`new ArrayCodec<String>(Codec.STRING, String[]::new)`) contains parens. Balance the
-  constructor call instead. All four of that codec's keys are required; the regex found three.
+  constructor call instead. (Corrected 2026-10-15: all four of that codec's keys are `strict_null`, only `BlockSets` is null-validated, and none rejects its omission — `BlockSets` defaults to `EMPTY_BLOCKSETS`. The parsing lesson stands; the word "required" did not.)
 
-Requiredness has two forms and both must be read: a `true` third argument to `KeyedCodec`,
-and `Validators.nonNull()` attaching to the builder *after* `append(...)` has closed.
+"Required" is two facts.
+- `null_validated`: a `NonNullValidator` instance (`nonNull()`, `nonEmptyArray()` or `nonEmptyMap()`), attaching to the builder after `append(...)` closes. It is the only thing that can make an omitted key fail, and only when the field is still null after construction.
+- `strict_null`: a `true` third `KeyedCodec` argument. It never makes an omitted key fail; it only changes how an explicit `null` decodes on the BSON inherit path.
 
-**The `true`-third-argument trap is symmetric, and the false-positive half is the dangerous
-one.** CLAUDE.md invariant 7 warns that stopping before the third argument loses a key's
-requiredness. The mirror image manufactures it: an inner constructor's trailing `true`
-attributed to the outer `KeyedCodec`. These two are visually identical —
+Both are measured by the live probes in `maintenance/probes/requiredness/` (2026-10-15).
+
+The `true`-third-argument trap is symmetric in *attribution*:
 
 ```java
-new KeyedCodec("Shapes", new MapCodec<…>, true)                                  // 3 args: REQUIRED
+new KeyedCodec("Shapes", new MapCodec<…>, true)                                  // 3 args: strict_null
 new KeyedCodec("ProjectileSpawnOffsets",
-        new MapCodec<Vector3d, Object2ObjectOpenHashMap>(codec, ctor::new, true)) // 2 args: NOT required
+        new MapCodec<Vector3d, Object2ObjectOpenHashMap>(codec, ctor::new, true)) // 2 args: not strict_null
 ```
 
-— and both are *raw* `KeyedCodec`, so the generic gives no signal either. Telling them apart
-needs an argument splitter that tracks `<>` as well as `()`: `MapCodec<Vector3d,
-Object2ObjectOpenHashMap>` contains a top-level-looking comma inside its type parameters, and a
-splitter that ignores angle brackets reports three arguments for the second form and calls a
-non-required key required. Both a reviewer and this author's first splitter made exactly that
-error on `DeployableTurretConfig.ProjectileSpawnOffsets` before angle-bracket handling was added.
+A splitter that ignores `<>` reports three arguments for the second form, because `MapCodec<Vector3d, Object2ObjectOpenHashMap>` hides a comma. Both a reviewer and this author's first splitter made exactly that error on `DeployableTurretConfig.ProjectileSpawnOffsets`. Since 2026-10-15 that mistake only misplaces a flag. The dangerous mistake is downstream: reading `strict_null`, or a `null_validated` key that cannot fire, as required. It tells a modder to write a key the engine does not want, and nothing in the corpus will contradict it.
 
-A false "required" is worse than a false "optional": it tells a modder to write a key the engine
-does not want, and nothing in the corpus will contradict it.
+**The §11 tables below predate this split.** Their Required column and `*` marks are the union `strict_null ∪ null_validated`, not "an omission fails". `maintenance/fixtures/registry-oracle/tail-44.json` carries the split per key, with source lines, and `effective-required.py` gives the engine's verdict.
 
 ## 6. Prefer a phrasing that names a real symbol over prose stating the same fact
 

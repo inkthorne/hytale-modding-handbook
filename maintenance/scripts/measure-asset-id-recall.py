@@ -111,15 +111,22 @@ def main():
                                                 text=True, check=True).stdout.split('\n'))
     print(f'  INFO  0.7.2 Assets.zip listing: {len(zip_stems)} distinct file stem(s)')
     rc = 0
+    shipped_k = gate.PARENT_K
     results = {}
-    for widen in (True, False):
+    # The gate was changed twice after its first docs run (see its constants). Recall is
+    # reported under every setting so neither change can quietly buy or cost a number.
+    settings = (('first docs run: no widening, bare key speaks for any parent', False, 1),
+                ('position-evidence widening, bare key speaks for any parent', True, 1),
+                ('as shipped: widening, bare key needs PARENT_K parents', True, None))
+    for label, widen, pk in settings:
         gate.WIDEN = widen
-        print(f"\n{'=' * 8} widening {'ON (as shipped)' if widen else 'OFF (the setting of the first docs run)'} {'=' * 8}")
+        gate.PARENT_K = pk if pk is not None else shipped_k
+        print(f"\n{'=' * 8} {label} {'=' * 8}")
         r, res = measure(gate, ctx, packs, zip_stems, a)
         rc = rc or r
-        results[widen] = res
-    for widen, (ra, rb) in results.items():
-        print(f"RECALL widening {'ON ' if widen else 'OFF'}  (a) {ra:.0%}  (b) {rb:.0%}")
+        results[label] = res
+    for label, (ra, rb) in results.items():
+        print(f"RECALL (a) {ra:.0%}  (b) {rb:.0%}   {label}")
     return rc
 
 

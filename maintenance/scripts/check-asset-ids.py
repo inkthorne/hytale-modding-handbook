@@ -93,6 +93,14 @@ IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 # docs run, which flagged 60 pairs without them; WIDEN = False reproduces that first setting so the
 # change is always reportable under both.
 WIDEN = True
+# A bare-key class types a position under a parent the shipped assets never show the key under
+# only if the key was seen under at least this many distinct parents. One parent is one codec
+# context: `Weapons` is 55 item ids, all under `Modify` (an NPC role's inventory), and the same
+# key on an item ability holds Family tag names (CoreItemAbility.Weapons, STRING_ARRAY, "Staff",
+# "Sword"). Nothing in the shipped data shows the second field, so the bare class must not speak
+# for it. Added after that false positive was reported; PARENT_K = 1 reproduces the setting
+# before it.
+PARENT_K = 3
 EXEMPT_CLASSES = ('shape', 'position-evidence', 'shipped-use', 'placeholder', 'pack', 'page-defined')
 
 
@@ -155,6 +163,7 @@ class Sweep:
         self.parse_fail = 0
         self.fail_by_top = collections.Counter()
         self.children = collections.defaultdict(set)   # parent -> child keys seen
+        self.parents = collections.defaultdict(set)    # key -> nearest named parents it carries a string under
 
     def walk(self, o, path):
         if isinstance(o, dict):
@@ -166,6 +175,7 @@ class Sweep:
             for v in o:
                 self.walk(v, path)
         elif isinstance(o, str) and path:
+            self.parents[path[-1]].add(path[-2] if len(path) > 1 else None)
             self.L1[path[-1:]].add(o)
             if len(path) > 1:
                 self.L2[path[-2:]].add(o)
@@ -391,7 +401,7 @@ def scan_docs(docs: pathlib.Path):
         text = d.read_text()
         rec = dict(name=d.name, text=text, pairs=[], n_json=0, n_json_strict=0,
                    n_json_tolerant=0, n_untagged=0, n_untagged_strict=0,
-                   n_untagged_jsonish=0, n_other=0, tolerant_pairs=0,
+                   n_untagged_jsonish=0, n_untagged_fragment=0, n_other=0, tolerant_pairs=0,
                    strict_disagree=[])
         for m in FENCE.finditer(text):
             lang, body = m.group(2), m.group(3)
@@ -413,6 +423,8 @@ def scan_docs(docs: pathlib.Path):
                 jsonish = bool(sig[:1] in ('{', '[', '"') and has_pairs)
                 if jsonish:
                     rec['n_untagged_jsonish'] += 1
+                elif has_pairs:
+                    rec['n_untagged_fragment'] += 1      # a quoted "Key": inside a tree or a .lang sample
                 scan = jsonish
             else:
                 rec['n_other'] += 1
@@ -443,7 +455,7 @@ def lookup_families(path, typed, sweep):
     p = path[-2] if len(path) > 1 else None
     if p is not None and (p, k) in typed['L2']:
         fams |= typed['L2'][(p, k)][0]; via.append('L2')
-    if (k,) in typed['L1']:
+    if (k,) in typed['L1'] and (p in sweep.parents.get(k, ()) or len(sweep.parents.get(k, ())) >= PARENT_K):
         fams |= typed['L1'][(k,)][0]; via.append('L1')
     if p is not None and (p, '*') in typed['LW']:
         # LW is for maps with free-form keys. If this exact (parent, key) is a FIELD
@@ -453,7 +465,7 @@ def lookup_families(path, typed, sweep):
     return fams, via
 
 
-def position_evidence(path, sweep, idx):
+def position_evidence(path, sweep, idx, via):
     """What the shipped assets show at THIS position, beyond the typed classes.
 
     A bare-key class can be a mixture of two codec fields that happen to share a
@@ -463,10 +475,13 @@ def position_evidence(path, sweep, idx):
       stores    the stores in which >= P of the values at exactly (parent, key)
                 resolve, at ANY N — a path with little data still says where its
                 few values live;
-      verbatim  the shipped values themselves, from every class the position matches:
-                a value the game ships under this key is real by demonstration even
-                when it resolves nowhere (`Empty`, a built-in; `Full`; the
-                `Melee`/`Ranged` tag values under `Attack`)."""
+      verbatim  the shipped values themselves, from the exact (parent, key) and from
+                the typed classes that typed this position (`via`): a value the game
+                ships under this key is real by demonstration even when it resolves
+                nowhere (`Empty`, a built-in; `Full`; the `Melee`/`Ranged` tag values
+                under `Attack`). NOT from an untyped bare key: `Id` is 50% items and
+                50% sounds, and taking its values as verbatim passes a sound id under
+                `Rewards.Id` (the fixture caught that)."""
     k = path[-1]
     p = path[-2] if len(path) > 1 else None
     stores, verb = set(), set()
@@ -475,8 +490,9 @@ def position_evidence(path, sweep, idx):
         c = collections.Counter(s for v in vs for s in set(resolves(v, idx)))
         stores |= {s for s, n in c.items() if n / len(vs) >= P_MIN}
         verb |= vs
-    verb |= sweep.L1.get((k,), set())
-    if p is not None:
+    if 'L1' in via:
+        verb |= sweep.L1.get((k,), set())
+    if 'LW' in via:
         verb |= sweep.LW.get((p, '*'), set())
     return stores, verb
 
@@ -536,7 +552,7 @@ def evaluate(pages, ctx: Ctx, packs):
             if set(hit) & fams:
                 rec['verdict'] = 'resolved'
                 continue
-            ev_stores, verb = position_evidence(path, ctx.sweep, ctx.idx) if WIDEN else (set(), set())
+            ev_stores, verb = position_evidence(path, ctx.sweep, ctx.idx, via) if WIDEN else (set(), set())
             if set(hit) & ev_stores:
                 rec['verdict'] = 'position-evidence'
             elif val in verb or core in verb:
@@ -588,7 +604,8 @@ def main():
                          'reads no docs')
     ap.add_argument('--dump-typing', metavar='FILE',
                     help='write the derived key->family table to FILE (the snapshot format)')
-    ap.add_argument('-v', '--verbose', action='store_true')
+    ap.add_argument('-v', '--verbose', action='store_true',
+                    help='also print one PAIR line per extracted pair with its verdict')
     a = ap.parse_args()
     docs, assets, src = pathlib.Path(a.docs), pathlib.Path(a.assets), pathlib.Path(a.src)
 
@@ -663,7 +680,7 @@ def main():
     tot = collections.Counter()
     for r in pages:
         for k in ('n_json', 'n_json_strict', 'n_json_tolerant', 'n_untagged', 'n_untagged_strict',
-                  'n_untagged_jsonish', 'n_other', 'tolerant_pairs'):
+                  'n_untagged_jsonish', 'n_untagged_fragment', 'n_other', 'tolerant_pairs'):
             tot[k] += r[k]
     bad_extract = [(r['name'], ln, d) for r in pages for ln, d in r['strict_disagree']]
 
@@ -679,6 +696,11 @@ def main():
               ('exists only as ' + ', '.join(r['hit'])) if r['hit'] else 'absent from every store')
              for r in records if r['verdict'] == 'failed']
 
+    if a.verbose:
+        # one line per extracted pair, tab-separated: the fixture asserts on these rather than
+        # inferring a verdict from the absence of a flag, which a silently dropped pair also satisfies
+        for r in records:
+            print(f"  PAIR  {r['page']}:{r['line']}\t{'.'.join(r['path'])}\t{r['val']}\t{r['verdict']}")
     t_docs = time.time() - t1
     n_pairs = tot['tolerant_pairs']
     if n_pages == 0 or tot['n_json'] == 0 or n_pairs == 0 or typed_pairs == 0:
@@ -689,7 +711,8 @@ def main():
     print(f"  INFO  docs scan: {n_pages} page(s); {tot['n_json']} ```json fence(s) "
           f"({tot['n_json_strict']} strict-parse, {tot['n_json_tolerant']} unparseable and read tolerantly); "
           f"{tot['n_untagged']} untagged fence(s), of which {tot['n_untagged_strict']} parse as JSON and "
-          f"{tot['n_untagged_jsonish']} hold JSON pairs (scanned); {tot['n_other']} other-language fence(s) not scanned")
+          f"{tot['n_untagged_jsonish']} hold JSON pairs (scanned); {tot['n_untagged_fragment']} more hold only a "
+          f"quoted-key fragment inside a tree or sample (not scanned); {tot['n_other']} other-language fence(s) not scanned")
     n_exempt = sum(exempt.values())
     print(f"  INFO  pairs: {n_pairs} string value(s) extracted, {typed_pairs} at a typed position "
           f"({untyped_pairs} untyped, not checkable); of the typed: {checked['resolved']} resolved, "

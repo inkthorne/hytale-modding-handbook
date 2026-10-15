@@ -36,23 +36,26 @@ CHECKER = HERE / 'check-asset-ids.py'
 
 # The healthy corpus, stated exactly. Each line is asserted verbatim: a value leaving the
 # corpus, a fence no longer scanned, a class no longer typed all move one of them.
-SWEEP = ('asset sweep: 53 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
+SWEEP = ('asset sweep: 58 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
          'Prefabs, World); 1 failed to parse; 8 store(s) declared in the jar, 7 present with ids '
-         '(1 absent from this build), 47 distinct id(s)')
-TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 51 classes, L1 10 of 29, '
-          'LW 7 of 14; 7 of 7 store(s) are the target of at least one typed class; 1 tied class(es)')
-DRIFT = 'typing drift vs typing-snapshot.txt: 1 class(es) added, 1 removed, 1 retargeted (24 in the snapshot)'
-SCAN = ('docs scan: 6 page(s); 21 ```json fence(s) (18 strict-parse, 3 unparseable and read tolerantly); '
+         '(1 absent from this build), 52 distinct id(s)')
+TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 69 classes, L1 13 of 43, '
+          'LW 8 of 19; 7 of 7 store(s) are the target of at least one typed class; 2 tied class(es)')
+DRIFT = 'typing drift vs typing-snapshot.txt: 1 class(es) added, 1 removed, 1 retargeted (28 in the snapshot)'
+SCAN = ('docs scan: 9 page(s); 33 ```json fence(s) (30 strict-parse, 3 unparseable and read tolerantly); '
         '2 untagged fence(s), of which 1 parse as JSON and 1 hold JSON pairs (scanned); 1 more hold only a '
-        'quoted-key fragment inside a tree or sample (not scanned); 1 other-language fence(s) not scanned')
-PAIRS = ('pairs: 75 string value(s) extracted, 70 at a typed position (5 untyped, not checkable); of the typed: '
-         '16 resolved, 15 exempt (shape 6, position-evidence 1, shipped-use 1, placeholder 3, pack 2, '
-         'page-defined 2), 39 failed; resolved in 7 distinct store(s)')
+        'quoted-key fragment inside a tree or sample (not scanned); 3 other-language fence(s) not scanned; '
+        '2 fence(s) sit inside a blockquote, 1 of them ```json (all counted and scanned)')
+PAIRS = ('pairs: 95 string value(s) extracted, 86 at a typed position (9 untyped, not checkable); of the typed: '
+         '18 resolved, 15 exempt (shape 6, shipped-use 1, shipped-excerpt 1, placeholder 3, pack 2, '
+         'page-defined 2), 53 failed; resolved in 7 distinct store(s)')
+RECOVERED = 'recovered from the unparseable fences: 4 pair(s), 3 at a typed position, 3 failed'
+N_FLAG_LINES = 55       # 53 failed pairs and the 2 declarations in declared.md
 
 # Floors, same shape as every other fixture in this directory: raise freely, lower only
 # with a reason in the commit message.
-MIN_CASES = 25
-MIN_MUTATIONS = 20
+MIN_CASES = 34
+MIN_MUTATIONS = 32
 
 PAIR_RE = re.compile(r'^  PAIR  (\S+?):\d+\t([^\t]*)\t([^\t]*)\t(\S+)$')
 FLAG_RE = re.compile(r'^  FLAG  (\S+?):\d+: "([^"]*)": "([^"]*)" is not an id in (\S+) \((.*)\)$')
@@ -125,13 +128,13 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         # The load-bearing case. Every INFO line verbatim: the denominators catch anything that
         # stops being SCANNED or TYPED, which no absence assertion can.
         case('healthy corpus: every denominator is exact', rc, t, want_rc=1,
-             must=(SWEEP, TYPING, DRIFT, SCAN, PAIRS), must_not=('PASS', 'FAIL'))
+             must=(SWEEP, TYPING, DRIFT, SCAN, PAIRS, RECOVERED), must_not=('PASS', 'FAIL'))
         case('the flag set is exactly the invented, wrong-kind and unexcused ids', rc, t, want_rc=1,
-             must=('39 failed',))
-        got_flags = flags_of(t)
-        if len(got_flags) != 39:
+             must=('53 failed',))
+        n_flags = sum(1 for ln in t.split('\n') if ln.startswith('  FLAG  '))
+        if n_flags != N_FLAG_LINES:
             out['the flag set is exactly the invented, wrong-kind and unexcused ids'].append(
-                f'{len(got_flags)} distinct FLAG line(s), wanted 39')
+                f'{n_flags} FLAG line(s), wanted {N_FLAG_LINES}')
 
         F = 'families.md'
         case('an invented id in each covered family fails', rc, t, want_rc=1, verdicts={
@@ -163,7 +166,7 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
             (F, 'SoundMap.Fly', 'SFX_F'): 'resolved', (F, 'SoundMap.Dive', 'SFX_Fake_Map'): 'failed',
             (F, 'Tones.Zeta', 'SFX_Fake_Zeta'): 'failed'})
         case('a known FIELD among map values is not mistaken for an id slot', rc, t, want_rc=1,
-             verdicts={(F, 'Tones.Style', 'quiet'): 'untyped'})
+             verdicts={(F, 'Tones.Style', 'quiet'): 'untyped', (F, 'Tones.Inner', 'text'): 'untyped'})
         case('a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
              rc, t, want_rc=1, verdicts={
                  (F, 'Rewards.Id', 'Sword_B'): 'resolved', (F, 'Rewards.Id', 'Id_Fake_Reward'): 'failed',
@@ -173,14 +176,29 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('a bare key seen under one parent types that parent and no unseen one', rc, t, want_rc=1,
              verdicts={(F, 'Holder.Lonely', 'Sword_Fake_L'): 'failed',
                        (F, 'Elsewhere.Lonely', 'Anything_L'): 'untyped'})
-        case('a mixture class is widened by the shipped evidence at the exact position', rc, t,
-             want_rc=1, verdicts={
-                 (F, 'Dust.Build', 'P_B'): 'position-evidence', (F, 'Smoke.Build', 'Nothing_Real'): 'failed',
-                 (F, 'SoundEvents.Build', 'SFX_B'): 'resolved'})
-        case('a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
-             rc, t, want_rc=1, verdicts={
+        case('a mixture key does not speak where the exact position shows the other field, and still speaks '
+             'for an unseen parent', rc, t, want_rc=1, verdicts={
+                 (F, 'Dust.Build', 'P_B'): 'untyped', (F, 'Tags.Pick', 'Uninterruptable'): 'untyped',
+                 (F, 'Smoke.Build', 'Nothing_Real'): 'failed', (F, 'SoundEvents.Build', 'SFX_B'): 'resolved'})
+        case('a parent.* class does not speak for a pair the assets show holding another kind, and still does '
+             'for an unseen key', rc, t, want_rc=1, verdicts={
+                 (F, 'Bag.Loot', 'D_B'): 'resolved', (F, 'Bag.Loot', 'Sword_A'): 'failed',
+                 (F, 'Bag.Extra', 'Sword_Fake_Bag'): 'failed'})
+        case('two parents are not enough to speak for a third (PARENT_K = 3)', rc, t, want_rc=1, verdicts={
+            (F, 'HolderA.Twin', 'Sword_Fake_T'): 'failed', (F, 'Elsewhere.Twin', 'Anything_T'): 'untyped'})
+        case('a value the shipped assets put under the key passes if it names no asset; an untyped bare key '
+             'lends nothing', rc, t, want_rc=1, verdicts={
                  (F, 'Solid', 'Empty'): 'shipped-use', (F, 'Solid', 'Nothing'): 'failed',
                  (F, 'Rewards.Id', 'SFX_B'): 'failed'})
+        case('an id of ANOTHER store that ships under the key somewhere is still the wrong kind', rc, t,
+             want_rc=1, flagged={(F, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
+        X = 'excerpt.md'
+        case('an excerpt of a real shipped file passes only for ids that file contains', rc, t, want_rc=1,
+             verdicts={}, flagged={(X, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
+        v = pairs_of(t).get((X, 'Next', 'Fx_A'), [])
+        if v != ['shipped-excerpt', 'failed', 'failed']:
+            out['an excerpt of a real shipped file passes only for ids that file contains'].append(
+                f'verdicts for the three Fx_A fences are {v}, wanted [shipped-excerpt, failed, failed]')
         case('a generated-state id resolves by its base', rc, t, want_rc=1, verdicts={
             (F, 'Solid', '*Sword_A_State_Broken'): 'resolved', (F, 'Solid', '*Ghost_State_X'): 'failed'})
         case('a value not shaped like an id is exempt as shape and counted', rc, t, want_rc=1, verdicts={
@@ -196,6 +214,13 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('placeholder: the same ids on a page that only mentions them in prose fail', rc, t, want_rc=1,
              verdicts={(B, 'Next', 'MyMod_Step'): 'failed', (B, 'Next', 'Chain_Named'): 'failed',
                        (B, 'ItemId', 'MyMod_Item'): 'failed'})
+        case('placeholder: a table row or a list item that says "placeholder" is not a note', rc, t, want_rc=1,
+             verdicts={(B, 'Next', 'Zed_One'): 'failed', (B, 'Next', 'List_Named'): 'failed',
+                       (B, 'Next', 'Tab_One'): 'failed', (B, 'Next', 'Table_Named'): 'failed'})
+        case('placeholder: a note that declares a real prefix or a real id is reported and excuses nothing', rc,
+             t, want_rc=1, must=('declared.md:3: the placeholder note declares prefix `Sword_`',
+                                 'declared.md:3: the placeholder note declares id `"Axe_C"`'),
+             verdicts={('declared.md', 'ItemId', 'Sword_Mine'): 'failed'})
         case('pack: a pack\'s id is exempt on a page that names that pack and only there', rc, t, want_rc=1,
              verdicts={(E, 'ItemId', 'Food_Snack'): 'pack', (E, 'ItemId', 'Drop_Chick'): 'failed',
                        ('pack2.md', 'ItemId', 'Drop_Chick'): 'pack', ('pack2.md', 'ItemId', 'Food_Snack'): 'failed',
@@ -205,6 +230,14 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
                  (E, 'ItemId', 'Sword_Page'): 'page-defined', (E, 'Next', 'Sword_Page'): 'failed',
                  (E, 'Next', 'Int_Page'): 'page-defined',
                  (B, 'ItemId', 'Sword_Page'): 'failed', (B, 'Next', 'Int_Page'): 'failed'})
+        case('page-defined: a path in prose, or before a java fence, defines nothing', rc, t, want_rc=1,
+             verdicts={('pathprose.md', 'ItemId', 'Sword_Prose'): 'failed',
+                       ('pathprose.md', 'ItemId', 'Sword_Java'): 'failed'})
+        case('a blockquoted fence is counted and scanned; a quoted java fence is counted and not read', rc, t,
+             want_rc=1, must=('2 fence(s) sit inside a blockquote, 1 of them ```json',),
+             verdicts={('fences.md', 'Next', 'Int_Bad7'): 'failed'})
+        case('pairs recovered from unparseable fences are reported on their own line', rc, t, want_rc=1,
+             must=(RECOVERED,))
         got = pairs_of(t)
         case('fences: comments, an ellipsis, a fragment, an untagged JSON fence and an indented fence are read; '
              'a tree and a java fence are not', rc, t, want_rc=1, verdicts={
@@ -270,8 +303,8 @@ MUTATIONS = {
         E("    if p is not None and (p, '*') in typed['LW']:", "    if False:"),
         None, {'a map value is typed by its parent, whatever its key'}),
     'the field guard on map-value typing removed': (
-        E("        if k not in sweep.children.get(p, ()) or (p, k) in typed['L2'] or (k,) in typed['L1']:",
-          "        if True:"),
+        E("        elif k not in sweep.children.get(p, ()) or (p, k) in typed['L2'] or (k,) in typed['L1']:",
+          "        elif True:"),
         None, {'a known FIELD among map values is not mistaken for an id slot'}),
     'a bare key speaks for parents it was never seen under (PARENT_K = 1)': (
         E("PARENT_K = 3\n", "PARENT_K = 1\n"),
@@ -298,13 +331,55 @@ MUTATIONS = {
         None, {'healthy corpus: every denominator is exact'}),
 
     # --- widening and normalisation
-    'position-evidence widening off (WIDEN = False)': (
+    'verbatim widening off (WIDEN = False)': (
         E("\nWIDEN = True\n", "\nWIDEN = False\n"),
-        None, {'a mixture class is widened by the shipped evidence at the exact position',
-               'a value the shipped assets put under the key passes; an untyped bare key does not lend its values'}),
-    'verbatim values taken from an untyped bare key': (
-        E("    if 'L1' in via:\n        verb |= sweep.L1.get((k,), set())", "    if True:\n        verb |= sweep.L1.get((k,), set())"),
-        None, {'a value the shipped assets put under the key passes; an untyped bare key does not lend its values'}),
+        None, {'a value the shipped assets put under the key passes if it names no asset; an untyped bare key '
+               'lends nothing'}),
+    'verbatim of another store\'s id accepted (VERBATIM_STRICT = False)': (
+        E("VERBATIM_STRICT = True\n", "VERBATIM_STRICT = False\n"),
+        None, {'an id of ANOTHER store that ships under the key somewhere is still the wrong kind'}),
+    'verbatim taken from an untyped class AND the strict filter off (the via guard\'s own effect)': (
+        E("        if lvl in via:\n", "        if True:\n") + E("VERBATIM_STRICT = True\n", "VERBATIM_STRICT = False\n"),
+        None, {'a value the shipped assets put under the key passes if it names no asset; an untyped bare key '
+               'lends nothing'}),
+    'the exact position no longer wins over a bare key (EXACT_WINS = False)': (
+        E("EXACT_WINS = True\n", "EXACT_WINS = False\n"),
+        None, {'a mixture key does not speak where the exact position shows the other field, and still speaks '
+               'for an unseen parent'}),
+    'the exact pair no longer wins over parent.*': (
+        E("        if EXACT_WINS and ex is not None and not (ex & lw):", "        if False:"),
+        None, {'a parent.* class does not speak for a pair the assets show holding another kind, and still does '
+               'for an unseen key'}),
+    'the placeholder note is the whole page, not a paragraph': (
+        E("    for n, p in prose_paragraphs(text):", "    for n, p in [(1, text)]:"),
+        None, {'placeholder: the same ids on a page that only mentions them in prose fail'}),
+    'two parents suffice to speak for a third (PARENT_K = 2)': (
+        E("PARENT_K = 3\n", "PARENT_K = 2\n"),
+        None, {'two parents are not enough to speak for a third (PARENT_K = 3)'}),
+    'an excerpt exempts any id, whether or not the named file holds it': (
+        E("any(('\"%s\"' % core) in t for t in excerpts.get(fi, ()))", "bool(excerpts.get(fi))"),
+        None, {'an excerpt of a real shipped file passes only for ids that file contains'}),
+    'a table row or list item counts as a placeholder note': (
+        E("        elif LIST_OR_TABLE.match(ln):", "        elif False:"),
+        None, {'placeholder: a table row or a list item that says "placeholder" is not a note'}),
+    'a declared prefix that shipped ids start with still excuses': (
+        E("hit = next((i for i in ctx.idx if i.startswith(x)), None)", "hit = None"),
+        None, {'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing'}),
+    'a declared id that names a shipped asset still excuses': (
+        E("            if resolves(x, ctx.idx):\n                out.append(dict(page=r['name'], line=n, path=('<placeholder note>',), val=x",
+          "            if False:\n                out.append(dict(page=r['name'], line=n, path=('<placeholder note>',), val=x"),
+        None, {'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing'}),
+    'blockquoted fences not recognised': (
+        E(r"QFENCE = re.compile(r'^([ \t]*(?:>[ \t]?)*)```(\w*)[^\n]*\n(.*?)^[ \t]*(?:>[ \t]?)*```', re.M | re.S)",
+          "QFENCE = FENCE"),
+        None, {'a blockquoted fence is counted and scanned; a quoted java fence is counted and not read'}),
+    'a page-defined path counts before any fence, java included': (
+        E("    for lang, prev, comment in fence_claims(text):\n        if lang not in ('json', ''):\n            continue\n        for c in (prev[:1]",
+          "    for lang, prev, comment in fence_claims(text):\n        for c in (prev[:1]"),
+        None, {'page-defined: a path in prose, or before a java fence, defines nothing'}),
+    'a page-defined path counts from anywhere on the page': (
+        E("        for c in (prev[:1] + ([comment] if comment else [])):", "        for c in text.split('\\n'):"),
+        None, {'page-defined: a path in prose, or before a java fence, defines nothing'}),
     'generated-state base rule dropped': (
         E("    if not hit and gen and '_State_' in core:", "    if False:"),
         None, {'a generated-state id resolves by its base'}),
@@ -350,20 +425,23 @@ EXPECT = {
     'IDENTITY (no change - the harness control)': set(),
     "typing disabled: resolve against every store, not the key's family": {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
-        'a mixture class is widened by the shipped evidence at the exact position',
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
+        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'path typing collapsed to bare keys': {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'map-value typing by the parent dropped': {
         'a map value is typed by its parent, whatever its key',
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
@@ -376,60 +454,136 @@ EXPECT = {
         'a bare key seen under one parent types that parent and no unseen one',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
+        'two parents are not enough to speak for a third (PARENT_K = 3)',
     },
     'N floor lowered to 1': {
-        'a mixture class is widened by the shipped evidence at the exact position',
+        'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
         'healthy corpus: every denominator is exact',
     },
     'P floor lowered to 0.5': {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'array elements not extracted': {
         'a bare key seen under one parent types that parent and no unseen one',
+        'a blockquoted fence is counted and scanned; a quoted java fence is counted and not read',
         'a generated-state id resolves by its base',
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
         'a known FIELD among map values is not mistaken for an id slot',
         'a map value is typed by its parent, whatever its key',
         'a missing typing snapshot is reported, not fatal',
-        'a mixture class is widened by the shipped evidence at the exact position',
+        'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a real id in each covered family passes',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
         'a tie passes in either store; the stem, not the path or extension, is the id',
         'a value not shaped like an id is exempt as shape and counted',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
+        'an excerpt of a real shipped file passes only for ids that file contains',
         'an id inside an array is checked',
+        'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'an invented id in each covered family fails',
         'fences: comments, an ellipsis, a fragment, an untagged JSON fence and an indented fence are read; a tree and a java fence are not',
         'healthy corpus: every denominator is exact',
         "pack: a pack's id is exempt on a page that names that pack and only there",
+        'page-defined: a path in prose, or before a java fence, defines nothing',
         "page-defined: a path on the line before a fence or in its first comment defines the stem, for that path's family only",
+        'pairs recovered from unparseable fences are reported on their own line',
+        'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing',
         'placeholder: a prefix or quoted id the page names is exempt there, nothing near it is',
+        'placeholder: a table row or a list item that says "placeholder" is not a note',
         'placeholder: the same ids on a page that only mentions them in prose fail',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
         'the tolerant extractor agrees with json.loads on every strict fence',
+        'two parents are not enough to speak for a third (PARENT_K = 3)',
     },
     'array elements not extracted AND the json.loads cross-check removed': {
         'an id inside an array is checked',
         'fences: comments, an ellipsis, a fragment, an untagged JSON fence and an indented fence are read; a tree and a java fence are not',
         'healthy corpus: every denominator is exact',
+        'pairs recovered from unparseable fences are reported on their own line',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'bulk data (Prefabs, World) swept like a store': {
         'healthy corpus: every denominator is exact',
     },
-    'position-evidence widening off (WIDEN = False)': {
-        'a mixture class is widened by the shipped evidence at the exact position',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+    'verbatim widening off (WIDEN = False)': {
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
-    'verbatim values taken from an untyped bare key': {
-        'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
-        'a value the shipped assets put under the key passes; an untyped bare key does not lend its values',
+    "verbatim of another store's id accepted (VERBATIM_STRICT = False)": {
+        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
         'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    "verbatim taken from an untyped class AND the strict filter off (the via guard's own effect)": {
+        'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
+        'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
+        'an excerpt of a real shipped file passes only for ids that file contains',
+        'an id of ANOTHER store that ships under the key somewhere is still the wrong kind',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'the exact position no longer wins over a bare key (EXACT_WINS = False)': {
+        'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'the exact pair no longer wins over parent.*': {
+        'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'the placeholder note is the whole page, not a paragraph': {
+        'healthy corpus: every denominator is exact',
+        'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing',
+        'placeholder: a table row or a list item that says "placeholder" is not a note',
+        'placeholder: the same ids on a page that only mentions them in prose fail',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'two parents suffice to speak for a third (PARENT_K = 2)': {
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+        'two parents are not enough to speak for a third (PARENT_K = 3)',
+    },
+    'an excerpt exempts any id, whether or not the named file holds it': {
+        'an excerpt of a real shipped file passes only for ids that file contains',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a table row or list item counts as a placeholder note': {
+        'healthy corpus: every denominator is exact',
+        'placeholder: a table row or a list item that says "placeholder" is not a note',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a declared prefix that shipped ids start with still excuses': {
+        'healthy corpus: every denominator is exact',
+        'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a declared id that names a shipped asset still excuses': {
+        'placeholder: a note that declares a real prefix or a real id is reported and excuses nothing',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'blockquoted fences not recognised': {
+        'a blockquoted fence is counted and scanned; a quoted java fence is counted and not read',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a page-defined path counts before any fence, java included': {
+        'healthy corpus: every denominator is exact',
+        'page-defined: a path in prose, or before a java fence, defines nothing',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a page-defined path counts from anywhere on the page': {
+        'healthy corpus: every denominator is exact',
+        'page-defined: a path in prose, or before a java fence, defines nothing',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'generated-state base rule dropped': {

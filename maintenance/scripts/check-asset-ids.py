@@ -85,23 +85,52 @@ ID_SHAPE = re.compile(r'^[A-Za-z0-9_.\-]+$')
 NUMERIC = re.compile(r'^[0-9.\-]+$')
 SETPATH = re.compile(r'setPath\("([^"]*)"\)')
 FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
+# The same, but a fence may sit inside a blockquote (`> ```json`): 8 of the handbook's fences do, and an
+# anchor that allows only spaces before the backticks neither scanned nor COUNTED them.
+QFENCE = re.compile(r'^([ \t]*(?:>[ \t]?)*)```(\w*)[^\n]*\n(.*?)^[ \t]*(?:>[ \t]?)*```', re.M | re.S)
+BQ = re.compile(r'^[ \t]*(?:>[ \t]?)*')
+
+
+def fences(text: str):
+    """(lang, body, body_start, open_start, quoted) per fence; a blockquoted fence's body has its
+    `> ` markers stripped line by line, newlines kept so line numbers still add up."""
+    for m in QFENCE.finditer(text):
+        quoted = '>' in m.group(1)
+        body = m.group(3)
+        if quoted:
+            body = '\n'.join(BQ.sub('', ln) for ln in body.split('\n'))
+        yield m.group(2), body, m.start(3), m.start(), quoted
 # A path-shaped token naming an asset file: Server/Item/Items/Foo.json, Item/Items/Foo.json
 PATH_TOKEN = re.compile(r'[\w./\-]*?/([\w.\-]+?)\.(?:json|particlesystem|particlespawner)\b')
 PATH_FULL = re.compile(r'[\w./\-]+\.(?:json|particlesystem|particlespawner)\b')
 IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
-# The two position-evidence widenings (see position_evidence). They were added AFTER the first
-# docs run, which flagged 60 pairs without them; WIDEN = False reproduces that first setting so the
-# change is always reportable under both.
+# Settings added AFTER the first docs run, each a response to a measured false positive, each
+# switchable so every result is reportable under the setting before it (measure-asset-id-recall.py
+# prints them all):
+#   WIDEN          a value the shipped assets themselves put under the key passes ("verbatim"):
+#                  the built-in `Empty`, `Full`, tag names under `Attack`. 60 flags became 44.
+#   VERBATIM_STRICT  ...but a value taken from a BARE-KEY (or parent.*) class counts only if it
+#                  resolves in NO store at all (a sentinel). An id of another store shipped under
+#                  the key somewhere (a stage id under Forks.Next) is the wrong kind everywhere
+#                  else, and passed `"Next": "Hunt_Breach_Stage2"` until the review found it.
+#                  Values shipped at exactly (parent, key) stay verbatim at any kind.
+#   EXACT_WINS     where the shipped assets show THIS exact (parent, key) and its values do not
+#                  resolve in the bare-key class's family, the bare key does not speak there. A
+#                  bare key can be a mixture of two codec fields (`Attack` is root-interaction ids
+#                  under Actions/Modify and the tag names Block/Melee/Ranged under Tags; `Build` is
+#                  9 sounds and 1 particle). The review found `Tags.Attack: Uninterruptable` flagged.
+#   PARENT_K       a bare-key class types a position under a parent the shipped assets never show
+#                  the key under only if the key was seen under at least this many distinct parents.
+#                  One parent is one codec context (`Weapons`: 55 NPC-inventory item ids, all under
+#                  `Modify`, and Family tag names on an item ability). The value 3 is a JUDGMENT,
+#                  not a measurement: K = 1..4 give identical flag sets on every docs revision
+#                  measured (37425a6, a83ffd0, HEAD), so the data cannot choose. The fixture pins
+#                  2 vs 3 (key `Twin`, two parents) so a change to it is a decision, not drift.
 WIDEN = True
-# A bare-key class types a position under a parent the shipped assets never show the key under
-# only if the key was seen under at least this many distinct parents. One parent is one codec
-# context: `Weapons` is 55 item ids, all under `Modify` (an NPC role's inventory), and the same
-# key on an item ability holds Family tag names (CoreItemAbility.Weapons, STRING_ARRAY, "Staff",
-# "Sword"). Nothing in the shipped data shows the second field, so the bare class must not speak
-# for it. Added after that false positive was reported; PARENT_K = 1 reproduces the setting
-# before it.
+VERBATIM_STRICT = True
+EXACT_WINS = True
 PARENT_K = 3
-EXEMPT_CLASSES = ('shape', 'position-evidence', 'shipped-use', 'placeholder', 'pack', 'page-defined')
+EXEMPT_CLASSES = ('shape', 'shipped-use', 'shipped-excerpt', 'placeholder', 'pack', 'page-defined')
 
 
 def stem_of(name: str):
@@ -164,6 +193,7 @@ class Sweep:
         self.fail_by_top = collections.Counter()
         self.children = collections.defaultdict(set)   # parent -> child keys seen
         self.parents = collections.defaultdict(set)    # key -> nearest named parents it carries a string under
+        self.relpaths = []                             # swept files, relative to Server/
 
     def walk(self, o, path):
         if isinstance(o, dict):
@@ -192,6 +222,7 @@ class Sweep:
                 self.excluded += 1
                 continue
             self.files += 1
+            self.relpaths.append(f.relative_to(server).as_posix())
             try:
                 o = json.loads(f.read_text(encoding='utf-8-sig'))
             except Exception:
@@ -316,29 +347,48 @@ def strict_pairs(o, path=()):
 
 
 # ------------------------------------------------------------------- docs
+LIST_OR_TABLE = re.compile(r'^\s*(?:\||[-*+]\s|\d+[.)]\s)')
+
+
 def prose_paragraphs(text: str):
-    """Paragraphs of text OUTSIDE fences, with blockquote markers removed."""
-    stripped = FENCE.sub(lambda m: '\n' * m.group(0).count('\n'), text)
-    para, out = [], []
-    for ln in stripped.split('\n'):
+    """(first line number, text) of every PROSE paragraph outside fences, blockquote markers
+    removed. A table row or a list item is not a paragraph: it ends the one before it and is
+    dropped, with its continuation lines. A symptoms list that mentions a UI "placeholder" is
+    not a note about ids."""
+    stripped = QFENCE.sub(lambda m: '\n' * m.group(0).count('\n'), text)
+    para, out, start, in_list = [], [], 0, False
+    for n, ln in enumerate(stripped.split('\n'), 1):
         ln = re.sub(r'^\s*>\s?', '', ln)
-        if ln.strip():
+        if not ln.strip():
+            if para:
+                out.append((start, ' '.join(para))); para = []
+            in_list = False
+        elif LIST_OR_TABLE.match(ln):
+            if para:
+                out.append((start, ' '.join(para))); para = []
+            in_list = True
+        elif in_list:
+            continue
+        else:
+            if not para:
+                start = n
             para.append(ln)
-        elif para:
-            out.append(' '.join(para)); para = []
     if para:
-        out.append(' '.join(para))
+        out.append((start, ' '.join(para)))
     return out
 
 
 def placeholder_note(text: str):
-    """(prefixes, exact ids) named by the page's own placeholder paragraphs."""
-    prefixes, ids = set(), set()
-    for p in prose_paragraphs(text):
+    """(prefixes, exact ids) -> each with the line of the paragraph that declares it, from the
+    page's own placeholder PARAGRAPHS (see prose_paragraphs)."""
+    prefixes, ids = {}, {}
+    for n, p in prose_paragraphs(text):
         if not re.search(r'\bplaceholders?\b', p, re.I):
             continue
-        prefixes.update(re.findall(r'`([A-Za-z0-9]+_)`', p))
-        ids.update(re.findall(r'`"([A-Za-z0-9_.\-]+)"`', p))
+        for x in re.findall(r'`([A-Za-z0-9]+_)`', p):
+            prefixes.setdefault(x, n)
+        for x in re.findall(r'`"([A-Za-z0-9_.\-]+)"`', p):
+            ids.setdefault(x, n)
     return prefixes, ids
 
 
@@ -367,24 +417,32 @@ def store_of_path(token: str, stores):
     return best
 
 
-def page_defined(text, stores):
-    """id -> set of stores, from a path token on the line before a fence or in its
-    first `//` comment."""
-    defs = collections.defaultdict(set)
+def fence_claims(text):
+    """Per fence (same order as fences()): (nearest non-blank line before it, the two nearest, first
+    line of the body if it is a `//` comment), as raw text lines - where a fence says which file it is."""
+    out = []
     lines = text.split('\n')
-    for m in FENCE.finditer(text):
-        start_line = text.count('\n', 0, m.start()) # 0-based line of the opening fence
-        cands = []
+    for lang, body, bstart, ostart, quoted in fences(text):
+        start_line = text.count('\n', 0, ostart)      # 0-based line of the opening fence
+        prev = []
         j = start_line - 1
-        while j >= 0 and not lines[j].strip():
+        while j >= 0 and len(prev) < 2:
+            if BQ.sub('', lines[j]).strip():
+                prev.append(lines[j])
             j -= 1
-        if j >= 0:
-            cands.append(lines[j])
-        body_lines = m.group(3).split('\n')
-        for bl in body_lines[:1]:
-            if bl.strip().startswith('//'):
-                cands.append(bl)
-        for c in cands:
+        first = body.split('\n')[0]
+        out.append((lang, prev, first if first.strip().startswith('//') else None))
+    return out
+
+
+def page_defined(text, stores):
+    """id -> set of stores, from a path token on the line before a JSON (or untagged) fence or in its
+    first `//` comment. Not a path anywhere else on the page, and not one before a java fence."""
+    defs = collections.defaultdict(set)
+    for lang, prev, comment in fence_claims(text):
+        if lang not in ('json', ''):
+            continue
+        for c in (prev[:1] + ([comment] if comment else [])):
             for pm in PATH_FULL.finditer(c):
                 tok = pm.group()
                 st = stem_of(tok.rsplit('/', 1)[-1])
@@ -392,6 +450,32 @@ def page_defined(text, stores):
                 if st and sp:
                     defs[st].add(sp)
     return defs
+
+
+def excerpt_files(claims, sweep, assets):
+    """Per fence index: the text of every REAL shipped file its introduction names (the two lines
+    before it, or its first comment). A path that matches no swept file names nothing."""
+    by_base = sweep.__dict__.get('_by_base')
+    if by_base is None:
+        by_base = collections.defaultdict(list)
+        for rp in sweep.relpaths:
+            by_base[rp.rsplit('/', 1)[-1]].append(rp)
+        sweep._by_base = by_base
+    out = {}
+    for i, (lang, prev, comment) in enumerate(claims):
+        if lang not in ('json', ''):
+            continue
+        texts = []
+        for c in (prev + ([comment] if comment else [])):
+            for pm in PATH_FULL.finditer(c):
+                tok = pm.group()
+                tok = tok[len('Server/'):] if tok.startswith('Server/') else tok
+                for rp in by_base.get(tok.rsplit('/', 1)[-1], ()):
+                    if rp == tok or rp.endswith('/' + tok):
+                        texts.append((assets / 'Server' / rp).read_text(encoding='utf-8-sig', errors='replace'))
+        if texts:
+            out[i] = texts
+    return out
 
 
 def scan_docs(docs: pathlib.Path):
@@ -402,10 +486,11 @@ def scan_docs(docs: pathlib.Path):
         rec = dict(name=d.name, text=text, pairs=[], n_json=0, n_json_strict=0,
                    n_json_tolerant=0, n_untagged=0, n_untagged_strict=0,
                    n_untagged_jsonish=0, n_untagged_fragment=0, n_other=0, tolerant_pairs=0,
-                   strict_disagree=[])
-        for m in FENCE.finditer(text):
-            lang, body = m.group(2), m.group(3)
-            first_line = text.count('\n', 0, m.start(3)) + 1
+                   n_quoted=0, n_quoted_json=0, recovered_pairs=0, strict_disagree=[])
+        for fi, (lang, body, bstart, ostart, quoted) in enumerate(fences(text)):
+            first_line = text.count('\n', 0, bstart) + 1
+            rec['n_quoted'] += quoted
+            rec['n_quoted_json'] += quoted and lang == 'json'
             strict = None
             try:
                 strict = json.loads(body)
@@ -442,59 +527,67 @@ def scan_docs(docs: pathlib.Path):
             elif lang == 'json':
                 rec['n_json_tolerant'] += 1
             for path, val, off in tp:
-                rec['pairs'].append((first_line + body.count('\n', 0, off), path, val))
+                rec['pairs'].append((first_line + body.count('\n', 0, off), path, val, strict is None, fi))
             rec['tolerant_pairs'] += len(tp)
+            if strict is None:
+                rec['recovered_pairs'] += len(tp)
         pages.append(rec)
     return pages
 
 
-def lookup_families(path, typed, sweep):
-    """Union of the families of every typed class this position matches."""
+def exact_stores(sweep, idx, p, k):
+    """The stores in which >= P of the shipped values at exactly (parent, key) resolve, at any N;
+    None when the assets never show that pair."""
+    if p is None or (p, k) not in sweep.L2:
+        return None
+    cache = sweep.__dict__.setdefault('_exact', {})
+    if (p, k) not in cache:
+        vs = sweep.L2[(p, k)]
+        c = collections.Counter(s for v in vs for s in set(resolves(v, idx)))
+        cache[(p, k)] = {s for s, n in c.items() if n / len(vs) >= P_MIN}
+    return cache[(p, k)]
+
+
+def lookup_families(path, typed, sweep, idx):
+    """Union of the families of every typed class this position matches, minus a bare-key or
+    parent.* class that the exact (parent, key) contradicts (EXACT_WINS)."""
     fams, via = set(), []
     k = path[-1]
     p = path[-2] if len(path) > 1 else None
     if p is not None and (p, k) in typed['L2']:
         fams |= typed['L2'][(p, k)][0]; via.append('L2')
     if (k,) in typed['L1'] and (p in sweep.parents.get(k, ()) or len(sweep.parents.get(k, ())) >= PARENT_K):
-        fams |= typed['L1'][(k,)][0]; via.append('L1')
+        l1 = typed['L1'][(k,)][0]
+        ex = exact_stores(sweep, idx, p, k)
+        if EXACT_WINS and ex is not None and not (ex & l1):
+            pass        # the shipped assets show this (parent, key) holding something else
+        else:
+            fams |= l1; via.append('L1')
     if p is not None and (p, '*') in typed['LW']:
         # LW is for maps with free-form keys. If this exact (parent, key) is a FIELD
         # the shipped assets use and no class types it, it is not an id slot.
-        if k not in sweep.children.get(p, ()) or (p, k) in typed['L2'] or (k,) in typed['L1']:
-            fams |= typed['LW'][(p, '*')][0]; via.append('LW')
+        lw = typed['LW'][(p, '*')][0]
+        ex = exact_stores(sweep, idx, p, k)
+        if EXACT_WINS and ex is not None and not (ex & lw):
+            pass        # this (parent, key) is a field of its own that the parent.* class does not describe
+        elif k not in sweep.children.get(p, ()) or (p, k) in typed['L2'] or (k,) in typed['L1']:
+            fams |= lw; via.append('LW')
     return fams, via
 
 
-def position_evidence(path, sweep, idx, via):
-    """What the shipped assets show at THIS position, beyond the typed classes.
-
-    A bare-key class can be a mixture of two codec fields that happen to share a
-    name (`Build` is 9 sound ids and 1 particle id: typed to sounds at 0.90 by that
-    margin). Two monotone widenings, each read from the shipped assets at the exact
-    position and neither able to type a position that was not already typed:
-      stores    the stores in which >= P of the values at exactly (parent, key)
-                resolve, at ANY N — a path with little data still says where its
-                few values live;
-      verbatim  the shipped values themselves, from the exact (parent, key) and from
-                the typed classes that typed this position (`via`): a value the game
-                ships under this key is real by demonstration even when it resolves
-                nowhere (`Empty`, a built-in; `Full`; the `Melee`/`Ranged` tag values
-                under `Attack`). NOT from an untyped bare key: `Id` is 50% items and
-                50% sounds, and taking its values as verbatim passes a sound id under
-                `Rewards.Id` (the fixture caught that)."""
+def shipped_values(path, sweep, idx, via):
+    """Values the shipped assets themselves put at this position (verbatim). At exactly
+    (parent, key): any value. From a bare-key or parent.* class: only a value that resolves in
+    NO store (a sentinel such as `Empty`) - a real id of another store is the wrong kind
+    everywhere but where it ships (VERBATIM_STRICT)."""
     k = path[-1]
     p = path[-2] if len(path) > 1 else None
-    stores, verb = set(), set()
-    if p is not None and (p, k) in sweep.L2:
-        vs = sweep.L2[(p, k)]
-        c = collections.Counter(s for v in vs for s in set(resolves(v, idx)))
-        stores |= {s for s, n in c.items() if n / len(vs) >= P_MIN}
-        verb |= vs
-    if 'L1' in via:
-        verb |= sweep.L1.get((k,), set())
-    if 'LW' in via:
-        verb |= sweep.LW.get((p, '*'), set())
-    return stores, verb
+    verb = set(sweep.L2.get((p, k), ())) if p is not None else set()
+    for lvl, tbl, key in (('L1', sweep.L1, (k,)), ('LW', sweep.LW, (p, '*'))):
+        if lvl in via:
+            vs = tbl.get(key, set())
+            verb |= {v for v in vs if not resolves(v, idx)} if VERBATIM_STRICT else vs
+    return verb
 
 
 # ---------------------------------------------------------------- evaluation
@@ -518,27 +611,43 @@ def build_context(assets: pathlib.Path, src: pathlib.Path) -> Ctx:
     return c
 
 
-def evaluate(pages, ctx: Ctx, packs):
+def evaluate(pages, ctx: Ctx, packs, assets=None):
     """One verdict per extracted pair. verdict is one of 'untyped', 'resolved',
-    'failed' or an exemption class in EXEMPT_CLASSES. Order of the checks is the
-    order of the cheapest-and-most-structural first; an exemption is only reached
-    for a value that did NOT resolve, so an exemption count is a count of things it
-    actually excused."""
+    'failed' or an exemption class in EXEMPT_CLASSES. An exemption is only reached for a value that
+    did NOT resolve, so an exemption count is a count of things it actually excused. A placeholder
+    note that declares a prefix some shipped id starts with, or an id that resolves, is itself a
+    record (verdict 'bad-placeholder') and excuses nothing."""
     stores_set = set(ctx.stores)
     out = []
     for r in pages:
         text = r['text']
-        pre_prefixes, pre_ids = placeholder_note(text)
+        decl_prefixes, decl_ids = placeholder_note(text)
+        pre_prefixes, pre_ids = {}, {}
+        for x, n in decl_prefixes.items():
+            hit = next((i for i in ctx.idx if i.startswith(x)), None)
+            if hit:
+                out.append(dict(page=r['name'], line=n, path=('<placeholder note>',), val=x, fams=(),
+                                hit=(hit,), verdict='bad-placeholder'))
+            else:
+                pre_prefixes[x] = n
+        for x, n in decl_ids.items():
+            if resolves(x, ctx.idx):
+                out.append(dict(page=r['name'], line=n, path=('<placeholder note>',), val=x, fams=(),
+                                hit=(x,), verdict='bad-placeholder'))
+            else:
+                pre_ids[x] = n
         pdef = page_defined(text, stores_set)
+        excerpts = excerpt_files(fence_claims(text), ctx.sweep, assets) if assets is not None else {}
         pack_ids = {}
         for pk, ids in packs.items():
             if pk in text:
                 for i in ids:
                     pack_ids[i] = pk
-        for line, path, val in r['pairs']:
-            rec = dict(page=r['name'], line=line, path=path, val=val, fams=(), hit=(), verdict=None)
+        for line, path, val, tol, fi in r['pairs']:
+            rec = dict(page=r['name'], line=line, path=path, val=val, fams=(), hit=(), verdict=None,
+                       tolerant=tol)
             out.append(rec)
-            fams, via = lookup_families(path, ctx.typed, ctx.sweep)
+            fams, via = lookup_families(path, ctx.typed, ctx.sweep, ctx.idx)
             rec['fams'] = tuple(sorted(fams))
             if not fams:
                 rec['verdict'] = 'untyped'
@@ -552,11 +661,11 @@ def evaluate(pages, ctx: Ctx, packs):
             if set(hit) & fams:
                 rec['verdict'] = 'resolved'
                 continue
-            ev_stores, verb = position_evidence(path, ctx.sweep, ctx.idx, via) if WIDEN else (set(), set())
-            if set(hit) & ev_stores:
-                rec['verdict'] = 'position-evidence'
-            elif val in verb or core in verb:
+            verb = shipped_values(path, ctx.sweep, ctx.idx, via) if WIDEN else set()
+            if val in verb or core in verb:
                 rec['verdict'] = 'shipped-use'
+            elif any(('"%s"' % core) in t for t in excerpts.get(fi, ())):
+                rec['verdict'] = 'shipped-excerpt'
             elif val in pre_ids or core in pre_ids or any(core.startswith(p) for p in pre_prefixes):
                 rec['verdict'] = 'placeholder'
             elif core in pack_ids:
@@ -680,11 +789,14 @@ def main():
     tot = collections.Counter()
     for r in pages:
         for k in ('n_json', 'n_json_strict', 'n_json_tolerant', 'n_untagged', 'n_untagged_strict',
-                  'n_untagged_jsonish', 'n_untagged_fragment', 'n_other', 'tolerant_pairs'):
+                  'n_untagged_jsonish', 'n_untagged_fragment', 'n_other', 'tolerant_pairs',
+                  'n_quoted', 'n_quoted_json', 'recovered_pairs'):
             tot[k] += r[k]
     bad_extract = [(r['name'], ln, d) for r in pages for ln, d in r['strict_disagree']]
 
-    records = evaluate(pages, ctx, packs)
+    all_records = evaluate(pages, ctx, packs, assets)
+    decl_flags = [r for r in all_records if r['verdict'] == 'bad-placeholder']
+    records = [r for r in all_records if r['verdict'] != 'bad-placeholder']
     verdicts = collections.Counter(r['verdict'] for r in records)
     exempt = collections.Counter({k: verdicts[k] for k in EXEMPT_CLASSES})
     checked = collections.Counter(resolved=verdicts['resolved'], failed=verdicts['failed'])
@@ -695,6 +807,8 @@ def main():
     flags = [(r['page'], r['line'], r['path'], r['val'], list(r['fams']),
               ('exists only as ' + ', '.join(r['hit'])) if r['hit'] else 'absent from every store')
              for r in records if r['verdict'] == 'failed']
+    rec_typed = sum(1 for r in records if r['tolerant'] and r['verdict'] != 'untyped')
+    rec_failed = sum(1 for r in records if r['tolerant'] and r['verdict'] == 'failed')
 
     if a.verbose:
         # one line per extracted pair, tab-separated: the fixture asserts on these rather than
@@ -712,12 +826,15 @@ def main():
           f"({tot['n_json_strict']} strict-parse, {tot['n_json_tolerant']} unparseable and read tolerantly); "
           f"{tot['n_untagged']} untagged fence(s), of which {tot['n_untagged_strict']} parse as JSON and "
           f"{tot['n_untagged_jsonish']} hold JSON pairs (scanned); {tot['n_untagged_fragment']} more hold only a "
-          f"quoted-key fragment inside a tree or sample (not scanned); {tot['n_other']} other-language fence(s) not scanned")
+          f"quoted-key fragment inside a tree or sample (not scanned); {tot['n_other']} other-language fence(s) not scanned; "
+          f"{tot['n_quoted']} fence(s) sit inside a blockquote, {tot['n_quoted_json']} of them ```json (all counted and scanned)")
     n_exempt = sum(exempt.values())
     print(f"  INFO  pairs: {n_pairs} string value(s) extracted, {typed_pairs} at a typed position "
           f"({untyped_pairs} untyped, not checkable); of the typed: {checked['resolved']} resolved, "
           f"{n_exempt} exempt (" + ', '.join(f"{k} {exempt[k]}" for k in EXEMPT_CLASSES)
           + f"), {checked['failed']} failed; resolved in {len(fam_checked)} distinct store(s)")
+    print(f"  INFO  recovered from the unparseable fences: {tot['recovered_pairs']} pair(s), "
+          f"{rec_typed} at a typed position, {rec_failed} failed")
     print(f"  INFO  timing: asset sweep {t_sweep:.1f}s, docs scan {t_docs:.1f}s")
     if typed_pairs != checked['resolved'] + n_exempt + checked['failed']:
         print("  FAIL  the typed-pair tally does not add up")
@@ -731,7 +848,12 @@ def main():
     for name, line, path, val, fams, kind in flags:
         print(f"  FLAG  {name}:{line}: \"{'.'.join(path)}\": \"{val}\" is not an id in "
               f"{'/'.join(fams)} ({kind})")
-    if flags:
+    for r in decl_flags:
+        what = (f"prefix `{r['val']}` that shipped ids start with (e.g. {r['hit'][0]})" if r['val'].endswith('_')
+                else f"id `\"{r['val']}\"` that names a shipped asset")
+        print(f"  FLAG  {r['page']}:{r['line']}: the placeholder note declares {what}; "
+              f"a placeholder must be a name no asset has, so it excuses nothing")
+    if flags or decl_flags:
         rc = rc or 1
     if rc == 0:
         print(f"  PASS  all {checked['resolved']} checked asset id(s) resolve in the family their key refers to")

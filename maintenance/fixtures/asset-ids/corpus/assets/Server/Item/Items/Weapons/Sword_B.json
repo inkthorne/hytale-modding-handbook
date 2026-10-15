@@ -7,5 +7,7 @@
   "Solid": "Sword_B",
   "SoundEvents": {
     "Build": "SFX_B"
-  }
+  },
+  "Pick": "Sword_B",
+  "Loot": "D_B"
 }

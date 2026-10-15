@@ -38,7 +38,7 @@ REPO = HERE.parents[1]
 REV_BASE, REV_FIX = '37425a6', 'd58a7a1'
 REV_DROPS_FIX = 'd003f50'
 REV_BUILD26 = '8a83d79'
-FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
+FENCE = re.compile(r'^([ \t]*(?:>[ \t]?)*)```(\w*)[^\n]*\n(.*?)^[ \t]*(?:>[ \t]?)*```', re.M | re.S)   # blockquoted fences too
 QUOTED = re.compile(r'"((?:[^"\\\n]|\\.)*)"')   # consumed left to right, so a closing quote never opens the next
 ID_LIKE = re.compile(r'^[A-Za-z][A-Za-z0-9_.\-]*$')
 
@@ -70,7 +70,8 @@ def json_fence_values(docs: pathlib.Path, glob='interactions*.md'):
     for f in sorted(docs.glob(glob)):
         for m in FENCE.finditer(f.read_text()):
             if m.group(2) == 'json':
-                body = m.group(3)
+                body = '\n'.join(re.sub(r'^[ \t]*(?:>[ \t]?)*', '', ln) for ln in m.group(3).split('\n')) \
+                    if '>' in m.group(1) else m.group(3)
                 for q in QUOTED.finditer(body):
                     if not body[q.end():].lstrip().startswith(':'):     # a value, not a key
                         vals[q.group(1)].add(f.name)
@@ -111,22 +112,46 @@ def main():
                                                 text=True, check=True).stdout.split('\n'))
     print(f'  INFO  0.7.2 Assets.zip listing: {len(zip_stems)} distinct file stem(s)')
     rc = 0
-    shipped_k = gate.PARENT_K
     results = {}
-    # The gate was changed twice after its first docs run (see its constants). Recall is
+    # The gate was changed after its first docs run (see its constants). Recall is
     # reported under every setting so neither change can quietly buy or cost a number.
-    settings = (('first docs run: no widening, bare key speaks for any parent', False, 1),
-                ('position-evidence widening, bare key speaks for any parent', True, 1),
-                ('as shipped: widening, bare key needs PARENT_K parents', True, None))
-    for label, widen, pk in settings:
-        gate.WIDEN = widen
-        gate.PARENT_K = pk if pk is not None else shipped_k
+    shipped = {k: getattr(gate, k) for k in ('WIDEN', 'VERBATIM_STRICT', 'EXACT_WINS', 'PARENT_K')}
+    settings = (
+        ('first docs run: no verbatim, bare key wins, speaks for any parent',
+         dict(WIDEN=False, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1)),
+        ('+ verbatim from every class (the widening before the review)',
+         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1)),
+        ('+ PARENT_K',
+         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False)),
+        ('as shipped: + strict verbatim + exact position wins',
+         dict()))
+    for label, over in settings:
+        for k, v in {**shipped, **over}.items():
+            setattr(gate, k, v)
         print(f"\n{'=' * 8} {label} {'=' * 8}")
         r, res = measure(gate, ctx, packs, zip_stems, a)
         rc = rc or r
         results[label] = res
+    for k, v in shipped.items():
+        setattr(gate, k, v)
     for label, (ra, rb) in results.items():
         print(f"RECALL (a) {ra:.0%}  (b) {rb:.0%}   {label}")
+    # PARENT_K sweep: does the data choose K? Flag sets per docs revision for K = 1..4.
+    with tempfile.TemporaryDirectory() as td2:
+        td2 = pathlib.Path(td2)
+        trees = {'37425a6': export_docs(REV_BASE, td2 / 'a'), 'a83ffd0': export_docs('a83ffd0', td2 / 'b'),
+                 'HEAD (working tree)': REPO / 'docs'}
+        for name, tree in trees.items():
+            pages = gate.scan_docs(tree)
+            sets = {}
+            for k in (1, 2, 3, 4):
+                gate.PARENT_K = k
+                recs = gate.evaluate(pages, ctx, packs, pathlib.Path(a.assets))
+                sets[k] = {(r['page'], r['line'], r['val']) for r in recs if r['verdict'] == 'failed'}
+            same = all(sets[k] == sets[3] for k in sets)
+            print(f"PARENT_K sweep on {name}: flags " + ', '.join(f'K={k}: {len(v)}' for k, v in sets.items())
+                  + ('  (identical sets - the data cannot choose K)' if same else '  (SETS DIFFER)'))
+        gate.PARENT_K = shipped['PARENT_K']
     return rc
 
 
@@ -143,10 +168,11 @@ def measure(gate, ctx, packs, zip_stems, a):
         print(f'\n(a) interactions: {len(v_base)} distinct json-fence values at {REV_BASE}, '
               f'{len(v_fix)} at {REV_FIX}; {len(removed)} removed; denominator = {len(den)} id-shaped, '
               f'match no stem in the 0.7.2 listing')
-        recs_base = gate.evaluate(gate.scan_docs(base), ctx, packs)
-        recs_fix = gate.evaluate(gate.scan_docs(fix), ctx, packs)
+        recs_base = gate.evaluate(gate.scan_docs(base), ctx, packs, pathlib.Path(a.assets))
+        recs_fix = gate.evaluate(gate.scan_docs(fix), ctx, packs, pathlib.Path(a.assets))
         flagged_base = {(r['page'], r['val']) for r in recs_base if r['verdict'] == 'failed'}
-        flagged_vals = {v for _, v in flagged_base}
+        # a flag counts as a hit only on the pages the denominator was drawn from
+        flagged_vals = {v for p_, v in flagged_base if p_.startswith('interactions')}
         hits = [v for v in den if v in flagged_vals]
         miss = [v for v in den if v not in flagged_vals]
         print(f'    recall: {pct(len(hits), len(den))}')
@@ -193,7 +219,7 @@ def measure(gate, ctx, packs, zip_stems, a):
         print(f'\n(b) drops: {REV_DROPS_FIX} removed {len(removed_lines)} "ItemId" line(s) carrying '
               f'{len(ids_removed)} distinct id(s); build-26 listing has {len(b26_stems)} stem(s); '
               f'denominator = {len(den_b)} id(s) matching no build-26 stem')
-        recs_d = gate.evaluate(gate.scan_docs(drops_old), ctx, packs)
+        recs_d = gate.evaluate(gate.scan_docs(drops_old), ctx, packs, pathlib.Path(a.assets))
         flagged_d = {r['val']: r for r in recs_d if r['verdict'] == 'failed' and r['page'] == 'drops.md'}
         hits_b = [i for i in den_b if i in flagged_d]
         print(f'    recall: {pct(len(hits_b), len(den_b))}')

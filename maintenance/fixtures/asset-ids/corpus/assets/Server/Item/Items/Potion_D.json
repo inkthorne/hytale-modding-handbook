@@ -7,5 +7,7 @@
   "Solid": "Potion_D",
   "SoundEvents": {
     "Build": "SFX_D"
-  }
+  },
+  "Pick": "Potion_D",
+  "Loot": "D_D"
 }

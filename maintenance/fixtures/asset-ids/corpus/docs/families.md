@@ -41,10 +41,12 @@ A key that means different things under different parents is typed by the pair:
 }
 ```
 
-A bare-key class that is a mixture of two fields is widened by the evidence at the exact position:
+A bare-key class that is a mixture of two fields does not speak where the exact position shows the other
+field (`Dust.Build` is a particle, `Tags.Pick` a tag name), and still speaks for a parent it was never seen under:
 
 ```json
-{ "Dust": { "Build": "P_B" }, "Smoke": { "Build": "Nothing_Real" }, "SoundEvents": { "Build": "SFX_B" } }
+{ "Dust": { "Build": "P_B" }, "Smoke": { "Build": "Nothing_Real" }, "SoundEvents": { "Build": "SFX_B" },
+  "Tags": { "Pick": "Uninterruptable" } }
 ```
 
 A value the shipped assets themselves put under the key, and a generated state id:
@@ -57,4 +59,25 @@ A bare-key class seen under one parent only types that parent, not a parent the 
 
 ```json
 { "Holder": { "Lonely": "Sword_Fake_L" }, "Elsewhere": { "Lonely": "Anything_L" } }
+```
+
+Two parents are not enough, and an id of another store that ships under the key somewhere is still the wrong kind:
+
+```json
+{ "HolderA": { "Twin": "Sword_Fake_T" }, "Elsewhere": { "Twin": "Anything_T" } }
+```
+
+```json
+{ "Next": "Fx_A" }
+```
+
+A map of item ids that also has a field of its own, holding another kind of id (`Loot` is a drop list
+wherever it is seen), and a key the map has not seen:
+
+```json
+{ "Bag": { "Loot": "D_B", "Extra": "Sword_Fake_Bag" } }
+```
+
+```json
+{ "Bag": { "Loot": "Sword_A" }, "Tones": { "Inner": "text" } }
 ```

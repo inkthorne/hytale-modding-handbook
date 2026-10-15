@@ -46,5 +46,6 @@
   ],
   "Mix": {
     "Build": "SFX_G"
-  }
+  },
+  "Pick": "Item_G"
 }

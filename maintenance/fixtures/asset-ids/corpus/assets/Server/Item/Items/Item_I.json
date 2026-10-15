@@ -12,5 +12,20 @@
       "Gem_E",
       "Rock_F"
     ]
-  }
+  },
+  "HolderA": {
+    "Twin": [
+      "Sword_A",
+      "Sword_B",
+      "Axe_C"
+    ]
+  },
+  "HolderB": {
+    "Twin": [
+      "Potion_D",
+      "Gem_E",
+      "Rock_F"
+    ]
+  },
+  "Pick": "Item_I"
 }

@@ -1,0 +1,13 @@
+{
+  "Type": "Simple",
+  "Next": "Int_J",
+  "EffectId": "Fx_C",
+  "Effects": {
+    "LocalSoundEventId": "SFX_I",
+    "Particles": [
+      {
+        "SystemId": "P_C"
+      }
+    ]
+  }
+}

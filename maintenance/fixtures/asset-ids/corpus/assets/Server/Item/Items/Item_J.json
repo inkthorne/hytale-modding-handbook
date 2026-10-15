@@ -10,7 +10,8 @@
     "Interactions": [
       "Int_A"
     ],
-    "Solid": "Sword_A"
+    "Solid": "Sword_A",
+    "Loot": "D_A"
   },
   "Beta": {
     "ItemId": "Sword_A",
@@ -22,7 +23,8 @@
     "Interactions": [
       "Int_A"
     ],
-    "Solid": "Sword_A"
+    "Solid": "Sword_A",
+    "Loot": "D_A"
   },
   "Gamma": {
     "ItemId": "Sword_A",
@@ -34,6 +36,11 @@
     "Interactions": [
       "Int_A"
     ],
-    "Solid": "Sword_A"
+    "Solid": "Sword_A",
+    "Loot": "D_A"
+  },
+  "Pick": "Item_J",
+  "Tags": {
+    "Pick": "Melee"
   }
 }

@@ -18,9 +18,26 @@
     "T7": "SFX_H",
     "T8": "SFX_I",
     "T9": "SFX_J",
-    "Style": "loud"
+    "Style": "loud",
+    "Inner": {
+      "deep": "x"
+    }
   },
   "Mix": {
     "Build": "SFX_H"
+  },
+  "Pick": "Item_H",
+  "Bag": {
+    "B0": "Sword_A",
+    "B1": "Sword_B",
+    "B2": "Axe_C",
+    "B3": "Potion_D",
+    "B4": "Gem_E",
+    "B5": "Rock_F",
+    "B6": "Item_G",
+    "B7": "Item_H",
+    "B8": "Item_I",
+    "B9": "Item_J",
+    "Loot": "D_A"
   }
 }

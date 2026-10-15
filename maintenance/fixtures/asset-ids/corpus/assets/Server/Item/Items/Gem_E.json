@@ -7,5 +7,7 @@
   "Solid": "Gem_E",
   "SoundEvents": {
     "Build": "SFX_E"
-  }
+  },
+  "Pick": "Gem_E",
+  "Loot": "D_E"
 }

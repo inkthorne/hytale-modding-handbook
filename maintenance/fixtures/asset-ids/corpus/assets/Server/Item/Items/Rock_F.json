@@ -7,5 +7,7 @@
   "Solid": "Rock_F",
   "SoundEvents": {
     "Build": "SFX_F"
-  }
+  },
+  "Pick": "Rock_F",
+  "Loot": "D_F"
 }

@@ -1,6 +1,6 @@
 {
   "Type": "Simple",
-  "Next": "Int_A",
+  "Next": "Int_G",
   "EffectId": "Fx_F",
   "Effects": {
     "LocalSoundEventId": "SFX_F",

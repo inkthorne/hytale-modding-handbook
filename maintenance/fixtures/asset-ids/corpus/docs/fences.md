@@ -40,3 +40,15 @@ Map.of("Next", "Int_Bad5");
    ```json
    { "Next": "Int_Bad6" }
    ```
+
+> A blockquoted fence is a fence:
+>
+> ```json
+> { "Next": "Int_Bad7" }
+> ```
+
+> And so is a quoted java one, which is counted and not read:
+>
+> ```java
+> Map.of("Next", "Int_Bad8");
+> ```

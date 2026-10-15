@@ -1,6 +1,6 @@
 {
   "source": "registry-oracle-notes.md \u00a711, derived independently twice and reconciled",
-  "build": "0.6.3 (build-26)",
+  "build": "0.6.3 (build-26); updated for 0.7.2 (build-34)",
   "types": {
     "AddItem": {
       "class": "AddItemInteraction",
@@ -127,13 +127,6 @@
       "verdict": "row",
       "target_page": "interactions-world.md"
     },
-    "DestroyTreasureCondition": {
-      "class": "DestroyTreasureConditionInteraction",
-      "own_keys": 0,
-      "required": [],
-      "verdict": "row",
-      "target_page": "adventure.md"
-    },
     "DragEraseBlock": {
       "class": "config.client.DragEraseBlockInteraction",
       "own_keys": 0,
@@ -227,13 +220,6 @@
       "required": [],
       "verdict": "row",
       "target_page": "items-crafting.md"
-    },
-    "OpenTreasureContainer": {
-      "class": "OpenTreasureContainerInteraction",
-      "own_keys": 0,
-      "required": [],
-      "verdict": "row",
-      "target_page": "adventure.md"
     },
     "PickBlock": {
       "class": "config.client.PickBlockInteraction",
@@ -356,7 +342,7 @@
     },
     "ShowEventTitle": {
       "class": "ShowEventTitleInteraction",
-      "own_keys": 8,
+      "own_keys": 9,
       "required": [
         "Target",
         "PrimaryTitle"
@@ -367,6 +353,7 @@
         "Target",
         "PrimaryTitle",
         "SecondaryTitle",
+        "Style",
         "IsMajor",
         "Icon",
         "DurationS",
@@ -493,5 +480,6 @@
       "verdict": "row",
       "target_page": "npc-spawning.md"
     }
-  }
+  },
+  "rederived": "0.7.2 (2026-10-14): DestroyTreasureCondition and OpenTreasureContainer removed, their classes deleted with the treasure-map objective (42 types remain). ShowEventTitle re-read whole from the 0.7.2 source: 9 keys, `Style` added after SecondaryTitle, `IsMajor` kept but now Validators.deprecated() and mapped onto style; required set unchanged. The other 42 reproduce unchanged."
 }

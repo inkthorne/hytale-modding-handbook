@@ -1,32 +1,32 @@
 {
  "note": "Fixture for maintenance/scripts/registry_miner.py (queued gate 1, phase b). Figures marked source=notes were derived independently by hand in registry-oracle-notes.md \u00a71-\u00a72 and are the real check; figures marked source=measured were produced by this miner and are regression baselines only \u2014 they cannot validate it.",
- "build": "0.6.3 (build-26)",
+ "build": "0.7.2 (build-34)",
  "independent": {
   "source": "notes",
   "interaction_codec": {
-   "names": 124,
-   "form1_registrations": 89,
-   "form2_registrations": 35,
-   "form2_statements": 21,
+   "names": 135,
+   "form1_registrations": 92,
+   "form2_registrations": 43,
+   "form2_statements": 29,
    "verdict": "closed",
    "why": "\u00a71: the two forms are disjoint; mining only form 1 sees 72%."
   },
   "field_statements": {
    "CODEC": {
-    "form2": 44,
-    "form1": 578
+    "form2": 54,
+    "form1": 586
    },
    "TYPE_CODEC": {
     "form2": 14,
     "form1": 0
    },
    "PLUGIN_CODEC": {
-    "form2": 10,
+    "form2": 12,
     "form1": 1
    },
    "PAGE_CODEC": {
-    "form2": 3,
-    "form1": 1
+    "form2": 4,
+    "form1": 3
    },
    "OPERATION_CODEC": {
     "form2": 0,
@@ -59,9 +59,9 @@
   },
   "core_component_types": {
    "why": "\u00a71's THIRD correction. NPCPlugin.registerCoreComponentType(name, Builder::new) registers into a builder FACTORY chosen by the builder's category() return type, not into a codec field, so forms 1 and 2 see none of these ~194 names. Every figure here was derived by grep and by reading `extends` chains in the decompiled source, NOT by registry_miner \u2014 the point of the fixture is that the two routes must agree.",
-   "occurrences": 195,
+   "occurrences": 199,
    "declaration_sites": 1,
-   "call_sites": 194,
+   "call_sites": 198,
    "declaration_note": "NPCPlugin:1507 declares the method and its parameter list has the same arity as every call site, so arity cannot exclude it; the miner excludes it structurally (a declaration is followed by its body). Left in, it reads as one unresolvable site.",
    "constant_named": 3,
    "constants": {
@@ -70,8 +70,8 @@
    },
    "by_name_convention": {
     "why": "Independent route: bucket each site by its builder's `Builder<Category>*` name rather than by resolving category(). It sees only the 191 sites whose id is a string literal \u2014 a naive `registerCoreComponentType(\"...\"` grep cannot see a constant id.",
-    "Action": 86,
-    "Sensor": 57,
+    "Action": 89,
+    "Sensor": 58,
     "EntityFilter": 21,
     "BodyMotion": 18,
     "HeadMotion": 7,
@@ -80,12 +80,12 @@
      "BuilderEncounterMemberCollector",
      "BuilderCombatTargetCollector"
     ],
-    "total": 191
+    "total": 195
    },
-   "reconciliation": "convention 191 + 3 constant-named = 194 call sites. Per category the constants land as BuilderBodyMotionPath (+1 BodyMotion), BuilderSensorPath (+1 Sensor) and BuilderActionRole (+1 Action); BuilderSensorEntityPrioritiserAttitude is `BuilderSensor`-prefixed but categorises as ISensorEntityPrioritiser, which is why the convention's Sensor bucket (57) and the resolved Sensor bucket (57) agree only after both corrections cancel.",
+   "reconciliation": "convention 195 + 3 constant-named = 198 call sites (0.7.2; 191 + 3 = 194 at build-26). Per category the constants land as BuilderBodyMotionPath (+1 BodyMotion), BuilderSensorPath (+1 Sensor) and BuilderActionRole (+1 Action); BuilderSensorEntityPrioritiserAttitude is `BuilderSensor`-prefixed but categorises as ISensorEntityPrioritiser, which is why the convention's Sensor bucket (57) and the resolved Sensor bucket (57) agree only after both corrections cancel.",
    "categories_resolved": {
-    "com.hypixel.hytale.server.npc.instructions.Action": 87,
-    "com.hypixel.hytale.server.npc.instructions.Sensor": 57,
+    "com.hypixel.hytale.server.npc.instructions.Action": 90,
+    "com.hypixel.hytale.server.npc.instructions.Sensor": 58,
     "com.hypixel.hytale.server.npc.corecomponents.IEntityFilter": 21,
     "com.hypixel.hytale.server.npc.instructions.BodyMotion": 19,
     "com.hypixel.hytale.server.npc.instructions.HeadMotion": 7,
@@ -109,7 +109,7 @@
     ]
    },
    "probes_why": "`Kill` is the one that mattered: effects-stats.md documented `\"Type\": \"Kill\"` as an INTERACTION, and a forms-1-and-2 miner reports it registered nowhere \u2014 which reads as 'invented' when the truth is \u00a74 collision, a real name in a different registry. `Orbit` is the control: npc-roles.md uses it twice and captions it both times as a custom BodyMotion, so it must resolve to NOTHING or the caption is wrong. `Timer` is the reason the vocabulary has to stay partitioned: it is a legal `Type` in three slots and an unscoped membership test would pass it in all seven. Two of the 15 do double duty and should not be trimmed out of this fixture. `Path` is BOTH a constant-named site (FACTORY_CLASS_TRANSIENT_PATH at NPCPlugin:821 BodyMotion and :824 Sensor) AND multi-category, so a literal-only sweep loses the name and with it the fact that it spans two slots \u2014 the failure that matters for scoping rather than for the count. `Attitude` is the single name the naming-convention route mis-buckets (BuilderSensorEntityPrioritiserAttitude reads as Sensor) AND multi-category, so the reconciliation arithmetic below is doing real work on exactly the datum phase (c)'s scoping rests on.",
-   "resolved_by_inheritance": 188,
+   "resolved_by_inheritance": 192,
    "resolved_by_own_declaration": 6,
    "own_declaration_builders": [
     "BuilderBodyMotionSequence",
@@ -131,11 +131,12 @@
     "category_returning_a_type_variable": 0,
     "category_returning_a_type_variable_why": "Builder.java declares `public Class<T> category();` \u2014 a type VARIABLE. _resolve_type turns `T` into a plausible FQCN that is NOT <category-unresolved>, so the guard built for this would not fire. Nothing reaches it only because the walk follows `extends` and Builder is reached only through `implements` \u2014 an unstated traversal-order property protecting a 194-site resolver, and 'also follow interfaces' is the obvious future hardening that would break it. _category_of now requires the captured name to resolve to a real source file, which makes the protection deliberate."
    }
-  }
+  },
+  "rederived": "0.7.2 (2026-10-14): every independent figure re-derived by maintenance/scripts/hand-registry-recount.py, a text sweep sharing no code with registry_miner. It was first run on the 0.6.8 snapshot, where it reproduced every figure below as originally hand-derived for build-26 (124/89/35/21, the field table, 195/194, 86/57/21/18/7 = 191, 188 inherited), and only then on 0.7.2. The miner and the recount agree on every changed figure. Changes: Interaction.CODEC +13 ability types (ApplyAbilityEffects, AttachBeam, ClearCarriedBlock, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, MarkAbilityBenchIntroSeen, OpenAbilityBench, OpenChapterRewards, PullEntityAbility, SpawnAbilityEntity, SplitAbilityProjectile, TriggerAbilityFX), -2 treasure types (DestroyTreasureCondition, OpenTreasureContainer); core components +4 (Actions ClearEncounterWeather, GrantReward, SetEncounterWeather; Sensor GameFlag)."
  },
  "measured": {
   "source": "measured",
-  "registrations": 754,
+  "registrations": 977,
   "second_form_only": [
    "com.hypixel.hytale.builtin.adventure.farming.config.stages.spread.SpreadGrowthBehaviour.CODEC",
    "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
@@ -147,6 +148,7 @@
    "com.hypixel.hytale.builtin.adventure.worldevents.condition.spawner.Spawner.Config.TYPE_CODEC",
    "com.hypixel.hytale.builtin.adventure.worldevents.context.Context.TYPE_CODEC",
    "com.hypixel.hytale.builtin.instances.removal.RemovalCondition.CODEC",
+   "com.hypixel.hytale.builtin.rewards.asset.RewardAsset.CODEC",
    "com.hypixel.hytale.builtin.worldgen.modifier.content.Content.TYPE_CODEC",
    "com.hypixel.hytale.builtin.worldgen.modifier.content.cave.CaveTypeGenerator.TYPE_CODEC",
    "com.hypixel.hytale.builtin.worldgen.modifier.op.Op.TYPE_CODEC",
@@ -162,7 +164,7 @@
   ],
   "id_not_in_argument_zero": 28,
   "register_class_name_codec_sites": 12,
-  "registries": 105,
-  "registries_note": "98 before 2026-09-04; +7 when form 3 (registerCoreComponentType) was added. Those 7 are all closed, so the open count stays 10 \u2014 a form-3 site that could not be categorised would land in <category-unresolved>, which the independent block pins at 0."
+  "registries": 107,
+  "registries_note": "98 before 2026-09-04; +7 when form 3 (registerCoreComponentType) was added. Those 7 are all closed, so the open count stays 10 \u2014 a form-3 site that could not be categorised would land in <category-unresolved>, which the independent block pins at 0. 0.7.2: 107 \u2014 +RewardAsset.CODEC (new builtin.rewards, second form only) and +IHeightmap.CODEC; none removed; open count still 10. `registrations` read 754 (the pre-form-3 figure, never updated when form 3 landed; 948 at 0.6.8) and is now 977. It is not checked by the runner."
  }
 }

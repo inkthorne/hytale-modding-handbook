@@ -1226,3 +1226,35 @@ it is **per-hop, not per-walk** — `ChangeFarmingStage`'s ancestry crosses thre
 consecutive 2-copy names and the leaf imports neither grandparent, so resolving
 everything against the leaf's imports fixes hop 1, truncates at hop 2, and reads as
 progress.
+
+## 15. Re-deriving the independent figures after a game update (0.7.2, 2026-10-14)
+
+The registry fixture's `independent` block is only evidence while its figures are
+re-derived by a route that shares nothing with `registry_miner.py`. At 0.7.2 that route
+is `maintenance/scripts/hand-registry-recount.py`: plain text sweeps (statement = text to
+the next depth-0 `;`, args split on top-level commas, `static final String` constants
+resolved per file, `category()` found by walking `extends`). It is a review tool, not a
+gate, in the same sense as `check-sigblocks.py`.
+
+**Validate the route before trusting it.** It was run on the 0.6.8 snapshot
+(`~/.cache/hytale-update-snapshot/src`) first, and reproduced every figure §1–§2 derived
+by hand for build-26: 124 / 89 / 35 / 21 for `Interaction.CODEC`, all ten field-table
+cells, 195 occurrences and 194 call sites, the convention buckets 86 / 57 / 21 / 18 / 7
+(191), and 188 resolved by inheritance. Only then was its 0.7.2 output used. A recount
+that has not reproduced the previous build's known answer is a second miner, not a check.
+
+0.7.2 results, which agree with the miner on every changed figure: `Interaction.CODEC`
+135 names (92 + 43 in 29 statements) — +13 ability-system types, −2 treasure types;
+field table `CODEC` 54 / 586, `PLUGIN_CODEC` 12 / 1, `PAGE_CODEC` 4 / 3; core components
+199 / 198, convention 195 + 3 constant-named, Action 90, Sensor 58, 192 by inheritance
+(+`ClearEncounterWeather`, `GrantReward`, `SetEncounterWeather`, `GameFlag`). The measured
+baselines moved to 107 registries (+`RewardAsset.CODEC`, second form only, and
++`IHeightmap.CODEC`) with the open count still 10. The codec fixture lost its two treasure
+types (42 remain), `ShowEventTitle` gained `Style` (re-read whole: `IsMajor` is now
+`Validators.deprecated()`), and `Item` counts 60 `new KeyedCodec` (+`Ability`).
+
+The type-value skiplist's one entry, `IntervalCondition`, went stale for a reason worth
+knowing: its registration is still the two-hop indirection described there, unchanged,
+but 0.7.2 ships 18 `Server/WorldEvent` assets using it as a `"Type"`, so the shipped-asset
+oracle now covers it independently. A stale exemption can mean the oracle grew, not that
+the page changed.

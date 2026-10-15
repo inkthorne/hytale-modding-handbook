@@ -125,7 +125,7 @@ for case in traps['cases']:
 # and count the ones we read nothing from.
 import re
 BASELINE_BLIND = 23      # classes yielding 0 keys while declaring some (build-26)
-BASELINE_NOFIELD = 21    # classes whose codec field is not named plainly CODEC
+BASELINE_NOFIELD = 22    # classes whose codec field is not named plainly CODEC (21 at build-26; +EditorPropertyGallery in 0.7.2)
 blind = nofield = swept = uncovered = filegap = 0
 for jp in root.rglob('*.java'):
     src = jp.read_text(errors='replace')

@@ -32,7 +32,8 @@ because a source that silently stops contributing is how this check would rot:
      self-registering, so a jar-only oracle has a structural false-positive
      floor, and a skip list for them would be a claim about a fence with the
      fence left unread.
-  4. maintenance/scripts/type-value-skiplist.txt, audited, currently one entry.
+  4. maintenance/scripts/type-value-skiplist.txt, audited, currently empty (its one entry, IntervalCondition,
+     resolves through shipped assets as of 0.7.2).
 
 Usage: python3 maintenance/scripts/check-type-values.py [--docs DIR] [--src DIR]
                                                         [--assets DIR] [-v]

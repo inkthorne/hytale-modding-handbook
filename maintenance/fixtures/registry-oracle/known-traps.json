@@ -1,6 +1,6 @@
 {
  "note": "Cases CLAUDE.md invariant 7 and registry-oracle-notes.md \u00a711 name as the known ways to be confidently wrong. Each defeated some plausible parser. The last two cases assert STRUCTURE (were the keys found at all) rather than required/raw sets: those would have to be filled from the parser's own output, and a fixture that copies the parser cannot test it. Their key counts come from counting `new KeyedCodec` in the file independently.",
- "build": "0.6.3 (build-26)",
+ "build": "0.6.3 (build-26); Item count updated for 0.7.2 (build-34)",
  "cases": [
   {
    "label": "raw KeyedCodec + true THIRD ARGUMENT = required",
@@ -52,10 +52,11 @@
    "label": "chain on a *_BUILDER field, .build()-ed into the public codec",
    "path": "com/hypixel/hytale/server/core/asset/type/item/config/Item.java",
    "why": "Item.CODEC is `CODEC_BUILDER.build()`. Scanning the CODEC statement alone returns ZERO keys and the appends==adds==keys self-check ENDORSES it \u2014 on the corpus's most-documented asset type (items.md plus five items-*.md pages). One key, `State`, is appended to the builder ~700 lines BELOW the declaration, so following the field is necessary but not sufficient; the scan must also collect appends on that field elsewhere in the file.",
-   "expect_keys": 59,
+   "expect_keys": 60,
    "expect_builder": "CODEC_BUILDER",
    "expect_has_key": "State",
-   "expect_covered": true
+   "expect_covered": true,
+   "expect_keys_note": "0.7.2: 60, counted independently as `new KeyedCodec` occurrences in Item.java (59 at 0.6.8); the new key is `Ability`."
   },
   {
    "label": ".addField(...) declares keys too",

@@ -96,7 +96,7 @@ All items support these core properties:
 | `MaxDurability` | int | Maximum durability points |
 | `DurabilityLossOnHit` | float | Durability lost per use |
 | `PortalKey` | object | Makes the item a portal key (`PortalType`, plus optional `TimeLimitSeconds` and — 0.7.2+ — `AllowedEntryCount` overrides of the portal type's values; see [Adventure API](adventure.md#portalkey)) |
-| `Ability` | object | 0.7.2+: makes the item an ability rune (a `Slot`-keyed codec map, `Core` or `Support`; shipped runes live under `Items/Rune/`) |
+| `Ability` | object | 0.7.2+: makes the item an ability rune (a `Slot`-keyed codec map, `Core` or `Support`; shipped runes live under `Items/Rune/`; see [Abilities and Runes](abilities.md)) |
 
 ### TranslationProperties
 

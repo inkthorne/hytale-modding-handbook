@@ -80,7 +80,7 @@ Interaction System
 
 A curated reading path through the types that have a written section, grouped by the page that
 covers them. It is **not** the full vocabulary: as of build-34 (0.7.2), `Interaction.CODEC` carries **135**
-registered `Type` values, of which 95 have a written section (on this page or another) and 40 are
+registered `Type` values, of which 102 have a written section (on this page or another) and 33 are
 documented in their registry rows themselves. None is undocumented. For the complete list — and to
 tell "undocumented" apart from "does not exist" — see
 [Complete Type Registry](#complete-type-registry) below.
@@ -143,8 +143,8 @@ tell "undocumented" apart from "does not exist" — see
 
 ### Complete Type Registry
 
-Every `Type` value `Interaction.CODEC` accepts, as of **build-34 (0.7.2)** — **135** rows: 95 have a
-written section (on this page or another) and 40 are documented in their registry rows themselves. **None is
+Every `Type` value `Interaction.CODEC` accepts, as of **build-34 (0.7.2)** — **135** rows: 102 have a
+written section (on this page or another) and 33 are documented in their registry rows themselves. **None is
 undocumented** — as of 2026-09-04 every registered `Type` is covered. A `—` appearing here again
 means some type is undocumented: usually a game update adding one, but an edit that drops a link or
 a prose cell produces the same state. A row count is itself a closure claim, and so is each of those three figures, so
@@ -157,11 +157,7 @@ The **Documented** cell has three states, and its first character tells you whic
   keys, or both.
 - **Prose** — the type has fewer than two keys of its own and no gotcha needing a paragraph, so
   *this row is its documentation*: one line, its own keys with their requiredness, and the
-  fully-qualified class last. There is no section to link to and none is owed. **The exception is the
-  seven `AbilitiesPlugin` types that have more keys** (`ApplyAbilityEffects`, `GrantAbilityCharges`,
-  `LaunchAbilityProjectile`, `PullEntityAbility`, `SpawnAbilityEntity`, `SplitAbilityProjectile`,
-  `TriggerAbilityFX`, all 0.7.2+). They have prose rows only for now, because their key tables belong
-  on a dedicated abilities page.
+  fully-qualified class last. There is no section to link to and none is owed.
 - **`— *not yet documented*`** — neither, yet. No row is in this state today.
 
 A bare mention in a list, or a name that appears only inside an example, is *not* documentation and
@@ -185,7 +181,7 @@ registers it.
 | `Type` | Registered by | Documented |
 |---|---|---|
 | `AddItem` | `InteractionModule` | [interactions-world.md](interactions-world.md#additem) |
-| `ApplyAbilityEffects` | `AbilitiesPlugin` | Applies **one** of its `Effects` (`EntityEffect` ids, one per stack) to the target entity per run: the first the target does not carry, else the one closest to expiring, so several entries act as stacks of one debuff. Optional `Duration`, `DurationAttribute`, `DamageAttribute` and `RuneEffects`; no key is required. One shipped use, inside `Server/Item/Interactions/Abilities/PoisonImbue/Ability_PoisonImbue_Cast.json`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.ApplyAbilityEffectsInteraction` |
+| `ApplyAbilityEffects` | `AbilitiesPlugin` | [abilities.md](abilities.md#applyabilityeffects) |
 | `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
 | `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
 | `AttachBeam` | `BeamPlugin` | [interactions.md](#attachbeam) |
@@ -236,14 +232,14 @@ registers it.
 | `GameFlagCondition` | `GameFlagsPlugin` | [world.md](world.md#game-flags) |
 | `GlobalEventStartInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
 | `GlobalEventStopInteraction` | `WorldEventsPlugin` | [world-events.md](world-events.md#starting-and-stopping-events) |
-| `GrantAbilityCharges` | `AbilitiesPlugin` | Puts a buff `Effect` on the caster and arms charges tied to it: while it lasts, each `Trigger` (`OnPrimaryActivation` or `OnHit`) spends a charge and runs `PerActivationInteraction` on the caster, up to `MaxCharges` (`0` means unlimited). `Effect` and `PerActivationInteraction` are required. Two shipped uses, the PoisonImbue and WindStrike casts. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.GrantAbilityChargesInteraction` |
+| `GrantAbilityCharges` | `AbilitiesPlugin` | [abilities.md](abilities.md#grantabilitycharges) |
 | `GroundedCondition` | `AbilitiesPlugin` | Fails the chain unless the interacting entity stands on the ground. Codec doc: "Fails the chain unless the caster stands on ground (or within Tolerance blocks above it). Author the fail feedback on Failed. Swimming, climbing and falling all fail." It passes when `MovementStatesComponent` reports `onGround`, or, with a positive `Tolerance`, when a downward ray from just above the feet meets a block of `Solid` material within `Tolerance` blocks. One key, `Tolerance` (float, default `0` meaning strictly on the ground, validated `>= 0`, not required). The client runs the same check (`simulateFirstRun` calls it too). Two shipped uses: `Server/Item/Interactions/Abilities/GroundSlam/Ability_GroundSlam_Cast.json` (`"Tolerance": 1`) and the core `Server/Item/Items/Glider/Template_Glider.json`, so that core item depends on a bundled plugin. The class lives in the core package all the same. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.GroundedConditionInteraction` |
 | `HarvestCrop` | `FarmingPlugin` | [items-blocks.md](items-blocks.md#harvestcrop-interaction) |
 | `HubPortal` | `CreativeHubPlugin` | [adventure.md](adventure.md#hubportal) |
 | `IncreaseBackpackCapacity` | `InteractionModule` | [interactions-world.md](interactions-world.md#increasebackpackcapacity) |
 | `IncrementCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#incrementcooldown) |
 | `Interrupt` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#interruptinteraction) |
-| `LaunchAbilityProjectile` | `AbilitiesPlugin` | Launches a server-side projectile from a `ProjectileConfig` (`Projectile`, required) along the caster's look, with keys for piercing, flight distance and lifetime, spectral flight, scale and speed attributes, and a particle trail. Nine shipped uses under `Server/Item/Interactions/Abilities/`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.LaunchAbilityProjectileInteraction` |
+| `LaunchAbilityProjectile` | `AbilitiesPlugin` | [abilities.md](abilities.md#launchabilityprojectile) |
 | `LaunchPad` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchpadinteraction) |
 | `LaunchProjectile` | `InteractionModule` | [interactions-world.md](interactions-world.md#launchprojectile) |
 | `LearnRecipe` | `CraftingPlugin` | [items-crafting.md](items-crafting.md#learning-recipes-learnrecipe) |
@@ -272,7 +268,7 @@ registers it.
 | `PortalReturn` | `PortalsPlugin` | The return leg of [`Portal`](#complete-type-registry) — class `ReturnPortalInteraction`, again not matching the registered name. No keys of its own. One shipped use, the interaction asset `Server/Item/Interactions/Block/Portal/Portal_Return.json`, referenced by its id `Portal_Return` from three items: the `Portal_Return` block's `CollisionEnter`, and the `Success` branch of the two dungeon exits, `Dungeon_Portal_End.json` (through [`OpenChapterRewards`](#openchapterrewards)) and `Dungeon_Portal_Early_Exit.json`. `com.hypixel.hytale.builtin.portals.interactions.ReturnPortalInteraction` |
 | `PrefabSelectionInteraction` | `BuilderToolsPlugin` | Selects a prefab in the prefab editor, and is the one registered name that carries the `Interaction` suffix — the `Type` string really is `PrefabSelectionInteraction`. It requires an active prefab edit session (otherwise it messages `server.commands.editprefab.notInEditSession`) and branches on the slot it was run from: `Secondary` picks the loaded prefab whose horizontal centre is nearest the player, while any other slot picks the one whose bounding box contains the block the player is looking at. No keys of its own. One shipped use, `Server/Item/Items/EditorTool/EditorTool_PrefabEditing_SelectPrefab.json`, which runs it from both `Primary` and `Secondary`. `com.hypixel.hytale.builtin.buildertools.prefabeditor.PrefabSelectionInteraction` |
 | `Projectile` | `ProjectileModule` | [projectiles.md](projectiles.md#projectileinteraction) |
-| `PullEntityAbility` | `AbilitiesPlugin` | Reels the target entity toward the caster over a fixed `ReelTime`, after an optional hooked `Delay`, stopping at `StopRange`. A victim guarding toward the caster, or wider than `MaxTargetWidth`, resists the pull and skips the optional `Effect`. No key is required. One shipped use, `Server/Item/Interactions/Abilities/ChainHook/Ability_ChainHook_Hit.json`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.PullEntityAbilityInteraction` |
+| `PullEntityAbility` | `AbilitiesPlugin` | [abilities.md](abilities.md#pullentityability) |
 | `RefillContainer` | `InteractionModule` | [items-tools.md](items-tools.md#watering-can) |
 | `RemoveEntity` | `InteractionModule` | [interactions-world.md](interactions-world.md#removeentity) |
 | `Repeat` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#repeat) |
@@ -291,7 +287,7 @@ registers it.
 | `ShowEventTitle` | `InteractionModule` | [trigger-volumes.md](trigger-volumes.md#the-showeventtitle-interaction-is-a-different-type-with-the-same-name) |
 | `SignalNearbyVolumes` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `Simple` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#simpleinteraction) |
-| `SpawnAbilityEntity` | `AbilitiesPlugin` | Spawns a stationary ability entity with a `Model` at the caster's aim point, within `Range`, for `Lifetime` seconds. It re-runs each `Repeats` entry's root-interaction `Chain` at that entry's `Interval`, and damage against it is ignored. `Model` and a non-empty `Repeats` are required. One shipped use, the debug `Debug_Ability_Tornado_Cast.json`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.SpawnAbilityEntityInteraction` |
+| `SpawnAbilityEntity` | `AbilitiesPlugin` | [abilities.md](abilities.md#spawnabilityentity) |
 | `SpawnDeployableAtHitLocation` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
 | `SpawnDeployableAtLocation` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
 | `SpawnDeployableFromRaycast` | `DeployablesPlugin` | [deployables.md](deployables.md#the-three-interactions) |
@@ -300,7 +296,7 @@ registers it.
 | `SpawnPrefab` | `InteractionModule` | [interactions-world.md](interactions-world.md#spawnprefab) |
 | `SpawnTriggerVolume` | `TriggerVolumesPlugin` | [trigger-volumes.md](trigger-volumes.md#commands-tooling) |
 | `SpectateControl` | `InteractionModule` | [player.md](player.md#spectatecontrol-interaction) |
-| `SplitAbilityProjectile` | `AbilitiesPlugin` | Placed in a `ProjectileConfig`'s `ProjectileHit` chain, it splits an ability projectile on its first entity hit, fanning `Fork` children `ForkSpread` degrees apart or relaunching at the nearest unhit entity within `RicochetRange`. It does nothing unless the cast carried a `Fork` or `Ricochet` attribute of 2 or more. Two shipped uses, `Ability_Split.json` and `ChargedShot/Ability_ChargedShot_Shatter.json`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.SplitAbilityProjectileInteraction` |
+| `SplitAbilityProjectile` | `AbilitiesPlugin` | [abilities.md](abilities.md#splitabilityprojectile) |
 | `StartObjective` | `ObjectivePlugin` | Starts the objective described by its one key, `Setup` (an `ObjectiveTypeSetup` — shipped assets write `{ "Type": "Objective", "ObjectiveId": … }` — required by `Validators.nonNull()`). Starting stamps the new objective's UUID into the **held item stack's** metadata, and a later use of that same stack adds the player to the existing objective instead of starting another. `com.hypixel.hytale.builtin.adventure.objectives.interactions.StartObjectiveInteraction` — note that `com.hypixel.hytale.builtin.adventure.objectiveshop.StartObjectiveInteraction` shares the simple name, is registered on `ChoiceInteraction.CODEC` with a different single key, and is **not** this type |
 | `StatsCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#statscondition) |
 | `StatsConditionWithModifier` | `InteractionModule` | The armour-discounted variant of [`StatsCondition`](interactions-flow.md#statscondition), whose keys (`Costs`, `LessThan`, `ValueType`, `Lenient`) it inherits from their shared `StatsConditionBaseInteraction` base. Its one own key, `InteractionModifierId`, is **required** (`Validators.nonNull()`) and is `ItemArmor.InteractionModifierId`, an enum with exactly **one** constant, `Dodge` — which both shipped uses (`Server/Item/Interactions/Dodge/Dodge_Left.json` and `Dodge_Right.json`) write. That closure claim belongs to the enum rather than to this type: `ChangeStatWithModifier`'s identically-named key reads the same enum, so a second constant in a future build falsifies both rows at once. The difference from `StatsCondition` is that each cost is first reduced by the flat and multiplier modifiers carried by the armour the player has **equipped** — the lookup runs over the armour container only — so the same `Costs` passes for a better-equipped player. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.none.StatsConditionWithModifierInteraction` |
@@ -309,7 +305,7 @@ registers it.
 | `Teleporter` | `TeleporterPlugin` | [adventure.md](adventure.md#teleporter) |
 | `TeleportInstance` | `InstancesPlugin` | [adventure.md](adventure.md#teleportinstance) |
 | `ToggleGlider` | `InteractionModule` | Toggles glider movement for the player. No keys of its own, and **no server-side behaviour at all**: `firstRun` is empty and the class exists to emit a protocol `ToggleGliderInteraction` from `generatePacket()`, which is why it lives in the `config.client` package — the client performs the toggle. One shipped use, `Server/Item/Items/Glider/Template_Glider.json`. `com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.ToggleGliderInteraction` |
-| `TriggerAbilityFX` | `AbilitiesPlugin` | Spawns a particle system (`SystemId`) and/or plays a mono 3D sound (`SoundEventId`) at the chain's hit location, with optional `Scale`, `ScaleAttribute` and `Color`. Codec doc: "Use this instead of Effects in server-simulated chains: their Effects never reach a client." Eight shipped uses, one of them the dragon cinematic root `Root_NPC_Cinematic_Dragon_Void_Dissolve.json`. Its key table is deferred to a dedicated abilities page. `com.hypixel.hytale.builtin.abilities.interaction.TriggerAbilityFXInteraction` |
+| `TriggerAbilityFX` | `AbilitiesPlugin` | [abilities.md](abilities.md#triggerabilityfx) |
 | `TriggerCooldown` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#triggercooldown) |
 | `TriggerSpawnMarkers` | `SpawningPlugin` | [npc-spawning.md](npc-spawning.md#triggerspawnmarkers) |
 | `UseBlock` | `InteractionModule` | [items-blocks.md](items-blocks.md#block_secondary-interaction) |

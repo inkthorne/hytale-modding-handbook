@@ -159,7 +159,8 @@ The non-deprecated way to reach a section is through its ECS component. Each sec
 `com.hypixel.hytale.server.core.inventory.InventoryComponent` with a static `getComponentType()`:
 `InventoryComponent.Hotbar`, `.Storage`, `.Armor`, `.Utility`, `.Tool`, `.Backpack`, and as of 0.7.2
 `.AbilitySlots` (section `-11`, the rune-ability bench slots) and `.RuneBag` (section `-12`). The component wraps
-the section's `ItemContainer`:
+the section's `ItemContainer`. For the ability-slot layout, slot filters and rune-bag rules, see
+[Ability Slots and the Rune Bag](abilities.md#ability-slots-and-the-rune-bag).
 
 ```java
 // InventoryComponent (instance)

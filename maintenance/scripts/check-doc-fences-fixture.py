@@ -67,8 +67,8 @@ DEF_CORPUS = FIXTURES / 'defaults' / 'corpus'
 # FLOORS: raise freely, lowering one needs a reason in the commit message. The fixture guards
 # the reader and nothing guards the fixture; a table that quietly shrank would report "every
 # mutation red" over fewer mutations, which is the sentence this repo keeps having to prevent.
-MIN_CASES = 98
-MIN_MUTATIONS = 47
+MIN_CASES = 99
+MIN_MUTATIONS = 48
 
 
 # ---------------------------------------------------------------------------------------------
@@ -667,6 +667,7 @@ JSON_PAGE = textwrap.dedent('''\
 def doctype_page(kind: str) -> str:
     java = {'quote': "> ```java\n> void setFoo(boolean b)\n> ```\n",
             'indent': "1. A step:\n\n   ```java\n   void setFoo(boolean b)\n   ```\n",
+            'upper': "```Java\nvoid setFoo(boolean b)\n```\n",
             'none': ""}[kind]
     return ("**Doc type:** JSON asset format\n\n"
             "### Alpha Interaction\n\n"
@@ -693,14 +694,15 @@ def inline_groups(c: Cases, scripts: pathlib.Path, td: pathlib.Path, tag: str, g
         c.text('JSON-parse check: a valid json fence inside a BLOCKQUOTE parses (its `> ` is removed), both fences counted',
                rc, t, want_rc=0, must=['FRAG 0', 'JSONFENCES 2'])
     if 'doctype' in groups:
-        for kind in ('quote', 'indent', 'none'):
+        for kind in ('quote', 'indent', 'upper', 'none'):
             root = inline_root(td, f'dt-{tag}-{kind}', scripts, {'p.md': doctype_page(kind)})
             rc, t = run_script(root, extract_block(scripts, 'section "[ADVISORY] Doc-type tags are present'))
             if kind == 'none':
                 c.text('doc-type healthy twin: Package-line citations on a page with no Java surface are provenance',
                        rc, t, want_rc=0, must=['FELL p.md', 'FENCESREAD 1'], must_not=['MISMATCH'])
             else:
-                label = {'quote': 'a java fence inside a BLOCKQUOTE', 'indent': 'a java fence INDENTED in a list item'}[kind]
+                label = {'quote': 'a java fence inside a BLOCKQUOTE', 'indent': 'a java fence INDENTED in a list item',
+                         'upper': 'a ```Java fence (the case fold is kept on purpose, maintenance/fixtures/doctype/fixture-i.md)'}[kind]
                 c.text(f'doc-type: {label} disqualifies the provenance exclusion (D), so the page is a MISMATCH',
                        rc, t, want_rc=0, must=['MISMATCH p.md', 'FENCESREAD 2'], must_not=['FELL p.md'])
     if 'codenames' in groups:
@@ -1088,6 +1090,10 @@ VERIFY_MUTATIONS = {
         ('verify',), {'verify-docs fence_agree: a gate that printed no fence count FAILs, it is never skipped',
                       'verify-docs: type-values: a missing INFO line is a FAIL, not a skip',
                       'verify-docs: asset-ids: a missing docs-scan line is a FAIL, not a skip'}),
+    'VERIFY: the doc-type reader stops folding the fence tag to lower case': (
+        'def _tag(s): return s.lower()', 'def _tag(s): return s',
+        ('doctype',), {'doc-type: a ```Java fence (the case fold is kept on purpose, maintenance/fixtures/doctype/fixture-i.md) '
+                       'disqualifies the provenance exclusion (D), so the page is a MISMATCH'}),
     'VERIFY: fence_agree no longer validates the figures before comparing them': (
         '''  elif case "$2" in *[!0-9]*) true ;; *) false ;; esac || case "$3" in ''|*[!0-9]*) true ;; *) false ;; esac; then\n''',
         '  elif false; then\n',

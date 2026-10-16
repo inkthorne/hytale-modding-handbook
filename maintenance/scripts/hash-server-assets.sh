@@ -35,9 +35,10 @@ roots=(Server); [ -d Cosmetics ] && roots+=(Cosmetics)
 # or a directory find could not enter left a short index and exit 0, which update-build.sh then
 # reported as those files REMOVED (review of 02aaa06..3baa29d, LOW-2). It is now nonzero, and the
 # message goes to stderr; the rows already written to stdout are an incomplete index.
+# xargs -r: with no file at all GNU xargs would still run sha256sum once, on stdin, and emit a `-` row.
 set -o pipefail
 find "${roots[@]}" -type f -print0 \
-  | xargs -0 sha256sum \
+  | xargs -r0 sha256sum \
   | sed 's/  / /' \
   | LC_ALL=C sort -k2
 rc=$?

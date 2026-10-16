@@ -28,7 +28,7 @@ classes under com/hypixel/ that do not parse), TF (a failing triage stub), RC (a
 comparison with no result, alone, with a failing triage, and with a python that exits non-zero
 after printing its result) and the resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
 DG (the API drift, source drift, asset-diff and hash-server-assets.sh guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
-without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg8]).
+without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg9]).
 
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
@@ -69,8 +69,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 883
-MIN_MUTATIONS = 145
+MIN_CHECKS = 891
+MIN_MUTATIONS = 148
 
 
 class Run:
@@ -946,6 +946,16 @@ def part1():
                        absent='no Server/Cosmetics drift')
         finally:
             demo.chmod(0o644)
+        # mktemp -d failing (review verify pass, NIT-B): TMPDIR names a directory that does not exist (a
+        # non-writable one fails the same way and still would under root, which a missing one does not).
+        # Unguarded, SORT_DIR is empty, the sorts write to /baseline and /extracted and the FAIL blames an unreadable file
+        drift_case(tmp, AI, 'ASSET-05', msg=r'asset drift: could not create a temporary directory for the sorted Common-asset indexes \(mktemp -d failed',
+                   absent='no Common-asset drift', over={'TMPDIR': str(tmp / 'no-such-tmp')})
+        # and the temp files are gone afterwards, on a run that sorts and diffs
+        mytmp = tmp / 'mytmp'; mytmp.mkdir()
+        install(tmp, 'v1r'); rc, out, *_ = run(tmp, AI, '--skip-caches', TMPDIR=str(mytmp))
+        check(rc == 0 and 'no Common-asset drift' in out and list(mytmp.iterdir()) == [],
+              "drift guards: a run that sorts the Common-asset indexes leaves nothing in TMPDIR")
         # hash-server-assets.sh on its own: a file it cannot hash is a nonzero exit and a message, not a short index
         hd = tmp / 'hashdir'
         (hd / 'Server/Item').mkdir(parents=True)
@@ -955,6 +965,10 @@ def part1():
         r = sh(f'"{hs}" "{hd}"')
         check(r.returncode == 0 and len(r.stdout.splitlines()) == 3 and r.stderr == '',
               "hash-server-assets.sh: control: every file readable, no Cosmetics/ directory: exit 0, 3 rows, nothing on stderr")
+        he = tmp / 'hashempty'; (he / 'Server').mkdir(parents=True)
+        r = sh(f'"{hs}" "{he}"')
+        check(r.returncode == 0 and r.stdout == '' and r.stderr == '',
+              "hash-server-assets.sh: an empty Server/ and no Cosmetics/: exit 0 and no row (xargs must not hash stdin)")
         lock = hd / 'Server/Item/b.json'
         lock.chmod(0)
         try:
@@ -1628,16 +1642,22 @@ MUTATIONS = [
     ("drift guard [dg6] API-15: REMOVED rows are not compared with the awk count", U, 'elif [ "$N_REMOVED" != "${X_REMOVED:-?}" ]; then', 'elif false; then', {_fl('API-15')}),
     ("drift guard [dg6] API-16: CHANGED rows are not compared with the awk count", U, 'elif [ "$N_CHGROWS" != "${X_CHANGED:-?}" ]; then', 'elif false; then', {_fl('API-16')}),
     ("drift guard [dg7] ASSET-03: neither sort status is read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if false; then',
-     {_fl('ASSET-03'), _fl('ASSET-03b'), _fl('ASSET-03c')}),
+     {_fl('ASSET-03'), _fl('ASSET-03b'), _fl('ASSET-03c'), CN('ASSET-03', "no asset drift row or count is printed after its FAIL")}),
     ("drift guard [dg7] ASSET-03: the baseline sort's status is not read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if [ "$SORT_RC_X" != 0 ]; then',
      {_fl('ASSET-03')}),
     ("drift guard [dg7] ASSET-03: the extracted index's sort status is not read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if [ "$SORT_RC_B" != 0 ]; then',
      {_fl('ASSET-03b')}),
-    ("drift guard [dg7] ASSET-04: hash-server-assets.sh's exit status is ignored", U, 'if [ "$HASH_RC" != 0 ]; then', 'if false; then', {_fl('ASSET-04')}),
+    ("drift guard [dg7] ASSET-04: hash-server-assets.sh's exit status is ignored", U, 'if [ "$HASH_RC" != 0 ]; then', 'if false; then', {_fl('ASSET-04'), CN('ASSET-04', "no asset drift row or count is printed after its FAIL")}),
     ("drift guard [dg7] ASSET-04: hash-server-assets.sh reads only the last stage's status", 'hash-server-assets.sh', 'set -o pipefail\n', '',
      {_fl('ASSET-04'), "hash-server-assets.sh: one unreadable file: exit 123, the other 2 rows, and the message on stderr"}),
     ("drift guard [dg8] ASSET-04: hash-server-assets.sh exits 0 after its message", 'hash-server-assets.sh', 'exit "$rc"; }', 'exit 0; }',
      {_fl('ASSET-04'), "hash-server-assets.sh: one unreadable file: exit 123, the other 2 rows, and the message on stderr"}),
+    ("drift guard [dg9] ASSET-05: a failed mktemp -d is not caught", U, 'if [ -z "$SORT_DIR" ]; then', 'if false; then', {_fl('ASSET-05')}),
+    ("drift guard [dg9] ASSET-05: the sort temp files are not removed", U, 'trap \'rm -rf "${SORT_DIR:-}"\' EXIT',
+     lambda src: src.replace('trap \'rm -rf "${SORT_DIR:-}"\' EXIT', ':').replace('    rm -rf "$SORT_DIR"\n', ''),
+     {"drift guards: a run that sorts the Common-asset indexes leaves nothing in TMPDIR"}),
+    ("drift guard [dg9] hash-server-assets.sh: xargs hashes stdin when there is no file", 'hash-server-assets.sh', 'xargs -r0 sha256sum', 'xargs -0 sha256sum',
+     {"hash-server-assets.sh: an empty Server/ and no Cosmetics/: exit 0 and no row (xargs must not hash stdin)"}),
     ("drift guard [dg8] API rows: section 5 prints its rows after its FAIL", U,
      '    soft_fail "$API_BAD; $SUFFIX"\n  elif [ "$N_CLS" = 0 ]; then', '    soft_fail "$API_BAD; $SUFFIX"\n  fi\n  if [ "$N_CLS" = 0 ]; then',
      {CN('API-04', "section 5 prints no ADDED/REMOVED/CHANGED row after its FAIL"), CN('API-16', "section 5 prints no ADDED/REMOVED/CHANGED row after its FAIL")}),

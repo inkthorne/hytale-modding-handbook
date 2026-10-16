@@ -187,35 +187,43 @@ if [ -f "$BASELINE" ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
   # file (everything "added" or "removed"), and both unreadable made it see two empty files, exit 0
   # and print "no Common-asset drift - content identical to the baseline" (measured, review of
   # 02aaa06..3baa29d, LOW-1). The temp files live outside the report dir so it holds only reports.
-  SORT_DIR="$(mktemp -d)"
-  LC_ALL=C sort "$BASELINE" > "$SORT_DIR/baseline" 2>/dev/null; SORT_RC_B=$?
-  LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes" > "$SORT_DIR/extracted" 2>/dev/null; SORT_RC_X=$?
-  if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then
-    soft_fail "asset drift: could not sort the Common-asset indexes for the diff (the baseline sort exited $SORT_RC_B, the extracted index's $SORT_RC_X; an unreadable file is the usual cause) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+  # an EXIT trap as well as the rm below: the temp files must not outlive any way out of the script
+  trap 'rm -rf "${SORT_DIR:-}"' EXIT
+  SORT_DIR="$(mktemp -d)" || SORT_DIR=""
+  if [ -z "$SORT_DIR" ]; then
+    # mktemp failing (TMPDIR unwritable or missing) left SORT_DIR empty, the sorts wrote to /baseline and
+    # /extracted, and the FAIL blamed an unreadable file (review verify pass, NIT-B)
+    soft_fail "asset drift: could not create a temporary directory for the sorted Common-asset indexes (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
   else
-    diff "$SORT_DIR/baseline" "$SORT_DIR/extracted" > "$REPORT/assets-drift.diff"
-    ASSET_DIFF_RC=$?     # 2 or more is trouble (0 same, 1 differs): the buckets below would be cut short
-    # index lines are "<sha256> <path>"; split the diff into per-path buckets
-    grep '^<' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-old-paths.txt"
-    grep '^>' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-new-paths.txt"
-    comm -12 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-modified.txt"
-    comm -23 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-removed.txt"
-    comm -13 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-added.txt"
-    N_MOD=$(wc -l < "$REPORT/assets-modified.txt")
-    N_DEL=$(wc -l < "$REPORT/assets-removed.txt")
-    N_ADD=$(wc -l < "$REPORT/assets-added.txt")
-    if [ "$ASSET_DIFF_RC" -ge 2 ]; then
-      soft_fail "asset drift: diff of the Common-asset indexes exited $ASSET_DIFF_RC (0 and 1 are normal) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
-    elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
-      info "no Common-asset drift — content identical to the baseline"
+    LC_ALL=C sort "$BASELINE" > "$SORT_DIR/baseline" 2>/dev/null; SORT_RC_B=$?
+    LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes" > "$SORT_DIR/extracted" 2>/dev/null; SORT_RC_X=$?
+    if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then
+      soft_fail "asset drift: could not sort the Common-asset indexes for the diff (the baseline sort exited $SORT_RC_B, the extracted index's $SORT_RC_X; an unreadable file is the usual cause) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
     else
-      warn "$N_MOD modified, $N_ADD added, $N_DEL removed (assets-{modified,added,removed}.txt)"
-      sed 's/^/        M /' "$REPORT/assets-modified.txt"
-      sed 's/^/        A /' "$REPORT/assets-added.txt"
-      sed 's/^/        D /' "$REPORT/assets-removed.txt"
+      diff "$SORT_DIR/baseline" "$SORT_DIR/extracted" > "$REPORT/assets-drift.diff"
+      ASSET_DIFF_RC=$?     # 2 or more is trouble (0 same, 1 differs): the buckets below would be cut short
+      # index lines are "<sha256> <path>"; split the diff into per-path buckets
+      grep '^<' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-old-paths.txt"
+      grep '^>' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-new-paths.txt"
+      comm -12 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-modified.txt"
+      comm -23 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-removed.txt"
+      comm -13 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-added.txt"
+      N_MOD=$(wc -l < "$REPORT/assets-modified.txt")
+      N_DEL=$(wc -l < "$REPORT/assets-removed.txt")
+      N_ADD=$(wc -l < "$REPORT/assets-added.txt")
+      if [ "$ASSET_DIFF_RC" -ge 2 ]; then
+        soft_fail "asset drift: diff of the Common-asset indexes exited $ASSET_DIFF_RC (0 and 1 are normal) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+      elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+        info "no Common-asset drift — content identical to the baseline"
+      else
+        warn "$N_MOD modified, $N_ADD added, $N_DEL removed (assets-{modified,added,removed}.txt)"
+        sed 's/^/        M /' "$REPORT/assets-modified.txt"
+        sed 's/^/        A /' "$REPORT/assets-added.txt"
+        sed 's/^/        D /' "$REPORT/assets-removed.txt"
+      fi
     fi
+    rm -rf "$SORT_DIR"
   fi
-  rm -rf "$SORT_DIR"
 else
   warn "baseline or extracted index missing — asset drift skipped"
 fi

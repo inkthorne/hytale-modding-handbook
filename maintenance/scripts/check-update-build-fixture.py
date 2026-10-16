@@ -532,21 +532,21 @@ def part1():
         # Y: BLIND, in both directions
         st = fresh(tmp, 'Y'); install(tmp, 'v2'); run(tmp, st)
         for f in ('resource-hashes.txt', 'resource-owners.txt'):
-            (st / 'snapshot' / f).unlink()
+            (st / 'snapshot' / f).unlink(missing_ok=True)  # a mutated script may not have written it
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check('BLIND: the previous-build snapshot has no resource-hashes.txt' in out,
               "snapshot without resource hashes: BLIND, said in a WARN")
         check('compared' not in out.split('Resource drift')[1].split('== Triage')[0] and rc == 0,
               "snapshot without resource hashes: no comparison is attempted or claimed")
         st = fresh(tmp, 'Y2'); install(tmp, 'v2'); run(tmp, st)
-        (st / 'cache-jar/resource-hashes.txt').unlink()
+        (st / 'cache-jar/resource-hashes.txt').unlink(missing_ok=True)
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check('BLIND: the new cache has no resource-hashes.txt' in out, "cache without resource hashes: BLIND, said in a WARN")
 
         # Z: a snapshot that predates resource hashing, same index and class hashes as the installed build
         st = fresh(tmp, 'Z'); install(tmp, 'v1r'); run(tmp, st)
         for f in ('resource-hashes.txt', 'resource-owners.txt'):
-            (st / 'snapshot' / f).unlink()
+            (st / 'snapshot' / f).unlink(missing_ok=True)  # a mutated script may not have written it
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check('no jar_sha/class hashes/resource hashes to tell them apart' in out,
               "snapshot with class hashes but no resource hashes, identical index: cannot prove it differs, warned")
@@ -900,7 +900,11 @@ def mutations():
                 bad.append(f"{label}: patch no longer applies to {fname} ({src.count(old)} match(es))")
                 continue
             f.write_text(new(src) if callable(new) else src.replace(old, new))
-            r = one_pass(root / 'maintenance/scripts')
+            try:
+                r = one_pass(root / 'maintenance/scripts')
+            except Exception as e:   # a crash must cost one mutation, not the whole pass
+                bad.append(f"{label}: the pass CRASHED ({type(e).__name__}: {e}) - make the case tolerate this mutation's output")
+                continue
             ran += 1
             stayed = sorted(must_red - set(r.fails))
             if stayed:

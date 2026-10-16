@@ -429,8 +429,10 @@ ptab_re=re.compile(r'^\|\s*(?:Property|Key)\s*\|', re.M)
 mtab_re=re.compile(r'^\|\s*(?:Methods?|Signatures?)\s*\|', re.M)
 # Fences come from doc_fences.py, so a java fence in a blockquote or indented in a list item
 # disqualifies a page (D) and a section (E) exactly like a column-0 one; the column-0 regexes
-# this replaced could not see them. A fence belongs to the section whose span holds its opener.
-def _tag(s): return s.lower()
+# this replaced could not see them. Tags are compared as written, like every other gate: this reader
+# used to lower-case them (`_tag`), so a ```Java fence counted for it and for no other gate; the
+# census now refuses any tag outside doc_fences.ALLOWED_TAGS, so there is nothing to fold.
+# A fence belongs to the section whose span holds its opener.
 def _sections(txt):
     # A heading-shaped line inside a code fence (a `# comment` in a bash fence, a `## ` line in an
     # ASCII diagram) is not a heading: read as one it ended the section it sat in, mid-fence.
@@ -444,10 +446,10 @@ def _sections(txt):
             if lvl2<=lvl: end=pos2; break
         yield pos,end
 def _nonjson_fence_text(fences):
-    return "\n".join(f.body for f in fences if _tag(f.lang)!='json')
+    return "\n".join(f.body for f in fences if f.lang!='json')
 def provenance(txt):
     fences=doc_fences.fences(txt)
-    if any(_tag(f.lang)=='java' for f in fences) or mtab_re.search(txt): return set()      # D
+    if any(f.lang=='java' for f in fences) or mtab_re.search(txt): return set()      # D
     prov=set(); spans=[]
     for s,e in _sections(txt):
         body=txt[s:e]
@@ -456,7 +458,7 @@ def provenance(txt):
             cs=set(cls_re.findall(pm.group(0)))
             if not cs: continue
             if not (any(f.lang=='json' for f in here) or ptab_re.search(body)): continue   # F
-            if any(_tag(f.lang)!='json' for f in here): continue                           # E
+            if any(f.lang!='json' for f in here): continue                           # E
             prov|=cs; spans.append((s+pm.start(), s+pm.end()))
     if not prov: return set()
     masked=list(txt)

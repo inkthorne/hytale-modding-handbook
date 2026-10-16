@@ -67,8 +67,8 @@ DEF_CORPUS = FIXTURES / 'defaults' / 'corpus'
 # FLOORS: raise freely, lowering one needs a reason in the commit message. The fixture guards
 # the reader and nothing guards the fixture; a table that quietly shrank would report "every
 # mutation red" over fewer mutations, which is the sentence this repo keeps having to prevent.
-MIN_CASES = 85
-MIN_MUTATIONS = 42
+MIN_CASES = 92
+MIN_MUTATIONS = 45
 
 
 # ---------------------------------------------------------------------------------------------
@@ -383,6 +383,24 @@ CENSUS_CASES = {
         {'bad.md': "- ```java\n  x\n  ```\n"}, 1, ['bad.md:1:', 'list marker']),
     'orphan: a 4-backtick fence around a ``` fence FAILs on the outer markers only': (
         {'bad.md': "````md\n```java\nx\n```\n````\n"}, 1, ['bad.md:1:', 'bad.md:5:']),
+    'tag allowlist: ```Java FAILs naming file:line and the tag': (
+        {'bad.md': HEALTHY_PAGE + "\n```Java\nWorld.noSuchMemberXyzzy();\n```\n"}, 1,
+        ["bad.md:21:", "fence tag 'Java' is not in the allowed set"]),
+    'tag allowlist: ```JSON FAILs naming file:line and the tag': (
+        {'bad.md': HEALTHY_PAGE + "\n```JSON\n{}\n```\n"}, 1,
+        ["bad.md:21:", "fence tag 'JSON' is not in the allowed set"]),
+    'tag allowlist: ```jsonc FAILs naming file:line and the tag': (
+        {'bad.md': HEALTHY_PAGE + "\n```jsonc\n{}\n```\n"}, 1,
+        ["bad.md:21:", "fence tag 'jsonc' is not in the allowed set"]),
+    'tag allowlist: an unknown LOWERCASE tag (```text) FAILs, a new language is an explicit edit': (
+        {'bad.md': HEALTHY_PAGE + "\n```text\nx\n```\n"}, 1,
+        ["bad.md:21:", "fence tag 'text' is not in the allowed set"]),
+    'tag allowlist: the whole info string is compared (```java title=x FAILs)': (
+        {'bad.md': HEALTHY_PAGE + "\n```java title=x\nx\n```\n"}, 1,
+        ["bad.md:21:", "fence tag 'java title=x' is not in the allowed set"]),
+    'tag allowlist: java, json, bash, batch and untagged all pass': (
+        {'ok.md': HEALTHY_PAGE + "\n```bash\nls\n```\n\n```batch\ndir\n```\n"}, 0,
+        ['6 fence(s) in 1 page(s): java 2, bash 1, batch 1, json 1, untagged 1; 1 blockquoted, 1 indented, 0 orphan']),
     'a census that visited ZERO pages FAILs': ({}, 1, ['visited 0 page(s)']),
     'a census that visited pages but ZERO fences FAILs': (
         {'p.md': "# no fences here\n"}, 1, ['visited 1 page(s) and 0 fence(s)']),
@@ -846,7 +864,9 @@ def verify_group(c: Cases, scripts: pathlib.Path, td: pathlib.Path, tag: str):
             ('healthy pages PASS and print the census line and the counts', {'h.md': HEALTHY_PAGE},
              ['PASS  every fence marker is accounted for', CENSUS_LINE.strip(), 'FC=2/1/4', 'HARD_FAILS=0'], ['FAIL  ']),
             ('an orphan marker is a HARD FAIL naming file:line', {'h.md': HEALTHY_PAGE, 'bad.md': "p\n````x\n"},
-             ['FAIL  fence census:', 'bad.md:2:', 'HARD_FAILS=1'], ['PASS  every fence marker'])):
+             ['FAIL  fence census:', 'bad.md:2:', 'HARD_FAILS=1'], ['PASS  every fence marker']),
+            ('a fence tagged ```Java is a HARD FAIL naming file:line', {'h.md': HEALTHY_PAGE + "\n```Java\nx\n```\n"},
+             ['FAIL  fence census:', "h.md:21:", "fence tag 'Java'", 'HARD_FAILS=1'], ['PASS  every fence marker'])):
         root = inline_root(td, f'vs-{tag}-{abs(hash(name))}', scripts, pages)
         rc, t = bash(root, PRELUDE + sect + 'echo "FC=$FC_JAVA/$FC_JSON/$FC_TOTAL"; echo "HARD_FAILS=$HARD_FAILS"\n')
         c.text('verify-docs census section: ' + name, rc, t, want_rc=0, must=must, must_not=must_not)
@@ -938,6 +958,11 @@ def all_cases(scripts: pathlib.Path, jar: pathlib.Path, groups=ALL_GROUPS):
 # mutations. label -> (file in the variant, old, new, groups to run, the cases that must go red)
 # ---------------------------------------------------------------------------------------------
 RD = 'reader: '
+TA = 'census: tag allowlist: '
+TAG_RED = ('```Java FAILs naming file:line and the tag', '```JSON FAILs naming file:line and the tag',
+           '```jsonc FAILs naming file:line and the tag',
+           'an unknown LOWERCASE tag (```text) FAILs, a new language is an explicit edit',
+           'the whole info string is compared (```java title=x FAILs)')
 READER_MUTATIONS = {
     'READER: blockquote markers are not counted': (
         "            quotes += 1\n", "            pass\n",
@@ -1005,18 +1030,27 @@ READER_MUTATIONS = {
         "                    finish(no, starts[idx] + len(line))", "                    finish(no, starts[idx])",
         ('reader',), {RD + 'fenced_text() slices opener line through closer line, prefix intact'}),
     'CENSUS: orphan markers are no longer collected': (
-        "            if CENSUS_MARKER.match(line) and no not in accounted:", "            if False and no not in accounted:",
+        "        if CENSUS_MARKER.match(line) and no not in accounted:", "        if False and no not in accounted:",
         ('census', 'cli'), {'census: orphan: a 4-backtick fence FAILs naming both markers',
                             'census: orphan: a ~~~ fence FAILs naming both markers',
                             'census CLI: an orphan exits 1'}),
     'CENSUS: unclosed fences and quote-breaks are no longer collected': (
-        "            if pr.kind != 'marker':", "            if False:",
+        "        if pr.kind != 'marker':", "        if False:",
         ('census',), {'census: orphan: an UNCLOSED fence FAILs naming its opener',
                       'census: orphan: a non-blank body line missing the opener `>` FAILs naming it'}),
     'CENSUS: zero pages or zero fences is no longer a FAIL': (
         "    floor = c.pages == 0 or c.fences == 0\n", "    floor = False\n",
         ('census',), {'census: a census that visited ZERO pages FAILs',
                       'census: a census that visited pages but ZERO fences FAILs'}),
+    'CENSUS: the tag allowlist is no longer enforced': (
+        "        if allowed_tags is not None and f.info not in allowed_tags:\n", "        if False:\n",
+        ('census', 'cli', 'verify'), {TA + t for t in TAG_RED}),
+    'CENSUS: the allowlist folds case (the tag is lower-cased before the test)': (
+        "f.info not in allowed_tags:", "f.info.lower() not in allowed_tags:",
+        ('census', 'verify'), {TA + t for t in TAG_RED[:2]} | {'verify-docs census section: a fence tagged ```Java is a HARD FAIL naming file:line'}),
+    'CENSUS: the allowlist compares the leading word, not the whole info string': (
+        "f.info not in allowed_tags:", "f.lang not in allowed_tags:",
+        ('census',), {TA + 'the whole info string is compared (```java title=x FAILs)'}),
     'CENSUS: the marker definition forgets list markers': (
         "CENSUS_MARKER = re.compile(r'^(?:[ \\t]|>|[-*+]|\\d+[.)])*(?:```|~~~)')",
         "CENSUS_MARKER = re.compile(r'^(?:[ \\t]|>)*(?:```|~~~)')",
@@ -1048,7 +1082,8 @@ VERIFY_MUTATIONS = {
         ('verify',), {'verify-docs: every gate is compared with the census (7 comparisons)'}),
     'VERIFY: the census section stops failing on an orphan': (
         '  fail "fence census:"\n', '  :\n',
-        ('verify',), {'verify-docs census section: an orphan marker is a HARD FAIL naming file:line'}),
+        ('verify',), {'verify-docs census section: an orphan marker is a HARD FAIL naming file:line',
+                      'verify-docs census section: a fence tagged ```Java is a HARD FAIL naming file:line'}),
     'VERIFY: the coverage advisory ignores a fence-count mismatch': (
         '    sys.exit(3)\n', '    pass\n',
         ('codenames',), {'coverage advisory: a harvest of 3 fence(s) against a census of 4 exits 3'}),

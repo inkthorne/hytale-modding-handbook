@@ -58,6 +58,20 @@ nobody thought of: a reader that handled only the forms measured above would be 
 this module exists to close. It FAILS on 0 pages and on 0 fences, because a census that
 visited nothing certifies nothing.
 
+THE TAG ALLOWLIST. Every content gate selects fences with a case-sensitive test on the tag
+(`lang == 'java'`, `'json'`), so a fence written ```Java, ```JAVA, ```JSON or ```jsonc is
+returned by the reader, counted by the census, counted identically by each gate's own
+fence tally (fence_agree compares counts, and the count is of ALL fences), and read by no
+gate: a dead `World.noSuchMemberXyzzy()` in a ```Java fence reported nothing (review of
+bc10b45..23ea833, MAJOR-1). So the census also FAILS, with file:line, on any fence in docs/
+whose whole info string is not one of ALLOWED_TAGS, the set the corpus uses (measured at
+23ea833: java 1099, json 731, untagged 229, bash 4, batch 2). It fails closed: a new
+language is an explicit edit of ALLOWED_TAGS, made by someone who has asked which gates
+should read it. The comparison is on the whole info string, not on the leading \\w+: an
+info string of `java title=x` or `java-x` is read as `java` by the gates and is refused.
+The allowlist is a docs/ rule. Outside docs/ (check-links reads README, CLAUDE.md,
+maintenance/, examples/) only the structural orphans apply, via `orphans_of()`.
+
 HEADINGS. A heading-shaped line inside a fence is not a heading. The heading readers
 (check-links, section_binder, verify-docs.sh's doc-type _sections and gotcha scan) take their
 headings only from lines outside `Page.fence_lines`.
@@ -71,6 +85,9 @@ from __future__ import annotations
 import argparse, collections, pathlib, re, sys
 from typing import NamedTuple
 
+
+# The info strings a fence in docs/ may carry. '' is an untagged fence. See THE TAG ALLOWLIST.
+ALLOWED_TAGS = frozenset({'', 'java', 'json', 'bash', 'batch'})
 
 # The census's own definition of "a marker line", independent of the reader's grammar.
 CENSUS_MARKER = re.compile(r'^(?:[ \t]|>|[-*+]|\d+[.)])*(?:```|~~~)')
@@ -264,7 +281,35 @@ class Census(NamedTuple):
     per_page: dict       # page -> Counter(lang)
 
 
-def census(docs: pathlib.Path) -> Census:
+def orphans_of(name: str, text: str, allowed_tags=None, page: Page | None = None) -> list:
+    """The census's findings for one file's text: [(name, line, detail)].
+
+    Structural orphans always (a marker line no returned fence opens or closes, an unclosed
+    fence, a quote-break). With `allowed_tags` (a set of info strings), also every fence whose
+    whole info string is outside it. check-links calls this without a tag set for the files
+    outside docs/; census() calls it with ALLOWED_TAGS for docs/."""
+    page = page or parse(text)
+    accounted, found = set(), []
+    for f in page.fences:
+        accounted.add(f.line)
+        if f.end_line is not None:
+            accounted.add(f.end_line)
+        if allowed_tags is not None and f.info not in allowed_tags:
+            found.append((name, f.line, f'fence tag {f.info!r} is not in the allowed set '
+                          f'({", ".join(repr(t) for t in sorted(allowed_tags))}): the gates select '
+                          f'fences by an exact lowercase tag, so no gate reads this fence'))
+    for no, line in enumerate(text.split('\n'), 1):
+        if CENSUS_MARKER.match(line) and no not in accounted:
+            why = next((pr.detail for pr in page.problems if pr.line == no),
+                       'a marker line that no returned fence opens or closes')
+            found.append((name, no, why))
+    for pr in page.problems:
+        if pr.kind != 'marker':        # unclosed / quote-break have no marker line of their own
+            found.append((name, pr.line, f'{pr.kind}: {pr.detail}'))
+    return found
+
+
+def census(docs: pathlib.Path, allowed_tags=ALLOWED_TAGS) -> Census:
     by_lang, by_kind = collections.Counter(), collections.Counter()
     orphans: list = []
     per_page: dict = {}
@@ -273,23 +318,12 @@ def census(docs: pathlib.Path) -> Census:
     for p in pages:
         text = p.read_text(errors='replace')
         page = parse(text)
-        accounted = set()
         for f in page.fences:
-            accounted.add(f.line)
-            if f.end_line is not None:
-                accounted.add(f.end_line)
             by_lang[f.lang or 'untagged'] += 1
             by_kind[f.kind] += 1
             total += 1
         per_page[p.name] = collections.Counter(f.lang or 'untagged' for f in page.fences)
-        for no, line in enumerate(text.split('\n'), 1):
-            if CENSUS_MARKER.match(line) and no not in accounted:
-                why = next((pr.detail for pr in page.problems if pr.line == no),
-                           'a marker line that no returned fence opens or closes')
-                orphans.append((p.name, no, why))
-        for pr in page.problems:
-            if pr.kind != 'marker':        # unclosed / quote-break have no marker line of their own
-                orphans.append((p.name, pr.line, f'{pr.kind}: {pr.detail}'))
+        orphans += orphans_of(p.name, text, allowed_tags, page)
     return Census(len(pages), total, by_lang, by_kind, sorted(set(orphans)), per_page)
 
 

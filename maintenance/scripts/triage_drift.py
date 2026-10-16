@@ -41,7 +41,8 @@ something a page documents. A doc names one in three ways:
   - by its full path, `migration/blocks/3_4.json`, or in a brace list,
     `migration/blocks/{0_1,3_4}.json`;
   - by a wildcard over its directory, `bundledDefaults/*.lang`, `bundledDefaults/*`
-    (docs/i18n.md cites the first). Matched for every file that wildcard spans;
+    (docs/i18n.md cites the first). Matched for every file that wildcard spans:
+    `dir/*.lang` does not span a .json, and a bare `dir/*` is not `dir/*.ext`;
   - by its bare name, ONLY when that name is unique among the jar's resources AND
     absent from the shipped assets. `server.lang` names a jar resource and 20+
     shipped files, so a page citing `en-US/server.lang` is not flagged by a change
@@ -112,7 +113,7 @@ def resource_rx(path, res_names, asset_names):
     if d:
         wild_ext = re.escape(ext) if ext else ""
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*" + wild_ext + RES_END)
-        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*-])")
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*.-])")
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\{(?:[^{}]*,)?\s*" + re.escape(stem) + r"\s*(?:,[^{}]*)?\}" + re.escape(ext))
     if res_names[name] == 1 and asset_names.get(name, 0) == 0:
         alts.append(r"(?<![\w-])" + re.escape(name) + r"(?![\w.-])")

@@ -64,7 +64,7 @@ ap.add_argument('-v', '--verbose', action='store_true')
 ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 
-MIN_CHECKS = 436
+MIN_CHECKS = 437
 MIN_MUTATIONS = 63
 
 
@@ -644,10 +644,10 @@ def part2():
             '0 Server/Languages/en-US/server.lang\n0 Server/Languages/pt-BR/server.lang\n0 Icons/Thing.png\n')
         (t / 'report/resource-drift.txt').write_text(
             'CHANGED hypixel d bundledDefaults/server.lang\nCHANGED hypixel d migration/blocks/3_4.json\n'
-            'ADDED hypixel d manifests.json\nCHANGED hypixel d x/data.json\nREMOVED hypixel d res/Thing.png\n'
+            'ADDED hypixel d cfg/manifests.json\nCHANGED hypixel d x/data.json\nREMOVED hypixel d res/Thing.png\n'
             'CHANGED third-party b native/linux-x64/libx.so\n')
         (t / 'report/resources-all.txt').write_text(
-            'bundledDefaults/server.lang\nmigration/blocks/3_4.json\nmanifests.json\nx/data.json\ny/data.json\n'
+            'bundledDefaults/server.lang\nmigration/blocks/3_4.json\ncfg/manifests.json\nx/data.json\ny/data.json\n'
             'res/Thing.png\nnative/linux-x64/libx.so\n')
         for rel, text in {'docs/p1.md': 'Bundled strings live in `bundledDefaults/*.lang`.',
                           'docs/p2.md': 'Edit `Server/Languages/en-US/server.lang`.',
@@ -659,7 +659,8 @@ def part2():
                           'docs/p8.md': 'The `data.json` file.',
                           'docs/p9.md': 'The `Thing.png` icon.',
                           'docs/p10.md': 'Everything under `bundledDefaults/*` ships.',
-                          'docs/p11.md': 'Only `migration/blocks/0_1.json` is old.'}.items():
+                          'docs/p11.md': 'Only `migration/blocks/0_1.json` is old.',
+                          'docs/p12.md': 'The `bundledDefaults/*.json` files.'}.items():
             (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -667,9 +668,10 @@ def part2():
         out = buf.getvalue()
     check('resource bundledDefaults/server.lang \u2192 docs/p1.md docs/p10.md\n' in out,
           "resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not")
+    check('docs/p12.md' not in out, "resource triage: `dir/*.json` does not span a .lang file")
     check('resource migration/blocks/3_4.json \u2192 docs/p3.md docs/p4.md\n' in out,
           "resource triage: a full path and a brace list flag the change; another file of the brace's directory does not")
-    check('resource manifests.json \u2192 docs/p5.md\n' in out, "resource triage: a bare name unique among jar resources and shipped assets matches")
+    check('resource cfg/manifests.json \u2192 docs/p5.md\n' in out, "resource triage: a bare name unique among jar resources and shipped assets matches")
     check('docs/p8.md' not in out, "resource triage: a bare name shared by two jar resources does not match")
     check('docs/p9.md' not in out, "resource triage: a bare name that is also a shipped asset does not match")
     check('libx.so' not in out and 'docs/p7.md' not in out, "resource triage: a third-party resource is not triaged")

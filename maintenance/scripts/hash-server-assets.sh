@@ -27,7 +27,18 @@ ASSETS="${1:-${HYTALE_ASSETS:-$HOME/.cache/hytale-assets}}"
 [ -d "$ASSETS/Server" ] || { echo "no Server/ under $ASSETS — extract Assets.zip first (see CLAUDE.md)" >&2; exit 2; }
 
 cd "$ASSETS" || exit 2
-find Server Cosmetics -type f -print0 2>/dev/null \
+# Cosmetics/ is optional (a minimal tree has none); Server/ was checked above. find is told only about
+# directories that exist, so that a find failure means a real one (an unreadable directory) and not
+# a missing optional root.
+roots=(Server); [ -d Cosmetics ] && roots+=(Cosmetics)
+# pipefail: the pipeline's status was sort's, so a file sha256sum could not read (xargs exits 123)
+# or a directory find could not enter left a short index and exit 0, which update-build.sh then
+# reported as those files REMOVED (review of 02aaa06..3baa29d, LOW-2). It is now nonzero, and the
+# message goes to stderr; the rows already written to stdout are an incomplete index.
+set -o pipefail
+find "${roots[@]}" -type f -print0 \
   | xargs -0 sha256sum \
   | sed 's/  / /' \
   | LC_ALL=C sort -k2
+rc=$?
+[ "$rc" -eq 0 ] || { echo "hash-server-assets.sh: failed to hash every file under ${roots[*]} (pipeline status $rc) - the index on stdout is incomplete" >&2; exit "$rc"; }

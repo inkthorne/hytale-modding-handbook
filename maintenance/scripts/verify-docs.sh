@@ -879,14 +879,14 @@ section "[HARD] The gates' own fixtures pass"
 # 2026-10-16, ~45s before), so --mutations is included rather than deferred
 # behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
-# update-build.sh end to end against generated jars: 181 checks in ~27s, which
+# update-build.sh end to end against generated jars: 437 checks in ~55s, which
 # is kept here because those scripts run only at a game update, and their
 # defects would otherwise surface only then, on the one run whose previous-build
-# snapshot cannot be regenerated. Its --mutations pass (32 mutations, ~13 min)
+# snapshot cannot be regenerated. Its --mutations pass (63 mutations, ~1 h)
 # is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
 # or triage_drift.py changes.
 # check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:
-# 73 cases, 37 mutations including the identity control) takes ~6 s, so it is run here
+# 85 cases, 42 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a

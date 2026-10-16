@@ -68,8 +68,10 @@ look good there and it is not the same everywhere: only string VALUES are checke
 (not map KEYS that are ids), only stem-keyed JSON stores, and only positions a shipped
 class types. Not covered: Instances (directory-keyed, instance.bson), Prefabs and World
 (path-keyed bulk data, not asset stores), Common/ (cited by path, not id), `.lang`
-keys, and every key with fewer than N shipped values. `--report-typing` prints what is
-typed, what is not and why.
+keys, and every key with fewer than N shipped values (so a fixed field shipped once, such as
+MovementCondition's `ForwardLeft`, and an id-valued child of a free-form map the assets only
+ever fill with inline objects, such as Chaining's `Flags`, stay untyped). `--report-typing`
+prints what is typed, what is not and why.
 
 Usage: python3 maintenance/scripts/check-asset-ids.py [--docs DIR] [--assets DIR]
          [--src DIR] [--packs DIR] [--snapshot FILE] [--report-typing] [--dump-typing FILE]

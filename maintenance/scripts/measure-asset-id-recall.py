@@ -192,7 +192,7 @@ def main():
         for k, v in {**shipped, **over}.items():
             setattr(gate, k, v)
         print(f"\n{'=' * 8} {label} {'=' * 8}")
-        r, res = measure(gate, ctx, packs, zip_stems, a)
+        r, res = measure(gate, ctx, packs, zip_stems, a, detail=label.startswith(('before this item', 'as shipped')))
         rc = rc or r
         results[label] = res
     for k, v in shipped.items():
@@ -323,7 +323,7 @@ def scope_report(gate, ctx, recs, den, hits, detail):
     return 0
 
 
-def measure(gate, ctx, packs, zip_stems, a):
+def measure(gate, ctx, packs, zip_stems, a, detail=True):
     rc = 0
     with tempfile.TemporaryDirectory() as td:
         td = pathlib.Path(td)
@@ -375,7 +375,7 @@ def measure(gate, ctx, packs, zip_stems, a):
             print('  FAIL  empty denominator'); rc = 1
         a_recall = len(hits) / len(den) if den else 0.0
         if den:
-            rc = scope_report(gate, ctx, recs_base, den, hits, detail=True) or rc
+            rc = scope_report(gate, ctx, recs_base, den, hits, detail=detail) or rc
 
         # ------------------------------------------------------------ (b)
         drops_old = export_docs(REV_DROPS_FIX + '^', td / 'dropsold')

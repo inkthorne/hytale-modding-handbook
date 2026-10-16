@@ -449,7 +449,7 @@ for (st, k), v in sorted(tp.items()): print(f"TP {st} {k} {v}")
 PY
   RES_PY_RC=$?
   if [ "$RES_PY_RC" != 0 ] || ! grep -q '^#COUNTS ' "$REPORT/resource-summary.txt"; then
-    soft_fail "the resource comparison produced no result — resource drift is NOT reported; this run exits 3"
+    soft_fail "the resource comparison produced no result — resource drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
   else
     read -r N_OLDR N_NEWR N_RROWS N_RHYP N_RTP N_OWNED < <(sed -n 's/^#COUNTS //p' "$REPORT/resource-summary.txt")
     info "compared $N_OLDR resource(s) in the snapshot with $N_NEWR in the new build (every non-class, non-directory jar entry, hashed by content)"
@@ -479,13 +479,13 @@ python3 "$REPO/maintenance/scripts/triage_drift.py" "$REPORT" "$ASSETS" > "$REPO
 TRIAGE_RC=$?
 grep -v '^#SUMMARY' "$REPORT/triage.txt" | sed 's/^/        /'
 info "$(sed -n 's/^#SUMMARY //p' "$REPORT/triage.txt") (triage.txt)"
-# triage_drift.py exits 2 when it could not read the report in full (its stderr, above, says
-# which file and how many rows): the triage shown is then missing matches. A FAIL line alone
-# leaves the exit status to verify-docs.sh, so soft_fail carries it to both exits below.
+# triage_drift.py exits 2 when it could not read the report in full (its #ERROR lines, in the
+# triage shown, say which rows and files): the triage is then missing matches. soft_fail
+# prints the FAIL line and sets SOFT_RC, which finish() exits with unless verify-docs.sh failed.
 if [ "$TRIAGE_RC" = 2 ]; then
-  soft_fail "triage_drift.py exited 2 — it could not read the report in full, so the triage shown is INCOMPLETE (its #ERROR lines say which rows and files); this run exits 3"
+  soft_fail "triage_drift.py exited 2 — it could not read the report in full, so the triage shown is INCOMPLETE (its #ERROR lines say which rows and files); this run exits nonzero (3 unless verify-docs.sh fails)"
 elif [ "$TRIAGE_RC" != 0 ]; then
-  soft_fail "triage_drift.py exited $TRIAGE_RC — it crashed or was killed, so the triage shown is missing or incomplete; this run exits 3"
+  soft_fail "triage_drift.py exited $TRIAGE_RC — it crashed or was killed, so the triage shown is missing or incomplete; this run exits nonzero (3 unless verify-docs.sh fails)"
 fi
 
 # exit status: verify-docs.sh's, unless that is 0 and a soft_fail happened (then 3)

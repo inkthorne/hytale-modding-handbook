@@ -54,23 +54,21 @@ import argparse, collections, os, pathlib, re, sys, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import registry_miner as rm
+import doc_fences
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 
-# Fences may be INDENTED — a ```json nested in a numbered list is still a fence,
-# and an `^```' anchor silently skipped interactions.md's `My_Type` example (and,
-# by luck, the java fence that registers it, so the two errors cancelled).
-#
-# Two things this cannot do, both measured as absent from build-26's corpus (2036
-# fences, 4072 line-initial markers, exactly 2x; no four-backtick fences; no fence
-# whose closing indent differs from its opening): the indent group is captured and
-# unused, so a closer need not match its opener; and a four-backtick fence would be
-# sliced at its first three. Both fail by UNDER-COUNTING — a mis-paired json fence
-# stops being scanned rather than being scanned wrongly — which is why the
-# `N json fence(s) of M` denominator this gate prints is the thing that would catch
-# it, and why the exposure is acceptable rather than a gap.
-FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
+# Fences come from doc_fences.py, the one reader every gate shares. They may be INDENTED
+# (a ```json nested in a numbered list is a fence; an `^```' anchor silently skipped
+# interactions.md's `My_Type` example and, by luck, the java fence that registers it, so
+# the two errors cancelled) and they may sit inside a BLOCKQUOTE (four do, and this gate
+# did not see them until 2026-10-15). The reader requires a closer with the opener's prefix
+# shape and the census in verify-docs.sh fails on any marker that belongs to no fence, so
+# the under-counting this file used to document as "acceptable because the denominator
+# would show it" is now caught by something that does not depend on someone reading a
+# number. The `N json fence(s) of M` denominator this gate prints is still the figure
+# verify-docs.sh compares with the census.
 TYPE = re.compile(r'"Type"\s*:\s*"([^"]*)"')
 
 # A known-positive probe. The oracle is a union of four large sets, so "nothing was
@@ -108,8 +106,8 @@ def docs_values(docs: pathlib.Path, src: pathlib.Path):
     n_fence = n_json = n_java = 0
     for d in sorted(docs.glob('*.md')):
         java_blocks = []
-        for m in FENCE.finditer(d.read_text()):
-            lang, body = m.group(2), m.group(3)
+        for fence in doc_fences.fences(d.read_text()):
+            lang, body = fence.lang, fence.body
             n_fence += 1
             if lang == 'json':
                 n_json += 1

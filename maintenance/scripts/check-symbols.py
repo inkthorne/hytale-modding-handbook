@@ -15,12 +15,30 @@ member to them would require type inference we deliberately don't attempt.
 
 Output: an advisory findings list grouped by doc page. Pure reporting; exit 0.
 
-Usage: check-symbols.py <HytaleServer.jar>
+Usage: check-symbols.py <HytaleServer.jar> [--docs DIR]
+
+Fences are read through doc_fences.py, the one fence reader every gate shares: a java fence
+that sits in a blockquote or is indented inside a list item is code here exactly like a
+column-0 one. Until 2026-10-15 this file anchored at column 0, so five such fences were read
+as PROSE (inline spans only, under the NEG guard) and a dead `Receiver.member` in one would
+have passed. The `JAVA_FENCES` line it prints is compared with the census in verify-docs.sh.
 """
-import re, sys, os, glob, zipfile, struct
+import re, sys, os, glob, zipfile, struct, pathlib
 from collections import defaultdict
 
-JAR = sys.argv[1]
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_fences
+
+_args = sys.argv[1:]
+DOCS = "docs"
+if "--docs" in _args:
+    _i = _args.index("--docs")
+    DOCS = _args[_i + 1]
+    del _args[_i:_i + 2]
+if len(_args) != 1:
+    print("usage: check-symbols.py <HytaleServer.jar> [--docs DIR]")
+    sys.exit(2)
+JAR = _args[0]
 
 # ---- jar class index -------------------------------------------------------
 # Members are read by parsing the class files directly (constant pool + the
@@ -143,7 +161,7 @@ def resolve_class(simple):
 # Only ```java fenced blocks and inline `...` spans are treated as Java contexts.
 # JSON / bash / untagged blocks use dotted paths (BlockType.Components) and file
 # names (Foo.json) that collide with class names but are not Java member access.
-java_block = re.compile(r"^```java\s*\n(.*?)^```", re.S | re.M)
+# (Fences, of any container, come from doc_fences.parse.)
 inline = re.compile(r"`[^`\n]+`")
 # Receiver.member in a code context. Receiver is a capitalized simple name;
 # member is the final identifier, optionally a call.
@@ -175,9 +193,6 @@ NEG = re.compile(r"\b(no|not|never|cannot|don't|doesn't|isn't|aren't|won't|"
                  r"instead|rather than|no such|no longer|wrong|invalid|removed|"
                  r"renamed|deprecated)\b|n't\b|❌|🚫|⚠", re.I)
 
-# fence-open with a language tag, e.g. ```java
-fence_open = re.compile(r"^```([a-zA-Z]*)\s*$")
-
 findings = defaultdict(list)        # doc -> [ (kind, detail) ]
 checked_members = 0
 
@@ -190,54 +205,53 @@ def scan_fragment(frag, recv_member_sink):
 # excluded even when its name collides with a real jar class.
 local_decl = re.compile(r"\b(?:class|interface|enum|record)\s+([A-Z]\w*)")
 
-for f in sorted(glob.glob("docs/*.md")):
+java_fences_read = 0
+for f in sorted(glob.glob(os.path.join(DOCS, "*.md"))):
     bn = os.path.basename(f)
-    fence_lang = None                  # None = prose; "" = untagged block; else lang
     refs = []                          # (recv, member, is_call) for this doc
     local_types = set()
     txt_all = open(f).read()
-    for blk in java_block.findall(txt_all):
-        local_types.update(local_decl.findall(blk))
-    for line in open(f):
-        fm = fence_open.match(line)
-        if fm:
-            if fence_lang is None:
-                fence_lang = fm.group(1) or ""     # opening a fence
-            else:
-                fence_lang = None                  # closing a fence
+    page = doc_fences.parse(txt_all)
+    java_fences = page.of("java")
+    java_fences_read += len(java_fences)
+    for blk in java_fences:
+        local_types.update(local_decl.findall(blk.body))
+    for fence in java_fences:
+        for line in fence.body.split("\n"):
+            scan_fragment(line, refs)                  # real code: always scan
+    # PROSE is every line outside a fence of any language and any container; the other
+    # fenced langs (json/bash/untagged) contribute no member refs.
+    for no, line in enumerate(txt_all.split("\n"), 1):
+        if no in page.fence_lines:
             continue
-        if fence_lang == "java":
-            scan_fragment(line, refs)              # real code: always scan
-        elif fence_lang is None:
-            if NEG.search(line):                   # prose negative example: skip line
-                # This suppression list is also, unused, a detector. A line the
-                # NEG guard drops is a line asserting a symbol does NOT exist —
-                # the only evidence in the corpus that runs real -> documented,
-                # the direction nothing else here checks. Inverting it (assert
-                # the ref does not resolve, instead of skipping it) needs no new
-                # machinery: ~7 `Receiver.member` denials on 6 lines, plus ~4
-                # bare-class denials checkable as "no com.hypixel.* declares this
-                # simple name". All verified holding against build-26.
-                #
-                # Two hard requirements if anyone builds it:
-                #   * Match EXACTLY, against a receiver resolved to its own javap
-                #     block. 43% of the denied names are near-misses of real
-                #     members ON THE SAME CLASS -- Codec.BOOL vs BOOLEAN, INT vs
-                #     INTEGER/INT_ARRAY, BuilderCodec.getDefault vs
-                #     getDefaultValue. That is structural, not bad luck: a denial
-                #     earns its place on a page precisely BECAUSE the wrong name
-                #     is plausible. Substring or fuzzy matching therefore fails on
-                #     exactly the claims worth checking, and fails by accusing a
-                #     correct page.
-                #   * Skip a line whose denial is scoped by prose rather than by
-                #     the code span. "there is no `LivingEntity` parameter" denies
-                #     a parameter while naming a real class; npc-roles.md denies a
-                #     concept beside a symbol that does resolve. No resolver reaches
-                #     these -- they are correct pages a naive gate would flag.
-                continue
-            for span in inline.findall(line):      # only inline `...` in prose
-                scan_fragment(span, refs)
-        # other fenced langs (json/bash/untagged) contribute no member refs
+        if NEG.search(line):                           # prose negative example: skip line
+            # This suppression list is also, unused, a detector. A line the
+            # NEG guard drops is a line asserting a symbol does NOT exist --
+            # the only evidence in the corpus that runs real -> documented,
+            # the direction nothing else here checks. Inverting it (assert
+            # the ref does not resolve, instead of skipping it) needs no new
+            # machinery: ~7 `Receiver.member` denials on 6 lines, plus ~4
+            # bare-class denials checkable as "no com.hypixel.* declares this
+            # simple name". All verified holding against build-26.
+            #
+            # Two hard requirements if anyone builds it:
+            #   * Match EXACTLY, against a receiver resolved to its own javap
+            #     block. 43% of the denied names are near-misses of real
+            #     members ON THE SAME CLASS -- Codec.BOOL vs BOOLEAN, INT vs
+            #     INTEGER/INT_ARRAY, BuilderCodec.getDefault vs
+            #     getDefaultValue. That is structural, not bad luck: a denial
+            #     earns its place on a page precisely BECAUSE the wrong name
+            #     is plausible. Substring or fuzzy matching therefore fails on
+            #     exactly the claims worth checking, and fails by accusing a
+            #     correct page.
+            #   * Skip a line whose denial is scoped by prose rather than by
+            #     the code span. "there is no `LivingEntity` parameter" denies
+            #     a parameter while naming a real class; npc-roles.md denies a
+            #     concept beside a symbol that does resolve. No resolver reaches
+            #     these -- they are correct pages a naive gate would flag.
+            continue
+        for span in inline.findall(line):              # only inline `...` in prose
+            scan_fragment(span, refs)
 
     seen_member = set()
     for recv, member, is_call in refs:
@@ -273,6 +287,7 @@ for f in sorted(glob.glob("docs/*.md")):
 # ---- report ----------------------------------------------------------------
 total = sum(len(v) for v in findings.values())
 print(f"CHECKED_MEMBERS {checked_members}")
+print(f"JAVA_FENCES {java_fences_read}")
 print(f"FINDINGS {total}")
 for bn in sorted(findings):
     for kind, detail in findings[bn]:

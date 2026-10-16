@@ -98,6 +98,14 @@ TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
 MIN_CASES = 13
 MIN_MUTATIONS = 7
 
+# label -> the file in maintenance/scripts/ the mutation edits (default: the checker itself). A
+# mutant of doc_fences.py is written to the temp dir BESIDE the checker copy, where the
+# checker's own sys.path.insert(0, <its directory>) finds it before the real module: the
+# mutant module shadows doc_fences in the temp dir, and nothing in the repo is touched.
+MUTATION_TARGET = {
+    'fence anchor loses indent tolerance': 'doc_fences.py',
+}
+
 MUTATIONS = {
     # THE CONTROL, and it must come first. A copy of the checker with NOTHING
     # changed must still pass every case. Without it the harness reported all five
@@ -119,9 +127,15 @@ MUTATIONS = {
         {'missing source cache exits 2', 'missing asset cache exits 2',
          'missing docs corpus exits 2'}),
 
+    # The fence reader moved to doc_fences.py (2026-10-15, the one reader every gate shares), so
+    # this mutation's target moved with it - see MUTATION_TARGET. It was RETARGETED, not
+    # deleted: it is the only case here that proves an INDENTED fence is scanned, and the
+    # anchor it used to edit no longer exists in the checker. The mutant keeps the reader's
+    # other rules and only stops recognising an opener or closer that sits indented.
     'fence anchor loses indent tolerance': (
-        "FENCE = re.compile(r'^([ \\t]*)```(\\w*)[^\\n]*\\n(.*?)^[ \\t]*```', re.M | re.S)",
-        "FENCE = re.compile(r'^()```(\\w*)[^\\n]*\\n(.*?)^```', re.M | re.S)",
+        "        marker = CENSUS_MARKER.match(line)\n        q, w, j = split_prefix(line)\n        rest = line[j:]\n",
+        "        marker = CENSUS_MARKER.match(line)\n        q, w, j = split_prefix(line)\n        rest = line[j:]\n"
+        "        if w and not q:\n            marker = None\n",
         {'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a fence indented inside a list item is scanned'}),
 
     'TYPE regex narrowed to space-only': (
@@ -330,14 +344,19 @@ def main():
         return 1
     print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     with tempfile.TemporaryDirectory() as td:
-        for label, (old, new, expect, names) in MUTATIONS.items():
-            src = CHECKER.read_text()
+        for k, (label, (old, new, expect, names)) in enumerate(MUTATIONS.items()):
+            target = HERE / MUTATION_TARGET.get(label, CHECKER.name)
+            src = target.read_text()
             if old not in src:
-                print(f'  FAIL {label}: anchor no longer present in the checker — the '
+                print(f'  FAIL {label}: anchor no longer present in {target.name} — the '
                       f'mutation is stale and tests nothing')
                 rc = 1
                 continue
-            mutant = pathlib.Path(td) / 'mutant.py'
+            # one directory per mutation: a mutant doc_fences.py left from the last one would
+            # shadow the real module in the next, and a stale .pyc would hide the change
+            mdir = pathlib.Path(td) / f'm{k}'
+            mdir.mkdir()
+            mutant = mdir / 'mutant.py'
             # A mutation is a CLAIM about what changed, and it needs verifying like
             # any other. Three times this session one did something else: `or True`
             # was cruder than the defect and tripped the wrong case; an empty-corpus
@@ -354,12 +373,23 @@ def main():
             # whichever the file happens to mention earlier.
             n = src.count(old)
             if n != 1:
-                print(f'  FAIL {label}: the anchor occurs {n} time(s) in the '
-                      f'checker, not once. `replace` would edit the first, which is '
+                print(f'  FAIL {label}: the anchor occurs {n} time(s) in '
+                      f'{target.name}, not once. `replace` would edit the first, which is '
                       f'whichever comes earlier in the file — say where you mean.')
                 rc = 1
                 continue
-            mutant.write_text(src.replace(old, new, 1))
+            if target == CHECKER:
+                mutant.write_text(src.replace(old, new, 1))
+            else:
+                mutant.write_text(CHECKER.read_text())
+                (mdir / target.name).write_text(src.replace(old, new, 1))
+                # registry_miner does sys.path.insert(0, <its own directory>) on import, so a
+                # copy left in HERE would put the REAL scripts directory ahead of the mutant
+                # one and the shadow would never take effect (measured: the first retarget
+                # stayed green because the real doc_fences.py was the one imported). Its
+                # siblings travel with it, and PYTHONPATH then finds nothing it needs in HERE.
+                for sib in ('registry_miner.py', 'codec_parser.py'):
+                    shutil.copy(HERE / sib, mdir / sib)
             mres, mcrashed = all_cases(mutant)
             if mcrashed:
                 # A broken mutant, not a detected defect. Without this the run

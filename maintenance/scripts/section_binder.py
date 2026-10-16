@@ -34,6 +34,7 @@ import collections, pathlib, re, sys
 from dataclasses import dataclass, field
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_fences
 from codec_parser import find_source, parse_chain
 
 # A section heading at any level, then a Package line within a few lines of it. The
@@ -165,7 +166,11 @@ def _sections(text: str):
 # FINGERPRINT. Matching them against a parsed chain is content checked against
 # structure — not a name matched corpus-wide (§12) and not a title pattern.
 TABLE = re.compile(r'^\|(.+)\|\s*\n\|[\s:|-]+\|\s*$((?:\n\|.*)*)', re.M)
-JSON_FENCE = re.compile(r'^[ \t]*```json[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
+# A section's JSON fences come from doc_fences.py (the one reader every gate shares), whose body has
+# the container prefix removed: a fence in a blockquote, or indented in a list item, exposes its root
+# keys to ROOT_KEY exactly as a column-0 one does. Until 2026-10-15 this was a regex that allowed
+# indentation only and read an indented fence's body with the indentation still on every line, so a
+# root key two columns in from a three-column indent sat past ROOT_KEY's four-column allowance.
 ROOT_KEY = re.compile(r'^\s{0,4}"([A-Za-z_][A-Za-z0-9_]*)"\s*:', re.M)
 DISCRIMINATOR = re.compile(r'CodecMapCodec\s*\(\s*"([^"]+)"')
 
@@ -261,8 +266,9 @@ def section_keys(body: str) -> list[str]:
                 cell = cells[col].strip().strip('*`')
                 if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', cell):
                     out.append(cell)
-    for m in JSON_FENCE.finditer(body):
-        out += ROOT_KEY.findall(m.group(1))
+    for fence in doc_fences.fences(body):
+        if fence.lang == 'json':
+            out += ROOT_KEY.findall(fence.body)
     return out
 
 

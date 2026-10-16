@@ -21,7 +21,12 @@ passed:
 So the behaviour rests on this runner, and --mutations proves each check can go
 red by reverting each fix.
 
-WHAT IT DOES. Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
+WHAT IT DOES. Resource drift (acceptance 8) closed the first gap invariant 4 listed as "not covered":
+the jar's non-class entries. Cases below: W (resource-only update), X (timestamps only),
+Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures), and the
+resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
+
+Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
 scripts with every cache, report, snapshot and baseline path in a temp dir.
 v1 -> v2:
@@ -31,15 +36,24 @@ v1 -> v2:
     PluginManager      a returned string changes inside a method CFR cannot
                        decompile (a sealed-interface pattern switch in nested In)
     Gone / Fresh       removed / added
+    resources          the jar's NON-class entries (migration/blocks, bundledDefaults,
+                       services files, natives, a vendor package ...) are hashed by
+                       content: one changed, one removed, one added, one unchanged
+                       beside them, in the Hypixel and third-party groups both.
+    v1r                v1 with ONE migration file changed, classes identical: a
+                       resource-only update, which the self-compare warning must not hide.
+    v1t                v1 repacked with different zip timestamps and no byte changed:
+                       NOT reported.
 Part 2 unit-tests triage_drift.AssetMatcher on a synthetic corpus, and runs
-triage_drift.main on a synthetic report to test how class rows are keyed.
+triage_drift.main on a synthetic report to test how class rows and resource rows
+are keyed.
 
 Needs javac, jar, zip, javap and CFR at ~/.cache/hytale-jar-tools/cfr.jar.
 
 Usage: python3 maintenance/scripts/check-update-build-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, contextlib, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile
+import argparse, contextlib, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -50,8 +64,8 @@ ap.add_argument('-v', '--verbose', action='store_true')
 ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 
-MIN_CHECKS = 150
-MIN_MUTATIONS = 32
+MIN_CHECKS = 436
+MIN_MUTATIONS = 63
 
 
 class Run:
@@ -112,6 +126,58 @@ SRC = {
 }
 
 
+# Non-class jar entries. Each has one job (the rule letters are build-jar-cache.sh's):
+#   migration/blocks/3_4.json   Hypixel (d): CHANGED          .../0_1.json: unchanged beside it
+#   jwks_bundled.json           Hypixel (d): REMOVED          brandnew/data.json: ADDED, a
+#                                            top-level directory the jar has never shown
+#   com/hypixel/.../data.json   Hypixel (x): under com/, which ALSO holds a vendor package
+#   META-INF/services/...Svc    Hypixel (c): its PATH names com.hypixel
+#   META-INF/services/other.Spi Hypixel (c): its BYTES name com.hypixel
+#   META-INF/services/vendor.Spi third-party (c)
+#   native/...libx.so, win-x64/x.dll, osx-arm64/libgone.dylib   third-party (b): CHANGED/ADDED/REMOVED
+#   com/vendor/messages.properties   third-party (a): com/ holds com/vendor/lib/Ext.class
+#   vendor/lib/schema.proto          third-party (e): beside com/vendor/lib/Ext.class
+R1 = {
+    'migration/blocks/0_1.json': b'{"from":0}\n',
+    'migration/blocks/3_4.json': b'{"to":4,"map":"a"}\n',
+    'bundledDefaults/server.lang': b'hello = Hello\n',
+    'jwks_bundled.json': b'{"keys":[]}\n',
+    'update/start.sh': b'#!/bin/sh\n',
+    'com/hypixel/hytale/demo/data.json': b'{"x":1}\n',
+    'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-a\n',
+    'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Dep\n',
+    'META-INF/services/vendor.Spi': b'org.vendor.ImplA\n',
+    'native/linux-x64/libx.so': b'\x7fELF-a',
+    'native/osx-arm64/libgone.dylib': b'gone',
+    'com/vendor/messages.properties': b'a=1\n',
+    'vendor/lib/schema.proto': b'syntax = "proto3"; // a\n',
+}
+R2 = {k: v for k, v in R1.items() if k not in ('jwks_bundled.json', 'native/osx-arm64/libgone.dylib')}
+R2.update({
+    'migration/blocks/3_4.json': b'{"to":4,"map":"b"}\n',
+    'brandnew/data.json': b'{"new":true}\n',
+    'com/hypixel/hytale/demo/data.json': b'{"x":2}\n',
+    'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-b\n',
+    'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Fresh\n',
+    'META-INF/services/vendor.Spi': b'org.vendor.ImplB\n',
+    'native/linux-x64/libx.so': b'\x7fELF-b',
+    'native/win-x64/x.dll': b'MZ',
+    'com/vendor/messages.properties': b'a=2\n',
+    'vendor/lib/schema.proto': b'syntax = "proto3"; // b\n',
+})
+R1R = dict(R1, **{'migration/blocks/3_4.json': b'{"to":4,"map":"r"}\n'})
+VENDOR = 'package com.vendor.lib; public class Ext { public int e(){ return 1; } }\n'
+D1, D2 = (2020, 1, 2, 3, 4, 6), (2021, 5, 6, 7, 8, 10)     # zip entry timestamps
+RES_DRIFT_V1_V2 = [   # state owner rule path: the whole resource drift of v1 -> v2
+    'CHANGED hypixel d migration/blocks/3_4.json', 'REMOVED hypixel d jwks_bundled.json',
+    'ADDED hypixel d brandnew/data.json', 'CHANGED hypixel x com/hypixel/hytale/demo/data.json',
+    'CHANGED hypixel c META-INF/services/com.hypixel.hytale.demo.Svc', 'CHANGED hypixel c META-INF/services/other.Spi',
+    'CHANGED third-party c META-INF/services/vendor.Spi', 'CHANGED third-party b native/linux-x64/libx.so',
+    'ADDED third-party b native/win-x64/x.dll', 'REMOVED third-party b native/osx-arm64/libgone.dylib',
+    'CHANGED third-party a com/vendor/messages.properties', 'CHANGED third-party e vendor/lib/schema.proto',
+]
+
+
 def sh(cmd, **kw):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True, **kw)
 
@@ -120,21 +186,49 @@ def sha(p):
     return hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()[:16]
 
 
+def pack(base, dest, resources, dt, manifest=True, store=False):
+    """Repack a jar with the resources added and EVERY entry's timestamp set to dt,
+    so which bytes differ between two jars is decided here and not by the clock."""
+    with zipfile.ZipFile(base) as zi, zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as zo:
+        for info in zi.infolist():
+            if not manifest and info.filename.startswith('META-INF'):
+                continue
+            zinfo = zipfile.ZipInfo(info.filename, dt)
+            zinfo.compress_type, zinfo.external_attr = zipfile.ZIP_DEFLATED, info.external_attr
+            zo.writestr(zinfo, zi.read(info.filename))
+        for name, data in resources.items():
+            zinfo = zipfile.ZipInfo(name, dt)
+            zinfo.compress_type = zipfile.ZIP_STORED if store else zipfile.ZIP_DEFLATED
+            zo.writestr(zinfo, data)
+
+
 def build(tmp: pathlib.Path):
-    # v1/v2 carry Implementation-Version; v1n/v2n have the same classes and none
-    for v, ver, classes in (('v1', '0.9.1', SRC['v1']), ('v2', '0.9.2', SRC['v2']),
-                            ('v1n', None, SRC['v1']), ('v2n', None, SRC['v2'])):
+    # v1/v2 carry Implementation-Version; v1n/v2n have the same classes and none;
+    # v1r / v1t are v1 with one resource changed / with only the zip timestamps changed
+    for v, ver, classes, res, dt in (('v1', '0.9.1', SRC['v1'], R1, D1), ('v2', '0.9.2', SRC['v2'], R2, D1),
+                                     ('v1n', None, SRC['v1'], R1, D1), ('v2n', None, SRC['v2'], R2, D1),
+                                     ('v1r', '0.9.1', SRC['v1'], R1R, D1), ('v1t', '0.9.1', SRC['v1'], R1, D2)):
         src, cls = tmp / v / 'src' / P, tmp / v / 'cls'
         src.mkdir(parents=True); cls.mkdir(parents=True)
+        (tmp / v / 'src/com/vendor/lib').mkdir(parents=True)
+        (tmp / v / 'src/com/vendor/lib/Ext.java').write_text(VENDOR)
         for name, body in classes.items():
             (src / f'{name}.java').write_text(f'package {P.replace("/", ".")}; {body}\n')
-        r = sh(f'javac --release 21 -d "{cls}" {P}/*.java', cwd=tmp / v / 'src')
+        r = sh(f'javac --release 21 -d "{cls}" {P}/*.java com/vendor/lib/*.java', cwd=tmp / v / 'src')
         if r.returncode:
             sys.exit(f"javac failed: {r.stderr}")
         (tmp / v / 'MANIFEST.MF').write_text(f'Implementation-Version: {ver}\n' if ver else 'Created-By: fixture\n')
-        r = sh(f'jar cfm "{tmp / v / "HytaleServer.jar"}" "{tmp / v / "MANIFEST.MF"}" com', cwd=cls)
+        r = sh(f'jar cfm "{tmp / v / "base.jar"}" "{tmp / v / "MANIFEST.MF"}" com', cwd=cls)
         if r.returncode:
             sys.exit(f"jar failed: {r.stderr}")
+        pack(tmp / v / 'base.jar', tmp / v / 'HytaleServer.jar', res, dt)
+    # a jar with no non-class entry at all (not even a manifest), and one whose
+    # resource cannot be read back (bad CRC): the two ways the writer can fail
+    pack(tmp / 'v1/base.jar', tmp / 'v0.jar', {}, D1, manifest=False)
+    pack(tmp / 'v1/base.jar', tmp / 'vbad.jar', {'migration/blocks/3_4.json': b'CORRUPT-ME-CORRUPT-ME'}, D1, store=True)
+    raw = (tmp / 'vbad.jar').read_bytes()
+    assert raw.count(b'CORRUPT-ME-CORRUPT-ME') == 1
+    (tmp / 'vbad.jar').write_bytes(raw.replace(b'CORRUPT-ME-CORRUPT-ME', b'CORRUPT-XX-CORRUPT-ME'))
     a = tmp / 'assets'
     (a / 'Common/Blocks').mkdir(parents=True); (a / 'Server/Item/Items').mkdir(parents=True)
     (a / 'Common/Blocks/Demo_Block.png').write_text('x\n')
@@ -180,15 +274,37 @@ def run(tmp, state, *args, cwd=None, script='update-build.sh', **over):
     r = subprocess.run([str(R.scripts / script), *extra, *args], env=env, capture_output=True, text=True, cwd=cwd)
     rep = state / 'report'
     rd = lambda f: (rep / f).read_text() if (rep / f).exists() else ''
-    return r.returncode, r.stdout + r.stderr, rd('src-changed-classes.txt'), rd('api-changed-classes.txt'), rd('triage.txt')
+    return (r.returncode, r.stdout + r.stderr, rd('src-changed-classes.txt'), rd('api-changed-classes.txt'),
+            rd('triage.txt'), rd('resource-drift.txt'))
 
 
 D = 'com.hypixel.hytale.demo.'
 SELF = 'the snapshot IS the installed build'
 
 
-def expect_update(label, rc, out, src, api, tri):
+def expect_resources(label, out, res, manifest=True):
+    """The v1 -> v2 resource drift: exactly these rows, each with the owner and rule
+    that decided it, and nothing for the entries that did not change."""
+    want = RES_DRIFT_V1_V2 + (['CHANGED third-party c META-INF/MANIFEST.MF'] if manifest else [])
+    rows = res.splitlines()
+    for row in want:
+        check(row in rows, f"{label}: resource drift has `{row}`")
+    check(len(rows) == len(want), f"{label}: resource drift has exactly {len(want)} row(s) (got {len(rows)})")
+    for quiet in ('migration/blocks/0_1.json', 'bundledDefaults/server.lang', 'update/start.sh'):
+        check(quiet not in res, f"{label}: unchanged resource {quiet} is not reported")
+    n_old, n_new = len(R1) + 1, len(R2) + 1      # + the manifest, which every jar carries
+    check(f'compared {n_old} resource(s) in the snapshot with {n_new} in the new build' in out,
+          f"{label}: resource denominator printed")
+    check('Hypixel-owned resource(s) added/removed/changed' in out and 'CHANGED d migration/blocks/3_4.json' in out,
+          f"{label}: Hypixel-owned resources listed one by one")
+    check('libx.so' not in out and 'CHANGED native/linux-x64 1' in out,
+          f"{label}: third-party resources collapsed to counts, not listed")
+    check('holds:' in out and 'ownership: Hypixel' in out, f"{label}: the ownership rule and what each side holds are printed")
+
+
+def expect_update(label, rc, out, src, api, tri, res='', manifest=True):
     """The v1 -> v2 drift, however the run got there."""
+    expect_resources(label, out, res, manifest)
     check(rc == 0, f"{label}: exit 0 (got {rc})")
     check(f'BODY     {D}KickCommand' in src, f"{label}: body-only change reported (KickCommand)")
     check(f'BODY     {D}BlockHarvestUtils  (nested signature change: BlockHarvestUtils$Qx)' in src,
@@ -242,6 +358,9 @@ def part1():
         bad = tmp / 'notajar.jar'; bad.write_text('not a jar\n')
         rc, out, *_ = run(tmp, st, DECOMPILER_JAR=str(bad))
         check(rc != 0 and 'build-jar-cache.sh failed' in out, "broken decompiler: the run fails instead of reporting no changes")
+        # the resources are hashed BEFORE the decompile, so a failed decompile still leaves them
+        check((st / 'cache-jar/resource-hashes.txt').exists() and (st / 'cache-jar/resource-owners.txt').exists(),
+              "broken decompiler: the cache still has the resource hashes (written before the decompile)")
         expect_update('recovery after broken decompiler', *run(tmp, st))
 
         # F: an unwritable snapshot store fails before the cache is wiped
@@ -258,10 +377,10 @@ def part1():
 
         # G (r2 MAJOR-1): jars with NO Implementation-Version
         st = fresh(tmp, 'G', 'v1n'); install(tmp, 'v2n')
-        expect_update('no-version update', *run(tmp, st))
+        expect_update('no-version update', *run(tmp, st), manifest=False)
         r = run(tmp, st)
         check('built from this same jar' in r[1], "no-version re-run: the cache is recognised by content, not version")
-        expect_update('no-version re-run', *r)
+        expect_update('no-version re-run', *r, manifest=False)
 
         # H (r2 MEDIUM-2): build-jar-cache.sh run by hand before update-build.sh
         st = fresh(tmp, 'H'); install(tmp, 'v2')
@@ -349,9 +468,10 @@ def part1():
         # T (r3 LOW-2): the early stamp — a --no-src cache is still stamped, so it is saved as the previous build
         st = tmp / 'T'
         install(tmp, 'v1'); run(tmp, st, '--no-src')
-        install(tmp, 'v2'); rc, out, *_ = run(tmp, st)
+        install(tmp, 'v2'); rc, out, _src, _api, _tri, res = run(tmp, st)
         check('saved the previous build (0.9.1' in out and 'no jar_sha stamp' not in out,
               "--no-src cache: stamped, and saved as the previous build")
+        expect_resources('--no-src cache, then a full run', out, res)
 
         # U (r3 LOW-2): a failed copy, and a failed rename, both leave the cache unwiped
         st = fresh(tmp, 'U'); install(tmp, 'v2')
@@ -379,7 +499,7 @@ def part1():
         (st / 'snapshot/class-hashes.txt').unlink()
         m = st / 'snapshot/cache-meta.txt'; m.write_text(re.sub(r'jar_sha=.*\n', '', m.read_text()))
         rc, out, *_ = run(tmp, st, '--skip-caches')
-        check('no jar_sha/class hashes to tell them apart' in out, "old-style snapshot identical to the installed build: warned")
+        check('no jar_sha/class hashes/resource hashes to tell them apart' in out, "old-style snapshot identical to the installed build: warned")
         check('could NOT be checked (no class hashes on one side)' in out, "BLIND rows are counted in a WARN")
 
         # Q (r2 LOW-3): an interrupted copy's leftovers are removed
@@ -387,6 +507,72 @@ def part1():
         (st / 'snapshot.new.99999').mkdir()
         run(tmp, st)
         check(not (st / 'snapshot.new.99999').exists(), "leftover snapshot.new.* from an interrupted copy is removed")
+
+        # W (resource-only update): same classes, one migration file changed
+        st = fresh(tmp, 'W'); install(tmp, 'v1r')
+        rc, out, src, api, tri, res = run(tmp, st)
+        check(rc == 0 and res.splitlines() == ['CHANGED hypixel d migration/blocks/3_4.json'],
+              "resource-only update: exactly the changed migration file is reported, as Hypixel-owned")
+        check(SELF not in out, "resource-only update: the snapshot is NOT called the installed build (SELF absent)")
+        check('no signature changes' in out and 'no source changes' in out,
+              "resource-only update: the class sections are empty, so the resource section is the only evidence")
+
+        # X (control for W): the same bytes under different zip timestamps are NOT a change
+        st = fresh(tmp, 'X'); install(tmp, 'v1t')
+        with zipfile.ZipFile(tmp / 'v1/HytaleServer.jar') as a, zipfile.ZipFile(tmp / 'v1t/HytaleServer.jar') as b:
+            e1, e2 = a.getinfo('migration/blocks/3_4.json'), b.getinfo('migration/blocks/3_4.json')
+            check(e1.date_time != e2.date_time and e1.CRC == e2.CRC and a.read(e1.filename) == b.read(e2.filename),
+                  "timestamp control: the jars differ in the entry's zip date and not in a byte")
+        check(sha(tmp / 'v1/HytaleServer.jar') != sha(tmp / 'v1t/HytaleServer.jar'), "timestamp control: the two jars differ as files")
+        rc, out, src, api, tri, res = run(tmp, st)
+        check(rc == 0 and res == '' and 'no resource drift in the' in out,
+              "same bytes, different zip timestamps: no resource reported")
+        check(SELF in out, "same content in a repacked jar: the identical-snapshot warning still governs")
+
+        # Y: BLIND, in both directions
+        st = fresh(tmp, 'Y'); install(tmp, 'v2'); run(tmp, st)
+        for f in ('resource-hashes.txt', 'resource-owners.txt'):
+            (st / 'snapshot' / f).unlink()
+        rc, out, *_ = run(tmp, st, '--skip-caches')
+        check('BLIND: the previous-build snapshot has no resource-hashes.txt' in out,
+              "snapshot without resource hashes: BLIND, said in a WARN")
+        check('compared' not in out.split('Resource drift')[1].split('== Triage')[0] and rc == 0,
+              "snapshot without resource hashes: no comparison is attempted or claimed")
+        st = fresh(tmp, 'Y2'); install(tmp, 'v2'); run(tmp, st)
+        (st / 'cache-jar/resource-hashes.txt').unlink()
+        rc, out, *_ = run(tmp, st, '--skip-caches')
+        check('BLIND: the new cache has no resource-hashes.txt' in out, "cache without resource hashes: BLIND, said in a WARN")
+
+        # Z: a snapshot that predates resource hashing, same index and class hashes as the installed build
+        st = fresh(tmp, 'Z'); install(tmp, 'v1r'); run(tmp, st)
+        for f in ('resource-hashes.txt', 'resource-owners.txt'):
+            (st / 'snapshot' / f).unlink()
+        rc, out, *_ = run(tmp, st, '--skip-caches')
+        check('no jar_sha/class hashes/resource hashes to tell them apart' in out,
+              "snapshot with class hashes but no resource hashes, identical index: cannot prove it differs, warned")
+
+        # R: the snapshot copy list carries the resource files
+        st = fresh(tmp, 'R')
+        before = {f: (st / 'cache-jar' / f).read_text() for f in ('resource-hashes.txt', 'resource-owners.txt')}
+        check(all(before.values()) and len(before['resource-hashes.txt'].splitlines()) == len(R1) + 1,
+              "v1 cache: every non-class entry hashed, nothing filtered (the manifest included)")
+        check(all(re.fullmatch(r'[0-9a-f]{64}  \S.*', l) for l in before['resource-hashes.txt'].splitlines()),
+              "resource-hashes.txt lines are `sha256  path`")
+        install(tmp, 'v2'); run(tmp, st)
+        for f, text in before.items():
+            check((st / 'snapshot' / f).exists() and (st / 'snapshot' / f).read_text() == text,
+                  f"update: snapshot/{f} equals the v1 cache's (so the first real update is not BLIND)")
+
+        # B: the writer's two failure modes stop the build
+        st = tmp / 'B'
+        rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v0.jar'))
+        check(rc != 0 and "resource hashing wrote '0' entries" in out,
+              "a jar with no non-class entry: the build fails (an empty record is not a record)")
+        rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'vbad.jar'))
+        check(rc != 0 and "could not hash the jar's resources" in out,
+              "a resource that cannot be read back: the build fails at its own guard")
+        rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v1/HytaleServer.jar'))
+        check(rc == 0 and f'resources hashed: {len(R1) + 1}' in out, "build-jar-cache.sh prints `resources hashed: N`")
 
 
 # ---------------------------------------------------------------- part 2
@@ -449,6 +635,47 @@ def part2():
     check('class a.b.Mixed → docs/m.md\n' in out, "triage: a folded row keeps the enclosing class's own signature change")
     check('#SUMMARY 4 changed' in out, "triage: folded rows are counted once, under the enclosing class")
 
+    # Resource rows: a path inside the jar, keyed by full path, a dir/*.ext wildcard
+    # (docs/i18n.md cites `bundledDefaults/*.lang`) or a bare name that is unique
+    with tempfile.TemporaryDirectory() as t:
+        t = pathlib.Path(t)
+        (t / 'report').mkdir(); (t / 'assets').mkdir()
+        (t / 'assets/CommonAssetsIndex.hashes').write_text(
+            '0 Server/Languages/en-US/server.lang\n0 Server/Languages/pt-BR/server.lang\n0 Icons/Thing.png\n')
+        (t / 'report/resource-drift.txt').write_text(
+            'CHANGED hypixel d bundledDefaults/server.lang\nCHANGED hypixel d migration/blocks/3_4.json\n'
+            'ADDED hypixel d manifests.json\nCHANGED hypixel d x/data.json\nREMOVED hypixel d res/Thing.png\n'
+            'CHANGED third-party b native/linux-x64/libx.so\n')
+        (t / 'report/resources-all.txt').write_text(
+            'bundledDefaults/server.lang\nmigration/blocks/3_4.json\nmanifests.json\nx/data.json\ny/data.json\n'
+            'res/Thing.png\nnative/linux-x64/libx.so\n')
+        for rel, text in {'docs/p1.md': 'Bundled strings live in `bundledDefaults/*.lang`.',
+                          'docs/p2.md': 'Edit `Server/Languages/en-US/server.lang`.',
+                          'docs/p3.md': 'Block migrations: `migration/blocks/3_4.json`.',
+                          'docs/p4.md': 'See `migration/blocks/{0_1,3_4}.json`.',
+                          'docs/p5.md': 'The `manifests.json` index.',
+                          'docs/p6.md': 'A `server.lang` file.',
+                          'docs/p7.md': 'The `libx.so` library.',
+                          'docs/p8.md': 'The `data.json` file.',
+                          'docs/p9.md': 'The `Thing.png` icon.',
+                          'docs/p10.md': 'Everything under `bundledDefaults/*` ships.',
+                          'docs/p11.md': 'Only `migration/blocks/0_1.json` is old.'}.items():
+            (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            mod.main(str(t / 'report'), str(t / 'assets'), str(t))
+        out = buf.getvalue()
+    check('resource bundledDefaults/server.lang \u2192 docs/p1.md docs/p10.md\n' in out,
+          "resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not")
+    check('resource migration/blocks/3_4.json \u2192 docs/p3.md docs/p4.md\n' in out,
+          "resource triage: a full path and a brace list flag the change; another file of the brace's directory does not")
+    check('resource manifests.json \u2192 docs/p5.md\n' in out, "resource triage: a bare name unique among jar resources and shipped assets matches")
+    check('docs/p8.md' not in out, "resource triage: a bare name shared by two jar resources does not match")
+    check('docs/p9.md' not in out, "resource triage: a bare name that is also a shipped asset does not match")
+    check('libx.so' not in out and 'docs/p7.md' not in out, "resource triage: a third-party resource is not triaged")
+    check('#SUMMARY 5 changed thing(s) checked, 3 referenced' in out,
+          "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
+
 
 def one_pass(scripts, verbose=False):
     global R
@@ -504,7 +731,7 @@ MUTATIONS = [
      '&& [ "$(meta "$SNAP/cache-meta.txt" cache)" != "$C_ABS" ]; then', '&& false; then',
      {"a store owned by another cache is NOT replaced"}),
     ("r3 LOW-1: old-style snapshot self-compare not warned", U,
-     'elif { [ -z "$SNAP_SHA" ] || [ ! -f "$SNAP/class-hashes.txt" ]; } && cmp', 'elif false && cmp',
+     'elif { [ -z "$SNAP_SHA" ]', 'elif false && { [ -z "$SNAP_SHA" ]',
      {"old-style snapshot identical to the installed build: warned"}),
     ("r3 LOW-2: id length rule dropped", T, ' and "_" in stem and len(stem) >= 5', ' and "_" in stem',
      {"rule: a stem shorter than 5 characters is never matched bare"}),
@@ -558,6 +785,104 @@ MUTATIONS = [
     ("0.7.2 triage: a folded row overrides the enclosing class's own row", T,
      'classes.setdefault(outer, "body")', 'classes[outer] = "body"',
      {"triage: a folded row keeps the enclosing class's own signature change"}),
+    # ---- jar resources (acceptance 8): one mutation per guard, each named by the
+    # check that only that guard can turn red
+    ("resources: hashed by zip metadata, not content", B,
+     'hashlib.sha256(data).hexdigest()}  {n}', 'hashlib.sha256(data + repr(z.getinfo(n).date_time).encode()).hexdigest()}  {n}',
+     {"same bytes, different zip timestamps: no resource reported"}),
+    ("resources: an allowlist of paths", B,
+     'if not n.endswith("/") and not n.endswith(".class"))',
+     'if not n.endswith("/") and not n.endswith(".class") and n.startswith(("migration/", "bundledDefaults/")))',
+     {"v1 cache: every non-class entry hashed, nothing filtered (the manifest included)"}),
+    ("resources rule a: a top-level directory that holds foreign classes", B,
+     'elif top in foreign_top:', 'elif False:',
+     {"update: resource drift has `CHANGED third-party a com/vendor/messages.properties`"}),
+    ("resources rule b: native libraries", B,
+     'if n.endswith(NATIVE):', 'if False:',
+     {"update: resource drift has `CHANGED third-party b native/linux-x64/libx.so`"}),
+    ("resources rule c: META-INF is third-party", B,
+     'elif top == "META-INF":', 'elif False:',
+     {"update: resource drift has `CHANGED third-party c META-INF/services/vendor.Spi`"}),
+    ("resources rule c: a path naming com.hypixel is not enough", B,
+     'hyp = "com.hypixel" in n or b"com.hypixel" in data', 'hyp = b"com.hypixel" in data',
+     {"update: resource drift has `CHANGED hypixel c META-INF/services/com.hypixel.hytale.demo.Svc`"}),
+    ("resources rule c: bytes naming com.hypixel are not enough", B,
+     'hyp = "com.hypixel" in n or b"com.hypixel" in data', 'hyp = "com.hypixel" in n',
+     {"update: resource drift has `CHANGED hypixel c META-INF/services/other.Spi`"}),
+    ("resources rule x: com/hypixel/ is always Hypixel's", B,
+     'elif n.startswith("com/hypixel/"):', 'elif False:',
+     {"update: resource drift has `CHANGED hypixel x com/hypixel/hytale/demo/data.json`"}),
+    ("resources rule e: a directory that mirrors a foreign package", B,
+     'elif "/" in n and ("com/" + n.rsplit("/", 1)[0]) in foreign_dirs:', 'elif False:',
+     {"update: resource drift has `CHANGED third-party e vendor/lib/schema.proto`"}),
+    ("resources rule d: Hypixel-owned is the default", B,
+     'owner, rule = "hypixel", "d"', 'owner, rule = "third-party", "d"',
+     {"update: resource drift has `ADDED hypixel d brandnew/data.json`"}),
+    ("resources: written after the decompile, not before", B,
+     'RES_N="$(write_resources)"',
+     lambda src: (lambda a, b: src[:a] + src[b:])(*[src.index('RES_N="$(write_resources)"'), src.index('INDEXED="$(grep')]
+                  ).replace('step "Done"\n', src[src.index('RES_N="$(write_resources)"'):src.index('INDEXED="$(grep')] + 'step "Done"\n', 1),
+     {"broken decompiler: the cache still has the resource hashes (written before the decompile)"}),
+    ("resources: the snapshot copy list drops the hashes", B,
+     'class-hashes.txt resource-hashes.txt resource-owners.txt cache-meta.txt', 'class-hashes.txt resource-owners.txt cache-meta.txt',
+     {"update: snapshot/resource-hashes.txt equals the v1 cache's (so the first real update is not BLIND)"}),
+    ("resources: the snapshot copy list drops the owners", B,
+     'class-hashes.txt resource-hashes.txt resource-owners.txt cache-meta.txt', 'class-hashes.txt resource-hashes.txt cache-meta.txt',
+     {"update: snapshot/resource-owners.txt equals the v1 cache's (so the first real update is not BLIND)"}),
+    ("resources: zero entries accepted", B,
+     "case \"$RES_N\" in ''|0|*[!0-9]*)", "case \"$RES_N\" in ''|*[!0-9]*)",
+     {"a jar with no non-class entry: the build fails (an empty record is not a record)"}),
+    ("resources: a writer failure ignored", B,
+     '|| { echo "  FAILED: could not hash the jar\'s resources" >&2; exit 5; }', '|| true',
+     {"a resource that cannot be read back: the build fails at its own guard"}),
+    ("resources: the self-compare test ignores resource hashes", U,
+     ' \\\n       && cmp -s "$SNAP/resource-hashes.txt" "$JAR_CACHE/resource-hashes.txt"; }; then', '; }; then',
+     {"resource-only update: the snapshot is NOT called the installed build (SELF absent)"}),
+    ("resources: a snapshot without resource hashes is not 'old-style'", U,
+     ' || [ ! -f "$SNAP/resource-hashes.txt" ]; } && cmp -s "$SNAP/javap-index.txt"', '; } && cmp -s "$SNAP/javap-index.txt"',
+     {"snapshot with class hashes but no resource hashes, identical index: cannot prove it differs, warned"}),
+    ("resources: a snapshot without resource hashes is not BLIND", U,
+     'elif [ ! -f "$OLD_RH" ]; then', 'elif false; then',
+     {"snapshot without resource hashes: BLIND, said in a WARN"}),
+    ("resources: a cache without resource hashes is not BLIND", U,
+     'elif [ ! -f "$NEW_RH" ]; then', 'elif false; then',
+     {"cache without resource hashes: BLIND, said in a WARN"}),
+    ("resources: a removed resource takes its owner from the new build", U,
+     'elif p not in nh: rows.append(("REMOVED", *own(oo, p), p))', 'elif p not in nh: rows.append(("REMOVED", *own(no, p), p))',
+     {"update: resource drift has `REMOVED third-party b native/osx-arm64/libgone.dylib`"}),
+    ("resources: third-party rows listed one by one", U,
+     '    if o == "hypixel": print(f"HYP {st} {r} {p}")', '    print(f"HYP {st} {r} {p}")',
+     {"update: third-party resources collapsed to counts, not listed"}),
+    ("resources: an unchanged resource reported", U,
+     'elif oh[p] != nh[p]: rows.append', 'elif True: rows.append',
+     {"update: unchanged resource migration/blocks/0_1.json is not reported"}),
+    ("resources: Hypixel rows not listed", U,
+     "sed -n 's/^HYP /        /p'", "sed -n 's/^HYPX /        /p'",
+     {"update: Hypixel-owned resources listed one by one"}),
+    ("resources: the ownership rule and sides not printed", U,
+     ";s/^#HOLDS /          holds: /p'", "'",
+     {"update: the ownership rule and what each side holds are printed"}),
+    ("resources triage: third-party rows are triaged", T,
+     'len(parts) == 4 and parts[1] == "hypixel"', 'len(parts) == 4',
+     {"resource triage: a third-party resource is not triaged"}),
+    ("resources triage: `dir/*.ext` wildcard", T,
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*" + wild_ext + RES_END)', 'pass',
+     {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
+    ("resources triage: bare `dir/*` wildcard", T,
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*(?![\\w*-])")', 'pass',
+     {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
+    ("resources triage: brace list", T,
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\{', 'pass; (r"(?<![\\w-])" + re.escape(d) + r"/\\{',
+     {"resource triage: a full path and a brace list flag the change; another file of the brace's directory does not"}),
+    ("resources triage: a bare name need not be unique among jar resources", T,
+     'if res_names[name] == 1 and asset_names', 'if asset_names',
+     {"resource triage: a bare name shared by two jar resources does not match"}),
+    ("resources triage: a bare name may also be a shipped asset", T,
+     ' and asset_names.get(name, 0) == 0:', ':',
+     {"resource triage: a bare name that is also a shipped asset does not match"}),
+    ("resources triage: bare names never match", T,
+     'if res_names[name] == 1 and asset_names.get(name, 0) == 0:', 'if False:',
+     {"resource triage: a bare name unique among jar resources and shipped assets matches"}),
 ]
 
 
@@ -574,7 +899,7 @@ def mutations():
             if src.count(old) != 1:
                 bad.append(f"{label}: patch no longer applies to {fname} ({src.count(old)} match(es))")
                 continue
-            f.write_text(src.replace(old, new))
+            f.write_text(new(src) if callable(new) else src.replace(old, new))
             r = one_pass(root / 'maintenance/scripts')
             ran += 1
             stayed = sorted(must_red - set(r.fails))

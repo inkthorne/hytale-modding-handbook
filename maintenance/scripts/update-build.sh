@@ -10,6 +10,8 @@
 #   4. asset drift report         (changed/added/removed Common assets vs baseline)
 #   5. API drift report           (classes whose signatures changed old→new)
 #   5b. source drift report       (decompiled source old→new: body-only and @Deprecated changes)
+#   5c. resource drift report     (the jar's NON-class entries old→new: migration/blocks/*.json,
+#                                  bundledDefaults/server.lang, manifests.json, services files, …)
 #   6. triage                     (which docs/examples mention the changed things)
 #   7. verify-docs.sh             (hard gates + advisories against the new build)
 #
@@ -140,12 +142,16 @@ if [ -f "$SNAP/javap-index.txt" ]; then
   info "snapshot: version ${SNAP_VER:-unknown}, jar ${SNAP_SHA:-(unstamped)}, $(wc -l < "$SNAP/javap-index.txt") index lines, $N_SNAPSRC decompiled files ($SNAP)"
   # Content, not version strings: a jar with no Implementation-Version, or an
   # unstamped cache, must not be able to hide a build compared with itself.
+  # The resource hashes are part of the content test: a jar whose classes are
+  # byte-identical but whose migration/blocks/3_4.json changed is NOT the same
+  # build, and calling it one would tell the reader every section is empty.
   if [ "$SNAP_SHA" = "$INSTALLED_SHA" ] || \
-     { cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt" && cmp -s "$SNAP/class-hashes.txt" "$JAR_CACHE/class-hashes.txt"; }; then
-    warn "the snapshot IS the installed build (same jar, or byte-identical index and class hashes) — every drift section below compares it with itself"
-  elif { [ -z "$SNAP_SHA" ] || [ ! -f "$SNAP/class-hashes.txt" ]; } && cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt"; then
-    # a snapshot from before jar_sha/class-hashes existed cannot prove it differs
-    warn "the snapshot's index is byte-identical to the installed build's and it has no jar_sha/class hashes to tell them apart — it may be the installed build compared with itself"
+     { cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt" && cmp -s "$SNAP/class-hashes.txt" "$JAR_CACHE/class-hashes.txt" \
+       && cmp -s "$SNAP/resource-hashes.txt" "$JAR_CACHE/resource-hashes.txt"; }; then
+    warn "the snapshot IS the installed build (same jar, or byte-identical index, class hashes and resource hashes) — every drift section below compares it with itself"
+  elif { [ -z "$SNAP_SHA" ] || [ ! -f "$SNAP/class-hashes.txt" ] || [ ! -f "$SNAP/resource-hashes.txt" ]; } && cmp -s "$SNAP/javap-index.txt" "$JAR_CACHE/javap-index.txt"; then
+    # a snapshot from before jar_sha/class-hashes/resource-hashes existed cannot prove it differs
+    warn "the snapshot's index is byte-identical to the installed build's and it has no jar_sha/class hashes/resource hashes to tell them apart — it may be the installed build compared with itself"
   fi
   ln -s "$SNAP/javap-index.txt" "$REPORT/javap-index-old.txt"
   [ -d "$SNAP/src" ] && ln -s "$SNAP/src" "$REPORT/src-old"
@@ -349,6 +355,93 @@ PY
     warn "$N_BODY file(s) changed with NO signature change on their top-level class (behaviour-only; invisible to the API drift above), $N_BOTH also changed signatures, $N_BYTE bytecode-only change(s) inside failed decompiles, $N_DEP @Deprecated line(s) added/removed (src-changed-classes.txt)"
     grep -E '^(BODY |BYTECODE|DEPRECATION)' "$REPORT/src-changed-classes.txt" | sed -n '1,60p' | sed 's/^/        /'
     [ "$((N_BODY + N_BYTE + N_DEP))" -gt 60 ] && info "(list truncated at 60 lines — full list in the report dir)"
+  fi
+fi
+
+# ---- 5c. resource drift old→new: the jar's non-class entries ----
+# Neither the javap index, the class hashes nor the decompiled source covers a
+# resource, and the asset baselines cover Assets.zip only, so a changed
+# migration/blocks/3_4.json or bundledDefaults/server.lang appeared nowhere.
+# build-jar-cache.sh hashes EVERY non-class entry's content (no allowlist) and
+# records an owner for each: Hypixel's by default, third-party only by a
+# property the jar shows (rules a-e, written at the writer). Hypixel rows are
+# listed in full; third-party rows collapse to counts by their first two path
+# components. A snapshot or cache with no resource hashes is reported BLIND.
+section "Resource drift (jar non-class entries, old → new)"
+OLD_RH="$SNAP/resource-hashes.txt"; NEW_RH="$JAR_CACHE/resource-hashes.txt"
+if [ ! -f "$SNAP/javap-index.txt" ]; then
+  warn "no snapshot of a previous build — resource drift skipped"
+elif [ ! -f "$NEW_RH" ]; then
+  warn "BLIND: the new cache has no resource-hashes.txt (built by an older build-jar-cache.sh) — resources ADDED/REMOVED/CHANGED are NOT reported; rebuild the cache"
+elif [ ! -f "$OLD_RH" ]; then
+  warn "BLIND: the previous-build snapshot has no resource-hashes.txt (it predates resource hashing) — resources ADDED/REMOVED/CHANGED since that build are NOT reported; list them by hand: unzip -Z1 <old jar> | grep -v '\.class\$' and diff"
+else
+  python3 -I - "$OLD_RH" "$NEW_RH" "$SNAP/resource-owners.txt" "$JAR_CACHE/resource-owners.txt" "$REPORT/resource-drift.txt" "$REPORT/resources-all.txt" <<'PY' > "$REPORT/resource-summary.txt"
+import collections, os, sys
+old_h, new_h, old_o, new_o, out_drift, out_all = sys.argv[1:7]
+def hashes(p):
+    d = {}
+    for l in open(p, encoding="utf-8"):
+        l = l.rstrip("\n")
+        if l:
+            h, path = l.split(maxsplit=1)
+            d[path] = h
+    return d
+def owners(p):
+    d = {}
+    if os.path.exists(p):
+        for l in open(p, encoding="utf-8"):
+            l = l.rstrip("\n")
+            if l:
+                o, r, path = l.split(maxsplit=2)
+                d[path] = (o, r)
+    return d
+oh, nh, oo, no = hashes(old_h), hashes(new_h), owners(old_o), owners(new_o)
+# no owner recorded: the default, which keeps the row on the Hypixel side
+own = lambda tab, p: tab.get(p, ("hypixel", "-"))
+rows = []
+for p in sorted(oh.keys() | nh.keys()):
+    if p not in oh:   rows.append(("ADDED", *own(no, p), p))
+    elif p not in nh: rows.append(("REMOVED", *own(oo, p), p))
+    elif oh[p] != nh[p]: rows.append(("CHANGED", *own(no, p), p))
+with open(out_drift, "w") as f:
+    for st, o, r, p in rows: f.write(f"{st} {o} {r} {p}\n")
+with open(out_all, "w") as f:
+    for p in sorted(oh.keys() | nh.keys()): f.write(p + "\n")
+top2 = lambda p: "/".join(p.split("/")[:2]) if p.count("/") > 1 else (p.split("/")[0] if "/" in p else "(root)")
+print(f"#COUNTS {len(oh)} {len(nh)} {len(rows)} {sum(1 for r in rows if r[1] == 'hypixel')} {sum(1 for r in rows if r[1] != 'hypixel')} {len(no)}")
+for o in ("hypixel", "third-party"):
+    paths = [p for p in nh if own(no, p)[0] == o]
+    rules = collections.Counter(own(no, p)[1] for p in paths)
+    print(f"#SIDE {o} {len(paths)} rules " + " ".join(f"{k}:{v}" for k, v in sorted(rules.items())))
+    print(f"#HOLDS {o} " + ", ".join(f"{k} ({v})" for k, v in collections.Counter(top2(p) for p in paths).most_common()))
+for st, o, r, p in rows:
+    if o == "hypixel": print(f"HYP {st} {r} {p}")
+tp = collections.Counter((st, top2(p)) for st, o, r, p in rows if o != "hypixel")
+for (st, k), v in sorted(tp.items()): print(f"TP {st} {k} {v}")
+PY
+  if ! grep -q '^#COUNTS ' "$REPORT/resource-summary.txt"; then
+    fail "the resource comparison produced no result — resource drift is NOT reported"
+  else
+    read -r N_OLDR N_NEWR N_RROWS N_RHYP N_RTP N_OWNED < <(sed -n 's/^#COUNTS //p' "$REPORT/resource-summary.txt")
+    info "compared $N_OLDR resource(s) in the snapshot with $N_NEWR in the new build (every non-class, non-directory jar entry, hashed by content)"
+    info "ownership: Hypixel's by default; third-party only when the jar shows it (a: its top-level directory also holds classes outside com/hypixel/; b: native library; c: under META-INF/ and neither path nor bytes contain com.hypixel; e: its directory mirrors a foreign package under com/; com/hypixel/ is always Hypixel's)"
+    [ "$N_OWNED" = 0 ] && warn "the new cache has no resource-owners.txt — every row is classified as Hypixel's by default"
+    sed -n 's/^#SIDE /        /p;s/^#HOLDS /          holds: /p' "$REPORT/resource-summary.txt"
+    if [ "$N_RROWS" = 0 ]; then
+      info "no resource drift in the $N_NEWR resource(s) of the new build (same content, whatever the zip timestamps)"
+    else
+      if [ "$N_RHYP" -gt 0 ]; then
+        warn "$N_RHYP Hypixel-owned resource(s) added/removed/changed (resource-drift.txt)"
+        sed -n 's/^HYP /        /p' "$REPORT/resource-summary.txt" | sed -n '1,60p'
+      else
+        info "no Hypixel-owned resource added, removed or changed"
+      fi
+      if [ "$N_RTP" -gt 0 ]; then
+        info "$N_RTP third-party resource(s) added/removed/changed, collapsed:"
+        sed -n 's/^TP /        /p' "$REPORT/resource-summary.txt"
+      fi
+    fi
   fi
 fi
 

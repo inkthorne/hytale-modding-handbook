@@ -4,14 +4,16 @@
 Usage: triage_drift.py REPORT_DIR ASSETS_DIR [CORPUS_ROOT]
 
 Reads update-build.sh's report files (assets-/server-{modified,removed}.txt,
-api-changed-classes.txt, src-changed-classes.txt, ServerAssetsIndex.hashes) and
+api-changed-classes.txt, src-changed-classes.txt, resource-drift.txt,
+resources-all.txt, ServerAssetsIndex.hashes) and
 the extracted assets' CommonAssetsIndex.hashes, and searches CORPUS_ROOT/docs and
 CORPUS_ROOT/examples (default: the current directory). It prints one line per
 changed thing that some file mentions:
 
     <kind> <thing> → <file> <file> ...
 
-kind is "asset", "class" (signature changed) or "body" (source changed with no
+kind is "asset", "resource" (a Hypixel-owned non-class jar entry that was added,
+removed or changed), "class" (signature changed) or "body" (source changed with no
 signature change on the top-level class, or a bytecode-only change inside a
 method the decompiler could not render). An anonymous or local class is reported
 under its enclosing class, as "body" (see ANON). The last line is
@@ -32,6 +34,18 @@ Asset keys. A doc names an asset in one of four ways, and each needs its own key
     change does not flag pages that cite only en-US.
   - by a wildcard: `Server/Languages/*/server.lang`, `<lang>/server.lang`. Matched
     for every file of that name, because such a claim spans all of them.
+Resource keys (kind "resource"; a path inside HytaleServer.jar such as
+migration/blocks/3_4.json or bundledDefaults/server.lang, which no asset index
+holds). Only Hypixel-owned rows are triaged; a third-party library's file is not
+something a page documents. A doc names one in three ways:
+  - by its full path, `migration/blocks/3_4.json`, or in a brace list,
+    `migration/blocks/{0_1,3_4}.json`;
+  - by a wildcard over its directory, `bundledDefaults/*.lang`, `bundledDefaults/*`
+    (docs/i18n.md cites the first). Matched for every file that wildcard spans;
+  - by its bare name, ONLY when that name is unique among the jar's resources AND
+    absent from the shipped assets. `server.lang` names a jar resource and 20+
+    shipped files, so a page citing `en-US/server.lang` is not flagged by a change
+    to bundledDefaults/server.lang: the bare name could mean either.
 Files under build/ and .gradle/ and binary files (containing NUL) are skipped.
 """
 import collections, os, re, sys
@@ -88,6 +102,23 @@ class AssetMatcher:
         return sorted(k for k, t in corpus.items() if rx.search(t))
 
 
+RES_END = r"(?![\w-]|\.\w)"
+
+
+def resource_rx(path, res_names, asset_names):
+    d, name = os.path.split(path)
+    stem, ext = os.path.splitext(name)
+    alts = [r"(?<![\w-])" + re.escape(path) + RES_END]
+    if d:
+        wild_ext = re.escape(ext) if ext else ""
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*" + wild_ext + RES_END)
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*-])")
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\{(?:[^{}]*,)?\s*" + re.escape(stem) + r"\s*(?:,[^{}]*)?\}" + re.escape(ext))
+    if res_names[name] == 1 and asset_names.get(name, 0) == 0:
+        alts.append(r"(?<![\w-])" + re.escape(name) + r"(?![\w.-])")
+    return re.compile("|".join(alts))
+
+
 def main(report, assets, root="."):
     def lines(name):
         p = os.path.join(report, name)
@@ -104,6 +135,14 @@ def main(report, assets, root="."):
         for p in lines(f):
             if p:
                 out.append(("asset", p, matcher.hits(p, corpus)))
+    # jar resources: "<ADDED|REMOVED|CHANGED> <owner> <rule> <path>"; resources-all.txt
+    # lists every path of both builds so a bare name can be tested for uniqueness
+    res_names = collections.Counter(os.path.basename(p) for p in lines("resources-all.txt") if p)
+    for l in lines("resource-drift.txt"):
+        parts = l.split(" ", 3)
+        if len(parts) == 4 and parts[1] == "hypixel":
+            rx = resource_rx(parts[3], res_names, matcher.names)
+            out.append(("resource", parts[3], sorted(k for k, t in corpus.items() if rx.search(t))))
     classes = {}
     for l in lines("api-changed-classes.txt"):
         m = re.match(r"(?:ADDED|REMOVED|CHANGED) +(\S+)", l)

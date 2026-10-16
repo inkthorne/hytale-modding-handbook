@@ -7,6 +7,10 @@
 #   ~/.cache/hytale-jar/javap-index.txt   signatures + constant values of every com.hypixel.* class
 #   ~/.cache/hytale-jar/src/              decompiled .java for com.hypixel.hytale.*
 #   ~/.cache/hytale-jar/class-hashes.txt  sha256 (16 hex) of every com/hypixel/hytale class's bytes
+#   ~/.cache/hytale-jar/resource-hashes.txt  sha256 (64 hex, of the entry's CONTENT) and path of EVERY
+#                                         non-class, non-directory jar entry, no allowlist
+#   ~/.cache/hytale-jar/resource-owners.txt  for each of those: hypixel | third-party, the rule that
+#                                         decided it, and the path (see the rules at the writer below)
 #   ~/.cache/hytale-jar/cache-meta.txt    which jar built this cache (jar_sha = sha256 of the
 #                                         jar, 16 hex; version = its Implementation-Version),
 #                                         which decompiler, and whether the decompile completed
@@ -118,7 +122,7 @@ else
   rm -rf "$SNAP".new.* 2>/dev/null
   TMP="$SNAP.new.$$"
   { mkdir -p "$TMP"; } 2>/dev/null || { echo "  FAILED: cannot create $TMP — the cache is NOT wiped" >&2; exit 4; }
-  for f in javap-index.txt class-hashes.txt cache-meta.txt; do
+  for f in javap-index.txt class-hashes.txt resource-hashes.txt resource-owners.txt cache-meta.txt; do
     [ -f "$CACHE/$f" ] || continue
     cp "$CACHE/$f" "$TMP/$f" || { rm -rf "$TMP"; echo "  FAILED: snapshot copy of $f — the cache is NOT wiped" >&2; exit 4; }
   done
@@ -167,6 +171,66 @@ with zipfile.ZipFile(sys.argv[1]) as z:
         if n.startswith("com/hypixel/hytale/") and n.endswith(".class"):
             print(hashlib.sha256(z.read(n)).hexdigest()[:16], n[:-6].replace("/", "."))
 PY
+# Every non-class, non-directory entry of the jar, hashed by CONTENT (not the
+# zip's CRC or timestamps, which a repack changes without changing a byte). The
+# class hashes above cover com/hypixel/hytale only, and the javap index and the
+# decompiled source cover classes only, so a changed block-id migration
+# (migration/blocks/*.json), the bundled .lang, a service file or the manifest
+# surfaced nowhere. There is NO allowlist: an allowlist of "interesting" paths is
+# the omission this closes.
+#
+# Ownership is the DEFAULT: a resource is Hypixel's unless the jar itself shows
+# it is not. Mis-sorting a third-party file onto the Hypixel side costs a line
+# of noise; the other direction hides a Hypixel change. In this order:
+#   b  native library (.so .dll .dylib .jnilib)                       -> third-party
+#   c  under META-INF/ and neither its path nor its bytes contain
+#      "com.hypixel" (services files naming a Hypixel class are Hypixel's)
+#                                                                      -> third-party; else hypixel
+#   x  under com/hypixel/ (the package that is Hypixel's by name)       -> hypixel
+#   a  its top-level directory also holds classes outside com/hypixel/
+#      (com/ holds com/google and others, hence rule x first)           -> third-party
+#   e  its directory mirrors a package of foreign classes under com/
+#      (google/protobuf/*.proto sits beside com/google/protobuf/*.class,
+#      which the jar shows; 12 files at 0.7.2)                          -> third-party
+#   d  anything else, including a top-level directory the jar has not
+#      shown before                                                     -> hypixel
+# The rules are written into resource-owners.txt so the report prints what each
+# side holds and a REMOVED resource keeps the owner it had.
+write_resources() {
+  python3 -I - "$JAR" "$CACHE" <<'PY'
+import hashlib, sys, zipfile
+jar, out = sys.argv[1:3]
+NATIVE = (".so", ".dll", ".dylib", ".jnilib")
+with zipfile.ZipFile(jar) as z:
+    names = sorted(n for n in z.namelist() if not n.endswith("/") and not n.endswith(".class"))
+    foreign = [n for n in z.namelist() if n.endswith(".class") and not n.startswith("com/hypixel/")]
+    foreign_top = {n.split("/")[0] for n in foreign}
+    foreign_dirs = {n.rsplit("/", 1)[0] for n in foreign}
+    with open(out + "/resource-hashes.txt", "w") as hf, open(out + "/resource-owners.txt", "w") as of:
+        for n in names:
+            data = z.read(n)
+            top = n.split("/")[0] if "/" in n else ""
+            if n.endswith(NATIVE):
+                owner, rule = "third-party", "b"
+            elif top == "META-INF":
+                hyp = "com.hypixel" in n or b"com.hypixel" in data
+                owner, rule = ("hypixel", "c") if hyp else ("third-party", "c")
+            elif n.startswith("com/hypixel/"):
+                owner, rule = "hypixel", "x"
+            elif top in foreign_top:
+                owner, rule = "third-party", "a"
+            elif "/" in n and ("com/" + n.rsplit("/", 1)[0]) in foreign_dirs:
+                owner, rule = "third-party", "e"
+            else:
+                owner, rule = "hypixel", "d"
+            hf.write(f"{hashlib.sha256(data).hexdigest()}  {n}\n")
+            of.write(f"{owner} {rule} {n}\n")
+print(len(names))
+PY
+}
+RES_N="$(write_resources)" || { echo "  FAILED: could not hash the jar's resources" >&2; exit 5; }
+case "$RES_N" in ''|0|*[!0-9]*) echo "  FAILED: resource hashing wrote '${RES_N:-nothing}' entries — a jar always carries META-INF/MANIFEST.MF" >&2; exit 5 ;; esac
+note "resources hashed: $RES_N"
 INDEXED="$(grep -cE '^(Compiled from|(public |final |abstract |private |protected |static |sealed |non-sealed )*(class|interface|enum|record) )' "$INDEX" 2>/dev/null || echo '?')"
 note "index written: $INDEX ($(du -h "$INDEX" | cut -f1), ~$INDEXED type decls)"
 

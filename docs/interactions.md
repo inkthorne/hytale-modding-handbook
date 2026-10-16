@@ -588,11 +588,11 @@ the `AssetCodecMapCodec<String, Interaction>` type-dispatch map; register into i
 3. Register in `setup()`:
    ```java
    getCodecRegistry(Interaction.CODEC)
-       .register("My_Type", MyInteraction.class, MyInteraction.CODEC);
+       .register("MyMod_Type", MyInteraction.class, MyInteraction.CODEC);
    ```
 4. Reference from JSON inline, or as a named interaction asset others reference by id:
    ```json
-   { "Type": "My_Type", "MyField": 8 }
+   { "Type": "MyMod_Type", "MyField": 8 }
    ```
 
 You don't advance the chain yourself. `Interaction.tick` is `final`. After your `firstRun` returns,

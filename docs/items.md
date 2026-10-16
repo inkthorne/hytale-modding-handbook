@@ -674,7 +674,7 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
 {
   "Parent": "Template_Weapon_Sword",
   "TranslationProperties": {
-    "Name": "server.items.My_Custom_Sword.name"
+    "Name": "server.items.MyMod_Custom_Sword.name"
   },
   "Model": "Items/Weapons/Sword/Iron.blockymodel",
   "Texture": "Items/Weapons/Sword/Iron_Texture.png",
@@ -711,7 +711,7 @@ Changes item appearance based on entity stats (e.g., signature ability ready):
 {
   "Parent": "Template_Food",
   "TranslationProperties": {
-    "Name": "server.items.My_Custom_Food.name"
+    "Name": "server.items.MyMod_Custom_Food.name"
   },
   "Icon": "Icons/ItemsGenerated/Plant_Crop_Corn.png",
   "Quality": "Common",

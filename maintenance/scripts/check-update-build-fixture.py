@@ -65,7 +65,7 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 525
+MIN_CHECKS = 531
 MIN_MUTATIONS = 63
 
 
@@ -679,10 +679,16 @@ def part2():
         (t / 'report/resource-drift.txt').write_text(
             'CHANGED hypixel d bundledDefaults/server.lang\nCHANGED hypixel d migration/blocks/3_4.json\n'
             'ADDED hypixel d cfg/manifests.json\nCHANGED hypixel d x/data.json\nREMOVED hypixel d res/Thing.png\n'
-            'CHANGED third-party b native/linux-x64/libx.so\n')
-        (t / 'report/resources-all.txt').write_text(
-            'bundledDefaults/server.lang\nmigration/blocks/3_4.json\ncfg/manifests.json\nx/data.json\ny/data.json\n'
-            'res/Thing.png\nnative/linux-x64/libx.so\n')
+            'CHANGED third-party b native/linux-x64/libx.so\n'
+            # a resource that MOVED between builds, one whose name stopped being ambiguous
+            # (m/shared.json removed) and one that became ambiguous (q/other.json added)
+            'REMOVED hypixel d cfg/moved.json\nADDED hypixel d auth/moved.json\n'
+            'CHANGED hypixel d k/shared.json\nREMOVED hypixel d m/shared.json\n'
+            'CHANGED hypixel d n/other.json\nADDED hypixel d q/other.json\n')
+        common = ('bundledDefaults/server.lang\nmigration/blocks/3_4.json\nx/data.json\ny/data.json\n'
+                  'res/Thing.png\nnative/linux-x64/libx.so\nk/shared.json\nn/other.json\n')
+        (t / 'report/resources-old.txt').write_text(common + 'cfg/moved.json\nm/shared.json\n')
+        (t / 'report/resources-new.txt').write_text(common + 'cfg/manifests.json\nauth/moved.json\nq/other.json\n')
         for rel, text in {'docs/p1.md': 'Bundled strings live in `bundledDefaults/*.lang`.',
                           'docs/p2.md': 'Edit `Server/Languages/en-US/server.lang`.',
                           'docs/p3.md': 'Block migrations: `migration/blocks/3_4.json`.',
@@ -694,7 +700,10 @@ def part2():
                           'docs/p9.md': 'The `Thing.png` icon.',
                           'docs/p10.md': 'Everything under `bundledDefaults/*` ships.',
                           'docs/p11.md': 'Only `migration/blocks/0_1.json` is old.',
-                          'docs/p12.md': 'The `bundledDefaults/*.json` files.'}.items():
+                          'docs/p12.md': 'The `bundledDefaults/*.json` files.',
+                          'docs/p13.md': 'The `moved.json` file.',
+                          'docs/p14.md': 'The `shared.json` file.',
+                          'docs/p15.md': 'The `other.json` file.'}.items():
             (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -709,7 +718,19 @@ def part2():
     check('docs/p8.md' not in out, "resource triage: a bare name shared by two jar resources does not match")
     check('docs/p9.md' not in out, "resource triage: a bare name that is also a shipped asset does not match")
     check('libx.so' not in out and 'docs/p7.md' not in out, "resource triage: a third-party resource is not triaged")
-    check('#SUMMARY 5 changed thing(s) checked, 3 referenced' in out,
+    check('resource cfg/moved.json \u2192 docs/p13.md\n' in out,
+          "resource triage: a bare name is tested in the OLD build for a REMOVED row, so a resource that moved is still flagged")
+    check('resource auth/moved.json \u2192 docs/p13.md\n' in out,
+          "resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged")
+    check('resource k/shared.json \u2192 docs/p14.md\n' in out,
+          "resource triage: a CHANGED row's bare name that is unique in the new build only is flagged")
+    check('resource m/shared.json' not in out,
+          "resource triage: a REMOVED row's bare name that was ambiguous in the old build is not flagged")
+    check('resource n/other.json \u2192 docs/p15.md\n' in out,
+          "resource triage: a CHANGED row's bare name that is unique in the old build only is flagged")
+    check('resource q/other.json' not in out,
+          "resource triage: an ADDED row's bare name that is ambiguous in the new build is not flagged")
+    check('#SUMMARY 11 changed thing(s) checked, 7 referenced' in out,
           "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
 
 
@@ -945,6 +966,27 @@ MUTATIONS = [
     ("resources triage: a bare name may also be a shipped asset", T,
      ' and asset_names.get(name, 0) == 0:', ':',
      {"resource triage: a bare name that is also a shipped asset does not match"}),
+    ("resources triage: bare-name uniqueness counted over the union of both builds", T,
+     '[res_names[b] for b in builds]',
+     '[collections.Counter(os.path.basename(p) for p in set(lines("resources-old.txt")) | set(lines("resources-new.txt")))]',
+     {"resource triage: a bare name is tested in the OLD build for a REMOVED row, so a resource that moved is still flagged",
+      "resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged"}),
+    ("resources triage: a REMOVED row's bare name tested in the new build", T,
+     '{"ADDED": ("new",), "REMOVED": ("old",)}', '{"ADDED": ("new",), "REMOVED": ("new",)}',
+     {"resource triage: a bare name is tested in the OLD build for a REMOVED row, so a resource that moved is still flagged"}),
+    ("resources triage: an ADDED row's bare name tested in the old build", T,
+     '{"ADDED": ("new",), "REMOVED": ("old",)}', '{"ADDED": ("old",), "REMOVED": ("old",)}',
+     {"resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged"}),
+    ("resources triage: a CHANGED row's bare name tested in the new build only", T,
+     '.get(parts[0], ("old", "new"))', '.get(parts[0], ("new",))',
+     {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged"}),
+    ("resources triage: a CHANGED row's bare name tested in the old build only", T,
+     '.get(parts[0], ("old", "new"))', '.get(parts[0], ("old",))',
+     {"resource triage: a CHANGED row's bare name that is unique in the new build only is flagged"}),
+    ("resources triage: a bare name must be unique in every build, not any", T,
+     'if any(c[name] == 1 for c in res_names)', 'if all(c[name] == 1 for c in res_names)',
+     {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged",
+      "resource triage: a CHANGED row's bare name that is unique in the new build only is flagged"}),
     ("resources triage: bare names never match", T,
      'if res_names[name] == 1 and asset_names.get(name, 0) == 0:', 'if False:',
      {"resource triage: a bare name unique among jar resources and shipped assets matches"}),

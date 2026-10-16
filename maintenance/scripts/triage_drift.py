@@ -5,7 +5,7 @@ Usage: triage_drift.py REPORT_DIR ASSETS_DIR [CORPUS_ROOT]
 
 Reads update-build.sh's report files (assets-/server-{modified,removed}.txt,
 api-changed-classes.txt, src-changed-classes.txt, resource-drift.txt,
-resources-all.txt, ServerAssetsIndex.hashes) and
+resources-old.txt, resources-new.txt, ServerAssetsIndex.hashes) and
 the extracted assets' CommonAssetsIndex.hashes, and searches CORPUS_ROOT/docs and
 CORPUS_ROOT/examples (default: the current directory). It prints one line per
 changed thing that some file mentions:
@@ -43,10 +43,14 @@ something a page documents. A doc names one in three ways:
   - by a wildcard over its directory, `bundledDefaults/*.lang`, `bundledDefaults/*`
     (docs/i18n.md cites the first). Matched for every file that wildcard spans:
     `dir/*.lang` does not span a .json, and a bare `dir/*` is not `dir/*.ext`;
-  - by its bare name, ONLY when that name is unique among the jar's resources AND
-    absent from the shipped assets. `server.lang` names a jar resource and 20+
-    shipped files, so a page citing `en-US/server.lang` is not flagged by a change
-    to bundledDefaults/server.lang: the bare name could mean either.
+  - by its bare name, ONLY when that name is unique among the jar's resources of a
+    build the row's path exists in (the old build for a REMOVED row, the new for an
+    ADDED one, either for a CHANGED one) AND absent from the shipped assets. Counted
+    per build, never over the union: a resource that moved (REMOVED cfg/x, ADDED
+    auth/x) would otherwise share its bare name with itself and flag no page.
+    `server.lang` names a jar resource and 20+ shipped files, so a page citing
+    `en-US/server.lang` is not flagged by a change to bundledDefaults/server.lang:
+    the bare name could mean either.
 Files under build/ and .gradle/ and binary files (containing NUL) are skipped.
 """
 import collections, os, re, sys
@@ -107,6 +111,7 @@ RES_END = r"(?![\w-]|\.\w)"
 
 
 def resource_rx(path, res_names, asset_names):
+    """res_names: one Counter of bare names per build the row's path exists in."""
     d, name = os.path.split(path)
     stem, ext = os.path.splitext(name)
     alts = [r"(?<![\w-])" + re.escape(path) + RES_END]
@@ -115,7 +120,7 @@ def resource_rx(path, res_names, asset_names):
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*" + wild_ext + RES_END)
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*.-])")
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\{(?:[^{}]*,)?\s*" + re.escape(stem) + r"\s*(?:,[^{}]*)?\}" + re.escape(ext))
-    if res_names[name] == 1 and asset_names.get(name, 0) == 0:
+    if any(c[name] == 1 for c in res_names) and asset_names.get(name, 0) == 0:
         alts.append(r"(?<![\w-])" + re.escape(name) + r"(?![\w.-])")
     return re.compile("|".join(alts))
 
@@ -136,13 +141,16 @@ def main(report, assets, root="."):
         for p in lines(f):
             if p:
                 out.append(("asset", p, matcher.hits(p, corpus)))
-    # jar resources: "<ADDED|REMOVED|CHANGED> <owner> <rule> <path>"; resources-all.txt
-    # lists every path of both builds so a bare name can be tested for uniqueness
-    res_names = collections.Counter(os.path.basename(p) for p in lines("resources-all.txt") if p)
+    # jar resources: "<ADDED|REMOVED|CHANGED> <owner> <rule> <path>"; resources-old.txt
+    # and resources-new.txt list every path of each build so a bare name can be tested
+    # for uniqueness within a build
+    res_names = {b: collections.Counter(os.path.basename(p) for p in lines(f"resources-{b}.txt") if p)
+                 for b in ("old", "new")}
     for l in lines("resource-drift.txt"):
         parts = l.split(" ", 3)
         if len(parts) == 4 and parts[1] == "hypixel":
-            rx = resource_rx(parts[3], res_names, matcher.names)
+            builds = {"ADDED": ("new",), "REMOVED": ("old",)}.get(parts[0], ("old", "new"))
+            rx = resource_rx(parts[3], [res_names[b] for b in builds], matcher.names)
             out.append(("resource", parts[3], sorted(k for k, t in corpus.items() if rx.search(t))))
     classes = {}
     for l in lines("api-changed-classes.txt"):

@@ -376,9 +376,9 @@ elif [ ! -f "$NEW_RH" ]; then
 elif [ ! -f "$OLD_RH" ]; then
   warn "BLIND: the previous-build snapshot has no resource-hashes.txt (it predates resource hashing) — resources ADDED/REMOVED/CHANGED since that build are NOT reported; list them by hand: unzip -Z1 <old jar> | grep -v '\.class\$' and diff"
 else
-  python3 -I - "$OLD_RH" "$NEW_RH" "$SNAP/resource-owners.txt" "$JAR_CACHE/resource-owners.txt" "$REPORT/resource-drift.txt" "$REPORT/resources-all.txt" <<'PY' > "$REPORT/resource-summary.txt"
+  python3 -I - "$OLD_RH" "$NEW_RH" "$SNAP/resource-owners.txt" "$JAR_CACHE/resource-owners.txt" "$REPORT/resource-drift.txt" "$REPORT/resources-old.txt" "$REPORT/resources-new.txt" <<'PY' > "$REPORT/resource-summary.txt"
 import collections, os, sys
-old_h, new_h, old_o, new_o, out_drift, out_all = sys.argv[1:7]
+old_h, new_h, old_o, new_o, out_drift, out_old, out_new = sys.argv[1:8]
 def hashes(p):
     d = {}
     for l in open(p, encoding="utf-8"):
@@ -414,8 +414,12 @@ for p in sorted(oh.keys() | nh.keys()):
     elif oh[p] != nh[p]: rows.append(("CHANGED", *own_both(p), p))
 with open(out_drift, "w") as f:
     for st, o, r, p in rows: f.write(f"{st} {o} {r} {p}\n")
-with open(out_all, "w") as f:
-    for p in sorted(oh.keys() | nh.keys()): f.write(p + "\n")
+# one list per build: the triage tests a bare name for uniqueness in the build the
+# row's path exists in, and a union would make a resource that MOVED between
+# builds look ambiguous with itself
+for out_path, tab in ((out_old, oh), (out_new, nh)):
+    with open(out_path, "w") as f:
+        for p in sorted(tab): f.write(p + "\n")
 top2 = lambda p: "/".join(p.split("/")[:2]) if p.count("/") > 1 else (p.split("/")[0] if "/" in p else "(root)")
 print(f"#COUNTS {len(oh)} {len(nh)} {len(rows)} {sum(1 for r in rows if r[1] == 'hypixel')} {sum(1 for r in rows if r[1] != 'hypixel')} {len(no)}")
 for o in ("hypixel", "third-party"):

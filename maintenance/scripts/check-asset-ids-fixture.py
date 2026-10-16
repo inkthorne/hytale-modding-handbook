@@ -36,26 +36,26 @@ CHECKER = HERE / 'check-asset-ids.py'
 
 # The healthy corpus, stated exactly. Each line is asserted verbatim: a value leaving the
 # corpus, a fence no longer scanned, a class no longer typed all move one of them.
-SWEEP = ('asset sweep: 66 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
+SWEEP = ('asset sweep: 67 JSON-bodied file(s) swept under Server/ (+2 excluded as bulk data: '
          'Prefabs, World); 1 failed to parse; 8 store(s) declared in the jar, 7 present with ids '
-         '(1 absent from this build), 56 distinct id(s)')
-TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 70 classes, L1 13 of 43, '
-          'LW 8 of 20; 7 of 7 store(s) are the target of at least one typed class; 2 tied class(es)')
-DRIFT = 'typing drift vs typing-snapshot.txt: 1 class(es) added, 1 removed, 1 retargeted (28 in the snapshot)'
-SCAN = ('docs scan: 9 page(s); 37 ```json fence(s) (34 strict-parse, 3 unparseable and read tolerantly); '
+         '(1 absent from this build), 57 distinct id(s)')
+TYPING = ('typing (N>=5 distinct values, P>=0.90 in one store): L2 7 of 100 classes, L1 13 of 67, '
+          'LW 9 of 22, LN 2 of 2; 7 of 7 store(s) are the target of at least one typed class; 2 tied class(es)')
+DRIFT = 'typing drift vs typing-snapshot.txt: 1 class(es) added, 1 removed, 1 retargeted (31 in the snapshot)'
+SCAN = ('docs scan: 10 page(s); 38 ```json fence(s) (35 strict-parse, 3 unparseable and read tolerantly); '
         '2 untagged fence(s), of which 1 parse as JSON and 1 hold JSON pairs (scanned); 1 more hold only a '
         'quoted-key fragment inside a tree or sample (not scanned); 3 other-language fence(s) not scanned; '
         '2 fence(s) sit inside a blockquote, 1 of them ```json (all counted and scanned)')
-PAIRS = ('pairs: 99 string value(s) extracted, 90 at a typed position (9 untyped, not checkable); of the typed: '
-         '18 resolved, 15 exempt (shape 6, shipped-use 1, shipped-excerpt 1, placeholder 3, pack 2, '
-         'page-defined 2), 57 failed; resolved in 7 distinct store(s)')
+PAIRS = ('pairs: 110 string value(s) extracted, 96 at a typed position (14 untyped, not checkable); of the typed: '
+         '19 resolved, 16 exempt (shape 6, shipped-use 2, shipped-excerpt 1, placeholder 3, pack 2, '
+         'page-defined 2), 61 failed; resolved in 7 distinct store(s)')
 RECOVERED = 'recovered from the unparseable fences: 4 pair(s), 3 at a typed position, 3 failed'
-N_FLAG_LINES = 59       # 57 failed pairs and the 2 declarations in declared.md
+N_FLAG_LINES = 63       # 61 failed pairs and the 2 declarations in declared.md
 
 # Floors, same shape as every other fixture in this directory: raise freely, lower only
 # with a reason in the commit message.
-MIN_CASES = 38
-MIN_MUTATIONS = 36
+MIN_CASES = 42
+MIN_MUTATIONS = 43
 
 PAIR_RE = re.compile(r'^  PAIR  (\S+?):\d+\t([^\t]*)\t([^\t]*)\t(\S+)$')
 FLAG_RE = re.compile(r'^  FLAG  (\S+?):\d+: "([^"]*)": "([^"]*)" is not an id in (\S+) \((.*)\)$')
@@ -130,7 +130,7 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('healthy corpus: every denominator is exact', rc, t, want_rc=1,
              must=(SWEEP, TYPING, DRIFT, SCAN, PAIRS, RECOVERED), must_not=('PASS', 'FAIL'))
         case('the flag set is exactly the invented, wrong-kind and unexcused ids', rc, t, want_rc=1,
-             must=('57 failed',))
+             must=('61 failed',))
         n_flags = sum(1 for ln in t.split('\n') if ln.startswith('  FLAG  '))
         if n_flags != N_FLAG_LINES:
             out['the flag set is exactly the invented, wrong-kind and unexcused ids'].append(
@@ -192,6 +192,23 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
                  (F, 'Rewards.Id', 'SFX_B'): 'failed'})
         case('an id of ANOTHER store that ships under the key somewhere is still the wrong kind', rc, t,
              want_rc=1, flagged={(F, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
+        N = 'numeric.md'
+        case('a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never '
+             'did: a real id passes, an invented one fails', rc, t, want_rc=1, verdicts={
+                 (N, 'Stages.1.0', 'Int_A'): 'resolved', (N, 'Stages.3.0', 'Int_Fake_Stage'): 'failed',
+                 (N, 'Stages.7.5', 'Int_Fake_Fresh'): 'failed'})
+        case('a real id of ANOTHER store under a numeric map child fails, naming where it lives', rc, t,
+             want_rc=1, flagged={(N, 'Stages.4.5', 'Sword_A'): 'exists only as Item/Items'})
+        case('a sentinel the assets ship under a numeric child passes at any numeric key of the map', rc, t,
+             want_rc=1, verdicts={(N, 'Stages.9.5', 'Void_Stage'): 'shipped-use'})
+        case('a field of an inline object held at a numeric child, and a non-numeric key beside the numeric '
+             'ones, are not an id slot', rc, t, want_rc=1, verdicts={
+                 (N, 'Stages.6.0.Text', 'Sword_Fake_Inline'): 'untyped', (N, 'Stages.6.0.9', 'Int_Fake_Deep'): 'untyped',
+                 (N, 'Stages.Zeta', 'Sword_Fake_Zeta'): 'untyped'})
+        case('a numeric child whose exact position the assets show holding another kind is not spoken for, and '
+             'a map the assets never showed is untyped', rc, t, want_rc=1, verdicts={
+                 (N, 'Rungs.99.0', 'Sword_B'): 'untyped', (N, 'Rungs.3', 'Int_Fake_Rung'): 'failed',
+                 (N, 'Gears.1.0', 'Anything_Gear'): 'untyped'})
         X = 'excerpt.md'
         case('an excerpt of a real shipped file passes only for the pair that file ships', rc, t, want_rc=1,
              flagged={(X, 'Next', 'Fx_A'): 'exists only as Entity/Effects'})
@@ -321,6 +338,38 @@ MUTATIONS = {
         E("P_MIN = 0.90       # fraction", "P_MIN = 0.50       # fraction"),
         None, {'healthy corpus: every denominator is exact'}),
 
+    # --- the numeric map-child class (LN)
+    'numeric map-child class switched off (NUMERIC_CHILD = False)': (
+        E("NUMERIC_CHILD = True\n", "NUMERIC_CHILD = False\n"),
+        None, {'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails'}),
+    'numeric property dropped when a doc position is looked up (any key under the map speaks)': (
+        E("    if NUMERIC_CHILD and p is not None and NUMKEY.match(k) and (p, '#') in typed['LN']:",
+          "    if NUMERIC_CHILD and p is not None and (p, '#') in typed['LN']:"),
+        None, {'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot'}),
+    'numeric property dropped when the assets are swept (every string under the parent counts)': (
+        E("                if NUMKEY.match(path[-1]) and IDENT.match(path[-2]):\n                    self.LN[(path[-2], '#')].add(o)",
+          "                if IDENT.match(path[-2]):\n                    self.LN[(path[-2], '#')].add(o)"),
+        None, {'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails'}),
+    'a numeric key inside an inline object counts as a map of its own (the parent need not be a name)': (
+        E("                if NUMKEY.match(path[-1]) and IDENT.match(path[-2]):\n                    self.LN[(path[-2], '#')].add(o)",
+          "                if NUMKEY.match(path[-1]):\n                    self.LN[(path[-2], '#')].add(o)"),
+        None, {'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot'}),
+    'strings below a numeric child count toward the class (inline objects not excluded)': (
+        E("                if NUMKEY.match(path[-1]) and IDENT.match(path[-2]):\n                    self.LN[(path[-2], '#')].add(o)",
+          "                for i_ in range(1, len(path)):\n                    if NUMKEY.match(path[i_]) and IDENT.match(path[i_ - 1]):\n                        self.LN[(path[i_ - 1], '#')].add(o)"),
+        None, {'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails'}),
+    'the children guard is consulted for a numeric child': (
+        E("    if NUMERIC_CHILD and p is not None and NUMKEY.match(k) and (p, '#') in typed['LN']:",
+          "    if NUMERIC_CHILD and p is not None and NUMKEY.match(k) and (p, '#') in typed['LN'] and k not in sweep.children.get(p, ()):"),
+        None, {'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails'}),
+    'the exact pair no longer wins over a numeric child class': (
+        E("        sh = exact_share(sweep, idx, p, k, ln)\n        if not (EXACT_WINS and sh is not None and sh < EXACT_SHARE):",
+          "        sh = exact_share(sweep, idx, p, k, ln)\n        if True:"),
+        None, {'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped'}),
+    'a sentinel shipped under a numeric child is not read': (
+        E(", ('LN', sweep.LN, (p, '#'))):", "):"),
+        None, {'a sentinel the assets ship under a numeric child passes at any numeric key of the map'}),
+
     # --- extraction
     'array elements not extracted': (
         E("                elif top[0] == 'a':\n                    out.append((top[1], unq(text), off))",
@@ -444,6 +493,7 @@ EXPECT = {
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
         "a pair mixed below P but mostly of the class's kind is still checked as that kind",
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
         'an excerpt of a real shipped file passes only for the pair that file ships',
@@ -476,27 +526,83 @@ EXPECT = {
     },
     'N floor lowered to 1': {
         'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
         'healthy corpus: every denominator is exact',
     },
     'P floor lowered to 0.5': {
+        'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot',
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'numeric map-child class switched off (NUMERIC_CHILD = False)': {
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
+        'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'numeric property dropped when a doc position is looked up (any key under the map speaks)': {
+        'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'numeric property dropped when the assets are swept (every string under the parent counts)': {
+        'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a numeric key inside an inline object counts as a map of its own (the parent need not be a name)': {
+        'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'strings below a numeric child count toward the class (inline objects not excluded)': {
+        'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'the children guard is consulted for a numeric child': {
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
+        'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'the exact pair no longer wins over a numeric child class': {
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
+        'healthy corpus: every denominator is exact',
+        'the flag set is exactly the invented, wrong-kind and unexcused ids',
+    },
+    'a sentinel shipped under a numeric child is not read': {
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
     },
     'array elements not extracted': {
         'a bare key seen under one parent types that parent and no unseen one',
         'a blockquoted fence is counted and scanned; a quoted java fence is counted and not read',
+        'a field of an inline object held at a numeric child, and a non-numeric key beside the numeric ones, are not an id slot',
         'a generated-state id resolves by its base',
         'a key typed by (parent, key) fails wrong-kind and invented ids; an unseen parent is untyped',
         'a known FIELD among map values is not mistaken for an id slot',
         'a map value is typed by its parent, whatever its key',
         'a missing typing snapshot is reported, not fatal',
         'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
+        'a numeric-keyed child of a typed map is checked, on a key the assets ship and on one they never did: a real id passes, an invented one fails',
         "a pair mixed below P but mostly of the class's kind is still checked as that kind",
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'a real id in each covered family passes',
+        'a real id of ANOTHER store under a numeric map child fails, naming where it lives',
         'a real id of the WRONG family under a typed key fails, naming where it lives',
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
         'a tie passes in either store; the stem, not the path or extension, is the id',
         'a value not shaped like an id is exempt as shape and counted',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
@@ -529,6 +635,7 @@ EXPECT = {
         'healthy corpus: every denominator is exact',
     },
     'verbatim widening off (WIDEN = False)': {
+        'a sentinel the assets ship under a numeric child passes at any numeric key of the map',
         'a value the shipped assets put under the key passes if it names no asset; an untyped bare key lends nothing',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
@@ -550,6 +657,7 @@ EXPECT = {
     },
     'the exact position no longer wins over a bare key (EXACT_WINS = False)': {
         'a mixture key does not speak where the exact position shows the other field, and still speaks for an unseen parent',
+        'a numeric child whose exact position the assets show holding another kind is not spoken for, and a map the assets never showed is untyped',
         'a parent.* class does not speak for a pair the assets show holding another kind, and still does for an unseen key',
         'healthy corpus: every denominator is exact',
         'the flag set is exactly the invented, wrong-kind and unexcused ids',
@@ -703,7 +811,7 @@ def main():
     print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     with tempfile.TemporaryDirectory() as td:
         for label, (edits, _unused, names) in MUTATIONS.items():
-            expect = EXPECT[label]
+            expect = EXPECT.get(label, set()) if a.measure else EXPECT[label]
             src = CHECKER.read_text()
             bad = [old for old, _ in edits if src.count(old) != 1]
             if bad:

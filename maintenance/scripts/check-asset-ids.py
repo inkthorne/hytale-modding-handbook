@@ -145,7 +145,7 @@ PARENT_K = 3
 # NUMERIC_CHILD (the LN class above) was added by acceptance 6. It exists because the LW class cannot speak
 # for these keys: `k not in sweep.children[p]` stops a parent.* class from typing a key the shipped assets
 # show as a child of that parent (a FIELD, not a free-form map key), and every distinct numeric key of a
-# Charging `Next` is such a child (41 of them, none with the 5 values L2 needs). The numeric property
+# Charging `Next` is such a child (41 distinct numeric keys; only `0` reaches the 5 values L2 needs). The numeric property
 # selects the map child directly, so the LN class does not consult that guard; it consults EXACT_WINS /
 # EXACT_SHARE (a (parent, key) the assets show holding something else is not spoken for) and VERBATIM_STRICT
 # (a sentinel the assets ship there passes) exactly as the other classes do. PARENT_K does not apply: LN is
@@ -234,8 +234,10 @@ class Sweep:
                 self.L2[path[-2:]].add(o)
                 if IDENT.match(path[-2]):
                     self.LW[(path[-2], '*')].add(o)
-                    if NUMKEY.match(path[-1]):
-                        self.LN[(path[-2], '#')].add(o)
+                # a string at a numeric-keyed child of a NAMED map: the parent must be a name, not itself a
+                # number (a numeric key inside an inline object held at a numeric child is not a map M)
+                if NUMKEY.match(path[-1]) and IDENT.match(path[-2]):
+                    self.LN[(path[-2], '#')].add(o)
 
     def run(self, assets: pathlib.Path):
         server = assets / 'Server'
@@ -607,7 +609,7 @@ def lookup_families(path, typed, sweep, idx):
             pass        # the shipped assets show this (parent, key) holding something else
         else:
             fams |= l1; via.append('L1')
-    if NUMERIC_CHILD and p is not None and IDENT.match(p) and NUMKEY.match(k) and (p, '#') in typed['LN']:
+    if NUMERIC_CHILD and p is not None and NUMKEY.match(k) and (p, '#') in typed['LN']:
         # a numeric-keyed child of a map: selected by the key's PROPERTY, so the children guard below
         # (which separates fields from free-form keys by looking the key up) is not consulted
         ln = typed['LN'][(p, '#')][0]

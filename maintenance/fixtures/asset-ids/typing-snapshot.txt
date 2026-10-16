@@ -3,7 +3,7 @@
 # typing taken before the docs were first resolved against it. The gate diffs its live table
 # against this file and reports drift as INFO; regenerate with --dump-typing after a game
 # update, once the docs have been re-verified. Not otherwise an input.
-# 13 L1 / 7 L2 / 8 LW class(es).
+# 13 L1 / 7 L2 / 9 LW / 2 LN class(es).
 L1 Bogus	Item/Items
 L1 DropListId	Drops,Item/Block/Spawners
 L1 EffectId	Entity/Effects
@@ -24,11 +24,14 @@ L2 Holder.Lonely	Item/Items
 L2 Particles.SystemId	Particles
 L2 Rewards.Id	Item/Items
 L2 SoundEvents.Build	Audio/SoundEvents
+LN Rungs.#	Item/Interactions
+LN Stages.#	Item/Interactions
 LW Bag.*	Item/Items
 LW Container.*	Item/Items
 LW Effects.*	Audio/SoundEvents
 LW Holder.*	Item/Items
 LW Particles.*	Particles
+LW Rungs.*	Item/Interactions
 LW SoundEvents.*	Audio/SoundEvents
 LW SoundMap.*	Audio/SoundEvents
 LW Tones.*	Audio/SoundEvents

@@ -215,7 +215,112 @@ def main():
             print(f"PARENT_K sweep on {name}: flags " + ', '.join(f'K={k}: {len(v)}' for k, v in sets.items())
                   + ('  (identical sets - the data cannot choose K)' if same else '  (SETS DIFFER)'))
         gate.PARENT_K = shipped['PARENT_K']
+        # WIDENING: every pair whose set of expected families differs between the code before this item
+        # (NUMERIC_CHILD off) and as shipped, on both docs trees. Each must be explained or is a defect.
+        for name in ('37425a6', 'HEAD (working tree)'):
+            pages = gate.scan_docs(trees[name])
+            gate.NUMERIC_CHILD = False
+            old = gate.evaluate(pages, ctx, packs, pathlib.Path(a.assets))
+            gate.NUMERIC_CHILD = True
+            new = gate.evaluate(pages, ctx, packs, pathlib.Path(a.assets))
+            assert len(old) == len(new)
+            diff = [(o, n) for o, n in zip(old, new) if (o['fams'], o['verdict']) != (n['fams'], n['verdict'])]
+            print(f'WIDENING on {name}: {len(diff)} of {len(new)} pair(s) change families or verdict (NUMERIC_CHILD off -> on)')
+            for o, n in diff:
+                print(f"    {n['page']}:{n['line']} {'.'.join(n['path'])}={n['val']}: "
+                      f"{'/'.join(o['fams']) or '-'} [{o['verdict']}] -> {'/'.join(n['fams']) or '-'} [{n['verdict']}]")
+        gate.NUMERIC_CHILD = shipped['NUMERIC_CHILD']
     return rc
+
+
+def why_untyped(gate, ctx, path):
+    """What the gate's tables hold for a position, as numbers: the evidence behind an 'untyped' verdict."""
+    sw = ctx.sweep
+    k = path[-1]
+    p = path[-2] if len(path) > 1 else None
+    parts = []
+    l2 = sw.L2.get((p, k), ()) if p is not None else ()
+    parts.append(f'L2 {p}.{k}: {len(l2)} distinct shipped value(s)')
+    parts.append(f'L1 {k}: {len(sw.L1.get((k,), ()))}')
+    if p is not None and gate.IDENT.match(p):
+        parts.append(f'LW {p}.*: {len(sw.LW.get((p, "*"), ()))}'
+                     + (', key is a shipped child of the parent (the children guard stops the wildcard)'
+                        if k in sw.children.get(p, ()) else ''))
+        if gate.NUMKEY.match(k):
+            parts.append(f'LN {p}.#: {len(sw.LN.get((p, "#"), ()))}')
+    return '; '.join(parts)
+
+
+def scope_report(gate, ctx, recs, den, hits, detail):
+    """Recall over the denominator split by the DECLARED scope (SCOPE_BY_KEY / classify, fixed from the
+    codecs before any verdict was read). A value under two keys counts once, in its strongest class
+    (asset > gap > free). Prints hits and misses on each side; the subset figure is labelled and is NOT
+    the figure the ~70% line is judged on."""
+    hitset = set(hits)
+    cls = {}         # value -> (class, set of (class, store, reason, 'parent.key'))
+    unknown = []
+    for v in den:
+        rs = [r for r in recs if r['val'] == v and r['page'].startswith('interactions') and r['verdict'] != 'bad-placeholder']
+        found = []
+        for r in rs:
+            try:
+                c, store, why = classify(r['path'])
+            except KeyError as e:
+                unknown.append((v, r['path']))
+                continue
+            found.append((c, store, why, '.'.join(r['path'][-2:])))
+        order = {'asset': 0, 'gap': 1, 'free': 2}
+        best = min((f[0] for f in found), key=order.get) if found else None
+        cls[v] = (best, found)
+    if unknown:
+        print(f'  FAIL  {len(unknown)} denominator position(s) are not in the declared-scope table: {unknown[:5]}')
+        return 1
+    n_unextracted = [v for v in den if cls[v][0] is None]
+    if n_unextracted:
+        print(f'  FAIL  {len(n_unextracted)} denominator value(s) carry no extracted pair: {n_unextracted[:5]}')
+        return 1
+    multi = [v for v in den if len({f[0] for f in cls[v][1]}) > 1]
+    print(f'    DECLARED SCOPE (classified per key from the codecs before any verdict; a value under two keys counts once, '
+          f'strongest class wins: asset > gap > free; {len(multi)} value(s) sit under keys of different classes: {", ".join(multi) or "none"})')
+    for c, label in (('asset', 'names an ASSET (resolves, or should, in a setPath store)'),
+                     ('free', 'FREE: any value is legal, out of the denominator'),
+                     ('gap', 'NAMED GAP: a real reference that is not a file stem')):
+        vs = [v for v in den if cls[v][0] == c]
+        h = [v for v in vs if v in hitset]
+        m = [v for v in vs if v not in hitset]
+        print(f'      {c:5s} {len(vs):3d} distinct value(s): {len(h)} caught, {len(m)} missed   [{label}]')
+        if detail:
+            by_key = collections.defaultdict(lambda: [[], []])
+            for v in vs:
+                f = next(f for f in cls[v][1] if f[0] == c)
+                pth, last = f[3], f[3].split('.')[-1]
+                label = ('Flags.*' if pth.startswith('Flags.') else 'Next.<numeric>' if f[2].startswith('ChargingInteraction.Next')
+                         else pth if last == 'Id' else last)
+                by_key[(label, f[1], f[2])][0 if v in hitset else 1].append(v)
+            for (k, store, why), (hh, mm) in sorted(by_key.items(), key=lambda kv: -len(kv[1][0]) - len(kv[1][1])):
+                print(f'        {k:24s} {len(hh):2d} caught {len(mm):2d} missed  -> {store or "-"}: {why}')
+                if mm:
+                    print(f'            missed: {", ".join(sorted(mm))}')
+    ast = [v for v in den if cls[v][0] == 'asset']
+    print(f'    recall over the 120 (the figure the ~70% line judges): {pct(len(hitset & set(den)), len(den))}')
+    print(f'    recall WITHIN DECLARED SCOPE (asset-naming positions only; never compared to the line): '
+          f'{pct(len([v for v in ast if v in hitset]), len(ast))}')
+    if detail:
+        mc = []
+        for v in den:
+            if v in hitset:
+                continue
+            for r in recs:
+                if r['val'] == v and r['page'].startswith('interactions') and r['verdict'] == 'untyped':
+                    k = r['path'][-1]
+                    p = r['path'][-2] if len(r['path']) > 1 else None
+                    if p == 'Flags' or (p == 'Next' and gate.NUMKEY.match(k)) or k in (
+                            'Forward', 'Back', 'ForwardLeft', 'ForwardRight', 'BackLeft', 'BackRight', 'Failed', 'Click', 'Held'):
+                        mc.append((r['page'], r['line'], '.'.join(r['path']), v, why_untyped(gate, ctx, r['path'])))
+        print(f'    MAP-CHILD / FIXED-CHILD-FIELD MISSES ({len(mc)}), each with the gate tables behind its untyped verdict:')
+        for pg, ln, pth, v, why in sorted(mc):
+            print(f'      {pg}:{ln} {pth}={v}\n          {why}')
+    return 0
 
 
 def measure(gate, ctx, packs, zip_stems, a):
@@ -269,6 +374,8 @@ def measure(gate, ctx, packs, zip_stems, a):
         if not den:
             print('  FAIL  empty denominator'); rc = 1
         a_recall = len(hits) / len(den) if den else 0.0
+        if den:
+            rc = scope_report(gate, ctx, recs_base, den, hits, detail=True) or rc
 
         # ------------------------------------------------------------ (b)
         drops_old = export_docs(REV_DROPS_FIX + '^', td / 'dropsold')

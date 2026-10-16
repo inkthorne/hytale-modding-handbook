@@ -1,0 +1,32 @@
+{
+  "Type": "Charging",
+  "Stages": {
+    "0.5": "Int_A",
+    "1.0": "Int_B",
+    "1.5": "Int_C",
+    "2": "Int_D",
+    "2.5": "Int_E",
+    "3.0": "Int_F",
+    "3.5": "Int_G",
+    "4.0": "Int_H",
+    "4.5": "Int_I",
+    "5.0": "Int_J",
+    "5.5": "Void_Stage",
+    "6.0": { "Text": "Charge text goes here", "1": "Int_A", "2": "Int_B", "3": "Int_C", "4": "Int_D", "5": "Int_E" },
+    "Label": "Charge text",
+    "Note": "More text",
+    "Tag": "plain"
+  },
+  "Rungs": {
+    "1": "Int_A",
+    "2": "Int_B",
+    "3": "Int_C",
+    "4": "Int_D",
+    "5": "Int_E",
+    "6": "Int_F",
+    "7": "Int_G",
+    "8": "Int_H",
+    "9": "Int_I",
+    "99.0": "Sword_A"
+  }
+}

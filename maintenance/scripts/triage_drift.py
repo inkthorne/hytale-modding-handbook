@@ -24,7 +24,8 @@ resource-drift.txt that is not `<ADDED|REMOVED|CHANGED> <hypixel|third-party> <r
 <path>` (<rule> is a letter, or `-` where no owners file recorded the path), or a
 Hypixel row whose path is missing from the resources-old.txt / resources-new.txt of a
 build it needs. The triage is still printed, with what the path, brace and wildcard
-rules can match, and stderr says which file and how many rows lost the match. No
+rules can match, and an `#ERROR` line (in the report on stdout, before #SUMMARY, and on
+stderr) says which file and how many rows lost the match. No
 resource-drift.txt, or one with no Hypixel rows, needs neither list.
 
 Asset keys. A doc names an asset in one of four ways, and each needs its own key:
@@ -209,24 +210,28 @@ def main(report, assets, root="."):
     for kind, thing, h in out:
         if h:
             print(f"{kind} {thing} → {' '.join(h)}")
-    print(f"#SUMMARY {len(out)} changed thing(s) checked, {sum(1 for o in out if o[2])} referenced in docs/examples")
-    sys.stdout.flush()      # the triage, then why it is incomplete, in that order on a terminal
-    rc = 0
+    errors = []
     if malformed:
-        rc = 2
-        print(f"triage_drift: {len(malformed)} line(s) of resource-drift.txt are not "
-              f"`<ADDED|REMOVED|CHANGED> <hypixel|third-party> <rule> <path>` and were NOT triaged "
-              f"(first: {malformed[0]!r}); the triage above is incomplete", file=sys.stderr)
+        errors.append(f"{len(malformed)} line(s) of resource-drift.txt are not "
+                      f"`<ADDED|REMOVED|CHANGED> <hypixel|third-party> <rule> <path>` and were NOT triaged "
+                      f"(first: {malformed[0]!r}); the triage is incomplete")
     for b in ("old", "new"):
         if unlisted[b]:
-            rc = 2
             f = f"resources-{b}.txt"
             why = ("is missing" if not os.path.exists(os.path.join(report, f))
                    else "is empty" if not listed[b] else "does not list their paths")
-            print(f"triage_drift: {f} {why}, so {len(unlisted[b])} Hypixel resource row(s) "
-                  f"(first: {unlisted[b][0]}) were matched by path and wildcard only, never by bare name; "
-                  f"the triage above is incomplete", file=sys.stderr)
-    return rc
+            errors.append(f"{f} {why}, so {len(unlisted[b])} Hypixel resource row(s) "
+                          f"(first: {unlisted[b][0]}) were matched by path and wildcard only, never by bare name; "
+                          f"the triage is incomplete")
+    # on stdout too, so the report file (update-build.sh keeps stdout as triage.txt) records
+    # that it is incomplete; the SUMMARY stays the last line
+    for e in errors:
+        print(f"#ERROR {e}")
+    print(f"#SUMMARY {len(out)} changed thing(s) checked, {sum(1 for o in out if o[2])} referenced in docs/examples")
+    sys.stdout.flush()
+    for e in errors:
+        print(f"triage_drift: {e}", file=sys.stderr)
+    return 2 if errors else 0
 
 
 if __name__ == "__main__":

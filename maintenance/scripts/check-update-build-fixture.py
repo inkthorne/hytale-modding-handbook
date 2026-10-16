@@ -23,8 +23,10 @@ red by reverting each fix.
 
 WHAT IT DOES. Resource drift (acceptance 8) closed the first gap invariant 4 listed as "not covered":
 the jar's non-class entries. Cases below: W (resource-only update), X (timestamps only),
-Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures), and the
-resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
+Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures, including
+classes under com/hypixel/ that do not parse), TF (a failing triage stub), RC (a resource
+comparison with no result, alone, with a failing triage, and with a python that exits non-zero
+after printing its result) and the resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
 
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
@@ -65,8 +67,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 666
-MIN_MUTATIONS = 102
+MIN_CHECKS = 675
+MIN_MUTATIONS = 109
 
 
 class Run:
@@ -124,7 +126,8 @@ LOADS_CONSTANTS = {
     'E': 'libover.so.1',                        # right edge: libover.so is a prefix of it
     'F': 'xMETA-INF/vendor-left.cfg',           # left edge, full path: preceded by a name character
     'G': '/META-INF/slash-loaded.properties',   # a full path preceded by `/`
-    'H': '/native/\\u0001/libindy.so',           # an indy concat recipe: the file name preceded by `/`
+    'H': '/native/\\u0001/libindy.so',           # an indy concat recipe, the shape RocksDbNative's "/native/" + dir + "/" + name has in 0.7.2: the file name
+    #                                           # preceded by `/`. It pins nothing G does not (both are a `/` delimiter); kept as the real shape
     'I': WHOLE,                                 # a whole path whose length byte is a name character
     'J': 'xlibq.so;libq.so',                    # an embedded libq.so, then a delimited one
 }
@@ -317,11 +320,23 @@ def build(tmp: pathlib.Path):
     (tmp / 'vbad.jar').write_bytes(raw.replace(b'CORRUPT-ME-CORRUPT-ME', b'CORRUPT-XX-CORRUPT-ME'))
     # jars with ONE class under com/hypixel/ that does not parse, each by exactly one defect
     gone = zipfile.ZipFile(tmp / 'v1/base.jar').read(f'{P}/Gone.class')
+    # where Gone's constant pool ends, by a walk of this fixture's own (not the script's)
+    cp_count, pool_end, i = int.from_bytes(gone[8:10], 'big'), 10, 1
+    while i < cp_count:
+        tag = gone[pool_end]; pool_end += 1
+        if tag == 1:
+            pool_end += 2 + int.from_bytes(gone[pool_end:pool_end + 2], 'big')
+        else:
+            pool_end += {3: 4, 4: 4, 5: 8, 6: 8, 7: 2, 8: 2, 9: 4, 10: 4, 11: 4, 12: 4, 15: 3, 16: 2, 17: 4, 18: 4, 19: 2, 20: 2}[tag]
+            i += 1 if tag in (5, 6) else 0
+        i += 1
     for name, entries in (
             ('junk', {'com/hypixel/hytale/Bad.class': b'junk'}),
             ('magic', {f'{P}/Gone.class': b'\xda' + gone[1:]}),               # only the first byte differs
             ('alias', {f'{P}/Alias.class': gone}),                              # parses; this_class says Gone
-            ('cut', {f'{P}/Gone.class': gone[:40]})):                           # ends inside the constant pool
+            ('cut', {f'{P}/Gone.class': gone[:40]}),                            # ends inside the constant pool
+            ('tag2', {f'{P}/Gone.class': gone[:8] + (cp_count + 1).to_bytes(2, 'big') + gone[10:pool_end] + b'\x02' + gone[pool_end:]}),
+            ('poolend', {f'{P}/Gone.class': gone[:pool_end]})):                 # ends exactly where the pool ends
         pack(tmp / 'v1/base.jar', tmp / f'vclass-{name}.jar', entries, D1)
     a = tmp / 'assets'
     (a / 'Common/Blocks').mkdir(parents=True); (a / 'Server/Item/Items').mkdir(parents=True)
@@ -665,37 +680,72 @@ def part1():
 
         # TF: a triage that cannot read its report fails the run. A stub stands in for it (a real
         # one needs a hand-made bad report, and update-build.sh rewrites the report each run);
-        # --no-verify, which every fixture run uses, is the exit the status must survive.
+        # --no-verify, which every fixture run uses, is the exit the status must survive. Every
+        # soft failure exits 3, whichever it is (the header of update-build.sh says why one code).
         st = fresh(tmp, 'TF'); install(tmp, 'v2')
         stub = tmp / 'stubroot/maintenance/scripts'
         shutil.copytree(R.scripts, stub, ignore=shutil.ignore_patterns('__pycache__'))
         real_scripts = R.scripts
         try:
             R.scripts = stub
-            for code in (0, 2):
+            for code in (0, 2, 1):
                 (stub / 'triage_drift.py').write_text(f'import sys\nprint("stub triage")\nsys.exit({code})\n')
                 rc, out, *_ = run(tmp, st)
                 if code == 0:
                     check(rc == 0 and 'triage_drift.py exited' not in out, "triage exits 0: update-build.sh exits 0, no FAIL")
-                else:
-                    check(re.search(r'FAIL\S*\s+triage_drift\.py exited 2 \u2014 the triage above is INCOMPLETE', out) and 'stub triage' in out,
+                elif code == 2:
+                    check(re.search(r'FAIL\S*\s+triage_drift\.py exited 2 \u2014 it could not read the report in full, so the triage shown is INCOMPLETE', out)
+                          and 'stub triage' in out,
                           "triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed")
-                    check(rc == 2, "triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify")
+                    check(rc == 3, "triage exit (update-build): a triage exiting 2 makes update-build.sh exit 3, even with --no-verify")
+                else:
+                    check(re.search(r'FAIL\S*\s+triage_drift\.py exited 1 \u2014 it crashed or was killed', out) and 'INCOMPLETE' not in out,
+                          "triage exit (update-build): a triage that crashes (exit 1) is a FAIL line saying so, not the unreadable-report one")
+                    check(rc == 3, "triage exit (update-build): a triage that crashes exits 3, not 1 (verify-docs.sh's code)")
         finally:
             R.scripts = real_scripts
 
-        # RC: a resource comparison that produces no result is a FAIL and a nonzero exit. A malformed
+        # RC: a resource comparison that produces no result is a FAIL and exit 3. A malformed
         # line in the cache's owners file makes the comparison's python raise (no #COUNTS); the run
         # carries on to the end (triage included), so the status must outlive --no-verify.
         st = fresh(tmp, 'RC'); install(tmp, 'v2'); run(tmp, st)
-        with open(st / 'cache-jar/resource-owners.txt', 'a') as f:
-            f.write('garbage\n')
+        owners = st / 'cache-jar/resource-owners.txt'
+        check(owners.exists(), "update-build exit: the cache has the owners file the case corrupts (setup)")
+        if owners.exists():
+            with open(owners, 'a') as f:
+                f.write('garbage\n')
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check(re.search(r'FAIL\S*\s+the resource comparison produced no result', out),
               "update-build exit: a resource comparison with no result is a FAIL line")
-        check('Triage: docs/examples' in out and 'compared' not in out.split('Resource drift')[1].split('== Triage')[0],
+        parts = out.split('Resource drift')
+        check(len(parts) > 1 and 'Triage: docs/examples' in out and 'compared' not in parts[1].split('== Triage')[0],
               "update-build exit: the run goes on past the failed comparison, which claims no comparison")
         check(rc == 3, "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify")
+        # both soft failures in one run: both FAIL lines, one exit code
+        try:
+            R.scripts = stub
+            (stub / 'triage_drift.py').write_text('import sys\nprint("stub triage")\nsys.exit(2)\n')
+            rc, out, *_ = run(tmp, st, '--skip-caches')
+        finally:
+            R.scripts = real_scripts
+        check(re.search(r'FAIL\S*\s+the resource comparison produced no result', out)
+              and re.search(r'FAIL\S*\s+triage_drift\.py exited 2', out) and rc == 3,
+              "update-build exit: a failed comparison and a failed triage in one run print both FAIL lines and exit 3")
+        # a comparison whose python prints its result and THEN exits non-zero is no result either
+        st = fresh(tmp, 'RC3'); install(tmp, 'v2')
+        stub2 = tmp / 'stubroot2/maintenance/scripts'
+        shutil.copytree(R.scripts, stub2, ignore=shutil.ignore_patterns('__pycache__'))
+        ub = (stub2 / 'update-build.sh').read_text()
+        tail = 'for (st, k), v in sorted(tp.items()): print(f"TP {st} {k} {v}")\n'
+        check(ub.count(tail) == 1, "update-build exit: the comparison's last python line is where the case injects its exit (setup)")
+        (stub2 / 'update-build.sh').write_text(ub.replace(tail, tail + 'sys.exit(4)\n'))
+        try:
+            R.scripts = stub2
+            rc, out, *_ = run(tmp, st)
+        finally:
+            R.scripts = real_scripts
+        check(re.search(r'FAIL\S*\s+the resource comparison produced no result', out) and rc == 3,
+              "update-build exit: a resource comparison whose python exits non-zero is a failure even if it printed #COUNTS")
 
         # B: the writer's two failure modes stop the build
         st = tmp / 'B'
@@ -719,7 +769,9 @@ def part1():
                 ('junk', 'not a class file at all', 'Bad.class', 'bad magic'),
                 ('magic', 'a class whose first byte is wrong', 'Gone.class', 'bad magic'),
                 ('alias', 'a class whose this_class names another entry', 'Alias.class', 'this_class does not name the entry'),
-                ('cut', 'a class cut inside its constant pool', 'Gone.class', 'the constant pool runs past the end')):
+                ('cut', 'a class cut inside its constant pool', 'Gone.class', 'the constant pool runs past the end'),
+                ('tag2', 'a class whose pool holds an entry with the unused tag 2', 'Gone.class', 'unknown constant tag 2'),
+                ('poolend', 'a class cut exactly where its constant pool ends', 'Gone.class', 'the constant pool runs past the end')):
             rc, out, *_ = run(tmp, st, '--no-src', script='build-jar-cache.sh', HYTALE_JAR=str(tmp / f'vclass-{name}.jar'))
             check(rc == 5 and "could not hash the jar's resources" in out
                   and re.search(rf'{entry}: not a parseable class file \({re.escape(reason)}\)', out),
@@ -893,6 +945,8 @@ def part2():
           "triage exit (lists): the missing list is named on stderr with the number of rows that lost bare-name matching")
     check('resource cfg/gone.json \u2192 docs/c.md\n' in out and '#SUMMARY 1 changed' in out,
           "triage exit (lists): the triage that can be made is still printed, path matches included")
+    check('#ERROR resources-old.txt is missing' in out and out.rstrip().splitlines()[-1].startswith('#SUMMARY'),
+          "triage exit (lists): the report itself says it is incomplete (an #ERROR line before the #SUMMARY)")
     rc, out, err = triage({'resource-drift.txt': 'ADDED hypixel d cfg/fresh.json\n', 'resources-old.txt': 'META-INF/MANIFEST.MF\n',
                            'resources-new.txt': ''}, docs)
     check(rc == 2 and 'resources-new.txt is empty' in err, "triage exit (lists): an ADDED Hypixel row with an empty resources-new.txt exits 2, naming it")
@@ -1268,25 +1322,49 @@ MUTATIONS = [
     ("triage exit (update-build): the status is not captured", U,
      'TRIAGE_RC=$?', 'TRIAGE_RC=0',
      {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed",
-      "triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify"}),
+      "triage exit (update-build): a triage exiting 2 makes update-build.sh exit 3, even with --no-verify"}),
     ("triage exit (update-build): no FAIL line", U,
-     '[ "$TRIAGE_RC" = 0 ] || soft_fail "$TRIAGE_RC" "triage_drift.py', '[ "$TRIAGE_RC" = 0 ] || : "triage_drift.py',
+     '  soft_fail "triage_drift.py exited 2 ', '  : "triage_drift.py exited 2 ',
      {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed"}),
     ("triage exit (update-build): the exit status ignores the triage", U,
      'finish() { [ "$1" = 0 ] && [ "$SOFT_RC" != 0 ] && exit "$SOFT_RC"; exit "$1"; }', 'finish() { exit "$1"; }',
-     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify",
+     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit 3, even with --no-verify",
       "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
     # ---- every mid-run fail that does not exit carries its status to the end (acceptance 9, follow-up)
     ("update-build exit: soft_fail keeps no status", U,
-     '[ "$SOFT_RC" = 0 ] && SOFT_RC="$1"; true; }', 'true; }',
-     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify",
+     'fail "$1"; SOFT_RC=3; true; }', 'fail "$1"; true; }',
+     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit 3, even with --no-verify",
       "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
     ("update-build exit: the resource comparison's fail leaves the status alone", U,
-     'soft_fail 3 "the resource comparison', 'fail "the resource comparison',
+     'soft_fail "the resource comparison', 'fail "the resource comparison',
      {"update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
     ("update-build exit: the resource comparison prints no FAIL line", U,
-     'soft_fail 3 "the resource comparison', ': 3 "the resource comparison',
+     'soft_fail "the resource comparison', ': "the resource comparison',
      {"update-build exit: a resource comparison with no result is a FAIL line"}),
+    # ---- review of 090b033..5c58f11 (MINOR-1 to MINOR-3 and nits)
+    ("update-build exit: soft_fail sets the status but prints no FAIL line", U,
+     'soft_fail() { fail "$1"; SOFT_RC=3; true; }', 'soft_fail() { SOFT_RC=3; true; }',
+     {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed",
+      "update-build exit: a resource comparison with no result is a FAIL line"}),
+    ("update-build exit: a comparison python that exits non-zero after printing #COUNTS passes", U,
+     'if [ "$RES_PY_RC" != 0 ] || ! grep -q', 'if ! grep -q',
+     {"update-build exit: a resource comparison whose python exits non-zero is a failure even if it printed #COUNTS"}),
+    ("triage exit (update-build): a triage crash is not a failure", U,
+     'elif [ "$TRIAGE_RC" != 0 ]; then', 'elif false; then',
+     {"triage exit (update-build): a triage that crashes (exit 1) is a FAIL line saying so, not the unreadable-report one",
+      "triage exit (update-build): a triage that crashes exits 3, not 1 (verify-docs.sh's code)"}),
+    ("triage exit (lists): the #ERROR lines are not written to the report", T,
+     'print(f"#ERROR {e}")', 'pass',
+     {"triage exit (lists): the report itself says it is incomplete (an #ERROR line before the #SUMMARY)"}),
+    ("rule-l bounds: the in-loop bound is not checked", B,
+     '        if p >= len(d):\n            bad("the constant pool runs past the end")\n', '',
+     {"a class cut inside its constant pool: the build fails with exit 5, naming the class and `the constant pool runs past the end`"}),
+    ("rule-l bounds: the bound after the pool is not checked", B,
+     '    if p + 4 > len(d):\n        bad("the constant pool runs past the end")\n', '',
+     {"a class cut exactly where its constant pool ends: the build fails with exit 5, naming the class and `the constant pool runs past the end`"}),
+    ("rule-l bounds: an unknown constant tag is not refused", B,
+     '        else:\n            bad(f"unknown constant tag {tag}")\n', '        else:\n            pass\n',
+     {"a class whose pool holds an entry with the unused tag 2: the build fails with exit 5, naming the class and `unknown constant tag 2`"}),
 ]
 
 

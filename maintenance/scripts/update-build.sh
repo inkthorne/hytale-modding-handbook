@@ -33,9 +33,15 @@
 #   UPDATE_SNAPSHOT Previous-build snapshot, written by build-jar-cache.sh whenever it
 #                   replaces a cache built from a different jar (default: as there)
 #
-# Exit code: non-zero if a cache step fails, verify-docs.sh hard-fails, or triage_drift.py
-# could not read the report in full (its exit status 2; the triage is then incomplete), or the
-# resource comparison produced no result (exit status 3).
+# Exit code:
+#   0  every step ran and verify-docs.sh passed (or --no-verify)
+#   1  (or verify-docs.sh's own non-zero status) verify-docs.sh failed; it takes precedence
+#   2  a hard stop: bad argument, jar/Assets.zip missing, a store inside a wiped directory,
+#      extraction or build-jar-cache.sh failed (nothing after it ran)
+#   3  one or more soft failures: a section failed WITHOUT stopping the run, so the rest of the
+#      report was still produced. The FAIL lines say which: the resource comparison produced no
+#      result, or triage_drift.py exited non-zero (2: it could not read the report in full, so
+#      the triage is incomplete; anything else: it crashed). All of them exit 3, whichever came first.
 
 set -u
 # absolute paths before the cd below, so a relative override is not silently
@@ -63,9 +69,9 @@ warn()    { printf '  \033[33mWARN\033[0m  %s\n' "$1"; }
 fail()    { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; }
 # A fail() that does not exit (a section has no result, the run goes on to show the rest)
 # must still end the run nonzero: the final status is verify-docs.sh's, and --no-verify makes
-# it 0. soft_fail STATUS MESSAGE prints the FAIL line and keeps the first status for finish().
+# it 0. soft_fail MESSAGE prints the FAIL line and makes finish() exit 3 (the header says why one code).
 SOFT_RC=0
-soft_fail() { fail "$2"; [ "$SOFT_RC" = 0 ] && SOFT_RC="$1"; true; }
+soft_fail() { fail "$1"; SOFT_RC=3; true; }
 
 # ---- resolve the Hytale install (mirrors verify-docs.sh) ----
 if [ -n "${APPDATA:-}" ]; then
@@ -441,8 +447,9 @@ for st, o, r, p in rows:
 tp = collections.Counter((st, top2(p)) for st, o, r, p in rows if o != "hypixel")
 for (st, k), v in sorted(tp.items()): print(f"TP {st} {k} {v}")
 PY
-  if ! grep -q '^#COUNTS ' "$REPORT/resource-summary.txt"; then
-    soft_fail 3 "the resource comparison produced no result — resource drift is NOT reported; this run exits nonzero"
+  RES_PY_RC=$?
+  if [ "$RES_PY_RC" != 0 ] || ! grep -q '^#COUNTS ' "$REPORT/resource-summary.txt"; then
+    soft_fail "the resource comparison produced no result — resource drift is NOT reported; this run exits 3"
   else
     read -r N_OLDR N_NEWR N_RROWS N_RHYP N_RTP N_OWNED < <(sed -n 's/^#COUNTS //p' "$REPORT/resource-summary.txt")
     info "compared $N_OLDR resource(s) in the snapshot with $N_NEWR in the new build (every non-class, non-directory jar entry, hashed by content)"
@@ -475,10 +482,13 @@ info "$(sed -n 's/^#SUMMARY //p' "$REPORT/triage.txt") (triage.txt)"
 # triage_drift.py exits 2 when it could not read the report in full (its stderr, above, says
 # which file and how many rows): the triage shown is then missing matches. A FAIL line alone
 # leaves the exit status to verify-docs.sh, so soft_fail carries it to both exits below.
-[ "$TRIAGE_RC" = 0 ] || soft_fail "$TRIAGE_RC" "triage_drift.py exited $TRIAGE_RC — the triage above is INCOMPLETE (some drift rows could not be matched); this run exits nonzero"
+if [ "$TRIAGE_RC" = 2 ]; then
+  soft_fail "triage_drift.py exited 2 — it could not read the report in full, so the triage shown is INCOMPLETE (its #ERROR lines say which rows and files); this run exits 3"
+elif [ "$TRIAGE_RC" != 0 ]; then
+  soft_fail "triage_drift.py exited $TRIAGE_RC — it crashed or was killed, so the triage shown is missing or incomplete; this run exits 3"
+fi
 
-# exit status: verify-docs.sh's, unless that is 0 and a soft_fail (triage: its own status 2;
-# resource comparison: 3) happened
+# exit status: verify-docs.sh's, unless that is 0 and a soft_fail happened (then 3)
 finish() { [ "$1" = 0 ] && [ "$SOFT_RC" != 0 ] && exit "$SOFT_RC"; exit "$1"; }
 
 # ---- 7. verify-docs ----

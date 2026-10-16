@@ -1326,7 +1326,7 @@ the tier/upgrade keys.
 
 ## Block Item Patterns
 
-In these patterns, a name that starts with `My_` is a placeholder for content of your own: the item
+In these patterns, a name that starts with `MyMod_` is a placeholder for content of your own: the item
 id (the file's basename under `Server/Item/Items/`, which the cube block's `Gathering.Breaking.ItemId`
 names so that breaking the block drops the item itself), its translation key, and the icon, texture
 and model files it cites.
@@ -1335,17 +1335,17 @@ and model files it cites.
 
 ```json
 {
-  "TranslationProperties": { "Name": "server.items.My_Custom_Block.name" },
+  "TranslationProperties": { "Name": "server.items.MyMod_Custom_Block.name" },
   "MaxStack": 100,
-  "Icon": "Icons/ItemsGenerated/My_Custom_Block.png",
+  "Icon": "Icons/ItemsGenerated/MyMod_Custom_Block.png",
   "Categories": ["Blocks.Rocks"],
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Cube",
     "HitboxType": "Full",
     "Flags": {},
-    "Gathering": { "Breaking": { "GatherType": "Rocks", "ItemId": "My_Custom_Block" } },
-    "Textures": [ { "All": "BlockTextures/My_Custom_Block.png", "Weight": 1 } ],
+    "Gathering": { "Breaking": { "GatherType": "Rocks", "ItemId": "MyMod_Custom_Block" } },
+    "Textures": [ { "All": "BlockTextures/MyMod_Custom_Block.png", "Weight": 1 } ],
     "ParticleColor": "#888888",
     "BlockParticleSetId": "Stone",
     "BlockSoundSetId": "Stone",
@@ -1361,7 +1361,7 @@ and model files it cites.
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",
-    "CustomModel": "Blocks/My_Lamp.blockymodel",
+    "CustomModel": "Blocks/MyMod_Lamp.blockymodel",
     "Light": { "Color": "#ffffff", "Radius": 0 },
     "Support": { "Down": [ { "FaceType": "Full" } ] },
     "Interactions": {
@@ -1388,7 +1388,7 @@ and model files it cites.
   "BlockType": {
     "Material": "Solid",
     "DrawType": "Model",
-    "CustomModel": "Blocks/My_Box.blockymodel",
+    "CustomModel": "Blocks/MyMod_Box.blockymodel",
     "HitboxType": "Chest_Small",
     "Interactions": { "Use": "Open_Container" },
     "BlockEntity": {

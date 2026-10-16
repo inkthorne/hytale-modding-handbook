@@ -1156,8 +1156,8 @@ Sets the override on the block the caller is looking at (max 10 blocks, via
 
 ## Quick Start Examples
 
-Every name in these examples that starts with `My_` is a placeholder for content of your own: the
-item id (the file's basename under `Server/Item/Items/`, which a breaking drop such as `My_Chest`'s
+Every name in these examples that starts with `MyMod_` is a placeholder for content of your own: the
+item id (the file's basename under `Server/Item/Items/`, which a breaking drop such as `MyMod_Chest`'s
 names), its translation key, and the model and texture files it cites.
 
 ### Simple Cube Block
@@ -1165,7 +1165,7 @@ names), its translation key, and the model and texture files it cites.
 ```json
 {
   "TranslationProperties": {
-    "Name": "server.items.My_Block.name"
+    "Name": "server.items.MyMod_Block.name"
   },
   "Categories": ["Blocks.Rocks"],
   "MaxStack": 10,
@@ -1176,7 +1176,7 @@ names), its translation key, and the model and texture files it cites.
     "Opacity": "Solid",
     "Group": "Rock",
     "Textures": [
-      { "Weight": 1, "All": "BlockTextures/My_Block.png" }
+      { "Weight": 1, "All": "BlockTextures/MyMod_Block.png" }
     ],
     "BlockSoundSetId": "Stone",
     "BlockParticleSetId": "Stone",
@@ -1195,16 +1195,16 @@ names), its translation key, and the model and texture files it cites.
 ```json
 {
   "TranslationProperties": {
-    "Name": "server.items.My_Furniture.name"
+    "Name": "server.items.MyMod_Furniture.name"
   },
   "Categories": ["Furniture.Furniture"],
   "MaxStack": 5,
   "BlockType": {
     "DrawType": "Model",
     "Opacity": "Transparent",
-    "CustomModel": "Blocks/Furniture/My_Furniture.blockymodel",
+    "CustomModel": "Blocks/Furniture/MyMod_Furniture.blockymodel",
     "CustomModelTexture": [
-      { "Texture": "Blocks/Furniture/My_Furniture_Texture.png", "Weight": 1 }
+      { "Texture": "Blocks/Furniture/MyMod_Furniture_Texture.png", "Weight": 1 }
     ],
     "HitboxType": "Chair",
     "VariantRotation": "NESW",
@@ -1225,13 +1225,13 @@ names), its translation key, and the model and texture files it cites.
 ```json
 {
   "TranslationProperties": {
-    "Name": "server.items.My_Door.name"
+    "Name": "server.items.MyMod_Door.name"
   },
   "Categories": ["Furniture.Doors"],
   "BlockType": {
     "DrawType": "Model",
     "Opacity": "Transparent",
-    "CustomModel": "Blocks/Doors/My_Door.blockymodel",
+    "CustomModel": "Blocks/Doors/MyMod_Door.blockymodel",
     "HitboxType": "Door",
     "VariantRotation": "NESW",
     "IsDoor": true,
@@ -1272,13 +1272,13 @@ names), its translation key, and the model and texture files it cites.
 ```json
 {
   "TranslationProperties": {
-    "Name": "server.items.My_Chest.name"
+    "Name": "server.items.MyMod_Chest.name"
   },
   "Categories": ["Furniture.Containers"],
   "BlockType": {
     "DrawType": "Model",
     "Opacity": "Transparent",
-    "CustomModel": "Blocks/Containers/My_Chest.blockymodel",
+    "CustomModel": "Blocks/Containers/MyMod_Chest.blockymodel",
     "HitboxType": "Chest_Small",
     "VariantRotation": "NESW",
     "Support": { "Down": [ { "FaceType": "Full" } ] },
@@ -1311,7 +1311,7 @@ names), its translation key, and the model and texture files it cites.
         "DropList": {
           "Container": {
             "Type": "Single",
-            "Item": { "ItemId": "My_Chest", "QuantityMin": 1, "QuantityMax": 1 }
+            "Item": { "ItemId": "MyMod_Chest", "QuantityMin": 1, "QuantityMax": 1 }
           }
         }
       }

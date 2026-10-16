@@ -1046,8 +1046,8 @@ Potion templates also expose a `RemoveEffect` var that defaults to a no-op (`{ "
 
 ## Creating Custom Consumables
 
-In both examples, a name that starts with `My_` is a placeholder for content of your own: the
-translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset you add under
+In both examples, a name that starts with `MyMod_` is a placeholder for content of your own: the
+translation keys, the icons, and the potion's `MyMod_Custom_Buff`, an effect asset you add under
 `Server/Entity/Effects/`. The parents, interactions and effects that carry other names are shipped.
 
 ### Custom Food Item
@@ -1056,9 +1056,9 @@ translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset 
 {
   "Parent": "Template_Food",
   "TranslationProperties": {
-    "Name": "server.items.My_Custom_Food.name"
+    "Name": "server.items.MyMod_Custom_Food.name"
   },
-  "Icon": "Icons/ItemsGenerated/My_Food.png",
+  "Icon": "Icons/ItemsGenerated/MyMod_Food.png",
   "Quality": "Uncommon",
   "MaxStack": 25,
   "InteractionVars": {
@@ -1094,9 +1094,9 @@ translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset 
 {
   "Parent": "Potion_Template",
   "TranslationProperties": {
-    "Name": "server.items.My_Custom_Potion.name"
+    "Name": "server.items.MyMod_Custom_Potion.name"
   },
-  "Icon": "Icons/ItemsGenerated/My_Potion.png",
+  "Icon": "Icons/ItemsGenerated/MyMod_Potion.png",
   "Quality": "Rare",
   "MaxStack": 10,
   "InteractionVars": {
@@ -1108,7 +1108,7 @@ translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset 
         "LessThan": true,
         "Next": {
           "Type": "ApplyEffect",
-          "EffectId": "My_Custom_Buff"
+          "EffectId": "MyMod_Custom_Buff"
         }
       }]
     }
@@ -1118,7 +1118,7 @@ translation keys, the icons, and the potion's `My_Custom_Buff`, an effect asset 
 
 Two things to note against older examples of this pattern: the stat gate goes **inside the
 `Effect` var** (the stock consume chain never `Replace`s a `Stat_Check` var — see the gotcha
-[above](#stat-check-condition)), and the buff's duration normally lives on `My_Custom_Buff`'s
+[above](#stat-check-condition)), and the buff's duration normally lives on `MyMod_Custom_Buff`'s
 own effect asset under `Server/Entity/Effects/`. From 0.7.2 an `ApplyEffect` `Duration` can
 override it per item.
 

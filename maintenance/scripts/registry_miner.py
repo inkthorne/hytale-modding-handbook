@@ -39,6 +39,21 @@ Everything here is shaped by measurements in maintenance/registry-oracle-notes.m
     by hand-registry-recount.py).
   * Anchors and `.register(` calls are read from comment- and string-masked text: a
     registration spelled in a comment or a string is not one.
+  * A registry's names are written under ITS OWN discriminator key, and the key is not
+    always "Type". `ItemAbility.CODEC` is `new CodecMapCodec("Slot")`; `Condition.CODEC`
+    is `new CodecMapCodec()`, whose default is "Id" (ACodecMapCodec.java:51-56);
+    `TagPattern.CODEC` takes "Op"; `Schema.CODEC` "type"; `UIEditor.CODEC` "component".
+    Until 2026-10-15 check-type-values unioned every registry's names into one "Type"
+    oracle, so a name registered under "Slot" or "Id" was accepted as a "Type" value.
+    Each Registry now carries `discriminator`, read from its declaration (`_declared_key`),
+    and a key that cannot be read is UNKNOWN, counted, and pinned by the fixture. The
+    defaults come from the codec library's own source (`constructor_defaults`), never from
+    this file's assumption.
+  * An id can be `E.C.name()`: `Enum.name()` is final, so it is exactly the constant's
+    spelling, and it is evaluated only when E resolves to an `enum` declared in the tree and
+    C is in its constant list (`_enum_name`). `E.C.toString()` is overridable and
+    `(Object)E.C` goes through the registry's key codec (Bench's EnumCodec maps
+    BenchType.Crafting to a JSON string by style detection, not by name()); both stay open.
   * Key a registry by its FULLY-QUALIFIED declaring type. Keying on the simple
     name collapses distinct `Config` / `Content` / `Context` / `Op` / `Shape`
     registries into single bogus rows.
@@ -102,7 +117,7 @@ class Site:
     form: int                 # 1 = X.FIELD.register(...), 2 = getCodecRegistry(X.FIELD)
     name: str | None          # resolved id, when statically knowable
     id_expr: str = ''         # the raw argument, when not
-    kind: str = 'literal'     # literal | constant | indirect | runtime | ambiguous
+    kind: str = 'literal'     # literal | constant | enum-name | indirect | runtime | ambiguous
     arg_index: int = 0        # WHICH argument carried the id (§1: not always 0)
     stmt: int = 0             # offset of the enclosing statement, so sites != names
     spelling: str = 'qualified'   # 'qualified' (`X.FIELD`) | 'unqualified' (bare `FIELD`,
@@ -114,6 +129,10 @@ class Registry:
     declaring_type: str       # fully qualified where resolvable
     field: str
     sites: list[Site] = field(default_factory=list)
+    discriminator: str | None = None   # the JSON key the registered names are written under;
+                                       # None when disc_how is 'map-key' or 'unknown' or 'unread'
+    disc_how: str = 'unread'  # explicit | constant | default | factory | map-key | unknown | unread
+    disc_at: str = ''         # file:line of the declaration the key was read from
 
     @property
     def key(self): return f'{self.declaring_type}.{self.field}'
@@ -586,7 +605,8 @@ def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
     # spelled in a `//` comment or a string is not a registration: check-type-values mines
     # docs java fences with this, and a commented-out example there supplied a page-local
     # name (review, 2026-10-15).
-    masked = _mask(src)
+    masked = _masked_of(path, src)[1]
+    enum_name = (lambda a: _enum_name(a, imports, pkg, masked, root)) if root is not None else None
 
     for stmt, off in _statement_spans(src):
         mstmt = masked[off:off + len(stmt)]
@@ -627,7 +647,7 @@ def mine_file(path: pathlib.Path, root: pathlib.Path | None = None,
             except (ValueError, AssertionError):
                 continue
             args = _split_args(body)
-            name, kind, expr, idx = _pick_name(args, consts)
+            name, kind, expr, idx = _pick_name(args, consts, enum_name)
             line = src.count('\n', 0, off + rm.start()) + 1
             out.append((declaring, fld, Site(str(path), line, form, name, expr, kind, idx, off, spelling)))
 
@@ -645,7 +665,7 @@ def _lit(arg: str):
     return m.group(1) if m else None
 
 
-def _pick_name(args: list[str], consts: dict[str, str]):
+def _pick_name(args: list[str], consts: dict[str, str], enum_name=None):
     """The id is the FIRST argument that is a string literal or a resolvable constant —
     NOT necessarily argument one (§1: `register(Class, "Name", codec)` at 18 sites), and
     the search must span every position (§2's false-positive guard:
@@ -665,6 +685,10 @@ def _pick_name(args: list[str], consts: dict[str, str]):
             return consts[a], 'constant', a, i
         if a.startswith(('this.', 'super.')) and a.split('.')[-1] in consts:
             return consts[a.split('.')[-1]], 'constant', a, i
+        if enum_name is not None:
+            en = enum_name(a)
+            if en is not None:
+                return en, 'enum-name', a, i
     if not args:
         return None, 'runtime', '', -1
     first = args[0].strip()
@@ -672,6 +696,261 @@ def _pick_name(args: list[str], consts: dict[str, str]):
     # call-graph following); anything else is a runtime value.
     kind = 'indirect' if re.fullmatch(r'\w+', first) else 'runtime'
     return None, kind, first, -1
+
+
+# ---------------------------------------------------------------------------------------
+# Enum constants as ids: `register(AbilitySlot.Core.name(), …)`
+# ---------------------------------------------------------------------------------------
+_ENUM_NAME = re.compile(r'^([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\.([A-Za-z_]\w*)\s*\.\s*name\s*\(\s*\)$')
+_FILE_CACHE: dict = {}
+
+
+def _cache_key(path: pathlib.Path):
+    st = path.stat()
+    return (str(path), st.st_mtime_ns, st.st_size)      # a rewritten scratch file is a different entry
+
+
+def _masked_of(path: pathlib.Path, text: str):
+    """(text, masked) for a file whose text the caller already read, cached: mine_file masks every
+    file that registers anything, and the key and enum lookups revisit the same files."""
+    key = _cache_key(path)
+    if key not in _FILE_CACHE:
+        _FILE_CACHE[key] = (text, _mask(text))
+    return _FILE_CACHE[key]
+
+
+def _read_masked(path: pathlib.Path):
+    """(text, masked) for a source file, from the cache when mine_file has already masked it."""
+    key = _cache_key(path)
+    if key not in _FILE_CACHE:
+        t = path.read_text(errors='replace')
+        _FILE_CACHE[key] = (t, _mask(t))
+    return _FILE_CACHE[key]
+
+
+def _enum_constants(masked: str, simple: str) -> list[str] | None:
+    """The constant names of the type called `simple` in this file, or None.
+
+    None unless EXACTLY ONE type of that name is declared here AND it is an `enum` (a class
+    with a static field of the same spelling is not an enum, and `Plain.C.name()` on it is
+    whatever its own `name()` returns). The constants are the comma-separated pieces ahead
+    of the first top-level `;` (or the closing brace): `Core(0),` and `A { … },` and
+    `@Deprecated B` all name their leading identifier."""
+    decls = [m for m in _CLASS_HEADER.finditer(masked) if (m.group(2) or m.group(4)) == simple]
+    if len(decls) != 1:
+        return None
+    m = decls[0]
+    if m.group(1) != 'enum':                     # GUARD enum-kind
+        return None
+    brace = masked.find('{', m.end())
+    if brace < 0:
+        return None
+    pieces, depth, start = [], 0, brace + 1
+    for i in range(brace + 1, len(masked)):
+        c = masked[i]
+        if c in '({[':
+            depth += 1
+        elif c in ')]':
+            depth -= 1
+        elif c == '}':
+            if depth == 0:
+                pieces.append(masked[start:i]); break
+            depth -= 1
+        elif depth == 0 and c in ',;':
+            pieces.append(masked[start:i]); start = i + 1
+            if c == ';':
+                break
+    names = []
+    for piece in pieces:
+        piece = re.sub(r'@\w+(?:\s*\([^)]*\))?\s*', '', piece).strip()
+        pm = re.match(r'(\w+)\b', piece)
+        if pm:
+            names.append(pm.group(1))
+    return names
+
+
+def _enum_name(arg: str, imports: dict, pkg: str, own_masked: str, root: pathlib.Path | None):
+    """The constant `C` when `arg` is `E.C.name()` with E an enum declared in the tree and C
+    one of its constants; None otherwise (the site stays open)."""
+    m = _ENUM_NAME.match(arg.strip())
+    if not m or root is None:
+        return None
+    etype, const = m.group(1), m.group(2)
+    simple = etype.split('.')[-1]
+    if not simple[:1].isupper():
+        return None
+    head = etype.split('.')[0]
+    if any((cm.group(2) or cm.group(4)) == head for cm in _CLASS_HEADER.finditer(own_masked)):
+        consts = _enum_constants(own_masked, simple)      # declared in the file that registers
+    else:
+        f = find_source(_resolve_type(etype, imports, pkg), root)
+        if f is None:                                      # GUARD E-resolves
+            return None
+        consts = _enum_constants(_read_masked(f)[1], simple)
+    if consts is None or const not in consts:             # GUARD constant-in-list
+        return None
+    return const
+
+
+# ---------------------------------------------------------------------------------------
+# The discriminator key of a registry, read from its declaration
+# ---------------------------------------------------------------------------------------
+_NEW_CODEC = re.compile(r'=\s*new\s+([\w.]+)\s*')
+_STRING_FAMILY = ('CodecMapCodec', 'StringCodecMapCodec', 'BuilderCodecMapCodec')
+_DEFAULTS_CACHE: dict = {}
+
+
+def _only_file(root: pathlib.Path, name: str):
+    found = [p for p in root.rglob(name)]
+    return found[0] if len(found) == 1 else None
+
+
+def constructor_defaults(root: pathlib.Path) -> dict:
+    """The discriminator key each constructor family uses when none is passed, READ from the
+    codec library's source under `root`; None for any that cannot be read (the registries
+    relying on it then come out UNKNOWN, loudly, rather than "Type" by assumption).
+
+      'id'      ACodecMapCodec(Codec<K>, boolean) does `this("Id", keyCodec, allowDefault)`; every
+                no-key constructor of CodecMapCodec, StringCodecMapCodec, BuilderCodecMapCodec and
+                ObjectCodecMapCodec delegates there (ACodecMapCodec.java:51-56).
+      'asset'   the no-key AssetCodecMapCodec constructors call `super("Type"[, allowDefault])`.
+      'factory' BuilderFactory.DEFAULT_TYPE, the type tag of every core-component factory.
+    """
+    ck = str(root)
+    if ck in _DEFAULTS_CACHE:
+        return _DEFAULTS_CACHE[ck]
+    out = {'id': None, 'asset': None, 'factory': None}
+    f = _only_file(root, 'ACodecMapCodec.java')
+    if f:
+        ms = re.findall(r'public\s+ACodecMapCodec\s*\(\s*Codec<K>\s+keyCodec\s*,\s*boolean\s+allowDefault\s*\)'
+                        r'\s*\{\s*this\(\s*"([^"]*)"\s*,\s*keyCodec\s*,\s*allowDefault\s*\)', f.read_text(errors='replace'))
+        if len(ms) == 1:
+            out['id'] = ms[0]
+    f = _only_file(root, 'AssetCodecMapCodec.java')
+    if f:
+        ms = re.findall(r'public\s+AssetCodecMapCodec\s*\(\s*Codec<K>\s+idCodec\s*,[^{]*\{\s*super\(\s*"([^"]*)"',
+                        f.read_text(errors='replace'))
+        if ms and len(set(ms)) == 1:
+            out['asset'] = ms[0]
+    f = _only_file(root, 'BuilderFactory.java')
+    if f:
+        ms = re.findall(r'\bDEFAULT_TYPE\s*=\s*"([^"]*)"', f.read_text(errors='replace'))
+        if len(ms) == 1:
+            out['factory'] = ms[0]
+    _DEFAULTS_CACHE[ck] = out
+    return out
+
+
+def factory_type_tags(root: pathlib.Path) -> collections.Counter:
+    """The literal type tag of every `new BuilderFactory<…>(Category.class, "<tag>"…)` in the tree.
+    A route to the form-3 key that does not go through DEFAULT_TYPE: the fixture pins that it
+    agrees (every tag is the default)."""
+    tags = collections.Counter()
+    for p in root.rglob('*.java'):
+        t = p.read_text(errors='replace')
+        if 'new BuilderFactory' not in t:
+            continue
+        for m in re.finditer(r'new\s+BuilderFactory\s*<', t):
+            lt = t.find('>(', m.end())
+            i = lt + 1
+            try:
+                args = _split_args(t[i + 1:_scan(t, i) - 1])
+            except (ValueError, AssertionError):
+                continue
+            if len(args) >= 2:
+                am = _LITERAL.match(args[1].strip())
+                tags[am.group(1) if am else f'<non-literal {args[1].strip()}>'] += 1
+    return tags
+
+
+def _ctor_key(name: str, args: list[str], consts: dict, defaults: dict):
+    """(key, how) for `new <name>(<args>)` as a registry's declaration.
+
+    The overload is told by the FIRST argument: a string (literal or constant of this file)
+    is the key; the family's no-key spellings are `()`, `(boolean)` for the string-keyed
+    families, `(Codec[, boolean])` for ObjectCodecMapCodec and `(Codec<K> idCodec, …)` for
+    AssetCodecMapCodec. A first argument that is none of those (an unresolved name, a call)
+    is UNKNOWN: it may be a key spelled somewhere this reader cannot see."""
+    simple = name.split('.')[-1]
+    first = args[0].strip() if args else ''
+    if simple == 'MapKeyMapCodec':
+        return None, 'map-key'            # object KEYS are the names; there is no discriminator
+    if simple not in _STRING_FAMILY + ('ObjectCodecMapCodec', 'AssetCodecMapCodec'):
+        return None, 'unknown'
+    if first:
+        lit = _LITERAL.match(first)
+        if lit:
+            return lit.group(1), 'explicit'
+        if first in consts:
+            return consts[first], 'constant'
+    codec_expr = bool(re.match(r'(?:new\s|Codec\.)', first))
+    if simple in _STRING_FAMILY and (not args or first in ('true', 'false')):
+        return (defaults.get('id'), 'default') if defaults.get('id') else (None, 'unknown')
+    if simple == 'ObjectCodecMapCodec' and codec_expr:
+        return (defaults.get('id'), 'default') if defaults.get('id') else (None, 'unknown')
+    if simple == 'AssetCodecMapCodec' and codec_expr:
+        return (defaults.get('asset'), 'default') if defaults.get('asset') else (None, 'unknown')
+    return None, 'unknown'
+
+
+def declared_key(declaring_type: str, fld: str, files, root: pathlib.Path | None):
+    """(key | None, how, 'file:line') for the registry field `declaring_type.fld`, read from its
+    `FIELD = new <X>CodecMapCodec(…)` declaration.
+
+    The declaration is found in the declaring type's own file first and, failing that, in
+    `files` (the files that register into it: a nested interface referenced bare from the
+    class that holds it is resolved to the wrong package by the miner, so its own file is
+    not at the FQCN). It must sit in a class whose name chain ENDS WITH the declaring
+    type's (capitalised) chain, so two nested classes in one file that both declare
+    TYPE_CODEC are told apart. Declarations that disagree, or none, are UNKNOWN."""
+    tail = [c for c in declaring_type.split('.') if c[:1].isupper()]
+    cands = []
+    if root is not None:
+        f = find_source(declaring_type, root)
+        if f:
+            cands.append(f)
+    cands += [pathlib.Path(x) for x in files if pathlib.Path(x) not in cands]
+    defaults = constructor_defaults(root) if root is not None else {'id': None, 'asset': None, 'factory': None}
+    found = set()
+    where = ''
+    for f in cands:
+        try:
+            text, masked = _read_masked(f)
+        except OSError:
+            continue
+        lex = None
+        for m in re.finditer(r'(?<![\w.$])' + re.escape(fld) + r'\s*=\s*new\s+([\w.]+)\s*', masked):
+            if lex is None:
+                lex = _Lexical(text, masked)
+            chain = [sc.cls for sc in sorted((sc for sc in lex.scopes if sc.cls and sc.open < m.start() < sc.close),
+                                             key=lambda sc: sc.open)]
+            if not tail or chain[-len(tail):] != tail:
+                continue
+            i = m.end()
+            if masked[i:i + 1] == '<':                 # skip the type arguments
+                d = 0
+                while i < len(masked):
+                    d += (masked[i] == '<') - (masked[i] == '>')
+                    i += 1
+                    if d == 0:
+                        break
+                while masked[i:i + 1].isspace():
+                    i += 1
+            if masked[i:i + 1] != '(':
+                found.add((None, 'unknown'))
+                continue
+            try:
+                args = _split_args(text[i + 1:_scan(text, i) - 1])
+            except (ValueError, AssertionError):
+                found.add((None, 'unknown'))
+                continue
+            consts = dict(_CONST.findall(text))
+            found.add(_ctor_key(m.group(1), args, consts, defaults))
+            where = f'{f}:{text.count(chr(10), 0, m.start()) + 1}'
+    if len(found) == 1:
+        key, how = next(iter(found))
+        return key, how, where
+    return None, 'unknown', where
 
 
 def core_component_diagnostics(root: pathlib.Path) -> dict:
@@ -751,4 +1030,14 @@ def mine(root: pathlib.Path, skipped: list | None = None) -> dict[str, Registry]
             key = f'{declaring}.{fld}'
             r = regs.setdefault(key, Registry(declaring, fld))
             r.sites.append(site)
+    defaults = constructor_defaults(root)
+    for r in regs.values():
+        if r.field == CORE_COMPONENT_FIELD:
+            # form 3 is not a codec: the key is the type tag of the BuilderFactory the builder
+            # lands in, and BuilderFactory.DEFAULT_TYPE is the tag every factory is built with
+            # (factory_type_tags pins that). A non-"Type" answer would be read here, not assumed.
+            r.discriminator, r.disc_how = defaults['factory'], 'factory' if defaults['factory'] else 'unknown'
+            continue
+        r.discriminator, r.disc_how, r.disc_at = declared_key(
+            r.declaring_type, r.field, sorted({s.file for s in r.sites}), root)
     return regs

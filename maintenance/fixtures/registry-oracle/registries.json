@@ -310,8 +310,11 @@
      "sites": 2,
      "form1": 2,
      "form2": 0,
-     "names": [],
-     "no_name": 2,
+     "names": [
+      "Core",
+      "Support"
+     ],
+     "no_name": 0,
      "empty_id_sites": 0
     },
     "com.hypixel.hytale.server.core.asset.type.item.config.container.ItemDropContainer.CODEC": {
@@ -413,20 +416,6 @@
    "cast_literal_decision": "`(Object)\"null\"` and its seven siblings (Schema.init) are literal ids behind a cast. Counted as resolved names in both scripts, implemented separately in each (miner: _CAST_LITERAL in _lit; recount: CAST_LIT in unq_name).",
    "no_name_sites": [
     {
-     "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
-     "site": "ItemAbility.java:71",
-     "expr": "AbilitySlot.Core.name()",
-     "label": "enum constant name",
-     "reading": "protocol/AbilitySlot.java declares `enum AbilitySlot { Core(0), Support(1) }`, so the id is statically the string \"Core\"; neither script evaluates `.name()`, so the registry reads open although its vocabulary is knowable"
-    },
-    {
-     "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
-     "site": "ItemAbility.java:72",
-     "expr": "AbilitySlot.Support.name()",
-     "label": "enum constant name",
-     "reading": "the id is statically \"Support\" (same enum)"
-    },
-    {
      "registry": "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC",
      "site": "OpenCustomUIInteraction.java:74",
      "expr": "id",
@@ -438,8 +427,8 @@
     {
      "registry": "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC",
      "before": "absent",
-     "after": "open",
-     "reading": "two ids written `AbilitySlot.X.name()`: knowable (Core, Support) but not evaluated"
+     "after": "closed (2 names, both ids `AbilitySlot.X.name()`)",
+     "reading": "two ids written `AbilitySlot.X.name()`: Enum.name() is final, AbilitySlot is an enum declared in the tree (protocol/AbilitySlot.java: `Core(0), Support(1)`), so the ids are Core and Support. Evaluated 2026-10-15; before that the registry read open. Independent route: both names are shipped-asset values under \"Slot\" (24 files), its discriminator key"
     },
     {
      "registry": "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC",
@@ -454,14 +443,15 @@
      "reading": "15 unqualified literal sites added to the 4 qualified ones; still one registry row"
     }
    ],
-   "open_registry_count_all_spellings": 12,
-   "open_registry_count_all_spellings_why": "10 (the qualified-population figure, \u00a72) + ItemAbility.CODEC + OpenCustomUIInteraction.PAGE_CODEC. Disjoint by reading source: ItemAbility has no qualified site at all, and PAGE_CODEC's seven qualified sites (ShopPlugin:45, TeleporterPlugin:81, AugmentBlocksPlugin:55, PortalsPlugin:107, InteractionModule:311-313) all take literals.",
+   "open_registry_count_all_spellings": 11,
+   "open_registry_count_all_spellings_why": "10 (the qualified-population figure, \u00a72) + OpenCustomUIInteraction.PAGE_CODEC = 11. ItemAbility.CODEC was the twelfth until 2026-10-15, when `E.C.name()` ids were evaluated (see `enum_name_decision`): it has no qualified site, and its two sites close, so it leaves the open set. Bench.CODEC stays open: its ids are `(Object)BenchType.X`, which reach a JSON string through EnumCodec's style detection (EnumCodec.java:41-46,161-190), not through name(). PAGE_CODEC's seven qualified sites (ShopPlugin:45, TeleporterPlugin:81, AugmentBlocksPlugin:55, PortalsPlugin:107, InteractionModule:311-313) all take literals.",
    "residue": {
     "variable_held_registries": 0,
     "non_field_argument_calls": 0,
     "non_field_argument_declarations": 3
    },
-   "residue_why": "What neither spelling covers, measured by the recount instead of asserted: no registry is held in a variable (`x = \u2026getCodecRegistry(\u2026)`), and every getCodecRegistry( whose argument is not a field is one of the three PluginBase overload DECLARATIONS (PluginBase.java:207/213/219), not a registration. Before 2026-10-15 the fourth hit was OpenCustomUIInteraction's `getCodecRegistry(PAGE_CODEC)`, now a mined unqualified form-2 site. If this moves, the \"nothing else is left\" claim is false and a third spelling exists."
+   "residue_why": "What neither spelling covers, measured by the recount instead of asserted: no registry is held in a variable (`x = \u2026getCodecRegistry(\u2026)`), and every getCodecRegistry( whose argument is not a field is one of the three PluginBase overload DECLARATIONS (PluginBase.java:207/213/219), not a registration. Before 2026-10-15 the fourth hit was OpenCustomUIInteraction's `getCodecRegistry(PAGE_CODEC)`, now a mined unqualified form-2 site. If this moves, the \"nothing else is left\" claim is false and a third spelling exists.",
+   "enum_name_decision": "`E.C.name()` (final in java.lang.Enum, so exactly the constant's spelling) is a resolved literal id when E resolves to an `enum` declared in the tree and C is in its constant list (constants may take arguments, a body or an annotation). `E.C.toString()` is overridable and `(Object)E.C` goes through the registry's key codec; both stay open. 2 sites at 0.7.2 (ItemAbility.CODEC), 0 at 0.6.8. Implemented in the miner by import resolution and in the recount by a tree-wide simple-name index (an enum evaluated only if its name is declared once); the enum rule itself is shared, so their agreement does not vouch for it. The route that shares nothing is a shipped asset."
   },
   "unqualified_previous_build": {
    "build": "0.6.8 (build-31)",
@@ -726,7 +716,70 @@
    }
   },
   "field_statements_population": "qualified sites only; the unqualified population is under `unqualified`",
-  "indirect_registries_note": "OpenCustomUIInteraction.PAGE_CODEC added by hand (unqualified site at OpenCustomUIInteraction.java:74 registers the parameter `id`; \u00a72(b) shape). Checked against the registry as a whole, not the qualified population."
+  "indirect_registries_note": "OpenCustomUIInteraction.PAGE_CODEC added by hand (unqualified site at OpenCustomUIInteraction.java:74 registers the parameter `id`; \u00a72(b) shape). Checked against the registry as a whole, not the qualified population.",
+  "discriminators": {
+   "why": "Derived by hand-registry-recount.py's DECLARATION-driven sweep (every `FIELD = new <X>CodecMapCodec(...)`, bound to its class chain, key read from the constructor), plus form 3's 7 category registries, whose key is BuilderFactory.DEFAULT_TYPE. NOT pasted from the miner. The miner reads the same fact registration-first; the two agree per registry (check_agreement). Constructor families: the no-key CodecMapCodec/StringCodecMapCodec/BuilderCodecMapCodec/ObjectCodecMapCodec constructors all reach ACodecMapCodec(Codec, boolean), which does `this(\"Id\", keyCodec, allowDefault)` (ACodecMapCodec.java:51-56); the no-key AssetCodecMapCodec constructors call super(\"Type\") (:44, :64); MapKeyMapCodec has no discriminator (its names are object keys); form 3 is BuilderFactory.DEFAULT_TYPE = \"Type\" (BuilderFactory.java:31) and all 20 `new BuilderFactory<..>(.., \"Type\")` sites say \"Type\".",
+   "library_defaults": {
+    "asset": "Type",
+    "factory": "Type",
+    "id": "Id"
+   },
+   "form3_registries": 7,
+   "factory_tags": {
+    "Type": 20
+   },
+   "declared_by_key_0.7.2": {
+    "<map-key>": 2,
+    "Id": 11,
+    "Op": 1,
+    "Slot": 1,
+    "Type": 101,
+    "component": 1,
+    "type": 1
+   },
+   "declared_by_key_0.6.8": {
+    "<map-key>": 2,
+    "Id": 10,
+    "Op": 1,
+    "Type": 99,
+    "component": 1,
+    "type": 1
+   },
+   "unknown_pinned_at": 0,
+   "id_registries_0.7.2": [
+    "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC",
+    "com.hypixel.hytale.builtin.buildertools.scriptedbrushes.operations.system.BrushOperation.OPERATION_CODEC",
+    "com.hypixel.hytale.server.core.inventory.container.ItemContainer.CODEC",
+    "com.hypixel.hytale.server.core.modules.entity.condition.Condition.CODEC",
+    "com.hypixel.hytale.server.core.modules.entitystats.modifier.Modifier.CODEC",
+    "com.hypixel.hytale.server.core.modules.interaction.breakshape.BreakShape.CODEC",
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.selector.SelectorType.CODEC",
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC",
+    "com.hypixel.hytale.server.core.universe.world.chunk.heightmap.IHeightmap.CODEC",
+    "com.hypixel.hytale.server.core.universe.world.spawn.ISpawnProvider.CODEC",
+    "com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager.MarkerReference.CODEC"
+   ],
+   "id_registries_note": "11 registries are keyed \"Id\" at 0.7.2 (10 by default, BrushOperation.OPERATION_CODEC explicitly): Condition (entity.condition), Modifier, BreakShape, SelectorType, OpenCustomUIInteraction.PAGE_CODEC, Memory, IHeightmap, MarkerReference, ItemContainer, ISpawnProvider and BrushOperation. `ShapeCodecs.SHAPE` (also `new CodecMapCodec()`) is NOT among them because it is not mined at all: its field is called SHAPE, not *CODEC, so neither script's field pattern matches it (4 names: Box, Ellipsoid, Cylinder, OriginShape).",
+   "non_type_registries_0.7.2": {
+    "com.hypixel.hytale.builtin.adventure.memories.memories.Memory.CODEC": "Id",
+    "com.hypixel.hytale.builtin.buildertools.scriptedbrushes.operations.system.BrushOperation.OPERATION_CODEC": "Id",
+    "com.hypixel.hytale.codec.schema.config.Schema.CODEC": "type",
+    "com.hypixel.hytale.codec.schema.metadata.ui.UIEditor.CODEC": "component",
+    "com.hypixel.hytale.server.core.asset.type.gameplay.GameplayConfig.PLUGIN_CODEC": null,
+    "com.hypixel.hytale.server.core.asset.type.item.config.ItemAbility.CODEC": "Slot",
+    "com.hypixel.hytale.server.core.asset.type.tagpattern.config.TagPattern.CODEC": "Op",
+    "com.hypixel.hytale.server.core.inventory.container.ItemContainer.CODEC": "Id",
+    "com.hypixel.hytale.server.core.modules.entity.condition.Condition.CODEC": "Id",
+    "com.hypixel.hytale.server.core.modules.entitystats.modifier.Modifier.CODEC": "Id",
+    "com.hypixel.hytale.server.core.modules.interaction.breakshape.BreakShape.CODEC": "Id",
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.selector.SelectorType.CODEC": "Id",
+    "com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.OpenCustomUIInteraction.PAGE_CODEC": "Id",
+    "com.hypixel.hytale.server.core.universe.world.WorldConfig.PLUGIN_CODEC": null,
+    "com.hypixel.hytale.server.core.universe.world.chunk.heightmap.IHeightmap.CODEC": "Id",
+    "com.hypixel.hytale.server.core.universe.world.spawn.ISpawnProvider.CODEC": "Id",
+    "com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager.MarkerReference.CODEC": "Id"
+   }
+  }
  },
  "measured": {
   "source": "measured",
@@ -777,7 +830,11 @@
      "Qual"
     ],
     "unqualified_sites": 4,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.alpha.Outer.Own.CODEC": {
     "unqualified_names": [
@@ -786,7 +843,11 @@
     ],
     "qualified_names": [],
     "unqualified_sites": 2,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.alpha.PageHolder.PAGE_CODEC": {
     "unqualified_names": [
@@ -796,7 +857,11 @@
     "qualified_names": [],
     "unqualified_sites": 3,
     "no_name": 1,
-    "form2": 3
+    "form2": 3,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.alpha.Registry.CODEC": {
     "unqualified_names": [
@@ -805,7 +870,11 @@
     "qualified_names": [],
     "unqualified_sites": 3,
     "no_name": 1,
-    "empty_id_sites": 1
+    "empty_id_sites": 1,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.beta.Host.CODEC": {
     "unqualified_names": [
@@ -815,7 +884,11 @@
     ],
     "qualified_names": [],
     "unqualified_sites": 3,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.beta.Multi.CODEC": {
     "unqualified_names": [
@@ -823,7 +896,11 @@
     ],
     "qualified_names": [],
     "unqualified_sites": 1,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.beta.Base.CODEC": {
     "unqualified_names": [],
@@ -831,7 +908,11 @@
      "BaseQualified"
     ],
     "unqualified_sites": 0,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
    },
    "synth.beta.Scopes.CODEC": {
     "unqualified_names": [
@@ -841,18 +922,231 @@
     ],
     "qualified_names": [],
     "unqualified_sites": 3,
-    "no_name": 0
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
+   },
+   "synth.gamma.Explicit.CODEC": {
+    "unqualified_names": [
+     "ExplicitName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Mode",
+     "explicit"
+    ]
+   },
+   "synth.gamma.Dflt.CODEC": {
+    "unqualified_names": [
+     "DefaultName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
+   },
+   "synth.gamma.DfltBool.CODEC": {
+    "unqualified_names": [
+     "DefaultBoolName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
+   },
+   "synth.gamma.ConstKey.CODEC": {
+    "unqualified_names": [
+     "ConstKeyName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Konst",
+     "constant"
+    ]
+   },
+   "synth.gamma.ObjDefault.CODEC": {
+    "unqualified_names": [
+     "ObjDefaultName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Disc",
+     "default"
+    ]
+   },
+   "synth.gamma.ObjKeyed.CODEC": {
+    "unqualified_names": [
+     "ObjKeyedName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Op2",
+     "explicit"
+    ]
+   },
+   "synth.gamma.AssetDefault.CODEC": {
+    "unqualified_names": [
+     "AssetDefaultName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Form",
+     "default"
+    ]
+   },
+   "synth.gamma.AssetKeyed.CODEC": {
+    "unqualified_names": [
+     "AssetKeyedName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "Opx",
+     "explicit"
+    ]
+   },
+   "synth.gamma.Unreadable.CODEC": {
+    "unqualified_names": [
+     "UnreadableName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     null,
+     "unknown"
+    ]
+   },
+   "synth.gamma.NotNew.CODEC": {
+    "unqualified_names": [
+     "NotNewName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     null,
+     "unknown"
+    ]
+   },
+   "synth.gamma.MapKeyed.PLUGIN_CODEC": {
+    "unqualified_names": [
+     "MapKeyedName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     null,
+     "map-key"
+    ]
+   },
+   "synth.gamma.Pair.TYPE_CODEC": {
+    "unqualified_names": [
+     "OuterName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "OuterKey",
+     "explicit"
+    ]
+   },
+   "synth.gamma.Pair.Inner.TYPE_CODEC": {
+    "unqualified_names": [
+     "InnerName"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 1,
+    "no_name": 0,
+    "discriminator": [
+     "InnerKey",
+     "explicit"
+    ]
+   },
+   "synth.gamma.Marker.CODEC": {
+    "unqualified_names": [],
+    "qualified_names": [
+     "MarkName"
+    ],
+    "unqualified_sites": 0,
+    "no_name": 0,
+    "discriminator": [
+     "MarkKey",
+     "explicit"
+    ]
+   },
+   "synth.gamma.Widget.CORE_COMPONENT_TYPES": {
+    "unqualified_names": [],
+    "qualified_names": [
+     "WidgetName"
+    ],
+    "unqualified_sites": 0,
+    "no_name": 0,
+    "discriminator": [
+     "Variant",
+     "factory"
+    ]
+   },
+   "synth.gamma.EnumCases.CODEC": {
+    "unqualified_names": [
+     "Alpha",
+     "Beta",
+     "Low",
+     "Red"
+    ],
+    "qualified_names": [],
+    "unqualified_sites": 8,
+    "no_name": 4,
+    "discriminator": [
+     "Mode3",
+     "explicit"
+    ]
    }
   },
-  "unqualified_sites": 19,
-  "qualified_sites": 2,
+  "unqualified_sites": 40,
+  "qualified_sites": 4,
   "new_registry_keys": [
    "synth.alpha.Outer.Own.CODEC",
    "synth.alpha.PageHolder.PAGE_CODEC",
    "synth.alpha.Registry.CODEC",
    "synth.beta.Host.CODEC",
    "synth.beta.Multi.CODEC",
-   "synth.beta.Scopes.CODEC"
+   "synth.beta.Scopes.CODEC",
+   "synth.gamma.AssetDefault.CODEC",
+   "synth.gamma.AssetKeyed.CODEC",
+   "synth.gamma.ConstKey.CODEC",
+   "synth.gamma.Dflt.CODEC",
+   "synth.gamma.DfltBool.CODEC",
+   "synth.gamma.EnumCases.CODEC",
+   "synth.gamma.Explicit.CODEC",
+   "synth.gamma.MapKeyed.PLUGIN_CODEC",
+   "synth.gamma.NotNew.CODEC",
+   "synth.gamma.ObjDefault.CODEC",
+   "synth.gamma.ObjKeyed.CODEC",
+   "synth.gamma.Pair.Inner.TYPE_CODEC",
+   "synth.gamma.Pair.TYPE_CODEC",
+   "synth.gamma.Unreadable.CODEC"
   ],
   "excluded": {
    "local": 10,
@@ -862,12 +1156,48 @@
   "unresolved_owner": 4,
   "open_registries": [
    "synth.alpha.PageHolder.PAGE_CODEC",
-   "synth.alpha.Registry.CODEC"
+   "synth.alpha.Registry.CODEC",
+   "synth.gamma.EnumCases.CODEC"
   ],
   "residue": {
    "variable_held_registries": 1,
    "non_field_argument_calls": 1,
    "non_field_argument_declarations": 1
+  },
+  "unknown_key_registries": [
+   "synth.gamma.NotNew.CODEC",
+   "synth.gamma.Unreadable.CODEC"
+  ],
+  "registries_by_key": {
+   "Disc": 11,
+   "Form": 1,
+   "Mode": 1,
+   "Konst": 1,
+   "Op2": 1,
+   "Opx": 1,
+   "OuterKey": 1,
+   "InnerKey": 1,
+   "MarkKey": 1,
+   "Mode3": 1,
+   "Variant": 1,
+   "<map-key>": 1,
+   "<unknown>": 2
+  },
+  "discriminator_why": "Hand-derived from the source. synth/lib holds stubs of the codec library's base classes whose DEFAULTS are deliberately not the real ones (\"Disc\", \"Form\", \"Variant\" for \"Id\", \"Type\", \"Type\"), so a miner that assumed the real defaults is wrong here. Explicit string -> that key; no key / (boolean) / (Codec) -> the family default read from the stub; a constant of the file -> its value; a constant of another class, or a field not initialised with `new`, -> UNKNOWN; MapKeyMapCodec -> no discriminator; Pair/Pair.Inner both declare TYPE_CODEC; Holder.Marker is a nested interface the miner resolves to a file that does not exist.",
+  "enum_cases": {
+   "closes": [
+    "Alpha",
+    "Beta",
+    "Low",
+    "Red"
+   ],
+   "stays_open": [
+    "Mode.Epsilon.name() (Mode has no Epsilon)",
+    "Plain.Gamma.name() (Plain is a class with a static field Gamma)",
+    "Mode.Gamma9.toString()",
+    "(Object)Mode.Delta9",
+    "synth.alpha.Registry: Slot.Core.name() (Slot is not in the tree)"
+   ]
   }
  }
 }

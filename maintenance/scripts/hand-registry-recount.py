@@ -33,6 +33,20 @@ disagreed between the two until each was fixed.
 It must reproduce the previous build's known figures (68 sites: 67 form-1 + 1 form-2 at
 0.6.8) before its 0.7.2 output means anything.
 
+DISCRIMINATOR KEYS and ENUM IDS (2026-10-15). Two more things are derived here, again by a
+walk that is not the miner's: (1) `declared_keys()` is DECLARATION-driven where the miner is
+registration-driven: it sweeps every `FIELD = new <X>CodecMapCodec(...)` in the tree, binds it
+to its class chain with this file's own `structure()` and reads the JSON key the names are
+written under (explicit string, or the constructor family's default read out of the codec
+library's source); the fixture then looks each miner registry up here, so the two agree per
+registry on the key, not on a shared traversal. (2) `E.C.name()` ids are evaluated against a
+tree-wide ENUM INDEX (an enum is accepted only when its simple name is declared exactly once in
+the tree and as an enum) instead of the miner's import-based resolution. WHAT IS SHARED, and so
+not vouched for by agreement: the constructor-family decision table (a first argument that is a
+string is the key; no key means the family default; `MapKeyMapCodec` has none) and the rule
+that only `E.C.name()` closes (`toString()` and `(Object)E.C` stay open). The route that shares
+nothing is a shipped asset: every name this closes appears as a value under its registry's key.
+
 Usage: python3 -I maintenance/scripts/hand-registry-recount.py SRC_ROOT [--json OUT]
        python3 -I maintenance/scripts/hand-registry-recount.py SRC_ROOT --unqualified-only [--json OUT]
 """
@@ -237,6 +251,24 @@ def strip_noncode(t):
     return re.sub(r"//[^\n]*|/\*.*?\*/|\"\"\"(?:\\.|[^\\])*?\"\"\"|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'", blank, t, flags=re.S)
 
 
+_code_cache, _structure_cache = {}, {}
+
+
+def code_of(p):
+    """strip_noncode of file `p`, once: the unqualified sweep and the declaration sweep both read it."""
+    if p not in _code_cache:
+        _code_cache[p] = strip_noncode(files[p])
+    return _code_cache[p]
+
+
+def classes_of(p):
+    """structure() of file `p`, once. The unqualified sweep adds each class's CODEC-shaped fields to
+    these dicts; the declaration sweep only reads names and nesting, so sharing them is harmless."""
+    if p not in _structure_cache:
+        _structure_cache[p] = structure(code_of(p))
+    return _structure_cache[p]
+
+
 def without_angles(text):
     """`<T extends Bar<U>>` removed (depth-counted): a type-parameter bound is no clause."""
     out, d = [], 0
@@ -404,7 +436,7 @@ def unqualified():
     for p, t in sorted(files.items()):
         if '.register(' not in t:
             continue
-        code = strip_noncode(t)
+        code = code_of(p)
         pkg = (re.search(r'^package\s+([\w.]+);', code, re.M) or [None, ''])[1]
         for m in Q1.finditer(code):
             qualified_recv[m.group(2)].add(m.group(1).rstrip('.'))
@@ -421,7 +453,7 @@ def unqualified():
         cs = consts(t)
         for at, form, fld in sorted(hits):
             if classes is None:
-                classes = structure(code)
+                classes = classes_of(p)
                 for dm in DECLARATOR.finditer(code):
                     k = innermost_class(classes, dm.start(1))
                     if k is None or not enclosing_is_class(code, classes, k, dm.start(1)):
@@ -508,16 +540,74 @@ def enclosing_is_class(code, classes, k, off):
     return depth == 0
 
 
+ENUM_NAME = re.compile(r'((?:[A-Za-z_]\w*\.)*)([A-Z]\w*)\.(\w+)\s*\.\s*name\s*\(\s*\)')
+_enum_cache = {}
+
+
+def enum_lookup(e):
+    """(how many types named `e` the tree declares, {path: constants} for those declared as an
+    enum), found by scanning every file for the declaration of that one name. A tree-wide lookup by
+    SIMPLE NAME, not the miner's import-based resolution: an enum is evaluated only when its name is
+    unambiguous. Per name, cached; a raw-text prefilter keeps the full strip_noncode for the few files
+    that mention the name in a declaration."""
+    if e in _enum_cache:
+        return _enum_cache[e]
+    decl = re.compile(r'(?<![\w.$])(class|interface|enum)\s+' + re.escape(e) + r'\b'
+                      r'|(?<![\w.$])record\s+' + re.escape(e) + r'\s*[(<]')
+    declared, enums = 0, {}
+    for p, t in files.items():
+        if e not in t or not decl.search(t):
+            continue
+        code = code_of(p)
+        for m in decl.finditer(code):
+            declared += 1
+            if m.group(1) == 'enum':
+                b = code.find('{', m.end())
+                top, d = [], 0
+                for ch in code[b + 1:]:
+                    if ch in '({[':
+                        d += 1
+                    elif ch in ')]':
+                        d -= 1
+                    elif ch == '}':
+                        if d == 0:
+                            break
+                        d -= 1
+                    elif ch == ';' and d == 0:
+                        break
+                    elif d == 0:
+                        top.append(ch)
+                enums[p] = re.findall(r'(?:^|,)\s*(?:@\w+\s*)*(\w+)', ''.join(top))
+    _enum_cache[e] = (declared, enums)
+    return _enum_cache[e]
+
+
+def enum_const(a):
+    """C when `a` is `E.C.name()` and E is an enum declared once in the tree with constant C."""
+    m = ENUM_NAME.fullmatch(a.strip())
+    if not m:
+        return None
+    e, c = m.group(2), m.group(3)
+    declared, enums = enum_lookup(e)
+    if declared != 1 or len(enums) != 1:
+        return None
+    return c if c in next(iter(enums.values())) else None
+
+
 def unq_name(args, cs):
     """(name or None, raw expression of the id position). Literal, constant or cast
-    literal among the first two arguments, as reg_name does; the raw expression reported
-    for a nameless site is the first argument that is not a Class or Priority."""
+    literal among the first two arguments, as reg_name does; then an enum constant's
+    `.name()`; the raw expression reported for a nameless site is the first argument
+    that is not a Class or Priority."""
     for a in args[:2]:
         m = re.fullmatch(r'"([^"]*)"', a) or re.fullmatch(CAST_LIT, a)
         if m:
             return m.group(1), a
         if re.fullmatch(r'[A-Z_][A-Z0-9_]*', a) and a in cs:
             return cs[a], a
+        ec = enum_const(a)
+        if ec is not None:
+            return ec, a
     for a in args[:2]:
         if not (re.fullmatch(r'[\w.]+\.class', a) or a.startswith('Priority.')):
             return None, a
@@ -545,6 +635,72 @@ def residue():
             row = (p, code.count('\n', 0, m.start()) + 1)
             (decls if re.match(r'\s*(\{|throws\b)', code[close + 1:]) else calls).append(row)
     return held, calls, decls
+
+
+def library_defaults():
+    """The constructor families' default JSON keys, read out of the codec library's own source
+    with patterns that are not the miner's. None for any that cannot be read."""
+    def only(basename):
+        ps = [p for p in files if os.path.basename(p) == basename]
+        return files[ps[0]] if len(ps) == 1 else ''
+    id_ = set(re.findall(r'\bthis\(\s*"([^"]*)"\s*,\s*keyCodec', only('ACodecMapCodec.java')))
+    asset = set(re.findall(r'\bsuper\(\s*"([^"]*)"', only('AssetCodecMapCodec.java')))
+    fac = re.findall(r'DEFAULT_TYPE\s*=\s*"([^"]*)"', only('BuilderFactory.java'))
+    return {'id': next(iter(id_)) if len(id_) == 1 else None,
+            'asset': next(iter(asset)) if len(asset) == 1 else None,
+            'factory': fac[0] if len(fac) == 1 else None}
+
+
+def declared_keys():
+    """Every `FIELD = new <X>CodecMapCodec(...)` in the tree, keyed 'pkg.Chain.FIELD', with the
+    JSON key its names are written under: (key | None, how). Declaration-driven, unlike the
+    miner's registration-driven walk. Also the literal type tags of every
+    `new BuilderFactory<…>(Category.class, "<tag>"…)` (form 3's key by a route that does not
+    read DEFAULT_TYPE)."""
+    dflt = library_defaults()
+    out, tags, nfiles = {}, collections.Counter(), 0
+    ctor = re.compile(r'(?<![\w.$])(' + FIELD + r')\s*=\s*new\s+((?:[\w.]*\.)?(?:\w*CodecMapCodec|MapKeyMapCodec))\s*(<[^;(){}]*>)?\s*\(')
+    for p, t in sorted(files.items()):
+        if 'new BuilderFactory' in t:
+            for m in re.finditer(r'new\s+BuilderFactory\s*<[^;]*?>\s*\(([^;]*?)\)\s*[;)]', t, re.S):
+                a = split_args('(' + m.group(1) + ')')
+                if len(a) >= 2:
+                    q = re.fullmatch(r'"([^"]*)"', a[1])
+                    tags[q.group(1) if q else '<non-literal>'] += 1
+        if 'CodecMapCodec' not in t and 'MapKeyMapCodec' not in t:
+            continue
+        code = code_of(p)
+        pkg = (re.search(r'^package\s+([\w.]+);', code, re.M) or [None, ''])[1]
+        classes = None
+        for m in ctor.finditer(code):
+            if classes is None:
+                classes = classes_of(p)
+                nfiles += 1
+            k0 = innermost_class(classes, m.start())
+            chain = [classes[k]['name'] for k in chain_of(classes, k0) if classes[k]['name']] if k0 is not None else []
+            fam = m.group(2).split('.')[-1]
+            args = [a for a in split_args(t[m.end() - 1:]) if a != '']
+            first = args[0] if args else ''
+            lit = re.fullmatch(r'"([^"]*)"', first)
+            kc = consts(t)
+            if fam == 'MapKeyMapCodec':
+                res = (None, 'map-key')
+            elif lit:
+                res = (lit.group(1), 'explicit')
+            elif first in kc:
+                res = (kc[first], 'constant')
+            elif fam in ('CodecMapCodec', 'StringCodecMapCodec', 'BuilderCodecMapCodec') and \
+                    (not args or first in ('true', 'false')):
+                res = (dflt['id'], 'default') if dflt['id'] else (None, 'unknown')
+            elif fam == 'ObjectCodecMapCodec' and re.match(r'(new\s|Codec\.)', first):
+                res = (dflt['id'], 'default') if dflt['id'] else (None, 'unknown')
+            elif fam == 'AssetCodecMapCodec' and re.match(r'(new\s|Codec\.)', first):
+                res = (dflt['asset'], 'default') if dflt['asset'] else (None, 'unknown')
+            else:
+                res = (None, 'unknown')
+            key = '.'.join(([pkg] if pkg else []) + chain + [m.group(1)])
+            out.setdefault(key, set()).add(res)
+    return dflt, out, tags, nfiles
 
 
 sites, excluded, unresolved, qrecv, nfiles = unqualified()
@@ -595,6 +751,12 @@ for k in new_keys:
     print("  ", k)
 print(f"RESIDUE: registries held in a variable {len(r_held)}; getCodecRegistry( with a non-field "
       f"argument: {len(r_calls)} call(s), {len(r_decls)} declaration(s)")
+dflt_keys, decl_keys, factory_tags, decl_files = declared_keys()
+by_key = collections.Counter(next(iter(v)) if len(v) == 1 else ('<disagree>', 'x') for v in decl_keys.values())
+print(f"DECLARED KEYS: {len(decl_keys)} registry-shaped declaration(s) in {decl_files} file(s); library defaults {dflt_keys}; "
+      f"form-3 factory tags {dict(factory_tags)}")
+for (k_, how_), n_ in sorted(by_key.items(), key=str):
+    print(f"  key {k_!r} ({how_}): {n_}")
 for e in excluded:
     print("  EXCLUDED", e[3], os.path.relpath(e[0], root), e[1], e[2])
 for u in unresolved:
@@ -606,4 +768,7 @@ if JSON_OUT:
                'residue': {'variable_held_registries': len(r_held),
                            'non_field_argument_calls': len(r_calls),
                            'non_field_argument_declarations': len(r_decls)},
-               'registries': report, 'new_keys': new_keys}, open(JSON_OUT, 'w'), indent=1, sort_keys=True)
+               'registries': report, 'new_keys': new_keys,
+               'library_defaults': dflt_keys, 'factory_tags': dict(factory_tags),
+               'declared_keys': {k_: sorted([list(x) for x in v], key=str) for k_, v in decl_keys.items()}},
+              open(JSON_OUT, 'w'), indent=1, sort_keys=True)

@@ -103,9 +103,47 @@ walk separately. Fixture changes:
 - The runner also compares miner and recount **live** on each tree (`AGREEMENT` line), pins
   `UNRESOLVED` at 0, and counts what neither spelling covers (`residue`).
 - `check-registry-fixture.py --mutations` removes each guard in a patched copy of the scripts and
-  requires named checks to go red (26 mutations, ~45 s).
+  requires named checks to go red (the first 26 mutations, ~45 s; see the next section for the rest).
 
 The two scripts share the decision table and six patterns (field character class, class
 keyword, not-a-type keywords, typed-local regex, cast-literal regex, lambda-parameter regex),
 so their agreement does not vouch for those; the hand-read synthetic expectations do. They
 implement the scope walk separately, which is what the agreement does vouch for.
+
+### Discriminator keys and `.name()` ids (2026-10-15)
+
+check-type-values used to union every registry's names into one `"Type"` oracle. A registry's names
+are written under ITS OWN key, and the key is not always `"Type"` (`ItemAbility.CODEC` is `"Slot"`,
+`Condition.CODEC` is `"Id"`), so a name registered under `"Slot"` was accepted as a `"Type"` value.
+The miner now reads each registry's key from its declaration (`registry_miner.declared_key`):
+
+- an explicit string (or a `static final String` of the file) is the key;
+- no key means the constructor family's default, **read from the codec library's own source**
+  (`constructor_defaults`: `ACodecMapCodec` `this("Id", …)`, `AssetCodecMapCodec` `super("Type")`,
+  `BuilderFactory.DEFAULT_TYPE`), never assumed. The synthetic tree carries stubs of those three
+  classes whose defaults are deliberately wrong (`Disc`, `Form`, `Variant`), so an assumed default
+  fails here instead of passing by coincidence;
+- `MapKeyMapCodec` has no discriminator (its names are object keys): neither a key nor UNKNOWN;
+- a key the declaration does not spell readably (a constant of another class, a field not initialised
+  with `new`) is UNKNOWN, counted and pinned at 0 on the real trees.
+
+`independent.discriminators` holds the figures: the recount's declaration-driven counts per key
+(`declared_by_key_*`), the 11 `"Id"` registries, and every registry whose key is not `"Type"`. The
+recount reads the same fact by sweeping declarations rather than registrations, and `check_agreement`
+compares the miner with it **per registry**, for all 118/114 codec registries and not only the
+unqualified population.
+
+`E.C.name()` ids are evaluated (`registry_miner._enum_name`): `Enum.name()` is final, so the id is
+exactly `C` when E is an `enum` declared in the tree and C is one of its constants. `toString()` and
+`(Object)E.C` stay open. The synthetic `EnumCases` registry holds one case per guard, each on a name
+only that case can supply (constant with an argument, with a body, through an import, nested in the
+registering file; constant not in the enum; a class with a static field of that name; `toString()`;
+`(Object)E.C`), and `Registry.CODEC`'s `Slot.Core.name()` is the unresolved-type case. **The enum rule
+is shared** by the miner and the recount (resolution differs: imports vs a tree-wide simple-name
+index), so their agreement does not vouch for it. The route that shares nothing is a shipped asset:
+the fixture requires every name the evaluation closes (`Core`, `Support`) to occur as a value under its
+registry's key (`"Slot"`) in `~/.cache/hytale-assets` (skipped, and said so on the summary line, when
+the cache is absent).
+
+`--mutations` now removes 50 guards (24 added here) and takes about 4 minutes.
+

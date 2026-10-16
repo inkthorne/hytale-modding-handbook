@@ -47,6 +47,10 @@ ap.add_argument('--prev-src', default=os.path.expanduser('~/.cache/hytale-update
                 help="previous build's decompiled source, for the recount's validation run")
 ap.add_argument('--fixtures', default=str(HERE.parent / 'fixtures/registry-oracle'),
                 help='fixture directory (overridable so --mutations can run a patched copy)')
+ap.add_argument('--assets', default=os.path.expanduser('~/.cache/hytale-assets'),
+                help="shipped assets, for the one route that shares nothing with either script: every id the "
+                     "enum evaluation closes must be a value under its registry's key there")
+ap.add_argument('--no-assets', action='store_true', help=argparse.SUPPRESS)
 ap.add_argument('--no-recount', action='store_true', help=argparse.SUPPRESS)
 ap.add_argument('-v', '--verbose', action='store_true')
 ap.add_argument('--mutations', action='store_true')
@@ -56,11 +60,12 @@ sys.path.insert(0, str(HERE))
 import registry_miner as rm
 
 FIXDIR = pathlib.Path(a.fixtures)
-MIN_MUTATIONS = 32     # = len(MUTATIONS); a deleted mutation fails the floor instead of shrinking the run
-MIN_CHECKS = 300       # what runs when the previous-build snapshot is NOT the recorded build (321 today)
+MIN_MUTATIONS = 50     # = len(MUTATIONS); a deleted mutation fails the floor instead of shrinking the run
+MIN_CHECKS = 560       # what runs when the previous-build snapshot is NOT the recorded build (about 950 today)
 
 fails, checks = [], 0
 agree_checks = 0
+a_root_of = {}     # tag -> tree root, so an agreement check can ask the miner for the same defaults
 
 
 def check(label, got, want):
@@ -142,6 +147,30 @@ def check_agreement(tag, regs, skipped, rc):
     check(f"{tag} agreement: excluded calls by reason",
           dict(collections.Counter(s.reason for s in skipped if s.reason != 'unresolved')),
           dict(collections.Counter(e['reason'] for e in rc['excluded'])))
+    # The discriminator key of EVERY registry (not only the unqualified population), against the
+    # recount's declaration-driven sweep. A registry the recount finds no `new` declaration for is
+    # UNKNOWN there, which is the miner's own word for it.
+    decl = rc['declared_keys']
+
+    def recount_key(r):
+        cands = decl.get(r.key)
+        if cands is None:
+            tail = '.'.join(c for c in r.declaring_type.split('.') if c[:1].isupper())
+            hit = [v for k, v in decl.items() if k.endswith('.' + tail + '.' + r.field)]
+            cands = hit[0] if len(hit) == 1 else None
+        if cands is None or len(cands) != 1:
+            return (None, 'unknown')
+        return tuple(cands[0])
+    codec_regs = {k: r for k, r in regs.items() if r.field != rm.CORE_COMPONENT_FIELD}
+    check(f"{tag} agreement: registries whose key was compared (a recount that visited nothing fails)",
+          len(codec_regs) > 0 and len(decl) > 0, True)
+    for k, r in sorted(codec_regs.items()):
+        check(f"{tag} agreement: discriminator key of {short(k)}", (r.discriminator, r.disc_how), recount_key(r))
+    check(f"{tag} agreement: form-3 registries' key vs the factories' literal type tags",
+          sorted({r.discriminator for r in regs.values() if r.field == rm.CORE_COMPONENT_FIELD}),
+          sorted(rc['factory_tags']))
+    check(f"{tag} agreement: constructor-family defaults the two scripts read",
+          rm.constructor_defaults(pathlib.Path(a_root_of[tag])), rc['library_defaults'])
     agree_checks += checks - n0
 
 
@@ -178,6 +207,23 @@ def check_unqualified_block(tag, regs, skipped, block):
         check(f"{lab} names", names_of(ss), want['names'])
         check(f"{lab} no-name sites", sum(1 for s in ss if s.name is None), want['no_name'])
         check(f"{lab} empty-id sites", sum(1 for s in ss if s.name == ''), want['empty_id_sites'])
+
+
+def key_label(r):
+    return r.discriminator if r.disc_how not in ('map-key', 'unknown', 'unread') else '<' + r.disc_how + '>'
+
+
+def check_key_block(tag, regs, want, key_counts):
+    """Registries per discriminator key, against the recount's declaration-driven counts (plus
+    form 3's category registries, which all sit under BuilderFactory.DEFAULT_TYPE). UNKNOWN is
+    pinned: a nonzero count is a registry whose names this reader cannot place under any key."""
+    got = collections.Counter(key_label(r) for r in regs.values())
+    exp = collections.Counter(key_counts)
+    form3 = sum(1 for r in regs.values() if r.field == rm.CORE_COMPONENT_FIELD)
+    exp[want['library_defaults']['factory']] += form3
+    check(f"{tag} registries per discriminator key", dict(sorted(got.items())), dict(sorted(exp.items())))
+    check(f"{tag} registries whose key cannot be read (pinned at zero)", got.get('<unknown>', 0), want['unknown_pinned_at'])
+    check(f"{tag} form-3 registries (key from BuilderFactory.DEFAULT_TYPE)", form3, want['form3_registries'])
 
 
 root = pathlib.Path(a.src)
@@ -313,6 +359,38 @@ for name, want in c3['probes'].items():
 
 # --- UNQUALIFIED registrations (the recount's figures, not the miner's) -----
 check_unqualified_block("0.7.2", regs, skipped, ind['unqualified'])
+disc = ind['discriminators']
+check_key_block("0.7.2", regs, disc, disc['declared_by_key_0.7.2'])
+# Compared by the LAST TWO name components (`Condition.CODEC`): the recount names the nested
+# interface WorldMapManager.MarkerReference, which the miner (resolving a bare receiver to the
+# registering file's package) calls worldmap.MarkerReference. Both are the same field.
+def tail2(k):
+    return '.'.join(k.rsplit('.', 2)[-2:])
+
+
+check("0.7.2 Id-keyed registries",
+      sorted(tail2(k) for k, r in regs.items() if r.discriminator == 'Id'),
+      sorted(tail2(k) for k in disc['id_registries_0.7.2']))
+check("0.7.2 every registry whose key is not Type: (key, registry)",
+      sorted((r.discriminator or key_label(r), tail2(k)) for k, r in regs.items()
+             if r.disc_how != 'factory' and r.discriminator != 'Type'),
+      sorted((v or '<map-key>', tail2(k)) for k, v in disc['non_type_registries_0.7.2'].items()))
+check("0.7.2 form-3 key is the factories' own literal tag",
+      sorted(rm.factory_type_tags(root)), sorted(disc['factory_tags']))
+# ItemAbility: `.name()` closes it; Bench (an `(Object)BenchType.X` id) stays open
+ia = next((r for r in regs.values() if r.key.endswith('.ItemAbility.CODEC')), None)
+check("0.7.2 ItemAbility.CODEC names (E.C.name() closes)", ia.names if ia else 'MISSING', ['Core', 'Support'])
+check("0.7.2 ItemAbility.CODEC verdict and key", (ia.verdict, ia.discriminator) if ia else 'MISSING', ('closed', 'Slot'))
+check("0.7.2 ItemAbility.CODEC sites are enum-name sites",
+      sorted(s.kind for s in ia.sites) if ia else 'MISSING', ['enum-name', 'enum-name'])
+bench = next((r for r in regs.values() if r.key.endswith('.Bench.CODEC')), None)
+check("0.7.2 Bench.CODEC stays open ((Object)BenchType.X is not name())",
+      (bench.verdict, bench.discriminator) if bench else 'MISSING', ('open', 'Type'))
+a_root_of['0.7.2'] = str(root)
+if a.verbose:
+    for k, r in sorted(regs.items(), key=lambda kv: (str(kv[1].discriminator), kv[0])):
+        if r.disc_how != 'factory' and r.discriminator != 'Type':
+            print(f"  key {r.discriminator or '<' + r.disc_how + '>'!s:10} {r.disc_how:9} {k}  <- {r.disc_at}")
 rc = run_recount(root, "0.7.2")
 if rc is not None:
     check_agreement("0.7.2", regs, skipped, rc)
@@ -331,6 +409,8 @@ if prev.exists() and prev_ver == want_ver:
     pskipped = []
     pregs = rm.mine(prev, pskipped)
     check_unqualified_block("0.6.8", pregs, pskipped, ind['unqualified_previous_build'])
+    check_key_block("0.6.8", pregs, disc, disc['declared_by_key_0.6.8'])
+    a_root_of['0.6.8'] = str(prev)
     prc = run_recount(prev, "0.6.8")
     if prc is not None:
         check_agreement("0.6.8", pregs, pskipped, prc)
@@ -345,6 +425,31 @@ if prev.exists() and prev_ver == want_ver:
 else:
     prev_note = (f"previous-build check SKIPPED: snapshot at {prev} is "
                  f"{'version ' + prev_ver if prev_ver else 'absent or unstamped'}, the fixture records {want_ver}")
+
+# --- the route that shares nothing with either script: shipped assets -------
+# Every id the enum evaluation closes must occur as a value under the registry's own key in the
+# shipped assets (Core and Support under "Slot"). Neither script reads an asset, so a rule both
+# got wrong (the enum rule is shared between them) cannot be wrong the same way here.
+enum_regs = [r for r in regs.values() if any(s.kind == 'enum-name' for s in r.sites)]
+check("0.7.2 registries with an enum-name site (the assets route has something to say)",
+      sorted(r.key.rsplit('.', 2)[-2] for r in enum_regs), ['ItemAbility'])
+asset_note = None
+assets = pathlib.Path(a.assets)
+if a.no_assets:
+    asset_note = None
+elif assets.exists():
+    for r in enum_regs:
+        seen = set()
+        pat = re.compile(r'"' + re.escape(r.discriminator) + r'"\s*:\s*"([^"]*)"')
+        for f_ in assets.rglob('*.json'):
+            seen.update(pat.findall(f_.read_text(errors='replace')))
+        for name in sorted({s.name for s in r.sites if s.kind == 'enum-name'}):
+            check(f"0.7.2 {r.key.rsplit('.', 2)[-2]}: closed name {name} is a shipped-asset value under {r.discriminator!r}",
+                  name in seen, True)
+else:
+    asset_note = f"asset route SKIPPED: no shipped assets at {assets}"
+if asset_note:
+    prev_note = (prev_note + "; " if prev_note else "") + asset_note
 
 # --- the synthetic tree: one instance of every binding rule -----------------
 syn_root = FIXDIR / 'synthetic/src'
@@ -370,6 +475,23 @@ else:
             check(f"{lab}: form-2 sites", sum(1 for s in us if s.form == 2), want['form2'])
         if 'empty_id_sites' in want:
             check(f"{lab}: empty-id sites", sum(1 for s in us if s.name == ''), want['empty_id_sites'])
+        check(f"{lab}: discriminator (key, how)", [r.discriminator, r.disc_how] if r else 'MISSING',
+              want['discriminator'])
+    # One check per enum case, each on a NAME that only that case can supply, so a mutation of one
+    # guard reddens its own check and not the others'.
+    ec = sregs.get('synth.gamma.EnumCases.CODEC')
+    en = set(ec.names) if ec else set()
+    for nm, closes, why in (('Alpha', True, 'constant with an argument'), ('Beta', True, 'constant with a body'),
+                            ('Low', True, 'enum reached through an import'),
+                            ('Red', True, 'enum nested in the registering file'),
+                            ('Epsilon', False, 'the enum has no such constant'),
+                            ('Gamma', False, 'a class with a static field of that name, not an enum'),
+                            ('Gamma9', False, 'toString() is overridable'),
+                            ('Delta9', False, '(Object)E.C goes through the key codec')):
+        check(f"synthetic enum: {nm} ({why}) {'closes' if closes else 'stays open'}", nm in en, closes)
+    reg_ = sregs.get('synth.alpha.Registry.CODEC')
+    check("synthetic enum: Core (Slot.Core.name(), Slot is not in the tree) stays open",
+          'Core' in (reg_.names if reg_ else ['MISSING']), False)
     check("synthetic: registries with no qualified site",
           sorted(k for k, r in sregs.items() if not r.of_spelling('qualified')), synth['new_registry_keys'])
     check("synthetic: calls excluded by property",
@@ -380,6 +502,13 @@ else:
           sorted(k for k in sregs if '.this.' in k or '.super.' in k or rm.UNRESOLVED_OWNER in k), [])
     check("synthetic: open registries",
           sorted(k for k, r in sregs.items() if r.verdict == 'open'), synth['open_registries'])
+    check("synthetic: registries per discriminator key", dict(sorted(collections.Counter(
+          key_label(r) for r in sregs.values()).items())), dict(sorted(synth['registries_by_key'].items())))
+    check("synthetic: registries whose key cannot be read",
+          sorted(k for k, r in sregs.items() if r.disc_how == 'unknown'), synth['unknown_key_registries'])
+    check("synthetic: the key defaults were read from the stubs, not assumed",
+          rm.constructor_defaults(syn_root), {'id': 'Disc', 'asset': 'Form', 'factory': 'Variant'})
+    a_root_of['synthetic'] = str(syn_root)
     src_text = ' '.join(p.read_text() for p in syn_root.rglob('*.java'))
     check("synthetic: the tree has a local, a this and a super shadow to exclude",
           [x in src_text for x in ('CodecMapCodec<Outer> CODEC', 'this.CODEC.register', 'super.CODEC.register')],
@@ -433,7 +562,7 @@ def mutate():
                 continue
             target.write_text(text)
             cmd = [sys.executable, '-I', str(scripts / 'check-registry-fixture.py'),
-                   '--src', a.src, '--prev-src', a.prev_src, '--fixtures', str(FIXDIR)]
+                   '--src', a.src, '--prev-src', a.prev_src, '--fixtures', str(FIXDIR), '--no-assets']
             r = subprocess.run(cmd, capture_output=True, text=True)
             ran += 1
             red = {m.group(1) for m in re.finditer(r'^  FAIL (.*?) => ', r.stdout, re.M)}
@@ -585,6 +714,83 @@ MUTATIONS += [
      [("            if arg_ok.match(code[m.end():close]):", "            if True:")],
      {"synthetic residue: non_field_argument_calls", "synthetic residue: non_field_argument_declarations",
       "0.7.2 residue: non_field_argument_declarations"}),
+    # ---- discriminator keys (2026-10-15) -------------------------------------------------
+    ("key defaults assumed (Id / Type / Type), not read from the library source", P,
+     [("    out = {'id': None, 'asset': None, 'factory': None}\n    f = _only_file(root, 'ACodecMapCodec.java')",
+       "    out = {'id': 'Id', 'asset': 'Type', 'factory': 'Type'}\n    _DEFAULTS_CACHE[ck] = out\n    return out\n    f = _only_file(root, 'ACodecMapCodec.java')")],
+     {"synthetic Dflt.CODEC: discriminator (key, how)", "synthetic AssetDefault.CODEC: discriminator (key, how)",
+      "synthetic Widget.CORE_COMPONENT_TYPES: discriminator (key, how)",
+      "synthetic: the key defaults were read from the stubs, not assumed",
+      "synthetic agreement: constructor-family defaults the two scripts read"}),
+    ("a key the constructor does not spell readably is guessed instead of UNKNOWN", P,
+     [("    return None, 'unknown'\n\n\ndef declared_key",
+       "    return defaults.get('id'), 'default'\n\n\ndef declared_key")],
+     {"synthetic Unreadable.CODEC: discriminator (key, how)", "synthetic: registries whose key cannot be read",
+      "synthetic agreement: discriminator key of Unreadable.CODEC"}),
+    ("a field with no `new` declaration is guessed instead of UNKNOWN", P,
+     [("    return None, 'unknown', where\n\n\n", "    return defaults.get('id'), 'default', where\n\n\n")],
+     {"synthetic NotNew.CODEC: discriminator (key, how)", "synthetic: registries whose key cannot be read",
+      "synthetic agreement: discriminator key of NotNew.CODEC"}),
+    ("a declaration is not bound to its class chain: two TYPE_CODECs in one file are confused", P,
+     [("            if not tail or chain[-len(tail):] != tail:\n                continue",
+       "            if False:\n                continue")],
+     {"synthetic Pair.TYPE_CODEC: discriminator (key, how)", "synthetic Inner.TYPE_CODEC: discriminator (key, how)",
+      "synthetic agreement: discriminator key of Pair.TYPE_CODEC"}),
+    ("the registering files are not searched when the declaring type's own file is absent", P,
+     [("    cands += [pathlib.Path(x) for x in files if pathlib.Path(x) not in cands]", "    cands += []")],
+     {"synthetic Marker.CODEC: discriminator (key, how)", "0.7.2 registries whose key cannot be read (pinned at zero)",
+      "synthetic agreement: discriminator key of Marker.CODEC"}),
+    ("form 3's key assumed to be Type instead of read from BuilderFactory.DEFAULT_TYPE", P,
+     [("            r.discriminator, r.disc_how = defaults['factory'], 'factory' if defaults['factory'] else 'unknown'",
+       "            r.discriminator, r.disc_how = 'Type', 'factory'")],
+     {"synthetic Widget.CORE_COMPONENT_TYPES: discriminator (key, how)",
+      "synthetic agreement: form-3 registries' key vs the factories' literal type tags"}),
+    ("MapKeyMapCodec read as a discriminator-keyed registry", P,
+     [("        return None, 'map-key'            # object KEYS are the names; there is no discriminator",
+       "        return defaults.get('id'), 'default'")],
+     {"synthetic MapKeyed.PLUGIN_CODEC: discriminator (key, how)", "0.7.2 registries per discriminator key",
+      "synthetic agreement: discriminator key of MapKeyed.PLUGIN_CODEC"}),
+    ("a string constant passed as the key is not resolved through the file's constant table", P,
+     [("        if first in consts:\n            return consts[first], 'constant'", "        if False:\n            return consts[first], 'constant'")],
+     {"synthetic ConstKey.CODEC: discriminator (key, how)", "synthetic agreement: discriminator key of ConstKey.CODEC"}),
+    ("AssetCodecMapCodec's no-key default taken from the string family instead", P,
+     [("        return (defaults.get('asset'), 'default') if defaults.get('asset') else (None, 'unknown')",
+       "        return (defaults.get('id'), 'default') if defaults.get('id') else (None, 'unknown')")],
+     {"synthetic AssetDefault.CODEC: discriminator (key, how)", "0.7.2 registries per discriminator key",
+      "synthetic agreement: discriminator key of AssetDefault.CODEC"}),
+    ("recount: the library defaults assumed instead of read", R,
+     [("    return {'id': next(iter(id_)) if len(id_) == 1 else None,\n            'asset': next(iter(asset)) if len(asset) == 1 else None,\n            'factory': fac[0] if len(fac) == 1 else None}",
+       "    return {'id': 'Id', 'asset': 'Type', 'factory': 'Type'}")],
+     {"synthetic agreement: constructor-family defaults the two scripts read",
+      "synthetic agreement: discriminator key of Dflt.CODEC"}),
+    ("recount: MapKeyMapCodec not recognised as keyless", R,
+     [("            if fam == 'MapKeyMapCodec':\n                res = (None, 'map-key')", "            if False:\n                res = (None, 'map-key')")],
+     {"synthetic agreement: discriminator key of MapKeyed.PLUGIN_CODEC"}),
+    # ---- enum constants as ids: one mutation per guard, each judged on the case only it can change
+    ("enum guard E-resolves removed: a type not found in the tree is accepted", P,
+     [("        if f is None:                                      # GUARD E-resolves\n            return None",
+       "        if f is None:                                      # GUARD E-resolves\n            return const")],
+     {"synthetic enum: Core (Slot.Core.name(), Slot is not in the tree) stays open"}),
+    ("enum guard enum-kind removed: a class with a static field of that name is read as an enum", P,
+     [("    if m.group(1) != 'enum':                     # GUARD enum-kind\n        return None", "    if False:\n        return None")],
+     {"synthetic enum: Gamma (a class with a static field of that name, not an enum) stays open"}),
+    ("enum guard constant-in-list removed: any C is accepted once E is an enum", P,
+     [("    if consts is None or const not in consts:             # GUARD constant-in-list", "    if consts is None:")],
+     {"synthetic enum: Epsilon (the enum has no such constant) stays open"}),
+    ("enum declared in the registering file not looked for", P,
+     [("    if any((cm.group(2) or cm.group(4)) == head for cm in _CLASS_HEADER.finditer(own_masked)):", "    if False:")],
+     {"synthetic enum: Red (enum nested in the registering file) closes"}),
+    ("toString() accepted like name()", P,
+     [(r"\s*\.\s*name\s*\(\s*\)$')", r"\s*\.\s*(?:name|toString)\s*\(\s*\)$')")],
+     {"synthetic enum: Gamma9 (toString() is overridable) stays open"}),
+    ("(Object)E.C accepted as the constant's name", P,
+     [(r"_ENUM_NAME = re.compile(r'^([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\.([A-Za-z_]\w*)\s*\.\s*name\s*\(\s*\)$')",
+       r"_ENUM_NAME = re.compile(r'^(?:\(\s*Object\s*\)\s*)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\.([A-Za-z_]\w*)(?:\s*\.\s*name\s*\(\s*\))?$')")],
+     {"synthetic enum: Delta9 ((Object)E.C goes through the key codec) stays open",
+      "0.7.2 Bench.CODEC stays open ((Object)BenchType.X is not name())"}),
+    ("recount: an enum constant is accepted without looking it up in the constant list", R,
+     [("    return c if c in next(iter(enums[e].values())) else None", "    return c")],
+     {"synthetic agreement: EnumCases.CODEC names"}),
 ]
 
 # ----------------------------------------------------------------------------

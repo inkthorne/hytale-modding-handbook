@@ -65,7 +65,7 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 546
+MIN_CHECKS = 548
 MIN_MUTATIONS = 81
 
 
@@ -690,11 +690,12 @@ def part2():
             # (m/shared.json removed) and one that became ambiguous (q/other.json added)
             'REMOVED hypixel d cfg/moved.json\nADDED hypixel d auth/moved.json\n'
             'CHANGED hypixel d k/shared.json\nREMOVED hypixel d m/shared.json\n'
-            'CHANGED hypixel d n/other.json\nADDED hypixel d q/other.json\n')
+            'CHANGED hypixel d n/other.json\nADDED hypixel d q/other.json\n'
+            'REMOVED hypixel d cfg/gone.json\nADDED hypixel d cfg/fresh.json\n')
         common = ('bundledDefaults/server.lang\nmigration/blocks/3_4.json\nx/data.json\ny/data.json\n'
                   'res/Thing.png\nnative/linux-x64/libx.so\nk/shared.json\nn/other.json\n')
-        (t / 'report/resources-old.txt').write_text(common + 'cfg/moved.json\nm/shared.json\n')
-        (t / 'report/resources-new.txt').write_text(common + 'cfg/manifests.json\nauth/moved.json\nq/other.json\n')
+        (t / 'report/resources-old.txt').write_text(common + 'cfg/moved.json\nm/shared.json\ncfg/gone.json\n')
+        (t / 'report/resources-new.txt').write_text(common + 'cfg/manifests.json\nauth/moved.json\nq/other.json\ncfg/fresh.json\n')
         for rel, text in {'docs/p1.md': 'Bundled strings live in `bundledDefaults/*.lang`.',
                           'docs/p2.md': 'Edit `Server/Languages/en-US/server.lang`.',
                           'docs/p3.md': 'Block migrations: `migration/blocks/3_4.json`.',
@@ -711,7 +712,9 @@ def part2():
                           'docs/p14.md': 'The `shared.json` file.',
                           'docs/p15.md': 'The `other.json` file.',
                           'docs/p16.md': 'The `bundledDefaults/*/sub` tree.',
-                          'docs/p17.md': 'The `bundledDefaults/*.lang/sub` tree.'}.items():
+                          'docs/p17.md': 'The `bundledDefaults/*.lang/sub` tree.',
+                          'docs/p18.md': 'The `gone.json` file.',
+                          'docs/p19.md': 'The `fresh.json` file.'}.items():
             (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -738,6 +741,10 @@ def part2():
     check('libx.so' not in out and 'docs/p7.md' not in out, "resource triage: a third-party resource is not triaged")
     check('resource cfg/moved.json \u2192 docs/p13.md\n' in out,
           "resource triage: a bare name is tested in the OLD build for a REMOVED row, so a resource that moved is still flagged")
+    check('resource cfg/gone.json \u2192 docs/p18.md\n' in out,
+          "resource triage: a REMOVED row's bare name that exists only in the old build is flagged")
+    check('resource cfg/fresh.json \u2192 docs/p19.md\n' in out,
+          "resource triage: an ADDED row's bare name that exists only in the new build is flagged")
     check('resource auth/moved.json \u2192 docs/p13.md\n' in out,
           "resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged")
     check('resource k/shared.json \u2192 docs/p14.md\n' in out,
@@ -748,7 +755,7 @@ def part2():
           "resource triage: a CHANGED row's bare name that is unique in the old build only is flagged")
     check('resource q/other.json' not in out,
           "resource triage: an ADDED row's bare name that is ambiguous in the new build is not flagged")
-    check('#SUMMARY 11 changed thing(s) checked, 7 referenced' in out,
+    check('#SUMMARY 13 changed thing(s) checked, 9 referenced' in out,
           "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
 
 
@@ -988,7 +995,7 @@ MUTATIONS = [
      'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\{', 'pass; (r"(?<![\\w-])" + re.escape(d) + r"/\\{',
      {"resource triage: a full path and a brace list flag the change; another file of the brace's directory does not"}),
     ("resources triage: a bare name need not be unique among jar resources", T,
-     'if res_names[name] == 1 and asset_names', 'if asset_names',
+     'if any(c[name] == 1 for c in res_names) and asset_names', 'if asset_names',
      {"resource triage: a bare name shared by two jar resources does not match"}),
     ("resources triage: a bare name may also be a shipped asset", T,
      ' and asset_names.get(name, 0) == 0:', ':',
@@ -1001,10 +1008,10 @@ MUTATIONS = [
       "resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged"}),
     ("resources triage: a REMOVED row's bare name tested in the new build", T,
      '{"ADDED": ("new",), "REMOVED": ("old",)}', '{"ADDED": ("new",), "REMOVED": ("new",)}',
-     {"resource triage: a bare name is tested in the OLD build for a REMOVED row, so a resource that moved is still flagged"}),
+     {"resource triage: a REMOVED row's bare name that exists only in the old build is flagged"}),
     ("resources triage: an ADDED row's bare name tested in the old build", T,
      '{"ADDED": ("new",), "REMOVED": ("old",)}', '{"ADDED": ("old",), "REMOVED": ("old",)}',
-     {"resource triage: a bare name is tested in the NEW build for an ADDED row, so a resource that moved is still flagged"}),
+     {"resource triage: an ADDED row's bare name that exists only in the new build is flagged"}),
     ("resources triage: a CHANGED row's bare name tested in the new build only", T,
      '.get(parts[0], ("old", "new"))', '.get(parts[0], ("new",))',
      {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged"}),
@@ -1016,7 +1023,7 @@ MUTATIONS = [
      {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged",
       "resource triage: a CHANGED row's bare name that is unique in the new build only is flagged"}),
     ("resources triage: bare names never match", T,
-     'if res_names[name] == 1 and asset_names.get(name, 0) == 0:', 'if False:',
+     'if any(c[name] == 1 for c in res_names) and asset_names.get(name, 0) == 0:', 'if False:',
      {"resource triage: a bare name unique among jar resources and shipped assets matches"}),
 ]
 

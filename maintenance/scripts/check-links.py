@@ -31,11 +31,24 @@ rather than a bigger floor, because a calibrated value rots every time an
 examples README is added — the argument this repo already settled twice for page
 sizes.
 
+HEADINGS COME FROM OUTSIDE FENCES ONLY. A `# comment` line in a bash fence matches the heading
+pattern, so before 2026-10-16 it was an anchor: a link to a section that does not exist
+but whose slug equalled one of those comments passed. Six such lines in the repo's own
+tree (00-overview.md:105, 02-structure.md:412, i18n.md:61, ui-templates.md:451 and
+CLAUDE.md:18/22); no link targeted any, so no verdict moved, but nothing would have
+noticed one that did. A line is read as a heading only when it is not on a line
+doc_fences.py's `fence_lines` occupies, so this gate shares the one fence reader the
+others read through. The count of heading-shaped lines it passed over is printed, so a
+run that excluded nothing can be told from one that was never offered any.
+
 Usage: python3 maintenance/scripts/check-links.py [--root DIR] [--min-outside N]
 Exit 0 pass, 1 findings, 2 SKIP (the corpus is absent or implausible).
 """
 from __future__ import annotations
 import argparse, collections, os, pathlib, re, sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import doc_fences
 
 SKIP_DIRS = {'.git', 'build', 'out', '.gradle', 'node_modules'}
 
@@ -53,6 +66,26 @@ HEADING = re.compile(r'^#{1,6}\s+(.*?)\s*#*$')
 # passes" — audited, not live on build-26, and stated here so the next reader
 # does not have to re-derive it.
 LINK = re.compile(r'\[([^\]]*)\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)')
+
+
+def anchors_of(text: str):
+    """-> (anchors, passed_over): the anchors a page's headings define, and the number of
+    heading-shaped lines that sit inside a code fence and so define none."""
+    fenced = doc_fences.parse(text).fence_lines
+    seen: collections.Counter = collections.Counter()
+    got = set()
+    passed_over = 0
+    for no, line in enumerate(text.split('\n'), 1):
+        m = HEADING.match(line)
+        if not m:
+            continue
+        if no in fenced:
+            passed_over += 1
+            continue
+        b = slug(m.group(1))
+        got.add(b if seen[b] == 0 else f'{b}-{seen[b]}')
+        seen[b] += 1
+    return got, passed_over
 
 
 def corpus(root: pathlib.Path) -> list[pathlib.Path]:
@@ -74,16 +107,10 @@ def main() -> int:
 
     files = corpus(root)
     anchors: dict[str, set[str]] = {}
+    in_fences = 0
     for p in files:
-        seen: collections.Counter = collections.Counter()
-        got = set()
-        for line in p.read_text(errors='replace').split('\n'):
-            m = HEADING.match(line)
-            if m:
-                b = slug(m.group(1))
-                got.add(b if seen[b] == 0 else f'{b}-{seen[b]}')
-                seen[b] += 1
-        anchors[str(p)] = got
+        anchors[str(p)], n = anchors_of(p.read_text(errors='replace'))
+        in_fences += n
 
     pop = collections.Counter()
     findings: list[str] = []
@@ -121,6 +148,7 @@ def main() -> int:
     print(f'  INFO  {total} markdown link(s) in {len(files)} file(s): '
           f'{pop["docs"]} under docs/, {pop["outside"]} outside it, '
           f'{pop["fixture"]} in gate fixtures (checked, not floored)')
+    print(f'  INFO  {in_fences} heading-shaped line(s) inside code fences passed over, not read as anchors')
 
     # TWO floors, and the second one is the point. A total-only floor cannot tell
     # "the widening works" from "the widening was reverted".

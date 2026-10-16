@@ -33,8 +33,8 @@ FROM = pathlib.Path(A.from_dir)
 
 fails: list[str] = []
 checks = 0
-MIN_CASES = 15
-MIN_MUTATIONS = 6
+MIN_CASES = 24
+MIN_MUTATIONS = 8
 
 
 def run(root, *extra):
@@ -79,6 +79,15 @@ def broken(root_extra_files, *extra):
 
 
 if A.mutations:
+    # Every case that expects a FINDING goes red when the run SKIPs instead (the two corpus
+    # narrowings below), so the fenced-comment cases that expect one belong to those sets.
+    FENCED_FINDINGS = {
+        'a link to the would-be anchor of a `# comment` in a bash fence FAILs',
+        'and the fenced-comment link makes the gate exit 1',
+        'a cross-file link to a fenced comment FAILs too',
+        'PIN, a `# comment` in a BLOCKQUOTED fence is not an anchor',
+        'PIN, a `# comment` in an INDENTED fence is not an anchor',
+        'and there is no #dup-1 because there is only one heading Dup'}
     # Each entry: the edit, and the EXACT set of case labels it must redden.
     MUTATIONS = {
         'IDENTITY (no change — the harness control)': (
@@ -97,7 +106,7 @@ if A.mutations:
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'}),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
@@ -117,7 +126,7 @@ if A.mutations:
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'}),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS),
         'gate-fixture links vote in the floor again': (
             """        elif rel.parts[:2] == ('maintenance', 'fixtures'):
             bucket = 'fixture'""",
@@ -137,6 +146,19 @@ if A.mutations:
             """                if tp not in anchors:
                     pass""",
             {'a link to a file that does not exist is caught'}),
+        'headings inside code fences are read as anchors again': (
+            """        if no in fenced:
+            passed_over += 1
+            continue
+""", '',
+            # The fence-blind heading reader. Reddens exactly the cases that look for
+            # a fenced comment's anchor, and the duplicate-slot one (the phantom takes
+            # `dup`, the real heading becomes `dup-1`). The two PINs stay green under it.
+            {'a link to the would-be anchor of a `# comment` in a bash fence FAILs',
+             'and the fenced-comment link makes the gate exit 1',
+             'a cross-file link to a fenced comment FAILs too',
+             'and there is no #dup-1 because there is only one heading Dup',
+             'the run reports the fenced heading-shaped lines it passed over'}),
         'SKIP shares an exit code with PASS': (
             '        return 2\n    if pop', '        return 0\n    if pop',
             {'a too-small corpus SKIPs with exit 2'}),
@@ -284,6 +306,51 @@ check('fixture links are still counted and reported, just not floored',
 # ---- what must NOT be a finding ---------------------------------------------
 check('a bare page link to a real file is fine',
       lambda: broken({'docs/gamma.md': '# G\n\n## Here\n\n[x](beta.md)\n'})[1], [])
+
+# ---- headings inside code fences are not anchors ---------------------------
+# A `# comment` line in a bash fence matches the heading pattern. Read as a heading
+# it is an anchor, so a link to a section that does not exist but whose slug equals
+# the comment used to PASS (measured at HEAD before the fix: 00-overview.md:105,
+# 02-structure.md:412, i18n.md:61, ui-templates.md:451 and CLAUDE.md:18/22 were all
+# anchors, and no link targeted one, so no verdict had moved). The fence membership
+# is doc_fences.py's, shared with every other gate.
+_BASH = '# G\n\n## Here\n\n```bash\n# Phantom Section\nrun\n```\n\n'
+check('a link to the would-be anchor of a `# comment` in a bash fence FAILs',
+      lambda: broken({'docs/gamma.md': _BASH + '[x](#phantom-section)\n'})[1],
+      ['docs/gamma.md:10 -> gamma.md#phantom-section (no such anchor)'])
+check('and the fenced-comment link makes the gate exit 1',
+      lambda: broken({'docs/gamma.md': _BASH + '[x](#phantom-section)\n'})[0], 1)
+check('a cross-file link to a fenced comment FAILs too',
+      lambda: broken({'docs/gamma.md': _BASH,
+                      'examples/sub/readme.md': '# E\n\n[x](../../docs/gamma.md#phantom-section)\n'})[1],
+      ['examples/sub/readme.md:3 -> ../../docs/gamma.md#phantom-section (no such anchor)'])
+# PIN, not a detector: a `> # comment` line never matched `^#{1,6}`, so this holds under
+# the fence-blind pattern as well and no mutation can redden it. It is here because the
+# ITEM names blockquoted fences and an indented one is the same shape; if the heading
+# pattern ever learns to look inside a container, these are the first to notice.
+check('PIN, a `# comment` in a BLOCKQUOTED fence is not an anchor',
+      lambda: broken({'docs/gamma.md': '# G\n\n> ```bash\n> # Quoted Phantom\n> ```\n\n[x](#quoted-phantom)\n'})[1],
+      ['docs/gamma.md:7 -> gamma.md#quoted-phantom (no such anchor)'])
+check('PIN, a `# comment` in an INDENTED fence is not an anchor',
+      lambda: broken({'docs/gamma.md': '# G\n\n1. step\n\n   ```bash\n   # Indented Phantom\n   ```\n\n[x](#indented-phantom)\n'})[1],
+      ['docs/gamma.md:9 -> gamma.md#indented-phantom (no such anchor)'])
+# Healthy twins: a real heading is still an anchor, and a fenced comment of the same
+# slug does not consume the duplicate counter (`dup` is the heading, `dup-1` is nothing).
+# Fence-blind, the phantom takes `dup` and the real heading becomes `dup-1`, so `#dup`
+# keeps resolving and only `#dup-1` tells the two readings apart.
+check('a REAL heading is still an anchor beside a fence holding the same words',
+      lambda: broken({'docs/gamma.md': _BASH + '## Phantom Section\n\n[x](#phantom-section)\n'})[1], [])
+_DUP = '# G\n\n```bash\n# Dup\n```\n\n## Dup\n\n'
+check('a fenced comment beside a heading of the same slug leaves #dup resolving',
+      lambda: broken({'docs/gamma.md': _DUP + '[x](#dup)\n'})[1], [])
+check('and there is no #dup-1 because there is only one heading Dup',
+      lambda: broken({'docs/gamma.md': _DUP + '[x](#dup-1)\n'})[1],
+      ['docs/gamma.md:9 -> gamma.md#dup-1 (no such anchor)'])
+# The denominator: the run says how many heading-shaped lines it passed over, so a run
+# that was never offered one can be told from one that excluded it.
+check('the run reports the fenced heading-shaped lines it passed over',
+      lambda: re.search(r'(\d+) heading-shaped line\(s\) inside code fences',
+                        broken({'docs/gamma.md': _BASH + '[x](#here)\n'})[2]).group(1), '1')
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

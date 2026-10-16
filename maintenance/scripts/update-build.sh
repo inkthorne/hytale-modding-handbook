@@ -414,7 +414,8 @@ for o in ("hypixel", "third-party"):
     paths = [p for p in nh if own(no, p)[0] == o]
     rules = collections.Counter(own(no, p)[1] for p in paths)
     print(f"#SIDE {o} {len(paths)} rules " + " ".join(f"{k}:{v}" for k, v in sorted(rules.items())))
-    print(f"#HOLDS {o} " + ", ".join(f"{k} ({v})" for k, v in collections.Counter(top2(p) for p in paths).most_common()))
+    held = collections.Counter(top2(p) for p in paths).most_common()
+    print(f"#HOLDS {o} " + ", ".join(f"{k} ({v})" for k, v in held[:12]) + (f", and {len(held) - 12} more" if len(held) > 12 else ""))
 for st, o, r, p in rows:
     if o == "hypixel": print(f"HYP {st} {r} {p}")
 tp = collections.Counter((st, top2(p)) for st, o, r, p in rows if o != "hypixel")

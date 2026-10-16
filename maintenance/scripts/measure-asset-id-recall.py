@@ -43,6 +43,65 @@ QUOTED = re.compile(r'"((?:[^"\\\n]|\\.)*)"')   # consumed left to right, so a c
 ID_LIKE = re.compile(r'^[A-Za-z][A-Za-z0-9_.\-]*$')
 
 
+# ---------------------------------------------------------------------------------------------
+# DECLARED SCOPE (acceptance 6). Which positions of the interactions replay name an ASSET.
+#
+# Written from the decompiled consumers BEFORE any verdict of the item was read, and applied to
+# every value of the denominator, hits included, so that the subset figure cannot be selected
+# by what the gate happened to catch. Each row is the codec field the position is, the consumer
+# that reads it, and one of three classes:
+#   asset  the value names a file in a `setPath` store (an id the engine resolves, or should)
+#   free   ANY value is legal: the engine creates or keys state by the string, nothing resolves it
+#   gap    a real reference that is NOT a file stem (a map key inside an asset, a model node, a
+#          .lang key): the gate cannot check it by construction. A NAMED GAP, not built here.
+# `classify(path)` is keyed by the last key, with the parent only where one key name is two codec
+# fields (`Id`) or the key is a free-form / numeric map child. A position it does not know raises:
+# the table must cover the denominator or the measurement does not run.
+# ---------------------------------------------------------------------------------------------
+_IA = ('asset', 'Item/Interactions')
+SCOPE_BY_KEY = {
+    # Interaction.CHILD_ASSET_CODEC / the Interaction validator
+    **{k: (*_IA, 'Interaction child: Interaction.CHILD_ASSET_CODEC') for k in (
+        'Next', 'Failed', 'Interactions', 'Parent', 'Click', 'Held',
+        'Forward', 'Back', 'ForwardLeft', 'ForwardRight', 'BackLeft', 'BackRight')},
+    'EffectId': ('asset', 'Entity/Effects', 'ApplyEffectInteraction.EffectId, HasEffectCondition.EffectId: EntityEffect.VALIDATOR_CACHE'),
+    'EntityEffectIds': ('asset', 'Entity/Effects', 'EffectConditionInteraction.EntityEffectIds: EntityEffect.VALIDATOR_CACHE'),
+    'WorldSoundEventId': ('asset', 'Audio/SoundEvents', 'InteractionEffects / DamageEffects / EntityEffect: SoundEvent.VALIDATOR_CACHE'),
+    'LocalSoundEventId': ('asset', 'Audio/SoundEvents', 'InteractionEffects / DamageEffects / EntityEffect: SoundEvent.VALIDATOR_CACHE'),
+    'ProjectileId': ('asset', 'Projectiles', 'LaunchProjectileInteraction.ProjectileId: Projectile.VALIDATOR_CACHE'),
+    'SystemId': ('asset', 'Particles', 'ModelParticle.SystemId: ParticleSystem.VALIDATOR_CACHE'),
+    'Block': ('asset', 'Item/Items', 'PlacementCountConditionInteraction.Block: plain string, looked up in BlockCounter by placed block-type key; '
+                                    'a name no block has can never match'),
+    # ---- free
+    'ChainId': ('free', None, 'ChainingInteraction/ChainFlag/CancelChain.ChainId: a key into a runtime Object2IntMap (dataComponent.namedMap); '
+                              'nothing resolves it, two interactions agree by writing the same string'),
+    # ---- named gaps
+    'ItemAnimationId': ('gap', None, 'InteractionEffects.ItemAnimationId: looked up with playerAnimations.getAnimations().get(id), a key of '
+                                     'the Animations map INSIDE an ItemPlayerAnimations asset (Item/Animations/*.json), chosen by ItemPlayerAnimationsId'),
+    'TargetNodeName': ('gap', None, 'ModelParticle/ModelTrail/BeamInstance.TargetNodeName: a node name inside a model file'),
+    'Key': ('gap', None, 'SendMessageInteraction.Key: a translation key in a Languages/*/server.lang file'),
+}
+
+
+def classify(path):
+    """(class, store or None, reason) for a pair's key path; raises KeyError on a position the table does not know."""
+    k = path[-1]
+    p = path[-2] if len(path) > 1 else None
+    if p == 'Flags':
+        return ('asset', 'Item/Interactions', 'ChainingInteraction.Flags: MapCodec(Interaction.CHILD_ASSET_CODEC), free-form keys')
+    if p == 'Next' and re.match(r'^[0-9.]+$', k):
+        return ('asset', 'Item/Interactions', 'ChargingInteraction.Next: Float2ObjectMapCodec(Interaction.CHILD_ASSET_CODEC)')
+    if k == 'Id':
+        if p == 'Block':
+            return ('asset', 'Item/Items', 'BlockConditionInteraction.BlockIdMatcher.Id: BlockType.VALIDATOR_CACHE')
+        if p == 'Cooldown':
+            return ('free', None, 'InteractionCooldown.Id: a key into CooldownHandler.cooldowns, created by computeIfAbsent; any string is legal')
+        raise KeyError(f"'Id' under {p!r}")
+    if k in SCOPE_BY_KEY:
+        return SCOPE_BY_KEY[k]
+    raise KeyError(f'{p!r}.{k!r}')
+
+
 def load_gate():
     spec = importlib.util.spec_from_file_location('check_asset_ids', HERE / 'check-asset-ids.py')
     m = importlib.util.module_from_spec(spec)
@@ -115,15 +174,19 @@ def main():
     results = {}
     # The gate was changed after its first docs run (see its constants). Recall is
     # reported under every setting so neither change can quietly buy or cost a number.
-    shipped = {k: getattr(gate, k) for k in ('WIDEN', 'VERBATIM_STRICT', 'EXACT_WINS', 'PARENT_K')}
+    shipped = {k: getattr(gate, k) for k in ('WIDEN', 'VERBATIM_STRICT', 'EXACT_WINS', 'PARENT_K', 'NUMERIC_CHILD')}
     settings = (
         ('first docs run: no verbatim, bare key wins, speaks for any parent',
-         dict(WIDEN=False, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1)),
+         dict(WIDEN=False, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1, NUMERIC_CHILD=False)),
         ('+ verbatim from every class (the widening before the review)',
-         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1)),
+         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False, PARENT_K=1, NUMERIC_CHILD=False)),
         ('+ PARENT_K',
-         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False)),
-        ('as shipped: + strict verbatim + exact position wins',
+         dict(WIDEN=True, VERBATIM_STRICT=False, EXACT_WINS=False, NUMERIC_CHILD=False)),
+        # PRE-REGISTERED (acceptance 6): this row is run FIRST and is the baseline the item is judged
+        # against, with the numeric map-child class (LN) switched off.
+        ('before this item: + strict verbatim + exact position wins',
+         dict(NUMERIC_CHILD=False)),
+        ('as shipped: + numeric map-child class (LN)',
          dict()))
     for label, over in settings:
         for k, v in {**shipped, **over}.items():

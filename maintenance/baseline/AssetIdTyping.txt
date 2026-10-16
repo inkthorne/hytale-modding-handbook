@@ -3,7 +3,7 @@
 # typing taken before the docs were first resolved against it. The gate diffs its live table
 # against this file and reports drift as INFO; regenerate with --dump-typing after a game
 # update, once the docs have been re-verified. Not otherwise an input.
-# 163 L1 / 273 L2 / 39 LW class(es).
+# 163 L1 / 273 L2 / 39 LW / 1 LN class(es).
 L1 0	Item/Interactions
 L1 Ability	Item/RootInteractions
 L1 Ability1	Item/RootInteractions
@@ -440,6 +440,7 @@ L2 Weapons.Value	Item/Items
 L2 WeightedEntityIds.Id	NPC/Roles
 L2 WorldParticles.SystemId	Particles
 L2 _CombatConfig.EntityEffects	Entity/Effects
+LN Next.#	Item/Interactions
 LW Biomes.*	HytaleGenerator/Biomes
 LW Block.*	Item/Items
 LW Breaking.*	Item/Items

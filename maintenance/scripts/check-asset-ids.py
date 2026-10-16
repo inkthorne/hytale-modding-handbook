@@ -26,6 +26,13 @@ HOW A KEY GETS A FAMILY (derived from the SHIPPED assets, never from the docs):
         L1  (key,)          - the bare key
         LW  (parent, '*')   - any value under that parent, for maps whose keys
                               are themselves free-form
+        LN  (parent, '#')   - a STRING held directly at a child of `parent` whose KEY PARSES
+                              AS A NUMBER (`"Next": {"1.0": "Heavy_Swing_1"}`, the shape of a
+                              Float2ObjectMapCodec map, which ChargingInteraction.Next is and
+                              nothing else in the jar is). Selected by that property, never by a
+                              list of keys; a string that is a field of an inline object held at
+                              the child (`"1.0": {"Interactions": ...}`) has a non-numeric last
+                              key and is not in the class, nor does an object count toward N or P.
   * A class is TYPED when it has >= N distinct string values and >= P of them
     resolve in one store. A class reaching P in two stores (block ids defined
     inside Item JSON, `CameraShake` vs `CameraEffect`...) is a TIE and a value
@@ -135,6 +142,16 @@ EXACT_WINS = True
 # pairs unchecked (found by the verify pass of b4365d8). Tags.Attack (Block/Melee/Ranged) has 0 of 3.
 EXACT_SHARE = 0.5
 PARENT_K = 3
+# NUMERIC_CHILD (the LN class above) was added by acceptance 6. It exists because the LW class cannot speak
+# for these keys: `k not in sweep.children[p]` stops a parent.* class from typing a key the shipped assets
+# show as a child of that parent (a FIELD, not a free-form map key), and every distinct numeric key of a
+# Charging `Next` is such a child (41 of them, none with the 5 values L2 needs). The numeric property
+# selects the map child directly, so the LN class does not consult that guard; it consults EXACT_WINS /
+# EXACT_SHARE (a (parent, key) the assets show holding something else is not spoken for) and VERBATIM_STRICT
+# (a sentinel the assets ship there passes) exactly as the other classes do. PARENT_K does not apply: LN is
+# keyed by its parent, so there is no bare key to be asked how many contexts it was seen in.
+NUMERIC_CHILD = True
+NUMKEY = re.compile(r'^[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$')   # what Float.parseFloat accepts, less NaN/Infinity/hex
 EXEMPT_CLASSES = ('shape', 'shipped-use', 'shipped-excerpt', 'placeholder', 'pack', 'page-defined')
 
 
@@ -192,6 +209,7 @@ class Sweep:
         self.L1 = collections.defaultdict(set)
         self.L2 = collections.defaultdict(set)
         self.LW = collections.defaultdict(set)
+        self.LN = collections.defaultdict(set)
         self.files = 0
         self.excluded = 0
         self.parse_fail = 0
@@ -216,6 +234,8 @@ class Sweep:
                 self.L2[path[-2:]].add(o)
                 if IDENT.match(path[-2]):
                     self.LW[(path[-2], '*')].add(o)
+                    if NUMKEY.match(path[-1]):
+                        self.LN[(path[-2], '#')].add(o)
 
     def run(self, assets: pathlib.Path):
         server = assets / 'Server'
@@ -587,6 +607,13 @@ def lookup_families(path, typed, sweep, idx):
             pass        # the shipped assets show this (parent, key) holding something else
         else:
             fams |= l1; via.append('L1')
+    if NUMERIC_CHILD and p is not None and IDENT.match(p) and NUMKEY.match(k) and (p, '#') in typed['LN']:
+        # a numeric-keyed child of a map: selected by the key's PROPERTY, so the children guard below
+        # (which separates fields from free-form keys by looking the key up) is not consulted
+        ln = typed['LN'][(p, '#')][0]
+        sh = exact_share(sweep, idx, p, k, ln)
+        if not (EXACT_WINS and sh is not None and sh < EXACT_SHARE):
+            fams |= ln; via.append('LN')
     if p is not None and (p, '*') in typed['LW']:
         # LW is for maps with free-form keys. If this exact (parent, key) is a FIELD
         # the shipped assets use and no class types it, it is not an id slot.
@@ -607,7 +634,7 @@ def shipped_values(path, sweep, idx, via):
     k = path[-1]
     p = path[-2] if len(path) > 1 else None
     verb = set(sweep.L2.get((p, k), ())) if p is not None else set()
-    for lvl, tbl, key in (('L1', sweep.L1, (k,)), ('LW', sweep.LW, (p, '*'))):
+    for lvl, tbl, key in (('L1', sweep.L1, (k,)), ('LW', sweep.LW, (p, '*')), ('LN', sweep.LN, (p, '#'))):
         if lvl in via:
             vs = tbl.get(key, set())
             verb |= {v for v in vs if not resolves(v, idx)} if VERBATIM_STRICT else vs
@@ -626,7 +653,7 @@ def build_context(assets: pathlib.Path, src: pathlib.Path) -> Ctx:
     c.sweep = Sweep()
     c.sweep.run(assets)
     c.typed, c.excl, c.ratios = {}, {}, {}
-    for lvl, table in (('L1', c.sweep.L1), ('L2', c.sweep.L2), ('LW', c.sweep.LW)):
+    for lvl, table in (('L1', c.sweep.L1), ('L2', c.sweep.L2), ('LW', c.sweep.LW), ('LN', c.sweep.LN)):
         c.typed[lvl], c.excl[lvl], c.ratios[lvl] = type_classes(table, c.idx)
     c.covered = set()
     for lvl in c.typed:
@@ -718,7 +745,7 @@ def fmt_class(level, key):
 
 def table_lines(typed):
     rows = []
-    for lvl in ('L1', 'L2', 'LW'):
+    for lvl in ('L1', 'L2', 'LW', 'LN'):
         for k, (fams, ratio, n) in typed[lvl].items():
             rows.append((fmt_class(lvl, k), ','.join(sorted(fams))))
     return sorted(rows)
@@ -774,7 +801,7 @@ def main():
           f"{n_stores_present} present with ids ({len(absent)} absent from this build), {n_ids} distinct id(s)")
     print(f"  INFO  typing (N>={N_MIN} distinct values, P>={P_MIN:.2f} in one store): "
           f"L2 {len(typed['L2'])} of {len(sweep.L2)} classes, L1 {len(typed['L1'])} of {len(sweep.L1)}, "
-          f"LW {len(typed['LW'])} of {len(sweep.LW)}; {len(covered)} of {n_stores_present} store(s) "
+          f"LW {len(typed['LW'])} of {len(sweep.LW)}, LN {len(typed['LN'])} of {len(sweep.LN)}; {len(covered)} of {n_stores_present} store(s) "
           f"are the target of at least one typed class; {ties} tied class(es)")
 
     if a.dump_typing:
@@ -784,7 +811,7 @@ def main():
                   f"# typing taken before the docs were first resolved against it. The gate diffs its live table\n"
                   f"# against this file and reports drift as INFO; regenerate with --dump-typing after a game\n"
                   f"# update, once the docs have been re-verified. Not otherwise an input.\n"
-                  f"# {len(typed['L1'])} L1 / {len(typed['L2'])} L2 / {len(typed['LW'])} LW class(es).\n")
+                  f"# {len(typed['L1'])} L1 / {len(typed['L2'])} L2 / {len(typed['LW'])} LW / {len(typed['LN'])} LN class(es).\n")
         pathlib.Path(a.dump_typing).write_text(header + ''.join(f"{c}\t{f}\n" for c, f in table_lines(typed)))
         print(f"  INFO  typing table written to {a.dump_typing}")
 
@@ -886,7 +913,7 @@ def main():
 
 def report_typing(sweep, typed, excl, ratios, stores, covered):
     """The C1 report: histogram of per-key resolution ratios, what is typed, what is not."""
-    for lvl, label in (('L1', 'bare key (L1)'), ('L2', 'parent.key (L2)'), ('LW', 'parent.* (LW)')):
+    for lvl, label in (('L1', 'bare key (L1)'), ('L2', 'parent.key (L2)'), ('LW', 'parent.* (LW)'), ('LN', 'parent.# numeric child (LN)')):
         rs = ratios[lvl]
         h = collections.Counter(min(int(r * 10), 10) for r in rs)
         print(f"\n  {label}: best-family resolution ratio over {len(rs)} class(es) with N>={N_MIN}")

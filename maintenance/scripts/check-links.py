@@ -31,6 +31,16 @@ rather than a bigger floor, because a calibrated value rots every time an
 examples README is added — the argument this repo already settled twice for page
 sizes.
 
+EVERY FILE THIS GATE READS IS FENCE-CENSUSED. The headings rule below trusts doc_fences.py's
+`fence_lines`, and that module's refusals (four backticks, ~~~, a closer of another prefix shape, an
+unclosed fence, ...) are only enforced by the census in verify-docs.sh, which covers docs/*.md. In
+README.md, CLAUDE.md, maintenance/ and examples/ the refusals were dropped on the floor: a
+`# phantom` line inside a ~~~ fence is a heading to a reader that does not support ~~~, so a link
+to `#phantom` passed (review of bc10b45..23ea833, MINOR-9). So here every file scanned goes
+through `doc_fences.orphans_of()`, and an orphan is a FAIL naming file:line. The tag allowlist is
+a docs/ rule and is not applied (maintenance/fixtures/doctype/fixture-i.md carries a ```Java fence
+on purpose). Measured at the commit that added it: 0 orphans in the 131 tracked markdown files.
+
 HEADINGS COME FROM OUTSIDE FENCES ONLY. A `# comment` line in a bash fence matches the heading
 pattern, so before 2026-10-16 it was an anchor: a link to a section that does not exist
 but whose slug equalled one of those comments passed. Six such lines in the repo's own
@@ -113,14 +123,16 @@ def main() -> int:
         return 2
 
     files = corpus(root)
+    texts = {p: p.read_text(errors='replace') for p in files}
     anchors: dict[str, set[str]] = {}
     in_fences = 0
     for p in files:
-        anchors[str(p)], n = anchors_of(p.read_text(errors='replace'))
+        anchors[str(p)], n = anchors_of(texts[p])
         in_fences += n
 
     pop = collections.Counter()
     findings: list[str] = []
+    orphans = 0
     for p in files:
         rel = p.relative_to(root)
         # THREE buckets, not two, and the classification is ROOT-RELATIVE.
@@ -137,7 +149,11 @@ def main() -> int:
             bucket = 'fixture'
         else:
             bucket = 'outside'
-        for ln, line in enumerate(p.read_text(errors='replace').split('\n'), 1):
+        # A fence marker the shared reader did not accept (see EVERY FILE ... above), in any bucket.
+        for _name, no, why in doc_fences.orphans_of(str(rel), texts[p]):
+            findings.append(f'{rel}:{no}: fence census orphan ({why})')
+            orphans += 1
+        for ln, line in enumerate(texts[p].split('\n'), 1):
             for m in LINK.finditer(line):
                 tgt, an = m.group(2), m.group(3)
                 if tgt is None and an is None:
@@ -156,6 +172,7 @@ def main() -> int:
           f'{pop["docs"]} under docs/, {pop["outside"]} outside it, '
           f'{pop["fixture"]} in gate fixtures (checked, not floored)')
     print(f'  INFO  {in_fences} heading-shaped line(s) inside code fences passed over, not read as anchors')
+    print(f'  INFO  {len(files)} file(s) fence-censused, {orphans} orphan marker(s)')
 
     # TWO floors, and the second one is the point. A total-only floor cannot tell
     # "the widening works" from "the widening was reverted".

@@ -33,8 +33,8 @@ FROM = pathlib.Path(A.from_dir)
 
 fails: list[str] = []
 checks = 0
-MIN_CASES = 27
-MIN_MUTATIONS = 9
+MIN_CASES = 35
+MIN_MUTATIONS = 12
 
 
 def run(root, *extra):
@@ -88,8 +88,17 @@ if A.mutations:
         'PIN, a `# comment` in a BLOCKQUOTED fence is not an anchor',
         'PIN, a `# comment` in an INDENTED fence is not an anchor',
         'and there is no #dup-1 because there is only one heading Dup'}
+    # Cases that expect an orphan or a worktree finding: red whenever the run SKIPs instead.
+    ORPHAN_CASES = {
+        'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding',
+        'a ~~~ fence in docs/gamma.md FAILs naming both markers, and the phantom link still resolves',
+        'a ~~~ fence in examples/sub/readme.md FAILs naming both markers, and the phantom link still resolves',
+        'a ~~~ fence in maintenance/notes.md FAILs naming both markers, and the phantom link still resolves',
+        'a ~~~ fence in CLAUDE.md FAILs naming both markers, and the phantom link still resolves',
+        'and a file with an orphan makes the gate exit 1',
+        'an UNCLOSED fence outside docs/ FAILs naming its opener',
+        'the run reports how many files were fence-censused and how many orphans it found'}
     # The worktree denominator case pins the INFO line, so it goes red when the outside population goes.
-    WT_CTRL = {'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding'}
     WT_DENOM = {'and the file is not in the denominator either'}
     # Each entry: the edit, and the EXACT set of case labels it must redden.
     MUTATIONS = {
@@ -109,7 +118,7 @@ if A.mutations:
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM | WT_CTRL),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | ORPHAN_CASES | WT_DENOM),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
@@ -120,16 +129,22 @@ if A.mutations:
         'the link pattern loses its path segment': (
             r"""LINK = re.compile(r'\[([^\]]*)\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
             r"""LINK = re.compile(r'\[([^\]]*)\]\(([A-Za-z0-9_\-]+\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
-            # Identical red set to the corpus narrowing, and that is the finding
-            # rather than a flaw: either narrowing alone makes every link outside
-            # docs/ invisible, so they are indistinguishable from the outside.
+            # The same red set as the corpus narrowing for the link-dependent cases, and that is the
+            # finding rather than a flaw: either narrowing alone makes every link outside docs/
+            # invisible, so they are indistinguishable from the outside. The ORPHAN_CASES are not
+            # in it: a fence orphan needs no link, so this pattern change cannot hide one. Two of them
+            # still go red, only because the corpus's own outside link (which keeps the OUTSIDE floor
+            # satisfied) is a path link: the docs/ ~~~ case and the UNCLOSED case (which brings its own
+            # path link, `../../docs/alpha.md`, to clear that floor).
             {'a healthy corpus passes',
              'it prints the two populations separately, never their sum',
              'a dead intra-doc anchor is caught',
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM
+            | {'a ~~~ fence in docs/gamma.md FAILs naming both markers, and the phantom link still resolves',
+               'an UNCLOSED fence outside docs/ FAILs naming its opener'}),
         'gate-fixture links vote in the floor again': (
             """        elif rel.parts[:2] == ('maintenance', 'fixtures'):
             bucket = 'fixture'""",
@@ -148,7 +163,8 @@ if A.mutations:
                     findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
             """                if tp not in anchors:
                     pass""",
-            {'a link to a file that does not exist is caught', *WT_CTRL}),
+            {'a link to a file that does not exist is caught',
+             'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding'}),
         'headings inside code fences are read as anchors again': (
             """        if no in fenced:
             passed_over += 1
@@ -166,6 +182,23 @@ if A.mutations:
             "SKIP_DIRS = {'.git', '.claude', 'build'", "SKIP_DIRS = {'.git', 'build'",
             {'a broken link under .claude/worktrees/ is not scanned',
              'and the file is not in the denominator either'}),
+        'the fence census is applied to docs/ only': (
+            "for _name, no, why in doc_fences.orphans_of(str(rel), texts[p]):",
+            "for _name, no, why in (doc_fences.orphans_of(str(rel), texts[p]) if bucket == 'docs' else []):",
+            {'a ~~~ fence in examples/sub/readme.md FAILs naming both markers, and the phantom link still resolves',
+             'a ~~~ fence in maintenance/notes.md FAILs naming both markers, and the phantom link still resolves',
+             'a ~~~ fence in CLAUDE.md FAILs naming both markers, and the phantom link still resolves',
+             'and a file with an orphan makes the gate exit 1',
+             'an UNCLOSED fence outside docs/ FAILs naming its opener',
+             'the run reports how many files were fence-censused and how many orphans it found'}),
+        'the fence census is not applied at all': (
+            "for _name, no, why in doc_fences.orphans_of(str(rel), texts[p]):",
+            "for _name, no, why in []:",
+            ORPHAN_CASES - {'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding'}),
+        'the fence census also applies the docs/ tag allowlist': (
+            "doc_fences.orphans_of(str(rel), texts[p])",
+            "doc_fences.orphans_of(str(rel), texts[p], doc_fences.ALLOWED_TAGS)",
+            {'a ```Java tag outside docs/ is NOT an orphan (the tag allowlist is a docs/ rule)'}),
         'SKIP shares an exit code with PASS': (
             '        return 2\n    if pop', '        return 0\n    if pop',
             {'a too-small corpus SKIPs with exit 2'}),
@@ -373,6 +406,30 @@ check('a broken link under .claude/worktrees/ is not scanned',
 check('and the file is not in the denominator either',
       lambda: next((l.strip() for l in broken({'.claude/worktrees/a/docs/w.md': _WT})[2].split('\n') if 'INFO' in l), ''),
       'INFO  5 markdown link(s) in 3 file(s): 4 under docs/, 1 outside it, 0 in gate fixtures (checked, not floored)')
+
+# ---- the fence census applies to every file this gate scans ------------------
+# doc_fences.py refuses ~~~ (and four backticks, an unclosed fence, ...), so the lines inside such a
+# fence are NOT in fence_lines and a `# comment` there reads as a heading. In docs/ the census in
+# verify-docs.sh FAILs on the marker; outside docs/ nothing did, so a link to `#phantom` passed
+# (MINOR-9). Each file below also carries that link, which resolves under the unsupported fence.
+_TILDE = '# T\n\n~~~bash\n# Phantom\n~~~\n\n[x](#phantom)\n'
+_TWHY = 'only three-backtick fences are supported, found a ~~~ marker: ~~~bash'
+_TWHY2 = 'only three-backtick fences are supported, found a ~~~ marker: ~~~'
+def _orph(rel):
+    return [f'{rel}:3: fence census orphan ({_TWHY})', f'{rel}:5: fence census orphan ({_TWHY2})']
+for _rel in ('docs/gamma.md', 'examples/sub/readme.md', 'maintenance/notes.md', 'CLAUDE.md'):
+    check(f'a ~~~ fence in {_rel} FAILs naming both markers, and the phantom link still resolves',
+          lambda _rel=_rel: broken({_rel: _TILDE})[1], _orph(_rel))
+check('and a file with an orphan makes the gate exit 1',
+      lambda: broken({'examples/sub/readme.md': _TILDE})[0], 1)
+check('an UNCLOSED fence outside docs/ FAILs naming its opener',
+      lambda: broken({'examples/sub/readme.md': '# E\n\n```bash\n# Phantom\n\n[x](../../docs/alpha.md)\n'})[1],
+      ['examples/sub/readme.md:3: fence census orphan (unclosed: the fence opened here (```bash) has no closer before EOF)'])
+check('a ```Java tag outside docs/ is NOT an orphan (the tag allowlist is a docs/ rule)',
+      lambda: broken({'maintenance/fixtures/doctype/x.md': '# I\n\n```Java\nx\n```\n'})[1], [])
+check('the run reports how many files were fence-censused and how many orphans it found',
+      lambda: next((l.strip() for l in broken({'examples/sub/readme.md': _TILDE})[2].split('\n') if 'fence-censused' in l), ''),
+      'INFO  3 file(s) fence-censused, 2 orphan marker(s)')
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

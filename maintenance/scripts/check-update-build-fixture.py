@@ -27,8 +27,8 @@ Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures,
 classes under com/hypixel/ that do not parse), TF (a failing triage stub), RC (a resource
 comparison with no result, alone, with a failing triage, and with a python that exits non-zero
 after printing its result) and the resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
-DG (the API drift, source drift and asset-diff guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
-without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg5]).
+DG (the API drift, source drift, asset-diff and hash-server-assets.sh guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
+without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg8]).
 
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
@@ -69,8 +69,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 809
-MIN_MUTATIONS = 132
+MIN_CHECKS = 883
+MIN_MUTATIONS = 145
 
 
 class Run:
@@ -489,7 +489,11 @@ SETS_ORDER = "drift guards: indexes that differ only by a member order report no
 CTRL_STRIP = "drift guards: control on real drift: both marker lines are stripped, the rows are kept"
 
 
-def drift_case(tmp, st, i, edits=(), msg='', absent='', over=None, info=None):
+ROWS5 = r'^        (ADDED|REMOVED|CHANGED) '                           # section 5's rows, as update-build.sh indents them
+ROWS5B = r'^        (BODY|SIG\+BODY|BYTECODE|DEPRECATION|BLIND|UNEXPLAINED)'   # section 5b's
+
+
+def drift_case(tmp, st, i, edits=(), msg='', absent='', over=None, info=None, also=()):
     """One guard: run update-build.sh --skip-caches on the state with the defect injected (or
     PATH wrapped, `over`) and read what the guard says. msg is a regex for the guard's OWN
     message: every guard of a section has a distinct one and a case asserts only its own, so a
@@ -502,11 +506,26 @@ def drift_case(tmp, st, i, edits=(), msg='', absent='', over=None, info=None):
     rc, out, *_ = run_with(tmp, st, root, '--skip-caches', **(over or {}))
     fails = re.findall(r'FAIL\S*\s+(.*)', out)
     check(any(re.search(msg, f) for f in fails), CN(i, "FAIL line has its own message"))
-    check(len(fails) == 1, CN(i, f"it is the only FAIL line (got {len(fails)})"))
+    # also: regexes for FAIL lines the injected defect causes in a LATER section, each its own message
+    check(len(fails) == 1 + len(also) and all(any(re.search(a, f) for f in fails) for a in also),
+          CN(i, f"it is the only FAIL line (got {len(fails)})" if not also else f"it and the {len(also)} expected later FAIL line(s) are all there is (got {len(fails)})"))
     check(rc == 3, CN(i, f"exit 3 even with --no-verify (got {rc})"))
     check(absent not in out, CN(i, f"the `{absent}` line is not printed"))
+    sect5 = out.split('API drift (javap')[1].split('Source drift')[0] if 'API drift (javap' in out and 'Source drift' in out else ''
     sect5b = out.split('Source drift')[1].split('== Resource drift')[0] if 'Source drift' in out else ''
     check(('section 5) failed' in sect5b) == info, CN(i, "source drift says the API drift failed" if info else "source drift does not claim the API drift failed"))
+    # a section that FAILED prints no rows and no figures of the result it did not produce. Only a
+    # state with drift can show it (AI has no rows to print), so only AD cases assert it, and only
+    # for their own section (the other one still runs and prints its own rows)
+    if st.name == 'AD' and i.startswith('API'):
+        check(sect5 and not re.search(ROWS5, sect5, re.M) and 'class(es) added/removed/changed' not in sect5,
+              CN(i, "section 5 prints no ADDED/REMOVED/CHANGED row after its FAIL"))
+    if st.name == 'AD' and i.startswith('SRC'):
+        check(sect5b and not re.search(ROWS5B, sect5b, re.M) and not re.search(r'compared \d+ file\(s\)', sect5b),
+              CN(i, "section 5b prints no row and no `compared N file(s)` line after its FAIL"))
+    if i.startswith('ASSET'):
+        check(not re.search(r'^        [MAD] \S', out, re.M) and 'modified,' not in out,
+              CN(i, "no asset drift row or count is printed after its FAIL"))
     return out
 
 
@@ -826,6 +845,9 @@ def part1():
         # controls: the unmodified script on both states
         install(tmp, 'v2'); rc, out, src, api, *_ = run(tmp, AD, '--skip-caches')
         check(rc == 0 and 'FAIL' not in out and 'section 5) failed' not in out, "drift guards: control on real drift: exit 0, no FAIL, no claim of a failed API drift")
+        s5 = out.split('API drift (javap')[1].split('Source drift')[0]; s5b = out.split('Source drift')[1].split('== Resource drift')[0]
+        check(re.search(ROWS5, s5, re.M) and 'class(es) added/removed/changed' in s5 and re.search(ROWS5B, s5b, re.M) and re.search(r'compared \d+ file\(s\)', s5b),
+              "drift guards: control on real drift: the row and figure patterns of the after-FAIL checks match what a succeeding run prints")
         check('#COUNTS' not in api and '#COUNTS' not in src and f'CHANGED {D}BlockHarvestUtils$Qx' in api and f'DEPRECATION added   {D}Dep' in src,
               "drift guards: control on real drift: both marker lines are stripped, the rows are kept")
         install(tmp, 'v1r'); rc, out, src, api, *_ = run(tmp, AI, '--skip-caches')
@@ -860,6 +882,16 @@ def part1():
         out = drift_case(tmp, AD, 'API-08', [('for cls in sorted(old.keys() | new.keys()):\n', 'for cls in []:\n')],
                          r'API drift: the javap indexes differ but the python found no class added, removed or changed', NOSIG)
         check('Source drift' in out and '== Triage' in out, CN('API-08', "the run goes on to the source drift and the triage"))
+        # the per-class counts (checks 9-11): each drops ONE kind of row and leaves the marker, the
+        # parse counts and the other kinds of row consistent, so only its own comparison can see it
+        drift_case(tmp, AD, 'API-14', [('    elif cls not in old: print(f"ADDED   {cls}"); rows += 1\n', '    elif cls not in old: pass\n')],
+                   r'API drift: the python wrote 0 ADDED row\(s\) but an awk pass over the two indexes finds 1 class\(es\) only in the new one', NOSIG)
+        drift_case(tmp, AD, 'API-15', [('    if cls not in new:   print(f"REMOVED {cls}"); rows += 1\n', '    if cls not in new: pass\n')],
+                   r'API drift: the python wrote 0 REMOVED row\(s\) but an awk pass over the two indexes finds 1 class\(es\) only in the old one', NOSIG)
+        # members() that attributes no member line (indented 2 by javap): every class still parses, so
+        # the parse counts hold and ADDED/REMOVED rows remain, but the CHANGED row of Qx is lost
+        drift_case(tmp, AD, 'API-16', [('        elif cur:\n', '        elif cur and line.startswith("    "):\n')],
+                   r'API drift: the python wrote 0 CHANGED row\(s\) but an awk pass over the two indexes finds 1 class\(es\) in both whose lines differ', NOSIG)
         # --- section 5b
         drift_case(tmp, AI, 'SRC-01', msg=r'source drift: diff -ru of the decompiled trees exited 2', absent=NOSRC,
                    over=diff_wrapper(tmp, 'ru', '-ru\\ *'))
@@ -876,11 +908,63 @@ def part1():
                    r'source drift: src-drift\.diff has \d+ changed \.java file header\(s\) but the python reports only 0 changed file', NOSRC)
         drift_case(tmp, AD, 'SRC-07', [("print(f\"DEPRECATION {'added  ' if line[0] == '+' else 'removed'} {cur}: {line[1:].strip()}\")", 'pass')],
                    r'source drift: src-drift\.diff has 1 added/removed @Deprecated line\(s\) but the python wrote 0 DEPRECATION row', NOSRC)
+        # the rows the python must print for what it counted: BODY/SIG+BODY exactly, BYTECODE/BLIND at most
+        drift_case(tmp, AD, 'SRC-09', [('for c in changed:\n', 'for c in changed[:0]:\n')],
+                   r'source drift: the python reports \d+ changed file\(s\) but wrote 0 BODY/SIG\+BODY row', NOSRC)
+        drift_case(tmp, AI, 'SRC-10', [('# a file on one side only must be an added/removed class; anything else is a hole\n',
+                                        'for _n in range(3): print("BYTECODE Injected%d  (injected)" % _n)\n# a file on one side only must be an added/removed class; anything else is a hole\n')],
+                   r'source drift: the python wrote 3 BYTECODE/BLIND row\(s\) but counts only \d+ unchanged file\(s\) with a failed decompile', NOSRC)
         # --- the two asset diffs of sections 4: a diff that exits 2 is not "identical to the baseline"
         drift_case(tmp, AI, 'ASSET-01', msg=r'asset drift: diff of the Common-asset indexes exited 2', absent='no Common-asset drift',
-                   over=diff_wrapper(tmp, 'common', '*/dev/fd/*'))
+                   over=diff_wrapper(tmp, 'common', '*/baseline\\ */extracted'))
         drift_case(tmp, AI, 'ASSET-02', msg=r'asset drift: diff of the Server/Cosmetics indexes exited 2', absent='no Server/Cosmetics drift',
                    over=diff_wrapper(tmp, 'server', '*ServerAssetsIndex*'))
+        # an input that cannot be read: the sort fails inside what used to be `<(...)`, where nothing read its
+        # status. Without the guard one unreadable input makes everything "added" or "removed" and both make
+        # diff exit 0, which prints "no Common-asset drift". chmod 000 stands in for any sort failure
+        base_idx, ext_idx = tmp / 'baseline/CommonAssetsIndex.hashes', AI / 'cache-assets/CommonAssetsIndex.hashes'
+        for tag, locked, want in (('', [base_idx], r"the baseline sort exited 2, the extracted index's 0"),
+                                  ('b', [ext_idx], r"the baseline sort exited 0, the extracted index's 2"),
+                                  ('c', [base_idx, ext_idx], r"the baseline sort exited 2, the extracted index's 2")):
+            for f in locked:
+                f.chmod(0)
+            try:
+                check(not any(os.access(f, os.R_OK) for f in locked), f"drift guard ASSET-03{tag}: the input really is unreadable (setup; not root)")
+                drift_case(tmp, AI, 'ASSET-03' + tag,
+                           msg=r'asset drift: could not sort the Common-asset indexes for the diff \(' + want + r'; ', absent='no Common-asset drift',
+                           # the triage reads the extracted index too, so it crashes on its own with its own message
+                           also=[r'triage_drift\.py exited 1 .* it crashed'] if ext_idx in locked else ())
+            finally:
+                for f in locked:
+                    f.chmod(0o644)
+        # hash-server-assets.sh failing on one file: the index it leaves is short, which diffs as that file REMOVED
+        demo = AI / 'cache-assets/Server/Item/Items/Demo_Item.json'
+        demo.chmod(0)
+        try:
+            check(not os.access(demo, os.R_OK), "drift guard ASSET-04: the asset really is unreadable (setup; not root)")
+            drift_case(tmp, AI, 'ASSET-04', msg=r'asset drift: hash-server-assets\.sh exited 123 .* Server/Cosmetics drift is NOT reported',
+                       absent='no Server/Cosmetics drift')
+        finally:
+            demo.chmod(0o644)
+        # hash-server-assets.sh on its own: a file it cannot hash is a nonzero exit and a message, not a short index
+        hd = tmp / 'hashdir'
+        (hd / 'Server/Item').mkdir(parents=True)
+        for n in 'abc':
+            (hd / f'Server/Item/{n}.json').write_text(n)
+        hs = str(R.scripts / 'hash-server-assets.sh')
+        r = sh(f'"{hs}" "{hd}"')
+        check(r.returncode == 0 and len(r.stdout.splitlines()) == 3 and r.stderr == '',
+              "hash-server-assets.sh: control: every file readable, no Cosmetics/ directory: exit 0, 3 rows, nothing on stderr")
+        lock = hd / 'Server/Item/b.json'
+        lock.chmod(0)
+        try:
+            check(not os.access(lock, os.R_OK), "hash-server-assets.sh: the file really is unreadable (setup; not root)")
+            r = sh(f'"{hs}" "{hd}"')
+            check(r.returncode == 123 and len(r.stdout.splitlines()) == 2
+                  and 'hash-server-assets.sh: failed to hash every file under Server (pipeline status 123) - the index on stdout is incomplete' in r.stderr,
+                  "hash-server-assets.sh: one unreadable file: exit 123, the other 2 rows, and the message on stderr")
+        finally:
+            lock.chmod(0o644)
         # --- the set comparison of section 5 (check 8): two indexes that differ as FILES but not
         # as sets of lines (a source-file name changed, two members swapped) have nothing to report
         install(tmp, 'v1r')
@@ -1537,6 +1621,29 @@ MUTATIONS = [
     ("drift guard [dg4] SRC-07: DEPRECATION rows are not compared with the diff", U, 'elif [ "$N_DEP" != "$D_DEPS" ]; then', 'elif false; then', {_fl('SRC-07')}),
     ("drift guard [dg5] SRC-08: the source marker line is left in src-changed-classes.txt", U, "sed -i '/^#COUNTS/d' \"$REPORT/src-changed-classes.txt\"", ':', {CTRL_STRIP}),
     ("drift guard [dg5] ASSET-01: the Common-asset diff's exit status is ignored", U, 'if [ "$ASSET_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('ASSET-01')}),
+    ("drift guard [dg6] SRC-09: BODY/SIG+BODY rows are not compared with the changed count", U, 'elif [ "$N_CHGROWS" != "$N_CHANGED" ]; then', 'elif false; then', {_fl('SRC-09')}),
+    ("drift guard [dg6] SRC-10: more BYTECODE/BLIND rows than failed decompiles are accepted", U,
+     'elif [ "$((N_BYTE + N_BLINDROWS))" -gt "$N_BLIND" ]; then', 'elif false; then', {_fl('SRC-10')}),
+    ("drift guard [dg6] API-14: ADDED rows are not compared with the awk count", U, 'elif [ "$N_ADDED" != "${X_ADDED:-?}" ]; then', 'elif false; then', {_fl('API-14')}),
+    ("drift guard [dg6] API-15: REMOVED rows are not compared with the awk count", U, 'elif [ "$N_REMOVED" != "${X_REMOVED:-?}" ]; then', 'elif false; then', {_fl('API-15')}),
+    ("drift guard [dg6] API-16: CHANGED rows are not compared with the awk count", U, 'elif [ "$N_CHGROWS" != "${X_CHANGED:-?}" ]; then', 'elif false; then', {_fl('API-16')}),
+    ("drift guard [dg7] ASSET-03: neither sort status is read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if false; then',
+     {_fl('ASSET-03'), _fl('ASSET-03b'), _fl('ASSET-03c')}),
+    ("drift guard [dg7] ASSET-03: the baseline sort's status is not read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if [ "$SORT_RC_X" != 0 ]; then',
+     {_fl('ASSET-03')}),
+    ("drift guard [dg7] ASSET-03: the extracted index's sort status is not read", U, 'if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then', 'if [ "$SORT_RC_B" != 0 ]; then',
+     {_fl('ASSET-03b')}),
+    ("drift guard [dg7] ASSET-04: hash-server-assets.sh's exit status is ignored", U, 'if [ "$HASH_RC" != 0 ]; then', 'if false; then', {_fl('ASSET-04')}),
+    ("drift guard [dg7] ASSET-04: hash-server-assets.sh reads only the last stage's status", 'hash-server-assets.sh', 'set -o pipefail\n', '',
+     {_fl('ASSET-04'), "hash-server-assets.sh: one unreadable file: exit 123, the other 2 rows, and the message on stderr"}),
+    ("drift guard [dg8] ASSET-04: hash-server-assets.sh exits 0 after its message", 'hash-server-assets.sh', 'exit "$rc"; }', 'exit 0; }',
+     {_fl('ASSET-04'), "hash-server-assets.sh: one unreadable file: exit 123, the other 2 rows, and the message on stderr"}),
+    ("drift guard [dg8] API rows: section 5 prints its rows after its FAIL", U,
+     '    soft_fail "$API_BAD; $SUFFIX"\n  elif [ "$N_CLS" = 0 ]; then', '    soft_fail "$API_BAD; $SUFFIX"\n  fi\n  if [ "$N_CLS" = 0 ]; then',
+     {CN('API-04', "section 5 prints no ADDED/REMOVED/CHANGED row after its FAIL"), CN('API-16', "section 5 prints no ADDED/REMOVED/CHANGED row after its FAIL")}),
+    ("drift guard [dg8] SRC rows: section 5b prints its rows after its FAIL", U,
+     '(3 unless verify-docs.sh fails)"\n  else\n    info "compared', '(3 unless verify-docs.sh fails)"\n  fi\n  if true; then\n    info "compared',
+     {CN('SRC-06', "section 5b prints no row and no `compared N file(s)` line after its FAIL"), CN('SRC-09', "section 5b prints no row and no `compared N file(s)` line after its FAIL")}),
     ("drift guard [dg5] ASSET-02: the Server/Cosmetics diff's exit status is ignored", U, 'if [ "$SERVER_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('ASSET-02')}),
     ("triage exit (update-build): a triage crash is not a failure", U,
      'elif [ "$TRIAGE_RC" != 0 ]; then', 'elif false; then',

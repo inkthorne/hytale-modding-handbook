@@ -39,13 +39,16 @@
 #   2  a hard stop: bad argument, jar/Assets.zip missing, a store inside a wiped directory,
 #      extraction or build-jar-cache.sh failed (nothing after it ran)
 #   3  one or more soft failures: a section failed WITHOUT stopping the run, so the rest of the
-#      report was still produced. The FAIL lines say which: a Common or Server/Cosmetics asset
-#      diff that exited 2, the API drift (5) or the source drift
-#      (5b) could not show its result (a diff that exited 2, a python that exited non-zero or
-#      printed no #COUNTS marker, or a count that a non-python route contradicts; the section then
-#      prints no rows and no "no changes" line), the resource comparison produced no result, or
-#      triage_drift.py exited non-zero (2: it could not read the report in full, so the triage is
-#      incomplete; anything else: it crashed). All of them exit 3, whichever came first.
+#      report was still produced. The FAIL lines say which: a Common-asset diff that exited 2, or
+#      whose indexes could not be sorted (an unreadable file); a Server/Cosmetics diff that exited 2,
+#      or a hash-server-assets.sh that exited non-zero (a file it could not hash); the API drift (5)
+#      or the source drift (5b) could not show its result (a diff that exited 2, a python that
+#      exited non-zero or printed no #COUNTS marker, or a count or row set that a non-python route
+#      contradicts: the classes added, removed and changed by an awk pass over the indexes, the
+#      BODY/SIG+BODY rows by the python's own marker; the section then prints no rows and no
+#      "no changes" line), the resource comparison produced no result, or triage_drift.py exited
+#      non-zero (2: it could not read the report in full, so the triage is incomplete; anything
+#      else: it crashed). All of them exit 3, whichever came first.
 
 set -u
 # absolute paths before the cd below, so a relative override is not silently
@@ -179,28 +182,40 @@ fi
 # ---- 4. asset drift vs baseline ----
 section "Asset drift vs baseline"
 if [ -f "$BASELINE" ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
-  diff <(LC_ALL=C sort "$BASELINE") <(LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes") \
-    > "$REPORT/assets-drift.diff"
-  ASSET_DIFF_RC=$?     # 2 or more is trouble (0 same, 1 differs): the buckets below would be cut short
-  # index lines are "<sha256> <path>"; split the diff into per-path buckets
-  grep '^<' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-old-paths.txt"
-  grep '^>' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-new-paths.txt"
-  comm -12 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-modified.txt"
-  comm -23 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-removed.txt"
-  comm -13 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-added.txt"
-  N_MOD=$(wc -l < "$REPORT/assets-modified.txt")
-  N_DEL=$(wc -l < "$REPORT/assets-removed.txt")
-  N_ADD=$(wc -l < "$REPORT/assets-added.txt")
-  if [ "$ASSET_DIFF_RC" -ge 2 ]; then
-    soft_fail "asset drift: diff of the Common-asset indexes exited $ASSET_DIFF_RC (0 and 1 are normal) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
-  elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
-    info "no Common-asset drift — content identical to the baseline"
+  # Each index is sorted to its own temp file and the sort's status read. The diff used to take
+  # `<(sort ...)` operands, whose status nothing reads: one unreadable input made diff see an empty
+  # file (everything "added" or "removed"), and both unreadable made it see two empty files, exit 0
+  # and print "no Common-asset drift - content identical to the baseline" (measured, review of
+  # 02aaa06..3baa29d, LOW-1). The temp files live outside the report dir so it holds only reports.
+  SORT_DIR="$(mktemp -d)"
+  LC_ALL=C sort "$BASELINE" > "$SORT_DIR/baseline" 2>/dev/null; SORT_RC_B=$?
+  LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes" > "$SORT_DIR/extracted" 2>/dev/null; SORT_RC_X=$?
+  if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_X" != 0 ]; then
+    soft_fail "asset drift: could not sort the Common-asset indexes for the diff (the baseline sort exited $SORT_RC_B, the extracted index's $SORT_RC_X; an unreadable file is the usual cause) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
   else
-    warn "$N_MOD modified, $N_ADD added, $N_DEL removed (assets-{modified,added,removed}.txt)"
-    sed 's/^/        M /' "$REPORT/assets-modified.txt"
-    sed 's/^/        A /' "$REPORT/assets-added.txt"
-    sed 's/^/        D /' "$REPORT/assets-removed.txt"
+    diff "$SORT_DIR/baseline" "$SORT_DIR/extracted" > "$REPORT/assets-drift.diff"
+    ASSET_DIFF_RC=$?     # 2 or more is trouble (0 same, 1 differs): the buckets below would be cut short
+    # index lines are "<sha256> <path>"; split the diff into per-path buckets
+    grep '^<' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-old-paths.txt"
+    grep '^>' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-new-paths.txt"
+    comm -12 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-modified.txt"
+    comm -23 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-removed.txt"
+    comm -13 "$REPORT/assets-old-paths.txt" "$REPORT/assets-new-paths.txt" > "$REPORT/assets-added.txt"
+    N_MOD=$(wc -l < "$REPORT/assets-modified.txt")
+    N_DEL=$(wc -l < "$REPORT/assets-removed.txt")
+    N_ADD=$(wc -l < "$REPORT/assets-added.txt")
+    if [ "$ASSET_DIFF_RC" -ge 2 ]; then
+      soft_fail "asset drift: diff of the Common-asset indexes exited $ASSET_DIFF_RC (0 and 1 are normal) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+    elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+      info "no Common-asset drift — content identical to the baseline"
+    else
+      warn "$N_MOD modified, $N_ADD added, $N_DEL removed (assets-{modified,added,removed}.txt)"
+      sed 's/^/        M /' "$REPORT/assets-modified.txt"
+      sed 's/^/        A /' "$REPORT/assets-added.txt"
+      sed 's/^/        D /' "$REPORT/assets-removed.txt"
+    fi
   fi
+  rm -rf "$SORT_DIR"
 else
   warn "baseline or extracted index missing — asset drift skipped"
 fi
@@ -208,28 +223,36 @@ fi
 section "Server/Cosmetics asset drift vs baseline (generated index)"
 if [ -f "$BASELINE_DIR/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; then
   "$REPO/maintenance/scripts/hash-server-assets.sh" "$ASSETS" > "$REPORT/ServerAssetsIndex.hashes"
-  diff "$BASELINE_DIR/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
-    > "$REPORT/server-drift.diff"
-  SERVER_DIFF_RC=$?    # as above
-  grep '^<' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-old-paths.txt"
-  grep '^>' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-new-paths.txt"
-  comm -12 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-modified.txt"
-  comm -23 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-removed.txt"
-  comm -13 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-added.txt"
-  N_MOD=$(wc -l < "$REPORT/server-modified.txt")
-  N_DEL=$(wc -l < "$REPORT/server-removed.txt")
-  N_ADD=$(wc -l < "$REPORT/server-added.txt")
-  if [ "$SERVER_DIFF_RC" -ge 2 ]; then
-    soft_fail "asset drift: diff of the Server/Cosmetics indexes exited $SERVER_DIFF_RC (0 and 1 are normal) — Server/Cosmetics drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
-  elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
-    info "no Server/Cosmetics drift — content identical to the baseline"
+  HASH_RC=$?
+  # hash-server-assets.sh exits nonzero when any file could not be hashed. Its status used to be
+  # unread, and it used to be 0: one unreadable file left a short index, which the diff below reports
+  # as that file REMOVED, a genuine-looking drift row (measured, review of 02aaa06..3baa29d, LOW-2).
+  if [ "$HASH_RC" != 0 ]; then
+    soft_fail "asset drift: hash-server-assets.sh exited $HASH_RC — the generated Server/Cosmetics index is incomplete (a file it could not hash would read as REMOVED) and Server/Cosmetics drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
   else
-    warn "$N_MOD modified, $N_ADD added, $N_DEL removed (server-{modified,added,removed}.txt)"
-    head -40 "$REPORT/server-modified.txt" | sed 's/^/        M /'
-    head -40 "$REPORT/server-added.txt"    | sed 's/^/        A /'
-    head -40 "$REPORT/server-removed.txt"  | sed 's/^/        D /'
-    TOTAL=$((N_MOD + N_ADD + N_DEL))
-    [ "$TOTAL" -gt 120 ] && info "(lists truncated at 40 lines each — full lists in the report dir)"
+    diff "$BASELINE_DIR/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
+      > "$REPORT/server-drift.diff"
+    SERVER_DIFF_RC=$?    # as above
+    grep '^<' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-old-paths.txt"
+    grep '^>' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-new-paths.txt"
+    comm -12 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-modified.txt"
+    comm -23 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-removed.txt"
+    comm -13 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-added.txt"
+    N_MOD=$(wc -l < "$REPORT/server-modified.txt")
+    N_DEL=$(wc -l < "$REPORT/server-removed.txt")
+    N_ADD=$(wc -l < "$REPORT/server-added.txt")
+    if [ "$SERVER_DIFF_RC" -ge 2 ]; then
+      soft_fail "asset drift: diff of the Server/Cosmetics indexes exited $SERVER_DIFF_RC (0 and 1 are normal) — Server/Cosmetics drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+    elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+      info "no Server/Cosmetics drift — content identical to the baseline"
+    else
+      warn "$N_MOD modified, $N_ADD added, $N_DEL removed (server-{modified,added,removed}.txt)"
+      head -40 "$REPORT/server-modified.txt" | sed 's/^/        M /'
+      head -40 "$REPORT/server-added.txt"    | sed 's/^/        A /'
+      head -40 "$REPORT/server-removed.txt"  | sed 's/^/        D /'
+      TOTAL=$((N_MOD + N_ADD + N_DEL))
+      [ "$TOTAL" -gt 120 ] && info "(lists truncated at 40 lines each — full lists in the report dir)"
+    fi
   fi
 else
   warn "ServerAssetsIndex baseline or extracted Server/ missing — Server drift skipped"
@@ -258,11 +281,45 @@ fi
 #      and prints its marker, and folds the missed classes' members into the previous class.
 #   8. rows: if the two indexes differ as SETS of lines (`Compiled from` lines dropped, the
 #      rest sorted unique, so a reorder or a source-file rename is not a difference; the `}`
-#      lines are the same in both), at least one row must exist. This catches TOTAL loss;
-#      checks 6 and 7 catch partial loss. The sets come from grep and sort, not from the
-#      python's parse.
+#      lines are the same in both), at least one row must exist. This catches TOTAL loss of
+#      rows only. The sets come from grep and sort, not from the python's parse.
+#   9, 10, 11. rows, class by class: an awk pass over the two indexes (index_class_counts, which
+#      shares no code with the python) counts the classes only in the new index, only in the old,
+#      and in both with different lines, and each count must equal the ADDED, REMOVED and CHANGED
+#      rows. Checks 6 and 7 do NOT catch partial loss: a members() that attributes no member line
+#      keeps every class parsed and N_CLS above 0, yet drops every CHANGED row (probe memtree,
+#      review of 02aaa06..3baa29d, MEDIUM-2: 850 rows became 51 and the exit status stayed 0).
+#      The definition of "changed" is the python's own: the SET of a class's lines, its
+#      declaration line included, compared as sets (a reorder is no change); the class is keyed
+#      by the name after the first class|interface|enum|record on a non-indented line, as
+#      members() keys it. Equality, not >=, because the definitions agree: 504 added, 72 removed
+#      and 850 changed at 0.6.8 -> 0.7.2 from both routes. They share the declaration pattern;
+#      checks 6 and 7 hold that to the `}` count.
 API_OK=1     # 0 when this section failed; the source drift (5b) says so
 index_set() { grep -v '^Compiled from ' "$1" | LC_ALL=C sort -u; }
+# index_class_counts OLD NEW: prints "<added> <removed> <changed>", classes counted as members()
+# in the python of section 5 keys them: a non-indented line holding class|interface|enum|record
+# and a name opens (or reopens) that class; an indented line belongs to the class last opened; any
+# other line is nobody's. A class is CHANGED when it is in both indexes and its set of lines
+# differs (size, or a line of one missing from the other).
+index_class_counts() {
+  LC_ALL=C awk '
+    function add(side, cls, line) { if (!((side, cls, line) in has)) { has[side, cls, line] = 1; n[side, cls]++ } }
+    { side = (FILENAME == ARGV[1]) ? 1 : 2
+      if (side != last) { cur = ""; last = side }
+      if (substr($0, 1, 1) != " ") {
+        if (match($0, /(class|interface|enum|record) +[A-Za-z0-9_.$]+/)) {
+          s = substr($0, RSTART, RLENGTH); sub(/^(class|interface|enum|record) +/, "", s)
+          cur = s; seen[side, cur] = 1; add(side, cur, $0)
+        }
+      } else if (cur != "") add(side, cur, $0)
+    }
+    END {
+      for (k in seen) { split(k, p, SUBSEP); if (p[1] == 1) { if ((2, p[2]) in seen) { if (n[1, p[2]] != n[2, p[2]]) chg[p[2]] = 1 } else removed++ } else if (!((1, p[2]) in seen)) added++ }
+      for (k in has) { split(k, p, SUBSEP); if (p[1] == 1 && ((2, p[2]) in seen) && !((2, p[2], p[3]) in has)) chg[p[2]] = 1 }
+      for (c in chg) changed++
+      print added + 0, removed + 0, changed + 0 }' "$1" "$2"
+}
 section "API drift (javap index old → new)"
 if [ -f "$REPORT/javap-index-old.txt" ] && [ -f "$JAR_CACHE/javap-index.txt" ]; then
   diff "$REPORT/javap-index-old.txt" "$JAR_CACHE/javap-index.txt" > "$REPORT/javap-drift.diff"
@@ -299,6 +356,10 @@ PY
   N_CLS=$(grep -c '^\(ADDED\|REMOVED\|CHANGED\)' "$REPORT/api-changed-classes.txt" || true)
   read -r A_OLD A_NEW A_ROWS <<< "${API_MARK#"#COUNTS "}"
   C_OLD=$(grep -c '^}$' "$REPORT/javap-index-old.txt" || true); C_NEW=$(grep -c '^}$' "$JAR_CACHE/javap-index.txt" || true)
+  N_ADDED=$(grep -c '^ADDED ' "$REPORT/api-changed-classes.txt" || true)
+  N_REMOVED=$(grep -c '^REMOVED ' "$REPORT/api-changed-classes.txt" || true)
+  N_CHGROWS=$(grep -c '^CHANGED ' "$REPORT/api-changed-classes.txt" || true)
+  read -r X_ADDED X_REMOVED X_CHANGED < <(index_class_counts "$REPORT/javap-index-old.txt" "$JAR_CACHE/javap-index.txt")
   SUFFIX="this run exits nonzero (3 unless verify-docs.sh fails)"
   API_BAD=""
   if [ "$API_DIFF_RC" -ge 2 ]; then
@@ -317,6 +378,12 @@ PY
     API_BAD="API drift: the python parsed $A_NEW class(es) from the new index but javap closes $C_NEW (one '}' line each) — it did not read the index whole, classes are NOT reported"
   elif [ "$N_CLS" = 0 ] && ! cmp -s <(index_set "$REPORT/javap-index-old.txt") <(index_set "$JAR_CACHE/javap-index.txt"); then
     API_BAD="API drift: the javap indexes differ but the python found no class added, removed or changed — classes are NOT reported"
+  elif [ "$N_ADDED" != "${X_ADDED:-?}" ]; then
+    API_BAD="API drift: the python wrote $N_ADDED ADDED row(s) but an awk pass over the two indexes finds ${X_ADDED:-?} class(es) only in the new one — classes are NOT reported"
+  elif [ "$N_REMOVED" != "${X_REMOVED:-?}" ]; then
+    API_BAD="API drift: the python wrote $N_REMOVED REMOVED row(s) but an awk pass over the two indexes finds ${X_REMOVED:-?} class(es) only in the old one — classes are NOT reported"
+  elif [ "$N_CHGROWS" != "${X_CHANGED:-?}" ]; then
+    API_BAD="API drift: the python wrote $N_CHGROWS CHANGED row(s) but an awk pass over the two indexes finds ${X_CHANGED:-?} class(es) in both whose lines differ — classes are NOT reported"
   fi
   if [ -n "$API_BAD" ]; then
     API_OK=0
@@ -436,6 +503,14 @@ PY
   #      file with a NUL byte as "Binary files ... differ", with no header.
   #   6. N_DEP == the +/- lines naming @Deprecated inside those files (not the `+++ `/`--- `
   #      headers). This is the only guard on the DEPRECATION rows.
+  #   7. N_CHANGED == the BODY and SIG+BODY rows the file holds. The python prints one row per
+  #      changed file, so equality is exact. Check 5 only holds N_CHANGED to the diff; a python
+  #      that computed `changed` and printed none of the rows read as a clean run (probe
+  #      rowlosstree, review of 02aaa06..3baa29d, MEDIUM-1: 984 rows became 0 and the exit stayed 0).
+  #   8. BYTECODE + BLIND rows <= N_BLIND, not ==. N_BLIND counts the unchanged files that hold a
+  #      failed decompile; the python prints a row for such a file only when its bytecode hashes
+  #      differ (BYTECODE) or cannot be compared (BLIND), so a file with equal hashes is counted
+  #      and has no row. The bound catches excess rows; it cannot catch lost ones.
   SRC_MARK="$(grep -E '^#COUNTS [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+$' "$REPORT/src-changed-classes.txt")"
   N_SMARKS=$(grep -cE '^#COUNTS [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+$' "$REPORT/src-changed-classes.txt" || true)
   sed -i '/^#COUNTS/d' "$REPORT/src-changed-classes.txt"
@@ -444,13 +519,14 @@ PY
   N_BOTH=$(grep -c '^SIG+BODY' "$REPORT/src-changed-classes.txt" || true)
   N_BYTE=$(grep -c '^BYTECODE' "$REPORT/src-changed-classes.txt" || true)
   N_BLINDROWS=$(grep -c '^BLIND' "$REPORT/src-changed-classes.txt" || true)
+  N_CHGROWS=$(grep -cE '^(BODY|SIG\+BODY) ' "$REPORT/src-changed-classes.txt" || true)
   N_DEP=$(grep -c '^DEPRECATION' "$REPORT/src-changed-classes.txt" || true)
   N_UNEX=$(grep -c '^UNEXPLAINED' "$REPORT/src-changed-classes.txt" || true)
   F_OLD=$(find -L "$REPORT/src-old" -type f -name '*.java' | wc -l); F_NEW=$(find -L "$JAR_CACHE/src" -type f -name '*.java' | wc -l)
   # the diff's own figures: `+++ ` headers of .java files, and +/- lines naming @Deprecated inside them
   read -r D_HDRS D_DEPS < <(awk '
     /^\+\+\+ / { p = substr($0, 5); sub(/\t.*/, "", p); java = (p ~ /\.java$/); if (java) h++; next }
-    /^--- /    { next }
+    /^(\+\+\+|---)/ { next }          # as the python: a line starting +++ or --- is never a content line
     /^[-+]/    { if (java && index($0, "@Deprecated")) d++ }
     END        { print h + 0, d + 0 }' "$REPORT/src-drift.diff")
   SRC_BAD=""
@@ -468,6 +544,10 @@ PY
     SRC_BAD="source drift: src-drift.diff has $D_HDRS changed .java file header(s) but the python reports only $N_CHANGED changed file(s) — changed files are NOT reported"
   elif [ "$N_DEP" != "$D_DEPS" ]; then
     SRC_BAD="source drift: src-drift.diff has $D_DEPS added/removed @Deprecated line(s) but the python wrote $N_DEP DEPRECATION row(s) — @Deprecated changes are NOT reported"
+  elif [ "$N_CHGROWS" != "$N_CHANGED" ]; then
+    SRC_BAD="source drift: the python reports $N_CHANGED changed file(s) but wrote $N_CHGROWS BODY/SIG+BODY row(s) — changed files are NOT reported"
+  elif [ "$((N_BYTE + N_BLINDROWS))" -gt "$N_BLIND" ]; then
+    SRC_BAD="source drift: the python wrote $((N_BYTE + N_BLINDROWS)) BYTECODE/BLIND row(s) but counts only $N_BLIND unchanged file(s) with a failed decompile — the rows cannot be trusted"
   fi
   [ "$API_OK" = 1 ] || info "the API drift (section 5) failed, so this section's SIG+BODY / BODY labels and its UNEXPLAINED rows rest on an incomplete api-changed-classes.txt"
   if [ -n "$SRC_BAD" ]; then

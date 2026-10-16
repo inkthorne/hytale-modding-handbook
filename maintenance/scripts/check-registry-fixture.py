@@ -789,7 +789,7 @@ MUTATIONS += [
      {"synthetic enum: Delta9 ((Object)E.C goes through the key codec) stays open",
       "0.7.2 Bench.CODEC stays open ((Object)BenchType.X is not name())"}),
     ("recount: an enum constant is accepted without looking it up in the constant list", R,
-     [("    return c if c in next(iter(enums[e].values())) else None", "    return c")],
+     [("    return c if c in next(iter(enums.values())) else None", "    return c")],
      {"synthetic agreement: EnumCases.CODEC names"}),
 ]
 

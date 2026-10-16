@@ -65,8 +65,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 641
-MIN_MUTATIONS = 90
+MIN_CHECKS = 663
+MIN_MUTATIONS = 99
 
 
 class Run:
@@ -663,6 +663,27 @@ def part1():
             check((st / 'snapshot' / f).exists() and (st / 'snapshot' / f).read_text() == text,
                   f"update: snapshot/{f} equals the v1 cache's (so the first real update is not BLIND)")
 
+        # TF: a triage that cannot read its report fails the run. A stub stands in for it (a real
+        # one needs a hand-made bad report, and update-build.sh rewrites the report each run);
+        # --no-verify, which every fixture run uses, is the exit the status must survive.
+        st = fresh(tmp, 'TF'); install(tmp, 'v2')
+        stub = tmp / 'stubroot/maintenance/scripts'
+        shutil.copytree(R.scripts, stub, ignore=shutil.ignore_patterns('__pycache__'))
+        real_scripts = R.scripts
+        try:
+            R.scripts = stub
+            for code in (0, 2):
+                (stub / 'triage_drift.py').write_text(f'import sys\nprint("stub triage")\nsys.exit({code})\n')
+                rc, out, *_ = run(tmp, st)
+                if code == 0:
+                    check(rc == 0 and 'triage_drift.py exited' not in out, "triage exits 0: update-build.sh exits 0, no FAIL")
+                else:
+                    check(re.search(r'FAIL\S*\s+triage_drift\.py exited 2 \u2014 the triage above is INCOMPLETE', out) and 'stub triage' in out,
+                          "triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed")
+                    check(rc == 2, "triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify")
+        finally:
+            R.scripts = real_scripts
+
         # B: the writer's two failure modes stop the build
         st = tmp / 'B'
         rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v0.jar'))
@@ -795,8 +816,9 @@ def part2():
             (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            mod.main(str(t / 'report'), str(t / 'assets'), str(t))
+            rc = mod.main(str(t / 'report'), str(t / 'assets'), str(t))
         out = buf.getvalue()
+    check(rc == 0, "resource triage: a complete report (every Hypixel row's path in the lists it needs) exits 0")
     m = re.search(r'^resource bundledDefaults/server\.lang \u2192 (.*)$', out, re.M)
     hits = m.group(1).split() if m else []
     check(bool(hits) and 'docs/p1.md' in hits,
@@ -834,6 +856,65 @@ def part2():
           "resource triage: an ADDED row's bare name that is ambiguous in the new build is not flagged")
     check('#SUMMARY 13 changed thing(s) checked, 9 referenced' in out,
           "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
+
+    # A report the triage cannot read in full exits 2 and says which file and how many
+    # rows; what the path, brace and wildcard rules can still match is printed first.
+    def triage(report, docs):
+        with tempfile.TemporaryDirectory() as t:
+            t = pathlib.Path(t)
+            (t / 'report').mkdir(); (t / 'assets').mkdir()
+            for name, text in report.items():
+                (t / 'report' / name).write_text(text)
+            for rel, text in docs.items():
+                (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
+            o, e = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(o), contextlib.redirect_stderr(e):
+                rc = mod.main(str(t / 'report'), str(t / 'assets'), str(t))
+        return rc, o.getvalue(), e.getvalue()
+
+    docs = {'docs/c.md': 'Edit `cfg/gone.json`, `cfg/fresh.json`, `cfg/both.json`, `cfg/dash.json` and `cfg/ok.json`.'}
+    # a REMOVED row needs the OLD list; with none it is still matched by its path
+    rc, out, err = triage({'resource-drift.txt': 'REMOVED hypixel d cfg/gone.json\n', 'resources-new.txt': 'META-INF/MANIFEST.MF\n'}, docs)
+    check(rc == 2, "triage exit (lists): a REMOVED Hypixel row with no resources-old.txt exits 2")
+    check('resources-old.txt is missing' in err and '1 Hypixel resource row(s)' in err and 'cfg/gone.json' in err,
+          "triage exit (lists): the missing list is named on stderr with the number of rows that lost bare-name matching")
+    check('resource cfg/gone.json \u2192 docs/c.md\n' in out and '#SUMMARY 1 changed' in out,
+          "triage exit (lists): the triage that can be made is still printed, path matches included")
+    rc, out, err = triage({'resource-drift.txt': 'ADDED hypixel d cfg/fresh.json\n', 'resources-old.txt': 'META-INF/MANIFEST.MF\n',
+                           'resources-new.txt': ''}, docs)
+    check(rc == 2 and 'resources-new.txt is empty' in err, "triage exit (lists): an ADDED Hypixel row with an empty resources-new.txt exits 2, naming it")
+    rc, out, err = triage({'resource-drift.txt': 'REMOVED hypixel d cfg/gone.json\n', 'resources-old.txt': 'META-INF/MANIFEST.MF\n'}, docs)
+    check(rc == 2 and 'resources-old.txt does not list their paths' in err,
+          "triage exit (lists): a list that exists and holds paths but not the row's exits 2, naming it")
+    rc, out, err = triage({'resource-drift.txt': 'CHANGED hypixel d cfg/both.json\n', 'resources-old.txt': 'cfg/both.json\n',
+                           'resources-new.txt': 'META-INF/MANIFEST.MF\n'}, docs)
+    check(rc == 2 and 'resources-new.txt' in err and 'resources-old.txt' not in err,
+          "triage exit (lists): a CHANGED row needs the NEW list too (old lists it, new lacks it)")
+    rc, out, err = triage({'resource-drift.txt': 'CHANGED hypixel d cfg/both.json\n', 'resources-new.txt': 'cfg/both.json\n',
+                           'resources-old.txt': 'META-INF/MANIFEST.MF\n'}, docs)
+    check(rc == 2 and 'resources-old.txt' in err and 'resources-new.txt' not in err,
+          "triage exit (lists): a CHANGED row needs the OLD list too (new lists it, old lacks it)")
+    rc, out, err = triage({'resource-drift.txt': 'REMOVED hypixel d cfg/gone.json\nADDED hypixel d cfg/fresh.json\n',
+                           'resources-old.txt': 'cfg/gone.json\n', 'resources-new.txt': 'cfg/fresh.json\n'}, docs)
+    check(rc == 0 and err == '' and out.count('resource cfg/') == 2,
+          "triage exit (lists): a REMOVED row needs only the old list and an ADDED row only the new (exit 0, silent)")
+    rc, out, err = triage({'resource-drift.txt': 'CHANGED third-party b native/linux-x64/libx.so\n'}, docs)
+    check(rc == 0 and err == '', "triage exit (lists): third-party rows only, no resource lists at all: exit 0")
+    rc, out, err = triage({}, docs)
+    check(rc == 0 and err == '' and '#SUMMARY 0 changed' in out, "triage exit (lists): no resource-drift.txt at all: exit 0")
+
+    both = {'resources-old.txt': 'cfg/dash.json\ncfg/ok.json\n', 'resources-new.txt': 'cfg/dash.json\ncfg/ok.json\n'}
+    rc, out, err = triage(dict(both, **{'resource-drift.txt': 'CHANGED hypixel - cfg/dash.json\n'}), docs)
+    check(rc == 0 and err == '' and 'resource cfg/dash.json \u2192 docs/c.md\n' in out,
+          "triage exit (grammar): a row with rule `-` (no owners file recorded the path) is well-formed")
+    rc, out, err = triage(dict(both, **{'resource-drift.txt': '\nCHANGED hypixel d cfg/ok.json\n\n\n'}), docs)
+    check(rc == 0 and err == '' and 'resource cfg/ok.json' in out, "triage exit (grammar): blank lines of resource-drift.txt are skipped")
+    for bad in ('CHANGED hypixel d', 'MOVED hypixel d cfg/ok.json', 'CHANGED hypixel dd cfg/ok.json',
+                'CHANGED hypixel D cfg/ok.json', 'CHANGED someone d cfg/ok.json', 'CHANGED hypixel 1 cfg/ok.json'):
+        rc, out, err = triage(dict(both, **{'resource-drift.txt': f'CHANGED hypixel d cfg/dash.json\n{bad}\n'}), docs)
+        check(rc == 2 and 'resource-drift.txt' in err and repr(bad) in err and 'resource cfg/dash.json' in out,
+              f"triage exit (grammar): the malformed row `{bad}` exits 2 and is named, the rows around it still triaged")
+
 
 def one_pass(scripts, verbose=False):
     global R
@@ -1092,7 +1173,7 @@ MUTATIONS = [
      "; l: a com/hypixel class names its path, or a native library's file name)", ")",
      {"update: the printed ownership rule describes every rule letter the owners file uses"}),
     ("resources triage: third-party rows are triaged", T,
-     'len(parts) == 4 and parts[1] == "hypixel"', 'len(parts) == 4',
+     'if owner == "hypixel":', 'if True:',
      {"resource triage: a third-party resource is not triaged"}),
     ("resources triage: `dir/*.ext` wildcard", T,
      'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*" + wild_ext + WILD_END)', 'pass',
@@ -1128,11 +1209,13 @@ MUTATIONS = [
      '{"ADDED": ("new",), "REMOVED": ("old",)}', '{"ADDED": ("old",), "REMOVED": ("old",)}',
      {"resource triage: an ADDED row's bare name that exists only in the new build is flagged"}),
     ("resources triage: a CHANGED row's bare name tested in the new build only", T,
-     '.get(parts[0], ("old", "new"))', '.get(parts[0], ("new",))',
-     {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged"}),
+     '.get(state, ("old", "new"))', '.get(state, ("new",))',
+     {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged",
+      "triage exit (lists): a CHANGED row needs the OLD list too (new lists it, old lacks it)"}),
     ("resources triage: a CHANGED row's bare name tested in the old build only", T,
-     '.get(parts[0], ("old", "new"))', '.get(parts[0], ("old",))',
-     {"resource triage: a CHANGED row's bare name that is unique in the new build only is flagged"}),
+     '.get(state, ("old", "new"))', '.get(state, ("old",))',
+     {"resource triage: a CHANGED row's bare name that is unique in the new build only is flagged",
+      "triage exit (lists): a CHANGED row needs the NEW list too (old lists it, new lacks it)"}),
     ("resources triage: a bare name must be unique in every build, not any", T,
      'if any(c[name] == 1 for c in res_names)', 'if all(c[name] == 1 for c in res_names)',
      {"resource triage: a CHANGED row's bare name that is unique in the old build only is flagged",
@@ -1140,6 +1223,45 @@ MUTATIONS = [
     ("resources triage: bare names never match", T,
      'if any(c[name] == 1 for c in res_names) and asset_names.get(name, 0) == 0:', 'if False:',
      {"resource triage: a bare name unique among jar resources and shipped assets matches"}),
+    # ---- a report the triage cannot read in full exits 2 (acceptance 9, fix C)
+    ("triage exit (lists): the check that a row's path is listed is removed", T,
+     'if path not in listed[b]:', 'if False:',
+     {"triage exit (lists): a REMOVED Hypixel row with no resources-old.txt exits 2",
+      "triage exit (lists): the missing list is named on stderr with the number of rows that lost bare-name matching",
+      "triage exit (lists): an ADDED Hypixel row with an empty resources-new.txt exits 2, naming it",
+      "triage exit (lists): a list that exists and holds paths but not the row's exits 2, naming it",
+      "triage exit (lists): a CHANGED row needs the NEW list too (old lists it, new lacks it)",
+      "triage exit (lists): a CHANGED row needs the OLD list too (new lists it, old lacks it)"}),
+    ("triage exit (lists): an empty or missing list is tolerated", T,
+     'if path not in listed[b]:', 'if listed[b] and path not in listed[b]:',
+     {"triage exit (lists): a REMOVED Hypixel row with no resources-old.txt exits 2",
+      "triage exit (lists): an ADDED Hypixel row with an empty resources-new.txt exits 2, naming it"}),
+    ("triage exit (lists): a list that lacks the row's path is tolerated", T,
+     'if path not in listed[b]:', 'if not listed[b]:',
+     {"triage exit (lists): a list that exists and holds paths but not the row's exits 2, naming it",
+      "triage exit (lists): a CHANGED row needs the NEW list too (old lists it, new lacks it)",
+      "triage exit (lists): a CHANGED row needs the OLD list too (new lists it, old lacks it)"}),
+    ("triage exit (grammar): a malformed line is skipped silently", T,
+     '            malformed.append(l)\n            continue\n', '            continue\n',
+     {f"triage exit (grammar): the malformed row `{b}` exits 2 and is named, the rows around it still triaged"
+      for b in ('CHANGED hypixel d', 'MOVED hypixel d cfg/ok.json', 'CHANGED hypixel dd cfg/ok.json',
+                'CHANGED hypixel D cfg/ok.json', 'CHANGED someone d cfg/ok.json', 'CHANGED hypixel 1 cfg/ok.json')}),
+    ("triage exit (grammar): the rule `-` is not accepted", T,
+     '([a-z]|-)', '([a-z])',
+     {"triage exit (grammar): a row with rule `-` (no owners file recorded the path) is well-formed"}),
+    ("triage exit (grammar): a blank line is malformed", T,
+     '        if not l:\n            continue\n        m = ROW', '        m = ROW',
+     {"triage exit (grammar): blank lines of resource-drift.txt are skipped"}),
+    ("triage exit (update-build): the status is not captured", U,
+     'TRIAGE_RC=$?', 'TRIAGE_RC=0',
+     {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed",
+      "triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify"}),
+    ("triage exit (update-build): no FAIL line", U,
+     '[ "$TRIAGE_RC" = 0 ] || fail "triage_drift.py', '[ "$TRIAGE_RC" = 0 ] || : "triage_drift.py',
+     {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed"}),
+    ("triage exit (update-build): the exit status ignores the triage", U,
+     'finish() { [ "$1" = 0 ] && [ "$TRIAGE_RC" != 0 ] && exit "$TRIAGE_RC"; exit "$1"; }', 'finish() { exit "$1"; }',
+     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify"}),
 ]
 
 

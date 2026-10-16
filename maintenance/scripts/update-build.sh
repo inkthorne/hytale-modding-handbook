@@ -33,7 +33,8 @@
 #   UPDATE_SNAPSHOT Previous-build snapshot, written by build-jar-cache.sh whenever it
 #                   replaces a cache built from a different jar (default: as there)
 #
-# Exit code: non-zero if a cache step fails or verify-docs.sh hard-fails.
+# Exit code: non-zero if a cache step fails, verify-docs.sh hard-fails, or triage_drift.py
+# could not read the report in full (its exit status 2; the triage is then incomplete).
 
 set -u
 # absolute paths before the cd below, so a relative override is not silently
@@ -462,11 +463,19 @@ fi
 # ---- 6. triage greps: what do the docs/examples say about the changed things ----
 section "Triage: docs/examples referencing the drift"
 python3 "$REPO/maintenance/scripts/triage_drift.py" "$REPORT" "$ASSETS" > "$REPORT/triage.txt"
+TRIAGE_RC=$?
 grep -v '^#SUMMARY' "$REPORT/triage.txt" | sed 's/^/        /'
 info "$(sed -n 's/^#SUMMARY //p' "$REPORT/triage.txt") (triage.txt)"
+# triage_drift.py exits 2 when it could not read the report in full (its stderr, above, says
+# which file and how many rows): the triage shown is then missing matches. A FAIL line alone
+# leaves the exit status to verify-docs.sh, so the status is carried to both exits below.
+[ "$TRIAGE_RC" = 0 ] || fail "triage_drift.py exited $TRIAGE_RC — the triage above is INCOMPLETE (some drift rows could not be matched); this run exits nonzero"
+
+# exit status: verify-docs.sh's, unless that is 0 and the triage failed
+finish() { [ "$1" = 0 ] && [ "$TRIAGE_RC" != 0 ] && exit "$TRIAGE_RC"; exit "$1"; }
 
 # ---- 7. verify-docs ----
-[ "$NO_VERIFY" = 1 ] && { section "verify-docs.sh"; info "skipped (--no-verify)"; exit 0; }
+[ "$NO_VERIFY" = 1 ] && { section "verify-docs.sh"; info "skipped (--no-verify)"; finish 0; }
 section "verify-docs.sh"
 # shellcheck disable=SC2086
 "$REPO/maintenance/scripts/verify-docs.sh" $NO_BUILD
@@ -498,4 +507,4 @@ cat <<EOF
   Full reports: $REPORT
 EOF
 
-exit "$VERIFY_RC"
+finish "$VERIFY_RC"

@@ -19,6 +19,14 @@ method the decompiler could not render). An anonymous or local class is reported
 under its enclosing class, as "body" (see ANON). The last line is
 "#SUMMARY <checked> changed thing(s) checked, <n> referenced in docs/examples".
 
+Exit status. 0, or 2 when the report could not be read in full: a line of
+resource-drift.txt that is not `<ADDED|REMOVED|CHANGED> <hypixel|third-party> <rule>
+<path>` (<rule> is a letter, or `-` where no owners file recorded the path), or a
+Hypixel row whose path is missing from the resources-old.txt / resources-new.txt of a
+build it needs. The triage is still printed, with what the path, brace and wildcard
+rules can match, and stderr says which file and how many rows lost the match. No
+resource-drift.txt, or one with no Hypixel rows, needs neither list.
+
 Asset keys. A doc names an asset in one of four ways, and each needs its own key:
   - by id: `Tool_Shears_Basic`, with no extension. Matched on the file's stem, as
     a whole word, when the stem is id-shaped (contains "_", 5+ chars) and names at
@@ -129,7 +137,22 @@ def resource_rx(path, res_names, asset_names):
     return re.compile("|".join(alts))
 
 
+# A line of resource-drift.txt, as update-build.sh section 5c writes it. <rule> is the
+# letter build-jar-cache.sh's owners file records, or `-` when no owners file records
+# the path (the row then stays on the Hypixel side by default).
+ROW = re.compile(r"(ADDED|REMOVED|CHANGED) (hypixel|third-party) ([a-z]|-) (.+)")
+
+
 def main(report, assets, root="."):
+    """Print the triage; return 0, or 2 when the report could not be read in full.
+
+    Exit 2 means some drift rows lost a match they would have had, and the triage
+    printed is INCOMPLETE: a resource-drift row that is not `<state> <owner> <rule>
+    <path>` (silently skipped before), and a Hypixel row whose path is not in the
+    resources-old.txt / resources-new.txt of each build it needs (REMOVED: old,
+    ADDED: new, CHANGED: both). Without that list a bare-name match is impossible
+    and the row got no bare-name match, with nothing to say so. What the path, brace
+    and wildcard rules can still match is printed first."""
     def lines(name):
         p = os.path.join(report, name)
         return [l.strip() for l in open(p)] if os.path.exists(p) else []
@@ -148,14 +171,24 @@ def main(report, assets, root="."):
     # jar resources: "<ADDED|REMOVED|CHANGED> <owner> <rule> <path>"; resources-old.txt
     # and resources-new.txt list every path of each build so a bare name can be tested
     # for uniqueness within a build
-    res_names = {b: collections.Counter(os.path.basename(p) for p in lines(f"resources-{b}.txt") if p)
-                 for b in ("old", "new")}
+    listed = {b: set(p for p in lines(f"resources-{b}.txt") if p) for b in ("old", "new")}
+    res_names = {b: collections.Counter(os.path.basename(p) for p in listed[b]) for b in ("old", "new")}
+    malformed, unlisted = [], {"old": [], "new": []}
     for l in lines("resource-drift.txt"):
-        parts = l.split(" ", 3)
-        if len(parts) == 4 and parts[1] == "hypixel":
-            builds = {"ADDED": ("new",), "REMOVED": ("old",)}.get(parts[0], ("old", "new"))
-            rx = resource_rx(parts[3], [res_names[b] for b in builds], matcher.names)
-            out.append(("resource", parts[3], sorted(k for k, t in corpus.items() if rx.search(t))))
+        if not l:
+            continue
+        m = ROW.fullmatch(l)
+        if not m:
+            malformed.append(l)
+            continue
+        state, owner, _rule, path = m.groups()
+        if owner == "hypixel":
+            builds = {"ADDED": ("new",), "REMOVED": ("old",)}.get(state, ("old", "new"))
+            for b in builds:
+                if path not in listed[b]:
+                    unlisted[b].append(path)
+            rx = resource_rx(path, [res_names[b] for b in builds], matcher.names)
+            out.append(("resource", path, sorted(k for k, t in corpus.items() if rx.search(t))))
     classes = {}
     for l in lines("api-changed-classes.txt"):
         m = re.match(r"(?:ADDED|REMOVED|CHANGED) +(\S+)", l)
@@ -177,7 +210,24 @@ def main(report, assets, root="."):
         if h:
             print(f"{kind} {thing} → {' '.join(h)}")
     print(f"#SUMMARY {len(out)} changed thing(s) checked, {sum(1 for o in out if o[2])} referenced in docs/examples")
+    sys.stdout.flush()      # the triage, then why it is incomplete, in that order on a terminal
+    rc = 0
+    if malformed:
+        rc = 2
+        print(f"triage_drift: {len(malformed)} line(s) of resource-drift.txt are not "
+              f"`<ADDED|REMOVED|CHANGED> <hypixel|third-party> <rule> <path>` and were NOT triaged "
+              f"(first: {malformed[0]!r}); the triage above is incomplete", file=sys.stderr)
+    for b in ("old", "new"):
+        if unlisted[b]:
+            rc = 2
+            f = f"resources-{b}.txt"
+            why = ("is missing" if not os.path.exists(os.path.join(report, f))
+                   else "is empty" if not listed[b] else "does not list their paths")
+            print(f"triage_drift: {f} {why}, so {len(unlisted[b])} Hypixel resource row(s) "
+                  f"(first: {unlisted[b][0]}) were matched by path and wildcard only, never by bare name; "
+                  f"the triage above is incomplete", file=sys.stderr)
+    return rc
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    sys.exit(main(*sys.argv[1:4]))

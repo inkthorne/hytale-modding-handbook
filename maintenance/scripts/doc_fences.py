@@ -64,7 +64,8 @@ readers, not of fence reading; handed back, not fixed here.
 
 CLI (for the bash-inline readers and the census line):
     doc_fences.py --census [--docs DIR]     print the census line; exit 1 on any orphan
-    doc_fences.py --json-count [--docs DIR] print the json fence count (the cross-check figure)
+    doc_fences.py --counts [--docs DIR]     print `JAVA n JSON n TOTAL n PAGES n ORPHANS n`, the figures
+                                            verify-docs.sh compares every gate's fence count with
 """
 from __future__ import annotations
 import argparse, collections, pathlib, re, sys
@@ -308,7 +309,6 @@ def main(argv=None) -> int:
     ap.add_argument('--docs', default='docs')
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument('--census', action='store_true')
-    g.add_argument('--json-count', action='store_true')
     g.add_argument('--counts', action='store_true',
                    help='machine line: JAVA n JSON n TOTAL n (the figures gates are compared to)')
     a = ap.parse_args(argv)
@@ -316,9 +316,6 @@ def main(argv=None) -> int:
     if a.counts:
         print(f'JAVA {c.by_lang["java"]} JSON {c.by_lang["json"]} TOTAL {c.fences} '
               f'PAGES {c.pages} ORPHANS {len(c.orphans)}')
-        return 0
-    if a.json_count:
-        print(c.by_lang['json'])
         return 0
     floor = c.pages == 0 or c.fences == 0
     if floor:

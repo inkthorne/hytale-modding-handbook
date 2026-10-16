@@ -65,7 +65,7 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 503
+MIN_CHECKS = 525
 MIN_MUTATIONS = 63
 
 
@@ -137,6 +137,8 @@ SRC = {
 #   com/hypixel/hytale/lib/libhyt.so   Hypixel (x): a native under com/hypixel/ (not b)
 #   META-INF/services/...Svc    Hypixel (h): its PATH names com.hypixel
 #   META-INF/services/other.Spi Hypixel (h): its BYTES name com.hypixel
+#   META-INF/services/lost.Spi  Hypixel (h): names com.hypixel in v1 only (the OLD build says so)
+#   META-INF/services/gained.Spi Hypixel (h): names com.hypixel in v2 only (the NEW build says so)
 #   META-INF/services/vendor.Spi third-party (c): a Hypixel class names "vendor.Spi", but only its
 #                                            file name, which is not enough off a native
 #   native/linux-x64/libbranded.so Hypixel (h): bytes carry "Hypixel Studios Canada Inc"
@@ -157,6 +159,8 @@ R1 = {
     'com/hypixel/hytale/lib/libhyt.so': b'\x7fELF-a',
     'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-a\n',
     'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Dep\n',
+    'META-INF/services/lost.Spi': b'com.hypixel.hytale.demo.Dep\n',
+    'META-INF/services/gained.Spi': b'org.vendor.ImplA\n',
     'META-INF/services/vendor.Spi': b'org.vendor.ImplA\n',
     'META-INF/vendor-loaded.properties': b'a=1\n',
     'native/linux-x64/libx.so': b'\x7fELF-a',
@@ -176,6 +180,8 @@ R2.update({
     'com/hypixel/hytale/lib/libhyt.so': b'\x7fELF-b',
     'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-b\n',
     'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Fresh\n',
+    'META-INF/services/lost.Spi': b'org.vendor.ImplB\n',
+    'META-INF/services/gained.Spi': b'com.hypixel.hytale.demo.Fresh\n',
     'META-INF/services/vendor.Spi': b'org.vendor.ImplB\n',
     'META-INF/vendor-loaded.properties': b'a=2\n',
     'native/linux-x64/libx.so': b'\x7fELF-b',
@@ -195,6 +201,7 @@ RES_DRIFT_V1_V2 = [   # state owner rule path: the whole resource drift of v1 ->
     'ADDED hypixel d brandnew/data.json', 'CHANGED hypixel x com/hypixel/hytale/demo/data.json',
     'CHANGED hypixel x com/hypixel/hytale/lib/libhyt.so',
     'CHANGED hypixel h META-INF/services/com.hypixel.hytale.demo.Svc', 'CHANGED hypixel h META-INF/services/other.Spi',
+    'CHANGED hypixel h META-INF/services/lost.Spi', 'CHANGED hypixel h META-INF/services/gained.Spi',
     'CHANGED third-party c META-INF/services/vendor.Spi', 'CHANGED hypixel l META-INF/vendor-loaded.properties',
     'CHANGED third-party b native/linux-x64/libx.so', 'CHANGED hypixel h native/linux-x64/libbranded.so',
     'CHANGED hypixel h native/osx-arm64/libbuild.dylib',
@@ -899,6 +906,12 @@ MUTATIONS = [
     ("resources: a cache without resource hashes is not BLIND", U,
      'elif [ ! -f "$NEW_RH" ]; then', 'elif false; then',
      {"cache without resource hashes: BLIND, said in a WARN"}),
+    ("resources: a changed resource takes its owner from the new build only", U,
+     '*own_both(p), p))', '*own(no, p), p))',
+     {"update: resource drift has `CHANGED hypixel h META-INF/services/lost.Spi`"}),
+    ("resources: a changed resource takes its owner from the old build only", U,
+     '*own_both(p), p))', '*own(oo, p), p))',
+     {"update: resource drift has `CHANGED hypixel h META-INF/services/gained.Spi`"}),
     ("resources: a removed resource takes its owner from the new build", U,
      'elif p not in nh: rows.append(("REMOVED", *own(oo, p), p))', 'elif p not in nh: rows.append(("REMOVED", *own(no, p), p))',
      {"update: resource drift has `REMOVED third-party b native/osx-arm64/libgone.dylib`"}),

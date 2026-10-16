@@ -399,11 +399,19 @@ def owners(p):
 oh, nh, oo, no = hashes(old_h), hashes(new_h), owners(old_o), owners(new_o)
 # no owner recorded: the default, which keeps the row on the Hypixel side
 own = lambda tab, p: tab.get(p, ("hypixel", "-"))
+# A resource in both builds takes Hypixel's side if EITHER build puts it there: a
+# services file that loses its com.hypixel line is refiled third-party by the new
+# build, and taking the owner from the new build alone collapsed exactly the change
+# (Hypixel dropping its own provider) a reader needs to see. The rule is the one the
+# writer applies, a Hypixel mark beats the third-party presumption.
+def own_both(p):
+    n, o = own(no, p), own(oo, p)
+    return n if n[0] == "hypixel" or o[0] != "hypixel" else o
 rows = []
 for p in sorted(oh.keys() | nh.keys()):
     if p not in oh:   rows.append(("ADDED", *own(no, p), p))
     elif p not in nh: rows.append(("REMOVED", *own(oo, p), p))
-    elif oh[p] != nh[p]: rows.append(("CHANGED", *own(no, p), p))
+    elif oh[p] != nh[p]: rows.append(("CHANGED", *own_both(p), p))
 with open(out_drift, "w") as f:
     for st, o, r, p in rows: f.write(f"{st} {o} {r} {p}\n")
 with open(out_all, "w") as f:

@@ -27,6 +27,8 @@ Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures,
 classes under com/hypixel/ that do not parse), TF (a failing triage stub), RC (a resource
 comparison with no result, alone, with a failing triage, and with a python that exits non-zero
 after printing its result) and the resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
+DG (the API drift and source drift guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
+without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg5]).
 
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
@@ -55,7 +57,7 @@ Needs javac, jar, zip, javap and CFR at ~/.cache/hytale-jar-tools/cfr.jar.
 Usage: python3 maintenance/scripts/check-update-build-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, contextlib, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, zipfile
+import argparse, contextlib, filecmp, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -67,8 +69,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 675
-MIN_MUTATIONS = 109
+MIN_CHECKS = 799
+MIN_MUTATIONS = 130
 
 
 class Run:
@@ -443,6 +445,71 @@ def fresh(tmp, name, first='v1'):
     return st
 
 
+def with_edit(tmp, name, edits):
+    """A copy of the scripts whose update-build.sh has each (old, new) edit applied, for a case
+    that injects a defect upstream of a guard. Every `old` must occur exactly once: a count is
+    a check, so a mutation that moves the injection site fails here and not silently."""
+    root = tmp / f'stub-{name}/maintenance/scripts'
+    shutil.copytree(R.scripts, root, ignore=shutil.ignore_patterns('__pycache__'))
+    ub = (root / 'update-build.sh').read_text()
+    check(all(ub.count(old) == 1 for old, _ in edits), f"{name}: the injection site is where the case expects it, once (setup)")
+    for old, new in edits:
+        ub = ub.replace(old, new)
+    (root / 'update-build.sh').write_text(ub)
+    return root
+
+
+def run_with(tmp, st, root, *args, **over):
+    real, R.scripts = R.scripts, root
+    try:
+        return run(tmp, st, *args, **over)
+    finally:
+        R.scripts = real
+
+
+def diff_wrapper(tmp, name, pattern):
+    """A directory for PATH whose `diff` exits 2 (trouble) for arguments matching the sh case
+    PATTERN and is the real diff otherwise: the only way to make diff itself fail on demand."""
+    d = tmp / f'diffwrap-{name}'
+    d.mkdir()
+    (d / 'diff').write_text(f'#!/bin/sh\ncase "$*" in {pattern}) exit 2;; esac\nexec {shutil.which("diff")} "$@"\n')
+    (d / 'diff').chmod(0o755)
+    return {'PATH': f"{d}:{os.environ['PATH']}"}
+
+
+DG_BUILD = {'AD': 'v2', 'AI': 'v1r'}      # state -> the build installed over it
+
+
+def CN(i, kind):
+    return f"drift guard {i}: {kind}"
+
+
+SETS_RENAME = "drift guards: indexes that differ only by a `Compiled from` line and a member order report no FAIL (sets compared)"
+SETS_ORDER = "drift guards: indexes that differ only by a member order report no FAIL (sorted)"
+CTRL_STRIP = "drift guards: control on real drift: both marker lines are stripped, the rows are kept"
+
+
+def drift_case(tmp, st, i, edits=(), msg='', absent='', over=None, info=None):
+    """One guard: run update-build.sh --skip-caches on the state with the defect injected (or
+    PATH wrapped, `over`) and read what the guard says. msg is a regex for the guard's OWN
+    message: every guard of a section has a distinct one and a case asserts only its own, so a
+    mutation that drops the guard cannot stay red through the next one in the chain. The
+    section's 'no changes' line must be absent: it is the defect (a silent loss reads as it)."""
+    install(tmp, DG_BUILD[st.name])        # the installed jar is the one the state's cache was built from
+    if info is None:
+        info = i.startswith('API')         # a failed API drift is said, in the source drift, by every one of its guards
+    root = with_edit(tmp, i, list(edits)) if edits else R.scripts
+    rc, out, *_ = run_with(tmp, st, root, '--skip-caches', **(over or {}))
+    fails = re.findall(r'FAIL\S*\s+(.*)', out)
+    check(any(re.search(msg, f) for f in fails), CN(i, "FAIL line has its own message"))
+    check(len(fails) == 1, CN(i, f"it is the only FAIL line (got {len(fails)})"))
+    check(rc == 3, CN(i, f"exit 3 even with --no-verify (got {rc})"))
+    check(absent not in out, CN(i, f"the `{absent}` line is not printed"))
+    sect5b = out.split('Source drift')[1].split('== Resource drift')[0] if 'Source drift' in out else ''
+    check(('section 5) failed' in sect5b) == info, CN(i, "source drift says the API drift failed" if info else "source drift does not claim the API drift failed"))
+    return out
+
+
 def part1():
     for tool in ('javac', 'jar', 'zip', 'javap'):
         if not shutil.which(tool):
@@ -747,6 +814,89 @@ def part1():
         check(re.search(r'FAIL\S*\s+the resource comparison produced no result', out) and rc == 3,
               "update-build exit: a resource comparison whose python exits non-zero is a failure even if it printed #COUNTS")
 
+        # DG: the API drift (5) and source drift (5b) cannot report "no changes" for a result they
+        # did not produce. AD (v1 -> v2) has real drift in both sections; AI (v1 -> v1r) has none
+        # in either, so there "no signature changes" / "no source changes" are the true answers
+        # and a guard that drops out lets them through. Every case injects ONE defect upstream
+        # of ONE guard (a python that exits 0 and prints its marker with no rows, a diff that
+        # exits 2) and expects that guard's own message and no other FAIL line.
+        AD = fresh(tmp, 'AD'); install(tmp, 'v2'); run(tmp, AD)
+        AI = fresh(tmp, 'AI'); install(tmp, 'v1r'); run(tmp, AI)
+        NOSIG, NOSRC = 'no signature changes', 'no source changes'
+        # controls: the unmodified script on both states
+        install(tmp, 'v2'); rc, out, src, api, *_ = run(tmp, AD, '--skip-caches')
+        check(rc == 0 and 'FAIL' not in out and 'section 5) failed' not in out, "drift guards: control on real drift: exit 0, no FAIL, no claim of a failed API drift")
+        check('#COUNTS' not in api and '#COUNTS' not in src and f'CHANGED {D}BlockHarvestUtils$Qx' in api and f'DEPRECATION added   {D}Dep' in src,
+              "drift guards: control on real drift: both marker lines are stripped, the rows are kept")
+        install(tmp, 'v1r'); rc, out, src, api, *_ = run(tmp, AI, '--skip-caches')
+        check(rc == 0 and 'FAIL' not in out and NOSIG in out and NOSRC in out and api == '',
+              "drift guards: control without drift: exit 0, no FAIL, both 'no changes' lines")
+        M5 = 'print(f"#COUNTS {len(old)} {len(new)} {rows}")\n'
+        M5B = 'print(f"#COUNTS {len(common)} {len(old.keys() - new.keys())} {len(new.keys() - old.keys())} {len(changed)} {len(blind)}")\n'
+        # --- section 5
+        drift_case(tmp, AI, 'API-01', msg=r'API drift: diff of the javap indexes exited 2', absent=NOSIG,
+                   over=diff_wrapper(tmp, 'javap', '*javap-index*'))
+        drift_case(tmp, AI, 'API-02', [(M5, M5 + 'sys.exit(4)\n')], r'API drift: the python exited 4', NOSIG)
+        drift_case(tmp, AI, 'API-03', [(M5, 'pass\n')], r'API drift: the python printed 0 well-formed #COUNTS marker line\(s\), not one', NOSIG)
+        drift_case(tmp, AI, 'API-03b', [(M5, M5 + M5)], r'API drift: the python printed 2 well-formed #COUNTS marker line\(s\), not one', NOSIG)
+        drift_case(tmp, AI, 'API-03c', [(M5, 'print("#COUNTS 1 2")\n')], r'API drift: the python printed 0 well-formed #COUNTS marker line\(s\), not one', NOSIG)
+        drift_case(tmp, AD, 'API-04', [(M5, M5.replace('{rows}', '{rows + 1}'))],
+                   r'API drift: the python says it wrote \d+ row\(s\) but api-changed-classes\.txt holds \d+', NOSIG)
+        # an index with no class: either side (restored afterwards). Without the guard the python
+        # parses 0 = 0 and reports every class of the other build as added or removed
+        for side, f in (('old', AI / 'snapshot/javap-index.txt'), ('new', AI / 'cache-jar/javap-index.txt')):
+            keep = f.read_text(); f.write_text('')
+            try:
+                drift_case(tmp, AI, 'API-05' + ('' if side == 'old' else 'b'),
+                           msg=r'API drift: an index holds no class \(javap closes ' + ('0 in the old index, \\d+' if side == 'old' else '\\d+ in the old index, 0') + r' in the new', absent=NOSIG)
+            finally:
+                f.write_text(keep)
+        drift_case(tmp, AD, 'API-06', [('decl = re.compile(r\'(?:class|interface|enum|record) +([\\w.$]+)\')\n', "decl = re.compile(r'(?!)')\n")],
+                   r'API drift: the python parsed 0 class\(es\) from the old index but javap closes \d+', NOSIG)
+        drift_case(tmp, AD, 'API-07', [('old, new = members(sys.argv[1]), members(sys.argv[2])\n',
+                                         'old, new = members(sys.argv[1]), members(sys.argv[2])\nnew = dict(list(new.items())[1:])\n')],
+                   r'API drift: the python parsed \d+ class\(es\) from the new index but javap closes \d+', NOSIG)
+        out = drift_case(tmp, AD, 'API-08', [('for cls in sorted(old.keys() | new.keys()):\n', 'for cls in []:\n')],
+                         r'API drift: the javap indexes differ but the python found no class added, removed or changed', NOSIG)
+        check('Source drift' in out and '== Triage' in out, CN('API-08', "the run goes on to the source drift and the triage"))
+        # --- section 5b
+        drift_case(tmp, AI, 'SRC-01', msg=r'source drift: diff -ru of the decompiled trees exited 2', absent=NOSRC,
+                   over=diff_wrapper(tmp, 'ru', '-ru\\ *'))
+        drift_case(tmp, AI, 'SRC-02', [(M5B, M5B + 'sys.exit(4)\n')], r'source drift: the python exited 4', NOSRC)
+        drift_case(tmp, AI, 'SRC-03', [(M5B, 'pass\n')], r'source drift: the python printed 0 well-formed #COUNTS marker line\(s\), not one', NOSRC)
+        drift_case(tmp, AI, 'SRC-03b', [(M5B, M5B + M5B)], r'source drift: the python printed 2 well-formed #COUNTS marker line\(s\), not one', NOSRC)
+        drift_case(tmp, AI, 'SRC-03c', [(M5B, 'print("#COUNTS 1 2 3")\n')], r'source drift: the python printed 0 well-formed #COUNTS marker line\(s\), not one', NOSRC)
+        W5B = 'old, new = files(old_root), files(new_root)\n'
+        drift_case(tmp, AI, 'SRC-04', [(W5B, W5B + 'old.pop(sorted(old)[0])\n')],
+                   r'source drift: the python counted \d+ \.java file\(s\) in the old tree but find counts \d+', NOSRC)
+        drift_case(tmp, AI, 'SRC-05', [(W5B, W5B + 'new.pop(sorted(new)[0])\n')],
+                   r'source drift: the python counted \d+ \.java file\(s\) in the new tree but find counts \d+', NOSRC)
+        drift_case(tmp, AD, 'SRC-06', [('changed = sorted(c for c in common if not filecmp.cmp(old[c], new[c], shallow=False))\n', 'changed = []\n')],
+                   r'source drift: src-drift\.diff has \d+ changed \.java file header\(s\) but the python reports only 0 changed file', NOSRC)
+        drift_case(tmp, AD, 'SRC-07', [("print(f\"DEPRECATION {'added  ' if line[0] == '+' else 'removed'} {cur}: {line[1:].strip()}\")", 'pass')],
+                   r'source drift: src-drift\.diff has 1 added/removed @Deprecated line\(s\) but the python wrote 0 DEPRECATION row', NOSRC)
+        # --- the set comparison of section 5 (check 8): two indexes that differ as FILES but not
+        # as sets of lines (a source-file name changed, two members swapped) have nothing to report
+        install(tmp, 'v1r')
+        f = AI / 'snapshot/javap-index.txt'
+        lines = f.read_text().split('\n')
+        k_cf = next((n for n, l in enumerate(lines) if l.startswith('Compiled from "')), None)
+        k_sw = next((n for n in range(len(lines) - 1) if lines[n].startswith(' ') and lines[n + 1].startswith(' ') and lines[n] != lines[n + 1]), None)
+        check(k_cf is not None and k_sw is not None, "drift guards: the index has a `Compiled from` line and two adjacent members to perturb (setup)")
+        if k_cf is not None and k_sw is not None:
+            lines[k_cf] = 'Compiled from "Renamed.java"'
+            lines[k_sw], lines[k_sw + 1] = lines[k_sw + 1], lines[k_sw]
+            f.write_text('\n'.join(lines))
+            check(not filecmp.cmp(f, AI / 'cache-jar/javap-index.txt', shallow=False), "drift guards: the perturbed indexes differ as files (setup)")
+            rc, out, *_ = run(tmp, AI, '--skip-caches')
+            check(rc == 0 and 'FAIL' not in out and NOSIG in out,
+                  "drift guards: indexes that differ only by a `Compiled from` line and a member order report no FAIL (sets compared)")
+            # each half alone: the rename without the swap, the swap without the rename
+            lines[k_cf] = next(l for l in (AI / 'cache-jar/javap-index.txt').read_text().split('\n') if l.startswith('Compiled from "'))
+            f.write_text('\n'.join(lines))
+            rc, out, *_ = run(tmp, AI, '--skip-caches')
+            check(rc == 0 and 'FAIL' not in out and NOSIG in out, "drift guards: indexes that differ only by a member order report no FAIL (sorted)")
+
         # B: the writer's two failure modes stop the build
         st = tmp / 'B'
         rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v0.jar'))
@@ -995,6 +1145,7 @@ def one_pass(scripts, verbose=False):
 # the checks that must go red. It fails if its patch no longer applies (the code
 # moved: update the mutation) or if a named check stays green.
 U, B, T = 'update-build.sh', 'build-jar-cache.sh', 'triage_drift.py'
+_fl = lambda i: CN(i, "FAIL line has its own message")
 MUTATIONS = [
     ("r2 MAJOR-1: identity by version string", B,
      '[ -n "$OLD_SHA" ] && [ "$OLD_SHA" = "$JAR_SHA" ]',
@@ -1349,6 +1500,36 @@ MUTATIONS = [
     ("update-build exit: a comparison python that exits non-zero after printing #COUNTS passes", U,
      'if [ "$RES_PY_RC" != 0 ] || ! grep -q', 'if ! grep -q',
      {"update-build exit: a resource comparison whose python exits non-zero is a failure even if it printed #COUNTS"}),
+    # ---- the API drift (5) and source drift (5b) cannot report "no changes" for a result they did not
+    # produce (item 10). One mutation per guard, each dropping exactly that guard's elif; the checks
+    # named are the case's own message check, which the next guard in the chain cannot satisfy.
+    # Run by group: --only "[dg1]" ... "[dg5]" (<= 5 each).
+    ("drift guard [dg1] API-01: the javap diff's exit status is ignored", U, 'if [ "$API_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('API-01')}),
+    ("drift guard [dg1] API-02: the python's exit status is ignored", U, 'elif [ "$API_PY_RC" != 0 ]; then', 'elif false; then', {_fl('API-02')}),
+    ("drift guard [dg1] API-03: the #COUNTS marker is not required", U, 'elif [ "$N_MARKS" != 1 ]; then', 'elif false; then',
+     {_fl('API-03'), _fl('API-03b'), _fl('API-03c')}),
+    ("drift guard [dg1] API-04: the marker's row count is not compared with the rows", U, 'elif [ "$A_ROWS" != "$N_CLS" ]; then', 'elif false; then', {_fl('API-04')}),
+    ("drift guard [dg1] API-05: an index with no class is accepted", U, 'elif [ "$C_OLD" = 0 ] || [ "$C_NEW" = 0 ]; then', 'elif false; then',
+     {_fl('API-05'), _fl('API-05b')}),
+    ("drift guard [dg2] API-06: classes parsed from the old index are not counted", U, 'elif [ "$A_OLD" != "$C_OLD" ]; then', 'elif false; then', {_fl('API-06')}),
+    ("drift guard [dg2] API-07: classes parsed from the new index are not counted", U, 'elif [ "$A_NEW" != "$C_NEW" ]; then', 'elif false; then', {_fl('API-07')}),
+    ("drift guard [dg2] API-08: differing indexes with no rows are accepted", U, 'elif [ "$N_CLS" = 0 ] && ! cmp -s', 'elif false && ! cmp -s', {_fl('API-08')}),
+    ("drift guard [dg2] API-09: the index sets keep the Compiled from lines", U, "grep -v '^Compiled from ' \"$1\"", 'cat "$1"', {SETS_RENAME}),
+    ("drift guard [dg2] API-10: the index sets are not sorted", U, '| LC_ALL=C sort -u; }', '| cat; }', {SETS_ORDER}),
+    ("drift guard [dg3] API-11: the source drift does not say the API drift failed", U, '[ "$API_OK" = 1 ] || info "the API drift', 'true || info "the API drift',
+     {CN('API-08', "source drift says the API drift failed"), CN('API-02', "source drift says the API drift failed")}),
+    ("drift guard [dg3] API-12: a failed API drift is not recorded for the source drift", U, '    API_OK=0\n    soft_fail "$API_BAD; $SUFFIX"', '    soft_fail "$API_BAD; $SUFFIX"',
+     {CN('API-08', "source drift says the API drift failed"), CN('API-02', "source drift says the API drift failed")}),
+    ("drift guard [dg3] API-13: the API marker line is left in api-changed-classes.txt", U, "sed -i '/^#COUNTS/d' \"$REPORT/api-changed-classes.txt\"", ':', {CTRL_STRIP}),
+    ("drift guard [dg3] SRC-01: the source diff's exit status is ignored", U, 'if [ "$SRC_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('SRC-01')}),
+    ("drift guard [dg3] SRC-02: the python's exit status is ignored", U, 'elif [ "$SRC_PY_RC" != 0 ]; then', 'elif false; then', {_fl('SRC-02')}),
+    ("drift guard [dg4] SRC-03: the #COUNTS marker is not required", U, 'elif [ "$N_SMARKS" != 1 ]; then', 'elif false; then',
+     {_fl('SRC-03'), _fl('SRC-03b'), _fl('SRC-03c')}),
+    ("drift guard [dg4] SRC-04: the old tree's file count is not compared with find", U, 'elif [ "$((N_COMMON + N_ONLYOLD))" != "$F_OLD" ]; then', 'elif false; then', {_fl('SRC-04')}),
+    ("drift guard [dg4] SRC-05: the new tree's file count is not compared with find", U, 'elif [ "$((N_COMMON + N_ONLYNEW))" != "$F_NEW" ]; then', 'elif false; then', {_fl('SRC-05')}),
+    ("drift guard [dg4] SRC-06: changed files are not compared with the diff's headers", U, 'elif ! [ "$N_CHANGED" -ge "$D_HDRS" ]; then', 'elif false; then', {_fl('SRC-06')}),
+    ("drift guard [dg4] SRC-07: DEPRECATION rows are not compared with the diff", U, 'elif [ "$N_DEP" != "$D_DEPS" ]; then', 'elif false; then', {_fl('SRC-07')}),
+    ("drift guard [dg5] SRC-08: the source marker line is left in src-changed-classes.txt", U, "sed -i '/^#COUNTS/d' \"$REPORT/src-changed-classes.txt\"", ':', {CTRL_STRIP}),
     ("triage exit (update-build): a triage crash is not a failure", U,
      'elif [ "$TRIAGE_RC" != 0 ]; then', 'elif false; then',
      {"triage exit (update-build): a triage that crashes (exit 1) is a FAIL line saying so, not the unreadable-report one",

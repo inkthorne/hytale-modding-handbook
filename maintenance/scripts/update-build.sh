@@ -39,9 +39,12 @@
 #   2  a hard stop: bad argument, jar/Assets.zip missing, a store inside a wiped directory,
 #      extraction or build-jar-cache.sh failed (nothing after it ran)
 #   3  one or more soft failures: a section failed WITHOUT stopping the run, so the rest of the
-#      report was still produced. The FAIL lines say which: the resource comparison produced no
-#      result, or triage_drift.py exited non-zero (2: it could not read the report in full, so
-#      the triage is incomplete; anything else: it crashed). All of them exit 3, whichever came first.
+#      report was still produced. The FAIL lines say which: the API drift (5) or the source drift
+#      (5b) could not show its result (a diff that exited 2, a python that exited non-zero or
+#      printed no #COUNTS marker, or a count that a non-python route contradicts; the section then
+#      prints no rows and no "no changes" line), the resource comparison produced no result, or
+#      triage_drift.py exited non-zero (2: it could not read the report in full, so the triage is
+#      incomplete; anything else: it crashed). All of them exit 3, whichever came first.
 
 set -u
 # absolute paths before the cd below, so a relative override is not silently
@@ -226,9 +229,37 @@ else
 fi
 
 # ---- 5. API drift old→new ----
+# Every step below used to be trusted: the python's exit status was never read and a
+# crash left api-changed-classes.txt empty or short, which read as "no signature changes"
+# (and the source drift and the triage read the same file). A section that cannot show its
+# result now says so (soft_fail, exit 3) and prints no rows and no "no changes" line. The
+# checks run in this order and only the first that applies speaks, so each has its own
+# message and a test that can tell it from the others:
+#   1. diff exited 2 or more (1 is "they differ"). The python never reads javap-drift.diff,
+#      so this protects the human-facing file only.
+#   2. the python's exit status.
+#   3. the python's `#COUNTS <classes in the old index> <classes in the new> <rows>` marker,
+#      present exactly once (counted among the well-formed lines; a malformed one is none).
+#      It is stripped before anything else reads the file.
+#   4. the marker's row count equals the ADDED/REMOVED/CHANGED rows the file holds.
+#   5. neither index is empty of classes: javap closes every class with one `}` at column 0
+#      (measured equal to the declaration lines and the `Compiled from` lines: 10,353 at
+#      0.7.2, 9,921 at 0.6.8), so an index with no `}` line is not a build.
+#   6, 7. classes parsed: the python must have parsed exactly as many classes from the old
+#      index, and from the new, as it has `}` lines. A javap format change that stops the
+#      `decl` pattern matching (or misses `record`, `interface`) leaves a python that exits 0
+#      and prints its marker, and folds the missed classes' members into the previous class.
+#   8. rows: if the two indexes differ as SETS of lines (`Compiled from` lines dropped, the
+#      rest sorted unique, so a reorder or a source-file rename is not a difference; the `}`
+#      lines are the same in both), at least one row must exist. This catches TOTAL loss;
+#      checks 6 and 7 catch partial loss. The sets come from grep and sort, not from the
+#      python's parse.
+API_OK=1     # 0 when this section failed; the source drift (5b) says so
+index_set() { grep -v '^Compiled from ' "$1" | LC_ALL=C sort -u; }
 section "API drift (javap index old → new)"
 if [ -f "$REPORT/javap-index-old.txt" ] && [ -f "$JAR_CACHE/javap-index.txt" ]; then
   diff "$REPORT/javap-index-old.txt" "$JAR_CACHE/javap-index.txt" > "$REPORT/javap-drift.diff"
+  API_DIFF_RC=$?
   # attribute each changed member line to its declaring class
   python3 - "$REPORT/javap-index-old.txt" "$JAR_CACHE/javap-index.txt" <<'PY' > "$REPORT/api-changed-classes.txt"
 import re, sys
@@ -244,16 +275,46 @@ def members(path):
             out[cur].add(line)
     return out
 old, new = members(sys.argv[1]), members(sys.argv[2])
+rows = 0
 for cls in sorted(old.keys() | new.keys()):
-    if cls not in new:   print(f"REMOVED {cls}")
-    elif cls not in old: print(f"ADDED   {cls}")
+    if cls not in new:   print(f"REMOVED {cls}"); rows += 1
+    elif cls not in old: print(f"ADDED   {cls}"); rows += 1
     elif old[cls] != new[cls]:
-        print(f"CHANGED {cls}")
+        print(f"CHANGED {cls}"); rows += 1
         for line in sorted(old[cls] - new[cls]): print(f"  - {line.strip()}")
         for line in sorted(new[cls] - old[cls]): print(f"  + {line.strip()}")
+print(f"#COUNTS {len(old)} {len(new)} {rows}")
 PY
+  API_PY_RC=$?
+  API_MARK="$(grep -E '^#COUNTS [0-9]+ [0-9]+ [0-9]+$' "$REPORT/api-changed-classes.txt")"
+  N_MARKS=$(grep -cE '^#COUNTS [0-9]+ [0-9]+ [0-9]+$' "$REPORT/api-changed-classes.txt" || true)
+  sed -i '/^#COUNTS/d' "$REPORT/api-changed-classes.txt"
   N_CLS=$(grep -c '^\(ADDED\|REMOVED\|CHANGED\)' "$REPORT/api-changed-classes.txt" || true)
-  if [ "$N_CLS" = 0 ]; then
+  read -r A_OLD A_NEW A_ROWS <<< "${API_MARK#"#COUNTS "}"
+  C_OLD=$(grep -c '^}$' "$REPORT/javap-index-old.txt" || true); C_NEW=$(grep -c '^}$' "$JAR_CACHE/javap-index.txt" || true)
+  SUFFIX="this run exits nonzero (3 unless verify-docs.sh fails)"
+  API_BAD=""
+  if [ "$API_DIFF_RC" -ge 2 ]; then
+    API_BAD="API drift: diff of the javap indexes exited $API_DIFF_RC (0 and 1 are normal) — javap-drift.diff is unreliable and the API drift is NOT reported"
+  elif [ "$API_PY_RC" != 0 ]; then
+    API_BAD="API drift: the python exited $API_PY_RC — added/removed/changed classes are NOT reported, and api-changed-classes.txt (read by the source drift and the triage) is incomplete"
+  elif [ "$N_MARKS" != 1 ]; then
+    API_BAD="API drift: the python printed $N_MARKS well-formed #COUNTS marker line(s), not one, so it cannot be known to have finished — classes are NOT reported"
+  elif [ "$A_ROWS" != "$N_CLS" ]; then
+    API_BAD="API drift: the python says it wrote $A_ROWS row(s) but api-changed-classes.txt holds $N_CLS — classes are NOT reported"
+  elif [ "$C_OLD" = 0 ] || [ "$C_NEW" = 0 ]; then
+    API_BAD="API drift: an index holds no class (javap closes $C_OLD in the old index, $C_NEW in the new, one '}' line each) — that is not a build, classes are NOT reported"
+  elif [ "$A_OLD" != "$C_OLD" ]; then
+    API_BAD="API drift: the python parsed $A_OLD class(es) from the old index but javap closes $C_OLD (one '}' line each) — it did not read the index whole, classes are NOT reported"
+  elif [ "$A_NEW" != "$C_NEW" ]; then
+    API_BAD="API drift: the python parsed $A_NEW class(es) from the new index but javap closes $C_NEW (one '}' line each) — it did not read the index whole, classes are NOT reported"
+  elif [ "$N_CLS" = 0 ] && ! cmp -s <(index_set "$REPORT/javap-index-old.txt") <(index_set "$JAR_CACHE/javap-index.txt"); then
+    API_BAD="API drift: the javap indexes differ but the python found no class added, removed or changed — classes are NOT reported"
+  fi
+  if [ -n "$API_BAD" ]; then
+    API_OK=0
+    soft_fail "$API_BAD; $SUFFIX"
+  elif [ "$N_CLS" = 0 ]; then
     info "no signature changes"
   else
     warn "$N_CLS class(es) added/removed/changed (api-changed-classes.txt)"
@@ -292,6 +353,7 @@ else
   [ -n "$OLD_DEC" ] && [ -n "$NEW_DEC" ] && [ "$OLD_DEC" != "$NEW_DEC" ] && \
     warn "decompiler differs between the snapshot ($OLD_DEC) and the new cache ($NEW_DEC) — expect most files to differ for that reason alone"
   diff -ru "$REPORT/src-old" "$JAR_CACHE/src" > "$REPORT/src-drift.diff"
+  SRC_DIFF_RC=$?
   python3 - "$REPORT/src-old" "$JAR_CACHE/src" "$REPORT/api-changed-classes.txt" "$REPORT/src-drift.diff" \
             "$SNAP/class-hashes.txt" "$JAR_CACHE/class-hashes.txt" <<'PY' > "$REPORT/src-changed-classes.txt"
 import os, re, sys, filecmp
@@ -350,24 +412,71 @@ for line in open(diff_path, encoding="utf-8", errors="replace"):
         print(f"DEPRECATION {'added  ' if line[0] == '+' else 'removed'} {cur}: {line[1:].strip()}")
 print(f"#COUNTS {len(common)} {len(old.keys() - new.keys())} {len(new.keys() - old.keys())} {len(changed)} {len(blind)}")
 PY
-  read -r N_COMMON N_ONLYOLD N_ONLYNEW N_CHANGED N_BLIND < <(sed -n 's/^#COUNTS //p' "$REPORT/src-changed-classes.txt")
-  sed -i '/^#COUNTS /d' "$REPORT/src-changed-classes.txt"
+  SRC_PY_RC=$?
+  # The python's result is not trusted (a crash here used to read as "compared 0 file(s) ...
+  # no source changes"). The checks below run in this order and only the first that applies
+  # speaks, so each has its own message and its own test. Every figure the python is held
+  # to is counted by find, awk or grep, not by the python:
+  #   1. diff -ru exited 2 or more (1 is "they differ"): src-drift.diff is truncated or
+  #      empty, and the @Deprecated rows are read only from it.
+  #   2. the python's exit status.
+  #   3. its `#COUNTS` marker, present exactly once, with five numbers (counted among the
+  #      well-formed lines; a malformed one is none).
+  #   4. N_COMMON + N_ONLYOLD equals find's count of .java files under the old tree, and
+  #      likewise N_COMMON + N_ONLYNEW for the new (-L: src-old is a symlink). A python that
+  #      walked part of a tree, or none, disagrees.
+  #   5. N_CHANGED >= the `+++ ` headers of .java files in the diff. Not `=`: diff reports a
+  #      file with a NUL byte as "Binary files ... differ", with no header.
+  #   6. N_DEP == the +/- lines naming @Deprecated inside those files (not the `+++ `/`--- `
+  #      headers). This is the only guard on the DEPRECATION rows.
+  SRC_MARK="$(grep -E '^#COUNTS [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+$' "$REPORT/src-changed-classes.txt")"
+  N_SMARKS=$(grep -cE '^#COUNTS [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+$' "$REPORT/src-changed-classes.txt" || true)
+  sed -i '/^#COUNTS/d' "$REPORT/src-changed-classes.txt"
+  read -r N_COMMON N_ONLYOLD N_ONLYNEW N_CHANGED N_BLIND <<< "${SRC_MARK#"#COUNTS "}"
   N_BODY=$(grep -c '^BODY ' "$REPORT/src-changed-classes.txt" || true)
   N_BOTH=$(grep -c '^SIG+BODY' "$REPORT/src-changed-classes.txt" || true)
   N_BYTE=$(grep -c '^BYTECODE' "$REPORT/src-changed-classes.txt" || true)
   N_BLINDROWS=$(grep -c '^BLIND' "$REPORT/src-changed-classes.txt" || true)
   N_DEP=$(grep -c '^DEPRECATION' "$REPORT/src-changed-classes.txt" || true)
   N_UNEX=$(grep -c '^UNEXPLAINED' "$REPORT/src-changed-classes.txt" || true)
-  info "compared $N_COMMON file(s) present in both builds ($N_ONLYOLD only in the old, $N_ONLYNEW only in the new); $N_CHANGED changed; $N_BLIND unchanged file(s) contain a failed decompile, $((N_BLIND - N_BLINDROWS)) of them checked by bytecode instead; full diff in src-drift.diff"
-  [ "$N_BLINDROWS" -gt 0 ] && warn "$N_BLINDROWS file(s) with a failed decompile could NOT be checked (no class hashes on one side) — a change inside them is invisible (BLIND rows)"
-  [ "$N_UNEX" -gt 0 ] && warn "$N_UNEX file(s) exist on one side only WITHOUT being an added/removed class in the API drift — a truncated decompile looks like this; their changes are NOT reported"
-  grep -E '^(UNEXPLAINED|BLIND)' "$REPORT/src-changed-classes.txt" | sed -n '1,20p' | sed 's/^/        /'
-  if [ "$((N_CHANGED + N_BYTE + N_DEP))" = 0 ]; then
-    info "no source changes in the $N_COMMON file(s) present in both builds"
+  F_OLD=$(find -L "$REPORT/src-old" -type f -name '*.java' | wc -l); F_NEW=$(find -L "$JAR_CACHE/src" -type f -name '*.java' | wc -l)
+  # the diff's own figures: `+++ ` headers of .java files, and +/- lines naming @Deprecated inside them
+  read -r D_HDRS D_DEPS < <(awk '
+    /^\+\+\+ / { p = substr($0, 5); sub(/\t.*/, "", p); java = (p ~ /\.java$/); if (java) h++; next }
+    /^--- /    { next }
+    /^[-+]/    { if (java && index($0, "@Deprecated")) d++ }
+    END        { print h + 0, d + 0 }' "$REPORT/src-drift.diff")
+  SRC_BAD=""
+  if [ "$SRC_DIFF_RC" -ge 2 ]; then
+    SRC_BAD="source drift: diff -ru of the decompiled trees exited $SRC_DIFF_RC (0 and 1 are normal) — src-drift.diff, which the @Deprecated rows are read from, is truncated or empty and the source drift is NOT reported"
+  elif [ "$SRC_PY_RC" != 0 ]; then
+    SRC_BAD="source drift: the python exited $SRC_PY_RC — changed files, @Deprecated lines and bytecode changes are NOT reported, and src-changed-classes.txt (read by the triage) is incomplete"
+  elif [ "$N_SMARKS" != 1 ]; then
+    SRC_BAD="source drift: the python printed $N_SMARKS well-formed #COUNTS marker line(s), not one, so it cannot be known to have finished — changed files are NOT reported"
+  elif [ "$((N_COMMON + N_ONLYOLD))" != "$F_OLD" ]; then
+    SRC_BAD="source drift: the python counted $((N_COMMON + N_ONLYOLD)) .java file(s) in the old tree but find counts $F_OLD — it did not walk the tree whole, changed files are NOT reported"
+  elif [ "$((N_COMMON + N_ONLYNEW))" != "$F_NEW" ]; then
+    SRC_BAD="source drift: the python counted $((N_COMMON + N_ONLYNEW)) .java file(s) in the new tree but find counts $F_NEW — it did not walk the tree whole, changed files are NOT reported"
+  elif ! [ "$N_CHANGED" -ge "$D_HDRS" ]; then
+    SRC_BAD="source drift: src-drift.diff has $D_HDRS changed .java file header(s) but the python reports only $N_CHANGED changed file(s) — changed files are NOT reported"
+  elif [ "$N_DEP" != "$D_DEPS" ]; then
+    SRC_BAD="source drift: src-drift.diff has $D_DEPS added/removed @Deprecated line(s) but the python wrote $N_DEP DEPRECATION row(s) — @Deprecated changes are NOT reported"
+  fi
+  [ "$API_OK" = 1 ] || info "the API drift (section 5) failed, so this section's SIG+BODY / BODY labels and its UNEXPLAINED rows rest on an incomplete api-changed-classes.txt"
+  if [ -n "$SRC_BAD" ]; then
+    soft_fail "$SRC_BAD; this run exits nonzero (3 unless verify-docs.sh fails)"
   else
-    warn "$N_BODY file(s) changed with NO signature change on their top-level class (behaviour-only; invisible to the API drift above), $N_BOTH also changed signatures, $N_BYTE bytecode-only change(s) inside failed decompiles, $N_DEP @Deprecated line(s) added/removed (src-changed-classes.txt)"
-    grep -E '^(BODY |BYTECODE|DEPRECATION)' "$REPORT/src-changed-classes.txt" | sed -n '1,60p' | sed 's/^/        /'
-    [ "$((N_BODY + N_BYTE + N_DEP))" -gt 60 ] && info "(list truncated at 60 lines — full list in the report dir)"
+    info "compared $N_COMMON file(s) present in both builds ($N_ONLYOLD only in the old, $N_ONLYNEW only in the new); $N_CHANGED changed; $N_BLIND unchanged file(s) contain a failed decompile, $((N_BLIND - N_BLINDROWS)) of them checked by bytecode instead; full diff in src-drift.diff"
+    [ "$N_BLINDROWS" -gt 0 ] && warn "$N_BLINDROWS file(s) with a failed decompile could NOT be checked (no class hashes on one side) — a change inside them is invisible (BLIND rows)"
+    [ "$N_UNEX" -gt 0 ] && warn "$N_UNEX file(s) exist on one side only WITHOUT being an added/removed class in the API drift — a truncated decompile looks like this; their changes are NOT reported"
+    grep -E '^(UNEXPLAINED|BLIND)' "$REPORT/src-changed-classes.txt" | sed -n '1,20p' | sed 's/^/        /'
+    if [ "$((N_CHANGED + N_BYTE + N_DEP))" = 0 ]; then
+      info "no source changes in the $N_COMMON file(s) present in both builds"
+    else
+      warn "$N_BODY file(s) changed with NO signature change on their top-level class (behaviour-only; invisible to the API drift above), $N_BOTH also changed signatures, $N_BYTE bytecode-only change(s) inside failed decompiles, $N_DEP @Deprecated line(s) added/removed (src-changed-classes.txt)"
+      grep -E '^(BODY |BYTECODE|DEPRECATION)' "$REPORT/src-changed-classes.txt" | sed -n '1,60p' | sed 's/^/        /'
+      [ "$((N_BODY + N_BYTE + N_DEP))" -gt 60 ] && info "(list truncated at 60 lines — full list in the report dir)"
+    fi
   fi
 fi
 

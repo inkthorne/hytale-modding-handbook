@@ -871,7 +871,7 @@ MUTATIONS = [
      'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*" + wild_ext + RES_END)', 'pass',
      {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
     ("resources triage: bare `dir/*` wildcard", T,
-     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*(?![\\w*-])")', 'pass',
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*(?![\\w*.-])")', 'pass',
      {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
     ("resources triage: brace list", T,
      'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\{', 'pass; (r"(?<![\\w-])" + re.escape(d) + r"/\\{',

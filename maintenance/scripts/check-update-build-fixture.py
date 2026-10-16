@@ -65,8 +65,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 663
-MIN_MUTATIONS = 99
+MIN_CHECKS = 666
+MIN_MUTATIONS = 102
 
 
 class Run:
@@ -684,6 +684,19 @@ def part1():
         finally:
             R.scripts = real_scripts
 
+        # RC: a resource comparison that produces no result is a FAIL and a nonzero exit. A malformed
+        # line in the cache's owners file makes the comparison's python raise (no #COUNTS); the run
+        # carries on to the end (triage included), so the status must outlive --no-verify.
+        st = fresh(tmp, 'RC'); install(tmp, 'v2'); run(tmp, st)
+        with open(st / 'cache-jar/resource-owners.txt', 'a') as f:
+            f.write('garbage\n')
+        rc, out, *_ = run(tmp, st, '--skip-caches')
+        check(re.search(r'FAIL\S*\s+the resource comparison produced no result', out),
+              "update-build exit: a resource comparison with no result is a FAIL line")
+        check('Triage: docs/examples' in out and 'compared' not in out.split('Resource drift')[1].split('== Triage')[0],
+              "update-build exit: the run goes on past the failed comparison, which claims no comparison")
+        check(rc == 3, "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify")
+
         # B: the writer's two failure modes stop the build
         st = tmp / 'B'
         rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v0.jar'))
@@ -1257,11 +1270,23 @@ MUTATIONS = [
      {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed",
       "triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify"}),
     ("triage exit (update-build): no FAIL line", U,
-     '[ "$TRIAGE_RC" = 0 ] || fail "triage_drift.py', '[ "$TRIAGE_RC" = 0 ] || : "triage_drift.py',
+     '[ "$TRIAGE_RC" = 0 ] || soft_fail "$TRIAGE_RC" "triage_drift.py', '[ "$TRIAGE_RC" = 0 ] || : "triage_drift.py',
      {"triage exit (update-build): a triage exiting 2 is a FAIL line, after the partial triage it printed"}),
     ("triage exit (update-build): the exit status ignores the triage", U,
-     'finish() { [ "$1" = 0 ] && [ "$TRIAGE_RC" != 0 ] && exit "$TRIAGE_RC"; exit "$1"; }', 'finish() { exit "$1"; }',
-     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify"}),
+     'finish() { [ "$1" = 0 ] && [ "$SOFT_RC" != 0 ] && exit "$SOFT_RC"; exit "$1"; }', 'finish() { exit "$1"; }',
+     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify",
+      "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
+    # ---- every mid-run fail that does not exit carries its status to the end (acceptance 9, follow-up)
+    ("update-build exit: soft_fail keeps no status", U,
+     '[ "$SOFT_RC" = 0 ] && SOFT_RC="$1"; true; }', 'true; }',
+     {"triage exit (update-build): a triage exiting 2 makes update-build.sh exit nonzero, even with --no-verify",
+      "update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
+    ("update-build exit: the resource comparison's fail leaves the status alone", U,
+     'soft_fail 3 "the resource comparison', 'fail "the resource comparison',
+     {"update-build exit: a resource comparison with no result makes update-build.sh exit 3, even with --no-verify"}),
+    ("update-build exit: the resource comparison prints no FAIL line", U,
+     'soft_fail 3 "the resource comparison', ': 3 "the resource comparison',
+     {"update-build exit: a resource comparison with no result is a FAIL line"}),
 ]
 
 

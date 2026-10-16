@@ -34,7 +34,8 @@
 #                   replaces a cache built from a different jar (default: as there)
 #
 # Exit code: non-zero if a cache step fails, verify-docs.sh hard-fails, or triage_drift.py
-# could not read the report in full (its exit status 2; the triage is then incomplete).
+# could not read the report in full (its exit status 2; the triage is then incomplete), or the
+# resource comparison produced no result (exit status 3).
 
 set -u
 # absolute paths before the cd below, so a relative override is not silently
@@ -60,6 +61,11 @@ section() { printf '\n\033[1m== %s ==\033[0m\n' "$1"; }
 info()    { printf '  INFO  %s\n' "$1"; }
 warn()    { printf '  \033[33mWARN\033[0m  %s\n' "$1"; }
 fail()    { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; }
+# A fail() that does not exit (a section has no result, the run goes on to show the rest)
+# must still end the run nonzero: the final status is verify-docs.sh's, and --no-verify makes
+# it 0. soft_fail STATUS MESSAGE prints the FAIL line and keeps the first status for finish().
+SOFT_RC=0
+soft_fail() { fail "$2"; [ "$SOFT_RC" = 0 ] && SOFT_RC="$1"; true; }
 
 # ---- resolve the Hytale install (mirrors verify-docs.sh) ----
 if [ -n "${APPDATA:-}" ]; then
@@ -436,7 +442,7 @@ tp = collections.Counter((st, top2(p)) for st, o, r, p in rows if o != "hypixel"
 for (st, k), v in sorted(tp.items()): print(f"TP {st} {k} {v}")
 PY
   if ! grep -q '^#COUNTS ' "$REPORT/resource-summary.txt"; then
-    fail "the resource comparison produced no result — resource drift is NOT reported"
+    soft_fail 3 "the resource comparison produced no result — resource drift is NOT reported; this run exits nonzero"
   else
     read -r N_OLDR N_NEWR N_RROWS N_RHYP N_RTP N_OWNED < <(sed -n 's/^#COUNTS //p' "$REPORT/resource-summary.txt")
     info "compared $N_OLDR resource(s) in the snapshot with $N_NEWR in the new build (every non-class, non-directory jar entry, hashed by content)"
@@ -468,11 +474,12 @@ grep -v '^#SUMMARY' "$REPORT/triage.txt" | sed 's/^/        /'
 info "$(sed -n 's/^#SUMMARY //p' "$REPORT/triage.txt") (triage.txt)"
 # triage_drift.py exits 2 when it could not read the report in full (its stderr, above, says
 # which file and how many rows): the triage shown is then missing matches. A FAIL line alone
-# leaves the exit status to verify-docs.sh, so the status is carried to both exits below.
-[ "$TRIAGE_RC" = 0 ] || fail "triage_drift.py exited $TRIAGE_RC — the triage above is INCOMPLETE (some drift rows could not be matched); this run exits nonzero"
+# leaves the exit status to verify-docs.sh, so soft_fail carries it to both exits below.
+[ "$TRIAGE_RC" = 0 ] || soft_fail "$TRIAGE_RC" "triage_drift.py exited $TRIAGE_RC — the triage above is INCOMPLETE (some drift rows could not be matched); this run exits nonzero"
 
-# exit status: verify-docs.sh's, unless that is 0 and the triage failed
-finish() { [ "$1" = 0 ] && [ "$TRIAGE_RC" != 0 ] && exit "$TRIAGE_RC"; exit "$1"; }
+# exit status: verify-docs.sh's, unless that is 0 and a soft_fail (triage: its own status 2;
+# resource comparison: 3) happened
+finish() { [ "$1" = 0 ] && [ "$SOFT_RC" != 0 ] && exit "$SOFT_RC"; exit "$1"; }
 
 # ---- 7. verify-docs ----
 [ "$NO_VERIFY" = 1 ] && { section "verify-docs.sh"; info "skipped (--no-verify)"; finish 0; }

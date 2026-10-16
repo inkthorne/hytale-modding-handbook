@@ -147,7 +147,7 @@ It adds one beam whose **source is always the entity the chain runs for** (`cont
 | Key | Type | Default | Requiredness (engine-measured) | Description |
 |-----|------|---------|-------------------------------|-------------|
 | `TargetEntity` | enum `User` / `Owner` / `Target` | `User` | Optional. It is null-validated, but the field already holds `User`, so the engine accepts the key's omission | Which entity the beam ends at, resolved from the context. `User` is the entity running the chain, `Owner` the entity that owns it, `Target` the chain's target entity |
-| `BeamConfig` | string (a `Beam` id) | none (`null`) | **Required.** Omitting it fails decode | The beam asset. An unknown id fails validation: `Asset '<id>' of type com.hypixel.hytale.builtin.beam.asset.Beam doesn't exist!` |
+| `BeamConfig` | string (a `Beam` id); the codec also takes an inline `Beam` object | none (`null`) | **Required.** Omitting it fails decode | The beam asset. An unknown id fails validation: `Asset '<id>' of type com.hypixel.hytale.builtin.beam.asset.Beam doesn't exist!`. Use an id: see [An inline BeamConfig](#an-inline-beamconfig) |
 | `Scale` | float | `1.0` | Optional | Width of the beam. The one value is used for both ends |
 | `SourceNodeName` | string | none | Optional | Model node on the source entity where the beam starts. Unset, it starts at the entity's position |
 | `TargetNodeName` | string | none | Optional | Model node on the target entity where the beam ends. Unset, it ends at the entity's position |
@@ -171,6 +171,21 @@ Step 3 is an add, never a merge. See the first item under [Gotchas](#gotchas--er
 The interaction does not end the beam, and no `DetachBeam` type exists. A beam lasts as long as
 its `BeamComponent` stays on the entity. The shipped uses put it on a short-lived projectile, so the
 beam ends when the projectile is removed.
+
+### An inline BeamConfig
+
+The key's codec is `Beam.CHILD_ASSET_CODEC`, a `ContainedAssetCodec`, so it decodes an inline object
+as well as an id: `"BeamConfig": { "TexturePath": "Trails/Fire.png" }`. `ContainedAssetCodec` gives
+such an object a generated id, `*<containing asset's id>_<key path>`, and queues it on the containing
+asset to be loaded into the `Beam` store afterwards. The load-time existence check passes, because
+`AssetStore.validate` accepts an id that the asset's own container holds.
+
+No shipped asset writes it this way, and it was not run. Read from the source, it would not get a
+valid index on a first load. `AttachBeamInteraction` turns the id into an index in its `afterDecode`
+hook (`processConfig`, through `Beam.getAssetMap().getIndex`), and `AssetStore` loads an asset's
+contained assets only after that asset has decoded. At that moment the generated id is not in the
+`Beam` store yet, so the lookup returns `Integer.MIN_VALUE` and every beam the interaction adds
+carries that index. Name a `Beam` asset file instead.
 
 ### How shipped content uses beams
 
@@ -215,21 +230,34 @@ through a `Projectile` interaction), its `ProjectileSpawn` entry:
 }
 ```
 
-The second entry removes the hook, and with it the rope, after half a second. Its `ProjectileHit`
-and `ProjectileMiss` chains interrupt `ProjectileSpawn` and end in their own `RemoveEntity`.
+The second entry removes the hook, and with it the rope, after half a second. The `ProjectileHit`
+and `ProjectileMiss` chains each end in their own `RemoveEntity` (both of the miss chain's branches
+do). Only the miss chain interrupts `ProjectileSpawn`: it declares
+`"Rules": { "Interrupting": ["ProjectileSpawn"] }`, the root rule `InteractionManager` checks when a
+chain starts. The hit chain writes `"Interrupting": ["ProjectileSpawn"]` at the top level of the
+root, beside `Interactions`. `RootInteraction`'s codec has no key of that name there; `Interrupting`
+is read only inside `Rules`. So the hit chain interrupts nothing, and the asset store logs the key as
+unused (see [Gotchas](#gotchas--errors)).
 
-`Server/ProjectileConfigs/Abilities/Projectile_Config_ChainHook.json` does the same with
-`"BeamConfig": "Chain"` and `"Scale": 0.5`. The chain of calls that reaches it starts at
-`Rune_ChainHook` and runs through `Root_Ability_ChainHook` and `Ability_ChainHook_Cast`, which launches
-the projectile with `LaunchAbilityProjectile` and a `Lifetime` of `0.5`.
+`Server/ProjectileConfigs/Abilities/Projectile_Config_ChainHook.json` runs the same `AttachBeam`
+with `"BeamConfig": "Chain"` and `"Scale": 0.5`, but its `ProjectileSpawn` chain holds only that
+entry, with no timed `RemoveEntity`. The chain of calls that reaches it starts at `Rune_ChainHook` and
+runs through `Root_Ability_ChainHook` and `Ability_ChainHook_Cast`, which launches the projectile with
+`LaunchAbilityProjectile` and a `Lifetime` of `0.5`. That lifetime is what removes it: for a
+projectile that does not pierce, `AbilityProjectileLauncher` gives it a `DespawnComponent` that
+expires after `Lifetime` seconds. Its `ProjectileHit` and `ProjectileMiss` chains declare no `Rules`;
+each waits 0.2 s and ends in `Weapon_Stick_Fire_Projectile_Despawn`, a `RemoveEntity` of the `User`.
 
 ### Example: a tethered bolt
 
-A projectile config of your own whose bolt trails a red beam back to the shooter's hand.
-The other keys of a projectile config are on [the Projectiles page](projectiles.md).
+A projectile config of your own whose bolt trails a red beam back to the shooter's hand. `Model` is
+the one key a projectile config cannot omit: the engine rejects a config without it. This one borrows
+the shipped `Ice_Bolt` model. The other keys of a projectile config are on
+[the Projectiles page](projectiles.md).
 
 ```json
 {
+  "Model": "Ice_Bolt",
   "Interactions": {
     "ProjectileSpawn": {
       "Interactions": [
@@ -309,7 +337,8 @@ component without a codec. A beam therefore does not survive the entity being sa
 
 With the overload that takes no lifetime, which passes `NO_LIFETIME`, the entity has no
 `DespawnComponent` and lasts until it is removed; being non-serialized, it is not saved with its
-chunk. It is the entity behind `/beam spawn`.
+chunk. `/beam spawn` always calls the overload that takes a lifetime, and its `--lifetime` must be
+greater than 0, so the command never creates a beam without one.
 
 ### AttachedBeam
 
@@ -454,8 +483,10 @@ id 93), keyed by index, on join and whenever beam assets are added, changed or r
 
 The wire caps match the component. `BeamsUpdate` rejects more than 64 beams on both write and read
 (`ProtocolException.arrayTooLong("Beams", n, 64)`). Each node name is written as ASCII of at most 96
-bytes; a longer one throws `ProtocolException("String exceeds max bytes: <n> > 96")` when the update
-is serialized. Scales and offsets must be finite (`PacketIO.requireFinite`). Nothing checks a node
+bytes. `PacketIO.writeVarAsciiString` encodes it with `String.getBytes(US_ASCII)`, which replaces
+every character outside ASCII with `?` without an error, so such a name reaches the client altered.
+A name longer than 96 bytes throws `ProtocolException("String exceeds max bytes: <n> > 96")` when
+the update is serialized. Scales and offsets must be finite (`PacketIO.requireFinite`). Nothing checks a node
 name against the model on the server. What the client does with a node name the model lacks was not
 verified.
 
@@ -470,9 +501,9 @@ sender. It defaults to a scale of `0.25`, unlike the interaction's `1.0`. Option
 
 | Subcommand | Arguments | Does |
 |------------|-----------|------|
-| `/beam entity <beam>` | `--entity` (default: the entity in view), `--sourceNode`, `--targetNode`, `--scale`, `--targetScale` (default: `scale`) | Adds a beam from you to the entity. With no entity in view it replies "No entity in view" |
+| `/beam entity <beam>` | `--entity` (an entity UUID; default: the entity in view), `--sourceNode`, `--targetNode`, `--scale`, `--targetScale` (default: `scale`) | Adds a beam from you to the entity. Without `--entity` and with no entity in view it replies `No entity in view! Either look at an entity or use --entity=<uuid>` (`server.commands.errors.no_entity_in_view`). A UUID that names no entity in your world replies `Target <uuid> not found` |
 | `/beam position <beam>` | `--height` (default `5.0`, must be > 0), `--sourceNode`, `--scale`, `--targetScale` | Adds a beam from you to the point `height` blocks above your feet |
-| `/beam spawn <beam>` | `--length` (default `8.0`), `--lifetime` (seconds, default `30.0`), `--scale`, `--targetScale` | Spawns a free-standing vertical beam at your position via `BeamComponent.spawn` |
+| `/beam spawn <beam>` | `--length` (default `8.0`, must be > 0), `--lifetime` (seconds, default `30.0`, must be > 0), `--scale`, `--targetScale` | Spawns a free-standing vertical beam at your position via `BeamComponent.spawn` |
 | `/beam clear` | none | Removes your `BeamComponent`: "Removed your beams." or "You have no beams to remove." |
 
 `entity` and `position` reply "Attached the beam." and `spawn` replies "Spawned the beam." (all from
@@ -519,6 +550,11 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
   such beams on the next tick (only on entities a viewer can see).
 - **Symptom:** a beam asset's texture shows on a beam but not on a trail → `Beams/` is accepted by
   beams only; `Trail` assets require `Trails/`.
+- **Symptom:** a chain does not interrupt the one it names, and the log shows
+  `Unused key(s) in '<id>' file <path>: Interrupting` → `Interrupting` sits at the top level of the
+  root interaction, beside `Interactions`. `RootInteraction` reads it only inside `Rules`. Write
+  `"Rules": { "Interrupting": ["ProjectileSpawn"] }`, as the Hookshot's `ProjectileMiss` does; its
+  `ProjectileHit` carries the top-level form, which does nothing.
 - **Note:** the builder tools' laser pointer (`LaserPointerOperation`, the `BuilderToolLaserPointer`
   packet) is a separate mechanism and uses none of these classes.
 

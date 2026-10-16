@@ -180,49 +180,75 @@ PY
 # the omission this closes.
 #
 # Ownership is the DEFAULT: a resource is Hypixel's unless the jar itself shows
-# it is not. Mis-sorting a third-party file onto the Hypixel side costs a line
-# of noise; the other direction hides a Hypixel change. In this order:
-#   b  native library (.so .dll .dylib .jnilib)                       -> third-party
-#   c  under META-INF/ and neither its path nor its bytes contain
-#      "com.hypixel" (services files naming a Hypixel class are Hypixel's)
-#                                                                      -> third-party; else hypixel
+# it is not, and a mark the jar shows for Hypixel beats the presumption of a
+# third party. Mis-sorting a third-party file onto the Hypixel side costs a line
+# of noise; the other direction hides a Hypixel change. The first rule that
+# applies decides:
 #   x  under com/hypixel/ (the package that is Hypixel's by name)       -> hypixel
+# Then a third-party presumption, the first of these that applies (b, c, a, e)...
+#   b  native library (.so .dll .dylib .jnilib)
+#   c  under META-INF/
 #   a  its top-level directory also holds classes outside com/hypixel/
-#      (com/ holds com/google and others, hence rule x first)           -> third-party
+#      (com/ holds com/google and others; rule x came first)
 #   e  its directory mirrors a package of foreign classes under com/
 #      (google/protobuf/*.proto sits beside com/google/protobuf/*.class,
-#      which the jar shows; 12 files at 0.7.2)                          -> third-party
-#   d  anything else, including a top-level directory the jar has not
-#      shown before                                                     -> hypixel
+#      which the jar shows; 12 files at 0.7.2)
+# ...which a mark of Hypixel's overrides, the first of these that applies:
+#   h  its path or its bytes contain "hypixel" or "hytale", in any case -> hypixel
+#      (a services file naming a Hypixel class; the "Hypixel Studios Canada Inc"
+#      signature and the HytaleClient build path inside the natives Hypixel
+#      builds; META-INF/NOTICE, which opens "Hytale Server / Copyright ...
+#      Hypixel Studios Canada inc.")
+#   l  a class under com/hypixel/ names it: its full path as a string constant
+#      ("/native/linux-x64/libzstd.so" in ZstdNative), or, for a native library
+#      only, its file name (RocksDbNative builds "/native/" + dir + "/" + name
+#      from parts, so only "librocksdb.so" is there). A file NAME alone is not
+#      enough for any other resource: MANIFEST.MF and "exec" are names that
+#      Hypixel classes contain and a third party's files carry.        -> hypixel
+# A presumption with no mark stays third-party under its own letter (b, c, a, e).
+#   d  anything that matched no presumption, including a top-level directory
+#      the jar has not shown before                                    -> hypixel
+# At 0.7.2 the overrides move 10 of 197 presumed-third-party entries: META-INF/NOTICE
+# and the nine native/* libraries (zstd, quiche, rocksdb). The third-party natives
+# (zstd-jni's <os>/<arch>/ libraries, netty's META-INF/native, jline's
+# org/jline/nativ) stay on b, c and a. Rule b stays as the presumption for a
+# library nothing Hypixel names: without it the zstd-jni libraries, whose top
+# directories (linux/, win/, darwin/) the jar shows no foreign class under, would
+# fall to d and be listed on every rebuild.
 # The rules are written into resource-owners.txt so the report prints what each
 # side holds and a REMOVED resource keeps the owner it had.
 write_resources() {
   python3 -I - "$JAR" "$CACHE" <<'PY'
-import hashlib, sys, zipfile
+import hashlib, re, sys, zipfile
 jar, out = sys.argv[1:3]
 NATIVE = (".so", ".dll", ".dylib", ".jnilib")
+HYP = re.compile(rb"(?i)hypixel|hytale")
 with zipfile.ZipFile(jar) as z:
     names = sorted(n for n in z.namelist() if not n.endswith("/") and not n.endswith(".class"))
     foreign = [n for n in z.namelist() if n.endswith(".class") and not n.startswith("com/hypixel/")]
     foreign_top = {n.split("/")[0] for n in foreign}
     foreign_dirs = {n.rsplit("/", 1)[0] for n in foreign}
+    # every class under com/hypixel/, raw: a path a Hypixel class names sits in its
+    # constant pool as plain ASCII
+    hyp_blob = b"\0".join(z.read(n) for n in z.namelist() if n.startswith("com/hypixel/") and n.endswith(".class"))
     with open(out + "/resource-hashes.txt", "w") as hf, open(out + "/resource-owners.txt", "w") as of:
         for n in names:
             data = z.read(n)
             top = n.split("/")[0] if "/" in n else ""
-            if n.endswith(NATIVE):
-                owner, rule = "third-party", "b"
-            elif top == "META-INF":
-                hyp = "com.hypixel" in n or b"com.hypixel" in data
-                owner, rule = ("hypixel", "c") if hyp else ("third-party", "c")
-            elif n.startswith("com/hypixel/"):
+            native = n.endswith(NATIVE)
+            base = n.rsplit("/", 1)[-1].encode()
+            presumed = ("b" if native else "c" if top == "META-INF" else "a" if top in foreign_top
+                        else "e" if "/" in n and ("com/" + n.rsplit("/", 1)[0]) in foreign_dirs else None)
+            if n.startswith("com/hypixel/"):
                 owner, rule = "hypixel", "x"
-            elif top in foreign_top:
-                owner, rule = "third-party", "a"
-            elif "/" in n and ("com/" + n.rsplit("/", 1)[0]) in foreign_dirs:
-                owner, rule = "third-party", "e"
-            else:
+            elif presumed is None:
                 owner, rule = "hypixel", "d"
+            elif HYP.search(n.encode()) or HYP.search(data):
+                owner, rule = "hypixel", "h"
+            elif n.encode() in hyp_blob or (native and base in hyp_blob):
+                owner, rule = "hypixel", "l"
+            else:
+                owner, rule = "third-party", presumed
             hf.write(f"{hashlib.sha256(data).hexdigest()}  {n}\n")
             of.write(f"{owner} {rule} {n}\n")
 print(len(names))

@@ -62,9 +62,10 @@ CFR = pathlib.Path.home() / '.cache/hytale-jar-tools/cfr.jar'
 ap = argparse.ArgumentParser()
 ap.add_argument('-v', '--verbose', action='store_true')
 ap.add_argument('--mutations', action='store_true')
+ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 437
+MIN_CHECKS = 503
 MIN_MUTATIONS = 63
 
 
@@ -114,6 +115,7 @@ SRC = {
         'KickCommand': 'public class KickCommand { public String run(){ return "old"; } }',
         'Gone': 'public class Gone { public void g(){} }',
         'Dep': 'public class Dep { public void d(){} }',
+        'Loads': 'public class Loads { public static final String B = "libpart.so"; public static final String C = "META-INF/vendor-loaded.properties"; public static final String D = "vendor.Spi"; }',
         'PluginManager': SW % 'old',
     },
     'v2': {
@@ -121,6 +123,7 @@ SRC = {
         'KickCommand': 'public class KickCommand { public String run(){ return "new"; } }',
         'Fresh': 'public class Fresh { public void h(){} }',
         'Dep': 'public class Dep { @Deprecated public void d(){} }',
+        'Loads': 'public class Loads { public static final String B = "libpart.so"; public static final String C = "META-INF/vendor-loaded.properties"; public static final String D = "vendor.Spi"; }',
         'PluginManager': SW % 'new',
     },
 }
@@ -131,10 +134,17 @@ SRC = {
 #   jwks_bundled.json           Hypixel (d): REMOVED          brandnew/data.json: ADDED, a
 #                                            top-level directory the jar has never shown
 #   com/hypixel/.../data.json   Hypixel (x): under com/, which ALSO holds a vendor package
-#   META-INF/services/...Svc    Hypixel (c): its PATH names com.hypixel
-#   META-INF/services/other.Spi Hypixel (c): its BYTES name com.hypixel
-#   META-INF/services/vendor.Spi third-party (c)
-#   native/...libx.so, win-x64/x.dll, osx-arm64/libgone.dylib   third-party (b): CHANGED/ADDED/REMOVED
+#   com/hypixel/hytale/lib/libhyt.so   Hypixel (x): a native under com/hypixel/ (not b)
+#   META-INF/services/...Svc    Hypixel (h): its PATH names com.hypixel
+#   META-INF/services/other.Spi Hypixel (h): its BYTES name com.hypixel
+#   META-INF/services/vendor.Spi third-party (c): a Hypixel class names "vendor.Spi", but only its
+#                                            file name, which is not enough off a native
+#   native/linux-x64/libbranded.so Hypixel (h): bytes carry "Hypixel Studios Canada Inc"
+#   native/osx-arm64/libbuild.dylib Hypixel (h): bytes carry only the build path ".../hytale/hytale/"
+#   native/linux-x64/libpart.so    Hypixel (l): Loads names its file name only, not its path (a native)
+#   META-INF/vendor-loaded.properties Hypixel (l): Loads names its full path (a non-native)
+#   com/vendor/branded.properties  Hypixel (h): under a vendor package (a), but the bytes say HYPIXEL
+#   native/linux-x64/libx.so, win-x64/x.dll, osx-arm64/libgone.dylib   third-party (b): CHANGED/ADDED/REMOVED
 #   com/vendor/messages.properties   third-party (a): com/ holds com/vendor/lib/Ext.class
 #   vendor/lib/schema.proto          third-party (e): beside com/vendor/lib/Ext.class
 R1 = {
@@ -144,12 +154,18 @@ R1 = {
     'jwks_bundled.json': b'{"keys":[]}\n',
     'update/start.sh': b'#!/bin/sh\n',
     'com/hypixel/hytale/demo/data.json': b'{"x":1}\n',
+    'com/hypixel/hytale/lib/libhyt.so': b'\x7fELF-a',
     'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-a\n',
     'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Dep\n',
     'META-INF/services/vendor.Spi': b'org.vendor.ImplA\n',
+    'META-INF/vendor-loaded.properties': b'a=1\n',
     'native/linux-x64/libx.so': b'\x7fELF-a',
+    'native/linux-x64/libbranded.so': b'\x7fELF-Hypixel Studios Canada Inc-a',
+    'native/osx-arm64/libbuild.dylib': b'\xcf\xfa/home/runner/work/hytale/hytale/ThirdParty-a',
+    'native/linux-x64/libpart.so': b'\x7fELF-a',
     'native/osx-arm64/libgone.dylib': b'gone',
     'com/vendor/messages.properties': b'a=1\n',
+    'com/vendor/branded.properties': b'# HYPIXEL a\n',
     'vendor/lib/schema.proto': b'syntax = "proto3"; // a\n',
 }
 R2 = {k: v for k, v in R1.items() if k not in ('jwks_bundled.json', 'native/osx-arm64/libgone.dylib')}
@@ -157,12 +173,18 @@ R2.update({
     'migration/blocks/3_4.json': b'{"to":4,"map":"b"}\n',
     'brandnew/data.json': b'{"new":true}\n',
     'com/hypixel/hytale/demo/data.json': b'{"x":2}\n',
+    'com/hypixel/hytale/lib/libhyt.so': b'\x7fELF-b',
     'META-INF/services/com.hypixel.hytale.demo.Svc': b'impl-b\n',
     'META-INF/services/other.Spi': b'com.hypixel.hytale.demo.Fresh\n',
     'META-INF/services/vendor.Spi': b'org.vendor.ImplB\n',
+    'META-INF/vendor-loaded.properties': b'a=2\n',
     'native/linux-x64/libx.so': b'\x7fELF-b',
+    'native/linux-x64/libbranded.so': b'\x7fELF-Hypixel Studios Canada Inc-b',
+    'native/osx-arm64/libbuild.dylib': b'\xcf\xfa/home/runner/work/hytale/hytale/ThirdParty-b',
+    'native/linux-x64/libpart.so': b'\x7fELF-b',
     'native/win-x64/x.dll': b'MZ',
     'com/vendor/messages.properties': b'a=2\n',
+    'com/vendor/branded.properties': b'# HYPIXEL b\n',
     'vendor/lib/schema.proto': b'syntax = "proto3"; // b\n',
 })
 R1R = dict(R1, **{'migration/blocks/3_4.json': b'{"to":4,"map":"r"}\n'})
@@ -171,10 +193,15 @@ D1, D2 = (2020, 1, 2, 3, 4, 6), (2021, 5, 6, 7, 8, 10)     # zip entry timestamp
 RES_DRIFT_V1_V2 = [   # state owner rule path: the whole resource drift of v1 -> v2
     'CHANGED hypixel d migration/blocks/3_4.json', 'REMOVED hypixel d jwks_bundled.json',
     'ADDED hypixel d brandnew/data.json', 'CHANGED hypixel x com/hypixel/hytale/demo/data.json',
-    'CHANGED hypixel c META-INF/services/com.hypixel.hytale.demo.Svc', 'CHANGED hypixel c META-INF/services/other.Spi',
-    'CHANGED third-party c META-INF/services/vendor.Spi', 'CHANGED third-party b native/linux-x64/libx.so',
+    'CHANGED hypixel x com/hypixel/hytale/lib/libhyt.so',
+    'CHANGED hypixel h META-INF/services/com.hypixel.hytale.demo.Svc', 'CHANGED hypixel h META-INF/services/other.Spi',
+    'CHANGED third-party c META-INF/services/vendor.Spi', 'CHANGED hypixel l META-INF/vendor-loaded.properties',
+    'CHANGED third-party b native/linux-x64/libx.so', 'CHANGED hypixel h native/linux-x64/libbranded.so',
+    'CHANGED hypixel h native/osx-arm64/libbuild.dylib',
+    'CHANGED hypixel l native/linux-x64/libpart.so',
     'ADDED third-party b native/win-x64/x.dll', 'REMOVED third-party b native/osx-arm64/libgone.dylib',
-    'CHANGED third-party a com/vendor/messages.properties', 'CHANGED third-party e vendor/lib/schema.proto',
+    'CHANGED third-party a com/vendor/messages.properties', 'CHANGED hypixel h com/vendor/branded.properties',
+    'CHANGED third-party e vendor/lib/schema.proto',
 ]
 
 
@@ -316,7 +343,7 @@ def expect_update(label, rc, out, src, api, tri, res='', manifest=True):
     check(f'CHANGED {D}BlockHarvestUtils$Qx' in api, f"{label}: API drift has the nested signature change")
     check(f'ADDED   {D}Fresh' in api and f'REMOVED {D}Gone' in api, f"{label}: API drift has the added and removed classes")
     check(f'body {D}BlockHarvestUtils →' in tri, f"{label}: triage flags pages naming BlockHarvestUtils as a body change")
-    check('compared 4 file(s) present in both builds (1 only in the old, 1 only in the new); 3 changed; '
+    check('compared 5 file(s) present in both builds (1 only in the old, 1 only in the new); 3 changed; '
           '1 unchanged file(s) contain a failed decompile' in out, f"{label}: source-drift denominator printed")
     check(SELF not in out, f"{label}: no self-compare warning")
     check('UNEXPLAINED' not in src, f"{label}: every one-sided file is an added/removed class")
@@ -797,25 +824,48 @@ MUTATIONS = [
      'if not n.endswith("/") and not n.endswith(".class") and n.startswith(("migration/", "bundledDefaults/")))',
      {"v1 cache: every non-class entry hashed, nothing filtered (the manifest included)"}),
     ("resources rule a: a top-level directory that holds foreign classes", B,
-     'elif top in foreign_top:', 'elif False:',
+     '"a" if top in foreign_top', '"a" if False',
      {"update: resource drift has `CHANGED third-party a com/vendor/messages.properties`"}),
     ("resources rule b: native libraries", B,
-     'if n.endswith(NATIVE):', 'if False:',
+     'native = n.endswith(NATIVE)', 'native = False',
      {"update: resource drift has `CHANGED third-party b native/linux-x64/libx.so`"}),
     ("resources rule c: META-INF is third-party", B,
-     'elif top == "META-INF":', 'elif False:',
+     '"c" if top == "META-INF"', '"c" if False',
      {"update: resource drift has `CHANGED third-party c META-INF/services/vendor.Spi`"}),
-    ("resources rule c: a path naming com.hypixel is not enough", B,
-     'hyp = "com.hypixel" in n or b"com.hypixel" in data', 'hyp = b"com.hypixel" in data',
-     {"update: resource drift has `CHANGED hypixel c META-INF/services/com.hypixel.hytale.demo.Svc`"}),
-    ("resources rule c: bytes naming com.hypixel are not enough", B,
-     'hyp = "com.hypixel" in n or b"com.hypixel" in data', 'hyp = "com.hypixel" in n',
-     {"update: resource drift has `CHANGED hypixel c META-INF/services/other.Spi`"}),
+    ("resources rule h: a path naming com.hypixel is not enough", B,
+     'HYP.search(n.encode()) or HYP.search(data)', 'HYP.search(data)',
+     {"update: resource drift has `CHANGED hypixel h META-INF/services/com.hypixel.hytale.demo.Svc`"}),
+    ("resources rule h: bytes naming com.hypixel are not enough", B,
+     'HYP.search(n.encode()) or HYP.search(data)', 'HYP.search(n.encode())',
+     {"update: resource drift has `CHANGED hypixel h META-INF/services/other.Spi`"}),
+    ("resources rule h: the mark is matched case-sensitively", B,
+     'HYP = re.compile(rb"(?i)hypixel|hytale")', 'HYP = re.compile(rb"hypixel|hytale")',
+     {"update: resource drift has `CHANGED hypixel h native/linux-x64/libbranded.so`",
+      "update: resource drift has `CHANGED hypixel h com/vendor/branded.properties`"}),
+    ("resources rule h: \"hytale\" is not a mark", B,
+     'HYP = re.compile(rb"(?i)hypixel|hytale")', 'HYP = re.compile(rb"(?i)hypixel")',
+     {"update: resource drift has `CHANGED hypixel h native/osx-arm64/libbuild.dylib`"}),
+    ("resources rule h: a mark does not beat a native presumption", B,
+     'elif HYP.search(n.encode()) or HYP.search(data):', 'elif presumed != "b" and (HYP.search(n.encode()) or HYP.search(data)):',
+     {"update: resource drift has `CHANGED hypixel h native/linux-x64/libbranded.so`"}),
+    ("resources rule h: a mark does not beat a vendor package", B,
+     'elif HYP.search(n.encode()) or HYP.search(data):', 'elif presumed != "a" and (HYP.search(n.encode()) or HYP.search(data)):',
+     {"update: resource drift has `CHANGED hypixel h com/vendor/branded.properties`"}),
+    ("resources rule l: a Hypixel class naming the full path", B,
+     'n.encode() in hyp_blob or (native and base in hyp_blob)', '(native and base in hyp_blob)',
+     {"update: resource drift has `CHANGED hypixel l META-INF/vendor-loaded.properties`"}),
+    ("resources rule l: a native's file name named by a Hypixel class", B,
+     '(native and base in hyp_blob)', 'False',
+     {"update: resource drift has `CHANGED hypixel l native/linux-x64/libpart.so`"}),
+    ("resources rule l: a file name alone is enough for any resource", B,
+     '(native and base in hyp_blob)', '(base in hyp_blob)',
+     {"update: resource drift has `CHANGED third-party c META-INF/services/vendor.Spi`"}),
     ("resources rule x: com/hypixel/ is always Hypixel's", B,
-     'elif n.startswith("com/hypixel/"):', 'elif False:',
-     {"update: resource drift has `CHANGED hypixel x com/hypixel/hytale/demo/data.json`"}),
+     'if n.startswith("com/hypixel/"):', 'if False:',
+     {"update: resource drift has `CHANGED hypixel x com/hypixel/hytale/demo/data.json`",
+      "update: resource drift has `CHANGED hypixel x com/hypixel/hytale/lib/libhyt.so`"}),
     ("resources rule e: a directory that mirrors a foreign package", B,
-     'elif "/" in n and ("com/" + n.rsplit("/", 1)[0]) in foreign_dirs:', 'elif False:',
+     '"e" if "/" in n and', '"e" if False and',
      {"update: resource drift has `CHANGED third-party e vendor/lib/schema.proto`"}),
     ("resources rule d: Hypixel-owned is the default", B,
      'owner, rule = "hypixel", "d"', 'owner, rule = "third-party", "d"',
@@ -891,6 +941,8 @@ MUTATIONS = [
 def mutations():
     ran, bad = 0, []
     for label, fname, old, new, must_red in MUTATIONS:
+        if A.only and A.only not in label:
+            continue
         with tempfile.TemporaryDirectory() as t:
             root = pathlib.Path(t)
             shutil.copytree(HERE, root / 'maintenance/scripts', ignore=shutil.ignore_patterns('__pycache__'))
@@ -923,7 +975,7 @@ if base.checks < MIN_CHECKS:
 print(f"FIXTURE {base.checks} check(s): {base.checks - len(base.fails)} passed, {len(base.fails)} failed")
 if A.mutations:
     ran, bad = mutations()
-    if ran < MIN_MUTATIONS:
+    if ran < MIN_MUTATIONS and not A.only:
         bad.append(f"only {ran} mutation(s) ran, floor is {MIN_MUTATIONS}")
     print(f"MUTATIONS {ran} defect(s) reintroduced, {ran - len([b for b in bad if 'still green' in b])} turned their checks red")
     fails += bad

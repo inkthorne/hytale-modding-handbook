@@ -1,0 +1,5 @@
+{
+  "Id": "Workbench",
+  "Child": { "Id": "Furnace" },
+  "Third": { "Id": "Alive2" }
+}

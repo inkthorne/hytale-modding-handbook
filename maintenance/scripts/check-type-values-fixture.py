@@ -51,10 +51,30 @@ CHECKER = HERE / 'check-type-values.py'
 # The healthy corpus, stated exactly. Six values, one per resolution path plus the
 # two trap cases. Asserting these two lines verbatim is what makes a value leaving
 # the corpus a failure rather than a quieter pass.
-SCAN = '6 json fence(s) of 7 in 2 page(s); 7 "Type" occurrence(s), 6 distinct value(s)'
+SCAN = '8 json fence(s) of 9 in 3 page(s); 7 "Type" occurrence(s), 6 distinct value(s)'
 TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
          "audited skiplist 1, unresolved 0 (distinct values by first source; "
          "2 live (value, page) exemption(s) in total)")
+# One line per discriminator key, pinned whole: the denominator, the share that classifies the key
+# as checked or mixed, the size of its shipped oracle, and where its docs values went. The corpus
+# is built so that each of the four keys is in a different position:
+#   Type  checked, resolved through the registry, the shipped assets, a java fence and the skiplist
+#   Op    checked, one value, resolved by the registry
+#   Slot  MIXED (the shipped assets also use it for ordinary values): Core2 confirmed, Fabricated_Slot unchecked
+#   Id    MIXED, the same shape: Alive2 confirmed, an ordinary id (Workbench) unchecked
+KEY_TYPE = ("key 'Type': checked (share 0.67); 1 registr(y/ies) naming 4; shipped oracle 6 value(s); "
+            "docs 7 occurrence(s), 6 distinct; resolved only through shipped values 2")
+KEY_OP = ("key 'Op': checked (share 1.00); 1 registr(y/ies) naming 2; shipped oracle 2 value(s); "
+          "docs 1 occurrence(s), 1 distinct; registry 1, shipped only 0, page's own java fence 0, unresolved 0")
+KEY_SLOT = ("key 'Slot': mixed (share 0.33); 1 registr(y/ies) naming 1; shipped oracle 3 value(s); "
+            "docs 2 occurrence(s), 2 distinct; CONFIRMED by a registry keyed 'Slot' 1, "
+            "UNCHECKED 1 (1 occurrence(s)) \u2014 not a pass")
+KEY_ID = ("key 'Id': mixed (share 0.33); 1 registr(y/ies) naming 1; shipped oracle 3 value(s); "
+          "docs 2 occurrence(s), 2 distinct; CONFIRMED by a registry keyed 'Id' 1, "
+          "UNCHECKED 1 (1 occurrence(s)) \u2014 not a pass")
+PASS_LINE = ("PASS  all 7 distinct value(s) under 2 checked key(s) (Type, Op) trace to a registration, "
+             "a shipped asset, or an audited exemption; 2 distinct value(s) (2 occurrence(s)) under "
+             "2 mixed key(s) (Id, Slot) are UNCHECKED, not passed")
 
 # label -> (old, new) applied to a COPY of the checker, and the exact set of case
 # labels that must go red. "and no others" is the point: a mutation whose red set
@@ -95,8 +115,8 @@ TALLY = ("registry 2, shipped assets 2, page's own java fence 1, "
 # These are FLOORS, not targets. Raise them freely when cases or mutations are
 # added; lowering one needs a reason in the commit message, exactly like the
 # page-size arrears list.
-MIN_CASES = 13
-MIN_MUTATIONS = 7
+MIN_CASES = 23
+MIN_MUTATIONS = 15
 
 # label -> the file in maintenance/scripts/ the mutation edits (default: the checker itself). A
 # mutant of doc_fences.py is written to the temp dir BESIDE the checker copy, where the
@@ -136,12 +156,12 @@ MUTATIONS = {
         "        marker = CENSUS_MARKER.match(line)\n        q, w, j = split_prefix(line)\n        rest = line[j:]\n",
         "        marker = CENSUS_MARKER.match(line)\n        q, w, j = split_prefix(line)\n        rest = line[j:]\n"
         "        if w and not q:\n            marker = None\n",
-        {'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a fence indented inside a list item is scanned'}),
+        {'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a fence indented inside a list item is scanned', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a registry whose key cannot be read is counted and names nothing', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails', 'the live exemption count is the number, not the label'}, {'a fence indented inside a list item is scanned'}),
 
-    'TYPE regex narrowed to space-only': (
-        '''TYPE = re.compile(r'"Type"\\s*:\\s*"([^"]*)"')''',
-        '''TYPE = re.compile(r'"Type" *: *"([^"]*)"')''',
-        {'a fabricated value fails and is named', 'a fence indented inside a list item is scanned', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a tab-separated asset "Type" resolves'}),
+    'key regex narrowed to space-only': (
+        '''                      + r')"\\s*:\\s*"([^"]*)"')''',
+        '''                      + r')" *: *"([^"]*)"')''',
+        {'a fabricated value fails and is named', 'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a fence indented inside a list item is scanned', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a registry whose key cannot be read is counted and names nothing', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails', 'the live exemption count is the number, not the label'}, {'a tab-separated asset "Type" resolves'}),
 
     # The zero-floor is a guard, so it gets a mutation like every other guard —
     # otherwise the newest defence is the one nothing verifies, which is how the
@@ -161,25 +181,66 @@ MUTATIONS = {
         {'a stale entry alone fails, as a WARN naming the entry'}, {'a stale entry alone fails, as a WARN naming the entry'}),
 
     'tally re-derived by a second pass (the original defect 2)': (
+        """    by_source = tally(PRIMARY)
+""",
         """    by_source = collections.Counter()
-    for value, used in sources.items():
-        if 'unresolved' in used:
-            by_source['unresolved'] += 1
-        else:
-            by_source[next(k for k in PRECEDENCE if k in used)] += 1""",
-        """    by_source = collections.Counter()
-    for value, pages in values.items():
-        if value in registered: by_source['registry'] += 1
-        elif value in asset_types: by_source['assets'] += 1
-        elif all(value in page_local.get(pg, ()) for pg in pages): by_source['page-local'] += 1
+    for value, pages in values.get(PRIMARY, {}).items():
+        if value in index.names[PRIMARY]: by_source['registry'] += 1
+        elif value in ship[PRIMARY]: by_source['assets'] += 1
+        elif all(value in page_local.get(pg, {}).get(PRIMARY, ()) for pg in pages): by_source['page-local'] += 1
         elif all(pg in skip.get(value, {}) for pg in pages): by_source['skiplist'] += 1
-        else: by_source['unresolved'] += 1""",
-        {'a canary that became real fails the run', 'a fabricated value fails and is named', 'a fence indented inside a list item is scanned', 'a stale entry alone fails, as a WARN naming the entry', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved',
-         'healthy corpus: scan denominator and tally are exact', 'the live exemption count is the number, not the label'}, {'a value resolved by different sources per page is not unresolved'}),
+        else: by_source['unresolved'] += 1
+""",
+        {'a canary that became real fails the run', 'a fabricated value fails and is named', 'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a fence indented inside a list item is scanned', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a registry whose key cannot be read is counted and names nothing', 'a stale entry alone fails, as a WARN naming the entry', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'a value valid for key A placed under key B fails, in both directions', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails', 'the live exemption count is the number, not the label', 'the same page-local name under another key fails'}, {'a value resolved by different sources per page is not unresolved'}),
+
+    # ---- the key (2026-10-15). `names` is the case the defect belongs to; `expect` is measured.
+    'REVERT to the unkeyed union (a name of ANY registry resolves a value under ANY key)': (
+        "                if value in index.names[k]:\n",
+        "                if value in registered_any:\n",
+        {'a value valid for key A placed under key B fails, in both directions'}, {'a value valid for key A placed under key B fails, in both directions'}),
+
+    'a MIXED key is read as checked (its shipped values resolve, its unregistered values fail)': (
+        "        mode[k] = 'checked' if share[k] is not None and share[k] >= SHARE_FLOOR else 'mixed'\n",
+        "        mode[k] = 'checked'\n",
+        {'a Type key whose shipped values are mostly not registered names FAILs as a collapse', 'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a fence indented inside a list item is scanned', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a registry whose key cannot be read is counted and names nothing', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails', 'the live exemption count is the number, not the label'},
+        {'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails'}),
+
+    'a MIXED key FAILs an unregistered value instead of counting it UNCHECKED': (
+        "                else:\n                    used.add('unchecked')\n",
+        "                else:\n                    used.add('unresolved')\n                    findings.append((k, value, page, pages[page]))\n",
+        {'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a fence indented inside a list item is scanned', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a registry whose key cannot be read is counted and names nothing', 'a tab-separated asset "Type" resolves', 'a value resolved by different sources per page is not unresolved', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails', 'the live exemption count is the number, not the label'},
+        {'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed'}),
+
+    'page-local names filed under Type whatever the registry they register into': (
+        "                        page_local[d.name][key].add(site.name)\n",
+        "                        page_local[d.name][PRIMARY].add(site.name)\n",
+        {'a name the page registers into a K-keyed registry resolves under K', 'the same page-local name under another key fails'}, {'a name the page registers into a K-keyed registry resolves under K'}),
+
+    'only the Type key is scanned in docs and assets': (
+        "    pat = key_pattern(keys) if keys else None\n",
+        "    pat = key_pattern([PRIMARY])\n",
+        {'a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed', 'a name of a registry keyed K, written under K, passes', 'a name the page registers into a K-keyed registry resolves under K', 'a value valid for key A placed under key B fails, in both directions', 'every key prints its own denominator, shipped-oracle size and tally', 'healthy corpus: scan denominator and tally are exact', 'the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails'}, {'every key prints its own denominator, shipped-oracle size and tally'}),
+
+    'the guard against a Type key with no registry removed': (
+        "    if not keys or PRIMARY not in index.names:\n",
+        "    if not keys:\n",
+        {'no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED'},
+        {'no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED'}),
+
+    'the guard against a Type key that classifies as mixed removed': (
+        "    if mode[PRIMARY] != 'checked':\n",
+        "    if False:\n",
+        {'a Type key whose shipped values are mostly not registered names FAILs as a collapse'},
+        {'a Type key whose shipped values are mostly not registered names FAILs as a collapse'}),
+
+    'a registry whose key cannot be read is not counted': (
+        '{len(index.unknown)} whose key could "\n          f"not be read',
+        '0 whose key could "\n          f"not be read',
+        {'a registry whose key cannot be read is counted and names nothing'}, {'a registry whose key cannot be read is counted and names nothing'}),
 }
 
 
-def run(checker, docs, src, assets, skiplist):
+def run(checker, docs, src, assets, skiplist, extra=()):
     # PYTHONPATH matters only for mutants, which live in a temp dir: the checker
     # does sys.path.insert(0, __file__'s parent), so a copy elsewhere cannot find
     # registry_miner and dies with ModuleNotFoundError before parsing anything.
@@ -189,7 +250,7 @@ def run(checker, docs, src, assets, skiplist):
     env = dict(os.environ, PYTHONPATH=str(HERE) + os.pathsep + os.environ.get('PYTHONPATH', ''))
     p = subprocess.run(
         [sys.executable, str(checker), '--docs', str(docs), '--src', str(src),
-         '--assets', str(assets), '--skiplist', str(skiplist)],
+         '--assets', str(assets), '--skiplist', str(skiplist), *extra],
         capture_output=True, text=True, env=env)
     return p.returncode, p.stdout + p.stderr
 
@@ -228,7 +289,25 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         # first version of this file used, and unlike those they cannot be satisfied
         # by the regression they guard.
         case('healthy corpus: scan denominator and tally are exact', rc, t,
-             want_rc=0, must=(SCAN, TALLY, 'PASS'), must_not=('FAIL', 'WARN'))
+             want_rc=0, must=(SCAN, TALLY, PASS_LINE), must_not=('FAIL', 'WARN'))
+        # The per-key denominators, each key's line whole. A key that stops being scanned, a
+        # registry that stops being keyed, or a share that crosses the floor moves one of these.
+        case('every key prints its own denominator, shipped-oracle size and tally', rc, t,
+             want_rc=0, must=(KEY_TYPE, KEY_OP, KEY_SLOT, KEY_ID))
+        # `Plus` is registered by a registry keyed "Op" and written under "Op": it resolves, and
+        # it resolves THROUGH THE REGISTRY (registry 1, not shipped only 1: the assets also hold it).
+        case('a name of a registry keyed K, written under K, passes', rc, t,
+             want_rc=0, must=(KEY_OP,), must_not=("key 'Op': mixed",))
+        # THE "Id" DECISION. "Id" is the plain id field of every asset, so a value under it that no
+        # registry names may be a perfectly good ordinary id. It is neither failed nor passed: the
+        # registered name (Alive2) is CONFIRMED and the ordinary id (Workbench) is UNCHECKED, and
+        # the PASS line says so. The shipped assets hold Workbench too, so a gate that trusted
+        # them under "Id" would have waved it through as resolved.
+        rcv, tv = run(checker, docs, src, assets, SKIPLIST, extra=('-v',))
+        case('the Id decision: a registered name is confirmed, an ordinary id is UNCHECKED, neither fails',
+             rcv, tv, want_rc=0,
+             must=(KEY_ID, "'Id': confirmed: Alive2", "'Id': UNCHECKED: Workbench", 'not passed'),
+             must_not=('FAIL',))
         case('a value resolved by different sources per page is not unresolved',
              rc, t, want_rc=0, must=("page's own java fence 1", 'unresolved 0'))
         # The live count, not the label: this line exists BECAUSE the bucket
@@ -288,6 +367,71 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         case('a stale entry alone fails, as a WARN naming the entry', rc, t,
              want_rc=1, must=('WARN', 'stale skiplist entry', "'Alpha'"),
              must_not=('PASS',))
+
+        # A VALUE VALID FOR KEY A, PLACED UNDER KEY B, FAILS. `Alpha` is a Type name and `Plus` an
+        # Op name; each is real, each is in the wrong key, and the unkeyed union accepted both.
+        (docs / 'zzz.md').write_text('# Z\n\n```json\n{ "Op": "Alpha", "Next": { "Type": "Plus" } }\n```\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('a value valid for key A placed under key B fails, in both directions', rc, t, want_rc=1,
+             must=('FAIL', '"Op": "Alpha"', '"Type": "Plus"', 'zzz.md', 'unresolved 1'), must_not=('PASS',))
+        (docs / 'zzz.md').unlink()
+
+        # A page-local registration counts under the key of the registry it registers into, and
+        # under no other. `Bar` is keyed "Op": `PageOp` resolves under "Op" and fails under "Type".
+        (docs / 'ddd.md').write_text('# D\n\n```java\nBar.CODEC.register("PageOp", PageBar.class, PageBar.CODEC);\n```\n\n'
+                                     '```json\n{ "Op": "PageOp" }\n```\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('a name the page registers into a K-keyed registry resolves under K', rc, t, want_rc=0,
+             must=("key 'Op': checked (share 1.00); 1 registr(y/ies) naming 2; shipped oracle 2 value(s); "
+                   "docs 2 occurrence(s), 2 distinct; registry 1, shipped only 0, page's own java fence 1, unresolved 0",),
+             must_not=('FAIL',))
+        (docs / 'ddd.md').write_text('# D\n\n```java\nBar.CODEC.register("PageOp", PageBar.class, PageBar.CODEC);\n```\n\n'
+                                     '```json\n{ "Type": "PageOp" }\n```\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('the same page-local name under another key fails', rc, t, want_rc=1,
+             must=('FAIL', '"Type": "PageOp"', 'ddd.md'), must_not=('PASS',))
+        (docs / 'ddd.md').unlink()
+
+        # The Id decision's other half: a fabricated value under a MIXED key is not detected, and
+        # the gate says so by counting it UNCHECKED rather than passing it.
+        (docs / 'eee.md').write_text('# E\n\n```json\n{ "Id": "Fabricated_Cond" }\n```\n')
+        rc, t = run(checker, docs, src, assets, SKIPLIST)
+        case('a fabricated value under a MIXED key is counted UNCHECKED, not failed and not passed',
+             rc, t, want_rc=0,
+             must=("CONFIRMED by a registry keyed 'Id' 1, UNCHECKED 2 (2 occurrence(s))",
+                   '3 distinct value(s) (3 occurrence(s)) under 2 mixed key(s)'),
+             must_not=('FAIL',))
+        (docs / 'eee.md').unlink()
+
+        # THE COLLAPSE GUARDS. If the key reader finds no registry keyed "Type", or the shipped
+        # values under "Type" are mostly not registered names, every value under every key would
+        # read UNCHECKED and the gate would PASS over nothing. Both must FAIL, naming the cause.
+        src_nokey = tmp / 'src-nokey'
+        shutil.copytree(src, src_nokey)
+        foo = src_nokey / 'fixturepkg' / 'Foo.java'
+        foo.write_text(foo.read_text().replace('new CodecMapCodec("Type")', 'new CodecMapCodec(Elsewhere.KEY)'))
+        rc, t = run(checker, docs, src_nokey, assets, SKIPLIST)
+        case('no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED',
+             rc, t, want_rc=1, must=('no registry is keyed', 'FAIL'), must_not=('PASS',))
+        assets_mixed = tmp / 'assets-mixed'
+        shutil.copytree(assets, assets_mixed)
+        for f in ('alpha', 'beta', 'zeta', 'eta'):
+            (assets_mixed / 'Server' / 'Thing' / f'{f}.json').unlink()
+        rc, t = run(checker, docs, src, assets_mixed, SKIPLIST)
+        case('a Type key whose shipped values are mostly not registered names FAILs as a collapse',
+             rc, t, want_rc=1, must=("'Type' classifies as a MIXED key", 'FAIL'), must_not=('PASS',))
+
+        # A registry whose key cannot be read is COUNTED. It names nothing under any key, so a docs
+        # value that depended on it would fail loudly rather than pass under a guessed key.
+        src_weird = tmp / 'src-weird'
+        shutil.copytree(src, src_weird)
+        (src_weird / 'fixturepkg' / 'Weird.java').write_text(
+            'package fixturepkg;\n\npublic class Weird {\n'
+            '    public static final CodecMapCodec<Weird> CODEC = new CodecMapCodec(Elsewhere.KEY);\n'
+            '    static { Weird.CODEC.register("WeirdName", W.class, W.CODEC); }\n}\n')
+        rc, t = run(checker, docs, src_weird, assets, SKIPLIST)
+        case('a registry whose key cannot be read is counted and names nothing', rc, t, want_rc=0,
+             must=('1 whose key could not be read',), must_not=('FAIL',))
 
         # Make a canary real and check the probe fires. Use the SYNTHETIC canary,
         # not `Furniture`: Furniture is one keystroke from real — already live in

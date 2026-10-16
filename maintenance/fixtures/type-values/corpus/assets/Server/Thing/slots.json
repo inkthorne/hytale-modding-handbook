@@ -1,0 +1,5 @@
+{
+  "Slot": "Status",
+  "Other": { "Slot": "Action" },
+  "Third": { "Slot": "Core2" }
+}

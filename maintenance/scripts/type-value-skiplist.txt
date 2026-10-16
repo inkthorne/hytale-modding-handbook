@@ -2,6 +2,9 @@
 #
 # Format: <value> <whitespace> <page.md> <whitespace> <justification>
 # One line per (value, page). Comments and blank lines ignored.
+# An entry waives a value under the "Type" key only (the checker honours it for no other key):
+# a key that is not discriminator-dominated reports its unregistered values UNCHECKED instead of
+# failing them, so it needs no waivers, and no other checked key has had to be waived.
 #
 # INVARIANT 1 applies to this file: an entry is a claim that the checker is
 # wrong, and it needs evidence the checker itself cannot see — a jar file:line,

@@ -1,7 +1,34 @@
 #!/usr/bin/env python3
 """
-Phase (c) of queued gate 1: every `"Type"` value in a docs JSON fence must be a
-name something actually registers.
+Phase (c) of queued gate 1: every discriminator value in a docs JSON fence must be a
+name something actually registers UNDER THAT KEY.
+
+THE KEY MATTERS (2026-10-15). A registry's names are written under its own discriminator key,
+and it is not always "Type": `ItemAbility.CODEC` is keyed "Slot", `Condition.CODEC` "Id",
+`TagPattern.CODEC` "Op", `Schema.CODEC` "type", `UIEditor.CODEC` "component" (registry_miner
+reads each from the declaration). Until then this gate unioned every registry's names into one
+oracle and checked only "Type", so a fabricated `"Type": "Core"` passed because ItemAbility
+registers `Core` under "Slot". Now each key K that some registry uses is checked on its own:
+a value under K resolves only against names of registries keyed K, shipped values under K,
+the page's own java fence (when it registers into a K-keyed registry) and the skiplist. A name
+registered under another key never resolves a value under K.
+
+TWO KINDS OF KEY, told apart by a measurement made before any docs value is looked at: the
+shipped assets. share(K) = (distinct shipped values under K that are names of K-keyed
+registries) / (distinct shipped values under K). A key whose share is at least SHARE_FLOOR is
+DISCRIMINATOR-DOMINATED ("checked"): shipped values under it are mostly registered names, so
+they are a legitimate extra oracle and an unresolved value FAILS. A key below it (or with no
+shipped value at all) is MIXED: it is also an ordinary field somewhere else ("Id" holds
+essentially every asset id; "Slot" holds an NPC blackboard slot 697 times beside 24 files of
+ItemAbility), so an unregistered value under it may be a perfectly good ordinary value. Values
+under a mixed key that ARE registered names are CONFIRMED; the rest are UNCHECKED, counted and
+printed, and never passed. That is a judgment about false positives: flagging the ordinary
+ids of `"Id": "Workbench"` would breed skiplist entries justified by this checker's own
+output. 0.7.2 measures Type 0.86, Op 1.00, Slot 0.07, Id 0.04, type and component no shipped
+value; any floor between 0.08 and 0.85 classifies them identically.
+
+KNOWN BLIND SPOT, unchanged: key matching is POSITION-BLIND, like the "Type" check (notes §12).
+The keyed oracle catches a value filed under the wrong key, not a value in the wrong slot.
 
 `"Type"` is the discriminator on nearly every JSON page in this handbook, and a
 fabricated one reads exactly like a real one — a `"Type": "Wall"` shipped for at
@@ -33,11 +60,11 @@ because a source that silently stops contributing is how this check would rot:
      here whatever slot it is in. None of the UIEditor or Schema names is a docs value today (measured
      2026-10-15), and `-v` lists the docs values that ONLY an unqualified registration
      supplies, which is the exposure this change added.
-  2. `"Type"` values observed in the shipped asset tree. Covers vocabularies
-     whose registration mechanism the miner does not model at all (drop-table
-     types, recipe types); an id in this set is real by demonstration.
-  3. Names the PAGE ITSELF registers, mined out of its own ```java fences with
-     the same miner. Every walkthrough that says "register your own type" then
+  2. Values observed under the SAME KEY in the shipped asset tree (for a checked key only).
+     Covers vocabularies whose registration mechanism the miner does not model at all
+     (drop-table types, recipe types); an id in this set is real by demonstration.
+  3. Names the PAGE ITSELF registers into a registry of that key, mined out of its own
+     ```java fences with the same miner. Every walkthrough that says "register your own type" then
      shows the JSON lands here — `Melt`, `Greet`, `My_Type`, `Orbit`,
      `MyMod_FlockAttackToken`. This is not a convenience: those pages are
      self-registering, so a jar-only oracle has a structural false-positive
@@ -48,6 +75,9 @@ because a source that silently stops contributing is how this check would rot:
 
 Usage: python3 maintenance/scripts/check-type-values.py [--docs DIR] [--src DIR]
                                                         [--assets DIR] [-v]
+       -v also lists, per key, the docs values it confirmed, left unchecked, or resolved only
+       through shipped values, and the docs values that only an unqualified registration
+       supplies.
 """
 from __future__ import annotations
 import argparse, collections, os, pathlib, re, sys, tempfile
@@ -69,9 +99,17 @@ REPO = HERE.parents[1]
 # would show it" is now caught by something that does not depend on someone reading a
 # number. The `N json fence(s) of M` denominator this gate prints is still the figure
 # verify-docs.sh compares with the census.
-TYPE = re.compile(r'"Type"\s*:\s*"([^"]*)"')
+SHARE_FLOOR = 0.5      # pre-registered; see the docstring. Any floor in (0.07, 0.86) gives the same answer at 0.7.2.
+PRIMARY = 'Type'       # the key every JSON page leans on; it must be checked or the gate has collapsed
 
-# A known-positive probe. The oracle is a union of four large sets, so "nothing was
+
+def key_pattern(keys):
+    r"""`"K"\s*:\s*"value"` for any K in `keys`: a whitespace CLASS, not a space (notes §12: the
+    tab dialect under Server/HytaleGenerator is 112 values a space-only pattern loses)."""
+    return re.compile(r'"(' + '|'.join(re.escape(k) for k in sorted(keys, key=lambda k: (-len(k), k)))
+                      + r')"\s*:\s*"([^"]*)"')
+
+# A known-positive probe. The oracle is a union of large sets, so "nothing was
 # flagged" has two causes — a clean corpus, or an oracle that accepts everything —
 # and only one is good news. Two of these are real fabrications this repo actually
 # shipped (items.md's `Furniture`, effects-stats.md's `FullEnergy_Glow`); the third
@@ -99,11 +137,65 @@ def load_skiplist(path: pathlib.Path):
     return out
 
 
-def docs_values(docs: pathlib.Path, src: pathlib.Path):
-    """(value -> {page: count}, page -> names the page registers, fence counts)."""
-    values = collections.defaultdict(collections.Counter)
-    page_local = collections.defaultdict(set)
+def _tail2(key: str) -> str:
+    return '.'.join(key.rsplit('.', 2)[-2:])
+
+
+class RegistryIndex:
+    """The mined registries seen by key: names per discriminator key, plus the lookups a page's
+    own `Receiver.CODEC.register(...)` needs to learn which key it registers under."""
+    def __init__(self, mined, src):
+        self.src = src
+        self.mined = mined
+        self.defaults = rm.constructor_defaults(src)
+        self.names = collections.defaultdict(set)         # key -> registered names
+        self.count = collections.Counter()                 # key -> registries
+        self.keyless = []                                  # MapKeyMapCodec registries (no discriminator)
+        self.unknown = []                                  # registries whose key could not be read
+        self.by_tail = collections.defaultdict(set)        # 'Foo.CODEC' -> {(key, how)}
+        for k, r in mined.items():
+            if r.disc_how == 'map-key':
+                self.keyless.append(k)
+            elif r.discriminator is None:
+                self.unknown.append(k)
+            else:
+                self.names[r.discriminator].update(r.names)
+                self.count[r.discriminator] += 1
+            self.by_tail[_tail2(k)].add((r.discriminator, r.disc_how))
+
+    def page_key(self, declaring, fld, tmp):
+        """(key | None, how) for a registration a docs java fence makes. The page's own
+        declaration wins (Java would bind its class first); then a jar registry of the same
+        `Class.FIELD` tail, if its key is unambiguous; form 3 sits under BuilderFactory's tag."""
+        if fld == rm.CORE_COMPONENT_FIELD:
+            return self.defaults['factory'], 'factory'
+        key, how, _ = rm.declared_key(declaring, fld, [tmp], self.src)
+        if how not in ('unknown',):
+            return key, how
+        cands = {c for c in self.by_tail.get(_tail2(f'{declaring}.{fld}'), ()) if c[1] not in ('unknown', 'unread')}
+        if len(cands) == 1:
+            return next(iter(cands))
+        return None, 'unknown'
+
+
+def scan_assets(assets: pathlib.Path, pat):
+    """key -> set of shipped values, and the file count."""
+    ship = collections.defaultdict(set)
+    n = 0
+    for p in assets.rglob('*.json'):
+        n += 1
+        for k, v in pat.findall(p.read_text(errors='replace')):
+            ship[k].add(v)
+    return ship, n
+
+
+def docs_values(docs: pathlib.Path, src: pathlib.Path, pat, index: RegistryIndex):
+    """(key -> value -> {page: count}, page -> key -> names the page registers,
+    fence counts, page-local sites whose key could not be read)."""
+    values = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
+    page_local = collections.defaultdict(lambda: collections.defaultdict(set))
     n_fence = n_json = n_java = 0
+    unkeyed = []
     for d in sorted(docs.glob('*.md')):
         java_blocks = []
         for fence in doc_fences.fences(d.read_text()):
@@ -111,8 +203,8 @@ def docs_values(docs: pathlib.Path, src: pathlib.Path):
             n_fence += 1
             if lang == 'json':
                 n_json += 1
-                for v in TYPE.findall(body):
-                    values[v][d.name] += 1
+                for k, v in pat.findall(body):
+                    values[k][v][d.name] += 1
             elif lang == 'java':
                 n_java += 1
                 java_blocks.append(body)
@@ -124,12 +216,17 @@ def docs_values(docs: pathlib.Path, src: pathlib.Path):
                 fh.write('\n'.join(java_blocks))
                 tmp = pathlib.Path(fh.name)
             try:
-                for _, _, site in rm.mine_file(tmp, src):
-                    if site.name:
-                        page_local[d.name].add(site.name)
+                for declaring, fld, site in rm.mine_file(tmp, src):
+                    if not site.name:
+                        continue
+                    key, how = index.page_key(declaring, fld, tmp)
+                    if key is None:
+                        unkeyed.append((d.name, site.name, how))
+                    else:
+                        page_local[d.name][key].add(site.name)
             finally:
                 tmp.unlink()
-    return values, page_local, (n_fence, n_json, n_java)
+    return values, page_local, (n_fence, n_json, n_java), unkeyed
 
 
 def main():
@@ -162,10 +259,11 @@ def main():
             print(f"  SKIP  {label} not found at {p} — {how}")
             return 2
 
-    registered = set()
     mined = rm.mine(src)
+    index = RegistryIndex(mined, src)
+    registered_any = set()                 # the union, kept ONLY for the canary probe
     for r in mined.values():
-        registered.update(r.names)
+        registered_any.update(r.names)
     # Names supplied ONLY by an unqualified registration: the part of this oracle that
     # did not exist before the miner learned that spelling (reported under -v).
     qualified_names = {s.name for r in mined.values() for s in r.sites
@@ -176,16 +274,31 @@ def main():
             if s.name and s.spelling == 'unqualified' and s.name not in qualified_names:
                 unqualified_only[s.name].add(r.key)
 
-    asset_types = set()
-    n_assets = 0
-    for p in assets.rglob('*.json'):
-        n_assets += 1
-        asset_types.update(TYPE.findall(p.read_text(errors='replace')))
+    keys = sorted(index.names, key=lambda k: (k != PRIMARY, k))
+    pat = key_pattern(keys) if keys else None
+    if not keys or PRIMARY not in index.names:
+        print(f"FAIL  no registry is keyed {PRIMARY!r}: the miner read {len(mined)} registr(y/ies), "
+              f"{len(index.unknown)} with an unreadable key. Either the key reader collapsed or the "
+              f"source cache is not the codec library — a clean run over that proves nothing.")
+        return 1
+    ship, n_assets = scan_assets(assets, pat)
 
     # A zero here would make the gate pass everything for the wrong reason.
-    if not registered or not asset_types or not n_assets:
-        print(f"FAIL  an oracle source is empty: registry={len(registered)} "
-              f"assets={len(asset_types)} from {n_assets} file(s)")
+    if not index.names[PRIMARY] or not ship[PRIMARY] or not n_assets:
+        print(f"FAIL  an oracle source is empty: registry={len(index.names[PRIMARY])} "
+              f"assets={len(ship[PRIMARY])} from {n_assets} file(s)")
+        return 1
+
+    # The classification, made from the registries and the shipped assets alone.
+    mode, share = {}, {}
+    for k in keys:
+        both = ship[k] & index.names[k]
+        share[k] = (len(both) / len(ship[k])) if ship[k] else None
+        mode[k] = 'checked' if share[k] is not None and share[k] >= SHARE_FLOOR else 'mixed'
+    if mode[PRIMARY] != 'checked':
+        print(f"FAIL  {PRIMARY!r} classifies as a MIXED key (share {share[PRIMARY]}): the shipped "
+              f"values under it are mostly not registered names, so either the registry oracle or "
+              f"the asset oracle has collapsed — and every value under it would read UNCHECKED.")
         return 1
 
     skip_path = pathlib.Path(a.skiplist)
@@ -197,7 +310,7 @@ def main():
         print(f"  SKIP  skiplist not found at {skip_path}")
         return 2
     skip = load_skiplist(skip_path)
-    values, page_local, (n_fence, n_json, n_java) = docs_values(docs, src)
+    values, page_local, (n_fence, n_json, n_java), unkeyed = docs_values(docs, src, pat, index)
 
     # Resolution is per (value, page): the page's own java fence and the skiplist are
     # both page-scoped, so a value legitimate on one page is not thereby legitimate
@@ -211,23 +324,26 @@ def main():
     # of truth.
     PRECEDENCE = ('registry', 'assets', 'page-local', 'skiplist')
     findings, used_skips = [], set()
-    sources = {}                       # value -> set of sources that resolved it
-    for value, pages in sorted(values.items()):
-        used = set()
-        for page in sorted(pages):
-            if value in registered:
-                used.add('registry')
-            elif value in asset_types:
-                used.add('assets')
-            elif value in page_local.get(page, ()):
-                used.add('page-local')
-            elif page in skip.get(value, {}):
-                used.add('skiplist')
-                used_skips.add((value, page))
-            else:
-                used.add('unresolved')
-                findings.append((value, page, pages[page]))
-        sources[value] = used
+    sources = {k: {} for k in keys}                # key -> value -> set of sources that resolved it
+    for k in keys:
+        for value, pages in sorted(values.get(k, {}).items()):
+            used = set()
+            for page in sorted(pages):
+                if value in index.names[k]:
+                    used.add('registry')
+                elif mode[k] == 'checked' and value in ship[k]:
+                    used.add('assets')
+                elif value in page_local.get(page, {}).get(k, ()):
+                    used.add('page-local')
+                elif mode[k] == 'checked' and k == PRIMARY and page in skip.get(value, {}):
+                    used.add('skiplist')
+                    used_skips.add((value, page))
+                elif mode[k] == 'checked':
+                    used.add('unresolved')
+                    findings.append((k, value, page, pages[page]))
+                else:
+                    used.add('unchecked')
+            sources[k][value] = used
 
     # ZERO-FLOOR ON THE SUBJECT, not just on the oracles. Every input this gate
     # READS is guarded above; the thing it is ABOUT was not, and an absent or empty
@@ -242,32 +358,35 @@ def main():
     # Precedent for failing rather than passing on a zero denominator: the README
     # gate's `RM_PAGES -eq 0`.
     n_pages = len(list(docs.glob('*.md')))
-    if n_pages == 0 or n_json == 0 or not values:
+    primary = values.get(PRIMARY, {})
+    if n_pages == 0 or n_json == 0 or not primary:
         print(f"  FAIL  scanned nothing: {n_pages} page(s), {n_json} json fence(s), "
-              f"{len(values)} distinct value(s) under {docs}")
+              f"{len(primary)} distinct value(s) under {docs}")
         print( "        A clean run over an empty corpus is the sentence invariant 6 "
                "exists to make impossible.")
         return 1
 
-    by_source = collections.Counter()
-    for value, used in sources.items():
-        if 'unresolved' in used:
-            by_source['unresolved'] += 1
-        else:
-            by_source[next(k for k in PRECEDENCE if k in used)] += 1
+    def tally(k):
+        c = collections.Counter()
+        for value, used in sources[k].items():
+            if 'unresolved' in used:
+                c['unresolved'] += 1
+            elif 'unchecked' in used:
+                c['unchecked'] += 1
+            else:
+                c[next(x for x in PRECEDENCE if x in used)] += 1
+        return c
 
-    missed = [c for c in CANARIES
-              if c in registered or c in asset_types
-              or any(c in s for s in page_local.values())]
-
+    by_source = tally(PRIMARY)
     stale = [(v, pg) for v, pgs in skip.items() for pg in pgs
              if (v, pg) not in used_skips]
+    missed = [c for c in CANARIES
+              if c in registered_any or c in ship[PRIMARY]
+              or any(c in names.get(PRIMARY, ()) for names in page_local.values())]
 
-    total = sum(sum(p.values()) for p in values.values())
+    total = sum(sum(p.values()) for p in primary.values())
     print(f"  INFO  {n_json} json fence(s) of {n_fence} in {n_pages} "
-          f"page(s); {total} \"Type\" occurrence(s), {len(values)} distinct value(s)")
-    tally = (by_source['registry'] + by_source['assets'] + by_source['page-local']
-             + by_source['skiplist'] + by_source['unresolved'])
+          f"page(s); {total} \"Type\" occurrence(s), {len(primary)} distinct value(s)")
     # The five buckets count DISTINCT VALUES by first source, so they sum to the
     # distinct count. That makes the skiplist bucket a FLOOR on how much is being
     # waived, not the answer: a value waived on one page and legitimate on another
@@ -281,30 +400,75 @@ def main():
           f"unresolved {by_source['unresolved']} "
           f"(distinct values by first source; {len(used_skips)} live "
           f"(value, page) exemption(s) in total)")
-    if tally != len(values):
-        print(f"  FAIL  the by-source tally is {tally} but there are {len(values)} "
+    sums = sum(by_source[x] for x in PRECEDENCE) + by_source['unresolved']
+    if sums != len(primary):
+        print(f"  FAIL  the by-source tally is {sums} but there are {len(primary)} "
               f"distinct value(s) — a value is being counted twice or not at all")
         return 1
-    if by_source['unresolved'] != len({v for v, _, _ in findings}):
+    if by_source['unresolved'] != len({v for k, v, _, _ in findings if k == PRIMARY}):
         print(f"  FAIL  the tally says {by_source['unresolved']} unresolved value(s) "
-              f"but {len({v for v, _, _ in findings})} are reported below — the "
+              f"but {len({v for k, v, _, _ in findings if k == PRIMARY})} are reported below — the "
               f"denominator and the verdict disagree")
         return 1
+
+    # One line per discriminator key: its denominator, the size of its shipped-value oracle, and
+    # how its values were resolved. Every key is accounted for to the distinct value.
+    n_unchecked_vals = n_unchecked_occ = 0
+    per_key = {}
+    for k in keys:
+        c = tally(k)
+        vals = values.get(k, {})
+        occ = sum(sum(p.values()) for p in vals.values())
+        ship_only = sorted(v for v, u in sources[k].items()
+                           if 'assets' in u and v not in index.names[k]
+                           and not any(v in names.get(k, ()) for names in page_local.values()))
+        per_key[k] = (c, vals, ship_only)
+        sh = '-' if share[k] is None else f"{share[k]:.2f}"
+        head_ = (f"  INFO  key {k!r}: {mode[k]} (share {sh}); {index.count[k]} registr(y/ies) naming "
+                 f"{len(index.names[k])}; shipped oracle {len(ship[k])} value(s); docs {occ} occurrence(s), "
+                 f"{len(vals)} distinct")
+        if mode[k] == 'checked':
+            if k == PRIMARY:
+                print(head_ + f"; resolved only through shipped values {len(ship_only)}")
+            else:
+                print(head_ + f"; registry {c['registry']}, shipped only {len(ship_only)}, "
+                      f"page's own java fence {c['page-local']}, unresolved {c['unresolved']}")
+        else:
+            unchecked_occ = sum(sum(vals[v].values()) for v, u in sources[k].items() if 'unchecked' in u)
+            n_unchecked_vals += c['unchecked']
+            n_unchecked_occ += unchecked_occ
+            print(head_ + f"; CONFIRMED by a registry keyed {k!r} {c['registry'] + c['page-local']}, "
+                  f"UNCHECKED {c['unchecked']} ({unchecked_occ} occurrence(s)) — not a pass")
+    print(f"  INFO  registries: {sum(index.count.values())} keyed by {len(keys)} key(s) "
+          f"({', '.join(f'{k} {index.count[k]}' for k in keys)}); {len(index.keyless)} without a "
+          f"discriminator (MapKeyMapCodec, names are object keys); {len(index.unknown)} whose key could "
+          f"not be read; {len(unkeyed)} page-local registration(s) whose registry key could not be read")
     if a.verbose:
-        print(f"  INFO  oracle sizes: {len(registered)} registered name(s), "
-              f"{len(asset_types)} asset \"Type\" value(s) over {n_assets} json file(s), "
+        print(f"  INFO  oracle sizes: {len(registered_any)} registered name(s) over all keys, "
+              f"{sum(len(v) for v in ship.values())} shipped (key, value) pair(s) over {n_assets} json file(s), "
               f"{n_java} java fence(s) mined")
-        shifted = sorted(v for v in values if v in unqualified_only)
+        for k in keys:
+            c, vals, ship_only = per_key[k]
+            if ship_only:
+                print(f"  INFO  {k!r}: resolved ONLY through shipped values: {', '.join(ship_only)}")
+            if mode[k] == 'mixed':
+                un = sorted(v for v, u in sources[k].items() if 'unchecked' in u)
+                cf = sorted(v for v, u in sources[k].items() if 'unchecked' not in u)
+                print(f"  INFO  {k!r}: confirmed: {', '.join(cf) or '-'}")
+                print(f"  INFO  {k!r}: UNCHECKED: {', '.join(un) or '-'}")
+        shifted = sorted(v for v in primary if v in unqualified_only)
         print(f"  INFO  docs value(s) that ONLY an unqualified registration supplies to the "
-              f"registry oracle: {len(shifted)} of {len(values)}")
+              f"registry oracle: {len(shifted)} of {len(primary)}")
         for v in shifted:
             regs_ = sorted(k.replace('com.hypixel.hytale.', '') for k in unqualified_only[v])
             print(f"          {v}  <- {', '.join(regs_)}")
+        for pg, nm, how in unkeyed:
+            print(f"  INFO  page-local registration with no readable key: {pg}: {nm} ({how})")
 
     rc = 0
     if missed:
         print(f"  FAIL  known-positive probe passed the oracle: {', '.join(missed)}")
-        print( "        Either the union of four oracles now accepts a value "
+        print( "        Either the union of the oracles now accepts a value "
                "registered nowhere — in which case a clean run below proves "
                "nothing — OR the value became real in a new build, in which case "
                "replace the canary. Check which before touching the oracles: "
@@ -315,16 +479,26 @@ def main():
         print(f"  WARN  stale skiplist entry: {value!r} on {page} — it resolves now, "
               f"or the page no longer uses it. Remove the line.")
         rc = 1
-    for value, page, n in findings:
-        print(f"  FAIL  {page}: \"Type\": \"{value}\" (x{n}) is registered nowhere "
-              f"and appears in no shipped asset")
+    for k, value, page, n in findings:
+        print(f"  FAIL  {page}: \"{k}\": \"{value}\" (x{n}) is registered nowhere "
+              f"under {k!r} and appears in no shipped asset under it"
+              if k == PRIMARY else
+              f"  FAIL  {page}: \"{k}\": \"{value}\" (x{n}) is not a name any registry keyed {k!r} "
+              f"registers and appears in no shipped asset under {k!r}")
     if findings:
         print( "        Before adding a skiplist entry, suspect the oracles: a whole "
                "registration form was missing the first time this ran.")
         rc = 1
     if rc == 0:
-        print(f"  PASS  all {len(values)} distinct \"Type\" value(s) trace to a "
-              f"registration, a shipped asset, or an audited exemption")
+        checked = [k for k in keys if mode[k] == 'checked']
+        mixed = [k for k in keys if mode[k] == 'mixed']
+        n_checked = sum(len(values.get(k, {})) for k in checked)
+        msg = (f"all {n_checked} distinct value(s) under {len(checked)} checked key(s) "
+               f"({', '.join(checked)}) trace to a registration, a shipped asset, or an audited exemption")
+        if mixed:
+            msg += (f"; {n_unchecked_vals} distinct value(s) ({n_unchecked_occ} occurrence(s)) under "
+                    f"{len(mixed)} mixed key(s) ({', '.join(mixed)}) are UNCHECKED, not passed")
+        print(f"  PASS  {msg}")
     return rc
 
 

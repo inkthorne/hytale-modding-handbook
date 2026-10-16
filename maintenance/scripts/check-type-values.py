@@ -277,7 +277,7 @@ def main():
     keys = sorted(index.names, key=lambda k: (k != PRIMARY, k))
     pat = key_pattern(keys) if keys else None
     if not keys or PRIMARY not in index.names:
-        print(f"FAIL  no registry is keyed {PRIMARY!r}: the miner read {len(mined)} registr(y/ies), "
+        print(f"  FAIL  no registry is keyed {PRIMARY!r}: the miner read {len(mined)} registr(y/ies), "
               f"{len(index.unknown)} with an unreadable key. Either the key reader collapsed or the "
               f"source cache is not the codec library — a clean run over that proves nothing.")
         return 1
@@ -285,7 +285,7 @@ def main():
 
     # A zero here would make the gate pass everything for the wrong reason.
     if not index.names[PRIMARY] or not ship[PRIMARY] or not n_assets:
-        print(f"FAIL  an oracle source is empty: registry={len(index.names[PRIMARY])} "
+        print(f"  FAIL  an oracle source is empty: registry={len(index.names[PRIMARY])} "
               f"assets={len(ship[PRIMARY])} from {n_assets} file(s)")
         return 1
 
@@ -296,7 +296,7 @@ def main():
         share[k] = (len(both) / len(ship[k])) if ship[k] else None
         mode[k] = 'checked' if share[k] is not None and share[k] >= SHARE_FLOOR else 'mixed'
     if mode[PRIMARY] != 'checked':
-        print(f"FAIL  {PRIMARY!r} classifies as a MIXED key (share {share[PRIMARY]}): the shipped "
+        print(f"  FAIL  {PRIMARY!r} classifies as a MIXED key (share {share[PRIMARY]}): the shipped "
               f"values under it are mostly not registered names, so either the registry oracle or "
               f"the asset oracle has collapsed — and every value under it would read UNCHECKED.")
         return 1

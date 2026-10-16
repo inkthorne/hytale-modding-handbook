@@ -115,8 +115,24 @@ PASS_LINE = ("PASS  all 7 distinct value(s) under 2 checked key(s) (Type, Op) tr
 # These are FLOORS, not targets. Raise them freely when cases or mutations are
 # added; lowering one needs a reason in the commit message, exactly like the
 # page-size arrears list.
-MIN_CASES = 23
-MIN_MUTATIONS = 15
+MIN_CASES = 28
+MIN_MUTATIONS = 19
+
+# The cases that run verify-docs.sh's own section around the checker (run_wrapper) each have a
+# direct twin: the same checker run, read by the operator's wrapper instead of by the case. A twin
+# is red exactly when its direct case is red, because both read one checker run, so `expect` is
+# stated for the direct cases and the twins are added here rather than pasted into fifteen sets.
+# (The healthy twin is the wrapper control: it goes red whenever the healthy corpus does.)
+WRAPPER_TWIN = {
+    'healthy corpus: scan denominator and tally are exact':
+        'verify-docs.sh on the healthy corpus passes with no FAIL (the wrapper harness control)',
+    'no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED':
+        'verify-docs.sh echoes the cause when no registry is keyed Type',
+    'a Type key whose shipped values are mostly not registered names FAILs as a collapse':
+        'verify-docs.sh echoes the cause when Type classifies as a mixed key',
+    'an empty asset oracle FAILs naming itself, not a clean run':
+        'verify-docs.sh echoes the cause when the asset oracle is empty',
+}
 
 # label -> the file in maintenance/scripts/ the mutation edits (default: the checker itself). A
 # mutant of doc_fences.py is written to the temp dir BESIDE the checker copy, where the
@@ -233,6 +249,39 @@ MUTATIONS = {
         {'a Type key whose shipped values are mostly not registered names FAILs as a collapse'},
         {'a Type key whose shipped values are mostly not registered names FAILs as a collapse'}),
 
+    # The three collapse guards printed `FAIL` at column 0 while verify-docs.sh collects
+    # `^  (FAIL|SKIP)`: the cause was never echoed. Each mutation restores one column-0 line. Both
+    # the direct case (a line-start test, which the old bare 'FAIL' substring was not) and the case
+    # that runs verify-docs.sh's own section around the checker must go red.
+    'the no-registry collapse guard prints FAIL at column 0 again': (
+        'print(f"  FAIL  no registry is keyed', 'print(f"FAIL  no registry is keyed',
+        {'no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED',
+         'verify-docs.sh echoes the cause when no registry is keyed Type'},
+        {'no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED',
+         'verify-docs.sh echoes the cause when no registry is keyed Type'}),
+
+    'the empty-oracle guard prints FAIL at column 0 again': (
+        'print(f"  FAIL  an oracle source is empty', 'print(f"FAIL  an oracle source is empty',
+        {'an empty asset oracle FAILs naming itself, not a clean run',
+         'verify-docs.sh echoes the cause when the asset oracle is empty'},
+        {'an empty asset oracle FAILs naming itself, not a clean run',
+         'verify-docs.sh echoes the cause when the asset oracle is empty'}),
+
+    'the mixed-Type collapse guard prints FAIL at column 0 again': (
+        'print(f"  FAIL  {PRIMARY!r} classifies as a MIXED key', 'print(f"FAIL  {PRIMARY!r} classifies as a MIXED key',
+        {'a Type key whose shipped values are mostly not registered names FAILs as a collapse',
+         'verify-docs.sh echoes the cause when Type classifies as a mixed key'},
+        {'a Type key whose shipped values are mostly not registered names FAILs as a collapse',
+         'verify-docs.sh echoes the cause when Type classifies as a mixed key'}),
+
+    'the empty-oracle guard is removed (a clean run over an empty asset oracle)': (
+        "    if not index.names[PRIMARY] or not ship[PRIMARY] or not n_assets:\n",
+        "    if False:\n",
+        {'an empty asset oracle FAILs naming itself, not a clean run',
+         'verify-docs.sh echoes the cause when the asset oracle is empty'},
+        {'an empty asset oracle FAILs naming itself, not a clean run',
+         'verify-docs.sh echoes the cause when the asset oracle is empty'}),
+
     'a registry whose key cannot be read is not counted': (
         '{len(index.unknown)} whose key could "\n          f"not be read',
         '0 whose key could "\n          f"not be read',
@@ -252,6 +301,46 @@ def run(checker, docs, src, assets, skiplist, extra=()):
         [sys.executable, str(checker), '--docs', str(docs), '--src', str(src),
          '--assets', str(assets), '--skiplist', str(skiplist), *extra],
         capture_output=True, text=True, env=env)
+    return p.returncode, p.stdout + p.stderr
+
+
+VERIFY = HERE / 'verify-docs.sh'
+WRAP_PRELUDE = (
+    'HARD_FAILS=0\n'
+    'section() { echo "== $1 =="; }\n'
+    'pass() { echo "  PASS  $1"; }\n'
+    'fail() { echo "  FAIL  $1"; HARD_FAILS=$((HARD_FAILS+1)); }\n'
+    'warn() { echo "  WARN  $1"; }\n'
+    'info() { echo "  INFO  $1"; }\n')
+
+
+def wrapper_blocks() -> str:
+    """fence_agree() and the type-values section of verify-docs.sh, verbatim: the code that
+    decides what the operator is shown when the checker exits non-zero."""
+    v = VERIFY.read_text()
+    a = v.index('fence_agree() {')
+    agree = v[a:v.index('\n}\n', a) + 3]
+    s = v.index('section "[HARD] Every discriminator value in a JSON fence')
+    return agree + '\n' + v[s:v.index('\n# =====', s)] + '\n'
+
+
+def run_wrapper(checker, tmp, name, docs, src, assets, fc_json=8, fc_total=9):
+    """Run verify-docs.sh's own type-values section around `checker`. The section calls
+    `python3 maintenance/scripts/check-type-values.py` with no --docs/--skiplist, so the copy of
+    the checker sits at <root>/maintenance/scripts/ beside its siblings, and <root>/docs and the
+    skiplist are where its defaults point (REPO / 'docs', HERE / 'type-value-skiplist.txt')."""
+    root = tmp / f'wrap-{name}'
+    sc = root / 'maintenance' / 'scripts'
+    sc.mkdir(parents=True)
+    shutil.copy(checker, sc / 'check-type-values.py')
+    for sib in ('registry_miner.py', 'codec_parser.py', 'doc_fences.py'):
+        shutil.copy((checker.parent / sib) if (checker.parent / sib).exists() else HERE / sib, sc / sib)
+    shutil.copy(SKIPLIST, sc / 'type-value-skiplist.txt')
+    shutil.copytree(docs, root / 'docs')
+    src_cmd = (WRAP_PRELUDE + f'SRC_CACHE={str(src)!r}\nASSETS={str(assets)!r}\nFC_JSON={fc_json}\nFC_TOTAL={fc_total}\n'
+               + wrapper_blocks() + 'echo "HARD_FAILS=$HARD_FAILS"\n')
+    p = subprocess.run(['bash', '-c', src_cmd], capture_output=True, text=True, cwd=root,
+                       env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
     return p.returncode, p.stdout + p.stderr
 
 
@@ -411,15 +500,43 @@ def all_cases(checker) -> tuple[dict[str, list[str]], list[str]]:
         foo = src_nokey / 'fixturepkg' / 'Foo.java'
         foo.write_text(foo.read_text().replace('new CodecMapCodec("Type")', 'new CodecMapCodec(Elsewhere.KEY)'))
         rc, t = run(checker, docs, src_nokey, assets, SKIPLIST)
+        # The leading newline makes `\n  FAIL  ` a LINE-START test: verify-docs.sh collects
+        # `^  (FAIL|SKIP)`, and these three lines were printed at column 0, so the cause was
+        # never echoed (review of bc10b45..23ea833, MINOR-2). A bare 'FAIL' substring was satisfied
+        # by the column-0 form, which is why the cases below used to stay green.
         case('no registry keyed Type (an unreadable key) FAILs rather than reading everything UNCHECKED',
-             rc, t, want_rc=1, must=('no registry is keyed', 'FAIL'), must_not=('PASS',))
+             rc, '\n' + t, want_rc=1, must=('\n  FAIL  no registry is keyed',), must_not=('PASS', '\nFAIL'))
+        rc_w, t_w = run_wrapper(checker, tmp, 'nokey', docs, src_nokey, assets)
+        case('verify-docs.sh echoes the cause when no registry is keyed Type', rc_w, t_w, want_rc=0,
+             must=('FAIL  check-type-values.py reported:', '\n    no registry is keyed', 'HARD_FAILS=3'),
+             must_not=('stale skiplist',))
         assets_mixed = tmp / 'assets-mixed'
         shutil.copytree(assets, assets_mixed)
         for f in ('alpha', 'beta', 'zeta', 'eta'):
             (assets_mixed / 'Server' / 'Thing' / f'{f}.json').unlink()
         rc, t = run(checker, docs, src, assets_mixed, SKIPLIST)
         case('a Type key whose shipped values are mostly not registered names FAILs as a collapse',
-             rc, t, want_rc=1, must=("'Type' classifies as a MIXED key", 'FAIL'), must_not=('PASS',))
+             rc, '\n' + t, want_rc=1, must=("\n  FAIL  'Type' classifies as a MIXED key",), must_not=('PASS', '\nFAIL'))
+        rc_w, t_w = run_wrapper(checker, tmp, 'mixed', docs, src, assets_mixed)
+        case('verify-docs.sh echoes the cause when Type classifies as a mixed key', rc_w, t_w, want_rc=0,
+             must=('FAIL  check-type-values.py reported:', "\n    'Type' classifies as a MIXED key", 'HARD_FAILS=3'),
+             must_not=('stale skiplist',))
+        # The third collapse guard had no case at all: registry non-empty, nothing shipped under Type.
+        assets_empty = tmp / 'assets-empty'
+        (assets_empty / 'Server').mkdir(parents=True)
+        rc, t = run(checker, docs, src, assets_empty, SKIPLIST)
+        case('an empty asset oracle FAILs naming itself, not a clean run', rc, '\n' + t, want_rc=1,
+             must=('\n  FAIL  an oracle source is empty:',), must_not=('PASS', '\nFAIL'))
+        rc_w, t_w = run_wrapper(checker, tmp, 'empty', docs, src, assets_empty)
+        case('verify-docs.sh echoes the cause when the asset oracle is empty', rc_w, t_w, want_rc=0,
+             must=('FAIL  check-type-values.py reported:', '\n    an oracle source is empty:', 'HARD_FAILS=3'),
+             must_not=('stale skiplist',))
+        # The control for the three wrapper cases: the same harness on the healthy corpus passes, so a
+        # red above is the checker's output and not the harness (a wrapper that never ran is not a
+        # wrapper that found the cause).
+        rc_w, t_w = run_wrapper(checker, tmp, 'healthy', docs, src, assets)
+        case('verify-docs.sh on the healthy corpus passes with no FAIL (the wrapper harness control)', rc_w, t_w,
+             want_rc=0, must=('PASS  all 7 distinct value(s)', 'HARD_FAILS=0'), must_not=('  FAIL  ',))
 
         # A registry whose key cannot be read is COUNTED. It names nothing under any key, so a docs
         # value that depended on it would fail loudly rather than pass under a guessed key.
@@ -489,6 +606,8 @@ def main():
     print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     with tempfile.TemporaryDirectory() as td:
         for k, (label, (old, new, expect, names)) in enumerate(MUTATIONS.items()):
+            expect = expect | {WRAPPER_TWIN[d] for d in expect if d in WRAPPER_TWIN}
+            names = names | {WRAPPER_TWIN[d] for d in names if d in WRAPPER_TWIN}
             target = HERE / MUTATION_TARGET.get(label, CHECKER.name)
             src = target.read_text()
             if old not in src:

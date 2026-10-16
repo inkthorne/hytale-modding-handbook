@@ -63,6 +63,43 @@ BUILD_MARKER="$(find "$ROOT/install/release/package/sig" -maxdepth 1 -name 'buil
 [ -n "$BUILD_MARKER" ] && info "build:  $(basename "$BUILD_MARKER")"
 
 # =====================================================================
+section "[HARD] Fence census: every fence marker in docs/ belongs to a fence the shared reader returned"
+# Every gate that reads a docs page's code fences reads them through
+# maintenance/scripts/doc_fences.py, and this section is what keeps that true. It counts
+# every line whose ``` or ~~~ is preceded only by whitespace, `>` and list markers, with a
+# regex of its own, and FAILS on any that is not the opener or the closer of a fence the
+# reader returned (a four-backtick fence, ~~~, a closer whose prefix shape differs from its
+# opener's, a ```lang line inside an open fence, an unclosed fence). It also FAILS on zero
+# pages or zero fences. The figures it prints are the denominators the gates below are
+# compared with: a gate that reports a different fence count than this one is reading a
+# different corpus, which is exactly how five java fences went unread. Only three-backtick
+# fences are supported; see the module's docstring for the container rules and the decisions.
+FC_JAVA=""; FC_JSON=""; FC_TOTAL=""
+OUT="$(python3 maintenance/scripts/doc_fences.py --census)"; RC=$?
+echo "$OUT" | grep -E '^  INFO'
+if [ "$RC" -eq 0 ]; then
+  pass "every fence marker is accounted for"
+else
+  fail "fence census:"
+  echo "$OUT" | grep -E '^  FAIL' | sed 's/^  FAIL  /    /'
+fi
+CNT="$(python3 maintenance/scripts/doc_fences.py --counts)"
+FC_JAVA="$(echo "$CNT" | awk '{print $2}')"; FC_JSON="$(echo "$CNT" | awk '{print $4}')"; FC_TOTAL="$(echo "$CNT" | awk '{print $6}')"
+if [ -z "$FC_JAVA" ] || [ -z "$FC_JSON" ] || [ -z "$FC_TOTAL" ]; then
+  fail "the fence census printed no counts - the cross-checks below have nothing to compare with"
+fi
+# fence_agree LABEL GATE_COUNT CENSUS_COUNT: a gate whose fence count differs from the
+# census, or printed none, is not reading the corpus the census counted. A missing figure is
+# a FAIL, never a skip.
+fence_agree() {
+  if [ -z "$2" ]; then
+    fail "$1: printed no fence count, so it cannot be compared with the census ($3)"
+  elif [ "$2" -ne "$3" ]; then
+    fail "$1: read $2 fence(s), the census counted $3 - the gate and the census are reading different corpora"
+  fi
+}
+
+# =====================================================================
 section "[HARD] Class references resolve via javap"
 # Every com.hypixel.* class named in docs/ must exist in the jar.
 if [ -f "$JAR" ] && command -v javap >/dev/null 2>&1; then
@@ -109,8 +146,10 @@ if [ -f "$JAR" ]; then
   OUT="$(python3 maintenance/scripts/check-symbols.py "$JAR" 2>&1)"
   C="$(echo "$OUT" | awk '/^CHECKED_MEMBERS/{print $2}')"
   N="$(echo "$OUT" | awk '/^FINDINGS/{print $2}')"
+  JF="$(echo "$OUT" | awk '/^JAVA_FENCES/{print $2}')"
+  fence_agree "check-symbols.py (java fences)" "$JF" "$FC_JAVA"
   if [ "${N:-1}" -eq 0 ]; then
-    pass "$C documented member symbol(s) all resolve"
+    pass "$C documented member symbol(s) all resolve (read from $JF java fence(s) and inline spans)"
   else
     fail "$N documented symbol(s) do not resolve in the jar (stale/typo/fabricated):"
     echo "$OUT" | grep '^FIND' | sed 's/^FIND/      /'
@@ -323,20 +362,30 @@ fi
 section "[ADVISORY] JSON code blocks parse"
 # Note: these docs intentionally use fenced fragments (e.g. \"Field\": { ... });
 # non-parsing blocks are usually fragments, not errors. Reported for awareness.
+# Fences come from doc_fences.py (blockquoted and indented ones included, container prefix
+# removed from the body). The unanchored regex this replaced read a blockquoted fence with
+# its `> ` still on every line, which never parses; JSONFENCES is compared with the census.
 OUT="$(python3 - <<'PY'
-import re, glob, os
-bad=0
-for f in glob.glob("docs/*.md"):
-    for i,b in enumerate(re.findall(r'```json\n(.*?)```', open(f).read(), re.S)):
+import re, glob, os, sys, json
+sys.path.insert(0, "maintenance/scripts")
+import doc_fences
+bad=0; n=0
+for f in sorted(glob.glob("docs/*.md")):
+    for fence in doc_fences.fences(open(f).read()):
+        if fence.lang != "json": continue
+        n+=1
+        b=fence.body
         if "..." in b or "//" in b or "$" in b: continue
         try:
-            import json; json.loads(b)
+            json.loads(b)
         except Exception:
             bad+=1
 print(f"FRAG {bad}")
+print(f"JSONFENCES {n}")
 PY
 )"
 FRAG="$(echo "$OUT" | awk '/^FRAG/{print $2}')"
+fence_agree "JSON-parse check (json fences)" "$(echo "$OUT" | awk '/^JSONFENCES/{print $2}')" "$FC_JSON"
 info "$FRAG json block(s) are fragments / not standalone-parseable (expected for this doc style)"
 
 # =====================================================================
@@ -345,7 +394,9 @@ section "[ADVISORY] Doc-type tags are present and consistent"
 # references >=2 distinct com.hypixel.* classes may be mis-tagged (a single
 # incidental base-class mention in a JSON/DSL doc is normal and not flagged).
 OUT="$(python3 - <<'PY'
-import re, glob, os
+import re, glob, os, sys
+sys.path.insert(0, "maintenance/scripts")
+import doc_fences
 untagged=[]; mismatch=[]; counts={}; multi=[]
 # Anchored: the tag is a line, never a prose mention. Unanchored, a page whose
 # real tag line was dropped would silently adopt the first inline `**Doc type:**`
@@ -374,11 +425,11 @@ cls_re=re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
 #      fence on the page; the FQCN test alone cannot see how Java is written.
 head_re=re.compile(r'^(#{1,6})\s', re.M)
 pkg_re=re.compile(r'^\*\*Package:\*\*.*$', re.M)
-json_re=re.compile(r'^```json', re.M)
 ptab_re=re.compile(r'^\|\s*(?:Property|Key)\s*\|', re.M)
-java_re=re.compile(r'^```java', re.M | re.I)
 mtab_re=re.compile(r'^\|\s*(?:Methods?|Signatures?)\s*\|', re.M)
-fence_re=re.compile(r'^```(\w*)', re.M)
+# Fences come from doc_fences.py, so a java fence in a blockquote or indented in a list item
+# disqualifies a page (D) and a section (E) exactly like a column-0 one; the column-0 regexes
+# this replaced could not see them. A fence belongs to the section whose span holds its opener.
 def _tag(s): return s.lower()
 def _sections(txt):
     hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)]
@@ -387,30 +438,27 @@ def _sections(txt):
         for pos2,lvl2 in hs[i+1:]:
             if lvl2<=lvl: end=pos2; break
         yield pos,end
-def _openers(body):
-    return [_tag(m.group(1)) for i,m in enumerate(fence_re.finditer(body)) if i%2==0]
-def _nonjson_fence_text(txt):
-    out=[]; f=[(m.start(), m.end(), m.group(1)) for m in fence_re.finditer(txt)]
-    for i in range(0,len(f)-1,2):
-        if _tag(f[i][2])!='json': out.append(txt[f[i][1]:f[i+1][0]])
-    return "\n".join(out)
+def _nonjson_fence_text(fences):
+    return "\n".join(f.body for f in fences if _tag(f.lang)!='json')
 def provenance(txt):
-    if java_re.search(txt) or mtab_re.search(txt): return set()      # D
+    fences=doc_fences.fences(txt)
+    if any(_tag(f.lang)=='java' for f in fences) or mtab_re.search(txt): return set()      # D
     prov=set(); spans=[]
     for s,e in _sections(txt):
         body=txt[s:e]
+        here=[f for f in fences if s<=f.start<e]
         for pm in pkg_re.finditer(body):
             cs=set(cls_re.findall(pm.group(0)))
             if not cs: continue
-            if not (json_re.search(body) or ptab_re.search(body)): continue   # F
-            if any(tag!='json' for tag in _openers(body)): continue           # E
+            if not (any(f.lang=='json' for f in here) or ptab_re.search(body)): continue   # F
+            if any(_tag(f.lang)!='json' for f in here): continue                           # E
             prov|=cs; spans.append((s+pm.start(), s+pm.end()))
     if not prov: return set()
     masked=list(txt)
     for a,b in spans:
         for i in range(a,b): masked[i]=' '
     outside=set(cls_re.findall(''.join(masked)))
-    nonjson=_nonjson_fence_text(txt)                                          # G
+    nonjson=_nonjson_fence_text(fences)                                       # G
     return {c for c in prov - outside if c.rsplit('.',1)[-1] not in nonjson}
 # Calibration skip-list: the residual — citations in prose or fences that the
 # provenance rule above cannot classify. See maintenance/scripts/doctype-skiplist.txt.
@@ -421,9 +469,11 @@ if os.path.exists(sl):
         line=line.split("#",1)[0].strip()
         if line: skip.add(line)
 scanned=0; candidates=0; used=set(); prov_cites=0; prov_pages=set(); fell=[]
+fences_read=0
 for p in sorted(glob.glob("docs/*.md")):
     bn=os.path.basename(p); txt=open(p).read()
     scanned+=1
+    fences_read+=len(doc_fences.fences(txt))      # every page, so the figure is comparable with the census
     m=type_re.search(txt)
     if not m:
         untagged.append(bn); continue
@@ -458,6 +508,7 @@ for p in sorted(glob.glob("docs/*.md")):
 # letting it sit ready to re-suppress if the file ever returns.
 for stale in sorted(skip - used): print(f"STALESKIP {stale}")
 print(f"DENOM {scanned} {candidates} {len(used)} {prov_cites} {len(prov_pages)} {len(fell)}")
+print(f"FENCESREAD {fences_read}")
 for b in fell: print(f"FELL {b}")
 for t in sorted(counts): print(f"COUNT {counts[t]} {t}")
 for u in untagged: print(f"UNTAGGED {u}")
@@ -474,6 +525,7 @@ SKIPPED="$(echo "$OUT" | awk '/^DENOM/{print $4}')"
 PROVC="$(echo "$OUT" | awk '/^DENOM/{print $5}')"
 PROVP="$(echo "$OUT" | awk '/^DENOM/{print $6}')"
 FELL="$(echo "$OUT" | awk '/^DENOM/{print $7}')"
+fence_agree "Doc-type check (all fences)" "$(echo "$OUT" | awk '/^FENCESREAD/{print $2}')" "$FC_TOTAL"
 SS="$(echo "$OUT" | grep -c '^STALESKIP' || true)"
 MT="$(echo "$OUT" | grep -c '^MULTITAG' || true)"
 [ "$U" -eq 0 ] && pass "all docs carry a **Doc type:** tag" || { warn "$U untagged doc(s):"; echo "$OUT" | grep '^UNTAGGED' | sed 's/^UNTAGGED/      /'; }
@@ -563,8 +615,10 @@ section "[ADVISORY] Documentation coverage vs public API surface"
 # for humans, never a gate.
 if [ -n "${TMPCLS:-}" ] && [ -d "$TMPCLS" ]; then
   python3 - "$TMPCLS" <<'PY'
-import sys, os, struct, re, glob
+import sys, os, struct, re, glob, pathlib
 from collections import defaultdict
+sys.path.insert(0, "maintenance/scripts")
+import doc_fences
 CLS = sys.argv[1]
 ACC_PUBLIC = 0x0001
 CAND = ("com/hypixel/hytale/server/core/", "com/hypixel/hytale/component/",
@@ -629,13 +683,15 @@ for root, _, files in os.walk(os.path.join(CLS, BUILTIN)):
 #      alltext    - full concatenated doc text, for plain-prose word matching
 dfq = set(); code_names = set(); alltext = []; codetext = []
 fq = re.compile(r'com\.hypixel\.hytale(?:\.[a-z0-9_]+)+\.[A-Z][A-Za-z0-9_]*')
-fenced = re.compile(r'```.*?```', re.S)
 inline = re.compile(r'`[^`\n]+`')
 ident = re.compile(r'\b[A-Z][A-Za-z0-9_]*\b')
 hump = re.compile(r'[a-z][A-Z]')          # CamelCase marker (RequiredArg, ModelComponent)
+fences_harvested = 0
 for f in glob.glob("docs/*.md"):
     t = open(f).read(); alltext.append(t); dfq.update(fq.findall(t))
-    code = " ".join(fenced.findall(t)) + " " + " ".join(inline.findall(t))
+    fenced = doc_fences.fenced_text(t)    # every fence, any container (doc_fences.py)
+    fences_harvested += len(fenced)
+    code = " ".join(fenced) + " " + " ".join(inline.findall(t))
     codetext.append(code); code_names.update(ident.findall(code))
 alltext = "\n".join(alltext); codetext = "\n".join(codetext)
 
@@ -671,6 +727,11 @@ def subpkg(internal):
 pub_b = [c for c in cand if c in bref]
 tiers = {"documented": [], "mentioned": [], "absent": []}
 for c in pub_b: tiers[tier(c)].append(c)
+_census_total = doc_fences.census(pathlib.Path("docs")).fences
+print(f"  {fences_harvested} fence(s) harvested for code names (the census counted {_census_total})")
+if fences_harvested != _census_total:
+    print("  FAIL  the coverage advisory harvested a different number of fences than the census")
+    sys.exit(3)
 print(f"  {len(cand)} public top-level candidate classes "
       f"(server.core/component/math)")
 print(f"  {len(pub_b)} are also builtin-referenced (high-confidence plugin API). Of those:")
@@ -690,6 +751,7 @@ for g in sorted(ag, key=lambda k: (-len(ag[k]), k)):
     print(f"      [{len(ag[g]):>3}] {g}")
     print("            " + ", ".join(sorted(ag[g])))
 PY
+  [ $? -eq 0 ] || fail "the coverage advisory's fence harvest disagrees with the census (above)"
   rm -rf "$TMPCLS"
 else
   warn "skipped (no extracted game classes)"
@@ -723,6 +785,8 @@ section "[ADVISORY] Documented JSON fields appear in real assets or codecs"
 if [ -d "$ASSETS" ]; then
   OUT="$(python3 - "$ASSETS" "${HYTALE_JAR_CACHE:-$HOME/.cache/hytale-jar}/src" <<'FIELDSPY'
 import re, glob, os, sys, subprocess
+sys.path.insert(0, "maintenance/scripts")
+import doc_fences
 assets=sys.argv[1]; jarsrc=sys.argv[2]
 # asset dir comes from each doc's "**Assets:** `dir`" tag (single source of truth)
 key_re = re.compile(r'"([A-Za-z][A-Za-z0-9_]+)"\s*:')
@@ -738,7 +802,7 @@ if os.path.exists(sl):
 def found_in(needle, d):
     return os.path.isdir(d) and subprocess.run(
         ["grep","-rl",needle,d],capture_output=True).returncode==0
-checked=0; flagged=0
+checked=0; flagged=0; json_fences=0
 for p in sorted(glob.glob("docs/*.md")):
     txt=open(p).read()
     m=adir_re.search(txt)
@@ -746,8 +810,10 @@ for p in sorted(glob.glob("docs/*.md")):
     adir=m.group(1)
     if adir=="Common": continue            # too broad to field-check meaningfully
     keys=set()
-    for b in re.findall(r'```json\n(.*?)```', txt, re.S):
-        keys.update(key_re.findall(b))
+    for fence in doc_fences.fences(txt):   # any container; `> ` and indent removed from the body
+        if fence.lang!="json": continue
+        json_fences+=1
+        keys.update(key_re.findall(fence.body))
     if not keys: continue
     d=os.path.join(assets,adir); checked+=1
     doc=os.path.basename(p)
@@ -767,12 +833,13 @@ for p in sorted(glob.glob("docs/*.md")):
         print(f"SUSPECT {doc}: "+", ".join(suspect))
 print(f"CHECKED {checked}")
 print(f"FLAGGED {flagged}")
+print(f"JSONFENCES {json_fences}")
 FIELDSPY
 )"
   N="$(echo "$OUT" | sed -n 's/^FLAGGED //p')"
   C="$(echo "$OUT" | sed -n 's/^CHECKED //p')"
   if [ "${N:-0}" -eq 0 ]; then
-    pass "all documented JSON keys trace to assets or codecs ($C docs checked)"
+    pass "all documented JSON keys trace to assets or codecs ($C docs checked, $(echo "$OUT" | sed -n 's/^JSONFENCES //p') json fence(s) read)"
   else
     warn "$N documented key(s) found in neither assets nor jar codecs (fabricated or renamed?):"
     echo "$OUT" | grep '^SUSPECT' | sed 's/^SUSPECT/      /'
@@ -807,6 +874,9 @@ section "[HARD] The gates' own fixtures pass"
 # snapshot cannot be regenerated. Its --mutations pass (32 mutations, ~13 min)
 # is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
 # or triage_drift.py changes.
+# check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:
+# 73 cases, 37 mutations including the identity control) takes ~6 s, so it is run here
+# rather than by hand.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -821,6 +891,7 @@ check-type-values-fixture.py --mutations
 check-asset-ids-fixture.py --mutations
 check-defaults-fixture.py --mutations
 check-links-fixture.py --mutations
+check-doc-fences-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
@@ -926,6 +997,10 @@ else
   OUT="$(python3 maintenance/scripts/check-type-values.py --src "$SRC_CACHE" --assets "$ASSETS")"
   RC=$?
   echo "$OUT" | grep -E '^  INFO'
+  # "N json fence(s) of M in P page(s)": N is the census's json count, M its total. A missing
+  # line is a FAIL (the sed prints nothing and fence_agree refuses an empty figure).
+  fence_agree "check-type-values.py (json fences)" "$(echo "$OUT" | sed -n 's/^  INFO  \([0-9][0-9]*\) json fence(s) of [0-9][0-9]* in .*/\1/p')" "$FC_JSON"
+  fence_agree "check-type-values.py (all fences)" "$(echo "$OUT" | sed -n 's/^  INFO  [0-9][0-9]* json fence(s) of \([0-9][0-9]*\) in .*/\1/p')" "$FC_TOTAL"
   # A stale skiplist entry is a WARN, and it must go through `warn` so it counts
   # toward the figure invariant 1 reads. Echoed raw it was simultaneously a hard
   # failure with no stated cause and a warning that did not count as one.
@@ -964,6 +1039,9 @@ else
   OUT="$(python3 maintenance/scripts/check-asset-ids.py --src "$SRC_CACHE" --assets "$ASSETS")"
   RC=$?
   echo "$OUT" | grep -E '^  INFO'
+  # Only its printed json-fence count is read ("... 727 ```json fence(s) (..."); the gate has its
+  # own reader (it predates doc_fences.py), so this is the check that it still sees the census's fences.
+  fence_agree "check-asset-ids.py (json fences)" "$(echo "$OUT" | sed -n 's/^  INFO  docs scan: [0-9][0-9]* page(s); \([0-9][0-9]*\) ```json fence(s).*/\1/p')" "$FC_JSON"
   if [ "$RC" -eq 0 ]; then
     pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
   elif [ "$RC" -eq 1 ]; then
@@ -1024,6 +1102,7 @@ if [ -f "$JAR" ] && command -v javac >/dev/null 2>&1; then
   DC="$(echo "$OUT" | awk '/^DOCS/{print $2}')"
   DJ="$(echo "$OUT" | awk '/^DOCS/{print $3}')"
   FRAG=$(( ${NB:-0} - ${N:-0} ))
+  fence_agree "check-snippets.py (java fences)" "$NB" "$FC_JAVA"
   if [ "$RC" -eq 0 ]; then
     # Report the denominator: this gate is opt-in (a fragment cannot compile), so
     # "all N compile" alone reads as corpus coverage when it is a small subset.

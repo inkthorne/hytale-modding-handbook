@@ -864,9 +864,10 @@ section "[HARD] The gates' own fixtures pass"
 # runs the fixture by hand and meets a wall of red at the worst possible moment,
 # which is precisely when "delete the failing mutations" is the cheap repair.
 #
-# Cost is ~1 min against a run that compiles six Gradle projects (codec ~26s and
-# registry ~45s of it, both added 2026-10-15), so --mutations is included rather
-# than deferred behind a flag. The exception is
+# Cost is ~3 min against a run that compiles six Gradle projects (codec ~26s, added
+# 2026-10-15; registry ~2m17s since the discriminator-key and enum mutations of
+# 2026-10-16, ~45s before), so --mutations is included rather than deferred
+# behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
 # update-build.sh end to end against generated jars: 181 checks in ~27s, which
 # is kept here because those scripts run only at a game update, and their
@@ -976,7 +977,7 @@ else
 fi
 
 # =====================================================================
-section "[HARD] Every \"Type\" value in a JSON fence is a registered name"
+section "[HARD] Every discriminator value in a JSON fence is registered under its own key"
 # Queued gate 1, phase (c). `"Type"` is the discriminator on nearly every JSON
 # page here and a fabricated one reads exactly like a real one; nothing checked
 # these before. The check prints its own denominator and its per-oracle tally —

@@ -1079,7 +1079,10 @@ project actually reads.
 ## 12. Phase (c) is unscoped, and the obvious scoping is unsound
 
 `check-type-values.py` checks that a documented `"Type"` is a registered name
-**somewhere**, not that it is legal in the **slot** it appears in. So it catches
+**somewhere**, not that it is legal in the **slot** it appears in.
+(Since 2026-10-16, §16, it checks each discriminator **key** against the registries
+keyed by it. That catches a value filed under the wrong key; it does not scope the
+slot. Key matching is still position-blind.) So it catches
 *invention* and is blind to *misattribution* — §4 lists eight names registered on
 two codecs, and §1 adds 15 core-component names registered in more than one
 category.
@@ -1253,7 +1256,7 @@ but 0.7.2 ships 18 `Server/WorldEvent` assets using it as a `"Type"`, so the shi
 oracle now covers it independently. A stale exemption can mean the oracle grew, not that
 the page changed.
 
-**Unqualified registrations (review of the 0.7.2 pass, closed 2026-10-15).** The recount shared no *code* with the miner, but it shared the miner's form-1 predicate: both needed a `Receiver.` before the field, so `CODEC.register("Box", …)` in `TriggerVolumeShape` matched neither. At 0.7.2 that was 69 sites in 20 classes (68 form-1, plus `OpenCustomUIInteraction`'s `getCodecRegistry(PAGE_CODEC)`); at 0.6.8 it was 68 in 18. The miner was missing 18 registries (107 → 125) and `Condition.CODEC` was short by 15 names. The review counted 17, because `EditorPropertyGallery.TYPED_SAMPLE_CODEC` is not named plain `CODEC`. The fix: the miner resolves a bare field the way Java does, from the inside out. A local or parameter of that name excludes the call; otherwise the innermost enclosing class declaring a static field of that name binds it; failing both, the site is UNRESOLVED. There is no superclass rule, and UNRESOLVED is pinned at 0. The recount binds the same sites by a forward pass over a class stack, with a shadow search in the enclosing member. They agree on site count, registry set, per-registry name set and no-name count at both builds. One ordering caveat: the miner was run once (a dump) before the recount's list of new registries existed, against the acceptance's order. The independence of that list rests on the recount's own hand-readable derivation, which produces the same 18. Decisions: Schema's `""` id is a resolved site but not a vocabulary name, and cast literals (`(Object)"null"`) resolve. Three sites have no resolved name: ItemAbility's two `AbilitySlot.X.name()` ids, knowable but not evaluated, and `OpenCustomUIInteraction`'s `id` parameter. Verdict changes: ItemAbility.CODEC and OpenCustomUIInteraction.PAGE_CODEC become open, taking the open count from 10 to 12. Still not covered, and now measured rather than assumed: a registry held in a variable (0); a `getCodecRegistry(` with a non-field argument other than the 3 `PluginBase` declarations (0); an inherited bare field (UNRESOLVED 0); a `this.`/`super.` receiver (0 in the tree, excluded by rule). The first version of this fix stored a nested class's parent link in the recount as a stack position rather than a class index. The synthetic tree caught it, which is the case for keeping nested-class cases there.
+**Unqualified registrations (review of the 0.7.2 pass, closed 2026-10-15).** The recount shared no *code* with the miner, but it shared the miner's form-1 predicate: both needed a `Receiver.` before the field, so `CODEC.register("Box", …)` in `TriggerVolumeShape` matched neither. At 0.7.2 that was 69 sites in 20 classes (68 form-1, plus `OpenCustomUIInteraction`'s `getCodecRegistry(PAGE_CODEC)`); at 0.6.8 it was 68 in 18. The miner was missing 18 registries (107 → 125) and `Condition.CODEC` was short by 15 names. The review counted 17, because `EditorPropertyGallery.TYPED_SAMPLE_CODEC` is not named plain `CODEC`. The fix: the miner resolves a bare field the way Java does, from the inside out. A local or parameter of that name excludes the call; otherwise the innermost enclosing class declaring a static field of that name binds it; failing both, the site is UNRESOLVED. There is no superclass rule, and UNRESOLVED is pinned at 0. The recount binds the same sites by a forward pass over a class stack, with a shadow search in the enclosing member. They agree on site count, registry set, per-registry name set and no-name count at both builds. One ordering caveat: the miner was run once (a dump) before the recount's list of new registries existed, against the acceptance's order. The independence of that list rests on the recount's own hand-readable derivation, which produces the same 18. Decisions: Schema's `""` id is a resolved site but not a vocabulary name, and cast literals (`(Object)"null"`) resolve. Three sites have no resolved name: ItemAbility's two `AbilitySlot.X.name()` ids, knowable but not evaluated, and `OpenCustomUIInteraction`'s `id` parameter. Verdict changes: ItemAbility.CODEC and OpenCustomUIInteraction.PAGE_CODEC become open, taking the open count from 10 to 12. **Update 2026-10-16 (§16):** ItemAbility's two `.name()` ids are now evaluated (Core, Support), so ItemAbility.CODEC closes and the open count is 11. Still not covered, and now measured rather than assumed: a registry held in a variable (0); a `getCodecRegistry(` with a non-field argument other than the 3 `PluginBase` declarations (0); an inherited bare field (UNRESOLVED 0); a `this.`/`super.` receiver (0 in the tree, excluded by rule). The first version of this fix stored a nested class's parent link in the recount as a stack position rather than a class index. The synthetic tree caught it, which is the case for keeping nested-class cases there.
 
 **Narrowed by review the same day (80cc419..cf95513, MEDIUM-3).** The first fix bound a bare field to the innermost enclosing class that declared it, and walked past every other class. Java looks in a class's inherited members first. Four cases bound to the outer field in BOTH scripts:
 - a nested class extending `Base`;
@@ -1274,3 +1277,63 @@ Found and fixed in the same round:
 
 Still not handled, stated so it is not rediscovered:
 - a multi-declarator that follows a lambda-bodied initialiser is read as UNRESOLVED. That fails loudly, never as a wrong binding.
+
+## 16. Discriminator keys, and the union that accepted 115 foreign names (2026-10-16)
+
+Until this date `check-type-values.py` unioned every registry's names into the `"Type"` oracle,
+whatever key the registry dispatches on. The advisor on the enum-name item found it: closing
+`ItemAbility.CODEC` (keyed `"Slot"`, `new CodecMapCodec("Slot")`) would have added Core and
+Support to the `"Type"` oracle, so a fabricated `"Type": "Core"` would pass. Measured: 132 names
+sat under some non-Type key, 115 of them not also Type names (86 Id, 11 in the two key-less
+`MapKeyMapCodec` registries, 8 `component`, 7 `type`, 2 `Slot`, 1 `Op`). No docs value relied on
+one (the before/after resolution of the 219 docs Type values is identical). A negative control on
+a scratch copy of abilities.md — `{"Type":"Core","Next":{"Op":"Charging"}}` — passes the old gate
+and fails the new.
+
+**How the key is read.** From the declaration: a string or file constant, else the constructor
+family's default, read from the library source, not assumed. `ACodecMapCodec(Codec, boolean)` does
+`this("Id", …)` (:51-56), and every no-key `CodecMapCodec` / `StringCodecMapCodec` /
+`BuilderCodecMapCodec` / `ObjectCodecMapCodec` constructor reaches it. The no-key
+`AssetCodecMapCodec` constructors call `super("Type")`. Form 3 uses `BuilderFactory.DEFAULT_TYPE =
+"Type"` (:31), and the literal tag at all 20 `new BuilderFactory<…>(…, "Type")` sites agrees. At
+0.7.2: Type 108 (59 explicit, 42 default, 7 form-3), Id 11, Op 1, Slot 1, type 1, component 1, 2
+key-less, 0 UNKNOWN. At 0.6.8: Type 106, Id 10, the rest the same less Slot. The miner and the
+recount agree per registry (118 key checks at 0.7.2, 114 at 0.6.8).
+
+The 11 Id-keyed registries are Memory, ItemContainer, entity `Condition`, Modifier, BreakShape,
+SelectorType, `OpenCustomUIInteraction.PAGE_CODEC`, IHeightmap, ISpawnProvider and
+`WorldMapManager`'s MarkerReference (all by default), and `BrushOperation.OPERATION_CODEC`
+(explicit). A list drafted from memory had `ShapeCodecs.SHAPE` in place of BrushOperation.
+`SHAPE` is keyed Id, but its field is not named `*CODEC`, so **neither script mines it**: its
+four names (Box, Ellipsoid, Cylinder, OriginShape) are in no oracle. The miner also resolves
+MarkerReference's declaring type to a `worldmap.MarkerReference` that does not exist. The key is
+still found, through the registering file.
+
+**Checked and mixed keys.** A key's shipped values are an oracle only if they are mostly its
+registry names. The share is shipped values under the key that are its registry names, divided by
+all shipped values under it. The floor is 0.5, set before any docs value was read, and every floor
+between 0.08 and 0.85 classifies identically:
+
+| Key | Share | Mode |
+|---|---|---|
+| Type | 0.86 | checked |
+| Op | 1.00 | checked |
+| Slot | 0.07 | mixed (an NPC blackboard slot elsewhere) |
+| Id | 0.04 | mixed (78 of 1,905 shipped values are registry names) |
+| type | no shipped value | mixed (`box`/`quad`/`none` are the blockymodel shape vocabulary, in `.blockymodel` files the sweep does not read) |
+| component | no shipped value | mixed |
+
+A mixed key's registered names are CONFIRMED, and every other value is UNCHECKED: printed and
+counted, never failed and never passed. At HEAD 97 distinct docs Id values: 20 confirmed (10
+entity Condition names in effects-stats.md, 4 SelectorType, 2 OpenCustomUI pages, 1 BreakShape, 1
+ISpawnProvider, 2 page-local), 77 unchecked. Plus `type` 3 unchecked. Before the change, all 105
+distinct values under the five non-Type keys went unexamined; now 80 do, each named under `-v`.
+
+**What agreement vouches for.** The enum rule (`E.C.name()` closes when E is an enum in the tree
+and C one of its constants; `toString()` and `(Object)E.C` stay open) and the constructor-family
+decision table are written into both scripts, so their agreement does not vouch for them. The
+route that shares nothing is the shipped assets: Core and Support under `"Slot"` in 24 files, a
+fixture check. Bench (`(Object)BenchType.X`) stays open on purpose: its JSON string comes from
+EnumCodec's style detection (EnumCodec.java:41-46, :161-190), and identity for Bench is a
+coincidence a general rule must not rely on.
+

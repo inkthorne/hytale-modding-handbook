@@ -432,7 +432,12 @@ mtab_re=re.compile(r'^\|\s*(?:Methods?|Signatures?)\s*\|', re.M)
 # this replaced could not see them. A fence belongs to the section whose span holds its opener.
 def _tag(s): return s.lower()
 def _sections(txt):
-    hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)]
+    # A heading-shaped line inside a code fence (a `# comment` in a bash fence, a `## ` line in an
+    # ASCII diagram) is not a heading: read as one it ended the section it sat in, mid-fence.
+    # Fence membership is doc_fences.py's, the one reader every gate shares.
+    fenced=doc_fences.parse(txt).fence_lines
+    hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)
+        if txt.count("\n",0,m.start())+1 not in fenced]
     for i,(pos,lvl) in enumerate(hs):
         end=len(txt)
         for pos2,lvl2 in hs[i+1:]:
@@ -555,6 +560,8 @@ if [ -f "$JAR" ]; then
   find "$TMPCLS" -name '*.class' -print0 | xargs -0 strings -n 6 2>/dev/null > "$POOL"
   OUT="$(python3 - "$POOL" <<'PY'
 import re, glob, os, sys
+sys.path.insert(0, "maintenance/scripts")
+import doc_fences
 pool = open(sys.argv[1], encoding="utf-8", errors="replace").read()
 # capture the bullet lead: - **`...`**  (only inside a "## Gotchas" section)
 lead = re.compile(r'^\s*-\s+\*\*`([^`]+)`\*\*')
@@ -564,8 +571,11 @@ misses = []
 for f in sorted(glob.glob("docs/*.md")):
     bn = os.path.basename(f)
     in_g = False
+    # A `## ` line inside a code fence is not a heading: it would open or close the Gotchas
+    # section mid-fence. Fence membership is doc_fences.py's, the one reader every gate shares.
+    fenced = doc_fences.parse(open(f).read()).fence_lines
     for ln, line in enumerate(open(f), 1):
-        h = re.match(r'^##\s+(.*)', line)
+        h = re.match(r'^##\s+(.*)', line) if ln not in fenced else None
         if h:
             in_g = "gotcha" in h.group(1).lower()
             continue

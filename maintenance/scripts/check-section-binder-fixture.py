@@ -241,6 +241,35 @@ check('an index is the heading ordinal, so the first section on a page is 0',
       lambda: min(rec.index for rec in (r.bound + r.inherited_accepted
                   + r.inherited_rejected + r.unbound) if rec.page == 'bound.md'), 0)
 
+# ---- a heading-shaped line inside a code fence is not a heading ---------------
+# `## ` (or deeper) inside a fence cut the section it sat in, mid-fence: the fence's tail and
+# everything after it up to the next real heading became the NEXT section's body. Here that
+# moves the key table from `Widget Properties` (which then has no fingerprint) onto a phantom
+# section. Level one is not matched by this binder at all (`#{2,4}`), so the shape the docs
+# actually carry (`# comment` in a bash fence) never cut anything here; the `##` line is the
+# latent one. Fence membership is doc_fences.py's.
+_PHANTOM_DOCS = pathlib.Path(tempfile.mkdtemp())
+_PAGE = ('### Widget\n\n**Package:** `binderpkg`\n\n#### Widget Properties\n\n'
+         '```text\n## Phantom Level Two\n```\n\n| Key | Type |\n|-----|------|\n| `Name` | string |\n')
+(_PHANTOM_DOCS / 'plain.md').write_text(_PAGE)
+# PIN, not a detector: `> ## x` never matched `^#{2,4}`, so a blockquoted fence is green under
+# the fence-blind pattern as well (a mutation cannot redden it).
+(_PHANTOM_DOCS / 'quoted.md').write_text(
+    '### Widget\n\n**Package:** `binderpkg`\n\n#### Widget Properties\n\n'
+    '> ```text\n> ## Phantom Level Two\n> ```\n\n| Key | Type |\n|-----|------|\n| `Name` | string |\n')
+_pr = sb.bind_all(_PHANTOM_DOCS, src, path_style_root='binderpkg')
+check('a `## ` line in a fence adds no section (2 per page, not 3)', lambda: _pr.seen, 4)
+check('the key table stays in the section it was written under, so that section is accepted',
+      lambda: sorted((i.page, i.section) for i in _pr.inherited_accepted),
+      [('plain.md', 'Widget Properties'), ('quoted.md', 'Widget Properties')])
+check('and no section is titled for the fenced line',
+      lambda: [u.section for u in _pr.unbound if 'Phantom' in u.section], [])
+check('_sections() yields the real headings only, in order',
+      lambda: [title for _i, title, _p, _l, _b in sb._sections((_PHANTOM_DOCS / 'plain.md').read_text())],
+      ['Widget', 'Widget Properties'])
+check('and the section body runs through the whole fence to the table',
+      lambda: '| `Name` | string |' in list(sb._sections((_PHANTOM_DOCS / 'plain.md').read_text()))[1][4], True)
+
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:
     print(f'  FAIL {f}')

@@ -40,6 +40,14 @@ mutation guards is the fence count each prints, which verify-docs.sh compares wi
 A mutation whose anchor is not present exactly once is a FAIL (it tests nothing), and so is a
 mutant that crashes (a traceback is not a detection).
 
+HEADINGS. A third reader of a page's text is the heading readers (check-links, section_binder,
+verify-docs.sh's doc-type `_sections` and its gotcha `## ` scan). A `# comment` line in a bash
+fence matches a heading pattern, so before 2026-10-16 each of them read it as a heading. They
+now take their headings only from lines outside doc_fences.py's `fence_lines`. The `headings`
+group plants such a line in a column-0 fence (and a blockquoted one, which is a PIN: `> # x` never
+matched `^#`) and requires each reader to ignore it; its mutations restore the fence-blind
+heading scan in each reader, and two reader mutations break `fence_lines` itself.
+
 Usage:
   python3 maintenance/scripts/check-doc-fences-fixture.py [-v]
   python3 maintenance/scripts/check-doc-fences-fixture.py --mutations [-v]
@@ -59,8 +67,8 @@ DEF_CORPUS = FIXTURES / 'defaults' / 'corpus'
 # FLOORS: raise freely, lowering one needs a reason in the commit message. The fixture guards
 # the reader and nothing guards the fixture; a table that quietly shrank would report "every
 # mutation red" over fewer mutations, which is the sentence this repo keeps having to prevent.
-MIN_CASES = 73
-MIN_MUTATIONS = 37
+MIN_CASES = 85
+MIN_MUTATIONS = 42
 
 
 # ---------------------------------------------------------------------------------------------
@@ -297,6 +305,17 @@ READER_CASES = {
         [], {(1, 'marker')}),
 }
 
+# fence_lines: the lines a fence occupies, opener through closer (EOF when unclosed). The heading
+# readers trust it: a line in this set is never a heading.
+FENCE_LINES_CASES = {
+    'col0 fence occupies opener through closer and nothing else': ("p\n```java\nA\n```\nq\n", {2, 3, 4}),
+    'blockquoted fence occupies its quoted lines': ("> ```java\n> x\n> ```\n", {1, 2, 3}),
+    'indented fence occupies its lines': ("1. s\n   ```java\n   x\n   ```\n", {2, 3, 4}),
+    'two fences leave the prose between them unoccupied': ("```a\n1\n```\np\n```b\n2\n```\n", {1, 2, 3, 5, 6, 7}),
+    'an UNCLOSED fence occupies everything to EOF': ("p\n```java\nx\ny\n", {2, 3, 4}),
+    'a quote-break ends the first fence at the line before it': ("> ```java\n> a\nb\n> ```\n", {1, 2, 4}),
+}
+
 # fenced_text() and the offsets: the raw text of each fence, opener line through closer line
 SLICE_PAGE = "p\n```json\n1\n```\nq\n> ```java\n> 2\n> ```\nr\n"
 SLICE_WANT = ["```json\n1\n```", "> ```java\n> 2\n> ```"]
@@ -321,6 +340,12 @@ def reader_group(c: Cases, scripts: pathlib.Path):
             c.check('reader: ' + label, probs)
         except Exception as e:                          # noqa: BLE001 - a crash is a failure
             c.check('reader: ' + label, [f'raised {type(e).__name__}: {e}'])
+    for label, (text, want) in FENCE_LINES_CASES.items():
+        try:
+            got = set(mod.parse(text).fence_lines)
+            c.check('reader: fence_lines, ' + label, [] if got == want else [f'{sorted(got)} != {sorted(want)}'])
+        except Exception as e:                          # noqa: BLE001
+            c.check('reader: fence_lines, ' + label, [f'raised {type(e).__name__}: {e}'])
     try:
         got = mod.fenced_text(SLICE_PAGE)
         c.check('reader: fenced_text() slices opener line through closer line, prefix intact',
@@ -699,6 +724,84 @@ def inline_groups(c: Cases, scripts: pathlib.Path, td: pathlib.Path, tag: str, g
 
 
 # ---------------------------------------------------------------------------------------------
+# the heading readers: a heading-shaped line inside a code fence is not a heading
+# ---------------------------------------------------------------------------------------------
+# Two sections each cite TWO classes and carry a bash fence BEFORE their Package line; a third
+# is clean JSON. Read correctly, the bash fence is in Alpha's section, so rule E refuses to treat
+# Alpha's citation as provenance and the page is a MISMATCH. Fence-blind, the fence's `# comment`
+# ends Alpha's section at the comment, the Package line lands in a section whose only fence is the
+# json one after it, and the citation is wrongly excluded: the page FELLs below the threshold and
+# the MISMATCH is lost.
+def doctype_heading_page(comment: bool, quoted: bool = False) -> str:
+    inside = '# comment\nrun\n' if comment else 'run\n'
+    fence = ('> ```bash\n' + ''.join('> ' + ln + '\n' for ln in inside.split('\n')[:-1]) + '> ```\n') if quoted \
+        else '```bash\n' + inside + '```\n'
+    return ("**Doc type:** JSON asset format\n\n"
+            "### Alpha Interaction\n\n" + fence + "\n"
+            "**Package:** `com.hypixel.hytale.server.core.foo.AlphaInteraction` "
+            "and `com.hypixel.hytale.server.core.foo.AlphaTwoInteraction`\n\n"
+            "| Property | Type |\n|---|---|\n| `X` | int |\n\n"
+            "### Beta Interaction\n\n"
+            "**Package:** `com.hypixel.hytale.server.core.foo.BetaInteraction`\n\n"
+            "```json\n{ \"Type\": \"Beta\" }\n```\n")
+
+
+GOTCHA_PAGES = {
+    # a `## ` line inside a fence must not END the Gotchas section: the bullet after the fence is a gotcha
+    'gotchas.md': "## Gotchas\n\n```text\n## Notes\n```\n\n- **`FirstGotcha`** -> cause\n",
+    # ... and must not OPEN one: the bullet after the fence belongs to Usage
+    'usage.md': "## Usage\n\n```text\n## Gotchas\n```\n\n- **`NotAGotcha`** -> not under a Gotchas heading\n",
+}
+# A section's `## Gotchas` heading written inside a BLOCKQUOTED fence never matched `^##` (PIN).
+GOTCHA_QUOTED = {'quoted.md': "## Usage\n\n> ```text\n> ## Gotchas\n> ```\n\n- **`StillNotAGotcha`** -> no\n"}
+
+BINDER_HEADING_PAGE = ("### Widget\n\n**Package:** `defpkg`\n\n#### Props\n\n"
+                       "```text\n## Phantom Level Two\n```\n\n| Key | Type |\n|-----|------|\n| `Radius` | double |\n")
+
+
+def heading_groups(c: Cases, scripts: pathlib.Path, td: pathlib.Path, tag: str):
+    py = sys.executable
+    # --- doc-type _sections ------------------------------------------------------------------
+    for kind, page in (('col0', doctype_heading_page(True)), ('quote', doctype_heading_page(True, True)),
+                       ('twin', doctype_heading_page(False))):
+        root = inline_root(td, f'hd-dt-{tag}-{kind}', scripts, {'p.md': page})
+        rc, t = run_script(root, extract_block(scripts, 'section "[ADVISORY] Doc-type tags are present'))
+        if kind == 'twin':
+            c.text('doc-type headings, healthy twin: a bash fence with no comment line still blocks the exclusion (MISMATCH)',
+                   rc, t, want_rc=0, must=['MISMATCH p.md'], must_not=['FELL p.md'])
+        elif kind == 'col0':
+            c.text('doc-type headings, a `# comment` in a bash fence does not end the section it sits in (MISMATCH kept)',
+                   rc, t, want_rc=0, must=['MISMATCH p.md'], must_not=['FELL p.md'])
+        else:
+            c.text('doc-type headings, PIN a `# comment` in a BLOCKQUOTED bash fence is no heading either',
+                   rc, t, want_rc=0, must=['MISMATCH p.md'], must_not=['FELL p.md'])
+    # --- the gotcha scan ----------------------------------------------------------------------
+    pool = td / f'empty-pool-{tag}'
+    pool.write_text('')
+    for kind, pages, must, must_not in (
+            ('col0', GOTCHA_PAGES, ['CHECKED 1', 'MISS gotchas.md:7: FirstGotcha'], ['usage.md', 'NotAGotcha']),
+            ('quote', GOTCHA_QUOTED, ['CHECKED 0'], ['quoted.md', 'StillNotAGotcha'])):
+        root = inline_root(td, f'hd-gt-{tag}-{kind}', scripts, pages)
+        rc, t = run_script(root, extract_block(scripts, 'section "[ADVISORY] Gotcha error strings trace to the jar"'),
+                           [str(pool)])
+        if kind == 'col0':
+            c.text('gotcha scan headings, a `## ` line in a fence neither ends nor opens a Gotchas section',
+                   rc, t, want_rc=0, must=must, must_not=must_not)
+        else:
+            c.text('gotcha scan headings, PIN a `## Gotchas` line in a BLOCKQUOTED fence opens nothing',
+                   rc, t, want_rc=0, must=must, must_not=must_not)
+    # --- section_binder ------------------------------------------------------------------------
+    d = write_pages(td / f'hd-bd-{tag}', {'planted.md': BINDER_HEADING_PAGE})
+    probe = ("import sys, pathlib; sys.path.insert(0, sys.argv[1]); import section_binder as sb; "
+             "r = sb.bind_all(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3])); "
+             "print('SEEN', r.seen); print('ACCEPTED', sorted(i.section for i in r.inherited_accepted)); "
+             "print('UNBOUND', sorted(u.section for u in r.unbound))")
+    rc, t = run([py, '-c', probe, scripts, d, DEF_CORPUS / 'src'])
+    c.text('section_binder headings, a `## ` line in a fence adds no section and the table still binds its own',
+           rc, t, want_rc=0, must=['SEEN 2', "ACCEPTED ['Props']", 'UNBOUND []'])
+
+
+# ---------------------------------------------------------------------------------------------
 # the shell half: the census section and fence_agree(), extracted from verify-docs.sh
 # ---------------------------------------------------------------------------------------------
 PRELUDE = textwrap.dedent('''\
@@ -808,7 +911,7 @@ def _shq(text: str) -> str:
 # running everything
 # ---------------------------------------------------------------------------------------------
 ALL_GROUPS = ('reader', 'census', 'cli', 'symbols', 'snippets', 'typevalues', 'binder', 'defaults',
-              'jsonparse', 'doctype', 'codenames', 'fields', 'verify')
+              'jsonparse', 'doctype', 'codenames', 'fields', 'verify', 'headings')
 
 
 def all_cases(scripts: pathlib.Path, jar: pathlib.Path, groups=ALL_GROUPS):
@@ -826,6 +929,8 @@ def all_cases(scripts: pathlib.Path, jar: pathlib.Path, groups=ALL_GROUPS):
         inline_groups(c, scripts, td, tag, groups)
         if 'verify' in groups:
             verify_group(c, scripts, td, tag)
+        if 'headings' in groups:
+            heading_groups(c, scripts, td, tag)
     return c
 
 
@@ -952,6 +1057,44 @@ VERIFY_MUTATIONS = {
         ('verify',), {'verify-docs census section: a census that prints no counts is a HARD FAIL'}),
 }
 
+# The heading readers, each reverted to its fence-blind scan (the code that shipped before
+# 2026-10-16). label -> (file in the variant, old, new, groups, cases that must go red).
+HD = 'reader: fence_lines, '
+HEADING_MUTATIONS = {
+    'HEADINGS doc-type: _sections() reads headings inside fences': (
+        VF,
+        '    fenced=doc_fences.parse(txt).fence_lines\n'
+        '    hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)\n'
+        '        if txt.count("\\n",0,m.start())+1 not in fenced]\n',
+        '    hs=[(m.start(), len(m.group(1))) for m in head_re.finditer(txt)]\n',
+        ('headings',), {'doc-type headings, a `# comment` in a bash fence does not end the section it sits in (MISMATCH kept)'}),
+    'HEADINGS gotcha scan: a `## ` line in a fence opens and closes sections': (
+        VF,
+        "h = re.match(r'^##\\s+(.*)', line) if ln not in fenced else None\n",
+        "h = re.match(r'^##\\s+(.*)', line)\n",
+        ('headings',), {'gotcha scan headings, a `## ` line in a fence neither ends nor opens a Gotchas section'}),
+    'HEADINGS section_binder: _sections() cuts a section at a fenced `## ` line': (
+        'section_binder.py',
+        "    ms = [m for m in HEADING.finditer(text)\n"
+        "          if text.count('\\n', 0, m.start()) + 1 not in fenced]\n",
+        "    ms = list(HEADING.finditer(text))\n",
+        ('headings',), {'section_binder headings, a `## ` line in a fence adds no section and the table still binds its own'}),
+    'READER: fence_lines leaves out the closer line': (
+        'doc_fences.py',
+        "occupied.update(range(cur['line'], (closer_no or last_line) + 1))",
+        "occupied.update(range(cur['line'], (closer_no or last_line + 1)))",
+        ('reader',), {HD + 'col0 fence occupies opener through closer and nothing else',
+                      HD + 'blockquoted fence occupies its quoted lines',
+                      HD + 'indented fence occupies its lines',
+                      HD + 'two fences leave the prose between them unoccupied'}),
+    'READER: an unclosed fence occupies only its opener line in fence_lines': (
+        'doc_fences.py',
+        "occupied.update(range(cur['line'], (closer_no or last_line) + 1))",
+        "occupied.update(range(cur['line'], (closer_no or cur['line']) + 1))",
+        ('reader',), {HD + 'an UNCLOSED fence occupies everything to EOF',
+                      HD + 'a quote-break ends the first fence at the line before it'}),
+}
+
 # gate reversions: the gate's `doc_fences` becomes a verbatim copy of its OLD reader.
 GATE_SHIMS = {
     'GATE check-symbols: reverted to the column-0 reader': (
@@ -1027,7 +1170,7 @@ def main():
             print('  FAIL  the base run is red; no mutation below would mean anything')
             return 1
 
-        total = len(READER_MUTATIONS) + len(VERIFY_MUTATIONS) + len(GATE_SHIMS) + 1
+        total = len(READER_MUTATIONS) + len(VERIFY_MUTATIONS) + len(HEADING_MUTATIONS) + len(GATE_SHIMS) + 1
         if total < MIN_MUTATIONS:
             print(f'  FAIL  {total} mutation(s) defined, floor is {MIN_MUTATIONS}. "every mutation red" over '
                   f'an empty table is a claim about nothing.')
@@ -1078,9 +1221,10 @@ def main():
 
         verify_src = VERIFY.read_text()
         table = [(l, 'doc_fences.py', *m) for l, m in READER_MUTATIONS.items()] + \
-                [(l, VF, *m) for l, m in VERIFY_MUTATIONS.items()]
+                [(l, VF, *m) for l, m in VERIFY_MUTATIONS.items()] + \
+                [(l, *m) for l, m in HEADING_MUTATIONS.items()]
         for i, (label, fname, old, new, groups, names) in enumerate(table):
-            src = reader_src if fname == 'doc_fences.py' else verify_src
+            src = reader_src if fname == 'doc_fences.py' else (HERE / fname).read_text()
             n = src.count(old)
             if n != 1:
                 rc = 1

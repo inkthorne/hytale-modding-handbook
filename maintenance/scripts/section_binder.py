@@ -152,7 +152,12 @@ def _sections(text: str):
     ambiguous result key this library's defect rather than the caller's.
     """
     lines = text.split('\n')
-    ms = list(HEADING.finditer(text))
+    # A heading-shaped line inside a code fence (`# comment` in a bash fence) is not a
+    # heading: read as one it cut the section mid-fence, so the fence's tail was the next
+    # section's body. Fence membership is doc_fences.py's, the one reader every gate shares.
+    fenced = doc_fences.parse(text).fence_lines
+    ms = [m for m in HEADING.finditer(text)
+          if text.count('\n', 0, m.start()) + 1 not in fenced]
     for i, m in enumerate(ms):
         title = m.group(2).strip()
         start = text.count('\n', 0, m.start()) + 1

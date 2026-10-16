@@ -27,7 +27,7 @@ Y/Z (BLIND and old-style snapshots), R (snapshot copy list), B (writer failures,
 classes under com/hypixel/ that do not parse), TF (a failing triage stub), RC (a resource
 comparison with no result, alone, with a failing triage, and with a python that exits non-zero
 after printing its result) and the resource rows of every v1 -> v2 run; one mutation per guard, each named after its check.
-DG (the API drift and source drift guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
+DG (the API drift, source drift and asset-diff guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
 without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg5]).
 
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
@@ -69,8 +69,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 799
-MIN_MUTATIONS = 130
+MIN_CHECKS = 809
+MIN_MUTATIONS = 132
 
 
 class Run:
@@ -829,8 +829,9 @@ def part1():
         check('#COUNTS' not in api and '#COUNTS' not in src and f'CHANGED {D}BlockHarvestUtils$Qx' in api and f'DEPRECATION added   {D}Dep' in src,
               "drift guards: control on real drift: both marker lines are stripped, the rows are kept")
         install(tmp, 'v1r'); rc, out, src, api, *_ = run(tmp, AI, '--skip-caches')
-        check(rc == 0 and 'FAIL' not in out and NOSIG in out and NOSRC in out and api == '',
-              "drift guards: control without drift: exit 0, no FAIL, both 'no changes' lines")
+        check(rc == 0 and 'FAIL' not in out and NOSIG in out and NOSRC in out and api == ''
+              and 'no Common-asset drift' in out and 'no Server/Cosmetics drift' in out,
+              "drift guards: control without drift: exit 0, no FAIL, all four 'no changes' lines")
         M5 = 'print(f"#COUNTS {len(old)} {len(new)} {rows}")\n'
         M5B = 'print(f"#COUNTS {len(common)} {len(old.keys() - new.keys())} {len(new.keys() - old.keys())} {len(changed)} {len(blind)}")\n'
         # --- section 5
@@ -875,6 +876,11 @@ def part1():
                    r'source drift: src-drift\.diff has \d+ changed \.java file header\(s\) but the python reports only 0 changed file', NOSRC)
         drift_case(tmp, AD, 'SRC-07', [("print(f\"DEPRECATION {'added  ' if line[0] == '+' else 'removed'} {cur}: {line[1:].strip()}\")", 'pass')],
                    r'source drift: src-drift\.diff has 1 added/removed @Deprecated line\(s\) but the python wrote 0 DEPRECATION row', NOSRC)
+        # --- the two asset diffs of sections 4: a diff that exits 2 is not "identical to the baseline"
+        drift_case(tmp, AI, 'ASSET-01', msg=r'asset drift: diff of the Common-asset indexes exited 2', absent='no Common-asset drift',
+                   over=diff_wrapper(tmp, 'common', '*/dev/fd/*'))
+        drift_case(tmp, AI, 'ASSET-02', msg=r'asset drift: diff of the Server/Cosmetics indexes exited 2', absent='no Server/Cosmetics drift',
+                   over=diff_wrapper(tmp, 'server', '*ServerAssetsIndex*'))
         # --- the set comparison of section 5 (check 8): two indexes that differ as FILES but not
         # as sets of lines (a source-file name changed, two members swapped) have nothing to report
         install(tmp, 'v1r')
@@ -1530,6 +1536,8 @@ MUTATIONS = [
     ("drift guard [dg4] SRC-06: changed files are not compared with the diff's headers", U, 'elif ! [ "$N_CHANGED" -ge "$D_HDRS" ]; then', 'elif false; then', {_fl('SRC-06')}),
     ("drift guard [dg4] SRC-07: DEPRECATION rows are not compared with the diff", U, 'elif [ "$N_DEP" != "$D_DEPS" ]; then', 'elif false; then', {_fl('SRC-07')}),
     ("drift guard [dg5] SRC-08: the source marker line is left in src-changed-classes.txt", U, "sed -i '/^#COUNTS/d' \"$REPORT/src-changed-classes.txt\"", ':', {CTRL_STRIP}),
+    ("drift guard [dg5] ASSET-01: the Common-asset diff's exit status is ignored", U, 'if [ "$ASSET_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('ASSET-01')}),
+    ("drift guard [dg5] ASSET-02: the Server/Cosmetics diff's exit status is ignored", U, 'if [ "$SERVER_DIFF_RC" -ge 2 ]; then', 'if false; then', {_fl('ASSET-02')}),
     ("triage exit (update-build): a triage crash is not a failure", U,
      'elif [ "$TRIAGE_RC" != 0 ]; then', 'elif false; then',
      {"triage exit (update-build): a triage that crashes (exit 1) is a FAIL line saying so, not the unreadable-report one",

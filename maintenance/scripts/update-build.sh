@@ -39,7 +39,8 @@
 #   2  a hard stop: bad argument, jar/Assets.zip missing, a store inside a wiped directory,
 #      extraction or build-jar-cache.sh failed (nothing after it ran)
 #   3  one or more soft failures: a section failed WITHOUT stopping the run, so the rest of the
-#      report was still produced. The FAIL lines say which: the API drift (5) or the source drift
+#      report was still produced. The FAIL lines say which: a Common or Server/Cosmetics asset
+#      diff that exited 2, the API drift (5) or the source drift
 #      (5b) could not show its result (a diff that exited 2, a python that exited non-zero or
 #      printed no #COUNTS marker, or a count that a non-python route contradicts; the section then
 #      prints no rows and no "no changes" line), the resource comparison produced no result, or
@@ -180,6 +181,7 @@ section "Asset drift vs baseline"
 if [ -f "$BASELINE" ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
   diff <(LC_ALL=C sort "$BASELINE") <(LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes") \
     > "$REPORT/assets-drift.diff"
+  ASSET_DIFF_RC=$?     # 2 or more is trouble (0 same, 1 differs): the buckets below would be cut short
   # index lines are "<sha256> <path>"; split the diff into per-path buckets
   grep '^<' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-old-paths.txt"
   grep '^>' "$REPORT/assets-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/assets-new-paths.txt"
@@ -189,7 +191,9 @@ if [ -f "$BASELINE" ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
   N_MOD=$(wc -l < "$REPORT/assets-modified.txt")
   N_DEL=$(wc -l < "$REPORT/assets-removed.txt")
   N_ADD=$(wc -l < "$REPORT/assets-added.txt")
-  if [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+  if [ "$ASSET_DIFF_RC" -ge 2 ]; then
+    soft_fail "asset drift: diff of the Common-asset indexes exited $ASSET_DIFF_RC (0 and 1 are normal) — Common-asset drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+  elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
     info "no Common-asset drift — content identical to the baseline"
   else
     warn "$N_MOD modified, $N_ADD added, $N_DEL removed (assets-{modified,added,removed}.txt)"
@@ -206,6 +210,7 @@ if [ -f "$BASELINE_DIR/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; t
   "$REPO/maintenance/scripts/hash-server-assets.sh" "$ASSETS" > "$REPORT/ServerAssetsIndex.hashes"
   diff "$BASELINE_DIR/ServerAssetsIndex.hashes" "$REPORT/ServerAssetsIndex.hashes" \
     > "$REPORT/server-drift.diff"
+  SERVER_DIFF_RC=$?    # as above
   grep '^<' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-old-paths.txt"
   grep '^>' "$REPORT/server-drift.diff" | cut -d' ' -f3- | LC_ALL=C sort > "$REPORT/server-new-paths.txt"
   comm -12 "$REPORT/server-old-paths.txt" "$REPORT/server-new-paths.txt" > "$REPORT/server-modified.txt"
@@ -214,7 +219,9 @@ if [ -f "$BASELINE_DIR/ServerAssetsIndex.hashes" ] && [ -d "$ASSETS/Server" ]; t
   N_MOD=$(wc -l < "$REPORT/server-modified.txt")
   N_DEL=$(wc -l < "$REPORT/server-removed.txt")
   N_ADD=$(wc -l < "$REPORT/server-added.txt")
-  if [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
+  if [ "$SERVER_DIFF_RC" -ge 2 ]; then
+    soft_fail "asset drift: diff of the Server/Cosmetics indexes exited $SERVER_DIFF_RC (0 and 1 are normal) — Server/Cosmetics drift is NOT reported; this run exits nonzero (3 unless verify-docs.sh fails)"
+  elif [ "$N_MOD$N_DEL$N_ADD" = "000" ]; then
     info "no Server/Cosmetics drift — content identical to the baseline"
   else
     warn "$N_MOD modified, $N_ADD added, $N_DEL removed (server-{modified,added,removed}.txt)"

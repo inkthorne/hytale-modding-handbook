@@ -65,8 +65,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 548
-MIN_MUTATIONS = 81
+MIN_CHECKS = 641
+MIN_MUTATIONS = 90
 
 
 class Run:
@@ -109,13 +109,33 @@ SW = '''public class PluginManager {
     }
   }
 }'''
+# The strings a Hypixel class holds, for rule l (build-jar-cache.sh): a resource is
+# Hypixel's (l) when a constant names its full path or, for a native, its file name,
+# delimited on both sides by anything but [A-Za-z0-9._-]. The same constants are in
+# v1 and v2: a CHANGED row is Hypixel's if EITHER build says so, which would hide a
+# match found by one build only. WHOLE is a whole-constant path whose u2 length is 50,
+# so the byte before it in the class file is '2', a name character.
+WHOLE = 'META-INF/vendor-whole-' + 'p' * 24 + '.cfg'
+assert len(WHOLE) == 50 and chr(len(WHOLE)).isalnum()
+LOADS_CONSTANTS = {
+    'B': 'libpart.so',                          # a native's file name, as a whole constant
+    'C': 'META-INF/vendor-loaded.properties',   # a full path, whole
+    'D': 'vendor.Spi',                          # a file name, but not a native
+    'E': 'libover.so.1',                        # right edge: libover.so is a prefix of it
+    'F': 'xMETA-INF/vendor-left.cfg',           # left edge, full path: preceded by a name character
+    'G': '/META-INF/slash-loaded.properties',   # a full path preceded by `/`
+    'H': '/native/\\u0001/libindy.so',           # an indy concat recipe: the file name preceded by `/`
+    'I': WHOLE,                                 # a whole path whose length byte is a name character
+    'J': 'xlibq.so;libq.so',                    # an embedded libq.so, then a delimited one
+}
+LOADS = 'public class Loads { ' + ' '.join(f'public static final String {k} = "{v}";' for k, v in LOADS_CONSTANTS.items()) + ' }'
 SRC = {
     'v1': {
         'BlockHarvestUtils': 'public class BlockHarvestUtils { public static int f(int x){ return x & 0x1000; } public static class Qx { public int a(){return 1;} } }',
         'KickCommand': 'public class KickCommand { public String run(){ return "old"; } }',
         'Gone': 'public class Gone { public void g(){} }',
         'Dep': 'public class Dep { public void d(){} }',
-        'Loads': 'public class Loads { public static final String B = "libpart.so"; public static final String C = "META-INF/vendor-loaded.properties"; public static final String D = "vendor.Spi"; }',
+        'Loads': LOADS,
         'PluginManager': SW % 'old',
     },
     'v2': {
@@ -123,7 +143,7 @@ SRC = {
         'KickCommand': 'public class KickCommand { public String run(){ return "new"; } }',
         'Fresh': 'public class Fresh { public void h(){} }',
         'Dep': 'public class Dep { @Deprecated public void d(){} }',
-        'Loads': 'public class Loads { public static final String B = "libpart.so"; public static final String C = "META-INF/vendor-loaded.properties"; public static final String D = "vendor.Spi"; }',
+        'Loads': LOADS,
         'PluginManager': SW % 'new',
     },
 }
@@ -145,6 +165,18 @@ SRC = {
 #   native/osx-arm64/libbuild.dylib Hypixel (h): bytes carry only the build path ".../hytale/hytale/"
 #   native/linux-x64/libpart.so    Hypixel (l): Loads names its file name only, not its path (a native)
 #   META-INF/vendor-loaded.properties Hypixel (l): Loads names its full path (a non-native)
+# Rule l is a WHOLE-name test (the byte before and after the match is not in
+# [A-Za-z0-9._-]), one predicate for a full path and a file name. Each edge has a case
+# that must stay third-party and one that must be Hypixel's:
+#   native/linux-arm64/part.so      third-party (b): only inside `libpart.so` (left edge, file name)
+#   native/linux-arm64/libover.so   third-party (b): only a prefix of `libover.so.1` (right edge, file name)
+#   META-INF/vendor-loaded.prop     third-party (c): a prefix of `META-INF/vendor-loaded.properties` (right edge, path)
+#   META-INF/vendor-left.cfg        third-party (c): only inside `xMETA-INF/vendor-left.cfg` (left edge, path)
+#   META-INF/slash-loaded.properties Hypixel (l): inside `/META-INF/slash-loaded.properties` (a `/` delimits)
+#   native/linux-arm64/libindy.so   Hypixel (l): inside `/native/\u0001/libindy.so` (an indy recipe)
+#   META-INF/vendor-whole-ppp...cfg Hypixel (l): a whole constant of length 50; a delimiter test on the RAW
+#                                   class bytes sees its u2 length byte, '2', and refuses it
+#   native/linux-arm64/libq.so      Hypixel (l): `xlibq.so;libq.so` holds an embedded libq.so BEFORE a delimited one
 #   com/vendor/branded.properties  Hypixel (h): under a vendor package (a), but the bytes say HYPIXEL
 #   native/linux-x64/libx.so, win-x64/x.dll, osx-arm64/libgone.dylib   third-party (b): CHANGED/ADDED/REMOVED
 #   com/vendor/messages.properties   third-party (a): com/ holds com/vendor/lib/Ext.class
@@ -167,6 +199,14 @@ R1 = {
     'native/linux-x64/libbranded.so': b'\x7fELF-Hypixel Studios Canada Inc-a',
     'native/osx-arm64/libbuild.dylib': b'\xcf\xfa/home/runner/work/hytale/hytale/ThirdParty-a',
     'native/linux-x64/libpart.so': b'\x7fELF-a',
+    'native/linux-arm64/part.so': b'\x7fELF-a',
+    'native/linux-arm64/libover.so': b'\x7fELF-a',
+    'META-INF/vendor-loaded.prop': b'a=1\n',
+    'META-INF/vendor-left.cfg': b'a=1\n',
+    'META-INF/slash-loaded.properties': b'a=1\n',
+    'native/linux-arm64/libindy.so': b'\x7fELF-a',
+    WHOLE: b'a=1\n',
+    'native/linux-arm64/libq.so': b'\x7fELF-a',
     'native/osx-arm64/libgone.dylib': b'gone',
     'com/vendor/messages.properties': b'a=1\n',
     'com/vendor/branded.properties': b'# HYPIXEL a\n',
@@ -189,6 +229,14 @@ R2.update({
     'native/osx-arm64/libbuild.dylib': b'\xcf\xfa/home/runner/work/hytale/hytale/ThirdParty-b',
     'native/linux-x64/libpart.so': b'\x7fELF-b',
     'native/win-x64/x.dll': b'MZ',
+    'native/linux-arm64/part.so': b'\x7fELF-b',
+    'native/linux-arm64/libover.so': b'\x7fELF-b',
+    'META-INF/vendor-loaded.prop': b'a=2\n',
+    'META-INF/vendor-left.cfg': b'a=2\n',
+    'META-INF/slash-loaded.properties': b'a=2\n',
+    'native/linux-arm64/libindy.so': b'\x7fELF-b',
+    WHOLE: b'a=2\n',
+    'native/linux-arm64/libq.so': b'\x7fELF-b',
     'com/vendor/messages.properties': b'a=2\n',
     'com/vendor/branded.properties': b'# HYPIXEL b\n',
     'vendor/lib/schema.proto': b'syntax = "proto3"; // b\n',
@@ -206,6 +254,10 @@ RES_DRIFT_V1_V2 = [   # state owner rule path: the whole resource drift of v1 ->
     'CHANGED third-party b native/linux-x64/libx.so', 'CHANGED hypixel h native/linux-x64/libbranded.so',
     'CHANGED hypixel h native/osx-arm64/libbuild.dylib',
     'CHANGED hypixel l native/linux-x64/libpart.so',
+    'CHANGED third-party b native/linux-arm64/part.so', 'CHANGED third-party b native/linux-arm64/libover.so',
+    'CHANGED third-party c META-INF/vendor-loaded.prop', 'CHANGED third-party c META-INF/vendor-left.cfg',
+    'CHANGED hypixel l META-INF/slash-loaded.properties', 'CHANGED hypixel l native/linux-arm64/libindy.so',
+    f'CHANGED hypixel l {WHOLE}', 'CHANGED hypixel l native/linux-arm64/libq.so',
     'ADDED third-party b native/win-x64/x.dll', 'REMOVED third-party b native/osx-arm64/libgone.dylib',
     'CHANGED third-party a com/vendor/messages.properties', 'CHANGED hypixel h com/vendor/branded.properties',
     'CHANGED third-party e vendor/lib/schema.proto',
@@ -225,8 +277,8 @@ def pack(base, dest, resources, dt, manifest=True, store=False):
     so which bytes differ between two jars is decided here and not by the clock."""
     with zipfile.ZipFile(base) as zi, zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as zo:
         for info in zi.infolist():
-            if not manifest and info.filename.startswith('META-INF'):
-                continue
+            if (not manifest and info.filename.startswith('META-INF')) or info.filename in resources:
+                continue     # an entry given in `resources` replaces the base's own
             zinfo = zipfile.ZipInfo(info.filename, dt)
             zinfo.compress_type, zinfo.external_attr = zipfile.ZIP_DEFLATED, info.external_attr
             zo.writestr(zinfo, zi.read(info.filename))
@@ -263,6 +315,14 @@ def build(tmp: pathlib.Path):
     raw = (tmp / 'vbad.jar').read_bytes()
     assert raw.count(b'CORRUPT-ME-CORRUPT-ME') == 1
     (tmp / 'vbad.jar').write_bytes(raw.replace(b'CORRUPT-ME-CORRUPT-ME', b'CORRUPT-XX-CORRUPT-ME'))
+    # jars with ONE class under com/hypixel/ that does not parse, each by exactly one defect
+    gone = zipfile.ZipFile(tmp / 'v1/base.jar').read(f'{P}/Gone.class')
+    for name, entries in (
+            ('junk', {'com/hypixel/hytale/Bad.class': b'junk'}),
+            ('magic', {f'{P}/Gone.class': b'\xda' + gone[1:]}),               # only the first byte differs
+            ('alias', {f'{P}/Alias.class': gone}),                              # parses; this_class says Gone
+            ('cut', {f'{P}/Gone.class': gone[:40]})):                           # ends inside the constant pool
+        pack(tmp / 'v1/base.jar', tmp / f'vclass-{name}.jar', entries, D1)
     a = tmp / 'assets'
     (a / 'Common/Blocks').mkdir(parents=True); (a / 'Server/Item/Items').mkdir(parents=True)
     (a / 'Common/Blocks/Demo_Block.png').write_text('x\n')
@@ -613,6 +673,23 @@ def part1():
               "a resource that cannot be read back: the build fails at its own guard")
         rc, out, *_ = run(tmp, st, script='build-jar-cache.sh', HYTALE_JAR=str(tmp / 'v1/HytaleServer.jar'))
         check(rc == 0 and f'resources hashed: {len(R1) + 1}' in out, "build-jar-cache.sh prints `resources hashed: N`")
+        with zipfile.ZipFile(tmp / 'v1/HytaleServer.jar') as zj:
+            n_pools = sum(1 for n in zj.namelist() if n.startswith('com/hypixel/') and n.endswith('.class'))
+        check(n_pools > len(SRC['v1']) and f'rule l read {n_pools} constant pool(s)' in out,
+              "build-jar-cache.sh prints how many constant pools rule l read (every class under com/hypixel/, nested included)")
+
+        # a class under com/hypixel/ that does not parse stops the build: its constants would be
+        # dropped, and every resource it names filed third-party. --no-src: nothing before the
+        # resource writer reads the class (javap's stderr goes to /dev/null, the class hashes only hash)
+        for name, why, entry, reason in (
+                ('junk', 'not a class file at all', 'Bad.class', 'bad magic'),
+                ('magic', 'a class whose first byte is wrong', 'Gone.class', 'bad magic'),
+                ('alias', 'a class whose this_class names another entry', 'Alias.class', 'this_class does not name the entry'),
+                ('cut', 'a class cut inside its constant pool', 'Gone.class', 'the constant pool runs past the end')):
+            rc, out, *_ = run(tmp, st, '--no-src', script='build-jar-cache.sh', HYTALE_JAR=str(tmp / f'vclass-{name}.jar'))
+            check(rc == 5 and "could not hash the jar's resources" in out
+                  and re.search(rf'{entry}: not a parseable class file \({re.escape(reason)}\)', out),
+                  f"{why}: the build fails with exit 5, naming the class and `{reason}`")
 
 
 # ---------------------------------------------------------------- part 2
@@ -757,7 +834,6 @@ def part2():
           "resource triage: an ADDED row's bare name that is ambiguous in the new build is not flagged")
     check('#SUMMARY 13 changed thing(s) checked, 9 referenced' in out,
           "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
-
 
 def one_pass(scripts, verbose=False):
     global R
@@ -905,14 +981,53 @@ MUTATIONS = [
      'elif HYP.search(n.encode()) or HYP.search(data):', 'elif presumed != "a" and (HYP.search(n.encode()) or HYP.search(data)):',
      {"update: resource drift has `CHANGED hypixel h com/vendor/branded.properties`"}),
     ("resources rule l: a Hypixel class naming the full path", B,
-     'n.encode() in hyp_blob or (native and base in hyp_blob)', '(native and base in hyp_blob)',
+     'named(consts, n.encode()) or (native and named(consts, base))', '(native and named(consts, base))',
      {"update: resource drift has `CHANGED hypixel l META-INF/vendor-loaded.properties`"}),
     ("resources rule l: a native's file name named by a Hypixel class", B,
-     '(native and base in hyp_blob)', 'False',
+     '(native and named(consts, base))', 'False',
      {"update: resource drift has `CHANGED hypixel l native/linux-x64/libpart.so`"}),
     ("resources rule l: a file name alone is enough for any resource", B,
-     '(native and base in hyp_blob)', '(base in hyp_blob)',
+     '(native and named(consts, base))', 'named(consts, base)',
      {"update: resource drift has `CHANGED third-party c META-INF/services/vendor.Spi`"}),
+    # ---- rule l is a whole-name test on the constant pools' Utf8 entries (acceptance 9):
+    # one mutation per edge and per term, one for the parse, one per parse guard
+    ("rule-l edge: the full path is a substring of a constant", B,
+     'named(consts, n.encode()) or', 'n.encode() in consts or',
+     {"update: resource drift has `CHANGED third-party c META-INF/vendor-loaded.prop`",
+      "update: resource drift has `CHANGED third-party c META-INF/vendor-left.cfg`"}),
+    ("rule-l edge: the file name is a substring of a constant", B,
+     '(native and named(consts, base))', '(native and base in consts)',
+     {"update: resource drift has `CHANGED third-party b native/linux-arm64/part.so`",
+      "update: resource drift has `CHANGED third-party b native/linux-arm64/libover.so`"}),
+    ("rule-l edge: no left delimiter", B,
+     'LEFT, RIGHT = rb"(?<![" + NAMECH + rb"])", rb"(?![" + NAMECH + rb"])"',
+     'LEFT, RIGHT = b"", rb"(?![" + NAMECH + rb"])"',
+     {"update: resource drift has `CHANGED third-party b native/linux-arm64/part.so`",
+      "update: resource drift has `CHANGED third-party c META-INF/vendor-left.cfg`"}),
+    ("rule-l edge: no right delimiter", B,
+     'LEFT, RIGHT = rb"(?<![" + NAMECH + rb"])", rb"(?![" + NAMECH + rb"])"',
+     'LEFT, RIGHT = rb"(?<![" + NAMECH + rb"])", b""',
+     {"update: resource drift has `CHANGED third-party b native/linux-arm64/libover.so`",
+      "update: resource drift has `CHANGED third-party c META-INF/vendor-loaded.prop`"}),
+    ("rule-l edge: only the first occurrence is tested", B,
+     'rx.search(blob) is not None', 'rx.match(blob, blob.find(tok)) is not None',
+     {"update: resource drift has `CHANGED hypixel l native/linux-arm64/libq.so`"}),
+    ("rule-l pool: a delimiter test on the raw class bytes", B,
+     'consts.extend(pool_utf8(n, z.read(n)))', 'consts.append(z.read(n))',
+     {f"update: resource drift has `CHANGED hypixel l {WHOLE}`"}),
+    ("rule-l pool: a class that does not parse is skipped", B,
+     '            consts.extend(pool_utf8(n, z.read(n)))\n            pools += 1\n',
+     '            try:\n                consts.extend(pool_utf8(n, z.read(n)))\n                pools += 1\n            except ValueError:\n                pass\n',
+     {"not a class file at all: the build fails with exit 5, naming the class and `bad magic`",
+      "a class whose first byte is wrong: the build fails with exit 5, naming the class and `bad magic`",
+      "a class whose this_class names another entry: the build fails with exit 5, naming the class and `this_class does not name the entry`",
+      "a class cut inside its constant pool: the build fails with exit 5, naming the class and `the constant pool runs past the end`"}),
+    ("rule-l pool: the magic number is not checked", B,
+     '    if d[:4] != b"\\xca\\xfe\\xba\\xbe":\n        bad("bad magic")\n', '',
+     {"a class whose first byte is wrong: the build fails with exit 5, naming the class and `bad magic`"}),
+    ("rule-l pool: this_class is not checked against the entry", B,
+     '    if utf8.get(this) != name[:-len(".class")].encode():\n        bad("this_class does not name the entry")\n', '',
+     {"a class whose this_class names another entry: the build fails with exit 5, naming the class and `this_class does not name the entry`"}),
     ("resources rule x: com/hypixel/ is always Hypixel's", B,
      'if n.startswith("com/hypixel/"):', 'if False:',
      {"update: resource drift has `CHANGED hypixel x com/hypixel/hytale/demo/data.json`",
@@ -924,9 +1039,9 @@ MUTATIONS = [
      'owner, rule = "hypixel", "d"', 'owner, rule = "third-party", "d"',
      {"update: resource drift has `ADDED hypixel d brandnew/data.json`"}),
     ("resources: written after the decompile, not before", B,
-     'RES_N="$(write_resources)"',
-     lambda src: (lambda a, b: src[:a] + src[b:])(*[src.index('RES_N="$(write_resources)"'), src.index('INDEXED="$(grep')]
-                  ).replace('step "Done"\n', src[src.index('RES_N="$(write_resources)"'):src.index('INDEXED="$(grep')] + 'step "Done"\n', 1),
+     'RES_OUT="$(write_resources)"',
+     lambda src: (lambda a, b: src[:a] + src[b:])(*[src.index('RES_OUT="$(write_resources)"'), src.index('INDEXED="$(grep')]
+                  ).replace('step "Done"\n', src[src.index('RES_OUT="$(write_resources)"'):src.index('INDEXED="$(grep')] + 'step "Done"\n', 1),
      {"broken decompiler: the cache still has the resource hashes (written before the decompile)"}),
     ("resources: the snapshot copy list drops the hashes", B,
      'class-hashes.txt resource-hashes.txt resource-owners.txt cache-meta.txt', 'class-hashes.txt resource-owners.txt cache-meta.txt',

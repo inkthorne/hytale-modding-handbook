@@ -199,22 +199,36 @@ PY
 #      signature and the HytaleClient build path inside the natives Hypixel
 #      builds; META-INF/NOTICE, which opens "Hytale Server / Copyright ...
 #      Hypixel Studios Canada inc.")
-#   l  a class under com/hypixel/ names it: its full path as a string constant
+#   l  a class under com/hypixel/ NAMES it: its full path as a string constant
 #      ("/native/linux-x64/libzstd.so" in ZstdNative), or, for a native library
 #      only, its file name (RocksDbNative builds "/native/" + dir + "/" + name
 #      from parts, so only "librocksdb.so" is there). A file NAME alone is not
 #      enough for any other resource: MANIFEST.MF and "exec" are names that
 #      Hypixel classes contain and a third party's files carry.        -> hypixel
+#      "Names" is a whole-name test on the CONSTANT_Utf8 entries of the classes'
+#      constant pools, not a substring test on their bytes: a token T is named
+#      when some entry holds T at an offset where the byte before it (if any) and
+#      the byte after it (if any) are not in [A-Za-z0-9._-]. So "/native/x/libzstd.so",
+#      an invokedynamic recipe "/native/\1/librocksdb.so" and a whole constant
+#      "librocksdb.so" name their file; "zstd.so" inside "libzstd.so" and
+#      "libpart.so" inside "libpart.so.1" do not. A raw search of the class bytes
+#      cannot say this: a whole constant sits right after its u2 length, and that
+#      byte is a name character for lengths 45, 46, 48-57, 65-90, 95 and 97-122, so such a path would
+#      be refused (the dangerous direction). Hence the pools are parsed; a class
+#      that does not parse (bad magic, unknown tag, a pool or entry that runs past
+#      the end, this_class not naming the entry) FAILS THE BUILD (exit 5), because
+#      dropping its constants would file the resources it names as third-party.
 # A presumption with no mark stays third-party under its own letter (b, c, a, e).
 #   d  anything that matched no presumption, including a top-level directory
 #      the jar has not shown before                                    -> hypixel
 # At 0.7.2 the overrides move 10 of 197 presumed-third-party entries: META-INF/NOTICE
 # and the nine native/* libraries (zstd, quiche, rocksdb). The third-party natives
 # (zstd-jni's <os>/<arch>/ libraries, netty's META-INF/native, jline's
-# org/jline/nativ) stay on b, c and a. Rule b stays as the presumption for a
-# library nothing Hypixel names: without it the zstd-jni libraries, whose top
-# directories (linux/, win/, darwin/) the jar shows no foreign class under, would
-# fall to d and be listed on every rebuild.
+# org/jline/nativ) all stay on b, 40 of them at 0.7.2: b is the first presumption
+# tested, so a native never reaches c (under META-INF/native) or a (under org/).
+# Rule b stays as the presumption for a library nothing Hypixel names: without it
+# the zstd-jni libraries, whose top directories (linux/, win/, darwin/) the jar
+# shows no foreign class under, would fall to d and be listed on every rebuild.
 # The rules are written into resource-owners.txt so the report prints what each
 # side holds and a REMOVED resource keeps the owner it had.
 write_resources() {
@@ -223,14 +237,71 @@ import hashlib, re, sys, zipfile
 jar, out = sys.argv[1:3]
 NATIVE = (".so", ".dll", ".dylib", ".jnilib")
 HYP = re.compile(rb"(?i)hypixel|hytale")
+# the one boundary predicate rule l uses, for a full path and for a file name alike
+NAMECH = rb"A-Za-z0-9._-"
+LEFT, RIGHT = rb"(?<![" + NAMECH + rb"])", rb"(?![" + NAMECH + rb"])"
+# constant pool entry widths after the tag byte (tag 1, Utf8, is u2 length + bytes;
+# tags 5 and 6, long and double, take two slots)
+WIDTH = {3: 4, 4: 4, 5: 8, 6: 8, 7: 2, 8: 2, 9: 4, 10: 4, 11: 4, 12: 4, 15: 3, 16: 2, 17: 4, 18: 4, 19: 2, 20: 2}
+
+
+def pool_utf8(name, d):
+    """The CONSTANT_Utf8 entries (raw modified-UTF-8 bytes) of one class file. A class
+    that does not parse RAISES: its constants would be silently dropped, and every
+    resource it names would be filed third-party."""
+    def bad(why):
+        raise ValueError(f"{name}: not a parseable class file ({why})")
+    if d[:4] != b"\xca\xfe\xba\xbe":
+        bad("bad magic")
+    if len(d) < 10:
+        bad("truncated header")
+    count, p, i = int.from_bytes(d[8:10], "big"), 10, 1
+    utf8, klass = {}, {}
+    while i < count:
+        if p >= len(d):
+            bad("the constant pool runs past the end")
+        tag = d[p]
+        p += 1
+        if tag == 1:
+            n = int.from_bytes(d[p:p + 2], "big")
+            utf8[i] = d[p + 2:p + 2 + n]
+            p += 2 + n
+        elif tag in WIDTH:
+            if tag == 7:
+                klass[i] = int.from_bytes(d[p:p + 2], "big")
+            p += WIDTH[tag]
+            if tag in (5, 6):
+                i += 1
+        else:
+            bad(f"unknown constant tag {tag}")
+        i += 1
+    if p + 4 > len(d):
+        bad("the constant pool runs past the end")
+    this = klass.get(int.from_bytes(d[p + 2:p + 4], "big"))
+    if utf8.get(this) != name[:-len(".class")].encode():
+        bad("this_class does not name the entry")
+    return list(utf8.values())
+
+
+def named(blob, tok):
+    """tok occurs in blob delimited on both sides (blob's ends count as delimiters)."""
+    rx = re.compile(LEFT + re.escape(tok) + RIGHT)
+    return tok in blob and rx.search(blob) is not None
+
+
 with zipfile.ZipFile(jar) as z:
     names = sorted(n for n in z.namelist() if not n.endswith("/") and not n.endswith(".class"))
     foreign = [n for n in z.namelist() if n.endswith(".class") and not n.startswith("com/hypixel/")]
     foreign_top = {n.split("/")[0] for n in foreign}
     foreign_dirs = {n.rsplit("/", 1)[0] for n in foreign}
-    # every class under com/hypixel/, raw: a path a Hypixel class names sits in its
-    # constant pool as plain ASCII
-    hyp_blob = b"\0".join(z.read(n) for n in z.namelist() if n.startswith("com/hypixel/") and n.endswith(".class"))
+    # every string a class under com/hypixel/ holds, joined by NUL (modified UTF-8
+    # never holds a raw NUL, and NUL is not a name character)
+    consts, pools = [], 0
+    for n in z.namelist():
+        if n.startswith("com/hypixel/") and n.endswith(".class"):
+            consts.extend(pool_utf8(n, z.read(n)))
+            pools += 1
+    consts = b"\0".join(consts)
     with open(out + "/resource-hashes.txt", "w") as hf, open(out + "/resource-owners.txt", "w") as of:
         for n in names:
             data = z.read(n)
@@ -245,18 +316,20 @@ with zipfile.ZipFile(jar) as z:
                 owner, rule = "hypixel", "d"
             elif HYP.search(n.encode()) or HYP.search(data):
                 owner, rule = "hypixel", "h"
-            elif n.encode() in hyp_blob or (native and base in hyp_blob):
+            elif named(consts, n.encode()) or (native and named(consts, base)):
                 owner, rule = "hypixel", "l"
             else:
                 owner, rule = "third-party", presumed
             hf.write(f"{hashlib.sha256(data).hexdigest()}  {n}\n")
             of.write(f"{owner} {rule} {n}\n")
 print(len(names))
+print(pools)
 PY
 }
-RES_N="$(write_resources)" || { echo "  FAILED: could not hash the jar's resources" >&2; exit 5; }
+RES_OUT="$(write_resources)" || { echo "  FAILED: could not hash the jar's resources" >&2; exit 5; }
+RES_N="$(printf '%s\n' "$RES_OUT" | sed -n 1p)"; POOLS_N="$(printf '%s\n' "$RES_OUT" | sed -n 2p)"
 case "$RES_N" in ''|0|*[!0-9]*) echo "  FAILED: resource hashing wrote '${RES_N:-nothing}' entries — a jar always carries META-INF/MANIFEST.MF" >&2; exit 5 ;; esac
-note "resources hashed: $RES_N"
+note "resources hashed: $RES_N (rule l read ${POOLS_N:-?} constant pool(s) of classes under com/hypixel/)"
 INDEXED="$(grep -cE '^(Compiled from|(public |final |abstract |private |protected |static |sealed |non-sealed )*(class|interface|enum|record) )' "$INDEX" 2>/dev/null || echo '?')"
 note "index written: $INDEX ($(du -h "$INDEX" | cut -f1), ~$INDEXED type decls)"
 

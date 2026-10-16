@@ -899,7 +899,7 @@ section "[HARD] The gates' own fixtures pass"
 # is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
 # or triage_drift.py changes.
 # check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:
-# 85 cases, 42 mutations including the identity control) takes ~7 s, so it is run here
+# 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a

@@ -67,8 +67,8 @@ DEF_CORPUS = FIXTURES / 'defaults' / 'corpus'
 # FLOORS: raise freely, lowering one needs a reason in the commit message. The fixture guards
 # the reader and nothing guards the fixture; a table that quietly shrank would report "every
 # mutation red" over fewer mutations, which is the sentence this repo keeps having to prevent.
-MIN_CASES = 92
-MIN_MUTATIONS = 45
+MIN_CASES = 98
+MIN_MUTATIONS = 47
 
 
 # ---------------------------------------------------------------------------------------------
@@ -889,7 +889,19 @@ def verify_group(c: Cases, scripts: pathlib.Path, td: pathlib.Path, tag: str):
             ('a gate that read MORE fences than the census FAILs, naming both numbers', 'fence_agree g 5 4',
              ['FAIL  g: read 5 fence(s), the census counted 4', 'HARD_FAILS=1'], []),
             ('a gate that printed no fence count FAILs, it is never skipped', 'fence_agree g "" 4',
-             ['FAIL  g: printed no fence count', 'HARD_FAILS=1'], [])):
+             ['FAIL  g: printed no fence count', 'HARD_FAILS=1'], []),
+            ('control: 5 against 6 FAILs naming both numbers', 'fence_agree g 5 6',
+             ['FAIL  g: read 5 fence(s), the census counted 6', 'HARD_FAILS=1'], []),
+            ('a newline-joined figure (two numbers on two lines) is a malformed-figure FAIL, not a silent pass',
+             "fence_agree g $'5\\n5' 5", ['FAIL  g: malformed fence figure(s)', 'HARD_FAILS=1'], []),
+            ('a figure with a suffix (5x) is a malformed-figure FAIL', 'fence_agree g 5x 5',
+             ['FAIL  g: malformed fence figure(s)', 'HARD_FAILS=1'], []),
+            ('a whitespace-only figure is a malformed-figure FAIL', 'fence_agree g " " 5',
+             ['FAIL  g: malformed fence figure(s)', 'HARD_FAILS=1'], []),
+            ('a malformed CENSUS figure is a malformed-figure FAIL too', 'fence_agree g 5 ""',
+             ['FAIL  g: malformed fence figure(s)', 'HARD_FAILS=1'], []),
+            ('a malformed figure produces no shell error text', "fence_agree g 5x 5",
+             ['FAIL  g: malformed fence figure(s)'], ['integer expression expected'])):
         rc, t = bash(root, PRELUDE + agree + call + '\necho "HARD_FAILS=$HARD_FAILS"\n')
         c.text('verify-docs fence_agree: ' + name, rc, t, want_rc=0, must=must, must_not=must_not)
     # --- gate 3's and the type-values gate's printed lines, parsed by the lines that ship ----------
@@ -1059,17 +1071,30 @@ READER_MUTATIONS = {
 }
 
 VF = 'verify-docs.sh'
+FA = 'verify-docs fence_agree: '
+FA_MALFORMED = ('a newline-joined figure (two numbers on two lines) is a malformed-figure FAIL, not a silent pass',
+                'a figure with a suffix (5x) is a malformed-figure FAIL',
+                'a whitespace-only figure is a malformed-figure FAIL',
+                'a malformed CENSUS figure is a malformed-figure FAIL too',
+                'a malformed figure produces no shell error text')
 _AI_CALL = ('  fence_agree "check-asset-ids.py (json fences)" "$(echo "$OUT" | sed -n '
             '\'s/^  INFO  docs scan: [0-9][0-9]* page(s); \\([0-9][0-9]*\\) ```json fence(s).*/\\1/p\')" "$FC_JSON"\n')
 VERIFY_MUTATIONS = {
     'VERIFY: fence_agree no longer refuses an empty figure': (
         '  if [ -z "$2" ]; then\n'
         '    fail "$1: printed no fence count, so it cannot be compared with the census ($3)"\n'
-        '  elif [ "$2" -ne "$3" ]; then',
-        '  if [ "$2" -ne "$3" ]; then',
+        '  elif case "$2" in',
+        '  if case "$2" in',
         ('verify',), {'verify-docs fence_agree: a gate that printed no fence count FAILs, it is never skipped',
                       'verify-docs: type-values: a missing INFO line is a FAIL, not a skip',
                       'verify-docs: asset-ids: a missing docs-scan line is a FAIL, not a skip'}),
+    'VERIFY: fence_agree no longer validates the figures before comparing them': (
+        '''  elif case "$2" in *[!0-9]*) true ;; *) false ;; esac || case "$3" in ''|*[!0-9]*) true ;; *) false ;; esac; then\n''',
+        '  elif false; then\n',
+        ('verify',), {FA + n for n in FA_MALFORMED}),
+    'VERIFY: fence_agree validates the gate figure but not the census figure': (
+        '''|| case "$3" in ''|*[!0-9]*) true ;; *) false ;; esac; then''', '; then',
+        ('verify',), {FA + 'a malformed CENSUS figure is a malformed-figure FAIL too'}),
     'VERIFY: fence_agree only notices a gate that read MORE': (
         'elif [ "$2" -ne "$3" ]; then', 'elif [ "$2" -gt "$3" ]; then',
         ('verify',), {'verify-docs fence_agree: a gate that read FEWER fences than the census FAILs, naming both numbers'}),

@@ -90,10 +90,15 @@ if [ -z "$FC_JAVA" ] || [ -z "$FC_JSON" ] || [ -z "$FC_TOTAL" ]; then
 fi
 # fence_agree LABEL GATE_COUNT CENSUS_COUNT: a gate whose fence count differs from the
 # census, or printed none, is not reading the corpus the census counted. A missing figure is
-# a FAIL, never a skip.
+# a FAIL, never a skip, and so is a malformed one: `[ "$2" -ne "$3" ]` on a figure like $'5\n5',
+# `5x` or " " does not compare, it errors (status 2, a message on stderr) and an `elif` taking
+# that as false printed no FAIL at all (review of bc10b45..23ea833, MINOR-8). Both figures must
+# be digits only before they are compared.
 fence_agree() {
   if [ -z "$2" ]; then
     fail "$1: printed no fence count, so it cannot be compared with the census ($3)"
+  elif case "$2" in *[!0-9]*) true ;; *) false ;; esac || case "$3" in ''|*[!0-9]*) true ;; *) false ;; esac; then
+    fail "$1: malformed fence figure(s), gate printed '$2' and the census counted '$3' - both must be digits only, so the two cannot be compared"
   elif [ "$2" -ne "$3" ]; then
     fail "$1: read $2 fence(s), the census counted $3 - the gate and the census are reading different corpora"
   fi

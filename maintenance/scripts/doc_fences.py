@@ -58,9 +58,9 @@ nobody thought of: a reader that handled only the forms measured above would be 
 this module exists to close. It FAILS on 0 pages and on 0 fences, because a census that
 visited nothing certifies nothing.
 
-NOT IN SCOPE. Headings inside a fence (`# comment` lines in a bash/ASCII fence read as
-headings by the doc-type check and by check-links) are a separate defect of the heading
-readers, not of fence reading; handed back, not fixed here.
+HEADINGS. A heading-shaped line inside a fence is not a heading. The heading readers
+(check-links, section_binder, verify-docs.sh's doc-type _sections and gotcha scan) take their
+headings only from lines outside `Page.fence_lines`.
 
 CLI (for the bash-inline readers and the census line):
     doc_fences.py --census [--docs DIR]     print the census line; exit 1 on any orphan

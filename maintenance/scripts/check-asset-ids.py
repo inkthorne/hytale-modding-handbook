@@ -94,7 +94,7 @@ ID_SHAPE = re.compile(r'^[A-Za-z0-9_.\-]+$')
 NUMERIC = re.compile(r'^[0-9.\-]+$')
 SETPATH = re.compile(r'setPath\("([^"]*)"\)')
 FENCE = re.compile(r'^([ \t]*)```(\w*)[^\n]*\n(.*?)^[ \t]*```', re.M | re.S)
-# The same, but a fence may sit inside a blockquote (`> ```json`): 8 of the handbook's fences do, and an
+# The same, but a fence may sit inside a blockquote (`> ```json`): 4 of the handbook's fences do (8 marker lines), and an
 # anchor that allows only spaces before the backticks neither scanned nor COUNTED them.
 QFENCE = re.compile(r'^([ \t]*(?:>[ \t]?)*)```(\w*)[^\n]*\n(.*?)^[ \t]*(?:>[ \t]?)*```', re.M | re.S)
 BQ = re.compile(r'^[ \t]*(?:>[ \t]?)*')

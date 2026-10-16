@@ -61,6 +61,7 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 | [encounters.md](encounters.md) | Encounter Manager (0.6.3+) — multi-NPC encounters scripted as `Server/EncounterManager` JSON with encounter-scoped boss-bar, music, role-change and world-event-signal components. |
 | [abilities.md](abilities.md) | Rune abilities (0.7.2+): core and support rune items (the Item `Ability` block), ability slots and rune bag, ability attributes that support runes modify, keywords and the --validate-assets audit, elements and reactions, the ten AbilitiesPlugin interaction types, the ability bench and /abilities. |
 | [mounts.md](mounts.md) | Mounts and seating — riding NPCs, sitting on block seats and driving minecarts; the `Mount`/`Seating`/`SpawnMinecart` interactions, `BlockMountAPI`, the rider/mount component pair, the NPC `Mount` action and the `/mount` commands. |
+| [beams.md](beams.md) | Beams (0.7.2+) — the `Beam` asset under `Server/Entity/Beams`, the `AttachBeam` interaction, `BeamComponent` and `AttachedBeam` for tethers to entities or fixed points, free-standing beam entities, the /beam command, and client sync. |
 | [deployables.md](deployables.md) | Player-placed deployables — turrets, AoE totems and traps; the `DeployableConfig` registry (`Trap`, `TrapSpawner`, `Aoe`, `Turret`), the three `SpawnDeployable*` interactions, and the owner/projectile components. |
 | [npc-spawning.md](npc-spawning.md) | How NPCs enter the world — spawn beacons under `Server/NPC/Spawn/Beacons`, companion block spawners, and the `SpawnNPC` interaction with its weighted roles, scatter and clearance rules. |
 | [npc-combat.md](npc-combat.md) | How NPCs fight — the two melee paths (instruction-driven attacks without a Combat Action Evaluator, and CAE-driven combat) and the CAE's action selection, ranges and cooldowns. |
@@ -94,7 +95,7 @@ _Documents the `.ui` curly-brace DSL — verify against real `.ui` files._
 ### Java API + JSON asset format
 _Covers both a Java API and a JSON asset format for the same topic._
 
-[Audio System](audio.md)  [Music](audio-music.md)  [Block Definitions](blocks.md)  [Blocks Java API](blocks-java-api.md)  [Connected Blocks](blocks-connected.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [NPC Combat](npc-combat.md)  [NPC Spawning](npc-spawning.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Abilities and Runes](abilities.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
+[Audio System](audio.md)  [Music](audio-music.md)  [Block Definitions](blocks.md)  [Blocks Java API](blocks-java-api.md)  [Connected Blocks](blocks-connected.md)  [Camera Control](camera.md)  [Combat API](combat.md)  [Crafting System](items-crafting.md)  [Drop System](drops.md)  [Deployables](deployables.md)  [NPC Combat](npc-combat.md)  [NPC Spawning](npc-spawning.md)  [Mounts & Seating](mounts.md)  [Effects & Stats Reference](effects-stats.md)  [Encounter Manager](encounters.md)  [Abilities and Runes](abilities.md)  [Beams](beams.md)  [Interactions API](interactions.md)  [Item Definitions](items.md)  [NPC Roles](npc-roles.md)  [Prefabs API](prefabs.md)  [Tool Items](items-tools.md)  [Trigger Volumes](trigger-volumes.md)  [World Events](world-events.md)  [World Generation](worldgen.md)
 
 ### Java API + Save / config file format
 _Covers both a Java API and an on-disk save/config file format._
@@ -144,6 +145,9 @@ JSON asset types used in Hytale's data-driven systems.
 
 **Encounters**
 [EncounterManager asset](encounters.md#asset-format--serverencountermanageridjson), [Variants & macros](encounters.md#variants-and-macros), [Encounter core components](encounters.md#encounter-specific-core-components), [EncounterMembers collector](encounters.md#tracking-the-audience-the-encountermembers-collector), [Rewards](encounters.md#rewards)
+
+**Beams**
+[Beam](beams.md#beam), [AttachBeam](beams.md#the-attachbeam-interaction)
 
 **World Generation - Zones & Biomes**
 [Zone](worldgen-zones.md#top-level-structure), [Biome Assignment](worldgen-zones.md#biome-assignment-noiserange), [Density](worldgen-zones.md#density), [SpawnPositions](worldgen-zones.md#spawnpositions), [Biome](worldgen-biomes.md#top-level-structure), [Terrain](worldgen-biomes.md#terrain), [MaterialProvider](worldgen-biomes.md#materialprovider)
@@ -260,6 +264,9 @@ JSON asset types used in Hytale's data-driven systems.
 **Encounters**
 [EncounterManagerPlugin](encounters.md), [EncounterManager](encounters.md), [EncounterMembers](encounters.md), [EncounterAudioState](encounters.md), [EncounterBossBarState](encounters.md), [EncounterMemberCollector](encounters.md), [EncounterManagerSystems](encounters.md), [EncounterMemberSystems](encounters.md), [EncounterCommand](encounters.md), [RewardModule](encounters.md#rewards), [RewardAsset](encounters.md#rewards)
 
+**Beams**
+[BeamPlugin](beams.md#beamplugin), [BeamComponent](beams.md#beamcomponent), [AttachedBeam](beams.md#attachedbeam), [BeamSystems](beams.md#how-beams-reach-clients), [AttachBeamInteraction](beams.md#the-attachbeam-interaction)
+
 **Abilities**
 [AbilitiesPlugin](abilities.md), [CoreItemAbility](abilities.md), [SupportItemAbility](abilities.md), [AbilityKeyword](abilities.md), [Element](abilities.md), [ImpactModifiers](abilities.md), [AbilityCastUtil](abilities.md), [AbilityKeywordAudit](abilities.md)
 
@@ -327,6 +334,7 @@ JSON asset types used in Hytale's data-driven systems.
 - world-events.md - Scripted world-event timelines: stages, forks, conditions, actions and context keys
 - mounts.md - Riding NPCs, block seats and minecarts; BlockMountAPI and the mount component pair
 - deployables.md - Turrets, AoE totems and traps; the DeployableConfig registry and the SpawnDeployable interactions
+- beams.md - Beam assets, the AttachBeam interaction, and BeamComponent tethers between entities or to points
 - npc-spawning.md - Spawn beacons, companion block spawners and the SpawnNPC interaction
 - npc-combat.md - The two NPC melee paths and the Combat Action Evaluator
 

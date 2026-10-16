@@ -57,6 +57,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Abilities and Runes](./docs/abilities.md) - Rune abilities: core/support runes, ability slots and rune bag, keywords, elements and the ability interactions (0.7.2+)
 - [Mounts](./docs/mounts.md) - Mount subsystem
 - [Deployables](./docs/deployables.md) - Deployable subsystem
+- [Beams](./docs/beams.md) - Beam assets, the AttachBeam interaction and the BeamComponent API (0.7.2+)
 - [Drops](./docs/drops.md) - Drop system and loot tables
 - [Projectiles](./docs/projectiles.md) - Projectile configuration
 

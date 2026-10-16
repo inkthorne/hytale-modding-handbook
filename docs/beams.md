@@ -245,8 +245,10 @@ entry, with no timed `RemoveEntity`. The chain of calls that reaches it starts a
 runs through `Root_Ability_ChainHook` and `Ability_ChainHook_Cast`, which launches the projectile with
 `LaunchAbilityProjectile` and a `Lifetime` of `0.5`. That lifetime is what removes it: for a
 projectile that does not pierce, `AbilityProjectileLauncher` gives it a `DespawnComponent` that
-expires after `Lifetime` seconds. Its `ProjectileHit` and `ProjectileMiss` chains declare no `Rules`;
-each waits 0.2 s and ends in `Weapon_Stick_Fire_Projectile_Despawn`, a `RemoveEntity` of the `User`.
+expires after `Lifetime` seconds. Its `ProjectileHit` and `ProjectileMiss` chains declare no `Rules`.
+The miss chain waits 0.2 s; the hit chain first runs `Ability_Split`, a `TriggerAbilityFX` and
+`Ability_ChainHook_Hit`, then waits 0.2 s. Both end in `Weapon_Stick_Fire_Projectile_Despawn`, a
+`RemoveEntity` of the `User`.
 
 ### Example: a tethered bolt
 

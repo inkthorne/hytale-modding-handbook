@@ -69,6 +69,9 @@ whose whole info string is not one of ALLOWED_TAGS, the set the corpus uses (mea
 language is an explicit edit of ALLOWED_TAGS, made by someone who has asked which gates
 should read it. The comparison is on the whole info string, not on the leading \\w+: an
 info string of `java title=x` or `java-x` is read as `java` by the gates and is refused.
+The info string is stripped first, so ``` json (a space before the tag) is accepted as json;
+check-asset-ids.py's own `(\\w*)` reads it as untagged, and verify-docs' fence_agree on gate 3's
+json count, not this census, is what catches that disagreement.
 The allowlist is a docs/ rule. Outside docs/ (check-links reads README, CLAUDE.md,
 maintenance/, examples/) only the structural orphans apply, via `orphans_of()`.
 

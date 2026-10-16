@@ -184,7 +184,7 @@ registers it.
 | `ApplyAbilityEffects` | `AbilitiesPlugin` | [abilities.md](abilities.md#applyabilityeffects) |
 | `ApplyEffect` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyeffect) |
 | `ApplyForce` | `InteractionModule` | [interactions-combat.md](interactions-combat.md#applyforce) |
-| `AttachBeam` | `BeamPlugin` | [interactions.md](#attachbeam) |
+| `AttachBeam` | `BeamPlugin` | [interactions.md](#attachbeam), [beams.md](beams.md#the-attachbeam-interaction) |
 | `AugmentCondition` | `AugmentBlocksPlugin` | [interactions-flow.md](interactions-flow.md#augmentcondition) |
 | `Bed` | `BedsPlugin` | [player.md](player.md#bed-interaction) |
 | `BlockCondition` | `InteractionModule` | [interactions-flow.md](interactions-flow.md#blockcondition) |
@@ -1220,6 +1220,8 @@ entity, and `BeamSystems.Tracker` sends the beam to clients that can see it. Reg
 `BeamPlugin` (`com.hypixel.hytale.builtin.beam.BeamPlugin`, 0.7.2+, absent from
 `Constants.CORE_PLUGINS`), which also owns the `Beam` asset store at `Server/Entity/Beams/`. A `Beam`
 asset has one key, the required `TexturePath`. Four ship: `Basic`, `Chain`, `Fire` and `Rope`.
+For the full subsystem (the `Beam` asset and its validator messages, the `BeamComponent` and
+`AttachedBeam` Java API, `/beam`, client sync, and gotchas), see [Beams](beams.md).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

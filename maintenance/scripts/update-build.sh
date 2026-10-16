@@ -364,7 +364,8 @@ fi
 # migration/blocks/3_4.json or bundledDefaults/server.lang appeared nowhere.
 # build-jar-cache.sh hashes EVERY non-class entry's content (no allowlist) and
 # records an owner for each: Hypixel's by default, third-party only by a
-# property the jar shows (rules a-e, written at the writer). Hypixel rows are
+# property the jar shows and no mark of Hypixel's overrides (rules x, b, c, a, e,
+# h, l and d, written at the writer). Hypixel rows are
 # listed in full; third-party rows collapse to counts by their first two path
 # components. A snapshot or cache with no resource hashes is reported BLIND.
 section "Resource drift (jar non-class entries, old → new)"
@@ -438,7 +439,7 @@ PY
   else
     read -r N_OLDR N_NEWR N_RROWS N_RHYP N_RTP N_OWNED < <(sed -n 's/^#COUNTS //p' "$REPORT/resource-summary.txt")
     info "compared $N_OLDR resource(s) in the snapshot with $N_NEWR in the new build (every non-class, non-directory jar entry, hashed by content)"
-    info "ownership: Hypixel's by default; third-party only when the jar shows it (a: its top-level directory also holds classes outside com/hypixel/; b: native library; c: under META-INF/ and neither path nor bytes contain com.hypixel; e: its directory mirrors a foreign package under com/; com/hypixel/ is always Hypixel's)"
+    info "ownership: Hypixel's by default (d: no rule below applies); x: under com/hypixel/ is always Hypixel's; a third-party presumption when the jar shows one (b: native library; c: under META-INF/; a: its top-level directory also holds classes outside com/hypixel/; e: its directory mirrors a foreign package under com/) that a mark of Hypixel's overrides (h: hypixel or hytale in its path or bytes, in any case; l: a com/hypixel class names its path, or a native library's file name)"
     [ "$N_OWNED" = 0 ] && warn "the new cache has no resource-owners.txt — every row is classified as Hypixel's by default"
     sed -n 's/^#SIDE /        /p;s/^#HOLDS /          holds: /p' "$REPORT/resource-summary.txt"
     if [ "$N_RROWS" = 0 ]; then

@@ -65,8 +65,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 531
-MIN_MUTATIONS = 63
+MIN_CHECKS = 546
+MIN_MUTATIONS = 81
 
 
 class Run:
@@ -334,6 +334,12 @@ def expect_resources(label, out, res, manifest=True):
     check('libx.so' not in out and 'CHANGED native/linux-x64 1' in out,
           f"{label}: third-party resources collapsed to counts, not listed")
     check('holds:' in out and 'ownership: Hypixel' in out, f"{label}: the ownership rule and what each side holds are printed")
+    # the printed rule text is the reader's only key to the letters in `rules d:10 h:7 ...`
+    # and once printed a rule the writer no longer had (a native is always third-party)
+    own_line = next((l for l in out.splitlines() if 'ownership: Hypixel' in l), '')
+    letters = set(re.findall(r'(?<![\w/])([a-z]):\d+', '\n'.join(l for l in out.splitlines() if ' rules ' in l)))
+    check(letters == set('xdhlbcae') and all(f' {c}: ' in own_line or f'({c}: ' in own_line for c in letters),
+          f"{label}: the printed ownership rule describes every rule letter the owners file uses")
 
 
 def expect_update(label, rc, out, src, api, tri, res='', manifest=True):
@@ -703,14 +709,26 @@ def part2():
                           'docs/p12.md': 'The `bundledDefaults/*.json` files.',
                           'docs/p13.md': 'The `moved.json` file.',
                           'docs/p14.md': 'The `shared.json` file.',
-                          'docs/p15.md': 'The `other.json` file.'}.items():
+                          'docs/p15.md': 'The `other.json` file.',
+                          'docs/p16.md': 'The `bundledDefaults/*/sub` tree.',
+                          'docs/p17.md': 'The `bundledDefaults/*.lang/sub` tree.'}.items():
             (t / rel).parent.mkdir(parents=True, exist_ok=True); (t / rel).write_text(text)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             mod.main(str(t / 'report'), str(t / 'assets'), str(t))
         out = buf.getvalue()
-    check('resource bundledDefaults/server.lang \u2192 docs/p1.md docs/p10.md\n' in out,
-          "resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not")
+    m = re.search(r'^resource bundledDefaults/server\.lang \u2192 (.*)$', out, re.M)
+    hits = m.group(1).split() if m else []
+    check(bool(hits) and 'docs/p1.md' in hits,
+          "resource triage: `bundledDefaults/*.lang` flags a change to bundledDefaults/server.lang")
+    check(bool(hits) and 'docs/p10.md' in hits,
+          "resource triage: `bundledDefaults/*` flags a change to bundledDefaults/server.lang")
+    check(bool(hits) and 'docs/p2.md' not in hits and 'docs/p6.md' not in hits,
+          "resource triage: en-US/server.lang and a bare `server.lang` do not flag a change to bundledDefaults/server.lang")
+    check(bool(hits) and 'docs/p16.md' not in hits,
+          "resource triage: `bundledDefaults/*/sub` is not `bundledDefaults/*`")
+    check(bool(hits) and 'docs/p17.md' not in hits,
+          "resource triage: `bundledDefaults/*.lang/sub` is not `bundledDefaults/*.lang`")
     check('docs/p12.md' not in out, "resource triage: `dir/*.json` does not span a .lang file")
     check('resource migration/blocks/3_4.json \u2192 docs/p3.md docs/p4.md\n' in out,
           "resource triage: a full path and a brace list flag the change; another file of the brace's directory does not")
@@ -948,15 +966,24 @@ MUTATIONS = [
     ("resources: the ownership rule and sides not printed", U,
      ";s/^#HOLDS /          holds: /p'", "'",
      {"update: the ownership rule and what each side holds are printed"}),
+    ("resources: the printed ownership rule omits a rule the owners file uses", U,
+     "; l: a com/hypixel class names its path, or a native library's file name)", ")",
+     {"update: the printed ownership rule describes every rule letter the owners file uses"}),
     ("resources triage: third-party rows are triaged", T,
      'len(parts) == 4 and parts[1] == "hypixel"', 'len(parts) == 4',
      {"resource triage: a third-party resource is not triaged"}),
     ("resources triage: `dir/*.ext` wildcard", T,
-     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*" + wild_ext + RES_END)', 'pass',
-     {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*" + wild_ext + WILD_END)', 'pass',
+     {"resource triage: `bundledDefaults/*.lang` flags a change to bundledDefaults/server.lang"}),
+    ("resources triage: `dir/*.ext` spans a `/`", T,
+     'r"/\\*" + wild_ext + WILD_END)', 'r"/\\*" + wild_ext + RES_END)',
+     {"resource triage: `bundledDefaults/*.lang/sub` is not `bundledDefaults/*.lang`"}),
+    ("resources triage: bare `dir/*` spans a `/`", T,
+     'r"/\\*(?![\\w*./-])")', 'r"/\\*(?![\\w*.-])")',
+     {"resource triage: `bundledDefaults/*/sub` is not `bundledDefaults/*`"}),
     ("resources triage: bare `dir/*` wildcard", T,
-     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*(?![\\w*.-])")', 'pass',
-     {"resource triage: `bundledDefaults/*.lang` and `bundledDefaults/*` flag a change to bundledDefaults/server.lang, and en-US/server.lang and a bare `server.lang` do not"}),
+     'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\*(?![\\w*./-])")', 'pass',
+     {"resource triage: `bundledDefaults/*` flags a change to bundledDefaults/server.lang"}),
     ("resources triage: brace list", T,
      'alts.append(r"(?<![\\w-])" + re.escape(d) + r"/\\{', 'pass; (r"(?<![\\w-])" + re.escape(d) + r"/\\{',
      {"resource triage: a full path and a brace list flag the change; another file of the brace's directory does not"}),
@@ -965,7 +992,8 @@ MUTATIONS = [
      {"resource triage: a bare name shared by two jar resources does not match"}),
     ("resources triage: a bare name may also be a shipped asset", T,
      ' and asset_names.get(name, 0) == 0:', ':',
-     {"resource triage: a bare name that is also a shipped asset does not match"}),
+     {"resource triage: a bare name that is also a shipped asset does not match",
+      "resource triage: en-US/server.lang and a bare `server.lang` do not flag a change to bundledDefaults/server.lang"}),
     ("resources triage: bare-name uniqueness counted over the union of both builds", T,
      '[res_names[b] for b in builds]',
      '[collections.Counter(os.path.basename(p) for p in set(lines("resources-old.txt")) | set(lines("resources-new.txt")))]',

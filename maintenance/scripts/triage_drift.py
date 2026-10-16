@@ -42,7 +42,8 @@ something a page documents. A doc names one in three ways:
     `migration/blocks/{0_1,3_4}.json`;
   - by a wildcard over its directory, `bundledDefaults/*.lang`, `bundledDefaults/*`
     (docs/i18n.md cites the first). Matched for every file that wildcard spans:
-    `dir/*.lang` does not span a .json, and a bare `dir/*` is not `dir/*.ext`;
+    `dir/*.lang` does not span a .json, a bare `dir/*` is not `dir/*.ext`, and
+    neither spans a `/` (`dir/*/sub` is not `dir/*`);
   - by its bare name, ONLY when that name is unique among the jar's resources of a
     build the row's path exists in (the old build for a REMOVED row, the new for an
     ADDED one, either for a CHANGED one) AND absent from the shipped assets. Counted
@@ -108,6 +109,9 @@ class AssetMatcher:
 
 
 RES_END = r"(?![\w-]|\.\w)"
+# A wildcard is a shell glob: its `*` does not cross a `/`, so `dir/*/sub` and
+# `dir/*.lang/sub` name files below a directory called `*` and are not `dir/*`.
+WILD_END = r"(?![\w/-]|\.\w)"
 
 
 def resource_rx(path, res_names, asset_names):
@@ -117,8 +121,8 @@ def resource_rx(path, res_names, asset_names):
     alts = [r"(?<![\w-])" + re.escape(path) + RES_END]
     if d:
         wild_ext = re.escape(ext) if ext else ""
-        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*" + wild_ext + RES_END)
-        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*.-])")
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*" + wild_ext + WILD_END)
+        alts.append(r"(?<![\w-])" + re.escape(d) + r"/\*(?![\w*./-])")
         alts.append(r"(?<![\w-])" + re.escape(d) + r"/\{(?:[^{}]*,)?\s*" + re.escape(stem) + r"\s*(?:,[^{}]*)?\}" + re.escape(ext))
     if any(c[name] == 1 for c in res_names) and asset_names.get(name, 0) == 0:
         alts.append(r"(?<![\w-])" + re.escape(name) + r"(?![\w.-])")

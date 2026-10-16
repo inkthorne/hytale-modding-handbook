@@ -50,7 +50,14 @@ import argparse, collections, os, pathlib, re, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import doc_fences
 
-SKIP_DIRS = {'.git', 'build', 'out', '.gradle', 'node_modules'}
+# `.claude` holds tooling state, never repo docs: the session lock (scheduled_tasks.lock), the
+# agents' addenda, and `worktrees/`, where each parallel agent has a full checkout of this repo.
+# Those checkouts' markdown is a second copy of the tracked tree (and of whatever an agent has
+# half-edited), so a main-checkout run counted it: 4484 links in 262 files with one worktree
+# present against the tracked tree's 2242 in 131, a figure that moved with how many agents
+# happened to be running and that nobody could reproduce from a clone. Nothing under .claude/ is
+# a link target of any tracked page (no tracked file lives there: `git ls-files .claude` is empty).
+SKIP_DIRS = {'.git', '.claude', 'build', 'out', '.gradle', 'node_modules'}
 
 # The heading -> anchor rule, matching the site generator's.
 def slug(t: str) -> str:

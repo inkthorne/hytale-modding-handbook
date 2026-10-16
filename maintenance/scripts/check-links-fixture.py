@@ -33,8 +33,8 @@ FROM = pathlib.Path(A.from_dir)
 
 fails: list[str] = []
 checks = 0
-MIN_CASES = 24
-MIN_MUTATIONS = 8
+MIN_CASES = 27
+MIN_MUTATIONS = 9
 
 
 def run(root, *extra):
@@ -88,6 +88,9 @@ if A.mutations:
         'PIN, a `# comment` in a BLOCKQUOTED fence is not an anchor',
         'PIN, a `# comment` in an INDENTED fence is not an anchor',
         'and there is no #dup-1 because there is only one heading Dup'}
+    # The worktree denominator case pins the INFO line, so it goes red when the outside population goes.
+    WT_CTRL = {'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding'}
+    WT_DENOM = {'and the file is not in the denominator either'}
     # Each entry: the edit, and the EXACT set of case labels it must redden.
     MUTATIONS = {
         'IDENTITY (no change — the harness control)': (
@@ -106,7 +109,7 @@ if A.mutations:
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM | WT_CTRL),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
@@ -126,7 +129,7 @@ if A.mutations:
              'a link to a file that does not exist is caught',
              'a broken link in a file outside docs/ is caught',
              'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS),
+             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM),
         'gate-fixture links vote in the floor again': (
             """        elif rel.parts[:2] == ('maintenance', 'fixtures'):
             bucket = 'fixture'""",
@@ -145,7 +148,7 @@ if A.mutations:
                     findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
             """                if tp not in anchors:
                     pass""",
-            {'a link to a file that does not exist is caught'}),
+            {'a link to a file that does not exist is caught', *WT_CTRL}),
         'headings inside code fences are read as anchors again': (
             """        if no in fenced:
             passed_over += 1
@@ -159,6 +162,10 @@ if A.mutations:
              'a cross-file link to a fenced comment FAILs too',
              'and there is no #dup-1 because there is only one heading Dup',
              'the run reports the fenced heading-shaped lines it passed over'}),
+        '.claude is scanned again (agent worktrees count as docs)': (
+            "SKIP_DIRS = {'.git', '.claude', 'build'", "SKIP_DIRS = {'.git', 'build'",
+            {'a broken link under .claude/worktrees/ is not scanned',
+             'and the file is not in the denominator either'}),
         'SKIP shares an exit code with PASS': (
             '        return 2\n    if pop', '        return 0\n    if pop',
             {'a too-small corpus SKIPs with exit 2'}),
@@ -351,6 +358,21 @@ check('and there is no #dup-1 because there is only one heading Dup',
 check('the run reports the fenced heading-shaped lines it passed over',
       lambda: re.search(r'(\d+) heading-shaped line\(s\) inside code fences',
                         broken({'docs/gamma.md': _BASH + '[x](#here)\n'})[2]).group(1), '1')
+
+# ---- agent worktrees under .claude/ are not part of the corpus --------------
+# Each parallel agent has a full checkout under .claude/worktrees/<id>/. A main-checkout run read
+# them as a second copy of the repo: 4484 links in 262 files against the tracked tree's 2242 in 131
+# (MINOR-3). The control is the SAME file at a path outside .claude/, which must be a finding, so a
+# green here is "skipped by name" and not "the broken link was never broken".
+_WT = '# W\n\n[x](ghost.md)\n'
+check('CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding',
+      lambda: broken({'extra/worktrees/a/docs/w.md': _WT})[1],
+      ['extra/worktrees/a/docs/w.md:3 -> ghost.md (no such file)'])
+check('a broken link under .claude/worktrees/ is not scanned',
+      lambda: broken({'.claude/worktrees/a/docs/w.md': _WT})[1], [])
+check('and the file is not in the denominator either',
+      lambda: next((l.strip() for l in broken({'.claude/worktrees/a/docs/w.md': _WT})[2].split('\n') if 'INFO' in l), ''),
+      'INFO  5 markdown link(s) in 3 file(s): 4 under docs/, 1 outside it, 0 in gate fixtures (checked, not floored)')
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

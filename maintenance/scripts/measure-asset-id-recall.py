@@ -95,7 +95,9 @@ def classify(path):
         if p == 'Block':
             return ('asset', 'Item/Items', 'BlockConditionInteraction.BlockIdMatcher.Id: BlockType.VALIDATOR_CACHE')
         if p == 'Cooldown':
-            return ('free', None, 'InteractionCooldown.Id: a key into CooldownHandler.cooldowns, created by computeIfAbsent; any string is legal')
+            return ('gap', None, 'InteractionCooldown.Id: a cooldown id, shared with RootInteraction asset ids (a root with no explicit '
+                    'Cooldown.Id keys its cooldown by root.getId(), InteractionManager.java:1125); CooldownHandler.getCooldown creates any '
+                    'string by computeIfAbsent, so an invented id decodes and silently names nothing a root checks')
         raise KeyError(f"'Id' under {p!r}")
     if k in SCOPE_BY_KEY:
         return SCOPE_BY_KEY[k]

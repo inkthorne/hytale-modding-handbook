@@ -54,8 +54,8 @@ N_FLAG_LINES = 63       # 61 failed pairs and the 2 declarations in declared.md
 
 # Floors, same shape as every other fixture in this directory: raise freely, lower only
 # with a reason in the commit message.
-MIN_CASES = 42
-MIN_MUTATIONS = 43
+MIN_CASES = 43
+MIN_MUTATIONS = 45
 
 PAIR_RE = re.compile(r'^  PAIR  (\S+?):\d+\t([^\t]*)\t([^\t]*)\t(\S+)$')
 FLAG_RE = re.compile(r'^  FLAG  (\S+?):\d+: "([^"]*)": "([^"]*)" is not an id in (\S+) \((.*)\)$')

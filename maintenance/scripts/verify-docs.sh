@@ -362,7 +362,7 @@ section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could
 # The copies of the indexes live in a temp dir that is removed when the section ends AND by an EXIT
 # trap (an interrupted or exiting run would otherwise leave two 28k-40k-row copies behind). This is
 # the only EXIT trap in this script: a second one would replace it, so chain it
-# (trap -p EXIT) if one is ever added; check-asset-drift-fixture.py counts the `trap` lines.
+# (trap -p EXIT) if one is ever added; check-asset-drift-fixture.py fails on any other `trap` word outside a comment.
 DRIFT_TMP=""
 trap 'rm -rf "${DRIFT_TMP:-}"' EXIT
 DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
@@ -432,6 +432,7 @@ else
     warn "Server-assets drift skipped (missing ServerAssetsIndex.hashes baseline or extracted Server/)"
   fi
   rm -rf "$DRIFT_TMP"
+  DRIFT_TMP=""      # the EXIT cleanup must not act on a path that is already gone
 fi
 
 # =====================================================================
@@ -974,9 +975,9 @@ section "[HARD] The gates' own fixtures pass"
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # check-asset-drift-fixture.py --mutations (the "Asset drift vs baseline" section above, run as text
-# under sort, diff and grep shims and stub hash scripts: 26 cases and 28 mutations including the
+# under sort, diff and grep shims and stub hash scripts: 29 cases and 29 mutations including the
 # identity control, after a negative control that reproduces the section's pre-fix false green)
-# takes ~9 s, so it is run here.
+# takes ~19 s (18.6-19.5 s over five runs), so it is run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading

@@ -42,8 +42,8 @@ ANCHOR = 'section "[HARD] Asset drift vs baseline'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 26
-MIN_MUTATIONS = 28
+MIN_CASES = 29
+MIN_MUTATIONS = 29
 
 REAL = {n: shutil.which(n) for n in ('sort', 'diff', 'grep')}
 for _n, _p in REAL.items():
@@ -74,7 +74,12 @@ def prelude() -> str:
 SORT_SHIM = f'''#!/usr/bin/env bash
 if [ -n "${{SHIM_SORT_FAIL_ARG:-}}" ]; then
   for a in "$@"; do
-    case "$a" in *"$SHIM_SORT_FAIL_ARG"*) echo "sort: shim: cannot read: $a" >&2; exit 2 ;; esac
+    case "$a" in *"$SHIM_SORT_FAIL_ARG"*)
+      # SHIM_SORT_PARTIAL=1: two sorted rows reach stdout BEFORE the failure, as a sort that dies midway
+      # leaves a short file with a nonzero status. Writing nothing is caught by the 0-row guard, so only
+      # this mode isolates the sort-status guard.
+      [ "${{SHIM_SORT_PARTIAL:-}}" = 1 ] && {REAL['sort']} "$@" | sed 2q
+      echo "sort: shim: cannot read: $a" >&2; exit 2 ;; esac
   done
 fi
 exec {REAL['sort']} "$@"
@@ -191,6 +196,7 @@ def run_section(text: str, tpl: pathlib.Path, work: pathlib.Path, name: str, *, 
     # DRIFT_TMP_AFTER_SECTION: whether the section's own cleanup ran (the EXIT trap has not fired yet)
     script = (prelude() + f'ASSETS={str(assets)!r}\n' + text
               + 'echo "DRIFT_TMP_AFTER_SECTION=$([ -d "${DRIFT_TMP:-}" ] && echo present || echo gone)"\n'
+              + 'echo "DRIFT_TMP_CLEARED=$([ -z "${DRIFT_TMP:-}" ] && echo yes || echo no)"\n'
               + 'echo "HARD_FAILS=$HARD_FAILS"\n')
     p = subprocess.run(['bash', '-c', script], capture_output=True, text=True, cwd=root, env=env)
     # the temp path of the assets is reported as @ASSETS@, so an expected line need not know it
@@ -217,7 +223,7 @@ S_DONE = 'INFO  0 changed Server/Cosmetics assets'
 
 def body(out: str) -> list[str]:
     return [l.strip() for l in out.splitlines()
-            if l.strip() and not l.startswith(('HARD_FAILS=', '== ', 'DRIFT_TMP_AFTER_SECTION=', 'TMP_LEFT='))]
+            if l.strip() and not l.startswith(('HARD_FAILS=', '== ', 'DRIFT_TMP_AFTER_SECTION=', 'DRIFT_TMP_CLEARED=', 'TMP_LEFT='))]
 
 
 def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
@@ -237,6 +243,8 @@ def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
             pr.append(f'the temp dir was not removed: {re.findall("TMP_LEFT=.*", out)}')
         if cleaned == 'section' and 'DRIFT_TMP_AFTER_SECTION=gone' not in out:
             pr.append('the section left its temp dir in place when it ended')
+        if cleaned == 'section' and 'DRIFT_TMP_CLEARED=yes' not in out:
+            pr.append('the section left DRIFT_TMP set to the removed path (the EXIT trap would act on it)')
         if cleaned == 'exit' and 'DRIFT_TMP_AFTER_SECTION' in out:
             pr.append('the section was meant to exit before its end')
         if exact is not None and body(out) != exact:
@@ -291,6 +299,13 @@ def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
                   go(shims=sortfail(cb)), 'FAIL  asset drift (Common): could not sort the indexes for the diff (the baseline sort exited 2, the live index\'s 0;')
     common_failed('sort of the live index fails (baseline fine): FAIL naming the step and its status, no count',
                   go(shims=sortfail(cl)), 'FAIL  asset drift (Common): could not sort the indexes for the diff (the baseline sort exited 0, the live index\'s 2;')
+    # a sort that writes two rows and THEN fails: the only input that reaches the status guard (a sort that
+    # writes nothing is caught by the 0-row guard as well, so the cases above do not isolate it)
+    partial = lambda arg: {'SHIM_SORT_FAIL_ARG': arg, 'SHIM_SORT_PARTIAL': '1'}
+    common_failed('a baseline sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
+                  go(shims=partial(cb)), 'FAIL  asset drift (Common): could not sort the indexes for the diff (the baseline sort exited 2, the live index\'s 0;')
+    common_failed('a live-index sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
+                  go(shims=partial(cl)), 'FAIL  asset drift (Common): could not sort the indexes for the diff (the baseline sort exited 0, the live index\'s 2;')
     common_failed('both sorts fail: FAIL, and no "0 changed Common assets ... still apply"',
                   go(shims=sortfail('CommonAssetsIndex.hashes')), 'the baseline sort exited 2, the live index\'s 2;')
     common_failed('diff of the Common indexes exits 2: FAIL naming diff and its status, no count',
@@ -351,10 +366,24 @@ def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
     mk = 'DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""\n'
     case('an exit inside the section still removes the temp dir (the EXIT trap)',
          go(inject=(mk, mk + 'echo "work" > "$DRIFT_TMP/x"; exit 7\n')), hf=None, want_rc=7, cleaned='exit')
-    traps = [l for l in VERIFY.read_text().splitlines() if re.match(r'\s*trap\s', l)]
-    res['verify-docs.sh sets exactly one EXIT trap, the drift section\'s (a second would replace it)'] = (
-        [] if len(traps) == 1 and 'DRIFT_TMP' in traps[0] and traps[0].rstrip().endswith('EXIT') else [f'trap lines: {traps}'])
+    res[CASE['trapcount']] = trap_problems(VERIFY.read_text())
+    # the predicate's own control: it must see a second trap in the forms a line-start match misses
+    seen = [trap_problems(VERIFY.read_text() + tail) for tail in ("\ntrue; trap 'echo replaced' EXIT\n", "\nx=1 && trap - EXIT\n", "\n( trap 'x' EXIT )\n")]
+    res[CASE['trapcontrol']] = [] if all(seen) else [f'a second trap went unseen: {seen}']
     return res
+
+
+def trap_problems(text: str) -> list[str]:
+    """verify-docs.sh must hold exactly one `trap`, the drift section's EXIT trap: a second EXIT trap
+    would REPLACE it (a leak) and a `trap - EXIT` would remove it. The word is searched on every line
+    that is not a comment, anywhere on the line, not only at its start: `true; trap 'x' EXIT` and
+    `x && trap - EXIT` are the forms a line-start match let through. This is static, so it also sees
+    code the drift section's run never reaches; a runtime check of `trap -p EXIT` at the end of the
+    section would see only the section. A comment and a string that contain the word would need the
+    word to be dropped from them: there are none at present, and one would fail here loudly."""
+    lines = [l for l in text.splitlines() if re.search(r'\btrap\b', l) and not l.lstrip().startswith('#')]
+    ok = len(lines) == 1 and 'DRIFT_TMP' in lines[0] and lines[0].rstrip().endswith('EXIT') and lines[0].startswith('trap ')
+    return [] if ok else [f'non-comment lines naming trap: {lines}']
 
 
 def negative_control(tpl, work) -> int:
@@ -415,6 +444,9 @@ CASE = {
     'zeroSB': 'the Server baseline holds 0 rows: FAIL naming the side, no count',
     'early': 'an exit inside the section still removes the temp dir (the EXIT trap)',
     'trapcount': "verify-docs.sh sets exactly one EXIT trap, the drift section's (a second would replace it)",
+    'trapcontrol': "the trap check sees a second trap written as `true; trap ...`, `x && trap - EXIT` or `( trap ... )`",
+    'sortBp': 'a baseline sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
+    'sortLp': 'a live-index sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
 }
 MUTATIONS: dict = {}
 MEAS = None      # an expected red set not yet pinned: main() prints the measured one and fails
@@ -428,16 +460,16 @@ def mut(label, old, new, names, expect):
 
 SB, SL = '[ "$SORT_RC_B" != 0 ]', '[ "$SORT_RC_L" != 0 ]'
 mut('IDENTITY (no change - the harness control)', 'DRIFT_TMP="$(mktemp -d)" ||', 'DRIFT_TMP="$(mktemp -d)" ||', [], [])
-mut('sort guard ignores the baseline sort', f'if {SB} || {SL}; then', f'if {SL}; then', ['sortB'], ['sortB'])
-mut('sort guard ignores the live-index sort', f'if {SB} || {SL}; then', f'if {SB}; then', ['sortL'], ['sortL'])
-mut('sort guard removed (the original false green)', f'if {SB} || {SL}; then', 'if false; then', ['sortB', 'sortL', 'sortBoth'], ['sortB', 'sortL', 'sortBoth'])
+mut('sort guard ignores the baseline sort', f'if {SB} || {SL}; then', f'if {SL}; then', ['sortB', 'sortBp'], ['sortB', 'sortBp'])
+mut('sort guard ignores the live-index sort', f'if {SB} || {SL}; then', f'if {SB}; then', ['sortL', 'sortLp'], ['sortL', 'sortLp'])
+mut('sort guard removed (the original false green)', f'if {SB} || {SL}; then', 'if false; then', ['sortB', 'sortL', 'sortBoth', 'sortBp', 'sortLp'], ['sortB', 'sortL', 'sortBoth', 'sortBp', 'sortLp'])
 mut('Common diff status >= 2 not read', '-ge 2 ]; then\n        fail "asset drift (Common): diff', '-ge 3 ]; then\n        fail "asset drift (Common): diff', ['diffC'], ['diffC'])
 mut('Server diff status >= 2 not read', '-ge 2 ]; then\n        fail "asset drift (Server/Cosmetics): diff', '-ge 3 ]; then\n        fail "asset drift (Server/Cosmetics): diff', ['diffS'], ['diffS'])
 mut('Common count status >= 2 not read', '-ge 2 ]; then\n          fail "asset drift (Common): counting', '-ge 3 ]; then\n          fail "asset drift (Common): counting', ['grepC'], ['grepC'])
 mut('Server count status >= 2 not read', '-ge 2 ]; then\n          fail "asset drift (Server/Cosmetics): counting', '-ge 3 ]; then\n          fail "asset drift (Server/Cosmetics): counting', ['grepS'], ['grepS'])
 mut('hash script status not read', 'if [ "$HASH_RC" != 0 ]; then', 'if false; then', ['hash123', 'hash1', 'hashsort'], ['hash123', 'hash1', 'hashsort', 'both'])
 mut('mktemp failure not read', 'if [ -z "$DRIFT_TMP" ]; then', 'if false; then', ['mktemp'], ['mktemp'])
-mut('sort failure is a WARN, not a FAIL', 'fail "asset drift (Common): could not sort', 'warn "asset drift (Common): could not sort', ['sortB', 'sortL', 'sortBoth'], ['sortB', 'sortL', 'sortBoth', 'both'])
+mut('sort failure is a WARN, not a FAIL', 'fail "asset drift (Common): could not sort', 'warn "asset drift (Common): could not sort', ['sortB', 'sortL', 'sortBoth', 'sortBp', 'sortLp'], ['sortB', 'sortL', 'sortBoth', 'sortBp', 'sortLp', 'both'])
 mut('hash failure is a WARN, not a FAIL', 'fail "asset drift (Server/Cosmetics): hash-server-assets.sh exited', 'warn "asset drift (Server/Cosmetics): hash-server-assets.sh exited', ['hash123', 'hash1', 'hashsort'], ['hash123', 'hash1', 'hashsort', 'both'])
 mut('Common live denominator counts the baseline', 'compared with $N_LIVE live row(s)', 'compared with $N_BASE live row(s)', ['drift'], ['drift', 'dose1', 'dose3'])
 mut('Server denominator counts the baseline', 'compared with $N_LIVE row(s) hashed', 'compared with $N_BASE row(s) hashed', ['drift'], ['drift', 'dose1', 'dose3'])
@@ -455,7 +487,9 @@ mut('Server guard ignores an empty generated index', 'if [ "$N_BASE" -eq 0 ] || 
 mut('Server guard ignores an empty baseline', 'if [ "$N_BASE" -eq 0 ] || [ "$N_LIVE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)',
     'if [ "$N_LIVE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)', ['zeroSB'], ['zeroSB'])
 mut('EXIT trap removed', "trap 'rm -rf \"${DRIFT_TMP:-}\"' EXIT\n", '', ['early'], ['early'])
-mut('section-end rm -rf removed', '  rm -rf "$DRIFT_TMP"\n', '', ['healthy'], ['both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortL', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
+mut('section-end rm -rf removed', '  rm -rf "$DRIFT_TMP"\n', '', ['healthy'], ['sortBp', 'sortLp', 'both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortL', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
+mut('DRIFT_TMP not cleared after the section-end rm', '  DRIFT_TMP=""      # the EXIT cleanup must not act on a path that is already gone\n', '', ['healthy'],
+    ['both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortBp', 'sortL', 'sortLp', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
 mut('Common condition ignores the live index', '[ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]',
     '[ -f maintenance/baseline/CommonAssetsIndex.hashes ]', ['skipCL'], ['skipCL'])
 mut('Common condition ignores the baseline', '[ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]',

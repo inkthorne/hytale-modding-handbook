@@ -197,8 +197,8 @@ Plugin-written types (their declared effect is one log line, so these are lines,
 
 | Type | `remote` | NPC-shaped | Reads |
 |------|----------|------------|-------|
-| `ProbeLog` (overrides `firstRun`) | 1 line, `pass=server` | 2 lines: `pass=simulation`, then `pass=server` | the default |
-| `ProbeLogS` (also waits for `Server`) | not run | 2 lines: `pass=server`, then `pass=simulation` | the pass order |
+| `ProbeLog` (overrides `firstRun`) | 1 line, `pass=server sim=false` | 2 lines: `pass=simulation sim=true`, then `pass=server sim=false` | the default |
+| `ProbeLogS` (also waits for `Server`) | not run | 2 lines: `pass=server sim=false`, then `pass=simulation sim=true` | the pass order |
 | `ProbeLogQ` (also overrides `simulateFirstRun` with an empty body) | not run | 1 line | the fix |
 
 Controls: unit control (one on `remote` reads one unit) and dose control (two on `remote` read two) held for
@@ -208,6 +208,12 @@ instrument seeing an add and then the refusal. The negative control is `Launch1.
 turned each of eight damages (dose control broken, unit control broken, a doubled damage read, a guarded
 read, a refusal line deleted, a pass deleted, a log missing, a stray exception) into the VOID or FAIL it
 should be, and the unharmed copy stayed at 22 PASS.
+
+`sim=` is `context.getEntry().isUseSimulationState()`, the one thing an interaction can read about its pass (both
+accessors are public: `InteractionContext.java:199`, `InteractionEntry.java:86`). It is printed by `ProbeLog` and `ProbeLogS`,
+and `pass=` is read off the calling stack (`simulationTick` or `serverTick`) by a different route, so the two must
+agree: `verdicts.sh` requires `true`, `false` for `Log1.npc` and `Log1.realnpc`, `false`, `true` for `LogS1.npc`, and
+`false` for `Log1.remote`. Measured (review of 41db9fe..5be0ad0, LOW-5): all four agree.
 
 ### Item-change check and the pass order (measured; the cause isolated)
 

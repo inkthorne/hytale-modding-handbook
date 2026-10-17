@@ -953,8 +953,8 @@ section "[HARD] The gates' own fixtures pass"
 # defects would otherwise surface only then, on the one run whose previous-build
 # snapshot cannot be regenerated. Its --mutations pass (162 mutations; 148 took 4 h 58 min measured on a git archive of 1968f4f, about 120 s each, 3 h 8 min at 109, 2 h at 81;
 # the 14 [sv1]-[sv3] starvation mutations added after that were run by group, and the whole 162 has not been timed)
-# is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh
-# or triage_drift.py changes.
+# is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh,
+# hash-server-assets.sh or triage_drift.py changes.
 # check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.

@@ -21,7 +21,7 @@
 # and leave the fake save and the fake .var/app in place, and must still accept a legitimate scratch.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-base="${1:?usage: guard-test.sh WORKDIR [RUN-SH [MARKER]]}"
+base="${1:?usage: guard-test.sh WORKDIR [RUN-SH [MARKER [SPACECASE]]]}"
 target="${2:-$here/run.sh}"; marker="${3:-.beams-probe-case}"; spacecase="${4:-boot c6}"
 [ -f "$target" ] || { echo "FAIL  no script to test at $target" >&2; exit 3; }
 target="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"

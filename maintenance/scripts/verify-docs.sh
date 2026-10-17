@@ -967,8 +967,8 @@ section "[HARD] The gates' own fixtures pass"
 # update-build.sh end to end against generated jars: 911 checks in ~125s, which
 # is kept here because those scripts run only at a game update, and their
 # defects would otherwise surface only then, on the one run whose previous-build
-# snapshot cannot be regenerated. Its --mutations pass (162 mutations; 148 took 4 h 58 min measured on a git archive of 1968f4f, about 120 s each, 3 h 8 min at 109, 2 h at 81;
-# the 14 [sv1]-[sv3] starvation mutations added after that were run by group, and the whole 162 has not been timed)
+# snapshot cannot be regenerated. Its --mutations pass (162 mutations: 5 h 16 min measured on a git archive of cf01883, about 117 s each;
+# 4 h 58 min at 148, 3 h 8 min at 109, 2 h at 81)
 # is NOT run here: run it by hand whenever build-jar-cache.sh, update-build.sh,
 # hash-server-assets.sh or triage_drift.py changes.
 # check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:

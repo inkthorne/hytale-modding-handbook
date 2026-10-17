@@ -93,9 +93,19 @@ with `97 > 96`; `café` serializes and reads back as `caf?`, the byte `0x3f`, wi
 All figures below are from one pass on 2026-10-17 (java 25.0.4.1, `HytaleServer.jar` 0.7.2). Paths are
 shortened to `$S`, the scratch directory. `verdicts.sh "$S"` re-reads the logs and prints one PASS or
 FAIL per verdict below; it prints VOID (exit 2) when a control did not hold. It was run against this
-pass: 0 failed, 0 void. It was also run against a copy with a control sabotaged (an exception line
-added to `c1-control.log`) and one message edited: it printed VOID and FAIL for those and no PASS for
-them. A missing log is a FAIL, not a skip.
+pass: 0 failed, 0 void. The figures and quoted lines were taken from the first pass; the review of
+a6433d0..3ff1bf7 then asked for markers the first pass lacked, and **every case was re-run** with the
+revised plugin (a WARN-level `PROBE-MARK` in `setup()` and `start()`, and a `ProbeMarker` key in the
+pack's `Probe_Own` beam), so `verdicts.sh` now judges that second pass. Those re-runs agree with the
+numbers below (same exit codes, indexes and counts).
+
+The verdict script was run against copies with a control sabotaged: the round-trip control of C3
+broken, a C5 negative control set to exit 0, an exception added to `c1-control.log`, a marker
+removed, a `start` marker added to `validate-plugin`. Each printed VOID or FAIL, and no PASS follows a
+VOID inside the block that control guards. (The C6 line "booted store holds Probe_Own" has its own
+control, the c6 sentinel, and is not suppressed by a C5 void.) A missing log is a FAIL, not a skip.
+
+`guard-test.sh WORKDIR` tests `run.sh`'s scratch guard with a fake `HOME`; see Files.
 
 ## R4. Does the server boot headless? Yes
 
@@ -110,9 +120,12 @@ run.sh "$S" boot
 in the scratch universe. Port 5599 was free; the game was not running.
 
 `--shutdown-after-validate` stops before plugin `start()`. With the probe plugin installed,
-`validate-plugin` ran 61 s, exit 0, and its log has 0 `PROBE` lines (`HytaleServer.boot`, line 323 of the
-decompiled source, checks the flag before `pluginManager.start()`). So a validate run never reaches a
-plugin. A plugin run ends by the plugin calling `HytaleServer.get().shutdownServer()` after logging.
+`validate-plugin` ran 61 s, exit 0. A validate run logs only WARNING and above, so the plugin's INFO
+`PROBE` lines could not show anything there; the plugin writes a WARN-level `PROBE-MARK` from
+`setup()` and from `start()`. The log has `PROBE-MARK setup` once and `PROBE-MARK start` zero times
+(`HytaleServer.boot`, line 323 of the decompiled source, checks the flag before
+`pluginManager.start()`). So a validate run loads a plugin and runs its `setup()`, and never its
+`start()`. A plugin run ends by the plugin calling `HytaleServer.get().shutdownServer()` after logging.
 
 Cost per run (`exit` and seconds as `run.sh` printed them):
 
@@ -121,7 +134,7 @@ Cost per run (`exit` and seconds as `run.sh` printed them):
 | `boot`, `c6`, `c3` | 7 |
 | `c5-outside`, `c5-nonpng`, `c5-missing` (fail while loading the pack) | 7 each |
 | `c5-0`, `c5-positive`, `c5-trails`, `validate-plugin` (pass: the whole validation runs) | 60 to 63 each |
-| `c6-reload`, `c6-chain` | 19 each |
+| `c6-reload`, `c6-reload-pc`, `c6-chain` | 18 to 20 each |
 | `c1-control`, `c1-npc` | 32 to 33 |
 | `c1-double` | 38 |
 
@@ -220,6 +233,15 @@ On a reload the contained `Beam` from the first load is already in the store, so
 That makes the failure easy to miss in development: save the file once and it works, then a fresh
 server start breaks it again.
 
+Reload with the inline `BeamConfig` inside a `ProjectileConfig` (`c6-reload-pc`, the shipped shape;
+added after the review of a6433d0..3ff1bf7, which ran the same probe first): the plugin rewrote the
+projectile config file 4 s after start, the watcher reloaded it, and
+
+```text
+PROBE c6 AttachBeam interaction id='**Probe_RP_Inline_Interactions_ProjectileSpawn_Interactions_0' ... resolvedBeamIndex=-2147483648 ...   (at boot)
+PROBE c6 AttachBeam interaction id='**Probe_RP_Inline_Interactions_ProjectileSpawn_Interactions_0' ... resolvedBeamIndex=8 ...            (after the reload)
+```
+
 **Verdict C6: confirmed, in both shapes, at boot.** The interaction exists (the existence sentence
 holds), `beamIndex` is `Integer.MIN_VALUE`, and the `BeamComponent` it makes carries it. A reload of
 the same file in a running server resolves a real index. What the client draws for beam index
@@ -257,8 +279,8 @@ PROBE   at ...InteractionManager.doTickChain(InteractionManager.java:865)
 ```
 
 An `InteractionManager` built without a `PlayerRef` has `hasRemoteClient == false`. For such a
-manager `executeChain0` runs a simulation tick and then a server tick for each operation
-(`InteractionManager.java:486-499`, decompiled-source lines), and
+manager `doTickChain` runs a simulation tick and then a server tick for each operation
+(`InteractionManager.java:486-499`, decompiled-source lines of `doTickChain`, which starts at `:454`), and
 `SimpleInstantInteraction.simulateFirstRun` calls `firstRun` unless a subclass overrides it
 (`SimpleInstantInteraction.java:49-51`). `AttachBeamInteraction` does not. So `firstRun` runs twice and
 queues two `addComponent` calls. An NPC's manager is built with `null` (`NPCInteractionSystems.java:83`),
@@ -314,13 +336,21 @@ The world-tick line (one per second of world time) read `tick 120` at 15:23:02, 
 - The first `AttachBeam` is applied; the second throws. One `ADDED` line, with the first beam.
 - The dedicated server reloads the default world 5 s later, as predicted
   (`WorldCrashRecoveryHandler.defaultWorldMode`: `Reload` unless singleplayer). The line
-  `Reloading crashed world 'default' in 5 second(s)` is **also** written on a plain shutdown (every
-  run ends with it, e.g. `boot`'s `stop`), so by itself it does not show a crash. The exception line
-  and the 6 s tick gap do.
-- Players were not simulated (no client). From `World.stopIndividualWorld` (decompiled source, `World.java:244-270`, the
-  default-world branch at `:265-269`): each player is sent a disconnect whose message is
-  `server.general.disconnect.worldCrashed` (`worldCrashedCause`, naming the plugin, when a third-party plugin is on the
-  stack). Read, not run.
+  `Reloading crashed world 'default' in 5 second(s)` is **also** written on some plain shutdowns
+  (`boot`, `c1-control`; not `c3` or `c6`, which stop before a world exists), so by itself it does not
+  show a crash. `Reloaded crashed world 'default'` is written once the reload has finished: once in
+  `c1-double` and once in `c1-npc`, and zero times in `boot`, `c3`, `c6` and `c1-control`.
+  `verdicts.sh` uses that line, with the exception line and the 6 s tick gap.
+- Players were not simulated (no client). Read, not run. `World.stopIndividualWorld` (decompiled
+  source, `World.java:244-270`) has two branches. In the default world (`:265-269`) each player is
+  sent a disconnect whose message is `server.general.disconnect.worldCrashed` (`worldCrashedCause`,
+  naming the plugin, when a third-party plugin is on the stack). In any other world (`:246-263`)
+  the players are moved to the default world with a `server.universe.worldCrash.*` message.
+  `WorldCrashRecoveryHandler.resolve` returns null for a non-default world with no per-world
+  `CrashRecovery` block, so that world is not reloaded; the default world reloads after
+  `RetryDelaySeconds` (5 by default, `CrashRecoveryConfig.DEFAULT_RETRY_DELAY_SECONDS`) for up to
+  `MaxAttempts` (3) inside a window of 5 minutes plus the delay. Measured: only the default world's
+  5 s reload.
 
 **Verdicts C1 (one per sub-question):**
 
@@ -332,7 +362,10 @@ The world-tick line (one per second of world time) read `tick 120` at 15:23:02, 
    `ProbeLog` after the second `AttachBeam` fired once); a `Next` that waits for a later tick, and
    anything queued behind the throwing command in the same buffer, **does not run**.
 4. Does the world keep ticking? **No.** The world thread ends. On a dedicated server the default world
-   is reloaded after 5 s (tick lines resume, state is gone). Players are disconnected (read).
+   is reloaded after 5 s (`Reloaded crashed world 'default'`; tick lines resume). The crash log shows
+   `Done Saving Chunks!` and `Saving Players...` before the reload; whether entities survive it was
+   not measured. Players: disconnected in the default world, moved to it from any other world (read,
+   see above).
 5. Is the double-add the only cause? **No.** A manager without a `PlayerRef` (NPC, host entity)
    runs `firstRun` twice, so **a single `AttachBeam` crashes the world** there (`c1-npc`; a stand-in for
    an NPC, not an NPC).
@@ -386,8 +419,10 @@ PROBE c3 case='CJK' charLength=2 utf8Length=6 serialize=OK bytes=65 readBack.len
 PROBE c3 case='96 ASCII + 1 e-acute (96 chars? 97 chars)' charLength=97 serialize=THREW com.hypixel.hytale.protocol.io.ProtocolException: String exceeds max bytes: 97 > 96
 ```
 
-- The limit counts bytes after the ASCII conversion, so it counts characters: two CJK characters are two
-  bytes (`3f3f`), not six, and `96 N + é` is 97 and throws.
+- The limit counts bytes after the ASCII conversion, one per code point, so it counts code points: two
+  CJK characters are two bytes (`3f3f`), not six, `96 N + é` is 97 and throws, and 95 `N` plus one emoji
+  (97 Java chars, one code point outside the BMP) is 96 bytes and serializes
+  (`PROBE c3 case='95 ASCII + 1 emoji (97 Java chars, 96 bytes)' charLength=97 ... serialize=OK ... readBack.length=96`).
 - The valid name round-trips, so the harness can read a name back.
 
 **Verdicts C3, server half:** the 97-byte `ProtocolException` text is exactly as the page says;
@@ -411,8 +446,8 @@ Not run: a width needs eyes. [PHASE-G.md](PHASE-G.md).
 - **Prediction: `c1-control` (one `AttachBeam`) throws nothing.** It threw. The driver used a manager
   that runs each instant interaction twice (no `PlayerRef`). Recorded above as a finding; the control
   was rebuilt around `setHasRemoteClient(true)`.
-- **Prediction: the line `Reloading crashed world` marks a crash.** It is also logged on every plain
-  shutdown (`boot`, `c6`, `c3`, `c1-control`).
+- **Prediction: the line `Reloading crashed world` marks a crash.** It is also logged on some plain
+  shutdowns (`boot`, `c1-control`; `c3` and `c6` have none). The finished-reload line is the marker.
 - **Prediction citations: lines `Store.java:2152`, `CommandBuffer.java:407`.** Lines of the decompiled
   cache; the engine's stack says `Store.java:2792` and `CommandBuffer.java:669`.
 - **Pre-check of the driver:** a host in an unloaded or `NonTicking` section is removed on add
@@ -426,6 +461,7 @@ Not run: a width needs eyes. [PHASE-G.md](PHASE-G.md).
 |------|------------|
 | `build.sh` | Builds `plugin/build/libs/beams-probe.jar` with the examples' Gradle wrapper |
 | `run.sh` | One headless case in a scratch dir (header lists the cases) |
-| `verdicts.sh` | Judges the logs; VOID when a control fails |
+| `verdicts.sh` | Judges the logs; VOID when a control fails, and nothing a control guards prints PASS after it |
+| `guard-test.sh WORKDIR` | Tests `run.sh`'s scratch guard with a fake `HOME`. First runs the unguarded `run.sh` of 584d7d1 and requires that it deletes the fake save (VOID otherwise); then requires the current one to refuse four attacks (a `./` segment, SCRATCH = `$HOME`, a relative SCRATCH, a case name with `../`), the same by scratch rule alone with a valid case, a symlink into `.var`, and an existing directory that is not a case dir |
 | `plugin/` | The probe plugin and its asset pack (not an example; not in the example-build gate) |
 | `PHASE-G.md` | The script for the user, for what needs a client. Not run |

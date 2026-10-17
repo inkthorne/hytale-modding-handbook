@@ -12,22 +12,31 @@ and a player's world would go down.
 1. Build: `maintenance/probes/beams/build.sh` gives `maintenance/probes/beams/plugin/build/libs/beams-probe.jar`.
 2. Create a **new throwaway save** in the launcher (Creative, any name; `phaseg` below). Do not use a
    save you want to keep. Quit the game.
-3. Copy the jar to `UserData/Mods/`, and in `UserData/Saves/phaseg/config.json` add the entry
-   `"Mods": { "probe:Beams Probe": { "Enabled": true } }` (the key is the manifest's `Group` and `Name`).
+3. Copy the jar to `UserData/Mods/`, and in `UserData/Saves/phaseg/config.json` add the key
+   `"probe:Beams Probe": { "Enabled": true }` **inside the save's existing `"Mods"` object** (the key is the
+   manifest's `Group` and `Name`). If the file has no `"Mods"` object, add the whole
+   `"Mods": { "probe:Beams Probe": { "Enabled": true } }` at the top level. Keep the JSON valid (commas).
 4. Remember exactly what was added, to take it out afterwards: the jar, and that one config entry.
    Deleting the save removes the rest. Nothing else is written. The jar is a plugin and an asset pack
-   in one: it adds the `ProbeLog` interaction type (unused here), six `Probe_*` assets and the logging
+   in one: it adds the `ProbeLog` interaction type (unused here), seven `Probe_*` assets under `Server/` (two beams,
+   two interactions, three projectile configs) and one PNG under `Common/Beams/`, and the logging
    systems below.
 
 The plugin writes a `PROBE` line whenever any entity gains, changes or loses a `BeamComponent`
 (`BeamComponent ADDED|SET|REMOVED|STATE`, with the entity's network id, whether it is a player, a
 projectile or a predicted projectile, and every beam's index, scales, nodes and target) and whenever a
-projectile entity is added (`Projectile ADDED ... predictedProjectile=true|false`). The server log is
+projectile entity is added (`Projectile ADDED ... predictedProjectile=true|false`). A third kind of
+line, `InteractionManager entity ADDED|REMOVED reason=...`, is written for every entity that has an
+interaction manager (you, every NPC, every host); it is only there to explain why a probe entity
+vanished, and there will be many of them. The server log is
 `UserData/Saves/phaseg/logs/<timestamp>_server.log`. After the session:
 
 ```bash
-grep -E 'PROBE|Exception|SEVERE' UserData/Saves/phaseg/logs/*_server.log
+grep -E 'PROBE (BeamComponent|Projectile)|Exception|SEVERE' UserData/Saves/phaseg/logs/*_server.log
 ```
+
+That grep leaves out the `InteractionManager entity` lines and the `PROBE-MARK` lines. (`PROBE-MARK setup`
+and `PROBE-MARK start` appear once each at start-up and show the plugin loaded; send them too.)
 
 ## Steps
 
@@ -66,10 +75,12 @@ Spawn a cow near you: `/npc spawn Cow`. Stand so the cow is in view (the crossha
 line, then `/beam clear` after each. Say what happens on screen and look at the log.
 
 1. Positive control, a node the cow has: `/beam entity Rope --targetNode=Pelvis`. The rope should
-   end on the cow's middle. If it does not appear at all, stop and report that; the steps below cannot be
+   end at the cow's hips, at the rear: on a four-legged model `Pelvis` is the hip, not the middle of
+   the body. If it does not appear at all, stop and report that; the steps below cannot be
    read.
-2. `/beam entity Rope --targetNode=NoSuchNode`. Where does the rope end: on the cow's feet or origin, on
-   its middle, or does no rope draw? Does the game complain?
+2. `/beam entity Rope --targetNode=NoSuchNode`. Where does the rope end: on the cow's feet or origin, at
+   the middle of its body, or at the hips as in step 1 (that would mean the missing node is ignored),
+   or does no rope draw? Does the game complain?
 3. A non-ASCII name, which the server turns into `Caf?`: `/beam entity Rope --targetNode=Café`. The
    expected result is the same as step 2.
 4. **Last, because it may disconnect you.** A name of 97 characters (one over the wire limit):

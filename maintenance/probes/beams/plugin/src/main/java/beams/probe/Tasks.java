@@ -94,6 +94,8 @@ final class Tasks {
         c3Case("e-acute (U+00E9)", "café");
         c3Case("CJK", "日本");
         c3Case("96 ASCII + 1 e-acute (96 chars? 97 chars)", "N".repeat(96) + "é");
+        // one code point outside the BMP is two Java chars and one byte after the ASCII conversion
+        c3Case("95 ASCII + 1 emoji (97 Java chars, 96 bytes)", "N".repeat(95) + new String(Character.toChars(0x1F600)));
     }
 
     private static void c3Case(String label, String nodeName) {

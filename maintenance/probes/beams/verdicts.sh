@@ -25,25 +25,31 @@ fi
 
 # C5. Run 0 first: if the shipped tree does not validate clean, exit status says nothing.
 if need c5-0 c5-positive c5-trails c5-outside c5-nonpng c5-missing validate-plugin; then
+  neg() { # case, message
+    local c="$1" msg="$2" n
+    n=$(strip "$c" | /usr/bin/grep -c 'FAIL: ')
+    if [ "$(exitcode "$c")" != 0 ] && [ "$n" = 1 ] && strip "$c" | /usr/bin/grep -qF "FAIL: $msg"; then ok "C5 $c: nonzero exit and exactly '$msg'"
+    else bad "C5 $c: exit $(exitcode "$c"), $n FAIL line(s), wanted exactly '$msg'"; fi
+  }
   if [ "$(exitcode c5-0)" != 0 ]; then voidc "c5-0: the shipped assets do not validate clean (exit $(exitcode c5-0))"
+  elif [ "$(exitcode c5-outside)" = 0 ] || [ "$(exitcode c5-nonpng)" = 0 ] || [ "$(exitcode c5-missing)" = 0 ]; then
+    voidc "a C5 negative control exited 0 (outside $(exitcode c5-outside), nonpng $(exitcode c5-nonpng), missing $(exitcode c5-missing)): a failing asset did not fail the run"
   else
     ok "C5 run 0: shipped assets, empty mods dir, exit 0"
-    # negative controls: each must fail with its quoted message, and with that message alone
-    neg() { # case, message
-      local c="$1" msg="$2" n
-      n=$(strip "$c" | /usr/bin/grep -c 'FAIL: ')
-      if [ "$(exitcode "$c")" != 0 ] && [ "$n" = 1 ] && strip "$c" | /usr/bin/grep -qF "FAIL: $msg"; then ok "C5 $c: nonzero exit and exactly '$msg'"
-      else bad "C5 $c: exit $(exitcode "$c"), $n FAIL line(s), wanted exactly '$msg'"; fi
-    }
     neg c5-outside "Common Asset 'Textures/Probe_Own.png' must be within the root: [Beams/, Trails/]"
     neg c5-nonpng "Common Asset 'Beams/Probe_Own.jpg' must have the extension png"
     neg c5-missing "Common Asset 'Beams/Probe_Missing.png' doesn't exist!"
-    # the controls held (all three refused), so the positives mean something
-    for c in c5-outside c5-nonpng c5-missing; do [ "$(exitcode $c)" != 0 ] || voidc "$c did not fail"; done
+    # the positives: exit 0, no FAIL line, and the marker that the asset was read and passed validation
+    # (an unused-key WARN is logged only after a Beam validates)
     for c in c5-positive c5-trails validate-plugin; do
-      [ "$(exitcode $c)" = 0 ] && [ "$(count $c 'FAIL: ')" = 0 ] && ok "C5 $c: exit 0, no FAIL line" || bad "C5 $c: exit $(exitcode $c)"
+      if [ "$(exitcode $c)" = 0 ] && [ "$(count $c 'FAIL: ')" = 0 ] && strip $c | /usr/bin/grep -q "Unused key(s) in 'Probe_Own'.*ProbeMarker"; then
+        ok "C5 $c: exit 0, no FAIL line, and the pack's Probe_Own was read and validated (ProbeMarker WARN)"
+      else bad "C5 $c: exit $(exitcode $c), $(count $c 'FAIL: ') FAIL line(s), marker $(count $c "Unused key(s) in 'Probe_Own'.*ProbeMarker")"; fi
     done
-    [ "$(count validate-plugin 'PROBE')" = 0 ] && ok "R4 --shutdown-after-validate stops before the plugin's start(): 0 PROBE lines" || bad "R4 plugin start() ran during validate"
+    # R4: validate runs setup() (WARN marker) and stops before start()
+    if [ "$(count validate-plugin 'PROBE-MARK setup')" = 1 ] && [ "$(count validate-plugin 'PROBE-MARK start')" = 0 ]; then
+      ok "R4 --shutdown-after-validate: the plugin's setup() ran (1 marker), start() did not (0 markers)"
+    else bad "R4 validate-plugin markers: setup $(count validate-plugin 'PROBE-MARK setup'), start $(count validate-plugin 'PROBE-MARK start')"; fi
   fi
 fi
 
@@ -71,6 +77,14 @@ if need c6-reload; then
   elif [ -n "$second" ] && [ "$second" -ge 0 ]; then ok "C6 reload: MIN_VALUE at boot, $second after the watcher reloaded the file"
   else bad "C6 reload: second read '$second'"; fi
 fi
+if need c6-reload-pc; then
+  l=$(strip c6-reload-pc | /usr/bin/grep "AttachBeam interaction id='\*\*Probe_RP_Inline_Interactions_ProjectileSpawn_Interactions_0'")
+  first=$(printf '%s\n' "$l" | sed -n 1p | sed -n 's/.*resolvedBeamIndex=\(-\?[0-9]*\).*/\1/p')
+  second=$(printf '%s\n' "$l" | sed -n 2p | sed -n 's/.*resolvedBeamIndex=\(-\?[0-9]*\).*/\1/p')
+  if [ "$first" != -2147483648 ]; then voidc "c6-reload-pc: first load was '$first', not MIN_VALUE"
+  elif [ -n "$second" ] && [ "$second" -ge 0 ]; then ok "C6 reload, inline in a ProjectileConfig: MIN_VALUE at boot, $second after the watcher reloaded the file"
+  else bad "C6 reload-pc: second read '$second'"; fi
+fi
 if need c6-chain; then
   strip c6-chain | /usr/bin/grep -q 'BeamComponent ADDED.*\[{index=-2147483648 ' && ok "C6 end to end: the BeamComponent holds beam index -2147483648" || bad "C6 c6-chain"
 fi
@@ -78,11 +92,14 @@ fi
 # C3 server half.
 if need c3; then
   l=$(strip c3)
-  printf '%s\n' "$l" | /usr/bin/grep -q "case='valid R-Attachment (control)'.*serialize=OK.*readBack='R-Attachment'" || voidc "c3: the valid name did not round-trip"
-  printf '%s\n' "$l" | /usr/bin/grep -q "case='96 bytes (boundary)'.*serialize=OK.*readBack.length=96" && ok "C3 96 bytes round-trips" || bad "C3 96 bytes"
-  printf '%s\n' "$l" | /usr/bin/grep -qF "case='97 bytes' charLength=97 serialize=THREW com.hypixel.hytale.protocol.io.ProtocolException: String exceeds max bytes: 97 > 96" && ok "C3 97 bytes: ProtocolException 'String exceeds max bytes: 97 > 96'" || bad "C3 97 bytes"
-  printf '%s\n' "$l" | /usr/bin/grep -q "case='e-acute (U+00E9)'.*serialize=OK.*readBack='caf?' readBackHex=6361663f" && ok "C3 e-acute reads back as '?' (0x3f), no error" || bad "C3 e-acute"
-  printf '%s\n' "$l" | /usr/bin/grep -q "case='CJK'.*readBack='??' readBackHex=3f3f" && ok "C3 two CJK characters read back as '??'" || bad "C3 CJK"
+  if ! printf '%s\n' "$l" | /usr/bin/grep -q "case='valid R-Attachment (control)'.*serialize=OK.*readBack='R-Attachment'"; then voidc "c3: the valid name did not round-trip"
+  else
+    printf '%s\n' "$l" | /usr/bin/grep -q "case='96 bytes (boundary)'.*serialize=OK.*readBack.length=96" && ok "C3 96 bytes round-trips" || bad "C3 96 bytes"
+    printf '%s\n' "$l" | /usr/bin/grep -qF "case='97 bytes' charLength=97 serialize=THREW com.hypixel.hytale.protocol.io.ProtocolException: String exceeds max bytes: 97 > 96" && ok "C3 97 bytes: ProtocolException 'String exceeds max bytes: 97 > 96'" || bad "C3 97 bytes"
+    printf '%s\n' "$l" | /usr/bin/grep -q "case='e-acute (U+00E9)'.*serialize=OK.*readBack='caf?' readBackHex=6361663f" && ok "C3 e-acute reads back as '?' (0x3f), no error" || bad "C3 e-acute"
+    printf '%s\n' "$l" | /usr/bin/grep -q "case='CJK'.*readBack='??' readBackHex=3f3f" && ok "C3 two CJK characters read back as '??'" || bad "C3 CJK"
+    printf '%s\n' "$l" | /usr/bin/grep -q "case='95 ASCII + 1 emoji.*charLength=97 .*serialize=OK.*readBack.length=96" && ok "C3 95 N + one emoji (97 Java chars) serializes as 96 bytes: the limit counts code points" || bad "C3 emoji"
+  fi
 fi
 
 # C1. The control first: one AttachBeam on a player-like manager must not throw.
@@ -100,7 +117,13 @@ if need c1-control c1-double c1-npc; then
       && ok "C1 double: same-tick ProbeLog once, one ADDED, then 'Entity already contains component type', the 0.2 s ProbeLog never fires" \
       || bad "C1 double"
     strip c1-double | /usr/bin/grep -q 'Exception in thread Thread\[#[0-9]*,WorldThread - default' && ok "C1 double: the exception is logged by the world thread" || bad "C1 double: not the world thread"
-    strip c1-double | /usr/bin/grep -q 'Reloading crashed world .default. in 5 second' && ok "C1 double: WorldCrashRecoveryHandler schedules a reload" || bad "C1 double: no reload line"
+    # the crash marker is 'Reloaded crashed world', written once the reload finished; the 'Reloading'
+    # line is also written on a plain stop, so it is not a marker (control: none in c1-control, boot)
+    if [ "$(count c1-control "Reloaded crashed world 'default'")" != 0 ] || [ "$(count boot "Reloaded crashed world 'default'")" != 0 ]; then
+      voidc "'Reloaded crashed world' appears in a run with no crash"
+    elif [ "$(count c1-double "Reloaded crashed world 'default'")" = 1 ] && [ "$(count c1-npc "Reloaded crashed world 'default'")" = 1 ]; then
+      ok "C1 double and npc-like: the world was reloaded after the crash ('Reloaded crashed world'); none in boot or c1-control"
+    else bad "C1: no 'Reloaded crashed world' after a crash"; fi
     [ "$(count c1-npc "ProbeLog message='control: after the one AttachBeam, same tick'")" = 2 ] \
       && [ "$(count c1-npc 'Entity already contains component type')" -ge 1 ] \
       && ok "C1 npc-like manager: one AttachBeam runs firstRun twice (two same-tick ProbeLog lines) and throws" || bad "C1 npc-like"

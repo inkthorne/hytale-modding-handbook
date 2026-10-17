@@ -29,6 +29,7 @@ public class ProbePlugin extends JavaPlugin {
 
     @Override
     protected void setup() {
+        Log.mark("setup");
         getCodecRegistry(Interaction.CODEC).register("ProbeLog", ProbeLogInteraction.class, ProbeLogInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new BeamWatch.Changes());
         getEntityStoreRegistry().registerSystem(new BeamWatch.Tick());
@@ -45,6 +46,7 @@ public class ProbePlugin extends JavaPlugin {
 
     @Override
     protected void start() {
+        Log.mark("start");
         String mode = tasks();
         Log.p("plugin started, beams.probe='%s'", mode);
         if (mode.isEmpty()) {

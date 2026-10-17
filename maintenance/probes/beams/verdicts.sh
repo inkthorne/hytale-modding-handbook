@@ -103,7 +103,7 @@ if need c3; then
 fi
 
 # C1. The control first: one AttachBeam on a player-like manager must not throw.
-if need c1-control c1-double c1-npc; then
+if need boot c1-control c1-double c1-npc; then
   if [ "$(count c1-control 'Exception in thread')" != 0 ] || [ "$(count c1-control 'BeamComponent ADDED')" != 1 ]; then
     voidc "c1-control: $(count c1-control 'Exception in thread') exception(s), $(count c1-control 'BeamComponent ADDED') ADDED line(s)"
   elif [ "$(count c1-control "ProbeLog message='control: 0.2 s later'.*beamComponentCommittedNow=true")" != 1 ]; then

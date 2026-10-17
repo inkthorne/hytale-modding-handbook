@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Test run.sh's scratch guard with a FAKE HOME.   maintenance/probes/beams/guard-test.sh WORKDIR
 #
-# WORKDIR is a scratch directory (it is wiped). Nothing outside it is touched: HOME is set to
+# WORKDIR must be absent, an empty directory, or one this script made before (it carries the
+# .beams-guard-test marker); only then is it wiped. Nothing outside it is touched: HOME is set to
 # WORKDIR/home, and the "game" is two empty files, so no server ever starts (an accepted case would
 # fail at `java -jar` of an empty file, after the guard).
 #
@@ -13,7 +14,15 @@ set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 base="${1:?usage: guard-test.sh WORKDIR}"
 case "$base" in /*) ;; *) echo "FAIL  WORKDIR must be absolute" >&2; exit 3;; esac
-rm -rf -- "$base"; mkdir -p "$base/game/Server"
+base="$(realpath -m -- "$base")"
+# Wipe only what this script made: a WORKDIR of $HOME or / used to be rm -rf'd (verify pass of
+# a6433d0..3ff1bf7, MINOR-A).
+if [ -e "$base" ] && [ ! -f "$base/.beams-guard-test" ]; then
+  if [ ! -d "$base" ] || [ -n "$(ls -A -- "$base")" ]; then
+    echo "FAIL  WORKDIR $base exists, is not empty and has no .beams-guard-test marker; give a new path" >&2; exit 3
+  fi
+fi
+rm -rf -- "$base"; mkdir -p "$base/game/Server"; : > "$base/.beams-guard-test"
 : > "$base/game/Server/HytaleServer.jar"; : > "$base/game/Assets.zip"
 git -C "$here" show 584d7d1:maintenance/probes/beams/run.sh > "$base/run-old.sh" 2>/dev/null || { echo "FAIL  cannot read the old run.sh from git" >&2; exit 3; }
 save() { echo "$base/home/.var/app/x/UserData/Saves/arena/config.json"; }

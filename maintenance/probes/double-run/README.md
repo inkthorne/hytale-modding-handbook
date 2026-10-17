@@ -18,7 +18,7 @@ maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see t
 maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (22 PASS on the pass quoted below)
 maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red
 python3 -I maintenance/probes/double-run/census-test.py "$WORK"    # plant defects in a copy of the source; census.py must see each
-maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-run/run.sh" .double-run-case
+maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-run/run.sh" .double-run-case "Log1 Damage1.npc remote"
 ```
 
 ## The mechanism, in one paragraph (read; file:line are of the decompiled cache)

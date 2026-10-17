@@ -29,11 +29,14 @@ refuse() { echo "FAIL  $*" >&2; exit 3; }
 roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1"
 mgrs="npc remote realnpc"
 root=""; mgr=""
+# listed WORD LIST...: WORD is exactly one of the list's elements. (A substring test of the joined list accepted
+# "Log1 Damage1.npc remote": root "Log1 Damage1" and manager "npc remote" are each a run of adjacent words.)
+listed() { local w="$1" e; shift; for e in "$@"; do [ "$e" = "$w" ] && return 0; done; return 1; }
 case "$case_" in
   boot) ;;
   *.*) root="${case_%%.*}"; mgr="${case_#*.}"
-       case " $roots " in *" $root "*) ;; *) refuse "unknown root '$root' in case '$case_' (see the header of $0)" ;; esac
-       case " $mgrs " in *" $mgr "*) ;; *) refuse "unknown manager '$mgr' in case '$case_' (see the header of $0)" ;; esac ;;
+       listed "$root" $roots || refuse "unknown root '$root' in case '$case_' (see the header of $0)"
+       listed "$mgr" $mgrs || refuse "unknown manager '$mgr' in case '$case_' (see the header of $0)" ;;
   *) refuse "unknown case '$case_' (see the header of $0)" ;;
 esac
 case "$scratch" in /*) ;; *) refuse "SCRATCH must be an absolute path, got '$scratch'" ;; esac

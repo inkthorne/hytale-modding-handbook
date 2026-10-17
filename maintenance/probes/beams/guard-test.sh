@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Test run.sh's scratch guard with a FAKE HOME.   maintenance/probes/beams/guard-test.sh WORKDIR [RUN-SH [MARKER]]
+# Test run.sh's scratch guard with a FAKE HOME.   maintenance/probes/beams/guard-test.sh WORKDIR [RUN-SH [MARKER [SPACECASE]]]
 #
 # RUN-SH (default: ./run.sh) is the script under test and MARKER (default .beams-probe-case) the file it puts
 # in a case dir it made; ../double-run/run.sh shares this guard and is tested by
-#   guard-test.sh WORKDIR ../double-run/run.sh .double-run-case
-# Any script under test must accept the case name `boot` and refuse every other name outside its own list.
+#   guard-test.sh WORKDIR ../double-run/run.sh .double-run-case "Log1 Damage1.npc remote"
+# Any script under test must accept the case name `boot` and refuse any name that is not exactly one of its own
+# cases. This test checks three such names: one that is in no list ("nonesuch" and "Nope1.npc"), and SPACECASE
+# (default "boot c6"), which must be two listed names joined by a space so that a substring test of the joined
+# list would accept it. SPACECASE must be refused (rc 3) with nothing created under SCRATCH. The test shows that
+# its own check sees the defect first: a stub with a substring allowlist must be read as accepting SPACECASE.
 #
 # WORKDIR must be absent, an empty directory, or one this script made before (it carries the
 # .beams-guard-test marker); only then is it wiped. Nothing outside it is touched: HOME is set to
@@ -18,7 +22,7 @@
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 base="${1:?usage: guard-test.sh WORKDIR [RUN-SH [MARKER]]}"
-target="${2:-$here/run.sh}"; marker="${3:-.beams-probe-case}"
+target="${2:-$here/run.sh}"; marker="${3:-.beams-probe-case}"; spacecase="${4:-boot c6}"
 [ -f "$target" ] || { echo "FAIL  no script to test at $target" >&2; exit 3; }
 target="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
 case "$base" in /*) ;; *) echo "FAIL  WORKDIR must be absolute" >&2; exit 3;; esac
@@ -73,6 +77,31 @@ scratch_attack "symlink into .var" "$base" "$base/link" "is inside"
 fresh; mkdir -p "$base/legit/boot"; echo mine > "$base/legit/boot/precious"
 HOME="$base/home" HYTALE_GAME="$base/game" bash "$RUN" "$base/legit" boot >/dev/null 2>&1; rc=$?
 if [ -f "$base/legit/boot/precious" ] && [ "$rc" = 3 ]; then echo "PASS  existing unmarked dir SCRATCH/boot: refused, not removed"; else echo "FAIL  unmarked dir: rc=$rc"; fails=$((fails+1)); fi
+# a case name that is not exactly one of the script's cases is refused, and nothing is created for it.
+# accepts_name RUN CASE: true when the guard let the name through (rc other than 3, or something created in SCRATCH).
+accepts_name() {
+  fresh
+  HOME="$base/home" HYTALE_GAME="$base/game" bash "$1" "$base/legit" "$2" >/dev/null 2>&1; local rc=$?
+  [ "$rc" != 3 ] || [ -n "$(ls -A -- "$base/legit")" ]
+}
+# negative control: a stub whose allowlist is a substring test of the joined list (what ../double-run/run.sh did at
+# 5be0ad0) must be read as accepting SPACECASE, and one that refuses it as refusing it, or the check below proves nothing
+cat > "$base/stub-substring.sh" <<'STUB'
+#!/usr/bin/env bash
+list="${STUB_LIST:?}"
+case " $list " in *" $2 "*) mkdir -p "$1/$2"; exit 0 ;; *) echo "FAIL  unknown case" >&2; exit 3 ;; esac
+STUB
+cat > "$base/stub-refuse.sh" <<'STUB'
+#!/usr/bin/env bash
+echo "FAIL  unknown case" >&2; exit 3
+STUB
+if ! STUB_LIST="$spacecase" accepts_name "$base/stub-substring.sh" "$spacecase" || accepts_name "$base/stub-refuse.sh" "$spacecase"; then
+  echo "VOID  the space-case check cannot tell a substring allowlist from a refusal"; exit 2
+fi
+echo "control held: a substring allowlist is read as accepting '$spacecase', a refusal as refusing it"
+for n in nonesuch Nope1.npc "$spacecase"; do
+  if accepts_name "$RUN" "$n"; then echo "FAIL  case name '$n' was accepted"; fails=$((fails+1)); else echo "PASS  case name '$n': refused, nothing created"; fi
+done
 # the legitimate form is accepted by the guard (it then fails at java -jar of the empty fake jar, rc != 3 from the guard's refusals)
 fresh; out="$(HOME="$base/home" HYTALE_GAME="$base/game" bash "$RUN" "$base/legit" boot 2>&1)"
 if [ -f "$base/legit/boot/$marker" ] && ! printf '%s' "$out" | /usr/bin/grep -q '^FAIL'; then echo "PASS  legitimate scratch and case: accepted, case dir created"; else echo "FAIL  legitimate form refused: $out"; fails=$((fails+1)); fi

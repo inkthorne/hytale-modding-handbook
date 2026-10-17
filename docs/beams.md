@@ -93,9 +93,16 @@ A failure produces one of these messages, quoted from `CommonAssetValidator`:
 - `Common Asset '<path>' must have the extension png`
 - `Common Asset '<path>' doesn't exist!`
 
+All three were run, one asset per server start with `--validate-assets`. Each came back alone, in
+`FAIL: ...` under `Failed to validate asset: Probe_Own`, and the run ended with `Asset validation
+FAILED with 1 reason(s)` and exit status 6. A pack with a good texture exits 0
+(`maintenance/probes/beams/`, cases `c5-outside`, `c5-nonpng`, `c5-missing`, `c5-trails`).
+
 Only the texture is sent to the client. `Beam.toPacket()` copies `TexturePath` into a
 `BeamConfig` packet object, whose only field is `texture`. Width comes from each beam's scale, set
-where the beam is attached, not from the asset.
+where the beam is attached, not from the asset. That is read from the code path. No beam was seen on
+a client, so it was not verified that `Scale` is the width (as against the length or the texture
+tiling).
 
 ### Shipped beams
 
@@ -128,8 +135,11 @@ A beam that reuses a shipped trail texture needs no art. In your pack, at
 ```
 
 For your own texture, put the PNG in your pack's `Common/` folder under `Beams/` (or `Trails/`) and
-point `TexturePath` at it, for example `Beams/MyMod_Laser.png`. A texture under `Beams/` cannot be
-shared with a `Trail` asset: `Trail`'s `CommonAssetValidator.TEXTURE_TRAIL` accepts `Trails/` only.
+point `TexturePath` at it, for example `Beams/MyMod_Laser.png`. This was run, from a directory
+pack and from a plugin jar that carries its pack: a `Common/Beams/Probe_Own.png` of its own, with a
+`Beam` that points at it, passes `--validate-assets` (exit 0) and loads into the `Beam` store
+(`maintenance/probes/beams/`, cases `c5-positive`, `validate-plugin` and `c6`). A texture under
+`Beams/` cannot be shared with a `Trail` asset: `Trail`'s `CommonAssetValidator.TEXTURE_TRAIL` accepts `Trails/` only.
 
 ---
 
@@ -180,12 +190,21 @@ such an object a generated id, `*<containing asset's id>_<key path>`, and queues
 asset to be loaded into the `Beam` store afterwards. The load-time existence check passes, because
 `AssetStore.validate` accepts an id that the asset's own container holds.
 
-No shipped asset writes it this way, and it was not run. Read from the source, it would not get a
-valid index on a first load. `AttachBeamInteraction` turns the id into an index in its `afterDecode`
-hook (`processConfig`, through `Beam.getAssetMap().getIndex`), and `AssetStore` loads an asset's
-contained assets only after that asset has decoded. At that moment the generated id is not in the
-`Beam` store yet, so the lookup returns `Integer.MIN_VALUE` and every beam the interaction adds
-carries that index. Name a `Beam` asset file instead.
+No shipped asset writes it this way. It was run, in two shapes: a standalone Interaction file, and an
+`AttachBeam` inline in a projectile config's `ProjectileSpawn` (`maintenance/probes/beams/`, cases
+`c6`, `c6-chain`, `c6-reload`). In both, the interaction loads, so the existence check passes, and the
+generated `Beam` loads with a real index, but the interaction's own index is `Integer.MIN_VALUE`.
+`AttachBeamInteraction` turns the id into an index in its `afterDecode` hook (`processConfig`, through
+`Beam.getAssetMap().getIndex`), and `AssetStore` loads an asset's contained assets only after that
+asset has decoded. At that moment the generated id is not in the `Beam` store yet, so the lookup
+returns `Integer.MIN_VALUE`. Every beam the interaction adds carries it: the `BeamComponent` the probe
+logged held `index=-2147483648`. What a client draws for that index was not observed.
+
+A reload hides the fault. When the file watcher reloads the same interaction file in a running server,
+the contained `Beam` from the first load is already in the store, and the index resolves (8 in the
+probe, where the first load gave `-2147483648`). A restart brings it back. So an inline `BeamConfig`
+that works after you save the file once can still fail at the next start. Name a `Beam` asset file
+instead.
 
 ### How shipped content uses beams
 
@@ -199,9 +218,18 @@ That context is the one the server builds when it starts the chain itself, which
 `ProjectileModule.spawnProjectile` does only for a projectile that is not client-predicted, such as
 the Chain Hook's (`LaunchAbilityProjectile` spawns through the overload without a prediction id). A
 player's `Projectile` interaction, which the Hookshot uses, can spawn a client-predicted projectile
-instead. The server does not start that projectile's `ProjectileSpawn` chain; `ProjectileSpawn` is
-one of the four types `InteractionValidation` lets a client run for a predicted projectile. That
-path was not traced here.
+instead: it passes the id the client sends as the prediction id. The server does not start that
+projectile's `ProjectileSpawn` chain. It runs one when the client sends it. A chain packet that
+carries the prediction id as `proxyId` is run with `InteractionContext.forProxyEntity` once
+`InteractionValidation.isAccessibleProxyTarget` passes. That check wants one of four types
+(`ProjectileSpawn`, `ProjectileHit`, `ProjectileMiss`, `ProjectileBounce`), a projectile that carries
+`PredictedProjectile`, and a requester who is the projectile's creator. The `User` is then the
+predicted projectile and the `Owner` the player, as for a server-started shot, so `AttachBeam` would add
+the `BeamComponent` to the predicted projectile. That is the source trace
+(`maintenance/probes/beams/README.md`, C2). It was not verified that the client sends the chain for the
+Hookshot, so it is not known whether the rope exists on the server for a predicted shot, or draws. It
+needs a client; `PHASE-G.md` there logs the two lines that decide it. What other players see was not
+verified either.
 
 `Server/ProjectileConfigs/Tools/Projectile_Config_Hookshot.json` (the `Tool_Hookshot` item fires it
 through a `Projectile` interaction), its `ProjectileSpawn` entry:
@@ -277,8 +305,8 @@ the shipped `Ice_Bolt` model. The other keys of a projectile config are on
 ```
 
 Put `AttachBeam` on the projectile, not on the player. A player that runs `AttachBeam` gets a
-`BeamComponent` that stays until something removes it, and its next `AttachBeam` fails (see
-[Gotchas](#gotchas--errors)).
+`BeamComponent` that stays until something removes it, and its next `AttachBeam` throws and ends the
+world thread (see [Gotchas](#gotchas--errors)).
 
 ---
 
@@ -453,7 +481,7 @@ public final class Tethers {
 ```
 
 `tether` uses `ensureAndGetComponent` and `add`, the way `/beam entity` does, so it appends to an
-existing list where `AttachBeam` would fail. `untether` removes the component once the list is empty.
+existing list where `AttachBeam` would throw. `untether` removes the component once the list is empty.
 That matters if an `AttachBeam` may later run on the same entity, because an empty `BeamComponent`
 still blocks it.
 
@@ -489,8 +517,14 @@ bytes. `PacketIO.writeVarAsciiString` encodes it with `String.getBytes(US_ASCII)
 every character outside ASCII with `?` without an error, so such a name reaches the client altered.
 A name longer than 96 bytes throws `ProtocolException("String exceeds max bytes: <n> > 96")` when
 the update is serialized. Scales and offsets must be finite (`PacketIO.requireFinite`). Nothing checks a node
-name against the model on the server. What the client does with a node name the model lacks was not
-verified.
+name against the model on the server.
+
+The server half was run (`maintenance/probes/beams/`, case `c3`): a 96-character name serializes and
+reads back, a 97-character name throws `ProtocolException: String exceeds max bytes: 97 > 96`, `café`
+reads back as `caf?` and two CJK characters as `??`, with no error. The limit counts the converted
+bytes, so it counts characters. Two things need a client and were not verified: what the client draws
+for a node name the model lacks, and what a viewer sees when the update that would carry a 97-byte
+name throws on the server (a disconnect is possible).
 
 ---
 
@@ -516,13 +550,29 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
 
 ## Gotchas & Errors
 
-- **Symptom:** a second `AttachBeam` on the same entity breaks the chain, or a server log shows
-  `Entity already contains component type` → `AttachBeam` queues `addComponent` of a new
-  `BeamComponent`, and `Store.addComponent` throws `IllegalArgumentException("Entity already contains component type: …")`
-  when the entity already has one. That includes an empty list left by `clear()`, and beams from
-  `/beam entity` on a player. The exception is thrown when the command buffer is applied; what it
-  does to the running chain and tick was not measured. Fix: run `AttachBeam` on a fresh entity (a
-  projectile), or add beams from Java with `ensureAndGetComponent(...).add(...)`.
+- **Symptom:** a second `AttachBeam` on the same entity stops the world, and the server log shows
+  `Exception in thread Thread[...WorldThread - default...]` with `IllegalArgumentException: Entity
+  already contains component type: ...BeamComponent...` → `AttachBeam` queues `addComponent` of a new
+  `BeamComponent`, and `Store.addComponent` throws when the entity already has one. That includes an
+  empty list left by `clear()`, and beams from `/beam entity` on a player. The throw comes when the
+  command buffer is consumed, after the tick's systems, and nothing on that path catches it. Measured
+  (`maintenance/probes/beams/`, case `c1-double`): the chain runs to its end in that tick (an
+  interaction after the second `AttachBeam` that writes at once does write), the first beam is added,
+  the world thread logs the exception and ends, and anything that waits for a later tick never runs.
+  A dedicated server reloads the default world 5 seconds later; the default policy in singleplayer is
+  not to (`WorldCrashRecoveryHandler.defaultWorldMode`, read, not run). Players in the world are
+  disconnected (read from `World.stopIndividualWorld`; run without a client). Fix: run `AttachBeam` on
+  a fresh entity (a projectile), or add beams from Java with `ensureAndGetComponent(...).add(...)`.
+- **Symptom:** the same exception on the first and only `AttachBeam` of a chain → the chain runs on an
+  `InteractionManager` with no player behind it, which is how an NPC's and an `InteractionHost`'s are
+  built. Such a manager ticks every operation twice, a simulation pass and a server pass, and
+  `SimpleInstantInteraction.simulateFirstRun` calls `firstRun` again unless the subclass overrides it;
+  `AttachBeamInteraction` does not. So `firstRun` queues two `addComponent` calls. Measured with a
+  host entity whose manager is built the way an NPC's is (case `c1-npc`, two same-tick log lines and
+  the exception); no real NPC was run. A player's manager has a `PlayerRef` and runs `firstRun` once.
+  The control for that (`c1-control`: one beam added, no exception) flags the host's manager as a
+  player's; it is not a player. Fix: keep `AttachBeam` to chains a player starts, and add beams from
+  an NPC's code through Java.
 - **Symptom:** the beam loops back on its own entity, or never appears → `TargetEntity` defaults to
   `User`, which is the source entity too. Set `"TargetEntity": "Owner"` (or `"Target"`). With
   `Target` and no target entity on the chain, `AttachBeam` does nothing and logs nothing.
@@ -530,6 +580,9 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
   engine rejects its omission) or names no loaded `Beam`:
   `Asset '<id>' of type com.hypixel.hytale.builtin.beam.asset.Beam doesn't exist!`. Without the
   `Hytale:Beam` plugin, the `AttachBeam` type itself is unregistered.
+- **Symptom:** a beam made by an `AttachBeam` with an inline `BeamConfig` object carries index
+  `-2147483648` → the contained `Beam` loads after the interaction decodes (see
+  [An inline BeamConfig](#an-inline-beamconfig)). Name a `Beam` asset file.
 - **Symptom:** a beam asset is rejected → `TexturePath` is missing, outside `Beams/` and
   `Trails/`, not a `.png`, or not an existing common asset. The messages are listed under
   [The Beam asset](#the-beam-asset).

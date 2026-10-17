@@ -1226,7 +1226,7 @@ For the full subsystem (the `Beam` asset and its validator messages, the `BeamCo
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `TargetEntity` | enum | `User` | Where the beam ends: `User`, `Owner` or `Target` (the default `EnumCodec`'s keys for `InteractionTarget`'s constants), resolved against the context. Carries `Validators.nonNull()`, which the default satisfies, so it may be omitted |
-| `BeamConfig` | string | — | **Required** (`Validators.nonNull()`). A `Beam` asset id, validated at load. The codec, `Beam.CHILD_ASSET_CODEC` (a `ContainedAssetCodec`), also decodes an inline `Beam` object, but read from the source such a beam gets no valid index on a first load; see [Beams](beams.md#an-inline-beamconfig) |
+| `BeamConfig` | string | — | **Required** (`Validators.nonNull()`). A `Beam` asset id, validated at load. The codec, `Beam.CHILD_ASSET_CODEC` (a `ContainedAssetCodec`), also decodes an inline `Beam` object, but run on a booted server such a beam gets index `Integer.MIN_VALUE` (a reload of the same file resolves a real one); use an id. See [Beams](beams.md#an-inline-beamconfig) |
 | `Scale` | float | `1.0` | Beam scale |
 | `SourceNodeName` | string | — | Model node on the executing entity to attach to |
 | `TargetNodeName` | string | — | Model node on the target entity to attach to |

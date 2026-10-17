@@ -79,7 +79,7 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 908
+MIN_CHECKS = 911
 MIN_MUTATIONS = 162
 
 
@@ -90,6 +90,7 @@ class Run:
         self.fails: list[str] = []
         self.checks = 0
         self.crashes: list[str] = []     # exceptions caught by a guard: recorded as failing checks AND counted
+        self.expect_import_failure = False   # set for the one mutation whose triage_drift.py is MEANT not to import
 
     def check(self, cond, what):
         self.checks += 1
@@ -1087,7 +1088,10 @@ def part1():
             check(rc == 0 and 'FAIL' not in out and NOSIG in out,
                   "drift guards: indexes that differ only by a `Compiled from` line and a member order report no FAIL (sets compared)")
             # each half alone: the rename without the swap, the swap without the rename
-            lines[k_cf] = next((l for l in new_index.read_text().split('\n') if l.startswith('Compiled from "')), lines[k_cf])
+            cf = next((l for l in new_index.read_text().split('\n') if l.startswith('Compiled from "')), None)
+            check(cf is not None, "drift guards: the new build's index has a `Compiled from` line to put back (setup)")
+            if cf is not None:      # else the rename stays and the next check fails on its own, not silently
+                lines[k_cf] = cf
             f.write_text('\n'.join(lines))
             rc, out, *_ = run(tmp, AI, '--skip-caches')
             check(rc == 0 and 'FAIL' not in out and NOSIG in out, "drift guards: indexes that differ only by a member order report no FAIL (sorted)")
@@ -1333,12 +1337,47 @@ def part2_lists(mod):
               f"triage exit (grammar): the malformed row `{bad}` exits 2 and is named, the rows around it still triaged")
 
 
+def import_failure_controls():
+    """part2_import_and_run() on a triage_drift.py that does not compile, twice: undeclared it is a crash (count 1), and
+    declared it is only the failing check. A fresh Run each time, so nothing here touches the pass's own."""
+    global R
+    outer, runs = R, {}
+    with tempfile.TemporaryDirectory() as t:
+        d = pathlib.Path(t)
+        (d / 'triage_drift.py').write_text('def main(:\n    pass\n')
+        for declared in (False, True):
+            r = Run(d)
+            r.expect_import_failure = declared
+            R = r
+            try:
+                part2_import_and_run()
+            finally:
+                R = outer
+            runs[declared] = r
+    undeclared, declared = runs[False], runs[True]
+    check(len(undeclared.crashes) == 1 and any('could not be imported (SyntaxError' in f for f in undeclared.fails),
+          "import control: a triage_drift.py that does not compile, in a mutation that does not declare it, is a failing check and a crash (count 1)")
+    check(declared.crashes == [] and any('could not be imported (SyntaxError' in f for f in declared.fails),
+          "import control: the same file in a mutation that declares an import failure is a failing check and no crash")
+
+
 def part2():
+    import_failure_controls()
+    part2_import_and_run()
+
+
+def part2_import_and_run():
     spec = importlib.util.spec_from_file_location(f"triage_drift_{id(R)}", R.scripts / 'triage_drift.py')
     try:
         mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     except (Exception, SystemExit) as e:
         check(False, f"triage_drift.py could not be imported ({type(e).__name__}: {e}) - its unit cases did not run")
+        # A triage that cannot be imported is a crash unless this mutation says it is meant to be one
+        # (EXPECT_IMPORT_FAILURE: `sys.exit(0)` as its first statement). Without that, a mutation whose
+        # PATCH breaks the file (a SyntaxError) counted as red, because every update-build run's triage then
+        # crashes and turns part 1's checks red too (review of fbbb664..2e87bc6, MAJOR-1).
+        if not R.expect_import_failure:
+            R.crashes.append(f"triage_drift.py import ({type(e).__name__})")
         return
     for label, fn in (('triage matcher', part2_matcher), ('triage class rows', part2_class_rows),
                       ('triage resource rows', part2_resource_rows), ('triage report lists', part2_lists)):
@@ -1346,9 +1385,14 @@ def part2():
             fn(mod)
 
 
-def one_pass(scripts, verbose=False):
+# mutations whose triage_drift.py is MEANT not to import (the import failure is the starvation under test)
+EXPECT_IMPORT_FAILURE = {"starvation [sv1] triage_drift.py exits 0 as its first statement"}
+
+
+def one_pass(scripts, verbose=False, expect_import_failure=False):
     global R
     R = Run(scripts, verbose)
+    R.expect_import_failure = expect_import_failure
     part1()
     part2()
     return R
@@ -1860,7 +1904,7 @@ def mutations():
                 bad.append(f"{label}: the patch function raised ({type(e).__name__}: {e}) - the mutation is stale and tests nothing")
                 continue
             try:
-                r = one_pass(root / 'maintenance/scripts')
+                r = one_pass(root / 'maintenance/scripts', expect_import_failure=label in EXPECT_IMPORT_FAILURE)
             except (Exception, SystemExit) as e:
                 # a crash must cost one mutation, not the whole pass. SystemExit is not an Exception: the
                 # sys.exit calls of build() and part1() would abort the pass, and a script under test that

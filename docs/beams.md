@@ -136,8 +136,8 @@ A beam that reuses a shipped trail texture needs no art. In your pack, at
 
 For your own texture, put the PNG in your pack's `Common/` folder under `Beams/` (or `Trails/`) and
 point `TexturePath` at it, for example `Beams/MyMod_Laser.png`. This was run, from a directory
-pack and from a plugin jar that carries its pack: a `Common/Beams/Probe_Own.png` of its own, with a
-`Beam` that points at it, passes `--validate-assets` (exit 0) and loads into the `Beam` store
+pack and from a plugin jar that carries its pack: a texture of its own under `Beams/` in the pack's
+`Common/`, with a `Beam` that points at it, passes `--validate-assets` (exit 0) and loads into the `Beam` store
 (`maintenance/probes/beams/`, cases `c5-positive`, `validate-plugin` and `c6`). A texture under
 `Beams/` cannot be shared with a `Trail` asset: `Trail`'s `CommonAssetValidator.TEXTURE_TRAIL` accepts `Trails/` only.
 

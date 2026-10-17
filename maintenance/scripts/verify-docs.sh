@@ -355,7 +355,16 @@ section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could
 # update-build.sh section 4 does the same Common computation, independently: the two are parallel
 # and deliberately not shared. check-asset-drift-fixture.py runs THIS text under shims.
 # Each half prints a denominator: the rows it compared, so "0 changed" cannot be read from a
-# run that compared nothing (Common: the rows of the two sorted copies diff read).
+# run that compared nothing (Common: the rows of the two sorted copies diff read). A side with 0 rows
+# is not a comparison either: a real index is never empty, and an empty one (a sort or a hash script
+# that exited 0 having written nothing) would otherwise read as every row of the other side changed,
+# a WARN with a count of the whole index. It is a FAIL with its own message, and no count.
+# The copies of the indexes live in a temp dir that is removed when the section ends AND by an EXIT
+# trap (an interrupted or exiting run would otherwise leave two 28k-40k-row copies behind). This is
+# the only EXIT trap in this script: a second one would replace it, so chain it
+# (trap -p EXIT) if one is ever added; check-asset-drift-fixture.py counts the `trap` lines.
+DRIFT_TMP=""
+trap 'rm -rf "${DRIFT_TMP:-}"' EXIT
 DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
 if [ -z "$DRIFT_TMP" ]; then
   fail "asset drift: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - neither the Common nor the Server/Cosmetics drift was computed"
@@ -368,15 +377,18 @@ else
     if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_L" != 0 ]; then
       fail "asset drift (Common): could not sort the indexes for the diff (the baseline sort exited $SORT_RC_B, the live index's $SORT_RC_L; an unreadable file is the usual cause) - Common-asset drift was NOT computed"
     else
+      N_BASE="$(wc -l < "$DRIFT_TMP/common-baseline")"; N_LIVE="$(wc -l < "$DRIFT_TMP/common-live")"
       diff "$DRIFT_TMP/common-baseline" "$DRIFT_TMP/common-live" > "$DRIFT_TMP/common.diff"; DIFF_RC=$?
-      if [ "$DIFF_RC" -ge 2 ]; then
+      if [ "$N_BASE" -eq 0 ] || [ "$N_LIVE" -eq 0 ]; then
+        fail "asset drift (Common): the $([ "$N_BASE" -eq 0 ] && echo baseline || echo live) index holds 0 rows (baseline $N_BASE, live $N_LIVE), so there is nothing to compare - Common-asset drift was NOT computed"
+      elif [ "$DIFF_RC" -ge 2 ]; then
         fail "asset drift (Common): diff of the indexes exited $DIFF_RC (0 and 1 are normal) - Common-asset drift was NOT computed"
       else
         D="$(grep -c '^[<>]' "$DRIFT_TMP/common.diff")"; COUNT_RC=$?
         if [ "$COUNT_RC" -ge 2 ]; then
           fail "asset drift (Common): counting the changed lines exited $COUNT_RC (0 and 1 are normal) - Common-asset drift was NOT computed"
         else
-          info "Common index: $(wc -l < "$DRIFT_TMP/common-baseline") baseline row(s) compared with $(wc -l < "$DRIFT_TMP/common-live") live row(s)"
+          info "Common index: $N_BASE baseline row(s) compared with $N_LIVE live row(s)"
           if [ "$D" -eq 0 ]; then
             info "0 changed Common assets — docs verified against this build still apply"
           else
@@ -395,20 +407,23 @@ else
     if [ "$HASH_RC" != 0 ]; then
       fail "asset drift (Server/Cosmetics): hash-server-assets.sh exited $HASH_RC, so the generated index is incomplete - Server/Cosmetics drift was NOT computed"
     else
+      N_BASE="$(wc -l < maintenance/baseline/ServerAssetsIndex.hashes)"; N_LIVE="$(wc -l < "$DRIFT_TMP/server-live")"
       diff maintenance/baseline/ServerAssetsIndex.hashes "$DRIFT_TMP/server-live" > "$DRIFT_TMP/server.diff"; DIFF_RC=$?
-      if [ "$DIFF_RC" -ge 2 ]; then
+      if [ "$N_BASE" -eq 0 ] || [ "$N_LIVE" -eq 0 ]; then
+        fail "asset drift (Server/Cosmetics): the $([ "$N_BASE" -eq 0 ] && echo baseline || echo generated) index holds 0 rows (baseline $N_BASE, generated $N_LIVE; hash-server-assets.sh exited 0), so there is nothing to compare - Server/Cosmetics drift was NOT computed"
+      elif [ "$DIFF_RC" -ge 2 ]; then
         fail "asset drift (Server/Cosmetics): diff of the indexes exited $DIFF_RC (0 and 1 are normal) - Server/Cosmetics drift was NOT computed"
       else
         D="$(grep -c '^[<>]' "$DRIFT_TMP/server.diff")"; COUNT_RC=$?
         if [ "$COUNT_RC" -ge 2 ]; then
           fail "asset drift (Server/Cosmetics): counting the changed lines exited $COUNT_RC (0 and 1 are normal) - Server/Cosmetics drift was NOT computed"
         else
-          info "Server/Cosmetics index: $(wc -l < maintenance/baseline/ServerAssetsIndex.hashes) baseline row(s) compared with $(wc -l < "$DRIFT_TMP/server-live") row(s) hashed from the extracted tree"
+          info "Server/Cosmetics index: $N_BASE baseline row(s) compared with $N_LIVE row(s) hashed from the extracted tree"
           if [ "$D" -eq 0 ]; then
             info "0 changed Server/Cosmetics assets — data-format docs verified against this build still apply"
           else
             warn "$D changed line(s) vs ServerAssetsIndex baseline — re-verify docs referencing those assets"
-            info "see: maintenance/scripts/hash-server-assets.sh | diff maintenance/baseline/ServerAssetsIndex.hashes -"
+            info "see: maintenance/scripts/hash-server-assets.sh \"$ASSETS\" | diff maintenance/baseline/ServerAssetsIndex.hashes -"
           fi
         fi
       fi
@@ -948,7 +963,7 @@ section "[HARD] The gates' own fixtures pass"
 # 2026-10-16, ~45s before), so --mutations is included rather than deferred
 # behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
-# update-build.sh end to end against generated jars: 908 checks in ~125s, which
+# update-build.sh end to end against generated jars: 911 checks in ~125s, which
 # is kept here because those scripts run only at a game update, and their
 # defects would otherwise surface only then, on the one run whose previous-build
 # snapshot cannot be regenerated. Its --mutations pass (162 mutations; 148 took 4 h 58 min measured on a git archive of 1968f4f, about 120 s each, 3 h 8 min at 109, 2 h at 81;
@@ -959,7 +974,7 @@ section "[HARD] The gates' own fixtures pass"
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # check-asset-drift-fixture.py --mutations (the "Asset drift vs baseline" section above, run as text
-# under sort, diff and grep shims and stub hash scripts: 18 cases and 18 mutations including the
+# under sort, diff and grep shims and stub hash scripts: 26 cases and 28 mutations including the
 # identity control, after a negative control that reproduces the section's pre-fix false green)
 # takes ~9 s, so it is run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.

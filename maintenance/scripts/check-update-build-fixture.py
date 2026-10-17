@@ -30,6 +30,16 @@ after printing its result) and the resource rows of every v1 -> v2 run; one muta
 DG (the API drift, source drift, asset-diff and hash-server-assets.sh guards of update-build.sh: states AD = v1 -> v2, with drift, and AI = v1 -> v1r,
 without; one injected defect per guard, each expecting its own FAIL line and exit 3; groups [dg1]..[dg9]).
 
+TOLERANCE (item 11). Every mutation runs the whole pass against a copy of a script that is wrong in one
+way, and a copy that writes or prints LESS must cost checks and never the pass: one crash discards every
+later check of that mutation's pass (the full run at 1968f4f lost 'r2 MAJOR-1' to a read of a file the
+mutant never wrote, and failed the 5 h run for it). The rule is stated at written()/copy_written()/
+following()/guarded() below and covers every expression that raises when a script under test writes or
+prints less, not only the reads a current mutation reaches. Proof: the [sv1] mutations make each script
+under test exit 0 as its first statement, and the [sv2] and [sv3] mutations starve one file or one section
+title each; every one ends red on a named check, and mutations() fails any whose pass crashed or lost a
+block to a guard. The MUTATIONS line counts both kinds of crash.
+
 Part 1 builds tiny HytaleServer.jar versions (javac + jar) and a
 tiny Assets.zip, installs them under a fake APPDATA root, and runs the real
 scripts with every cache, report, snapshot and baseline path in a temp dir.
@@ -57,7 +67,7 @@ Needs javac, jar, zip, javap and CFR at ~/.cache/hytale-jar-tools/cfr.jar.
 Usage: python3 maintenance/scripts/check-update-build-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, contextlib, filecmp, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, zipfile
+import argparse, contextlib, filecmp, hashlib, importlib.util, io, os, pathlib, re, shutil, stat, subprocess, sys, tempfile, traceback, zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -69,8 +79,8 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 893
-MIN_MUTATIONS = 148
+MIN_CHECKS = 908
+MIN_MUTATIONS = 162
 
 
 class Run:
@@ -79,6 +89,7 @@ class Run:
         self.scripts, self.verbose = scripts, verbose
         self.fails: list[str] = []
         self.checks = 0
+        self.crashes: list[str] = []     # exceptions caught by a guard: recorded as failing checks AND counted
 
     def check(self, cond, what):
         self.checks += 1
@@ -93,6 +104,58 @@ R: Run
 
 def check(cond, what):
     R.check(cond, what)
+
+
+# TOLERANT READS. The fixture runs against COPIES of the scripts with one defect each, and a copy that
+# writes or prints less than the real one must cost checks, never the pass: one crash discards every
+# later check of that mutation's pass (the full run at 1968f4f lost 'r2 MAJOR-1' to an unconditional
+# read of a file the mutant never wrote). The rule is one for every expression in the pass that
+# raises when a script under test writes or prints less, whether or not a current mutation starves
+# it: a read of a file a script writes goes through written(), a copy through copy_written(), a
+# slice of the output through after(), a step that rewrites such a file is skipped when it is
+# missing (never read as '' and written back, which would create a file the script never wrote),
+# and an exception that gets through anyway is recorded by guarded() as a failing check and a crash.
+# Reads of files the fixture itself wrote (the jars, the baselines, the stub scripts) stay as they
+# are. The audit, site by site, is in the commit that added this block.
+def written(p: pathlib.Path, label: str) -> str:
+    """The text of a file a script under test writes. Missing: a failing check (red only then, so
+    it passes in the base pass) and '', so the checks that read it fail on their own condition."""
+    ok = p.is_file()
+    check(ok, f"{label}: {p.parent.name}/{p.name} was written (setup)")
+    return p.read_text() if ok else ''
+
+
+def copy_written(src: pathlib.Path, dst: pathlib.Path, label: str) -> bool:
+    """copytree of a directory a script under test writes; dirs_exist_ok because a mutant may have
+    written the destination too. False (and a failing check) when the source is missing."""
+    ok = src.is_dir()
+    check(ok, f"{label}: {src.name}/ was written (setup)")
+    if ok:
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+    return ok
+
+
+def following(out: str, marker: str) -> str:
+    """out.split(marker)[1], or '' when the marker is not in out (a section a script no longer prints)."""
+    parts = out.split(marker)
+    return parts[1] if len(parts) > 1 else ''
+
+
+def last_line(out: str) -> str:
+    lines = out.rstrip().splitlines()
+    return lines[-1] if lines else ''
+
+
+@contextlib.contextmanager
+def guarded(label: str):
+    """An exception (or a sys.exit) inside the block is a failing check and a counted crash, and the
+    pass goes on with the next block."""
+    try:
+        yield
+    except (Exception, SystemExit) as e:
+        here = [fr for fr in traceback.extract_tb(e.__traceback__) if fr.filename == __file__]
+        R.crashes.append(f"{label} at line {here[-1].lineno if here else '?'}")
+        check(False, f"{label}: crashed ({type(e).__name__}: {e})")
 
 
 # ---------------------------------------------------------------- jars
@@ -566,12 +629,12 @@ def part1():
 
         # F: an unwritable snapshot store fails before the cache is wiped
         st = fresh(tmp, 'F'); install(tmp, 'v2')
-        ro = st / 'ro'; ro.mkdir(); os.chmod(ro, 0o555)
+        ro = st / 'ro'; ro.mkdir(parents=True, exist_ok=True); os.chmod(ro, 0o555)   # parents: a starved update-build.sh never made st
         try:
             rc, out, *_ = run(tmp, st, UPDATE_SNAPSHOT=str(ro / 'snapshot'))
             check(rc != 0 and re.search(r'FAIL\S*\s+cannot create \S*snapshot\.new\.', out),
                   "unwritable snapshot store: the run fails at its own guard")
-            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in (st / 'cache-jar/cache-meta.txt').read_text(),
+            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in written(st / 'cache-jar/cache-meta.txt', 'F'),
                   "unwritable snapshot store: the v1 cache is NOT wiped (still the only record)")
         finally:
             os.chmod(ro, 0o755)
@@ -591,7 +654,9 @@ def part1():
 
         # I (r2 MEDIUM-3): an unstamped cache never replaces an existing snapshot
         st = fresh(tmp, 'I'); install(tmp, 'v2'); run(tmp, st)
-        (st / 'cache-jar/cache-meta.txt').unlink()
+        stamp = st / 'cache-jar/cache-meta.txt'
+        check(stamp.exists(), "I: the cache has the stamp the case removes (setup)")
+        stamp.unlink(missing_ok=True)
         r = run(tmp, st)
         check('keeping the snapshot, NOT replacing it' in r[1], "unstamped cache: the existing snapshot is kept")
         expect_update('re-run over an unstamped cache', *r)
@@ -603,7 +668,7 @@ def part1():
 
         # K: the self-compare warning fires when it should
         st = fresh(tmp, 'K')
-        shutil.copytree(st / 'cache-jar', st / 'snapshot')
+        copy_written(st / 'cache-jar', st / 'snapshot', 'K')
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check(SELF in out, "snapshot equal to the installed build: the self-compare warning fires")
 
@@ -664,7 +729,7 @@ def part1():
         # a store that belongs to another cache is never replaced from this one
         run(tmp, st, script='build-jar-cache.sh', HOME=str(home), UPDATE_SNAPSHOT=str(def_store),
             HYTALE_JAR=str(tmp / 'v1n/HytaleServer.jar'), HYTALE_JAR_CACHE=str(st / 'scratch-cache'))
-        check((def_store / 'cache-meta.txt').read_text() == before, "a store owned by another cache is NOT replaced")
+        check(written(def_store / 'cache-meta.txt', 'S') == before, "a store owned by another cache is NOT replaced")
 
         # T (r3 LOW-2): the early stamp — a --no-src cache is still stamped, so it is saved as the previous build
         st = tmp / 'T'
@@ -676,36 +741,43 @@ def part1():
 
         # U (r3 LOW-2): a failed copy, and a failed rename, both leave the cache unwiped
         st = fresh(tmp, 'U'); install(tmp, 'v2')
-        victim = next((st / 'cache-jar/src').rglob('*.java')); os.chmod(victim, 0)
+        # a cache with no decompiled source (a mutant that writes none) has no file to lock: record that
+        victim = next(iter(sorted((st / 'cache-jar/src').rglob('*.java'))), None)
+        check(victim is not None, "U: the cache holds a decompiled .java file to make unreadable (setup)")
+        if victim is not None:
+            os.chmod(victim, 0)
         try:
             rc, out, *_ = run(tmp, st)
             check(rc != 0 and 'snapshot copy of src/' in out, "unreadable cache file: the snapshot copy fails at its own guard")
-            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in (st / 'cache-jar/cache-meta.txt').read_text(),
+            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in written(st / 'cache-jar/cache-meta.txt', 'U'),
                   "failed snapshot copy: the v1 cache is NOT wiped")
         finally:
-            os.chmod(victim, 0o644)
+            if victim is not None and victim.exists():
+                os.chmod(victim, 0o644)
         st = fresh(tmp, 'U2'); install(tmp, 'v2')
         stuck = st / 'snapshot.prev'; (stuck / 'x').mkdir(parents=True); os.chmod(stuck, 0o555)
         try:
             rc, out, *_ = run(tmp, st)
             check(rc != 0 and 'could not move the snapshot into place' in out, "a stuck snapshot.prev: the rename fails at its own guard")
-            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in (st / 'cache-jar/cache-meta.txt').read_text(),
+            check('jar_sha=' + sha(tmp / 'v1/HytaleServer.jar') in written(st / 'cache-jar/cache-meta.txt', 'U2'),
                   "failed snapshot rename: the v1 cache is NOT wiped")
         finally:
             os.chmod(stuck, 0o755)
 
         # V (r3 LOW-1): a pre-jar_sha snapshot identical to the installed build is flagged
         st = fresh(tmp, 'V')
-        shutil.copytree(st / 'cache-jar', st / 'snapshot')
-        (st / 'snapshot/class-hashes.txt').unlink()
-        m = st / 'snapshot/cache-meta.txt'; m.write_text(re.sub(r'jar_sha=.*\n', '', m.read_text()))
+        copy_written(st / 'cache-jar', st / 'snapshot', 'V')
+        (st / 'snapshot/class-hashes.txt').unlink(missing_ok=True)
+        m = st / 'snapshot/cache-meta.txt'
+        if m.exists():       # rewritten in place: only when the cache had a stamp to copy (never read '' and written back)
+            m.write_text(re.sub(r'jar_sha=.*\n', '', m.read_text()))
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check('no jar_sha/class hashes/resource hashes to tell them apart' in out, "old-style snapshot identical to the installed build: warned")
         check('could NOT be checked (no class hashes on one side)' in out, "BLIND rows are counted in a WARN")
 
         # Q (r2 LOW-3): an interrupted copy's leftovers are removed
         st = fresh(tmp, 'Q'); install(tmp, 'v2')
-        (st / 'snapshot.new.99999').mkdir()
+        (st / 'snapshot.new.99999').mkdir(parents=True, exist_ok=True)
         run(tmp, st)
         check(not (st / 'snapshot.new.99999').exists(), "leftover snapshot.new.* from an interrupted copy is removed")
 
@@ -737,7 +809,8 @@ def part1():
         rc, out, *_ = run(tmp, st, '--skip-caches')
         check('BLIND: the previous-build snapshot has no resource-hashes.txt' in out,
               "snapshot without resource hashes: BLIND, said in a WARN")
-        check('compared' not in out.split('Resource drift')[1].split('== Triage')[0] and rc == 0,
+        res_sec = following(out, 'Resource drift').split('== Triage')[0]
+        check(res_sec != '' and 'compared' not in res_sec and rc == 0,
               "snapshot without resource hashes: no comparison is attempted or claimed")
         st = fresh(tmp, 'Y2'); install(tmp, 'v2'); run(tmp, st)
         (st / 'cache-jar/resource-hashes.txt').unlink(missing_ok=True)
@@ -754,7 +827,7 @@ def part1():
 
         # R: the snapshot copy list carries the resource files
         st = fresh(tmp, 'R')
-        before = {f: (st / 'cache-jar' / f).read_text() for f in ('resource-hashes.txt', 'resource-owners.txt')}
+        before = {f: written(st / 'cache-jar' / f, 'R') for f in ('resource-hashes.txt', 'resource-owners.txt')}
         check(all(before.values()) and len(before['resource-hashes.txt'].splitlines()) == len(R1) + 1,
               "v1 cache: every non-class entry hashed, nothing filtered (the manifest included)")
         check(all(re.fullmatch(r'[0-9a-f]{64}  \S.*', l) for l in before['resource-hashes.txt'].splitlines()),
@@ -851,7 +924,7 @@ def part1():
         # controls: the unmodified script on both states
         install(tmp, 'v2'); rc, out, src, api, *_ = run(tmp, AD, '--skip-caches')
         check(rc == 0 and 'FAIL' not in out and 'section 5) failed' not in out, "drift guards: control on real drift: exit 0, no FAIL, no claim of a failed API drift")
-        s5 = out.split('API drift (javap')[1].split('Source drift')[0]; s5b = out.split('Source drift')[1].split('== Resource drift')[0]
+        s5 = following(out, 'API drift (javap').split('Source drift')[0]; s5b = following(out, 'Source drift').split('== Resource drift')[0]
         check(re.search(ROWS5, s5, re.M) and 'class(es) added/removed/changed' in s5 and re.search(ROWS5B, s5b, re.M) and re.search(r'compared \d+ file\(s\)', s5b),
               "drift guards: control on real drift: the row and figure patterns of the after-FAIL checks match what a succeeding run prints")
         check('#COUNTS' not in api and '#COUNTS' not in src and f'CHANGED {D}BlockHarvestUtils$Qx' in api and f'DEPRECATION added   {D}Dep' in src,
@@ -934,8 +1007,12 @@ def part1():
         for tag, locked, want in (('', [base_idx], r"the baseline sort exited 2, the extracted index's 0"),
                                   ('b', [ext_idx], r"the baseline sort exited 0, the extracted index's 2"),
                                   ('c', [base_idx, ext_idx], r"the baseline sort exited 2, the extracted index's 2")):
+            # a file that is not there cannot be locked: a failing setup check, and the file is skipped
+            # (os.access on a missing file is False, so "really unreadable" alone would pass for it)
+            check(all(f.exists() for f in locked), f"drift guard ASSET-03{tag}: the input exists to be locked (setup)")
             for f in locked:
-                f.chmod(0)
+                if f.exists():
+                    f.chmod(0)
             try:
                 check(not any(os.access(f, os.R_OK) for f in locked), f"drift guard ASSET-03{tag}: the input really is unreadable (setup; not root)")
                 drift_case(tmp, AI, 'ASSET-03' + tag,
@@ -944,16 +1021,20 @@ def part1():
                            also=[r'triage_drift\.py exited 1 .* it crashed'] if ext_idx in locked else ())
             finally:
                 for f in locked:
-                    f.chmod(0o644)
+                    if f.exists():
+                        f.chmod(0o644)
         # hash-server-assets.sh failing on one file: the index it leaves is short, which diffs as that file REMOVED
         demo = AI / 'cache-assets/Server/Item/Items/Demo_Item.json'
-        demo.chmod(0)
+        check(demo.exists(), "drift guard ASSET-04: the extracted asset exists to be locked (setup)")
+        if demo.exists():
+            demo.chmod(0)
         try:
             check(not os.access(demo, os.R_OK), "drift guard ASSET-04: the asset really is unreadable (setup; not root)")
             drift_case(tmp, AI, 'ASSET-04', msg=r'asset drift: hash-server-assets\.sh exited 123 .* Server/Cosmetics drift is NOT reported',
                        absent='no Server/Cosmetics drift')
         finally:
-            demo.chmod(0o644)
+            if demo.exists():
+                demo.chmod(0o644)
         # mktemp -d failing (review verify pass, NIT-B): TMPDIR names a directory that does not exist (a
         # non-writable one fails the same way and still would under root, which a missing one does not).
         # Unguarded, SORT_DIR is empty, the sorts write to /baseline and /extracted and the FAIL blames an unreadable file
@@ -995,16 +1076,18 @@ def part1():
         k_cf = next((n for n, l in enumerate(lines) if l.startswith('Compiled from "')), None)
         k_sw = next((n for n in range(len(lines) - 1) if lines[n].startswith(' ') and lines[n + 1].startswith(' ') and lines[n] != lines[n + 1]), None)
         check(k_cf is not None and k_sw is not None, "drift guards: the index has a `Compiled from` line and two adjacent members to perturb (setup)")
-        if k_cf is not None and k_sw is not None:
+        new_index = AI / 'cache-jar/javap-index.txt'
+        check(new_index.is_file(), "drift guards: the AI state holds the new build's index to compare with (setup)")
+        if k_cf is not None and k_sw is not None and new_index.is_file():
             lines[k_cf] = 'Compiled from "Renamed.java"'
             lines[k_sw], lines[k_sw + 1] = lines[k_sw + 1], lines[k_sw]
             f.write_text('\n'.join(lines))
-            check(not filecmp.cmp(f, AI / 'cache-jar/javap-index.txt', shallow=False), "drift guards: the perturbed indexes differ as files (setup)")
+            check(not filecmp.cmp(f, new_index, shallow=False), "drift guards: the perturbed indexes differ as files (setup)")
             rc, out, *_ = run(tmp, AI, '--skip-caches')
             check(rc == 0 and 'FAIL' not in out and NOSIG in out,
                   "drift guards: indexes that differ only by a `Compiled from` line and a member order report no FAIL (sets compared)")
             # each half alone: the rename without the swap, the swap without the rename
-            lines[k_cf] = next(l for l in (AI / 'cache-jar/javap-index.txt').read_text().split('\n') if l.startswith('Compiled from "'))
+            lines[k_cf] = next((l for l in new_index.read_text().split('\n') if l.startswith('Compiled from "')), lines[k_cf])
             f.write_text('\n'.join(lines))
             rc, out, *_ = run(tmp, AI, '--skip-caches')
             check(rc == 0 and 'FAIL' not in out and NOSIG in out, "drift guards: indexes that differ only by a member order report no FAIL (sorted)")
@@ -1041,9 +1124,11 @@ def part1():
 
 
 # ---------------------------------------------------------------- part 2
-def part2():
-    spec = importlib.util.spec_from_file_location(f"triage_drift_{id(R)}", R.scripts / 'triage_drift.py')
-    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+# Part 2 is four blocks that share only the imported module, each run under guarded(): a triage_drift.py
+# that raises inside one costs that block's checks and not the others'. Importing it is separate:
+# a module that exits or cannot be imported (a mutant that starves it, `sys.exit(0)` as its first
+# statement, raises SystemExit here, which `except Exception` does not catch) is one failing check.
+def part2_matcher(mod):
     m = mod.AssetMatcher([
         'Server/Item/Items/Bench/Bench_Alchemy.json', 'Server/Item/Block/Hitboxes/Bench/Bench_Alchemy.json',
         'Icons/ItemsGenerated/Bench_Alchemy.png',
@@ -1075,6 +1160,7 @@ def part2():
     check(m.rule('Characters/Anim0/Walk_Backward.blockyanim')[0] == 'parent', "rule: an id-shaped stem shared by 6 files is generic")
     check(h('Characters/Anim0/Walk_Backward.blockyanim') == [], "parent: a generic shared name does not match its bare word")
 
+def part2_class_rows(mod):
     # Class rows. An anonymous class's simple name is a number: `World$1` searched
     # as the word `1` flagged every gradlew and deploy.bat in the 0.7.2 triage
     # (59 rows). Docs cannot name one, so its change is the enclosing class's body.
@@ -1100,6 +1186,7 @@ def part2():
     check('class a.b.Mixed → docs/m.md\n' in out, "triage: a folded row keeps the enclosing class's own signature change")
     check('#SUMMARY 4 changed' in out, "triage: folded rows are counted once, under the enclosing class")
 
+def part2_resource_rows(mod):
     # Resource rows: a path inside the jar, keyed by full path, a dir/*.ext wildcard
     # (docs/i18n.md cites `bundledDefaults/*.lang`) or a bare name that is unique
     with tempfile.TemporaryDirectory() as t:
@@ -1184,6 +1271,7 @@ def part2():
     check('#SUMMARY 13 changed thing(s) checked, 9 referenced' in out,
           "resource triage: every Hypixel row is counted, and only those with a citing page are referenced")
 
+def part2_lists(mod):
     # A report the triage cannot read in full exits 2 and says which file and how many
     # rows; what the path, brace and wildcard rules can still match is printed first.
     def triage(report, docs):
@@ -1207,7 +1295,7 @@ def part2():
           "triage exit (lists): the missing list is named on stderr with the number of rows that lost bare-name matching")
     check('resource cfg/gone.json \u2192 docs/c.md\n' in out and '#SUMMARY 1 changed' in out,
           "triage exit (lists): the triage that can be made is still printed, path matches included")
-    check('#ERROR resources-old.txt is missing' in out and out.rstrip().splitlines()[-1].startswith('#SUMMARY'),
+    check('#ERROR resources-old.txt is missing' in out and last_line(out).startswith('#SUMMARY'),
           "triage exit (lists): the report itself says it is incomplete (an #ERROR line before the #SUMMARY)")
     rc, out, err = triage({'resource-drift.txt': 'ADDED hypixel d cfg/fresh.json\n', 'resources-old.txt': 'META-INF/MANIFEST.MF\n',
                            'resources-new.txt': ''}, docs)
@@ -1245,6 +1333,19 @@ def part2():
               f"triage exit (grammar): the malformed row `{bad}` exits 2 and is named, the rows around it still triaged")
 
 
+def part2():
+    spec = importlib.util.spec_from_file_location(f"triage_drift_{id(R)}", R.scripts / 'triage_drift.py')
+    try:
+        mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    except (Exception, SystemExit) as e:
+        check(False, f"triage_drift.py could not be imported ({type(e).__name__}: {e}) - its unit cases did not run")
+        return
+    for label, fn in (('triage matcher', part2_matcher), ('triage class rows', part2_class_rows),
+                      ('triage resource rows', part2_resource_rows), ('triage report lists', part2_lists)):
+        with guarded(label):
+            fn(mod)
+
+
 def one_pass(scripts, verbose=False):
     global R
     R = Run(scripts, verbose)
@@ -1258,6 +1359,28 @@ def one_pass(scripts, verbose=False):
 # moved: update the mutation) or if a named check stays green.
 U, B, T = 'update-build.sh', 'build-jar-cache.sh', 'triage_drift.py'
 _fl = lambda i: CN(i, "FAIL line has its own message")
+# the checks each starvation mutation must turn red (filled from the measured failing sets)
+SV_BJC = SV_UB = {"first run: exits 0, nothing to preserve"}
+SV_TRIAGE = {"update: triage flags pages naming a BYTECODE class",
+             "triage_drift.py could not be imported (SystemExit: 0) - its unit cases did not run"}
+SV_HASH = {"hash-server-assets.sh: control: every file readable, no Cosmetics/ directory: exit 0, 3 rows, nothing on stderr",
+           "drift guards: control without drift: exit 0, no FAIL, all four 'no changes' lines"}
+SV_META = {"update: the previous build is saved before the cache is wiped",
+           "unwritable snapshot store: the v1 cache is NOT wiped (still the only record)"}
+SV_RHASH = {"v1 cache: every non-class entry hashed, nothing filtered (the manifest included)",
+            "update: snapshot/resource-hashes.txt equals the v1 cache's (so the first real update is not BLIND)"}
+SV_ROWN = {"v1 cache: every non-class entry hashed, nothing filtered (the manifest included)",
+           "update: snapshot/resource-owners.txt equals the v1 cache's (so the first real update is not BLIND)"}
+SV_CHASH = {"update: change inside a failed decompile (nested class) reported as BYTECODE"}
+SV_INDEX = {"update: the previous build is saved before the cache is wiped"}
+SV_SRC = {"update: body-only change reported (KickCommand)", "update: source-drift denominator printed"}
+SV_SNAPMETA = {"incomplete snapshot decompile: warns"}
+SV_ASSETS = {"drift guards: control without drift: exit 0, no FAIL, all four 'no changes' lines",
+             "drift guard ASSET-04: FAIL line has its own message"}
+SV_TITLE_API = {"drift guards: control on real drift: the row and figure patterns of the after-FAIL checks match what a succeeding run prints"}
+SV_TITLE_RES = {"snapshot without resource hashes: no comparison is attempted or claimed",
+                "update-build exit: the run goes on past the failed comparison, which claims no comparison"}
+
 MUTATIONS = [
     ("r2 MAJOR-1: identity by version string", B,
      '[ -n "$OLD_SHA" ] && [ "$OLD_SHA" = "$JAR_SHA" ]',
@@ -1689,11 +1812,35 @@ MUTATIONS = [
     ("rule-l bounds: an unknown constant tag is not refused", B,
      '        else:\n            bad(f"unknown constant tag {tag}")\n', '        else:\n            pass\n',
      {"a class whose pool holds an entry with the unused tag 2: the build fails with exit 5, naming the class and `unknown constant tag 2`"}),
+    # ---- Part B of item 11: a script under test that writes or prints LESS must cost checks, not the pass.
+    # Two kinds. [sv1] TOTAL starvation: `exit 0` (`sys.exit(0)` for the python) as the first statement of
+    # each script under test, so every file and every line it would have produced is missing at once.
+    # [sv2] and [sv3] PER-FILE starvation: one file a script writes (or one section title it prints) is
+    # not produced, which is the shape of the r2 MAJOR-1 crash. Each ends red on a named check that is
+    # not a setup check, and without a crash: mutations() fails a mutation whose pass crashed or lost a
+    # block to a guard, so a starvation mutation that reached an unguarded read cannot count as red.
+    # Run by group: --only "[sv1]" ... "[sv3]" (<= 5 each).
+    ("starvation [sv1] build-jar-cache.sh exits 0 as its first statement", B, '\nset -u\n', '\nexit 0\nset -u\n', SV_BJC),
+    ("starvation [sv1] update-build.sh exits 0 as its first statement", U, '\nset -u\n', '\nexit 0\nset -u\n', SV_UB),
+    ("starvation [sv1] triage_drift.py exits 0 as its first statement", T, 'import collections, os, re, sys\n', 'import sys; sys.exit(0)\nimport collections, os, re, sys\n', SV_TRIAGE),
+    ("starvation [sv1] hash-server-assets.sh exits 0 as its first statement", 'hash-server-assets.sh', '\nset -u\n', '\nexit 0\nset -u\n', SV_HASH),
+    ("starvation [sv2] the cache has no cache-meta.txt", B, 'META="$CACHE/cache-meta.txt"', 'META=/dev/null', SV_META),
+    ("starvation [sv2] the cache has no resource-hashes.txt", B, 'open(out + "/resource-hashes.txt", "w") as hf', 'open("/dev/null", "w") as hf', SV_RHASH),
+    ("starvation [sv2] the cache has no resource-owners.txt", B, 'open(out + "/resource-owners.txt", "w") as of', 'open("/dev/null", "w") as of', SV_ROWN),
+    ("starvation [sv2] the cache has no class-hashes.txt", B, 'python3 - "$JAR" > "$CACHE/class-hashes.txt" <<\'PY\'', 'python3 - "$JAR" > /dev/null <<\'PY\'', SV_CHASH),
+    ("starvation [sv2] the cache has no javap-index.txt", B, 'cat "$WORK"/batch.*.sig > "$INDEX"', 'cat "$WORK"/batch.*.sig > /dev/null', SV_INDEX),
+    ("starvation [sv3] the cache has no decompiled source", B, '\nDO_SRC=1\n', '\nDO_SRC=0\n', SV_SRC),
+    ("starvation [sv3] the snapshot has no cache-meta.txt", B, 'echo "cache=$C_ABS" >> "$TMP/cache-meta.txt" 2>/dev/null', 'rm -f "$TMP/cache-meta.txt"', SV_SNAPMETA),
+    ("starvation [sv3] the assets cache has no Server/ tree and no Common index", U, 'unzip -q "$ZIP" -d "$ASSETS" ||',
+     lambda src: src.replace('unzip -q "$ZIP" -d "$ASSETS" ||', 'unzip -q "$ZIP" -d "$ASSETS" -x CommonAssetsIndex.hashes "Server/*" ||').replace(
+         "IN_ZIP=$(unzip -Z1 \"$ZIP\" | grep -vc '/$')", 'IN_ZIP=$EXTRACTED'), SV_ASSETS),
+    ("starvation [sv3] the API drift section is not printed under its title", U, 'section "API drift (javap', 'section "Signature drift (javap', SV_TITLE_API),
+    ("starvation [sv3] the resource drift section is not printed under its title", U, 'section "Resource drift (jar', 'section "Jar resources (jar', SV_TITLE_RES),
 ]
 
 
 def mutations():
-    ran, bad = 0, []
+    ran, bad, crashed, guarded_n = 0, [], 0, 0
     for label, fname, old, new, must_red in MUTATIONS:
         if A.only and A.only not in label:
             continue
@@ -1707,19 +1854,35 @@ def mutations():
             if src.count(old) != 1:
                 bad.append(f"{label}: patch no longer applies to {fname} ({src.count(old)} match(es))")
                 continue
-            f.write_text(new(src) if callable(new) else src.replace(old, new))
+            try:
+                f.write_text(new(src) if callable(new) else src.replace(old, new))
+            except Exception as e:   # a patch function that cannot find its own anchor
+                bad.append(f"{label}: the patch function raised ({type(e).__name__}: {e}) - the mutation is stale and tests nothing")
+                continue
             try:
                 r = one_pass(root / 'maintenance/scripts')
-            except Exception as e:   # a crash must cost one mutation, not the whole pass
-                bad.append(f"{label}: the pass CRASHED ({type(e).__name__}: {e}) - make the case tolerate this mutation's output")
+            except (Exception, SystemExit) as e:
+                # a crash must cost one mutation, not the whole pass. SystemExit is not an Exception: the
+                # sys.exit calls of build() and part1() would abort the pass, and a script under test that
+                # exits in their place (they call HERE's own copies today, never the mutated ones) must not
+                crashed += 1
+                here = [fr for fr in traceback.extract_tb(e.__traceback__) if fr.filename == __file__]
+                bad.append(f"{label}: the pass CRASHED ({type(e).__name__}: {e}) at line {here[-1].lineno if here else '?'} - make the case tolerate this mutation's output")
                 continue
             ran += 1
+            if r.crashes:    # caught by a guard: the pass went on, but the case it was in lost its checks
+                guarded_n += len(r.crashes)
+                bad.append(f"{label}: {len(r.crashes)} block(s) CRASHED inside a guard ({'; '.join(sorted(set(r.crashes)))}) - make the case tolerate this mutation's output")
+            if A.verbose and (A.only or must_red - set(r.fails)):
+                print(f"  {label}: {len(r.fails)} check(s) failed in {r.checks}")
+                for fl in r.fails:
+                    print(f"        - {fl[:170]}")
             stayed = sorted(must_red - set(r.fails))
             if stayed:
                 bad.append(f"{label}: still green: {'; '.join(stayed)}")
             elif A.verbose:
                 print(f"  red {label}: {len(r.fails)} check(s) failed, including all {len(must_red)} expected")
-    return ran, bad
+    return ran, bad, crashed, guarded_n
 
 
 base = one_pass(HERE, A.verbose)
@@ -1728,10 +1891,13 @@ if base.checks < MIN_CHECKS:
     fails.append(f"only {base.checks} check(s) ran, floor is {MIN_CHECKS}")
 print(f"FIXTURE {base.checks} check(s): {base.checks - len(base.fails)} passed, {len(base.fails)} failed")
 if A.mutations:
-    ran, bad = mutations()
+    ran, bad, crashed, guarded_n = mutations()
     if ran < MIN_MUTATIONS and not A.only:
         bad.append(f"only {ran} mutation(s) ran, floor is {MIN_MUTATIONS}")
-    print(f"MUTATIONS {ran} defect(s) reintroduced, {ran - len([b for b in bad if 'still green' in b])} turned their checks red")
+    # a crash is named in the tally and stays a failure of the run: `crashed` passes aborted (they are not in `ran`),
+    # `guarded` blocks lost their checks to an exception that a guard caught (the pass went on)
+    print(f"MUTATIONS {ran} defect(s) reintroduced, {ran - len([b for b in bad if 'still green' in b])} turned their checks red, "
+          f"{crashed} pass(es) crashed, {guarded_n} block(s) crashed inside a guard")
     fails += bad
 for f in fails:
     print(f"  FAIL {f}")

@@ -84,6 +84,27 @@ if need InvSelf1.remote InvSelf1.npc Inv1.npc; then
   else bad "ModifyInventory InvSelf1.npc: no desync line; predicted the item-change check to skip the second pass cleanly"; fi
 fi
 
+# The wait decides which pass runs first, and so what the item-change check does. The same chain with only
+# getWaitForDataFrom() changed from Server to None (the plugin's ProbeInvNone type): the simulation pass runs first and
+# puts the item in the held slot; the server pass then sees a changed held item, ends the chain as ItemChanged
+# (Interaction.tick throws ChainCancelledException, which tickChain catches) and never calls tick0. The effect lands once,
+# the passes do not desync and the entity is kept. Unit control: the same type on the remote-client manager reads one
+# item and finishes. Negative control: InvSelf1.npc, the Server-wait version of the chain, desyncs on the same harness.
+if need InvNoneSelf1.remote InvNoneSelf1.npc InvSelf1.npc; then
+  u=$(field "$(result_line InvNoneSelf1.remote)" inv_items_delta)
+  if ! fpos "$u" || [ "$(field "$(result_line InvNoneSelf1.remote)" chain_server_state)" != Finished ] || [ "$(count InvNoneSelf1.remote 'not in sync')" != 0 ]; then
+    voidc "ModifyInventory (wait None) unit control: InvNoneSelf1.remote read '$u', chain_server_state=$(field "$(result_line InvNoneSelf1.remote)" chain_server_state), $(count InvNoneSelf1.remote 'not in sync') desync line(s)"
+  elif [ "$(count InvSelf1.npc 'not in sync')" -lt 1 ]; then
+    voidc "ModifyInventory (wait None) negative control: InvSelf1.npc, the Server-wait chain, did not desync on this harness"
+  else
+    n=$(field "$(result_line InvNoneSelf1.npc)" inv_items_delta)
+    if feq "$n" "$u" && [ "$(field "$(result_line InvNoneSelf1.npc)" chain_server_state)" = ItemChanged ] \
+       && [ "$(count InvNoneSelf1.npc 'not in sync')" = 0 ] && [ "$(count InvNoneSelf1.npc 'Removing!')" = 0 ] && [ "$(count InvNoneSelf1.npc 'REMOVED reason=REMOVE')" = 0 ]; then
+      ok "ModifyInventory, owner == entity, wait None: $n item = the unit $u, chain_server_state=ItemChanged, no desync, entity kept (the simulation pass did the work, the server pass was cancelled as ItemChanged)"
+    else bad "ModifyInventory InvNoneSelf1.npc: read '$n' (unit $u), chain_server_state=$(field "$(result_line InvNoneSelf1.npc)" chain_server_state); predicted the unit, ItemChanged, no desync, no removal"; fi
+  fi
+fi
+
 # The cause, isolated: the same chain with "OnItemChangeBehavior": "Ignore" does not desync and doubles.
 if need InvIgnoreSelf1.remote InvIgnoreSelf1.npc; then
   u=$(field "$(result_line InvIgnoreSelf1.remote)" inv_items_delta); n=$(field "$(result_line InvIgnoreSelf1.npc)" inv_items_delta)

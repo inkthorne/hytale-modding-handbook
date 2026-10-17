@@ -14,10 +14,11 @@
 #                     npc      host entity, manager as an NPC's: new InteractionManager(null, NPCInteractionSimulationHandler)
 #                     remote   the same host with setHasRemoteClient(true): what a player's manager looks like
 #                     realnpc  a shipped NPC role (Chicken) spawned headless; the chain runs on its own manager
-#                   ROOT is one of: Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 LogS1 LogQ1
+#                   ROOT is one of: Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1
 #                   (the suffix is the number of times the type is in the chain). InvSelf1 is Inv1 with the
 #                   owner == the running entity (no proxy context), see dr.self in Driver.java; InvIgnoreSelf1 is
-#                   the same with "OnItemChangeBehavior": "Ignore" in the interaction.
+#                   the same with "OnItemChangeBehavior": "Ignore" in the interaction. InvNoneSelf1 is InvSelf1 with the
+#                   plugin's ProbeInvNone type: ModifyInventory with getWaitForDataFrom() = None, nothing else.
 # Environment: HYTALE_GAME (default: the Flatpak install's .../game/latest). PROBE_BIND=host:port moves the
 # listen address. DR_STACK=1 makes ProbeLog write the frames that called it.
 set -u
@@ -25,7 +26,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 scratch="${1:?usage: run.sh SCRATCH CASE}"; case_="${2:?usage: run.sh SCRATCH CASE}"
 
 refuse() { echo "FAIL  $*" >&2; exit 3; }
-roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 LogS1 LogQ1"
+roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1"
 mgrs="npc remote realnpc"
 root=""; mgr=""
 case "$case_" in
@@ -64,7 +65,7 @@ if [ "$case_" = boot ]; then
 else
   [ -f "$plugin_jar" ] || { echo "FAIL  build the plugin first: $here/build.sh" >&2; exit 3; }
   cp "$plugin_jar" "$d/mods/"
-  self=(); case "$root" in InvSelf1) root=Inv1; self=(-Ddr.self=true) ;; InvIgnoreSelf1) root=InvIgnore1; self=(-Ddr.self=true) ;; esac
+  self=(); case "$root" in InvSelf1) root=Inv1; self=(-Ddr.self=true) ;; InvIgnoreSelf1) root=InvIgnore1; self=(-Ddr.self=true) ;; InvNoneSelf1) root=InvNone1; self=(-Ddr.self=true) ;; esac
   jvm=("-Ddr.root=DR_$root" "-Ddr.manager=$mgr" -Ddr.exitMs=12000 "${self[@]}" ${DR_STACK:+-Ddr.stack=true})
   [ "$mgr" = realnpc ] && jvm+=(-Ddr.exitMs=16000 -Ddr.targetRole=Sheep)
   case "$root" in Inv*) jvm+=(-Ddr.inventory=true) ;; esac

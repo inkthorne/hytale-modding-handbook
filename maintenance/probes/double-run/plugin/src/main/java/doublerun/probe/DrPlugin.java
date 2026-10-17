@@ -8,10 +8,10 @@ import com.hypixel.hytale.server.core.universe.world.events.AllWorldsLoadedEvent
 import java.util.concurrent.TimeUnit;
 
 /**
- * Probe plugin for maintenance/probes/double-run. It registers three interaction types of its own, all
- * extending SimpleInstantInteraction: ProbeLog (overrides firstRun only: what a plugin author writes first),
- * ProbeLogS (the same with getWaitForDataFrom() = Server) and ProbeLogQ (also overrides simulateFirstRun with an
- * empty body). It also registers the counters of Watch, and, when -Ddr.root is set, stages one case with Driver (see its header for the
+ * Probe plugin for maintenance/probes/double-run. It registers four interaction types of its own: ProbeLog (extends
+ * SimpleInstantInteraction and overrides firstRun only: what a plugin author writes first), ProbeLogS (the same with
+ * getWaitForDataFrom() = Server), ProbeLogQ (also overrides simulateFirstRun with an empty body) and ProbeInvNone
+ * (ModifyInventory with the wait changed to None). It also registers the counters of Watch, and, when -Ddr.root is set, stages one case with Driver (see its header for the
  * properties). The server shuts itself down -Ddr.exitMs after the worlds are loaded. With no -Ddr.root it shuts
  * down at once (run.sh's `boot` case uses --boot-command stop instead).
  */
@@ -26,6 +26,7 @@ public class DrPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC).register("ProbeLog", ProbeLogInteraction.class, ProbeLogInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC).register("ProbeLogS", ProbeLogServerInteraction.class, ProbeLogServerInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC).register("ProbeLogQ", ProbeLogQuietInteraction.class, ProbeLogQuietInteraction.CODEC);
+        getCodecRegistry(Interaction.CODEC).register("ProbeInvNone", ProbeInvNoneInteraction.class, ProbeInvNoneInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new Watch.Projectiles());
         getEntityStoreRegistry().registerSystem(new Watch.Lifecycle());
         getEntityStoreRegistry().registerSystem(new Watch.DamageSeen());

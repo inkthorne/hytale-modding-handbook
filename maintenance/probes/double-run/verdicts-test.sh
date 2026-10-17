@@ -12,6 +12,10 @@
 #   * a refusal line deleted   -> VOID  "AttachBeam dose control"
 #   * the second pass of the NPC-shaped ProbeLog deleted -> FAIL "passes 'server'" (only one line left)
 #   * a missing log            -> FAIL  "no log/result"
+#   * a stray exception        -> VOID  "exception in a run that should have none"
+#   * ModifyInventory with the wait None (InvNoneSelf1): the effect doubled, or the chain not cancelled as
+#     ItemChanged, or the entity removed -> FAIL; its unit control broken, or the Server-wait desync control
+#     (InvSelf1.npc) not desyncing -> VOID
 # Each case also checks that the sabotaged verdict line is the ONLY change: the other verdict blocks keep their
 # PASS count (a damage that turns everything red would pass the checks above for the wrong reason).
 set -u
@@ -50,5 +54,12 @@ fresh; sed -i 's/Entity already contains component type/x/g' "$work/c/Beam2.remo
 fresh; sed -i "/PROBE ProbeLog message='log1' pass=server/d" "$work/c/Log1.npc.log"; expect "second pass of ProbeLog deleted" 1 "Log1.npc" 1
 fresh; rm -f "$work/c/Launch2.remote.log"; expect "a log is missing" 1 "no log/result" 3
 fresh; echo "Exception in thread Thread[#1,WorldThread - default" >> "$work/c/Launch1.remote.log"; expect "exception in a run that should have none" 2 "exception in a run that should have none" 3
+fresh; setfield InvNoneSelf1.npc inv_items_delta 2.0;  expect "ModifyInventory wait None read as doubled" 1 "InvNoneSelf1.npc" 1
+fresh; setfield InvNoneSelf1.npc chain_server_state Finished; expect "ModifyInventory wait None not cancelled as ItemChanged" 1 "InvNoneSelf1.npc" 1
+fresh; echo "[x SEVERE] [InteractionSystems\$TickInteractionManagerSystem] Exception while ticking entity interactions! Removing!" >> "$work/c/InvNoneSelf1.npc.log"; expect "ModifyInventory wait None, entity removed" 1 "InvNoneSelf1.npc" 1
+fresh; echo "java.lang.IllegalStateException: Simulation and server tick are not in sync (operation position)." >> "$work/c/InvNoneSelf1.npc.log"; expect "ModifyInventory wait None, desync line" 1 "InvNoneSelf1.npc" 1
+fresh; echo "[x INFO] [Log] PROBE entity with an InteractionManager REMOVED reason=REMOVE ref=Ref{index=3}" >> "$work/c/InvNoneSelf1.npc.log"; expect "ModifyInventory wait None, entity REMOVED" 1 "InvNoneSelf1.npc" 1
+fresh; setfield InvNoneSelf1.remote inv_items_delta 0.0; expect "ModifyInventory wait None unit control broken" 2 "unit control: InvNoneSelf1.remote" 2
+fresh; sed -i 's/not in sync/x/g' "$work/c/InvSelf1.npc.log"; expect "ModifyInventory Server-wait desync control does not desync" 2 "negative control: InvSelf1.npc" 3
 echo "---- $fails failed"
 [ "$fails" = 0 ]

@@ -69,7 +69,7 @@ ap.add_argument('--mutations', action='store_true')
 ap.add_argument('--only', metavar='TEXT', help='with --mutations: run only the mutations whose label contains TEXT (the floors do not apply)')
 A = ap.parse_args()
 
-MIN_CHECKS = 891
+MIN_CHECKS = 893
 MIN_MUTATIONS = 148
 
 
@@ -841,6 +841,12 @@ def part1():
         # exits 2) and expects that guard's own message and no other FAIL line.
         AD = fresh(tmp, 'AD'); install(tmp, 'v2'); run(tmp, AD)
         AI = fresh(tmp, 'AI'); install(tmp, 'v1r'); run(tmp, AI)
+        # a state build that did not record the previous build (a mutated build-jar-cache.sh that takes v1 -> v1r for
+        # the same build) must cost checks, not the pass: the steps below that read the snapshot are skipped
+        # when it is absent (full --mutations run on 1968f4f: 'r2 MAJOR-1' crashed here with FileNotFoundError)
+        for nm, stt in (('AD', AD), ('AI', AI)):
+            check((stt / 'snapshot/javap-index.txt').exists() and (stt / 'cache-jar/javap-index.txt').exists(),
+                  f"drift guards: the {nm} state recorded the previous build's index and holds the new one (setup)")
         NOSIG, NOSRC = 'no signature changes', 'no source changes'
         # controls: the unmodified script on both states
         install(tmp, 'v2'); rc, out, src, api, *_ = run(tmp, AD, '--skip-caches')
@@ -868,6 +874,8 @@ def part1():
         # an index with no class: either side (restored afterwards). Without the guard the python
         # parses 0 = 0 and reports every class of the other build as added or removed
         for side, f in (('old', AI / 'snapshot/javap-index.txt'), ('new', AI / 'cache-jar/javap-index.txt')):
+            if not f.exists():
+                continue                     # the setup check above has already recorded it
             keep = f.read_text(); f.write_text('')
             try:
                 drift_case(tmp, AI, 'API-05' + ('' if side == 'old' else 'b'),
@@ -983,7 +991,7 @@ def part1():
         # as sets of lines (a source-file name changed, two members swapped) have nothing to report
         install(tmp, 'v1r')
         f = AI / 'snapshot/javap-index.txt'
-        lines = f.read_text().split('\n')
+        lines = f.read_text().split('\n') if f.exists() else []
         k_cf = next((n for n, l in enumerate(lines) if l.startswith('Compiled from "')), None)
         k_sw = next((n for n in range(len(lines) - 1) if lines[n].startswith(' ') and lines[n + 1].startswith(' ') and lines[n] != lines[n + 1]), None)
         check(k_cf is not None and k_sw is not None, "drift guards: the index has a `Compiled from` line and two adjacent members to perturb (setup)")

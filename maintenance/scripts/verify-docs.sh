@@ -892,7 +892,7 @@ section "[HARD] The gates' own fixtures pass"
 # 2026-10-16, ~45s before), so --mutations is included rather than deferred
 # behind a flag. The exception is
 # check-update-build-fixture.py. It drives the real build-jar-cache.sh and
-# update-build.sh end to end against generated jars: 891 checks in ~120s, which
+# update-build.sh end to end against generated jars: 893 checks in ~120s, which
 # is kept here because those scripts run only at a game update, and their
 # defects would otherwise surface only then, on the one run whose previous-build
 # snapshot cannot be regenerated. Its --mutations pass (148 mutations; 3 h 8 min measured for 109 at 6564b03, so about 4 h 10 min estimated at ~100 s each, not measured; 2 h at 81)

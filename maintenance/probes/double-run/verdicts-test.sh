@@ -16,6 +16,11 @@
 #   * ModifyInventory with the wait None (InvNoneSelf1): the effect doubled, or the chain not cancelled as
 #     ItemChanged, or the entity removed -> FAIL; its unit control broken, or the Server-wait desync control
 #     (InvSelf1.npc) not desyncing -> VOID
+#   * a run that was aborted or ended in the wrong chain state still reads the predicted effect (the
+#     "lands once" verdicts counted only 'Exception in thread'): a desync line, a caught tick exception
+#     ("Removing!"), an entity REMOVED with reason=REMOVE, or a chain_server_state other than the prediction's,
+#     in a verdict run (-> FAIL "does not count") and in a control run (-> VOID "control run"), one reason at a time
+#   * a real-NPC log whose subject was not on an NPCInteractionSimulationHandler manager -> VOID "subject's manager"
 # Each case also checks that the sabotaged verdict line is the ONLY change: the other verdict blocks keep their
 # PASS count (a damage that turns everything red would pass the checks above for the wrong reason).
 set -u
@@ -61,5 +66,44 @@ fresh; echo "java.lang.IllegalStateException: Simulation and server tick are not
 fresh; echo "[x INFO] [Log] PROBE entity with an InteractionManager REMOVED reason=REMOVE ref=Ref{index=3}" >> "$work/c/InvNoneSelf1.npc.log"; expect "ModifyInventory wait None, entity REMOVED" 1 "InvNoneSelf1.npc" 1
 fresh; setfield InvNoneSelf1.remote inv_items_delta 0.0; expect "ModifyInventory wait None unit control broken" 2 "unit control: InvNoneSelf1.remote" 2
 fresh; sed -i 's/not in sync/x/g' "$work/c/InvSelf1.npc.log"; expect "ModifyInventory Server-wait desync control does not desync" 2 "negative control: InvSelf1.npc" 3
+# an aborted tick that the effect reads cannot show. One reason at a time, on the verdict run and on a control run.
+SYNC="java.lang.IllegalStateException: Simulation and server tick are not in sync (operation position)."
+REMV="[x SEVERE] [InteractionSystems\$TickInteractionManagerSystem] Exception while ticking entity interactions! Removing!"
+GONE="[x INFO] [Log] PROBE entity with an InteractionManager REMOVED reason=REMOVE ref=Ref{index=3}"
+addline() { printf '%s\n' "$2" >> "$work/c/$1.log"; }
+fresh; addline Damage1.npc "$SYNC"; expect "Damage1.npc: a desync line" 1 "Damage1.npc: the run does not count, it has a 'not in sync'" 1
+fresh; addline Damage1.npc "$REMV"; expect "Damage1.npc: a caught tick exception" 1 "Damage1.npc: the run does not count, it has a caught tick exception" 1
+fresh; addline Damage1.npc "$GONE"; expect "Damage1.npc: an entity REMOVED" 1 "Damage1.npc: the run does not count, an entity was removed" 1
+fresh; sed -i 's/chain_server_state=Finished/chain_server_state=NotFinished/' "$work/c/Damage1.npc.log"; expect "Damage1.npc: chain NotFinished" 1 "Damage1.npc: the run does not count, chain_server_state='NotFinished'" 1
+fresh; addline Launch1.npc "$REMV"; addline Launch1.npc "$SYNC"; sed -i 's/chain_server_state=Finished/chain_server_state=NotFinished/' "$work/c/Launch1.npc.log"; expect "Launch1.npc: aborted, chain NotFinished (the reviewer's S2)" 1 "Launch1.npc: the run does not count" 1
+fresh; addline Stat1.npc "$REMV"; expect "Stat1.npc: a caught tick exception" 1 "Stat1.npc: the run does not count" 1
+fresh; addline Inv1.npc "$GONE"; expect "Inv1.npc: an entity REMOVED (also the Inv1.npc negative control of the desync verdicts)" 2 "Inv1.npc" 3
+fresh; sed -i 's/chain_server_state=Failed/chain_server_state=Finished/' "$work/c/Damage1.remote.log"; expect "Damage1.remote control: chain not Failed" 2 "control run Damage1.remote does not count: chain_server_state='Finished', wanted Failed" 3
+fresh; addline Damage2.remote "$SYNC"; expect "Damage2.remote control: a desync line" 2 "control run Damage2.remote does not count: it has a 'not in sync'" 3
+fresh; addline Stat1.remote "$REMV"; expect "Stat1.remote control: a caught tick exception" 2 "control run Stat1.remote does not count: it has a caught tick exception" 3
+fresh; sed -i 's/chain_server_state=Finished/chain_server_state=ItemChanged/' "$work/c/Launch2.remote.log"; expect "Launch2.remote control: chain ItemChanged" 2 "control run Launch2.remote does not count: chain_server_state='ItemChanged'" 3
+fresh; sed -i '/REMOVED reason=REMOVE/d' "$work/c/InvSelf1.npc.log"; expect "InvSelf1.npc: the entity removal not logged" 1 "InvSelf1.npc: predicted the desync" 1
+fresh; sed -i 's/chain_server_state=NotFinished/chain_server_state=Finished/' "$work/c/InvSelf1.npc.log"; expect "InvSelf1.npc: chain ended Finished" 1 "InvSelf1.npc: predicted the desync" 1
+fresh; addline InvSelf1.remote "$SYNC"; expect "InvSelf1.remote control: a desync line" 2 "unit control: InvSelf1.remote" 3
+fresh; addline InvIgnoreSelf1.npc "$GONE"; expect "InvIgnoreSelf1.npc: an entity REMOVED" 1 "InvIgnoreSelf1.npc: the run does not count" 1
+fresh; addline InvIgnoreSelf1.remote "$REMV"; expect "InvIgnoreSelf1.remote control: a caught tick exception" 2 "unit control: InvIgnoreSelf1.remote" 2
+fresh; addline Beam1.npc "$REMV"; expect "Beam1.npc: a caught tick exception" 1 "AttachBeam Beam1.npc:" 1
+fresh; addline Beam2.remote "$SYNC"; expect "Beam2.remote control: a desync line" 2 "AttachBeam control run does not count" 3
+fresh; sed -i 's/chain_server_state=Finished/chain_server_state=NotFinished/' "$work/c/Beam1.remote.log"; expect "Beam1.remote control: chain NotFinished" 2 "AttachBeam control run does not count" 3
+fresh; addline Log1.npc "$REMV"; expect "Log1.npc: a caught tick exception" 1 "ProbeLog Log1.npc: the run does not count" 1
+fresh; addline LogQ1.npc "$GONE"; expect "LogQ1.npc: an entity REMOVED" 1 "ProbeLogQ LogQ1.npc: the run does not count" 1
+fresh; addline LogS1.npc "$SYNC"; expect "LogS1.npc: a desync line" 1 "ProbeLogS LogS1.npc: the run does not count" 1
+fresh; addline Log1.remote "$SYNC"; expect "Log1.remote control: a desync line" 2 "ProbeLog unit control: Log1.remote does not count" 5
+fresh; addline Log1.realnpc "$REMV"; expect "Log1.realnpc: a caught tick exception" 2 "Log1.realnpc does not count" 1
+fresh; addline Stat1.realnpc "$REMV"; expect "Stat1.realnpc: a caught tick exception" 2 "real NPC Stat1 does not count" 1
+fresh; addline Damage1.realnpc "$GONE"; expect "Damage1.realnpc: an entity REMOVED" 2 "real NPC Damage1 does not count" 1
+fresh; addline Beam1.realnpc "$SYNC"; expect "Beam1.realnpc: a desync line" 1 "AttachBeam Beam1.realnpc:" 1
+# the subject of a real-NPC case must be on an NPC manager (the reviewer's S3), each case on its own
+for c in Stat1 Damage1 Beam1 Log1; do
+  fresh; sed -i 's/simulationHandler=NPCInteractionSimulationHandler/simulationHandler=InteractionSimulationHandler/; s/DR manager=realnpc/DR manager=remote/' "$work/c/$c.realnpc.log"
+  if [ "$c" = Beam1 ]; then expect "$c.realnpc: subject not on an NPC manager" 1 "AttachBeam Beam1.realnpc:" 1
+  elif [ "$c" = Log1 ]; then expect "$c.realnpc: subject not on an NPC manager" 2 "Log1.realnpc: the subject's manager" 1
+  else expect "$c.realnpc: subject not on an NPC manager" 2 "real NPC $c: the subject's manager" 1; fi
+done
 echo "---- $fails failed"
 [ "$fails" = 0 ]

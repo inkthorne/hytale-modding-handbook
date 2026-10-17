@@ -1,0 +1,29 @@
+plugins {
+    id 'java'
+}
+
+// Probe plugin for maintenance/probes/beams. Not an example: it is not in the examples
+// list and not in the example-build gate. It builds the way the examples do, against the
+// installed HytaleServer.jar (path from examples/hytale-paths.gradle).
+apply from: '../../../../examples/hytale-paths.gradle'
+
+group = 'hytale.probes'
+version = '0.1.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly files(hytaleServerJar)
+}
+
+jar {
+    archiveBaseName.set('beams-probe')
+    archiveVersion.set('')
+}

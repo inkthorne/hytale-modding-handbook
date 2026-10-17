@@ -1,0 +1,6 @@
+{
+  "Type": "AttachBeam",
+  "BeamConfig": {
+    "TexturePath": "Trails/Fire.png"
+  }
+}

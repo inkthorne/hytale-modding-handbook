@@ -1,0 +1,16 @@
+{
+  "Model": "Ice_Bolt",
+  "Physics": { "Type": "Standard", "Gravity": 0, "TerminalVelocityAir": 1, "TerminalVelocityWater": 1, "RotationMode": "VelocityDamped", "Bounciness": 0.0, "SticksVertically": false },
+  "LaunchForce": 0.1,
+  "Interactions": {
+    "ProjectileSpawn": {
+      "Interactions": [
+        {
+          "Type": "AttachBeam",
+          "BeamConfig": { "TexturePath": "Trails/Fire.png" },
+          "TargetEntity": "Owner"
+        }
+      ]
+    }
+  }
+}

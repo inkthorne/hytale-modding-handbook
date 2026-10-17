@@ -1,0 +1,15 @@
+{
+  "Model": "Ice_Bolt",
+  "Physics": { "Type": "Standard", "Gravity": 0, "TerminalVelocityAir": 1, "TerminalVelocityWater": 1, "RotationMode": "VelocityDamped", "Bounciness": 0.0, "SticksVertically": false },
+  "LaunchForce": 0.1,
+  "Interactions": {
+    "ProjectileSpawn": {
+      "Interactions": [
+        { "Type": "AttachBeam", "BeamConfig": "Probe_Named", "TargetEntity": "Owner" },
+        { "Type": "AttachBeam", "BeamConfig": "Probe_Named", "TargetEntity": "Owner" },
+        { "Type": "ProbeLog", "Message": "double: after the second AttachBeam, same tick" },
+        { "Type": "Simple", "RunTime": 0.2, "Next": { "Type": "ProbeLog", "Message": "double: 0.2 s later" } }
+      ]
+    }
+  }
+}

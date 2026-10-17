@@ -535,13 +535,15 @@ Every interaction carries an `OnItemChangeBehavior` (`com.hypixel.hytale.protoco
 | Value | Meaning |
 |-------|---------|
 | `Cancel` | Default. The chain is cancelled |
-| `Fail` | The interaction ends in `InteractionState.Failed` (so a `Failed` branch can react) |
-| `Finish` | The interaction ends in `InteractionState.Finished` as if it completed |
+| `Fail` | The check sets `InteractionState.Failed` (so a `Failed` branch can react), but the operation's own hook (`tick0`, `simulateTick0`) still runs that tick |
+| `Finish` | The check sets `InteractionState.Finished` as if it completed, and the hook still runs that tick |
 | `Ignore` | The item change is ignored and the interaction keeps running |
 
 ```json
 { "Type": "Simple", "RunTime": 0.5, "OnItemChangeBehavior": "Ignore" }
 ```
+
+`Fail` and `Finish` do not stop the operation (read, not measured). `Interaction.tickInternal` sets the state but returns true only for `ItemChanged` (`Interaction.java:302`), so for these two `tick` still calls `tick0` (`:238-239`). A `SimpleInstantInteraction` reached on its first tick after the change therefore still runs `firstRun`, and the state it ends in is the one the check set. A type whose `tick0` writes the state itself overrides it: `ChargingInteraction.tick0` sets `NotFinished` or `Finished`, so `Fail` does not end a Charging operation as `Failed`.
 
 The check is skipped for a chain that runs through another entity, one whose owning entity differs
 from the executing entity (a projectile's hit chain, for example). On a manager with no remote client the check runs in both passes, and what a changed
@@ -673,8 +675,8 @@ The same results came out on a real `Chicken` run headless (no player) in a tick
 `Interaction.tickInternal` (`Interaction.java:288-302`) runs in both passes. If the held slot now holds a different item than when the context was built, the pass sets `ItemChanged` and does not call `tick0` or `simulateTick0`. A chain that runs through another entity is exempt (the owner is not the entity). An interaction that puts an item into the held slot of the entity that runs it (`ModifyInventory` does, with the owner the running entity) therefore changes what the **second** pass does, and the outcome depends on which pass that is, because only the server pass throws on `ItemChanged`:
 
 - **The wait is `Server`: the server pass runs first, the simulation pass second. (measured)** The simulation pass sees the changed item and skips its hook, and `Interaction.simulateTick` has no `ItemChanged` case (`:263-286`; `tick` has one, `:256`), so it ends with its operation counter behind. `doTickChain` throws the desync (`:499-505`), and `TickInteractionManagerSystem` catches it and **removes the entity that runs the chain** (`InteractionSystems.java:255`). Measured with `ModifyInventory` (shipped, waits for `Server`): `Counter: 1 vs 0`, entity removed.
-- **The wait is `None`: the simulation pass runs first, the server pass second. (measured)** The simulation pass does the work. The server pass sees the changed item, and `Interaction.tick` throws `ChainCancelledException(ItemChanged)` (`:256-258`), which the manager catches and only ends the chain with (`InteractionManager.java:376`). Measured with a plugin subclass of `ModifyInventory` that changes nothing but `getWaitForDataFrom()` to `None`: 1 item, `chain_server_state=ItemChanged`, no desync line, the entity kept. The effect lands once, and the chain ends there: no operation after it runs (read; the measured chain had none after it).
-- **The wait is `Client`. (read, not measured)** `doTickChain` runs the simulation pass first for `Client` as for `None` (`:486-492`; only `Server` runs it second), and the client state the simulation pass stores satisfies the server pass's wait, so the reading is the `None` one.
+- **The wait is `None`: the simulation pass runs first, the server pass second. (measured)** When the simulation pass does the work (the default `simulateFirstRun`, which calls `firstRun`), the server pass sees the changed item, and `Interaction.tick` throws `ChainCancelledException(ItemChanged)` (`:256-258`), which the manager catches and only ends the chain with (`InteractionManager.java:376`). Measured with a plugin subclass of `ModifyInventory` that changes nothing but `getWaitForDataFrom()` to `None`: 1 item, `chain_server_state=ItemChanged`, no desync line, the entity kept. The effect lands once, and the chain ends there: no operation after it runs (read; the measured chain had none after it).
+- **The wait is `Client`. (read, not measured)** `doTickChain` runs the simulation pass first for `Client` as for `None` (`:486-492`; only `Server` runs it second), and the client state the simulation pass stores satisfies the server pass's wait, so the reading is the `None` one, with the same precondition: the simulation pass must do the work. Of the 30 block interactions, 22 wait for `Client`, and 19 of those have an empty `simulateInteractWithBlock` (the census, `maintenance/probes/double-run/census-0.7.2.txt`; the other 8 wait for `Server`, the case above, which needs no such precondition). For those 19 the simulation pass changes nothing, the server pass changes the held slot after that operation's check has run, so the effect lands once and that operation is not cancelled (read). The next operation in the chain still meets the check. The same holds under `None` for a type whose `simulateFirstRun` is empty.
 - **`"OnItemChangeBehavior": "Ignore"` on a `Server`-wait interaction. (measured)** No exception, and the effect doubled (2 items).
 
 Measured on a host; the same code runs for an NPC (read).

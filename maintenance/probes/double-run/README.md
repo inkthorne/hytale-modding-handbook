@@ -15,7 +15,7 @@ python3 -I maintenance/probes/double-run/census.py            # the census; --ch
 python3 -I maintenance/probes/double-run/usage.py             # which types NPC and ability chains reach
 maintenance/probes/double-run/build.sh                         # plugin/build/libs/double-run-probe.jar
 maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see the header of run.sh
-maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (22 PASS on the pass quoted below)
+maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (24 PASS on the pass quoted below)
 maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red
 python3 -I maintenance/probes/double-run/census-test.py "$WORK"    # plant defects in a copy of the source; census.py must see each
 maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-run/run.sh" .double-run-case "Log1 Damage1.npc remote"
@@ -71,7 +71,17 @@ Controls, each with a prediction:
   window swallowing the second hit, say) makes the verdict VOID, not PASS.
 - **Negative control (R3).** `Launch1.npc` must read 1 while `Stat1.npc` reads 2: the same manager and
   harness, the instrument sees a 2 where there is one.
-- **Exception control.** No `Exception in thread` in any run except `Beam2.remote` and `Beam1.npc`.
+- **Exception control.** No `Exception in thread` in any run except `Beam2.remote`, `Beam1.npc` and `Beam1.realnpc`.
+- **Abort control (review of 41db9fe..5be0ad0, MINOR-3).** A run counts only if its tick was not aborted and its
+  chain ended in the state its prediction names (`flawed()` in `verdicts.sh`). Abort lines: `not in sync`, a caught
+  `Exception while ticking entity interactions! Removing!`, an entity `REMOVED reason=REMOVE`. Wanted
+  `chain_server_state`: `Finished` for every run, except the `DamageEntity` remote controls (`Failed`: the chain waits for a
+  client that never comes, after the effect has landed), `InvSelf1.npc` (`NotFinished`, with the three abort lines
+  predicted), `InvNoneSelf1.npc` (`ItemChanged`) and the `AttachBeam` refusals (no state: the world thread dies before the
+  RESULT line, only the abort lines are read). A control run that does not count is VOID, a verdict run that does not count is
+  a FAIL. Before this, `verdicts.sh` read only `Exception in thread`, and a caught desync that removed the subject passed.
+- **Manager control (LOW-1).** Every real-NPC case (`Log1`, `Stat1`, `Damage1`, `Beam1`) requires the driver's line
+  `manager=realnpc self=false simulationHandler=NPCInteractionSimulationHandler`; before this only `Log1.realnpc` did.
 
 Real NPC (fidelity check; `Log1.realnpc`, `Stat1.realnpc`, `Damage1.realnpc`): a shipped `Chicken`
 spawned headless in a ticking section with no player; the chain runs on **its own** manager, started the
@@ -130,8 +140,8 @@ do not parse are under `World/` and `Prefabs/` and none names `ChangeStat`), `Be
 
 ## Results (one pass, 2026-10-17, java 25.0.4.1, `HytaleServer.jar` 0.7.2)
 
-`verdicts.sh` on the final pass: **22 PASS, 0 failed, 0 void**. The final pass is 28 server runs (the boot, then
-27 cases), 547 s in all, 19-24 s each, in a scratch directory outside the repo, `--auth-mode offline`,
+`verdicts.sh` on the final pass: **24 PASS, 0 failed, 0 void**. The final pass is 32 server runs (the boot, then
+31 cases), 628 s in all, 19-24 s each (the boot 7 s), re-run after the review fixes (the pass quoted before them was 22 PASS in 28 runs), in a scratch directory outside the repo, `--auth-mode offline`,
 `--disable-sentry`, `--bind 127.0.0.1:5599`, under `timeout`. Earlier passes were discarded after the harness
 changes listed under "Refuted or changed"; none of their numbers is quoted here.
 
@@ -165,9 +175,13 @@ What the simulation pass reaches (`sim`, counted in names; they add up to 135):
 The census does **not** say whether running a hook twice changes the world. 70 names reach the server pass's
 method again (`firstRun`, `tick0`, `tick0+`); classifying the effect of each is item 13b. The census was
 checked by `census-test.py`: a copy of the source with a defect planted in one class, run through
-`census.py`, must move exactly that row to the expected label (six defects, all seen, no other row moved).
+`census.py`, must move exactly that row to the expected label (sixteen defects, all seen, no other row moved: six at the first pass, and since the review ten more, one per label
+path a real build does not reach: `super.simulateFirstRun`, a direct `firstRun` call, `+` around either, `tick0+`, `own`,
+`own+` -> `own`, the block hook gaining a body, and a base class change that moves two rows).
 The first run of that test failed on a defect the census mislabelled (`simulateFirstRun` calling `firstRun`
-with other code was `via-firstRun:other`; it is `firstRun+` now).
+with other code was `via-firstRun:other`; it is `firstRun+` now). The review found two more shapes mislabelled
+(`simulateFirstRun { super.simulateFirstRun(...); }` was `own`; a `simulateTick0` calling `this.firstRun` was
+`via-firstRun:other`); `census-0.7.2.txt` is byte-identical before and after that fix, since neither exists at 0.7.2.
 
 Managers with no `PlayerRef` (read; `new InteractionManager(null, ...)`): NPCs (`NPCInteractionSystems.java:83`,
 `NPCInteractionSimulationHandler`), `InteractionHost.spawnHost` (`InteractionHost.java:51`; its callers are
@@ -211,9 +225,10 @@ Controls: unit control (one on `remote` reads one unit) and dose control (two on
 `DamageEntity`, `LaunchProjectile`, `ChangeStat`, `ModifyInventory`; for `AttachBeam` the dose control is the
 instrument seeing an add and then the refusal. The negative control is `Launch1.npc` reading 1 and
 `Stat1.npc` reading 2 on the same manager with the same harness. The sabotage test (`verdicts-test.sh`)
-turned each of eight damages (dose control broken, unit control broken, a doubled damage read, a guarded
-read, a refusal line deleted, a pass deleted, a log missing, a stray exception) into the VOID or FAIL it
-should be, and the unharmed copy stayed at 22 PASS.
+turned each of 54 damages into the VOID or FAIL it should be (dose control broken, unit control broken, a doubled damage
+read, a guarded read, a refusal line deleted, a pass deleted, a log missing, a stray exception; and since the review: each
+abort line and the wrong chain state on verdict runs and on control runs, the real-NPC manager, the `InvNoneSelf1`
+verdict, the `StatSet1` verdict, the `sim=` flag), and the unharmed copy stayed at 24 PASS.
 
 `sim=` is `context.getEntry().isUseSimulationState()`, the one thing an interaction can read about its pass (both
 accessors are public: `InteractionContext.java:199`, `InteractionEntry.java:86`). It is printed by `ProbeLog` and `ProbeLogS`,
@@ -299,9 +314,9 @@ not reproduce: the real NPC's group filter (below) and its own AI.
 | File | What it is |
 |------|------------|
 | `census.py`, `census-0.7.2.txt` | The census and its output at 0.7.2 (re-run at the next build and diff) |
-| `census-test.py` | Plants six defects in a copy of the source; the census must see each and nothing else |
+| `census-test.py` | Plants sixteen defects in a copy of the source; the census must see each and nothing else |
 | `usage.py`, `usage-0.7.2.txt` | Which types shipped NPC roles and ability chains reach (the R6 sample) |
 | `build.sh`, `run.sh` | Build the plugin; run one case (header lists them) with the scratch guard of `../beams/run.sh` |
-| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails. The test damages the logs one way at a time |
-| `plugin/` | The probe plugin: `Driver` (stages one case), `Watch` (counters at the target), the three `ProbeLog*` types, and the `DR_*` root interactions |
+| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (54 damages) |
+| `plugin/` | The probe plugin: `Driver` (stages one case), `Watch` (counters at the target), the three `ProbeLog*` types and `ProbeInvNone` (`ModifyInventory` with the wait changed to `None`), and the `DR_*` root interactions |
 | `../beams/guard-test.sh` | Tests the shared guard; takes this directory's `run.sh` and marker as arguments (and still passes for the beams `run.sh`) |

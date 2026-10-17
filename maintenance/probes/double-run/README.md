@@ -33,7 +33,7 @@ for a `Server` wait the simulation pass (`:496`) runs after `handle` as well. A 
 The two passes share one `InteractionEntry` and so one instance store (`InteractionContext.getInstanceStore`,
 `InteractionContext.java:306`, `InteractionEntry.java:37`), but keep separate state and timestamps
 (`InteractionEntry.java:73-83`), so `firstRun` is true in both. `Interaction.tick` and
-`Interaction.simulateTick` are `final` (`Interaction.java:233,263`): both run `tickInternal` and then the
+`Interaction.simulateTick` are `final` (`Interaction.java:234,263`): both run `tickInternal` and then the
 type's `tick0` or `simulateTick0`. `SimpleInstantInteraction.simulateTick0` calls `simulateFirstRun`
 (`SimpleInstantInteraction.java:40`), whose default calls `firstRun` (`:49-51`).
 
@@ -94,10 +94,12 @@ section and was removed with `UNLOAD`; fix: load 3x3x3 sections and keep them lo
 needs a `BoundingBox` or the damaged NPC's AI throws. Those are harness defects, recorded under "Refuted or
 changed" below.
 
-`Damage1.realnpc` needs `CombatSupport.setExecutingAttack(chain, true, 0)` after the chain is queued, as
-`ActionAttack` does (`ActionAttack.java:221`): `NPCDamageSystems.FilterDamageSystem` cancels damage from an
-NPC source that belongs to the target's group unless the source deals friendly damage, and both are Chickens.
-Prediction after that: one hit (-3).
+`Damage1.realnpc` needs `CombatSupport.setExecutingAttack(chain, false, 0.0)` after the chain is queued, as
+`ActionAttack` does (`ActionAttack.java:221`; `Driver.java` makes the same call). The first draft passed `true` for
+`damageFriendlies`, because `NPCDamageSystems.FilterDamageSystem` cancels damage from an NPC source that belongs
+to the target's group unless the source deals friendly damage, and the target was a second Chicken; that was
+replaced by a target of another species (a Sheep, see "Refuted or changed"), so the call is the plain one.
+Prediction: one hit (-3).
 
 `InvIgnoreSelf1` (added after `InvSelf1` desynced, to isolate the cause): the same chain as `InvSelf1` with
 `"OnItemChangeBehavior": "Ignore"` on the interaction. Prediction: the item-change check is skipped, so both
@@ -141,7 +143,10 @@ closed, key `Type`**. The miner records names, not classes, so the class is pars
 0 superclass chains that did not reach `Interaction`**. (The first cut matched the register call by line and
 reported 121 classes and six classes carrying several names; one line of `WorldEventsPlugin` chains five
 registrations. It now matches by the id argument the miner recorded.) 78 names are classes that extend
-`SimpleInstantInteraction`; 57 write `tick0` and `simulateTick0` themselves.
+`SimpleInstantInteraction` (the predicate: `SimpleInstantInteraction` is in the class's superclass chain); the other 57
+are not, and of those 21 declare both `tick0` and `simulateTick0` themselves, while 36 inherit `simulateTick0` (30 from
+`SimpleBlockInteraction`, 3 from `DragPlaceBlockInteraction`, 3 from `SimpleInteraction`) and 31 inherit `tick0` (28 from
+`SimpleBlockInteraction`, 3 from `DragPlaceBlockInteraction`); counted from the `hooks` lines of `census-0.7.2.txt`.
 
 What the simulation pass reaches (`sim`, counted in names; they add up to 135):
 

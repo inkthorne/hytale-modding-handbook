@@ -715,7 +715,10 @@ Abstract base class for interactions that act on a targeted block (`BreakBlock`,
 WaitForDataFrom getWaitForDataFrom()   // returns WaitForDataFrom.Client
 boolean needsRemoteSync()
 
-// Subclasses implement these two — server-side effect and client-side prediction
+// Subclasses implement these two. interactWithBlock is the effect of the server pass (tick0);
+// simulateInteractWithBlock is the hook of the simulation pass (simulateTick0). The server calls it
+// itself on a manager with no remote client; for a player the client runs its own half and the
+// server never calls it
 protected abstract void interactWithBlock(World world, CommandBuffer<EntityStore> commandBuffer,
         InteractionType type, InteractionContext context, ItemStack itemInHand,
         Vector3i targetBlock, CooldownHandler cooldownHandler)

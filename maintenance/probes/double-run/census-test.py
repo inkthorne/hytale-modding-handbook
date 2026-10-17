@@ -16,6 +16,23 @@ change no other row:
     ModifyInventory      getWaitForDataFrom returns Client     wait Server -> Client
     Select ("Selector")  simulateTick0 calls tick0             no-op    -> tick0
 
+and the label paths a real build does not reach (review of 41db9fe..5be0ad0, LOW-2), each on a class of the
+real tree:
+
+    AttachBeam           simulateFirstRun { super.simulateFirstRun(...); }                firstRun stays firstRun
+    AttachBeam           simulateTick0 { this.firstRun(...); }                            firstRun stays firstRun
+    AttachBeam           simulateTick0 with other code around this.firstRun               firstRun -> firstRun+
+    AttachBeam           simulateTick0 with other code around super.simulateTick0         firstRun -> firstRun+
+    AttachBeam           simulateFirstRun with other code around super.simulateFirstRun   firstRun -> firstRun+
+    DamageEntity         simulateTick0 with other code around tick0                       tick0 -> tick0+
+    Selector             simulateTick0 gets a body that reaches no hook                   no-op -> own
+    Wielding             simulateTick0 is a lone super.simulateTick0(...)                 own+ -> own
+    AddItem              the block hook simulateInteractWithBlock gets a body             via-...:no-op -> via-...:other
+    ChangeStat and ChangeStatWithModifier   their base ChangeStatBase gets an empty simulateFirstRun
+                                                                                          both firstRun -> no-op
+
+A case "stays" when the label is kept but the row's note changes: the row must still be the only one that moved.
+
 The unmutated copy must reproduce the labels the README quotes, and the census must visit 135 names: a
 census that visits nothing, or one whose baseline is not the quoted one, is VOID here (exit 2).
 """
@@ -43,6 +60,43 @@ def rows(src: pathlib.Path):
             k, _, v = line.strip().partition('  ')
             table[cur][k] = v.strip()
     return table, text
+
+
+def brace_end(t: str, i: int) -> int:
+    """Index of the `}` closing the `{` at t[i] (the decompiled sources have no braces inside strings that matter here)."""
+    depth = 0
+    for j in range(i, len(t)):
+        if t[j] == '{':
+            depth += 1
+        elif t[j] == '}':
+            depth -= 1
+            if depth == 0:
+                return j
+    raise ValueError('unbalanced')
+
+
+def set_body(t: str, method: str, body: str) -> str:
+    """Replace the body of the first method `method` declared in t. Returns t unchanged if there is none."""
+    m = re.search(r'\b' + method + r'\s*\([^)]*\)\s*\{', t)
+    if not m:
+        return t
+    b = m.end() - 1
+    return t[:b + 1] + '\n        ' + body + '\n    ' + t[brace_end(t, b):]
+
+
+def add_method(t: str, text: str) -> str:
+    """Add a method before the last `}` of the file (every file used here is one top-level class)."""
+    k = t.rstrip().rfind('}')
+    return t[:k] + '\n' + text + '\n' + t[k:]
+
+
+S0 = ('(boolean firstRun, float time, @Nonnull InteractionType type, @Nonnull InteractionContext context, '
+      '@Nonnull CooldownHandler cooldownHandler)')
+SF = ('(@Nonnull InteractionType type, @Nonnull InteractionContext context, '
+      '@Nonnull CooldownHandler cooldownHandler)')
+ARGS0 = 'firstRun, time, type, context, cooldownHandler'
+ARGSF = 'type, context, cooldownHandler'
+BEAM = 'com/hypixel/hytale/builtin/beam/interaction/AttachBeamInteraction.java'
 
 
 def main():
@@ -80,52 +134,58 @@ def main():
         return 2
     print(f'baseline: {len(base)} rows, labels as quoted')
 
-    SIG = ('(@Nonnull InteractionType type, @Nonnull InteractionContext context, '
-           '@Nonnull CooldownHandler cooldownHandler)')
+    CFGS = f'{CFG}/server'
     cases = [
-        ('AttachBeam gets an empty simulateFirstRun', 'AttachBeam', 'sim', 'no-op',
-         'com/hypixel/hytale/builtin/beam/interaction/AttachBeamInteraction.java',
-         lambda t: t.replace('    @Override\n    protected void firstRun', '    protected void simulateFirstRun' + SIG + ' {\n    }\n\n    @Override\n    protected void firstRun', 1)),
-        ('ApplyEffect loses its simulateFirstRun', 'ApplyEffect', 'sim', 'firstRun',
+        ('AttachBeam gets an empty simulateFirstRun', [('AttachBeam', 'sim', 'no-op')], BEAM,
+         lambda t: add_method(t, '    protected void simulateFirstRun' + SF + ' {\n    }\n')),
+        ('ApplyEffect loses its simulateFirstRun', [('ApplyEffect', 'sim', 'firstRun')],
          f'{CFG}/none/simple/ApplyEffectInteraction.java',
          lambda t: re.sub(r'    @Override\n    protected void simulateFirstRun[^{]*\{\s*\}\n', '', t, count=1)),
-        ('DamageEntity simulateTick0 becomes return', 'DamageEntity', 'sim', 'no-op',
-         f'{CFG}/server/DamageEntityInteraction.java',
+        ('DamageEntity simulateTick0 becomes return', [('DamageEntity', 'sim', 'no-op')],
+         f'{CFGS}/DamageEntityInteraction.java',
          lambda t: re.sub(r'(protected void simulateTick0\([^)]*\) \{)\n\s*this\.tick0\([^;]*;\n', r'\1\n        return;\n', t, count=1)),
-        ('ChangeStat simulateFirstRun has its own code and calls firstRun', 'ChangeStat', 'sim', 'firstRun+',
-         f'{CFG}/server/ChangeStatInteraction.java',
-         lambda t: t.replace('    @Override\n    protected void firstRun', '    @Override\n    protected void simulateFirstRun' + SIG + ' {\n        System.out.println("own");\n        this.firstRun(type, context, cooldownHandler);\n        this.firstRun(type, context, cooldownHandler);\n    }\n\n    @Override\n    protected void firstRun', 1)),
-        ('ModifyInventory waits for Client', 'ModifyInventory', 'wait', 'Client',
-         f'{CFG}/server/ModifyInventoryInteraction.java',
+        ('ChangeStat simulateFirstRun has its own code and calls firstRun', [('ChangeStat', 'sim', 'firstRun+')],
+         f'{CFGS}/ChangeStatInteraction.java',
+         lambda t: add_method(t, '    @Override\n    protected void simulateFirstRun' + SF + ' {\n        System.out.println("own");\n'
+                                 '        this.firstRun(' + ARGSF + ');\n        this.firstRun(' + ARGSF + ');\n    }\n')),
+        ('ModifyInventory waits for Client', [('ModifyInventory', 'wait', 'Client')],
+         f'{CFGS}/ModifyInventoryInteraction.java',
          lambda t: t.replace('return WaitForDataFrom.Server;', 'return WaitForDataFrom.Client;', 1)),
-        ('Select simulateTick0 calls tick0', 'Selector', 'sim', 'tick0',
+        ('Select simulateTick0 calls tick0', [('Selector', 'sim', 'tick0')],
          f'{CFG}/none/SelectInteraction.java',
-         None),
+         lambda t: set_body(t, 'simulateTick0', 'this.tick0(' + ARGS0 + ');')),
+        # ---- label paths a real build does not reach (LOW-2)
+        ('AttachBeam simulateFirstRun is a lone super.simulateFirstRun (stays firstRun; was "own")', [('AttachBeam', 'sim', 'firstRun')], BEAM,
+         lambda t: add_method(t, '    @Override\n    protected void simulateFirstRun' + SF + ' {\n        super.simulateFirstRun(' + ARGSF + ');\n    }\n')),
+        ('AttachBeam simulateTick0 is a lone this.firstRun (stays firstRun; was "via-firstRun:other")', [('AttachBeam', 'sim', 'firstRun')], BEAM,
+         lambda t: add_method(t, '    @Override\n    protected void simulateTick0' + S0 + ' {\n        this.firstRun(' + ARGSF + ');\n    }\n')),
+        ('AttachBeam simulateTick0 has code around this.firstRun', [('AttachBeam', 'sim', 'firstRun+')], BEAM,
+         lambda t: add_method(t, '    @Override\n    protected void simulateTick0' + S0 + ' {\n        System.out.println("own");\n        this.firstRun(' + ARGSF + ');\n    }\n')),
+        ('AttachBeam simulateTick0 has code around super.simulateTick0', [('AttachBeam', 'sim', 'firstRun+')], BEAM,
+         lambda t: add_method(t, '    @Override\n    protected void simulateTick0' + S0 + ' {\n        System.out.println("own");\n        super.simulateTick0(' + ARGS0 + ');\n    }\n')),
+        ('AttachBeam simulateFirstRun has code around super.simulateFirstRun', [('AttachBeam', 'sim', 'firstRun+')], BEAM,
+         lambda t: add_method(t, '    @Override\n    protected void simulateFirstRun' + SF + ' {\n        System.out.println("own");\n        super.simulateFirstRun(' + ARGSF + ');\n    }\n')),
+        ('DamageEntity simulateTick0 has code around tick0', [('DamageEntity', 'sim', 'tick0+')],
+         f'{CFGS}/DamageEntityInteraction.java',
+         lambda t: re.sub(r'(protected void simulateTick0\([^)]*\) \{)\n', r'\1\n        System.out.println("own");\n', t, count=1)),
+        ('Select simulateTick0 gets a body that reaches no hook', [('Selector', 'sim', 'own')],
+         f'{CFG}/none/SelectInteraction.java',
+         lambda t: set_body(t, 'simulateTick0', 'System.out.println("own");')),
+        ('Wielding simulateTick0 is a lone super.simulateTick0', [('Wielding', 'sim', 'own')],
+         f'{CFG}/client/WieldingInteraction.java',
+         lambda t: set_body(t, 'simulateTick0', 'super.simulateTick0(' + ARGS0 + ');')),
+        ('AddItem block hook gets a body', [('AddItem', 'sim', 'via-simulateInteractWithBlock:other')],
+         f'{CFG}/client/AddItemInteraction.java',
+         lambda t: set_body(t, 'simulateInteractWithBlock', 'System.out.println("own");')),
+        ('ChangeStatBase gets an empty simulateFirstRun: both subclasses move', [('ChangeStat', 'sim', 'no-op'), ('ChangeStatWithModifier', 'sim', 'no-op')],
+         f'{CFGS}/ChangeStatBaseInteraction.java',
+         lambda t: add_method(t, '    @Override\n    protected void simulateFirstRun' + SF + ' {\n    }\n')),
     ]
     fails = 0
-    for label, name, key, wanted, path, fn in cases:
+    for label, expect, path, fn in cases:
         p = copy / path
         orig = p.read_text()
-        if fn is None:
-            # Select: replace the body of simulateTick0 by a bare call to tick0
-            m = re.search(r'(protected void simulateTick0\([^)]*\) \{)', orig)
-            if not m:
-                print(f'FAIL  {label}: no simulateTick0 in {path}')
-                fails += 1
-                continue
-            # find the matching close brace
-            depth, i = 0, m.end() - 1
-            while True:
-                if orig[i] == '{':
-                    depth += 1
-                elif orig[i] == '}':
-                    depth -= 1
-                    if depth == 0:
-                        break
-                i += 1
-            new = orig[:m.end()] + '\n        this.tick0(firstRun, time, type, context, cooldownHandler);\n    ' + orig[i:]
-        else:
-            new = fn(orig)
+        new = fn(orig)
         if new == orig:
             print(f'FAIL  {label}: the mutation changed nothing; the test is broken')
             fails += 1
@@ -139,12 +199,14 @@ def main():
             print(f'FAIL  {label}: census crashed on the mutated copy: {t2[-200:]}')
             fails += 1
             continue
-        moved = [n for n in base if base[n] != after.get(n)]
-        got = after[name][key].split()[0]
-        if moved == [name] and got == wanted:
-            print(f'PASS  {label}: {name} {key} {base[name][key].split()[0]} -> {got}; no other row moved')
+        moved = sorted(n for n in base if base[n] != after.get(n))
+        names = sorted(n for n, _, _ in expect)
+        got = {n: after[n][k].split()[0] for n, k, _ in expect}
+        was = {n: base[n][k].split()[0] for n, k, _ in expect}
+        if moved == names and all(got[n] == w for n, _, w in expect):
+            print(f'PASS  {label}: ' + ', '.join(f'{n} {k} {was[n]} -> {got[n]}' for n, k, _ in expect) + '; no other row moved')
         else:
-            print(f'FAIL  {label}: rows moved {moved}, {name} {key} is {got} (wanted {wanted})')
+            print(f'FAIL  {label}: rows moved {moved} (wanted {names}), ' + ', '.join(f'{n} {k} is {got[n]} (wanted {w})' for n, k, w in expect))
             fails += 1
     print(f'---- {fails} failed')
     return 1 if fails else 0

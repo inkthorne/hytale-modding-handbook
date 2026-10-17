@@ -269,6 +269,33 @@ class Chain:
         return ' < '.join(c.simple for c in self.classes) + ' < Interaction'
 
 
+def first_run_reach(ch: Chain, start: int = 0):
+    """What a call of simulateFirstRun reaches, from the nearest class at or above `start` that declares it:
+    (label, note). Follows `super.simulateFirstRun(...)` down the chain, as sim_pass follows super.simulateTick0."""
+    sr = ch.nearest('simulateFirstRun', start)
+    if sr is None:
+        return 'unknown', 'no class declares simulateFirstRun'
+    j, sbody = sr
+    sk, scalls = classify(sbody)
+    sat = ch.classes[j].simple
+    if sk == 'no-op':
+        return 'no-op', f'{sat}.simulateFirstRun is empty'
+    if sk == 'runs-firstRun':
+        return 'firstRun', f'{sat}.simulateFirstRun calls firstRun'
+    if sk == 'delegates:simulateFirstRun':
+        lab, note = first_run_reach(ch, j + 1)
+        return lab, f'{sat}.simulateFirstRun delegates to super; {note}'
+    if any(c in ('firstRun', 'this.firstRun') for c in scalls):
+        return 'firstRun+', f'{sat}.simulateFirstRun has its own code and calls firstRun'
+    if 'super.simulateFirstRun' in scalls:
+        lab, note = first_run_reach(ch, j + 1)
+        return lab.rstrip('+') + '+', f'{sat}.simulateFirstRun has its own code and calls super ({note})'
+    via = via_hook(ch, scalls)
+    if via:
+        return via[0], f'{sat}.simulateFirstRun is its own body and calls {via[1]}'
+    return 'own', f'{sat}.simulateFirstRun is its own body (calls {", ".join(sorted(set(scalls))) or "-"})'
+
+
 def sim_pass(ch: Chain, start: int = 0, depth: int = 0):
     """What the simulation pass reaches: (label, note). Follows delegation to the server-pass code."""
     nr = ch.nearest('simulateTick0', start)
@@ -281,27 +308,17 @@ def sim_pass(ch: Chain, start: int = 0, depth: int = 0):
         return 'no-op', f'{at}.simulateTick0 is empty'
     if kind == 'runs-tick0':
         return 'tick0', f'{at}.simulateTick0 calls tick0'
+    if kind == 'runs-firstRun':
+        return 'firstRun', f'{at}.simulateTick0 calls firstRun'
     if kind.startswith('delegates:'):
         lab, note = sim_pass(ch, i + 1, depth + 1)
         return lab, f'{at} delegates to super; {note}'
     # other: look at which hook it reaches
     if 'simulateFirstRun' in [c.split('.')[-1] for c in calls if not c.startswith('super.')] or 'this.simulateFirstRun' in calls:
-        sr = ch.nearest('simulateFirstRun', 0)
-        if sr is None:
-            return 'unknown', f'{at}.simulateTick0 calls simulateFirstRun, which no class declares'
-        j, sbody = sr
-        sk, scalls = classify(sbody)
-        sat = ch.classes[j].simple
-        if sk == 'no-op':
-            return 'no-op', f'{sat}.simulateFirstRun is empty'
-        if sk == 'runs-firstRun':
-            return 'firstRun', f'{sat}.simulateFirstRun calls firstRun'
-        if any(c in ('firstRun', 'this.firstRun') for c in scalls):
-            return 'firstRun+', f'{sat}.simulateFirstRun has its own code and calls firstRun'
-        via = via_hook(ch, scalls)
-        if via:
-            return via[0], f'{sat}.simulateFirstRun is its own body and calls {via[1]}'
-        return 'own', f'{sat}.simulateFirstRun is its own body (calls {", ".join(sorted(set(scalls))) or "-"})'
+        lab, note = first_run_reach(ch, 0)
+        return lab, note
+    if any(c in ('firstRun', 'this.firstRun') for c in calls):
+        return 'firstRun+', f'{at}.simulateTick0 has its own code and calls firstRun'
     plain = [c for c in calls if c in ('tick0', 'this.tick0')]
     sup = [c for c in calls if c == 'super.simulateTick0']
     if plain:
@@ -322,7 +339,7 @@ def via_hook(ch: 'Chain', calls):
     decls = [(n, b) for c in ch.classes for n, b in declarations(c)]
     counts = collections.Counter(n for n, _ in decls)
     # an overridable hook: declared abstract somewhere in the chain, or declared by two of its classes
-    own = {n for n, b in decls if b is None or counts[n] >= 2} - set(HOOKS) - {'handle'}
+    own = {n for n, b in decls if b is None or counts[n] >= 2} - set(HOOKS) - {'handle', 'firstRun'}
     named = sorted({c.split('.')[-1] for c in calls if not c.startswith('super.')} & own)
     if len(named) != 1:
         return None

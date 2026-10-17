@@ -1223,6 +1223,11 @@ asset has one key, the required `TexturePath`. Four ship: `Basic`, `Chain`, `Fir
 For the full subsystem (the `Beam` asset and its validator messages, the `BeamComponent` and
 `AttachedBeam` Java API, `/beam`, client sync, and gotchas), see [Beams](beams.md).
 
+> **Danger.** `AttachBeam` on an entity that already has a `BeamComponent`, or in a chain that runs on
+> an NPC's `InteractionManager` (`ProjectileModule` runs a projectile's `ProjectileSpawn` chain on its creator's manager),
+> throws and ends the world thread. See the first two items under
+> [Gotchas](beams.md#gotchas--errors).
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `TargetEntity` | enum | `User` | Where the beam ends: `User`, `Owner` or `Target` (the default `EnumCodec`'s keys for `InteractionTarget`'s constants), resolved against the context. Carries `Validators.nonNull()`, which the default satisfies, so it may be omitted |

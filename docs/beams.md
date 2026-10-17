@@ -102,7 +102,9 @@ Only the texture is sent to the client. `Beam.toPacket()` copies `TexturePath` i
 `BeamConfig` packet object, whose only field is `texture`. Width comes from each beam's scale, set
 where the beam is attached, not from the asset. That is read from the code path. No beam was seen on
 a client, so it was not verified that `Scale` is the width (as against the length or the texture
-tiling).
+tiling). Hypixel's own text for the command says so: `commands.beam.scale.desc` in
+`Server/Languages/en-US/server.lang` reads "How wide the beam is at both ends, unless targetScale is
+given". That is evidence of intent, not an observation.
 
 ### Shipped beams
 
@@ -152,19 +154,20 @@ pack and from a plugin jar that carries its pack: a texture of its own under `Be
 It is registered as `"Type": "AttachBeam"` by `BeamPlugin`.
 
 It adds one beam whose **source is always the entity the chain runs for** (`context.getEntity()`, the
-`User`). The keys choose only the far end, the asset, the width and the model nodes.
+`User`). The keys choose only the far end, the asset, the scale (the width, by intent; see
+[The Beam asset](#the-beam-asset)) and the model nodes.
 
 | Key | Type | Default | Requiredness (engine-measured) | Description |
 |-----|------|---------|-------------------------------|-------------|
 | `TargetEntity` | enum `User` / `Owner` / `Target` | `User` | Optional. It is null-validated, but the field already holds `User`, so the engine accepts the key's omission | Which entity the beam ends at, resolved from the context. `User` is the entity running the chain, `Owner` the entity that owns it, `Target` the chain's target entity |
 | `BeamConfig` | string (a `Beam` id); the codec also takes an inline `Beam` object | none (`null`) | **Required.** Omitting it fails decode | The beam asset. An unknown id fails validation: `Asset '<id>' of type com.hypixel.hytale.builtin.beam.asset.Beam doesn't exist!`. Use an id: see [An inline BeamConfig](#an-inline-beamconfig) |
-| `Scale` | float | `1.0` | Optional | Width of the beam. The one value is used for both ends |
+| `Scale` | float | `1.0` | Optional | Scale of the beam, meant as its width (not seen on a client; see [The Beam asset](#the-beam-asset)). The one value is used for both ends |
 | `SourceNodeName` | string | none | Optional | Model node on the source entity where the beam starts. Unset, it starts at the entity's position |
 | `TargetNodeName` | string | none | Optional | Model node on the target entity where the beam ends. Unset, it ends at the entity's position |
 
 `effective-required.py` reports `BeamConfig` as the only key `AttachBeamInteraction` rejects when
 omitted. Both `TargetEntity` and `BeamConfig` carry `Validators.nonNull()`; the difference is the
-default. The interaction has no keys for offsets, for a different width at each end, or for a target
+default. The interaction has no keys for offsets, for a different scale at each end, or for a target
 position. Those are Java-only (see [AttachedBeam](#attachedbeam)).
 
 What `firstRun` does, in order:
@@ -522,7 +525,8 @@ name against the model on the server.
 The server half was run (`maintenance/probes/beams/`, case `c3`): a 96-character name serializes and
 reads back, a 97-character name throws `ProtocolException: String exceeds max bytes: 97 > 96`, `café`
 reads back as `caf?` and two CJK characters as `??`, with no error. The limit counts the converted
-bytes, so it counts characters. Two things need a client and were not verified: what the client draws
+bytes, and each code point becomes one byte (`?` if it is not ASCII), so it counts code points: 95
+`N` plus one emoji is 97 Java chars but 96 bytes and serializes. Two things need a client and were not verified: what the client draws
 for a node name the model lacks, and what a viewer sees when the update that would carry a 97-byte
 name throws on the server (a disconnect is possible).
 
@@ -554,14 +558,21 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
   `Exception in thread Thread[...WorldThread - default...]` with `IllegalArgumentException: Entity
   already contains component type: ...BeamComponent...` → `AttachBeam` queues `addComponent` of a new
   `BeamComponent`, and `Store.addComponent` throws when the entity already has one. That includes an
-  empty list left by `clear()`, and beams from `/beam entity` on a player. The throw comes when the
-  command buffer is consumed, after the tick's systems, and nothing on that path catches it. Measured
-  (`maintenance/probes/beams/`, case `c1-double`): the chain runs to its end in that tick (an
+  empty list left by `clear()`, and beams from `/beam entity` on a player; those two follow from the
+  same check in the source and were not run. The throw comes when the command buffer is consumed, at
+  the end of the one system that ran the chain (`ArchetypeTickingSystem.tick`, called from
+  `Store.tick`), so the tick ends there and the systems after it do not run, and nothing on that path
+  catches it. Measured, with two adds in one buffer (`maintenance/probes/beams/`, case
+  `c1-double`): the chain runs to its end in that tick (an
   interaction after the second `AttachBeam` that writes at once does write), the first beam is added,
   the world thread logs the exception and ends, and anything that waits for a later tick never runs.
-  A dedicated server reloads the default world 5 seconds later; the default policy in singleplayer is
-  not to (`WorldCrashRecoveryHandler.defaultWorldMode`, read, not run). Players in the world are
-  disconnected (read from `World.stopIndividualWorld`; run without a client). Fix: run `AttachBeam` on
+  In the default world, a dedicated server reloads it after `RetryDelaySeconds` (5 by default, up to
+  3 attempts in a 5-minute window; measured: the log reads `Reloaded crashed world 'default'` 5 s later and the world ticks
+  again); the default policy in singleplayer is not to reload (`WorldCrashRecoveryHandler.defaultWorldMode`,
+  read). Read from the source, not run with a player: in the default world the players are
+  disconnected (`World.stopIndividualWorld`); in any other world they are moved to the default world,
+  and that world is not reloaded unless its own config sets crash recovery
+  (`WorldCrashRecoveryHandler.resolve`). Fix: run `AttachBeam` on
   a fresh entity (a projectile), or add beams from Java with `ensureAndGetComponent(...).add(...)`.
 - **Symptom:** the same exception on the first and only `AttachBeam` of a chain → the chain runs on an
   `InteractionManager` with no player behind it, which is how an NPC's and an `InteractionHost`'s are
@@ -569,7 +580,7 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
   `SimpleInstantInteraction.simulateFirstRun` calls `firstRun` again unless the subclass overrides it;
   `AttachBeamInteraction` does not. So `firstRun` queues two `addComponent` calls. Measured with a
   host entity whose manager is built the way an NPC's is (case `c1-npc`, two same-tick log lines and
-  the exception); no real NPC was run. A player's manager has a `PlayerRef` and runs `firstRun` once.
+  the exception); no real NPC was run. A player's manager has a `PlayerRef` and runs `firstRun` once (read).
   The control for that (`c1-control`: one beam added, no exception) flags the host's manager as a
   player's; it is not a player. Fix: keep `AttachBeam` to chains a player starts, and add beams from
   an NPC's code through Java.

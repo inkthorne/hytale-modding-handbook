@@ -27,6 +27,9 @@ fmul() { awk -v a="$1" -v k="$2" 'BEGIN{ printf "%g", a*k }'; }
 fneg() { awk -v a="$1" 'BEGIN{ exit !(a != "" && a != "NaN" && a+0 < 0) }'; }
 fpos() { awk -v a="$1" 'BEGIN{ exit !(a != "" && a != "NaN" && a+0 > 0) }'; }
 exceptions() { count "$1" 'Exception in thread'; }
+# The sim= flags (context.getEntry().isUseSimulationState(), what an interaction can read about its pass) of CASE's lines of
+# the plugin type TYPE (ProbeLog, ProbeLogS), in log order.
+simseq() { strip "$1" | /usr/bin/grep "PROBE $2 message=" | sed -n 's/.* sim=\([a-z?]*\).*/\1/p' | tr '\n' ' '; }
 # A run counts only if no tick was aborted and its chain ended in the state its prediction names. "Exception in thread"
 # is the world thread dying; a tick that is caught and ends the entity prints none of that, but leaves one of these three
 # lines: the desync, TickInteractionManagerSystem's "Removing!", or the probe's REMOVED reason=REMOVE (a shutdown or an
@@ -182,21 +185,21 @@ fi
 
 # Plugin-written types (their declared effect is one log line).
 if need Log1.remote Log1.npc LogQ1.npc LogS1.npc; then
-  if [ "$(count Log1.remote "ProbeLog message='log1'")" != 1 ] || [ "$(count Log1.remote "pass=server")" -lt 1 ]; then
-    voidc "ProbeLog unit control: Log1.remote has $(count Log1.remote "ProbeLog message='log1'") line(s), wanted 1 with pass=server"
+  if [ "$(count Log1.remote "ProbeLog message='log1'")" != 1 ] || [ "$(count Log1.remote "pass=server sim=false")" -lt 1 ]; then
+    voidc "ProbeLog unit control: Log1.remote has $(count Log1.remote "ProbeLog message='log1'") line(s), wanted 1 with pass=server sim=false"
   elif why=$(flawed Log1.remote Finished); then
     voidc "ProbeLog unit control: Log1.remote does not count: $why"
   else
-    ok "ProbeLog control: on the remote-client manager a firstRun-only type runs once (pass=server)"
+    ok "ProbeLog control: on the remote-client manager a firstRun-only type runs once (pass=server, isUseSimulationState() false)"
     p=$(strip Log1.npc | /usr/bin/grep "PROBE ProbeLog message='log1'" | sed -n 's/.* pass=\([a-z?]*\) .*/\1/p' | tr '\n' ' ')
     if why=$(flawed Log1.npc Finished); then bad "ProbeLog Log1.npc: the run does not count, $why"
-    else [ "$p" = "simulation server " ] && ok "ProbeLog Log1.npc: runs twice, simulation pass then server pass" || bad "ProbeLog Log1.npc: passes '$p', predicted 'simulation server'"; fi
+    else [ "$p" = "simulation server " ] && [ "$(simseq Log1.npc ProbeLog)" = "true false " ] && ok "ProbeLog Log1.npc: runs twice, simulation pass then server pass; context.getEntry().isUseSimulationState() reads true, then false" || bad "ProbeLog Log1.npc: passes '$p', isUseSimulationState '$(simseq Log1.npc ProbeLog)'; predicted 'simulation server', 'true false'"; fi
     q=$(count LogQ1.npc "ProbeLogQ message='logQ1'")
     if why=$(flawed LogQ1.npc Finished); then bad "ProbeLogQ LogQ1.npc: the run does not count, $why"
     else [ "$q" = 1 ] && ok "ProbeLogQ (simulateFirstRun overridden with an empty body): runs once on the NPC-shaped manager" || bad "ProbeLogQ LogQ1.npc: $q line(s), predicted 1"; fi
     s=$(strip LogS1.npc | /usr/bin/grep "PROBE ProbeLogS message='logS1'" | sed -n 's/.* pass=\([a-z?]*\).*/\1/p' | tr '\n' ' ')
     if why=$(flawed LogS1.npc Finished); then bad "ProbeLogS LogS1.npc: the run does not count, $why"
-    else [ "$s" = "server simulation " ] && ok "ProbeLogS (waits for Server): runs twice, server pass first, then simulation pass" || bad "ProbeLogS LogS1.npc: passes '$s', predicted 'server simulation'"; fi
+    else [ "$s" = "server simulation " ] && [ "$(simseq LogS1.npc ProbeLogS)" = "false true " ] && ok "ProbeLogS (waits for Server): runs twice, server pass first, then simulation pass; isUseSimulationState() reads false, then true" || bad "ProbeLogS LogS1.npc: passes '$s', isUseSimulationState '$(simseq LogS1.npc ProbeLogS)'; predicted 'server simulation', 'false true'"; fi
   fi
 fi
 
@@ -208,7 +211,7 @@ if need Log1.realnpc; then
     voidc "Log1.realnpc does not count: $why"
   else
     p=$(strip Log1.realnpc | /usr/bin/grep "PROBE ProbeLog message='log1'" | sed -n 's/.* pass=\([a-z?]*\) .*/\1/p' | tr '\n' ' ')
-    [ "$p" = "simulation server " ] && ok "real NPC (Chicken), its own manager: ProbeLog runs twice, simulation pass then server pass" || bad "real NPC Log1: passes '$p', predicted 'simulation server' (0 lines = the chain did not run)"
+    [ "$p" = "simulation server " ] && [ "$(simseq Log1.realnpc ProbeLog)" = "true false " ] && ok "real NPC (Chicken), its own manager: ProbeLog runs twice, simulation pass then server pass; isUseSimulationState() reads true, then false" || bad "real NPC Log1: passes '$p', isUseSimulationState '$(simseq Log1.realnpc ProbeLog)'; predicted 'simulation server', 'true false' (0 lines = the chain did not run)"
   fi
 fi
 if need Stat1.realnpc Stat1.remote; then

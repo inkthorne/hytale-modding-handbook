@@ -22,6 +22,7 @@
 #     "lands once" verdicts counted only 'Exception in thread'): a desync line, a caught tick exception
 #     ("Removing!"), an entity REMOVED with reason=REMOVE, or a chain_server_state other than the prediction's,
 #     in a verdict run (-> FAIL "does not count") and in a control run (-> VOID "control run"), one reason at a time
+#   * the sim= flag (isUseSimulationState) of the ProbeLog lines not following the pass -> FAIL, and VOID on the control
 #   * a real-NPC log whose subject was not on an NPCInteractionSimulationHandler manager -> VOID "subject's manager"
 # Each case also checks that the sabotaged verdict line is the ONLY change: the other verdict blocks keep their
 # PASS count (a damage that turns everything red would pass the checks above for the wrong reason).
@@ -100,6 +101,11 @@ fresh; addline Log1.npc "$REMV"; expect "Log1.npc: a caught tick exception" 1 "P
 fresh; addline LogQ1.npc "$GONE"; expect "LogQ1.npc: an entity REMOVED" 1 "ProbeLogQ LogQ1.npc: the run does not count" 1
 fresh; addline LogS1.npc "$SYNC"; expect "LogS1.npc: a desync line" 1 "ProbeLogS LogS1.npc: the run does not count" 1
 fresh; addline Log1.remote "$SYNC"; expect "Log1.remote control: a desync line" 2 "ProbeLog unit control: Log1.remote does not count" 5
+# the flag an interaction can read about its pass (context.getEntry().isUseSimulationState()) must follow the pass
+fresh; sed -i "0,/pass=simulation sim=true/s//pass=simulation sim=false/" "$work/c/Log1.npc.log"; expect "Log1.npc: the simulation pass reads isUseSimulationState false" 1 "ProbeLog Log1.npc: passes 'simulation server ', isUseSimulationState 'false false '" 1
+fresh; sed -i "s/pass=server sim=false/pass=server sim=true/" "$work/c/LogS1.npc.log"; expect "LogS1.npc: the server pass reads isUseSimulationState true" 1 "ProbeLogS LogS1.npc: passes 'server simulation ', isUseSimulationState 'true true '" 1
+fresh; sed -i "s/pass=server sim=false/pass=server sim=true/" "$work/c/Log1.realnpc.log"; expect "Log1.realnpc: the server pass reads isUseSimulationState true" 1 "real NPC Log1: passes 'simulation server ', isUseSimulationState 'true true '" 1
+fresh; sed -i "s/pass=server sim=false/pass=server sim=true/" "$work/c/Log1.remote.log"; expect "Log1.remote control: the server pass reads isUseSimulationState true" 2 "ProbeLog unit control: Log1.remote has" 5
 fresh; addline Log1.realnpc "$REMV"; expect "Log1.realnpc: a caught tick exception" 2 "Log1.realnpc does not count" 1
 fresh; addline Stat1.realnpc "$REMV"; expect "Stat1.realnpc: a caught tick exception" 2 "real NPC Stat1 does not count" 1
 fresh; addline Damage1.realnpc "$GONE"; expect "Damage1.realnpc: an entity REMOVED" 2 "real NPC Damage1 does not count" 1

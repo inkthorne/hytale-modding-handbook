@@ -28,7 +28,12 @@ public class ProbeLogServerInteraction extends SimpleInstantInteraction {
     @Override
     protected void firstRun(InteractionType type, InteractionContext context, CooldownHandler cooldownHandler) {
         String pass = pass();
-        Log.p("ProbeLogS message='%s' pass=%s", message, pass);
+        Log.p("ProbeLogS message='%s' pass=%s sim=%s", message, pass, sim(context));
+    }
+
+    /** What an interaction can read about the pass it is in: the entry's simulation flag (public API). "?" with no entry. */
+    static String sim(InteractionContext context) {
+        return context.getEntry() == null ? "?" : String.valueOf(context.getEntry().isUseSimulationState());
     }
 
     /** Which pass called us: the frames of the calling stack contain simulationTick or serverTick. */

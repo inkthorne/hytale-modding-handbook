@@ -11,7 +11,8 @@ import com.hypixel.hytale.server.core.modules.interaction.interaction.config.Sim
 /**
  * A probe interaction that extends SimpleInstantInteraction and overrides nothing but firstRun,
  * so it is exactly what a plugin author writes first. firstRun writes one line. With -Ddr.stack=true
- * the line carries the frames that called it, so the log shows the frames; `pass=` is read off them (simulationTick or serverTick).
+ * the line carries the frames that called it, so the log shows the frames; `pass=` is read off them (simulationTick or serverTick). `sim=` is what the
+ * interaction itself can see: context.getEntry().isUseSimulationState(), true in the simulation pass.
  *
  * This is NOT a measurement of a shipped type's effect: its effect is one log line. It shows that the
  * manager runs the hook twice; the effect at a target is measured with shipped types.
@@ -28,8 +29,8 @@ public class ProbeLogInteraction extends SimpleInstantInteraction {
 
     @Override
     protected void firstRun(InteractionType type, InteractionContext context, CooldownHandler cooldownHandler) {
-        Log.p("ProbeLog message='%s' pass=%s type=%s entity=%s owner=%s", message, ProbeLogServerInteraction.pass(), type,
-            context.getEntity(), context.getOwningEntity());
+        Log.p("ProbeLog message='%s' pass=%s sim=%s type=%s entity=%s owner=%s", message, ProbeLogServerInteraction.pass(),
+            ProbeLogServerInteraction.sim(context), type, context.getEntity(), context.getOwningEntity());
         if (Boolean.getBoolean("dr.stack")) {
             StackTraceElement[] frames = new Throwable().getStackTrace();
             for (int i = 1; i < Math.min(frames.length, 8); i++) {

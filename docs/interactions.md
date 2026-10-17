@@ -544,9 +544,10 @@ Every interaction carries an `OnItemChangeBehavior` (`com.hypixel.hytale.protoco
 ```
 
 The check is skipped for a chain that runs through another entity, one whose owning entity differs
-from the executing entity (a projectile's hit chain, for example). On a manager with no remote client the check runs in both passes, and an
-interaction that changes the held slot can desync the passes and remove the entity
-(see [the double run](#managers-with-no-remote-client-the-double-run)). A chain cast from the ability
+from the executing entity (a projectile's hit chain, for example). On a manager with no remote client the check runs in both passes, and what a changed
+held slot then does depends on which pass runs second: after a `Server` wait the passes desync and the
+entity is removed, after a `None` wait the chain ends as `ItemChanged`
+(see [the item-change check](#the-item-change-check-and-the-pass-order)). A chain cast from the ability
 slots compares against the slot it was cast from rather than the hotbar's active slot.
 
 The old boolean `CancelOnItemChange` key is still parsed (codec doc: "Deprecated field for whether the interaction will be cancelled when the entity's held item changes.") — `true` maps to `Cancel`, `false` to `Ignore` — but it is flagged deprecated by the validator; write `OnItemChangeBehavior` in new assets.
@@ -657,12 +658,22 @@ Each row is a count at the target. The control is the same chain on a host whose
 | `LaunchProjectile` | **once** | `simulateFirstRun` is empty (`LaunchProjectileInteraction.java:141`). (read) | 1 projectile entity; two copies: 2 |
 | `ChangeStat` | **twice** | `firstRun` adds to the stat directly and `simulateFirstRun` is not overridden. (read) | `SignatureCharges` +10 for a `+5` chain; flagged: +5 |
 | `ModifyInventory` (waits for `Server`) | **twice** when the owner is another entity (a host) | server pass first, then `firstRun` again | 2 items for `ItemToAdd` of 1; flagged: 1; two copies on flagged: 2 |
-| `ModifyInventory` when the owner is the running entity | **desync, and the entity is removed** | see below | `Simulation and server tick are not in sync (operation position)`, `Counter: 1 vs 0`; the entity is removed |
+| `ModifyInventory` (waits for `Server`) when the owner is the running entity | **desync, and the entity is removed** | the server pass runs first and the simulation pass second; see [the item-change check](#the-item-change-check-and-the-pass-order) | `Simulation and server tick are not in sync (operation position)`, `Counter: 1 vs 0`; the entity is removed |
+| `ModifyInventory` with only the wait changed to `None` (a plugin subclass), owner is the running entity | **once, then the rest of the chain is cancelled as `ItemChanged`** | the simulation pass runs first and does the work; the server pass sees the changed held item and ends the chain; see [the item-change check](#the-item-change-check-and-the-pass-order) | 1 item, `chain_server_state=ItemChanged`, no desync line, the entity kept; flagged: 1 item, `Finished` |
 | `AttachBeam` | **refuses** | `addComponent` is queued twice and the second throws `Entity already contains component type` on the world thread (see [beams.md](beams.md#gotchas--errors)) | 1 `BeamComponent` added, then the exception; the world reloads 5 s later. Flagged: 1 added, no exception |
 
 The same results came out on a real `Chicken` run headless (no player) in a ticking section, on its own manager, for `ProbeLog` (two lines, simulation then server), `ChangeStat` (+10), `DamageEntity` (one hit on a `Sheep`, one `Damage` event) and `AttachBeam` (refused). The host agreed with the real NPC in all four.
 
-**The item-change desync. (measured)** `Interaction.tickInternal` (`Interaction.java:288-300`) runs in both passes. If the held slot now holds a different item than when the context was built, the pass sets `ItemChanged` and does not call `tick0` or `simulateTick0`. A chain that runs through another entity is exempt (the owner is not the entity). The first pass of `ModifyInventory` puts the item into the held slot, and the second pass then skips its hook, so the two passes end on different operations. `doTickChain` throws (`:499-505`), and `TickInteractionManagerSystem` catches it and **removes the entity that runs the chain** (`InteractionSystems.java:255`). With `"OnItemChangeBehavior": "Ignore"` on the interaction there was no exception and the effect doubled (2 items). Measured on a host; the same code runs for an NPC (read).
+#### The item-change check and the pass order
+
+`Interaction.tickInternal` (`Interaction.java:288-302`) runs in both passes. If the held slot now holds a different item than when the context was built, the pass sets `ItemChanged` and does not call `tick0` or `simulateTick0`. A chain that runs through another entity is exempt (the owner is not the entity). An interaction that puts an item into the held slot of the entity that runs it (`ModifyInventory` does, with the owner the running entity) therefore changes what the **second** pass does, and the outcome depends on which pass that is, because only the server pass throws on `ItemChanged`:
+
+- **The wait is `Server`: the server pass runs first, the simulation pass second. (measured)** The simulation pass sees the changed item and skips its hook, and `Interaction.simulateTick` has no `ItemChanged` case (`:263-286`; `tick` has one, `:256`), so it ends with its operation counter behind. `doTickChain` throws the desync (`:499-505`), and `TickInteractionManagerSystem` catches it and **removes the entity that runs the chain** (`InteractionSystems.java:255`). Measured with `ModifyInventory` (shipped, waits for `Server`): `Counter: 1 vs 0`, entity removed.
+- **The wait is `None`: the simulation pass runs first, the server pass second. (measured)** The simulation pass does the work. The server pass sees the changed item, and `Interaction.tick` throws `ChainCancelledException(ItemChanged)` (`:256-258`), which the manager catches and only ends the chain with (`InteractionManager.java:376`). Measured with a plugin subclass of `ModifyInventory` that changes nothing but `getWaitForDataFrom()` to `None`: 1 item, `chain_server_state=ItemChanged`, no desync line, the entity kept. The effect lands once, and the chain ends there: no operation after it runs (read; the measured chain had none after it).
+- **The wait is `Client`. (read, not measured)** `doTickChain` runs the simulation pass first for `Client` as for `None` (`:486-492`; only `Server` runs it second), and the client state the simulation pass stores satisfies the server pass's wait, so the reading is the `None` one.
+- **`"OnItemChangeBehavior": "Ignore"` on a `Server`-wait interaction. (measured)** No exception, and the effect doubled (2 items).
+
+Measured on a host; the same code runs for an NPC (read).
 
 #### Writing your own interaction
 
@@ -680,8 +691,8 @@ The same results came out on a real `Chicken` run headless (no player) in a tick
 - **If the effect sets a value, it is usually safe. (read)** Setting a stat to a value, clearing an effect or raising a flag gives the same result twice. Read the body before you rely on it: this page has classified only the types measured above.
 - **Or guard it with the instance store. (read)** `DamageEntity` runs its real work in the simulation pass, stores the result with `context.getInstanceStore().putMetaObject(...)`, and the server pass reads it back. Both passes see the same store.
 - **A hand-written `Interaction` must write `simulateTick0`. (read)** It is abstract in `Interaction`. `SimpleInteraction` implements it by calling `tick0`. If you extend `Interaction` directly and call `tick0` from `simulateTick0`, you get the same double run.
-- **Do not change the held slot from an interaction that runs for its own entity. (measured)** On an NPC-shaped manager that desyncs and removes the entity (above). A chain a host or projectile runs for another owner is exempt.
-- **Keep both passes on the same path. (read)** The two passes must end on the same operation, or `doTickChain` throws the desync. The item-change case above is the measured instance.
+- **Changing the held slot from an interaction that runs for its own entity depends on the wait. (measured)** With a `Server` wait, on an NPC-shaped manager, that desyncs and removes the entity. With a `None` wait the effect lands once and the rest of the chain is cancelled as `ItemChanged`, which is not a crash but ends the chain early ([above](#the-item-change-check-and-the-pass-order)). A chain a host or projectile runs for another owner is exempt.
+- **Keep both passes on the same path. (read)** The two passes must end on the same operation, or `doTickChain` throws the desync. The item-change case with a `Server` wait is the measured instance.
 - **`Server` waits reverse the order. (measured)** If your interaction waits for `Server`, your `firstRun` runs in the server pass first, then in the simulation pass. (read) The default `simulateTick0` copies a `Failed` server result into the simulation state (`context.getServerState()`).
 
 ### SimpleBlockInteraction

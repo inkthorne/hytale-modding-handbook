@@ -107,6 +107,14 @@ check) is wrong.
 measurement): `AttachBeam` once, on the real Chicken's own manager. Prediction: refuses, as on the host: one
 `BeamComponent` ADDED, then `Entity already contains component type` on the world thread.
 
+`InvNoneSelf1` (added after review, MINOR-1; the reviewer ran it before this harness had it, so this is not a
+pre-registered prediction but the reading of the source that explained that run): `ModifyInventory` with only
+`getWaitForDataFrom()` changed to `None`, owner == the running entity. The simulation pass runs first and puts the item
+in the held slot; the server pass sees the changed item and `Interaction.tick` throws `ChainCancelledException(ItemChanged)`,
+which the manager catches. Prediction: **1** item (the same as the remote control), `chain_server_state=ItemChanged`,
+no `not in sync`, no removal. Unit control: `InvNoneSelf1.remote` reads 1 and finishes. Negative control: `InvSelf1.npc`
+(the `Server` wait) desyncs on the same harness.
+
 ## Results (one pass, 2026-10-17, java 25.0.4.1, `HytaleServer.jar` 0.7.2)
 
 `verdicts.sh` on the final pass: **22 PASS, 0 failed, 0 void**. The final pass is 28 server runs (the boot, then
@@ -172,6 +180,7 @@ Units are read from the remote-client control. `remote` is `setHasRemoteClient(t
 | `ChangeStat` (`SignatureCharges`) | +5.0 | +10.0 | **+10.0** | **doubled** |
 | `ModifyInventory` (items in the owner's inventory; Server wait) | 1 | 2 | **2** | **doubled** (proxy context) |
 | `AttachBeam` (`BeamComponent`s) | 1 ADDED, no exception | 1 ADDED, then `Entity already contains component type` | **1 ADDED, then the same exception on the world thread** | **refuses**; the world reloads 5 s later (`Reloaded crashed world 'default'`) |
+| `ModifyInventory` with the wait changed to `None` (owner == the running entity; `InvNoneSelf1`) | 1, chain `Finished` | not run | **1**, chain `ItemChanged` | **once**: the simulation pass does the work, the server pass is cancelled as `ItemChanged`; no desync, entity kept |
 
 Plugin-written types (their declared effect is one log line, so these are lines, not world effects):
 
@@ -189,7 +198,7 @@ turned each of eight damages (dose control broken, unit control broken, a double
 read, a refusal line deleted, a pass deleted, a log missing, a stray exception) into the VOID or FAIL it
 should be, and the unharmed copy stayed at 22 PASS.
 
-### Item-change desync (measured; the cause isolated)
+### Item-change check and the pass order (measured; the cause isolated)
 
 `ModifyInventory` with the owner == the running entity (the context `ActionAttack` builds; `InvSelf1`):
 
@@ -208,6 +217,17 @@ held slot, the second pass sees a changed held item and does not advance the sim
 exception is caught by `TickInteractionManagerSystem` (`InteractionSystems.java:255`), which **removes the entity
 that runs the chain**. Measured on a host; the same path serves an NPC (read).
 
+**Only with a `Server` wait.** `ModifyInventory` waits for `Server`, so the server pass runs first and the
+simulation pass is the second one, and `Interaction.simulateTick` has no `ItemChanged` case. With only
+`getWaitForDataFrom()` changed to `None` (the plugin's `ProbeInvNone`, case `InvNoneSelf1`; the reviewer ran it first,
+then it was rebuilt into this harness) the order is reversed: the simulation pass runs first and does the work, the
+server pass sees the changed held item, and `Interaction.tick` throws `ChainCancelledException(ItemChanged)`
+(`Interaction.java:256-258`), which `InteractionManager` catches at `:376` and only ends the chain with. Result on the
+NPC-shaped manager, owner == entity: `inv_items_delta` **1.0** (the same as `InvNoneSelf1.remote`), `chain_server_state=ItemChanged`
+(remote: `Finished`), no `not in sync`, no `Removing!`, the host not removed. `InvSelf1.npc` (the `Server` wait) is the negative control
+on the same harness and still desyncs and removes the entity. A `Client` wait is read, not measured: `doTickChain`
+orders it as `None`.
+
 ### Real NPC (fidelity; a Chicken spawned headless in a ticking section, no player)
 
 | Case | Result |
@@ -223,6 +243,12 @@ not reproduce: the real NPC's group filter (below) and its own AI.
 
 ## Refuted or changed by the runs
 
+- **The page's reading "a held-slot change from an interaction that runs for its own entity desyncs an NPC-shaped
+  manager and removes the entity" (452604c; review of 41db9fe..5be0ad0, MINOR-1).** It held for the one sample, a
+  `Server` wait, where the server pass runs first. `InvNoneSelf1.npc`, the same chain with only the wait changed to
+  `None`, measured **1.0** item, `chain_server_state=ItemChanged`, no `not in sync`, no `Removing!`, no removal: the
+  desync is the property of the pass order (the simulation pass is second and does not throw on `ItemChanged`), not of the held slot.
+  The page now says so for each wait.
 - **Prediction `InvSelf1.npc` = 1 egg (the second pass skipped cleanly).** Measured: desync and removal of the
   entity (above). The explanation (the item-change check) held; "cleanly" did not.
 - **First `Inv` design (owner == entity for every `Inv` case).** `Inv2.remote`'s dose control read 1 and its chain

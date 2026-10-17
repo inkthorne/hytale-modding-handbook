@@ -35,3 +35,6 @@ com/
 research/
 __pycache__/
 *.pyc
+
+# Project memory store (remember): local only, never published from this public repo
+.remember/

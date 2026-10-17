@@ -16,6 +16,8 @@
 #   * ModifyInventory with the wait None (InvNoneSelf1): the effect doubled, or the chain not cancelled as
 #     ItemChanged, or the entity removed -> FAIL; its unit control broken, or the Server-wait desync control
 #     (InvSelf1.npc) not desyncing -> VOID
+#   * ChangeStat with Behaviour Set read as doubled -> FAIL; its unit control broken, or the Add sensitivity
+#     control (Stat1.npc reads 2 x) broken -> VOID
 #   * a run that was aborted or ended in the wrong chain state still reads the predicted effect (the
 #     "lands once" verdicts counted only 'Exception in thread'): a desync line, a caught tick exception
 #     ("Removing!"), an entity REMOVED with reason=REMOVE, or a chain_server_state other than the prediction's,
@@ -54,11 +56,15 @@ expect() { # label, wanted-rc, fragment, expected-PASS-count-lost
 fresh; setfield Damage2.remote target_health_delta -3.0; expect "DamageEntity dose control broken" 2 "dose control" 3
 fresh; setfield Damage1.remote target_health_delta 0.0;   expect "DamageEntity unit control broken" 2 "unit control" 3
 fresh; setfield Damage1.npc target_health_delta -6.0;     expect "DamageEntity doubled on the NPC-shaped manager" 1 "predicted 1 x unit" 1
-fresh; setfield Stat1.npc subject_SignatureCharges_delta 5.0; expect "ChangeStat read as guarded" 1 "predicted 2 x unit" 1
+fresh; setfield Stat1.npc subject_SignatureCharges_delta 5.0; expect "ChangeStat read as guarded (also breaks the Set verdict's sensitivity control, so VOID)" 2 "predicted 2 x unit" 2
 fresh; sed -i 's/Entity already contains component type/x/g' "$work/c/Beam2.remote.log"; expect "AttachBeam refusal line deleted from the dose control" 2 "AttachBeam dose control" 3
 fresh; sed -i "/PROBE ProbeLog message='log1' pass=server/d" "$work/c/Log1.npc.log"; expect "second pass of ProbeLog deleted" 1 "Log1.npc" 1
 fresh; rm -f "$work/c/Launch2.remote.log"; expect "a log is missing" 1 "no log/result" 3
 fresh; echo "Exception in thread Thread[#1,WorldThread - default" >> "$work/c/Launch1.remote.log"; expect "exception in a run that should have none" 2 "exception in a run that should have none" 3
+fresh; setfield StatSet1.npc subject_SignatureCharges_delta 10.0; expect "ChangeStat Set read as doubled" 1 "StatSet1.npc: read '10.0', predicted the unit" 1
+fresh; setfield StatSet1.remote subject_SignatureCharges_delta 0.0; expect "ChangeStat Set unit control broken" 2 "Behaviour Set unit control: StatSet1.remote" 2
+fresh; setfield Stat1.npc subject_SignatureCharges_delta 5.0; expect "ChangeStat Set sensitivity control broken (Add reads once)" 2 "Behaviour Set sensitivity control" 3
+fresh; echo "[x SEVERE] [InteractionSystems\$TickInteractionManagerSystem] Exception while ticking entity interactions! Removing!" >> "$work/c/StatSet1.npc.log"; expect "ChangeStat Set run aborted" 1 "StatSet1.npc: the run does not count" 1
 fresh; setfield InvNoneSelf1.npc inv_items_delta 2.0;  expect "ModifyInventory wait None read as doubled" 1 "InvNoneSelf1.npc" 1
 fresh; setfield InvNoneSelf1.npc chain_server_state Finished; expect "ModifyInventory wait None not cancelled as ItemChanged" 1 "InvNoneSelf1.npc" 1
 fresh; echo "[x SEVERE] [InteractionSystems\$TickInteractionManagerSystem] Exception while ticking entity interactions! Removing!" >> "$work/c/InvNoneSelf1.npc.log"; expect "ModifyInventory wait None, entity removed" 1 "InvNoneSelf1.npc" 1

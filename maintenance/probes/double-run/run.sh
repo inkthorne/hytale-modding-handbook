@@ -14,7 +14,7 @@
 #                     npc      host entity, manager as an NPC's: new InteractionManager(null, NPCInteractionSimulationHandler)
 #                     remote   the same host with setHasRemoteClient(true): what a player's manager looks like
 #                     realnpc  a shipped NPC role (Chicken) spawned headless; the chain runs on its own manager
-#                   ROOT is one of: Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1
+#                   ROOT is one of: Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 StatSet1 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1
 #                   (the suffix is the number of times the type is in the chain). InvSelf1 is Inv1 with the
 #                   owner == the running entity (no proxy context), see dr.self in Driver.java; InvIgnoreSelf1 is
 #                   the same with "OnItemChangeBehavior": "Ignore" in the interaction. InvNoneSelf1 is InvSelf1 with the
@@ -26,7 +26,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 scratch="${1:?usage: run.sh SCRATCH CASE}"; case_="${2:?usage: run.sh SCRATCH CASE}"
 
 refuse() { echo "FAIL  $*" >&2; exit 3; }
-roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1"
+roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 StatSet1 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1"
 mgrs="npc remote realnpc"
 root=""; mgr=""
 # listed WORD LIST...: WORD is exactly one of the list's elements. (A substring test of the joined list accepted

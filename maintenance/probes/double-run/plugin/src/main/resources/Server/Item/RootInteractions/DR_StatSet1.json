@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "ChangeStat", "Behaviour": "Set", "StatModifiers": { "SignatureCharges": 5 } } ] }

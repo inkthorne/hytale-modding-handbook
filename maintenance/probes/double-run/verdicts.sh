@@ -88,6 +88,18 @@ if [ "$(result_line Damage1.remote)" ] && [ "$(result_line Damage2.remote)" ] &&
 fi
 block Launch projectiles "LaunchProjectile" 1 "simulateFirstRun is empty" Finished Finished
 block Stat subject_SignatureCharges_delta "ChangeStat (doubled)" 2 "firstRun runs in both passes and adds directly" Finished Finished
+# ChangeStat with "Behaviour": "Set" sets the stat to a value, so a second pass gives the same result: one unit, not two.
+# Unit control: StatSet1.remote reads a positive unit. Sensitivity control: on the same harness and manager Stat1.npc
+# (Behaviour Add, the default) reads two units, so a double run would have shown.
+if need StatSet1.remote StatSet1.npc Stat1.remote Stat1.npc; then
+  u=$(field "$(result_line StatSet1.remote)" subject_SignatureCharges_delta); n=$(field "$(result_line StatSet1.npc)" subject_SignatureCharges_delta); why=""
+  if ! fpos "$u" || why=$(flawed StatSet1.remote Finished); then voidc "ChangeStat Behaviour Set unit control: StatSet1.remote read '$u'; ${why:-it is sound}"
+  elif ! feq "$(field "$(result_line Stat1.npc)" subject_SignatureCharges_delta)" "$(fmul "$(field "$(result_line Stat1.remote)" subject_SignatureCharges_delta)" 2)"; then
+    voidc "ChangeStat Behaviour Set sensitivity control: Stat1.npc (Add) did not read 2 x Stat1.remote on this harness"
+  elif why=$(flawed StatSet1.npc Finished); then bad "ChangeStat Behaviour Set StatSet1.npc: the run does not count, $why"
+  elif feq "$n" "$u"; then ok "ChangeStat Behaviour Set StatSet1.npc: $n = the unit $u, not 2 x (setting a stat to a value gives the same result twice; Add on the same harness reads 2 x)"
+  else bad "ChangeStat Behaviour Set StatSet1.npc: read '$n', predicted the unit $u"; fi
+fi
 block Inv inv_items_delta "ModifyInventory (Server wait, doubled)" 2 "firstRun runs in both passes, server pass first" Finished Finished
 
 # ModifyInventory with owner == running entity (the context ActionAttack builds). PREDICTED: the item-change

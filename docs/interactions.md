@@ -544,7 +544,9 @@ Every interaction carries an `OnItemChangeBehavior` (`com.hypixel.hytale.protoco
 ```
 
 The check is skipped for a chain that runs through another entity, one whose owning entity differs
-from the executing entity (a projectile's hit chain, for example). A chain cast from the ability
+from the executing entity (a projectile's hit chain, for example). On a manager with no remote client the check runs in both passes, and an
+interaction that changes the held slot can desync the passes and remove the entity
+(see [the double run](#managers-with-no-remote-client-the-double-run)). A chain cast from the ability
 slots compares against the slot it was cast from rather than the hotbar's active slot.
 
 The old boolean `CancelOnItemChange` key is still parsed (codec doc: "Deprecated field for whether the interaction will be cancelled when the entity's held item changes.") — `true` maps to `Cancel`, `false` to `Ignore` — but it is flagged deprecated by the validator; write `OnItemChangeBehavior` in new assets.
@@ -610,6 +612,77 @@ Namespace your `Type` ids (interaction/asset ids resolve globally and case-sensi
 - `getOwningEntity()` → the **caster/shooter** (exclude it from AOE so the shooter isn't self-hit).
 - `getCommandBuffer()` → a `CommandBuffer<EntityStore>` that also serves as the `ComponentAccessor`
   for queries like `Selector.selectNearbyEntities(...)` and `EffectControllerComponent.addEffect(...)`.
+
+### Managers with no remote client: the double run
+
+Each statement below carries a label. **(read)** means read in the decompiled 0.7.2 source. **(measured)** means measured in a headless run of the probes in `maintenance/probes/double-run/`: a host entity, a flagged host and a real `Chicken`, no player. Line numbers are those of the decompiled source.
+
+An `InteractionManager` built without a `PlayerRef` has no remote client. On such a manager the server plays the client's part itself, so it runs **every operation of a chain twice**: a simulation pass, then a server pass. An interaction whose work can safely run twice loses nothing. One whose work cannot gets it done twice, or throws.
+
+#### The rule
+
+- **Which managers. (read)** `new InteractionManager(null, ...)` is written in five places: NPCs (`NPCInteractionSystems`, with an `NPCInteractionSimulationHandler`), host entities from `InteractionHost.spawnHost` (the `SpawnInteraction` NPC action and the block-break host in `BlockHarvestUtils`), `EncounterManager`, `AbilityEntitySpawner` and `AbilityProjectileLauncher`. A player's manager is built with the `PlayerRef` (`InteractionSystems`) and runs the server pass only.
+- **Projectile chains. (read)** A projectile's `ProjectileSpawn` chain runs on the shooter's manager (`ProjectileModule.onProjectileSpawnInteraction`, `:206`). Its `ProjectileHit` and `ProjectileMiss` chains run on the projectile's own manager if it has one, otherwise on the shooter's (`StandardPhysicsProvider`). When the shooter is an NPC, the `ProjectileSpawn` chain therefore runs on the NPC's manager, in two passes.
+- **Two passes. (read)** `InteractionManager.doTickChain` (`:454`) calls `simulationTick` (`Operation.simulateTick`) and `serverTick` (`Operation.tick`, then `Operation.handle`) for each operation when the manager has no remote client (`:486-497`). `handle` runs in the server pass only. **(measured)** An `Interaction` whose `firstRun` writes one line wrote two: `pass=simulation`, then `pass=server`. On the manager flagged as a player's, it wrote one: `pass=server`.
+- **Order. (read)** An operation that waits for `None` or `Client` runs the simulation pass first. One that waits for `Server` runs the server pass first. **(measured)** A plugin type with `getWaitForDataFrom() = Server` wrote `pass=server`, then `pass=simulation`.
+- **Shared state. (read)** Both passes use the same `InteractionEntry`, so they share one instance store (`context.getInstanceStore()`). Each pass keeps its own state and timestamp, so `firstRun` is `true` in both. `Interaction.tick` and `Interaction.simulateTick` are `final`: each runs the held-item check and the `RunTime` check, then calls `tick0` or `simulateTick0`.
+- **No switch. (read)** The manager keeps its flag private. `setHasRemoteClient` is deprecated for removal and nothing calls it. An interaction cannot ask which kind of manager it runs on.
+- **Count the effect, not the calls.** What matters is how often the effect lands at its target: health lost, items added, entities spawned. A hook that runs twice can still land once.
+
+#### What the simulation pass calls (read)
+
+`SimpleInstantInteraction.simulateTick0` calls `simulateFirstRun`, and the default `simulateFirstRun` calls `firstRun` (`SimpleInstantInteraction.java:40,49-51`). `SimpleInteraction.simulateTick0` calls `tick0`. A type that overrides neither hook runs its work in both passes. The census (`census.py`) reads this for the 135 names registered in the `Interaction` codec registry. 135 classes were parsed, none were missed, and none carries two names.
+
+| Simulation pass | Names | Types |
+|-----------------|------:|-------|
+| runs `firstRun` again (default `simulateFirstRun`) | 56 | listed below |
+| does nothing (`simulateFirstRun` or `simulateTick0` is empty) | 21 | `ApplyAbilityEffects`, `ApplyEffect`, `CarryDroppedBlock`, `ClearCarriedBlock`, `DestroyTaggedVolumes`, `GrantAbilityCharges`, `LaunchAbilityProjectile`, `LaunchProjectile`, `OpenAbilityBench`, `PullEntityAbility`, `RemoveEntity`, `RunOnBlockTypes`, `Selector`, `SendBeacon`, `SendMessage`, `ShowEventTitle`, `SignalNearbyVolumes`, `SpawnAbilityEntity`, `SpawnTriggerVolume`, `SplitAbilityProjectile`, `TriggerAbilityFX` |
+| runs `tick0` again | 2 | `DamageEntity`, `PlaceModeSelect` |
+| wraps `tick0` in other code | 12 | `ApplyForce`, `BuilderTool`, `Camera`, `CarryPlaceBlock`, `Condition`, `DragEraseBlock`, `DragPlaceBlock`, `ExtrudePlaceBlock`, `PlaceBlock`, `Repeat`, `Simple`, `SurfaceDrawPlaceBlock` |
+| block interactions: the simulate hook is empty | 25 | `AddItem`, `Bed`, `BreakBlock`, `CanBreakRespawnPoint`, `CarryBlock`, `ChangeFarmingStage`, `ChangeState`, `CycleBlockGroup`, `Door`, `FertilizeSoil`, `HarvestCrop`, `LaunchPad`, `OpenBenchPage`, `OpenContainer`, `OpenProcessingBench`, `PickBlock`, `PlaceFluid`, `Portal`, `Seating`, `SpawnMinecart`, `SpawnNPC`, `TeleportConfigInstance`, `UseCaptureCrate`, `UseCoop`, `UseWateringCan` |
+| block interactions: a real simulate hook | 5 | `BlockCondition`, `ChangeBlock`, `PortalReturn`, `Teleporter`, `UseBlock` |
+| a body of their own | 14 | `CancelChain`, `Chaining`, `ChangeActiveSlot`, `Charging`, `FirstClick`, `GroundedCondition`, `MemoriesCondition`, `MovementCondition`, `Parallel`, `Projectile`, `Replace`, `RevealMapMarkersInView`, `Serial`, `Wielding` |
+
+The 56 names that run `firstRun` again: `AttachBeam`, `AugmentCondition`, `CameraShake`, `ChainFlag`, `ChangeStat`, `ChangeStatWithModifier`, `CheckUniqueItemUsage`, `ClearEntityEffect`, `ContextualUseNPC`, `CooldownCondition`, `DestroyBlock`, `DurabilityCondition`, `EffectCondition`, `EquipItem`, `EventStartInteraction`, `EventStopInteraction`, `ExitInstance`, `Explode`, `GameFlagCondition`, `GlobalEventStartInteraction`, `GlobalEventStopInteraction`, `HubPortal`, `IncreaseBackpackCapacity`, `IncrementCooldown`, `Interrupt`, `LearnRecipe`, `MarkAbilityBenchIntroSeen`, `ModifyIntervalConditionInteraction`, `ModifyInventory`, `Mount`, `OpenChapterRewards`, `OpenCustomUI`, `OpenItemStackContainer`, `OpenPage`, `PickupItem`, `PlacementCountCondition`, `PrefabSelectionInteraction`, `RefillContainer`, `ResetCooldown`, `RunRootInteraction`, `SetGameFlag`, `SetMemoriesCapacity`, `SpawnDeployableAtHitLocation`, `SpawnDeployableAtLocation`, `SpawnDeployableFromRaycast`, `SpawnPrefab`, `SpectateControl`, `StartObjective`, `StatsCondition`, `StatsConditionWithModifier`, `TeleportInstance`, `ToggleGlider`, `TriggerCooldown`, `TriggerSpawnMarkers`, `UseEntity`, `UseNPC`.
+
+That a type runs its hook twice does not say its effect doubles. A condition reads and jumps. A flag setter sets a value. The effect of most of these 70 names (the 56, the 2 that run `tick0` again and the 12 that wrap it) has **not been classified**. Three have been measured (below). The census also does not read what a "body of their own" does.
+
+#### What lands (measured)
+
+Each row is a count at the target. The control is the same chain on a host whose manager was flagged as a player's (`setHasRemoteClient(true)`): one copy reads one unit, two copies in one chain read two units. All controls held.
+
+| Type | On a manager with no remote client | Why | Measured |
+|------|------------------------------------|-----|----------|
+| `DamageEntity` | **once** | `simulateTick0` runs `tick0`, which queues the damage and stores it in the instance store. The server pass finds it and only processes it (`DamageEntityInteraction.java:180,195,510`). (read) | health -3 for one hit; one `Damage` event raised; two copies on the flagged manager: -6 |
+| `LaunchProjectile` | **once** | `simulateFirstRun` is empty (`LaunchProjectileInteraction.java:141`). (read) | 1 projectile entity; two copies: 2 |
+| `ChangeStat` | **twice** | `firstRun` adds to the stat directly and `simulateFirstRun` is not overridden. (read) | `SignatureCharges` +10 for a `+5` chain; flagged: +5 |
+| `ModifyInventory` (waits for `Server`) | **twice** when the owner is another entity (a host) | server pass first, then `firstRun` again | 2 items for `ItemToAdd` of 1; flagged: 1; two copies on flagged: 2 |
+| `ModifyInventory` when the owner is the running entity | **desync, and the entity is removed** | see below | `Simulation and server tick are not in sync (operation position)`, `Counter: 1 vs 0`; the entity is removed |
+| `AttachBeam` | **refuses** | `addComponent` is queued twice and the second throws `Entity already contains component type` on the world thread (see [beams.md](beams.md#gotchas--errors)) | 1 `BeamComponent` added, then the exception; the world reloads 5 s later. Flagged: 1 added, no exception |
+
+The same results came out on a real `Chicken` run headless (no player) in a ticking section, on its own manager, for `ProbeLog` (two lines, simulation then server), `ChangeStat` (+10), `DamageEntity` (one hit on a `Sheep`, one `Damage` event) and `AttachBeam` (refused). The host agreed with the real NPC in all four.
+
+**The item-change desync. (measured)** `Interaction.tickInternal` (`Interaction.java:288-300`) runs in both passes. If the held slot now holds a different item than when the context was built, the pass sets `ItemChanged` and does not call `tick0` or `simulateTick0`. A chain that runs through another entity is exempt (the owner is not the entity). The first pass of `ModifyInventory` puts the item into the held slot, and the second pass then skips its hook, so the two passes end on different operations. `doTickChain` throws (`:499-505`), and `TickInteractionManagerSystem` catches it and **removes the entity that runs the chain** (`InteractionSystems.java:255`). With `"OnItemChangeBehavior": "Ignore"` on the interaction there was no exception and the effect doubled (2 items). Measured on a host; the same code runs for an NPC (read).
+
+#### Writing your own interaction
+
+- **Extend `SimpleInstantInteraction`. (read)** Your `firstRun` runs in both passes on a manager with no remote client. (measured with a plugin type that overrides only `firstRun`: two lines.)
+- **If the effect must land once, silence the simulation pass. (measured)** Override `simulateFirstRun` with an empty body. A plugin type that did this wrote one line on the same manager. This is what `LaunchProjectile` and `ApplyEffect` do.
+
+  ```java
+  @Override
+  protected void simulateFirstRun(InteractionType type, InteractionContext context,
+                                  CooldownHandler cooldownHandler) {
+      // empty: the effect lands once, in the server pass
+  }
+  ```
+
+- **If the effect sets a value, it is usually safe. (read)** Setting a stat to a value, clearing an effect or raising a flag gives the same result twice. Read the body before you rely on it: this page has classified only the types measured above.
+- **Or guard it with the instance store. (read)** `DamageEntity` runs its real work in the simulation pass, stores the result with `context.getInstanceStore().putMetaObject(...)`, and the server pass reads it back. Both passes see the same store.
+- **A hand-written `Interaction` must write `simulateTick0`. (read)** It is abstract in `Interaction`. `SimpleInteraction` implements it by calling `tick0`. If you extend `Interaction` directly and call `tick0` from `simulateTick0`, you get the same double run.
+- **Do not change the held slot from an interaction that runs for its own entity. (measured)** On an NPC-shaped manager that desyncs and removes the entity (above). A chain a host or projectile runs for another owner is exempt.
+- **Keep both passes on the same path. (read)** The two passes must end on the same operation, or `doTickChain` throws the desync. The item-change case above is the measured instance.
+- **`Server` waits reverse the order. (measured)** If your interaction waits for `Server`, your `firstRun` runs in the server pass first, then in the simulation pass. (read) The default `simulateTick0` copies a `Failed` server result into the simulation state (`context.getServerState()`).
 
 ### SimpleBlockInteraction
 

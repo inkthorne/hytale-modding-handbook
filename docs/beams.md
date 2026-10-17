@@ -580,7 +580,10 @@ stay on you until `/beam clear`, a restart, or the target entity going away.
   `SimpleInstantInteraction.simulateFirstRun` calls `firstRun` again unless the subclass overrides it;
   `AttachBeamInteraction` does not. So `firstRun` queues two `addComponent` calls. Measured with a
   host entity whose manager is built the way an NPC's is (case `c1-npc`, two same-tick log lines and
-  the exception); no real NPC was run. A player's manager has a `PlayerRef` and runs `firstRun` once (read).
+  the exception), and again on a real `Chicken` spawned headless, on its own manager: one `BeamComponent`
+  added, then the exception (`maintenance/probes/double-run`, case `Beam1.realnpc`). A player's manager
+  has a `PlayerRef` and runs `firstRun` once (read). The general rule, with the other types it hits, is
+  in [the double run](interactions.md#managers-with-no-remote-client-the-double-run).
   The control for that (`c1-control`: one beam added, no exception) flags the host's manager as a
   player's; it is not a player. Fix: keep `AttachBeam` to chains a player starts, and add beams from
   an NPC's code through Java.

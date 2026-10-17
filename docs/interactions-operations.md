@@ -42,7 +42,7 @@ Operation System
 ├── OperationsBuilder (addOperation + Label flow control)
 │   └── Label system (createLabel / createUnresolvedLabel / resolveLabel / jump)
 └── Runtime execution
-    ├── per tick: simulateTick() (no remote client only) → tick() → handle()
+    ├── per tick: tick() → handle(); for an entity with no remote client also simulateTick(), before tick() (after it for a Server wait)
     ├── operation counter — moving it is what advances the chain
     └── WaitForDataFrom (None / Server / Client) — client/server sync
 ```
@@ -111,7 +111,7 @@ There is **no** `LivingEntity` parameter — resolve components from `ref` throu
 | Method | Runs On | Purpose |
 |--------|---------|---------|
 | `tick()` | Server | Authoritative execution with full world access |
-| `simulateTick()` | Server, only for an entity with **no remote client** | `InteractionManager` builds its `hasRemoteClient` flag from whether the entity has a `PlayerRef`. For a player the client runs its own half and reports the result, so `simulateTick` never runs; for an NPC (or any entity without a player) the server plays that half itself, ticks both, and throws `Simulation and server tick are not in sync` when the two land on different operations |
+| `simulateTick()` | Server, only for an entity with **no remote client** | `InteractionManager` builds its `hasRemoteClient` flag from whether the entity has a `PlayerRef`. For a player the client runs its own half and reports the result, so `simulateTick` never runs; for an NPC (or any entity without a player) the server plays that half itself, ticks both, and throws `Simulation and server tick are not in sync` when the two land on different operations. The default hook of `SimpleInstantInteraction` calls `firstRun` again, so the **effect** runs in both passes. See [the double run](interactions.md#managers-with-no-remote-client-the-double-run) for which types double, which are guarded and which throw |
 
 Both methods receive identical parameters:
 - `ref` - Entity store reference for the executing entity
@@ -130,7 +130,7 @@ Controls synchronization between client and server:
 | Value | Behavior |
 |-------|----------|
 | `None` | Execute immediately on both client and server |
-| `Server` | Client waits for server confirmation before executing |
+| `Server` | Client waits for server confirmation before executing. On a manager with no remote client, the server pass runs first and the simulation pass after it (measured) |
 | `Client` | Server waits for client data (rare, for client-authoritative actions) |
 
 ---
@@ -149,7 +149,8 @@ ASSET LOADING PHASE
 
 RUNTIME EXECUTION PHASE (per server tick)
 ─────────────────────────────────────────
-3. simulateTick()  → only for an entity with no remote client
+3. simulateTick()  → only for an entity with no remote client; before tick(),
+                     or after it when the operation waits for Server
 4. tick()          → firstRun is true on the operation's first tick
 5. handle()        → right after tick(), same firstRun
 6. If the operation moved the operation counter, the manager continues with the
@@ -608,7 +609,7 @@ Backtick-quoted error strings below are the literal messages thrown by the inter
 
 - **`Label already resolved`** (`IllegalArgumentException` from `OperationsBuilder.resolveLabel`) → `resolveLabel(...)` was called on a label that already has a position — either twice on the same unresolved label, or on a label made with `createLabel()` (which is resolved at creation). Fix: resolve each `createUnresolvedLabel()` exactly once; never call `resolveLabel` on a `createLabel()` label.
 - **`Failed to find operation during simulation tick of chain '`** — assembled line ends with the root id and a closing quote (`IllegalStateException`) → the operation counter points outside the built `Operation[]`. An unresolved label still holds `Integer.MIN_VALUE`, so jumping to one you forgot to `resolveLabel(...)` lands here; so does `setOperationCounter(...)` with an arbitrary index. Fix: pair every `createUnresolvedLabel()` with a `resolveLabel(...)` before `build()`, and keep the counter within `[0, build().length - 1]`.
-- **`Simulation and server tick are not in sync (operation position).`** / **`... (root interaction).`** → `simulateTick()` and `tick()` diverged (different jump, or one finished and the other didn't), so the server's prediction replay and its authoritative run are at different counters. Fix: `simulateTick` must mirror `tick`'s flow control exactly (same `jump`/`Finished`/`Failed` decisions), differing only in world side-effects.
+- **`Simulation and server tick are not in sync (operation position).`** / **`... (root interaction).`** → `simulateTick()` and `tick()` diverged (different jump, or one finished and the other didn't), so the two passes are at different counters. It is thrown from `doTickChain` for an entity with no remote client, and `TickInteractionManagerSystem` catches it and **removes the entity that runs the chain**. Measured cause: an interaction that puts an item into the held slot of the entity running it (`ModifyInventory` with the owner the same entity). The second pass sees a changed held item, sets `ItemChanged` and never calls its hook (`Counter: 1 vs 0`); `"OnItemChangeBehavior": "Ignore"` removes the exception. Fix: `simulateTick` must mirror `tick`'s flow control exactly (same `jump`/`Finished`/`Failed` decisions). It need not mirror the side effects: the default hook of `SimpleInstantInteraction` runs them again, which is usually what you do not want, see [the double run](interactions.md#managers-with-no-remote-client-the-double-run).
 - **`Can't shift backwards`** (`InteractionManager.setGlobalTimeShift`) → a negative time shift was requested. Fix: time shifts are forward-only.
 - **`Failed to find interaction: `** — the offending id follows → a chain referenced an interaction id that is not in the asset map. Fix: see [interactions.md — Gotchas](interactions.md#gotchas--errors).
 - **Symptom:** your operation never ends — it runs on every tick, or restarts with `firstRun == true` over and over → nothing moved the operation counter. `InteractionManager` advances a chain only when the counter changes; a `Finished` state on its own does not do it. Fix: extend `SimpleInstantInteraction`/`SimpleInteraction` (whose inherited `Interaction.tick` increments the counter once the state is `Finished`/`Failed`), or, in a raw `Operation`, set the state **and** call `context.setOperationCounter(context.getOperationCounter() + 1)`. There is no `advanceOperation()`.

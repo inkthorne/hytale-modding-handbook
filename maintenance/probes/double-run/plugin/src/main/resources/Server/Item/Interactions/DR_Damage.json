@@ -1,0 +1,9 @@
+{
+  "Type": "DamageEntity",
+  "DamageCalculator": {
+    "BaseDamage": {
+      "Physical": 3
+    }
+  },
+  "DamageEffects": {}
+}

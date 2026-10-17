@@ -1,0 +1,700 @@
+build: version=0.7.2 jar_sha=23f71f03763422ce src=ok src_files=6829 decompiler=jar f686e8f3ded377d7 
+source: ~/.cache/hytale-jar/src
+DENOMINATOR
+  registry: com.hypixel.hytale.server.core.modules.interaction.interaction.config.Interaction.CODEC (closed, key "Type")
+  names registered (miner sites): 135; distinct names: 135
+  names whose class was parsed: 135; names whose class could not be parsed: 0
+  distinct classes: 135; classes carrying more than one name: 0
+  classes whose superclass chain did not reach Interaction: 0
+
+PER CLASS (sim = what the simulation pass reaches; wait = getWaitForDataFrom)
+AddItem
+    class   AddItemInteraction  [AddItemInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls AddItemInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+ApplyAbilityEffects
+    class   ApplyAbilityEffectsInteraction  [ApplyAbilityEffectsInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- ApplyAbilityEffectsInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=ApplyAbilityEffectsInteraction:no-op; tick0=SimpleInstantInteraction:other
+ApplyEffect
+    class   ApplyEffectInteraction  [ApplyEffectInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- ApplyEffectInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=ApplyEffectInteraction:no-op; tick0=SimpleInstantInteraction:other
+ApplyForce
+    class   ApplyForceInteraction  [ApplyForceInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- ApplyForceInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in ApplyForceInteraction)
+    hooks   simulateTick0=ApplyForceInteraction:other; simulateFirstRun=-; tick0=ApplyForceInteraction:other
+AttachBeam
+    class   AttachBeamInteraction  [AttachBeamInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+AugmentCondition
+    class   AugmentConditionInteraction  [AugmentConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in AugmentConditionInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Bed
+    class   BedInteraction  [BedInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls BedInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+BlockCondition
+    class   BlockConditionInteraction  [BlockConditionInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:other  -- SimpleBlockInteraction.simulateTick0 is its own body and calls BlockConditionInteraction.simulateInteractWithBlock (other)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+BreakBlock
+    class   BreakBlockInteraction  [BreakBlockInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls BreakBlockInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=BreakBlockInteraction:other
+BuilderTool
+    class   BuilderToolInteraction  [BuilderToolInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- SimpleInteraction.simulateTick0 calls tick0 with code around it
+    wait    Client (declared in BuilderToolInteraction)
+    hooks   simulateTick0=SimpleInteraction:other; simulateFirstRun=-; tick0=BuilderToolInteraction:other
+Camera
+    class   CameraInteraction  [CameraInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- SimpleInteraction.simulateTick0 calls tick0 with code around it
+    wait    Client (declared in CameraInteraction)
+    hooks   simulateTick0=SimpleInteraction:other; simulateFirstRun=-; tick0=CameraInteraction:other
+CameraShake
+    class   CameraShakeInteraction  [CameraShakeInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+CanBreakRespawnPoint
+    class   CanBreakRespawnPointInteraction  [CanBreakRespawnPointInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls CanBreakRespawnPointInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in CanBreakRespawnPointInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+CancelChain
+    class   CancelChainInteraction  [CancelChainInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     own  -- CancelChainInteraction.simulateFirstRun is its own body (calls ensureAndGetComponent, getCommandBuffer, getComponentType, getEntity, getNamedMap, removeInt)
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=CancelChainInteraction:other; tick0=SimpleInstantInteraction:other
+CarryBlock
+    class   CarryBlockInteraction  [CarryBlockInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls CarryBlockInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+CarryDroppedBlock
+    class   CarryDroppedBlockInteraction  [CarryDroppedBlockInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- CarryDroppedBlockInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=CarryDroppedBlockInteraction:no-op; tick0=SimpleInstantInteraction:other
+CarryPlaceBlock
+    class   CarryPlaceBlockInteraction  [CarryPlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- CarryPlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in CarryPlaceBlockInteraction)
+    hooks   simulateTick0=CarryPlaceBlockInteraction:other; simulateFirstRun=-; tick0=CarryPlaceBlockInteraction:other
+ChainFlag
+    class   ChainFlagInteraction  [ChainFlagInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Chaining
+    class   ChainingInteraction  [ChainingInteraction < Interaction]
+    sim     own  -- ChainingInteraction.simulateTick0 is its own body (calls getCommandBuffer, getComponent, getComponentType, getEntity, getInt, getLabel, getState, getTimeSinceLastAttackInSeconds, jump, nanoTime, put)
+    wait    Client (declared in ChainingInteraction)
+    hooks   simulateTick0=ChainingInteraction:other; simulateFirstRun=-; tick0=ChainingInteraction:other
+ChangeActiveSlot
+    class   ChangeActiveSlotInteraction  [ChangeActiveSlotInteraction < Interaction]
+    sim     own  -- ChangeActiveSlotInteraction.simulateTick0 is its own body (calls getServerState, getState)
+    wait    None (declared in ChangeActiveSlotInteraction)
+    hooks   simulateTick0=ChangeActiveSlotInteraction:other; simulateFirstRun=-; tick0=ChangeActiveSlotInteraction:other
+ChangeBlock
+    class   ChangeBlockInteraction  [ChangeBlockInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:other  -- SimpleBlockInteraction.simulateTick0 is its own body and calls ChangeBlockInteraction.simulateInteractWithBlock (other)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+ChangeFarmingStage
+    class   ChangeFarmingStageInteraction  [ChangeFarmingStageInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls ChangeFarmingStageInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in ChangeFarmingStageInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+ChangeStat
+    class   ChangeStatInteraction  [ChangeStatInteraction < ChangeStatBaseInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ChangeState
+    class   ChangeStateInteraction  [ChangeStateInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls ChangeStateInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+ChangeStatWithModifier
+    class   ChangeStatWithModifierInteraction  [ChangeStatWithModifierInteraction < ChangeStatBaseInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Charging
+    class   ChargingInteraction  [ChargingInteraction < Interaction]
+    sim     own  -- ChargingInteraction.simulateTick0 is its own body (calls getChargeValue, getEntity, getInteractionManager, getInteractionSimulationHandler, getState, isCharging, shouldCancelCharging, this.jumpToChargeValue)
+    wait    Client (declared in ChargingInteraction)
+    hooks   simulateTick0=ChargingInteraction:other; simulateFirstRun=-; tick0=ChargingInteraction:other
+CheckUniqueItemUsage
+    class   CheckUniqueItemUsageInteraction  [CheckUniqueItemUsageInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in CheckUniqueItemUsageInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ClearCarriedBlock
+    class   ClearCarriedBlockInteraction  [ClearCarriedBlockInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- ClearCarriedBlockInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=ClearCarriedBlockInteraction:no-op; tick0=SimpleInstantInteraction:other
+ClearEntityEffect
+    class   ClearEntityEffectInteraction  [ClearEntityEffectInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Condition
+    class   ConditionInteraction  [ConditionInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- SimpleInteraction.simulateTick0 calls tick0 with code around it
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInteraction:other; simulateFirstRun=-; tick0=ConditionInteraction:other
+ContextualUseNPC
+    class   ContextualUseNPCInteraction  [ContextualUseNPCInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+CooldownCondition
+    class   CooldownConditionInteraction  [CooldownConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+CycleBlockGroup
+    class   CycleBlockGroupInteraction  [CycleBlockGroupInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls CycleBlockGroupInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+DamageEntity
+    class   DamageEntityInteraction  [DamageEntityInteraction < Interaction]
+    sim     tick0  -- DamageEntityInteraction.simulateTick0 calls tick0
+    wait    None (declared in DamageEntityInteraction)
+    hooks   simulateTick0=DamageEntityInteraction:runs-tick0; simulateFirstRun=-; tick0=DamageEntityInteraction:other
+DestroyBlock
+    class   DestroyBlockInteraction  [DestroyBlockInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+DestroyTaggedVolumes
+    class   DestroyTaggedVolumesInteraction  [DestroyTaggedVolumesInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- DestroyTaggedVolumesInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=DestroyTaggedVolumesInteraction:no-op; tick0=SimpleInstantInteraction:other
+Door
+    class   DoorInteraction  [DoorInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls DoorInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+DragEraseBlock
+    class   DragEraseBlockInteraction  [DragEraseBlockInteraction < DragPlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- DragPlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in DragPlaceBlockInteraction)
+    hooks   simulateTick0=DragPlaceBlockInteraction:other; simulateFirstRun=-; tick0=DragPlaceBlockInteraction:other
+DragPlaceBlock
+    class   DragPlaceBlockInteraction  [DragPlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- DragPlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in DragPlaceBlockInteraction)
+    hooks   simulateTick0=DragPlaceBlockInteraction:other; simulateFirstRun=-; tick0=DragPlaceBlockInteraction:other
+DurabilityCondition
+    class   DurabilityConditionInteraction  [DurabilityConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+EffectCondition
+    class   EffectConditionInteraction  [EffectConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+EquipItem
+    class   EquipItemInteraction  [EquipItemInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in EquipItemInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+EventStartInteraction
+    class   EventStartInteraction  [EventStartInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+EventStopInteraction
+    class   EventStopInteraction  [EventStopInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ExitInstance
+    class   ExitInstanceInteraction  [ExitInstanceInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in ExitInstanceInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Explode
+    class   ExplodeInteraction  [ExplodeInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ExtrudePlaceBlock
+    class   ExtrudePlaceBlockInteraction  [ExtrudePlaceBlockInteraction < DragPlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- DragPlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in DragPlaceBlockInteraction)
+    hooks   simulateTick0=DragPlaceBlockInteraction:other; simulateFirstRun=-; tick0=DragPlaceBlockInteraction:other
+FertilizeSoil
+    class   FertilizeSoilInteraction  [FertilizeSoilInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls FertilizeSoilInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in FertilizeSoilInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+FirstClick
+    class   FirstClickInteraction  [FirstClickInteraction < Interaction]
+    sim     own  -- FirstClickInteraction.simulateTick0 is its own body (calls getEntity, getInteractionManager, getInteractionSimulationHandler, getState, isCharging)
+    wait    Client (declared in FirstClickInteraction)
+    hooks   simulateTick0=FirstClickInteraction:other; simulateFirstRun=-; tick0=FirstClickInteraction:other
+GameFlagCondition
+    class   GameFlagConditionInteraction  [GameFlagConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in GameFlagConditionInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+GlobalEventStartInteraction
+    class   GlobalEventStartInteraction  [GlobalEventStartInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+GlobalEventStopInteraction
+    class   GlobalEventStopInteraction  [GlobalEventStopInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+GrantAbilityCharges
+    class   GrantAbilityChargesInteraction  [GrantAbilityChargesInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- GrantAbilityChargesInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=GrantAbilityChargesInteraction:no-op; tick0=SimpleInstantInteraction:other
+GroundedCondition
+    class   GroundedConditionInteraction  [GroundedConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     own  -- GroundedConditionInteraction.simulateFirstRun is its own body (calls this.checkGrounded)
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=GroundedConditionInteraction:other; tick0=SimpleInstantInteraction:other
+HarvestCrop
+    class   HarvestCropInteraction  [HarvestCropInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls HarvestCropInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+HubPortal
+    class   HubPortalInteraction  [HubPortalInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in HubPortalInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+IncreaseBackpackCapacity
+    class   IncreaseBackpackCapacityInteraction  [IncreaseBackpackCapacityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in IncreaseBackpackCapacityInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+IncrementCooldown
+    class   IncrementCooldownInteraction  [IncrementCooldownInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Interrupt
+    class   InterruptInteraction  [InterruptInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+LaunchAbilityProjectile
+    class   LaunchAbilityProjectileInteraction  [LaunchAbilityProjectileInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- LaunchAbilityProjectileInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=LaunchAbilityProjectileInteraction:no-op; tick0=SimpleInstantInteraction:other
+LaunchPad
+    class   LaunchPadInteraction  [LaunchPadInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls LaunchPadInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in LaunchPadInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+LaunchProjectile
+    class   LaunchProjectileInteraction  [LaunchProjectileInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- LaunchProjectileInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=LaunchProjectileInteraction:no-op; tick0=SimpleInstantInteraction:other
+LearnRecipe
+    class   LearnRecipeInteraction  [LearnRecipeInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in LearnRecipeInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+MarkAbilityBenchIntroSeen
+    class   MarkAbilityBenchIntroSeenInteraction  [MarkAbilityBenchIntroSeenInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in MarkAbilityBenchIntroSeenInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+MemoriesCondition
+    class   MemoriesConditionInteraction  [MemoriesConditionInteraction < Interaction]
+    sim     own  -- MemoriesConditionInteraction.simulateTick0 is its own body (calls get, getLabel, getServerState, getState, jump)
+    wait    Server (declared in MemoriesConditionInteraction)
+    hooks   simulateTick0=MemoriesConditionInteraction:other; simulateFirstRun=-; tick0=MemoriesConditionInteraction:other
+ModifyIntervalConditionInteraction
+    class   ModifyIntervalConditionInteraction  [ModifyIntervalConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ModifyInventory
+    class   ModifyInventoryInteraction  [ModifyInventoryInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in ModifyInventoryInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Mount
+    class   MountInteraction  [MountInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+MovementCondition
+    class   MovementConditionInteraction  [MovementConditionInteraction < SimpleInteraction < Interaction]
+    sim     own  -- MovementConditionInteraction.simulateTick0 is its own body (calls getLabel, getState, jump)
+    wait    Client (declared in MovementConditionInteraction)
+    hooks   simulateTick0=MovementConditionInteraction:other; simulateFirstRun=-; tick0=MovementConditionInteraction:other
+OpenAbilityBench
+    class   OpenAbilityBenchInteraction  [OpenAbilityBenchInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- OpenAbilityBenchInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=OpenAbilityBenchInteraction:no-op; tick0=SimpleInstantInteraction:other
+OpenBenchPage
+    class   OpenBenchPageInteraction  [OpenBenchPageInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls OpenBenchPageInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+OpenChapterRewards
+    class   OpenChapterRewardsInteraction  [OpenChapterRewardsInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+OpenContainer
+    class   OpenContainerInteraction  [OpenContainerInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls OpenContainerInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+OpenCustomUI
+    class   OpenCustomUIInteraction  [OpenCustomUIInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+OpenItemStackContainer
+    class   OpenItemStackContainerInteraction  [OpenItemStackContainerInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+OpenPage
+    class   OpenPageInteraction  [OpenPageInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+OpenProcessingBench
+    class   OpenProcessingBenchInteraction  [OpenProcessingBenchInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls OpenProcessingBenchInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+Parallel
+    class   ParallelInteraction  [ParallelInteraction < Interaction]
+    sim     own  -- ParallelInteraction.simulateTick0 is its own body (calls execute, getAssetMap, getRootInteractionOrUnknown, getState)
+    wait    None (declared in ParallelInteraction)
+    hooks   simulateTick0=ParallelInteraction:other; simulateFirstRun=-; tick0=ParallelInteraction:other
+PickBlock
+    class   PickBlockInteraction  [PickBlockInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls PickBlockInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in PickBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+PickupItem
+    class   PickupItemInteraction  [PickupItemInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+PlaceBlock
+    class   PlaceBlockInteraction  [PlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- PlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in PlaceBlockInteraction)
+    hooks   simulateTick0=PlaceBlockInteraction:other; simulateFirstRun=-; tick0=PlaceBlockInteraction:other
+PlaceFluid
+    class   PlaceFluidInteraction  [PlaceFluidInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls PlaceFluidInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in PlaceFluidInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+PlacementCountCondition
+    class   PlacementCountConditionInteraction  [PlacementCountConditionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in PlacementCountConditionInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+PlaceModeSelect
+    class   PlaceModeSelectInteraction  [PlaceModeSelectInteraction < SimpleInteraction < Interaction]
+    sim     tick0  -- PlaceModeSelectInteraction.simulateTick0 calls tick0
+    wait    None (declared in PlaceModeSelectInteraction)
+    hooks   simulateTick0=PlaceModeSelectInteraction:runs-tick0; simulateFirstRun=-; tick0=PlaceModeSelectInteraction:other
+Portal
+    class   EnterPortalInteraction  [EnterPortalInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls EnterPortalInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in EnterPortalInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+PortalReturn
+    class   ReturnPortalInteraction  [ReturnPortalInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:other  -- SimpleBlockInteraction.simulateTick0 is its own body and calls ReturnPortalInteraction.simulateInteractWithBlock (other)
+    wait    Server (declared in ReturnPortalInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+PrefabSelectionInteraction
+    class   PrefabSelectionInteraction  [PrefabSelectionInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Projectile
+    class   ProjectileInteraction  [ProjectileInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     own  -- ProjectileInteraction.simulateFirstRun is its own body (calls Direction, getCommandBuffer, getEntity, getLook, getPosition, getRotation, getState, pitch, roll, toPositionPacket, yaw)
+    wait    Client (declared in ProjectileInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=ProjectileInteraction:other; tick0=SimpleInstantInteraction:other
+PullEntityAbility
+    class   PullEntityAbilityInteraction  [PullEntityAbilityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- PullEntityAbilityInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=PullEntityAbilityInteraction:no-op; tick0=SimpleInstantInteraction:other
+RefillContainer
+    class   RefillContainerInteraction  [RefillContainerInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+RemoveEntity
+    class   RemoveEntityInteraction  [RemoveEntityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- RemoveEntityInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=RemoveEntityInteraction:no-op; tick0=SimpleInstantInteraction:other
+Repeat
+    class   RepeatInteraction  [RepeatInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- RepeatInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    None (declared in RepeatInteraction)
+    hooks   simulateTick0=RepeatInteraction:other; simulateFirstRun=-; tick0=RepeatInteraction:other
+Replace
+    class   ReplaceInteraction  [ReplaceInteraction < Interaction]
+    sim     own  -- ReplaceInteraction.simulateTick0 is its own body (calls failed, getState, this.doReplace)
+    wait    None (declared in ReplaceInteraction)
+    hooks   simulateTick0=ReplaceInteraction:other; simulateFirstRun=-; tick0=ReplaceInteraction:other
+ResetCooldown
+    class   ResetCooldownInteraction  [ResetCooldownInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+RevealMapMarkersInView
+    class   RevealMapMarkersInViewInteraction  [RevealMapMarkersInViewInteraction < SimpleInteraction < Interaction]
+    sim     own  -- RevealMapMarkersInViewInteraction.simulateTick0 is its own body (calls getServerState, getState, super.tick0)
+    wait    Server (declared in RevealMapMarkersInViewInteraction)
+    hooks   simulateTick0=RevealMapMarkersInViewInteraction:other; simulateFirstRun=-; tick0=RevealMapMarkersInViewInteraction:other
+RunOnBlockTypes
+    class   RunOnBlockTypesInteraction  [RunOnBlockTypesInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- RunOnBlockTypesInteraction.simulateTick0 is empty
+    wait    Server (declared in RunOnBlockTypesInteraction)
+    hooks   simulateTick0=RunOnBlockTypesInteraction:no-op; simulateFirstRun=-; tick0=RunOnBlockTypesInteraction:other
+RunRootInteraction
+    class   RunRootInteraction  [RunRootInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+Seating
+    class   SeatingInteraction  [SeatingInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls SeatingInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+Selector
+    class   SelectInteraction  [SelectInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SelectInteraction.simulateTick0 is empty
+    wait    Client (declared in SelectInteraction)
+    hooks   simulateTick0=SelectInteraction:no-op; simulateFirstRun=-; tick0=SelectInteraction:other
+SendBeacon
+    class   SendBeaconInteraction  [SendBeaconInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SendBeaconInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SendBeaconInteraction:no-op; tick0=SimpleInstantInteraction:other
+SendMessage
+    class   SendMessageInteraction  [SendMessageInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SendMessageInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SendMessageInteraction:no-op; tick0=SimpleInstantInteraction:other
+Serial
+    class   SerialInteraction  [SerialInteraction < Interaction]
+    sim     own  -- SerialInteraction.simulateTick0 is its own body (calls IllegalStateException)
+    wait    None (declared in SerialInteraction)
+    hooks   simulateTick0=SerialInteraction:other; simulateFirstRun=-; tick0=SerialInteraction:other
+SetGameFlag
+    class   SetGameFlagInteraction  [SetGameFlagInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in SetGameFlagInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SetMemoriesCapacity
+    class   SetMemoriesCapacityInteraction  [SetMemoriesCapacityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in SetMemoriesCapacityInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ShowEventTitle
+    class   ShowEventTitleInteraction  [ShowEventTitleInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- ShowEventTitleInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=ShowEventTitleInteraction:no-op; tick0=SimpleInstantInteraction:other
+SignalNearbyVolumes
+    class   SignalNearbyVolumesInteraction  [SignalNearbyVolumesInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SignalNearbyVolumesInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SignalNearbyVolumesInteraction:no-op; tick0=SimpleInstantInteraction:other
+Simple
+    class   SimpleInteraction  [SimpleInteraction < Interaction]
+    sim     tick0+  -- SimpleInteraction.simulateTick0 calls tick0 with code around it
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInteraction:other; simulateFirstRun=-; tick0=SimpleInteraction:other
+SpawnAbilityEntity
+    class   SpawnAbilityEntityInteraction  [SpawnAbilityEntityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SpawnAbilityEntityInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SpawnAbilityEntityInteraction:no-op; tick0=SimpleInstantInteraction:other
+SpawnDeployableAtHitLocation
+    class   SpawnDeployableAtHitLocationInteraction  [SpawnDeployableAtHitLocationInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SpawnDeployableAtLocation
+    class   SpawnDeployableAtLocationInteraction  [SpawnDeployableAtLocationInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SpawnDeployableFromRaycast
+    class   SpawnDeployableFromRaycastInteraction  [SpawnDeployableFromRaycastInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Client (declared in SpawnDeployableFromRaycastInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SpawnMinecart
+    class   SpawnMinecartInteraction  [SpawnMinecartInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls SpawnMinecartInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+SpawnNPC
+    class   SpawnNPCInteraction  [SpawnNPCInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls SpawnNPCInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+SpawnPrefab
+    class   SpawnPrefabInteraction  [SpawnPrefabInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SpawnTriggerVolume
+    class   SpawnTriggerVolumeInteraction  [SpawnTriggerVolumeInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SpawnTriggerVolumeInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SpawnTriggerVolumeInteraction:no-op; tick0=SimpleInstantInteraction:other
+SpectateControl
+    class   SpectateControlInteraction  [SpectateControlInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SplitAbilityProjectile
+    class   SplitAbilityProjectileInteraction  [SplitAbilityProjectileInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- SplitAbilityProjectileInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SplitAbilityProjectileInteraction:no-op; tick0=SimpleInstantInteraction:other
+StartObjective
+    class   StartObjectiveInteraction  [StartObjectiveInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+StatsCondition
+    class   StatsConditionInteraction  [StatsConditionInteraction < StatsConditionBaseInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+StatsConditionWithModifier
+    class   StatsConditionWithModifierInteraction  [StatsConditionWithModifierInteraction < StatsConditionBaseInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+SurfaceDrawPlaceBlock
+    class   SurfaceDrawPlaceBlockInteraction  [SurfaceDrawPlaceBlockInteraction < DragPlaceBlockInteraction < SimpleInteraction < Interaction]
+    sim     tick0+  -- DragPlaceBlockInteraction.simulateTick0 has its own code and calls super (SimpleInteraction.simulateTick0 calls tick0 with code around it)
+    wait    Client (declared in DragPlaceBlockInteraction)
+    hooks   simulateTick0=DragPlaceBlockInteraction:other; simulateFirstRun=-; tick0=DragPlaceBlockInteraction:other
+TeleportConfigInstance
+    class   TeleportConfigInstanceInteraction  [TeleportConfigInstanceInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls TeleportConfigInstanceInteraction.simulateInteractWithBlock (no-op)
+    wait    Server (declared in TeleportConfigInstanceInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+Teleporter
+    class   TeleporterInteraction  [TeleporterInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:other  -- SimpleBlockInteraction.simulateTick0 is its own body and calls TeleporterInteraction.simulateInteractWithBlock (other)
+    wait    Server (declared in TeleporterInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+TeleportInstance
+    class   TeleportInstanceInteraction  [TeleportInstanceInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Server (declared in TeleportInstanceInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+ToggleGlider
+    class   ToggleGliderInteraction  [ToggleGliderInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+TriggerAbilityFX
+    class   TriggerAbilityFXInteraction  [TriggerAbilityFXInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     no-op  -- TriggerAbilityFXInteraction.simulateFirstRun is empty
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=TriggerAbilityFXInteraction:no-op; tick0=SimpleInstantInteraction:other
+TriggerCooldown
+    class   TriggerCooldownInteraction  [TriggerCooldownInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+TriggerSpawnMarkers
+    class   TriggerSpawnMarkersInteraction  [TriggerSpawnMarkersInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+UseBlock
+    class   UseBlockInteraction  [UseBlockInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:other  -- SimpleBlockInteraction.simulateTick0 is its own body and calls UseBlockInteraction.simulateInteractWithBlock (other)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+UseCaptureCrate
+    class   UseCaptureCrateInteraction  [UseCaptureCrateInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls UseCaptureCrateInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=UseCaptureCrateInteraction:other
+UseCoop
+    class   UseCoopInteraction  [UseCoopInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls UseCoopInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+UseEntity
+    class   UseEntityInteraction  [UseEntityInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    Client (declared in UseEntityInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+UseNPC
+    class   UseNPCInteraction  [UseNPCInteraction < SimpleInstantInteraction < SimpleInteraction < Interaction]
+    sim     firstRun  -- SimpleInstantInteraction.simulateFirstRun calls firstRun
+    wait    None (declared in SimpleInteraction)
+    hooks   simulateTick0=SimpleInstantInteraction:other; simulateFirstRun=SimpleInstantInteraction:runs-firstRun; tick0=SimpleInstantInteraction:other
+UseWateringCan
+    class   UseWateringCanInteraction  [UseWateringCanInteraction < SimpleBlockInteraction < SimpleInteraction < Interaction]
+    sim     via-simulateInteractWithBlock:no-op  -- SimpleBlockInteraction.simulateTick0 is its own body and calls UseWateringCanInteraction.simulateInteractWithBlock (no-op)
+    wait    Client (declared in SimpleBlockInteraction)
+    hooks   simulateTick0=SimpleBlockInteraction:other; simulateFirstRun=-; tick0=SimpleBlockInteraction:other
+Wielding
+    class   WieldingInteraction  [WieldingInteraction < ChargingInteraction < Interaction]
+    sim     own+  -- WieldingInteraction.simulateTick0 has its own code and calls super (ChargingInteraction.simulateTick0 is its own body (calls getChargeValue, getEntity, getInteractionManager, getInteractionSimulationHandler, getState, isCharging, shouldCancelCharging, this.jumpToChargeValue))
+    wait    Client (declared in ChargingInteraction)
+    hooks   simulateTick0=WieldingInteraction:other; simulateFirstRun=-; tick0=WieldingInteraction:other
+
+SUMMARY (counted in NAMES, denominator 135)
+  sim firstRun   56
+  sim via-simulateInteractWithBlock:no-op   25
+  sim no-op      21
+  sim own        13
+  sim tick0+     12
+  sim via-simulateInteractWithBlock:other    5
+  sim tick0       2
+  sim own+        1
+  wait None       70
+  wait Client     40
+  wait Server     25
+  names whose class extends SimpleInstantInteraction (shape 1): 78
+  all other names (shape 2, tick0/simulateTick0 written by hand): 57

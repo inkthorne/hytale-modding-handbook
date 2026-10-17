@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "AttachBeam", "BeamConfig": "Rope", "TargetEntity": "Owner" } ] }

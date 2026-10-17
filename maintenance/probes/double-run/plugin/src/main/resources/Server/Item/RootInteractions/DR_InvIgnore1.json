@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "ModifyInventory", "OnItemChangeBehavior": "Ignore", "ItemToAdd": { "Id": "Food_Egg", "Quantity": 1 } } ] }

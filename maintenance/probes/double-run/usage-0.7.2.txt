@@ -1,0 +1,95 @@
+assets: ~/.cache/hytale-assets/Server
+nodes: 6643 files in 6135 ids (Item/Interactions, Item/RootInteractions, ProjectileConfigs, Projectiles, Item/Items, Abilities)
+seeds: NPC 1858 files; ability 68 files
+reached files: NPC 3558, ability 99
+
+Types reached, by objects (NPC / ability), with the census sim label.
+type                         sim           npc   abil    sum
+Simple                       tick0+       1352     26   1378
+DamageEntity                 tick0         810     15    825
+Replace                      own           672      3    675
+Selector                     no-op         419      6    425
+Parallel                     own           295      9    304
+ApplyEffect                  no-op         125     43    168
+Serial                       own           130      9    139
+ChangeStat                   firstRun      123     12    135
+Projectile                   own            99      0     99
+StatsCondition               firstRun       71     14     85
+Chaining                     own            70      0     70
+Wielding                     own+           60      0     60
+LaunchProjectile             no-op          55      0     55
+Charging                     own            51      2     53
+EffectCondition              firstRun       44      8     52
+RemoveEntity                 no-op          40      3     43
+ClearEntityEffect            firstRun       31      8     39
+ModifyInventory              firstRun       38      0     38
+ApplyForce                   tick0+         31      0     31
+Repeat                       tick0+         26      0     26
+Condition                    tick0+         18      0     18
+TriggerCooldown              firstRun        3     13     16
+ChangeState                  via-simulateInteractWithBlock:no-op     11      0     11
+Explode                      firstRun        9      2     11
+SendBeacon                   no-op          10      0     10
+ChangeActiveSlot             own             9      0      9
+LaunchAbilityProjectile      no-op           0      9      9
+EquipItem                    firstRun        8      0      8
+TriggerAbilityFX             no-op           2      6      8
+ContextualUseNPC             firstRun        7      0      7
+DurabilityCondition          firstRun        7      0      7
+BreakBlock                   via-simulateInteractWithBlock:no-op      6      0      6
+PlaceFluid                   via-simulateInteractWithBlock:no-op      6      0      6
+UseBlock                     via-simulateInteractWithBlock:other      6      0      6
+DestroyBlock                 firstRun        5      0      5
+PlaceBlock                   tick0+          4      0      4
+RefillContainer              firstRun        4      0      4
+BlockCondition               via-simulateInteractWithBlock:other      3      0      3
+CooldownCondition            firstRun        3      0      3
+DragPlaceBlock               tick0+          3      0      3
+Interrupt                    firstRun        2      1      3
+SpawnTriggerVolume           no-op           3      0      3
+CycleBlockGroup              via-simulateInteractWithBlock:no-op      2      0      2
+GrantAbilityCharges          no-op           0      2      2
+MovementCondition            own             2      0      2
+SignalNearbyVolumes          no-op           2      0      2
+SplitAbilityProjectile       no-op           0      2      2
+TriggerSpawnMarkers          firstRun        2      0      2
+ApplyAbilityEffects          no-op           0      1      1
+AttachBeam                   firstRun        0      1      1
+ExtrudePlaceBlock            tick0+          1      0      1
+GroundedCondition            own             0      1      1
+PlaceModeSelect              tick0           1      0      1
+PullEntityAbility            no-op           0      1      1
+SendMessage                  no-op           1      0      1
+SpawnAbilityEntity           no-op           0      1      1
+SpawnNPC                     via-simulateInteractWithBlock:no-op      1      0      1
+SurfaceDrawPlaceBlock        tick0+          1      0      1
+
+CANDIDATES: 26 reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+), most used first:
+  Simple                       tick0+   npc=1352 ability=  26
+  DamageEntity                 tick0    npc= 810 ability=  15
+  ChangeStat                   firstRun npc= 123 ability=  12
+  StatsCondition               firstRun npc=  71 ability=  14
+  EffectCondition              firstRun npc=  44 ability=   8
+  ClearEntityEffect            firstRun npc=  31 ability=   8
+  ModifyInventory              firstRun npc=  38 ability=   0
+  ApplyForce                   tick0+   npc=  31 ability=   0
+  Repeat                       tick0+   npc=  26 ability=   0
+  Condition                    tick0+   npc=  18 ability=   0
+  TriggerCooldown              firstRun npc=   3 ability=  13
+  Explode                      firstRun npc=   9 ability=   2
+  EquipItem                    firstRun npc=   8 ability=   0
+  ContextualUseNPC             firstRun npc=   7 ability=   0
+  DurabilityCondition          firstRun npc=   7 ability=   0
+  DestroyBlock                 firstRun npc=   5 ability=   0
+  PlaceBlock                   tick0+   npc=   4 ability=   0
+  RefillContainer              firstRun npc=   4 ability=   0
+  CooldownCondition            firstRun npc=   3 ability=   0
+  DragPlaceBlock               tick0+   npc=   3 ability=   0
+  Interrupt                    firstRun npc=   2 ability=   1
+  TriggerSpawnMarkers          firstRun npc=   2 ability=   0
+  AttachBeam                   firstRun npc=   0 ability=   1
+  ExtrudePlaceBlock            tick0+   npc=   1 ability=   0
+  PlaceModeSelect              tick0    npc=   1 ability=   0
+  SurfaceDrawPlaceBlock        tick0+   npc=   1 ability=   0
+
+registered types never reached by either seed set: 77 of 135

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Test run.sh's scratch guard with a FAKE HOME.   maintenance/probes/beams/guard-test.sh WORKDIR
+# Test run.sh's scratch guard with a FAKE HOME.   maintenance/probes/beams/guard-test.sh WORKDIR [RUN-SH [MARKER]]
+#
+# RUN-SH (default: ./run.sh) is the script under test and MARKER (default .beams-probe-case) the file it puts
+# in a case dir it made; ../double-run/run.sh shares this guard and is tested by
+#   guard-test.sh WORKDIR ../double-run/run.sh .double-run-case
+# Any script under test must accept the case name `boot` and refuse every other name outside its own list.
 #
 # WORKDIR must be absent, an empty directory, or one this script made before (it carries the
 # .beams-guard-test marker); only then is it wiped. Nothing outside it is touched: HOME is set to
@@ -12,7 +17,10 @@
 # and leave the fake save and the fake .var/app in place, and must still accept a legitimate scratch.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-base="${1:?usage: guard-test.sh WORKDIR}"
+base="${1:?usage: guard-test.sh WORKDIR [RUN-SH [MARKER]]}"
+target="${2:-$here/run.sh}"; marker="${3:-.beams-probe-case}"
+[ -f "$target" ] || { echo "FAIL  no script to test at $target" >&2; exit 3; }
+target="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
 case "$base" in /*) ;; *) echo "FAIL  WORKDIR must be absolute" >&2; exit 3;; esac
 base="$(realpath -m -- "$base")"
 # Wipe only what this script made: a WORKDIR of $HOME or / used to be rm -rf'd (verify pass of
@@ -45,7 +53,7 @@ for r in "${RES[@]}"; do echo "old run.sh: $r"; done
 if [ "$deleted" = 0 ]; then echo "VOID  the old run.sh deleted nothing in a fake HOME, so these attacks prove nothing"; exit 2; fi
 echo "control held: the old run.sh deleted the fake save/.var in $deleted of 4 attacks"
 
-RUN="$here/run.sh"; attacks; fails=0
+RUN="$target"; attacks; fails=0
 for r in "${RES[@]}"; do
   IFS='|' read -r n st rc <<< "$r"
   if [ "$st" = survived ] && [ "$rc" = 3 ]; then echo "PASS  $n: refused (rc 3), save survives"; else echo "FAIL  $n: $st rc=$rc"; fails=$((fails+1)); fi
@@ -67,9 +75,9 @@ HOME="$base/home" HYTALE_GAME="$base/game" bash "$RUN" "$base/legit" boot >/dev/
 if [ -f "$base/legit/boot/precious" ] && [ "$rc" = 3 ]; then echo "PASS  existing unmarked dir SCRATCH/boot: refused, not removed"; else echo "FAIL  unmarked dir: rc=$rc"; fails=$((fails+1)); fi
 # the legitimate form is accepted by the guard (it then fails at java -jar of the empty fake jar, rc != 3 from the guard's refusals)
 fresh; out="$(HOME="$base/home" HYTALE_GAME="$base/game" bash "$RUN" "$base/legit" boot 2>&1)"
-if [ -f "$base/legit/boot/.beams-probe-case" ] && ! printf '%s' "$out" | /usr/bin/grep -q '^FAIL'; then echo "PASS  legitimate scratch and case: accepted, case dir created"; else echo "FAIL  legitimate form refused: $out"; fails=$((fails+1)); fi
+if [ -f "$base/legit/boot/$marker" ] && ! printf '%s' "$out" | /usr/bin/grep -q '^FAIL'; then echo "PASS  legitimate scratch and case: accepted, case dir created"; else echo "FAIL  legitimate form refused: $out"; fails=$((fails+1)); fi
 # the same run, twice: our own marked dir is replaced
 HOME="$base/home" HYTALE_GAME="$base/game" bash "$RUN" "$base/legit" boot >/dev/null 2>&1
-[ -f "$base/legit/boot/.beams-probe-case" ] && echo "PASS  a marked case dir is replaced by a re-run" || { echo "FAIL  re-run"; fails=$((fails+1)); }
+[ -f "$base/legit/boot/$marker" ] && echo "PASS  a marked case dir is replaced by a re-run" || { echo "FAIL  re-run"; fails=$((fails+1)); }
 echo "---- $fails failed"
 [ "$fails" = 0 ]

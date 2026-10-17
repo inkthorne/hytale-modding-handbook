@@ -1,0 +1,16 @@
+{
+  "Group": "probe",
+  "Name": "Double Run Probe",
+  "Version": "0.1.0",
+  "Authors": [
+    {
+      "Name": "handbook maintenance"
+    }
+  ],
+  "Main": "doublerun.probe.DrPlugin",
+  "ServerVersion": "^0.7.0",
+  "Dependencies": {
+    "Hytale:Beam": "*"
+  },
+  "IncludesAssetPack": true
+}

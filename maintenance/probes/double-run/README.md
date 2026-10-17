@@ -115,6 +115,16 @@ which the manager catches. Prediction: **1** item (the same as the remote contro
 no `not in sync`, no removal. Unit control: `InvNoneSelf1.remote` reads 1 and finishes. Negative control: `InvSelf1.npc`
 (the `Server` wait) desyncs on the same harness.
 
+`StatSet1` (added after review, MINOR-2; the page had generalised the `Add` sample to every `ChangeStat`): `ChangeStat`
+with `"Behaviour": "Set"` and `SignatureCharges` 5. `processStatChanges` calls `setStatValue`, which writes the value, so
+the second pass changes nothing. Prediction (written before the run): **+5.0** on the NPC-shaped manager, as on
+`remote`, while `Stat1.npc` (`Add`, same harness) reads +10.0. No dose control: setting twice reads one unit by
+construction; the sensitivity control is that `Add` on the same harness does read two. `Min` and `Max` are read from
+source (`minStatValue`, `maxStatValue`) and not measured. Shipped usage, counted from the extracted `Assets.zip`: of
+the 206 objects with `"Type": "ChangeStat"` in `Server/` (every `.json` that parses, any depth; the 6,030 files that
+do not parse are under `World/` and `Prefabs/` and none names `ChangeStat`), `Behaviour` is absent in 98, `Add` in 5,
+`Set` in 89, `Min` in 14 and `Max` in none.
+
 ## Results (one pass, 2026-10-17, java 25.0.4.1, `HytaleServer.jar` 0.7.2)
 
 `verdicts.sh` on the final pass: **22 PASS, 0 failed, 0 void**. The final pass is 28 server runs (the boot, then
@@ -180,6 +190,7 @@ Units are read from the remote-client control. `remote` is `setHasRemoteClient(t
 | `ChangeStat` (`SignatureCharges`) | +5.0 | +10.0 | **+10.0** | **doubled** |
 | `ModifyInventory` (items in the owner's inventory; Server wait) | 1 | 2 | **2** | **doubled** (proxy context) |
 | `AttachBeam` (`BeamComponent`s) | 1 ADDED, no exception | 1 ADDED, then `Entity already contains component type` | **1 ADDED, then the same exception on the world thread** | **refuses**; the world reloads 5 s later (`Reloaded crashed world 'default'`) |
+| `ChangeStat` with `Behaviour` `Set` (`StatSet1`) | +5.0 | not run (a Set has no dose) | **+5.0** | **the same result twice**: one unit, where `Add` on the same harness reads two |
 | `ModifyInventory` with the wait changed to `None` (owner == the running entity; `InvNoneSelf1`) | 1, chain `Finished` | not run | **1**, chain `ItemChanged` | **once**: the simulation pass does the work, the server pass is cancelled as `ItemChanged`; no desync, entity kept |
 
 Plugin-written types (their declared effect is one log line, so these are lines, not world effects):

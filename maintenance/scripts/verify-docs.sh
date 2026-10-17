@@ -335,32 +335,88 @@ else
 fi
 
 # =====================================================================
-section "[INFO] Asset drift vs baseline"
-# Tells you exactly which Common assets changed since the baseline was captured.
-if [ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
-  # LC_ALL=C: locale collation treats '-'/'_' as equal, making sort order
-  # unstable for near-duplicate paths (e.g. Face-Scar.png vs Face_Scar.png)
-  D="$(diff <(LC_ALL=C sort maintenance/baseline/CommonAssetsIndex.hashes) <(LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes") | grep -c '^[<>]' || true)"
-  if [ "$D" -eq 0 ]; then
-    info "0 changed Common assets — docs verified against this build still apply"
-  else
-    warn "$D changed line(s) vs baseline — re-verify docs referencing those assets"
-    info "see: diff <(LC_ALL=C sort maintenance/baseline/CommonAssetsIndex.hashes) <(LC_ALL=C sort \"$ASSETS/CommonAssetsIndex.hashes\")"
-  fi
+section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could not be computed is a FAIL)"
+# Tells you exactly which Common assets changed since the baseline was captured, and the same for
+# Server/ and Cosmetics/. The drift itself is a WARN (a game update makes it expected, and it is
+# the reader's cue to re-verify), but a run that could not COMPUTE the drift is a FAIL, and the
+# section is [HARD] for that reason alone. Both halves used to read a count from
+# `... | diff ... | grep -c '^[<>]' || true`, whose only status was grep's, so a failure upstream
+# became a number: one unreadable Common index read as every line changed (a WARN with a wrong
+# count), both read as 0 and printed "0 changed Common assets - docs verified against this build
+# still apply", the false green this section exists to prevent; and a hash-server-assets.sh that
+# exited 123 or 1 (since 69c5dd8) left a short index that was counted as drift, or as the whole
+# baseline removed. Each step that feeds a count is now run on its own and its status read: both
+# sorts, the hash script, diff (0 same, 1 differs, 2 or more is trouble) and the count itself. A
+# failed step prints which step and what it exited, and no count and no "still apply" line.
+# FAIL rather than WARN because at a game update this runs BEFORE the baselines are refreshed, so
+# real-drift WARNs are expected on that run, and a "could not compute" WARN would be lost among
+# them on the one run that matters (warn() does not change the exit status). update-build.sh
+# therefore exits verify-docs.sh's 1 for a Common-asset failure, not its own soft-failure 3.
+# update-build.sh section 4 does the same Common computation, independently: the two are parallel
+# and deliberately not shared. check-asset-drift-fixture.py runs THIS text under shims.
+# Each half prints a denominator: the rows it compared, so "0 changed" cannot be read from a
+# run that compared nothing (Common: the rows of the two sorted copies diff read).
+DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
+if [ -z "$DRIFT_TMP" ]; then
+  fail "asset drift: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - neither the Common nor the Server/Cosmetics drift was computed"
 else
-  warn "skipped (missing baseline or live index)"
-fi
-# Server/Cosmetics half (our own generated index — Hytale ships one for Common/ only).
-if [ -f maintenance/baseline/ServerAssetsIndex.hashes ] && [ -d "$ASSETS/Server" ]; then
-  D="$(maintenance/scripts/hash-server-assets.sh "$ASSETS" | diff maintenance/baseline/ServerAssetsIndex.hashes - | grep -c '^[<>]' || true)"
-  if [ "$D" -eq 0 ]; then
-    info "0 changed Server/Cosmetics assets — data-format docs verified against this build still apply"
+  if [ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]; then
+    # LC_ALL=C: locale collation treats '-'/'_' as equal, making sort order
+    # unstable for near-duplicate paths (e.g. Face-Scar.png vs Face_Scar.png)
+    LC_ALL=C sort maintenance/baseline/CommonAssetsIndex.hashes > "$DRIFT_TMP/common-baseline" 2>/dev/null; SORT_RC_B=$?
+    LC_ALL=C sort "$ASSETS/CommonAssetsIndex.hashes" > "$DRIFT_TMP/common-live" 2>/dev/null; SORT_RC_L=$?
+    if [ "$SORT_RC_B" != 0 ] || [ "$SORT_RC_L" != 0 ]; then
+      fail "asset drift (Common): could not sort the indexes for the diff (the baseline sort exited $SORT_RC_B, the live index's $SORT_RC_L; an unreadable file is the usual cause) - Common-asset drift was NOT computed"
+    else
+      diff "$DRIFT_TMP/common-baseline" "$DRIFT_TMP/common-live" > "$DRIFT_TMP/common.diff"; DIFF_RC=$?
+      if [ "$DIFF_RC" -ge 2 ]; then
+        fail "asset drift (Common): diff of the indexes exited $DIFF_RC (0 and 1 are normal) - Common-asset drift was NOT computed"
+      else
+        D="$(grep -c '^[<>]' "$DRIFT_TMP/common.diff")"; COUNT_RC=$?
+        if [ "$COUNT_RC" -ge 2 ]; then
+          fail "asset drift (Common): counting the changed lines exited $COUNT_RC (0 and 1 are normal) - Common-asset drift was NOT computed"
+        else
+          info "Common index: $(wc -l < "$DRIFT_TMP/common-baseline") baseline row(s) compared with $(wc -l < "$DRIFT_TMP/common-live") live row(s)"
+          if [ "$D" -eq 0 ]; then
+            info "0 changed Common assets — docs verified against this build still apply"
+          else
+            warn "$D changed line(s) vs baseline — re-verify docs referencing those assets"
+            info "see: diff <(LC_ALL=C sort maintenance/baseline/CommonAssetsIndex.hashes) <(LC_ALL=C sort \"$ASSETS/CommonAssetsIndex.hashes\")"
+          fi
+        fi
+      fi
+    fi
   else
-    warn "$D changed line(s) vs ServerAssetsIndex baseline — re-verify docs referencing those assets"
-    info "see: maintenance/scripts/hash-server-assets.sh | diff maintenance/baseline/ServerAssetsIndex.hashes -"
+    warn "skipped (missing baseline or live index)"
   fi
-else
-  warn "Server-assets drift skipped (missing ServerAssetsIndex.hashes baseline or extracted Server/)"
+  # Server/Cosmetics half (our own generated index — Hytale ships one for Common/ only).
+  if [ -f maintenance/baseline/ServerAssetsIndex.hashes ] && [ -d "$ASSETS/Server" ]; then
+    maintenance/scripts/hash-server-assets.sh "$ASSETS" > "$DRIFT_TMP/server-live"; HASH_RC=$?
+    if [ "$HASH_RC" != 0 ]; then
+      fail "asset drift (Server/Cosmetics): hash-server-assets.sh exited $HASH_RC, so the generated index is incomplete - Server/Cosmetics drift was NOT computed"
+    else
+      diff maintenance/baseline/ServerAssetsIndex.hashes "$DRIFT_TMP/server-live" > "$DRIFT_TMP/server.diff"; DIFF_RC=$?
+      if [ "$DIFF_RC" -ge 2 ]; then
+        fail "asset drift (Server/Cosmetics): diff of the indexes exited $DIFF_RC (0 and 1 are normal) - Server/Cosmetics drift was NOT computed"
+      else
+        D="$(grep -c '^[<>]' "$DRIFT_TMP/server.diff")"; COUNT_RC=$?
+        if [ "$COUNT_RC" -ge 2 ]; then
+          fail "asset drift (Server/Cosmetics): counting the changed lines exited $COUNT_RC (0 and 1 are normal) - Server/Cosmetics drift was NOT computed"
+        else
+          info "Server/Cosmetics index: $(wc -l < maintenance/baseline/ServerAssetsIndex.hashes) baseline row(s) compared with $(wc -l < "$DRIFT_TMP/server-live") row(s) hashed from the extracted tree"
+          if [ "$D" -eq 0 ]; then
+            info "0 changed Server/Cosmetics assets — data-format docs verified against this build still apply"
+          else
+            warn "$D changed line(s) vs ServerAssetsIndex baseline — re-verify docs referencing those assets"
+            info "see: maintenance/scripts/hash-server-assets.sh | diff maintenance/baseline/ServerAssetsIndex.hashes -"
+          fi
+        fi
+      fi
+    fi
+  else
+    warn "Server-assets drift skipped (missing ServerAssetsIndex.hashes baseline or extracted Server/)"
+  fi
+  rm -rf "$DRIFT_TMP"
 fi
 
 # =====================================================================
@@ -901,6 +957,10 @@ section "[HARD] The gates' own fixtures pass"
 # check-doc-fences-fixture.py --mutations (the one fence reader and each gate's use of it:
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
+# check-asset-drift-fixture.py --mutations (the "Asset drift vs baseline" section above, run as text
+# under sort, diff and grep shims and stub hash scripts: 18 cases and 18 mutations including the
+# identity control, after a negative control that reproduces the section's pre-fix false green)
+# takes ~9 s, so it is run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -916,6 +976,7 @@ check-asset-ids-fixture.py --mutations
 check-defaults-fixture.py --mutations
 check-links-fixture.py --mutations
 check-doc-fences-fixture.py --mutations
+check-asset-drift-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,

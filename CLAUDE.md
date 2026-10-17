@@ -140,6 +140,8 @@ Two habits follow from that, and both earned their place the hard way. **Audit t
 
 (Updates are detected automatically: `maintenance/scripts/check-for-update.sh` compares the installed jar version to the docs stamp — a weekly systemd user timer on the maintainer's machine runs it and raises a desktop notification plus `~/.cache/hytale-update-pending` when they diverge.)
 
+At a game update, also re-run `maintenance/probes/double-run/census.py` after `build-jar-cache.sh` and diff its output against `census-0.7.2.txt`. It reads the decompiled source for the `Interaction` registry (135 names at 0.7.2, 135 classes, 0 unparsed) and decides which hook each type's simulation pass reaches, which is what `docs/interactions.md`'s double-run section rests on; `census-test.py` and `verdicts-test.sh` are its negative controls, and the README pins 0.7.2 line numbers that the re-run will show drifting.
+
 Run the regression checker alone after doc edits (or before trusting/extending a doc):
 
 ```bash

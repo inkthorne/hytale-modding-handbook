@@ -36,5 +36,5 @@ research/
 __pycache__/
 *.pyc
 
-# Project memory store (remember): local only, never published from this public repo
+# No remember store in this public repo (personal and machine-specific data); ignored in case one is made
 .remember/

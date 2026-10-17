@@ -28,7 +28,8 @@ when the manager has no remote client (`hasRemoteClient`, set `playerRef != null
 `simulationTick` (`:644`, calls `Operation.simulateTick`) and `serverTick` (`:536`, calls
 `Operation.tick`, then `Operation.handle`). The order comes from the operation's
 `getWaitForDataFrom()` (`:486-497`): `None` and `Client` run simulation then server; `Server` runs
-server then simulation. A player's manager is built with a `PlayerRef`, so it runs the server pass only.
+server then simulation. "Server" there is `serverTick` as a whole, `tick` (`:591`) and then `handle` (`:602`), so
+for a `Server` wait the simulation pass (`:496`) runs after `handle` as well. A player's manager is built with a `PlayerRef`, so it runs the server pass only.
 The two passes share one `InteractionEntry` and so one instance store (`InteractionContext.getInstanceStore`,
 `InteractionContext.java:306`, `InteractionEntry.java:37`), but keep separate state and timestamps
 (`InteractionEntry.java:73-83`), so `firstRun` is true in both. `Interaction.tick` and

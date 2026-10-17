@@ -42,7 +42,7 @@ Operation System
 ├── OperationsBuilder (addOperation + Label flow control)
 │   └── Label system (createLabel / createUnresolvedLabel / resolveLabel / jump)
 └── Runtime execution
-    ├── per tick: tick() → handle(); for an entity with no remote client also simulateTick(), before tick() (after it for a Server wait)
+    ├── per tick: tick() → handle(); for an entity with no remote client also simulateTick(), before tick() (after tick() and handle() for a Server wait)
     ├── operation counter — moving it is what advances the chain
     └── WaitForDataFrom (None / Server / Client) — client/server sync
 ```
@@ -130,7 +130,7 @@ Controls synchronization between client and server:
 | Value | Behavior |
 |-------|----------|
 | `None` | Execute immediately on both client and server |
-| `Server` | Client waits for server confirmation before executing. On a manager with no remote client, the server pass runs first and the simulation pass after it (measured) |
+| `Server` | Client waits for server confirmation before executing. On a manager with no remote client, the server pass (`tick()` then `handle()`; read) runs first and the simulation pass after it (measured) |
 | `Client` | Server waits for client data (rare, for client-authoritative actions) |
 
 ---
@@ -150,7 +150,7 @@ ASSET LOADING PHASE
 RUNTIME EXECUTION PHASE (per server tick)
 ─────────────────────────────────────────
 3. simulateTick()  → only for an entity with no remote client; before tick(),
-                     or after it when the operation waits for Server
+                     or after tick() and handle() when the operation waits for Server
 4. tick()          → firstRun is true on the operation's first tick
 5. handle()        → right after tick(), same firstRun
 6. If the operation moved the operation counter, the manager continues with the
@@ -462,7 +462,7 @@ Each server tick, `InteractionManager` runs the chain's current operation and th
 **operation counter**:
 
 1. **Get current operation** — `root.getOperation(counter)`
-2. **Call** `tick()` (and, for an entity with no remote client, `simulateTick()`), then `handle()`
+2. **Call** `tick()` then `handle()`, and, for an entity with no remote client, `simulateTick()` before them (after both for a `Server` wait)
 3. **If the counter moved**, continue with the operation it now points at, in the same tick
 4. **If it did not move**, stop until the next tick — the operation is still running
 5. **Repeat** until the counter passes the end of the array

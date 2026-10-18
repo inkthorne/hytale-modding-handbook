@@ -51,11 +51,30 @@ doc_fences.py's `fence_lines` occupies, so this gate shares the one fence reader
 others read through. The count of heading-shaped lines it passed over is printed, so a
 run that excluded nothing can be told from one that was never offered any.
 
-Usage: python3 maintenance/scripts/check-links.py [--root DIR] [--min-outside N]
+THE SLUG IS GITHUB'S, TAGS INCLUDED. A heading is slugged from the text GitHub renders, and GitHub drops
+raw HTML from it: `## IAsyncEvent<KeyType>` is `iasyncevent`, not `iasynceventkeytype`, because `<KeyType>`
+is an inline HTML tag and not text. This gate slugged the raw characters, so it passed two links GitHub
+breaks (asset-editor.md:58 and player.md:265). What counts as a tag is CommonMark's inline raw HTML and
+nothing wider, fitted to GitHub's own ids (maintenance/fixtures/links/gh-heading-ids.tsv, read at d361e13
+with `gh api -H 'Accept: application/vnd.github.html' .../contents/docs/X.md`): `<KeyType>`, `<T>`, `<D>`
+and `<T extends Transaction>` are tags; `<K, T>`, `<Arg, D>` and `<ECS_TYPE>` are text, because a comma, or
+an underscore in the name, makes the thing no tag. A `[^>]*` regex drops `<K, T>` and so is wrong in the
+other direction. Code spans are text. `char_slug()` is the character rule alone, which the site's slugify
+shares: once no heading carries raw HTML (verify-docs lints that), the characters are all there is to
+compute from.
+
+EVERY RELATIVE TARGET IS CHECKED, NOT ONLY `.md`. The link pattern matched only `.md` targets, so the nine
+links that leave docs/ (eight into `../examples/`, one to `../CLAUDE.md`) and the README's directory links
+were never read: a renamed example would have left eight dead links and a green run. Any link whose target
+is neither a URL (`scheme:`), a `//` URL nor a bare `#fragment` must resolve to a file or a directory inside
+the root. Fragments are checked on `.md` targets only. Links on lines inside a code fence are not links
+(`list[i](x)` is code), so they are not read; none exists in the tree today.
+
+Usage: python3 maintenance/scripts/check-links.py [--root DIR] [--min-outside N] [--min-other N]
 Exit 0 pass, 1 findings, 2 SKIP (the corpus is absent or implausible).
 """
 from __future__ import annotations
-import argparse, collections, os, pathlib, re, sys
+import argparse, collections, os, pathlib, re, sys, urllib.parse
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import doc_fences
@@ -69,20 +88,51 @@ import doc_fences
 # a link target of any tracked page (no tracked file lives there: `git ls-files .claude` is empty).
 SKIP_DIRS = {'.git', '.claude', 'build', 'out', '.gradle', 'node_modules'}
 
-# The heading -> anchor rule, matching the site generator's.
-def slug(t: str) -> str:
+# The heading -> anchor rule, GitHub's. `char_slug` is the character rule: lower-case, drop everything that
+# is not a word character, hyphen or space, spaces to hyphens. `slug` first drops the inline HTML GitHub
+# drops from the heading text (see THE SLUG IS GITHUB'S above), outside code spans.
+def char_slug(t: str) -> str:
     s = t.strip().lower()
     s = re.sub(r'[^\w\- ]', '', s)
     return s.replace(' ', '-')
 
+
+# CommonMark's inline raw HTML (spec 6.6), the five forms. An open tag is a name, then attributes that each
+# need whitespace before them and a name of their own, then an optional `/`. That is why `<K, T>` is no tag
+# (a comma cannot start an attribute) and `<T extends Transaction>` is one (two boolean attributes).
+_ATTR = r'''\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:[^\s"'=<>`]+|'[^']*'|"[^"]*"))?'''
+RAW_HTML = re.compile(
+    r'<[A-Za-z][A-Za-z0-9-]*(?:' + _ATTR + r')*\s*/?>'      # open tag
+    r'|</[A-Za-z][A-Za-z0-9-]*\s*>'                        # closing tag
+    r'|<!--.*?-->'                                         # comment
+    r'|<\?.*?\?>'                                          # processing instruction
+    r'|<![A-Za-z][^>]*>'                                   # declaration
+    r'|<!\[CDATA\[.*?\]\]>', re.S)
+CODE_SPAN = re.compile(r'(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)')
+
+
+def strip_tags(t: str) -> str:
+    """`t` with the inline HTML GitHub drops removed, code spans left alone (their `<`..`>` is text)."""
+    out, pos = [], 0
+    for m in CODE_SPAN.finditer(t):
+        out.append(RAW_HTML.sub('', t[pos:m.start()]))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(RAW_HTML.sub('', t[pos:]))
+    return ''.join(out)
+
+
+def slug(t: str) -> str:
+    return char_slug(strip_tags(t))
+
 HEADING = re.compile(r'^#{1,6}\s+(.*?)\s*#*$')
-# `[text](target.md#anchor)`, either part optional. The anchor class is
-# `[A-Za-z0-9_-]` because `slug()` strips everything else from a heading, so no
-# anchor outside that class can ever be VALID. The failure mode is therefore
-# "an unfixable link is skipped rather than reported", not "a broken link
-# passes" — audited, not live on build-26, and stated here so the next reader
-# does not have to re-derive it.
-LINK = re.compile(r'\[([^\]]*)\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)')
+# Every link, `[text](target)` with an optional title; main() classifies the target. A fragment is read as
+# an anchor only inside `[A-Za-z0-9_-]`, because `slug()` strips everything else from a heading, so no
+# anchor outside that class can ever be VALID. The failure mode is therefore "an unfixable link is
+# skipped rather than reported", not "a broken link passes" - audited, not live on build-26, and stated
+# here so the next reader does not have to re-derive it.
+ANY_LINK = re.compile(r'\[([^\]]*)\]\(([^)\s]*)(?:\s+(?:"[^"]*"|\'[^\']*\'))?\)')
+SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:|^//')
 
 
 def anchors_of(text: str):
@@ -115,12 +165,19 @@ def main() -> int:
     ap.add_argument('--root', default=str(pathlib.Path(__file__).resolve().parents[2]))
     ap.add_argument('--min-links', type=int, default=100)
     ap.add_argument('--min-outside', type=int, default=1)
+    ap.add_argument('--min-other', type=int, default=1)
     ap.add_argument('-v', '--verbose', action='store_true')
     a = ap.parse_args()
     root = pathlib.Path(a.root)
     if not root.exists():
         print(f'  SKIP  corpus root not found at {root}')
         return 2
+
+    def where(page: pathlib.Path, target: str) -> str:
+        """Where a link's path points: beside the page, or from the repository root when it starts with `/`
+        (GitHub's reading of a root-relative link)."""
+        base = root if target.startswith('/') else page.parent
+        return os.path.normpath(str(base / target.lstrip('/')))
 
     files = corpus(root)
     texts = {p: p.read_text(errors='replace') for p in files}
@@ -133,6 +190,7 @@ def main() -> int:
     pop = collections.Counter()
     findings: list[str] = []
     orphans = 0
+    other = other_dirs = 0          # relative targets that are not .md pages: files, and directories
     for p in files:
         rel = p.relative_to(root)
         # THREE buckets, not two, and the classification is ROOT-RELATIVE.
@@ -153,19 +211,50 @@ def main() -> int:
         for _name, no, why in doc_fences.orphans_of(str(rel), texts[p]):
             findings.append(f'{rel}:{no}: fence census orphan ({why})')
             orphans += 1
+        fenced = doc_fences.parse(texts[p]).fence_lines
         for ln, line in enumerate(texts[p].split('\n'), 1):
-            for m in LINK.finditer(line):
-                tgt, an = m.group(2), m.group(3)
-                if tgt is None and an is None:
-                    continue
-                pop[bucket] += 1
-                tp = str(p) if tgt is None else os.path.normpath(str(p.parent / tgt))
-                if tp not in anchors:
-                    findings.append(f'{rel}:{ln} -> {tgt} (no such file)')
-                elif an is not None and an not in anchors[tp]:
-                    findings.append(f'{rel}:{ln} -> {tgt or p.name}#{an} (no such anchor)')
-                elif a.verbose:
-                    print(f'  ok    {rel}:{ln} -> {tgt or ""}#{an or ""}')
+            if ln in fenced:
+                continue            # `list[i](x)` in a fence is code, not a link
+            for m in ANY_LINK.finditer(line):
+                raw = m.group(2)
+                if not raw or SCHEME.match(raw):
+                    continue        # empty, or a URL: counted nowhere, fetched never
+                path, _, frag = raw.partition('#')
+                path = urllib.parse.unquote(path.partition('?')[0])
+                if not path:
+                    tgt, an = None, frag            # `#fragment`: this file
+                elif path.endswith('.md'):
+                    tgt, an = path, frag or None
+                else:
+                    tgt, an = path, None            # any other target must exist; its fragment is not read
+                if tgt is None or tgt.endswith('.md'):
+                    # An anchor outside `[A-Za-z0-9_-]` can never be VALID (slug() strips everything else), so
+                    # the link is skipped, as before, rather than reported: unfixable, not broken.
+                    if an is not None and not re.fullmatch(r'[A-Za-z0-9_\-]+', an):
+                        if tgt is None:
+                            continue
+                        an = None
+                    if tgt is None and not an:
+                        continue
+                    pop[bucket] += 1
+                    tp = str(p) if tgt is None else where(p, tgt)
+                    if tp not in anchors:
+                        findings.append(f'{rel}:{ln} -> {tgt} (no such file)')
+                    elif an is not None and an not in anchors[tp]:
+                        findings.append(f'{rel}:{ln} -> {tgt or p.name}#{an} (no such anchor)')
+                    elif a.verbose:
+                        print(f'  ok    {rel}:{ln} -> {tgt or ""}#{an or ""}')
+                else:
+                    other += 1
+                    dest = pathlib.Path(where(p, path))
+                    if not dest.is_relative_to(os.path.normpath(str(root))):
+                        findings.append(f'{rel}:{ln} -> {raw} (outside the repository)')
+                    elif not dest.exists():
+                        findings.append(f'{rel}:{ln} -> {raw} (no such file or directory)')
+                    else:
+                        other_dirs += dest.is_dir()
+                        if a.verbose:
+                            print(f'  ok    {rel}:{ln} -> {raw}')
 
     total = sum(pop.values())
     print(f'  INFO  {total} markdown link(s) in {len(files)} file(s): '
@@ -173,6 +262,7 @@ def main() -> int:
           f'{pop["fixture"]} in gate fixtures (checked, not floored)')
     print(f'  INFO  {in_fences} heading-shaped line(s) inside code fences passed over, not read as anchors')
     print(f'  INFO  {len(files)} file(s) fence-censused, {orphans} orphan marker(s)')
+    print(f'  INFO  {other} relative non-.md target(s) checked for existence ({other_dirs} directories)')
 
     # TWO floors, and the second one is the point. A total-only floor cannot tell
     # "the widening works" from "the widening was reverted".
@@ -186,11 +276,16 @@ def main() -> int:
               f'the regression this gate exists to prevent')
         return 2
 
+    if other < a.min_other:
+        print(f'  SKIP  {other} relative non-.md target(s) read, floor is {a.min_other} - the reader of '
+              f'links that leave the .md pages (examples/, CLAUDE.md, directories) has gone blind')
+        return 2
+
     for f in findings:
         print(f'  FAIL  {f}')
     if findings:
         return 1
-    print(f'  PASS  all {total} markdown link(s) resolve')
+    print(f'  PASS  all {total} markdown link(s) and {other} other relative target(s) resolve')
     return 0
 
 

@@ -34,12 +34,12 @@ FROM = pathlib.Path(A.from_dir)
 fails: list[str] = []
 checks = 0
 MIN_CASES = 35
-MIN_MUTATIONS = 12
+MIN_MUTATIONS = 31
 
 
 def run(root, *extra):
     p = subprocess.run([sys.executable, str(FROM / 'check-links.py'),
-                        '--root', str(root), '--min-links', '3', *extra],
+                        '--root', str(root), '--min-links', '3', '--min-other', '0', *extra],
                        capture_output=True, text=True)
     return p.returncode, p.stdout + p.stderr
 
@@ -78,6 +78,37 @@ def broken(root_extra_files, *extra):
     return rc, bad, out
 
 
+# ---- labels shared by the cases and the mutations that must redden them ----------------------------
+# GitHub's own ids (gh-heading-ids.tsv, 51 headings with a `<`) and the text GitHub renders for 42 heading
+# shapes (gh-heading-shapes.tsv) are measured data, committed beside the corpus; see the README there.
+L_IDS = 'check-links slugs every heading of the GitHub id table to the id GitHub gave it'
+L_IDS_N = 'the id table holds the 51 headings it was measured on, so a short read cannot pass it'
+L_IDS_OLD = 'NEGATIVE CONTROL, the character rule alone (the slug before the tag rule) misses 18 of those ids'
+L_SHAPES = 'strip_tags leaves exactly the text GitHub renders, for every measured heading shape'
+L_SHAPES_N = 'the shape table holds the 42 shapes it was measured on'
+L_CODE_KEEP = 'a code span keeps its angle brackets, as in a heading written ``## `Codec<T>` ``'
+L_GEN_LINK = 'a link by the id GitHub gave a generic heading resolves'
+L_GEN_RAW = 'a link by the raw-character id of a generic heading FAILs (GitHub has no such anchor)'
+L_NONMD_DEAD = 'a dead non-.md file target FAILs'
+L_NONMD_LIVE = 'a live non-.md file target passes'
+L_DIR_LIVE = 'a directory target passes, with and without the trailing slash'
+L_DIR_DEAD = 'a dead directory target FAILs'
+L_FENCE_NONMD = 'a link in a code fence is not read, so a dead non-.md target there is no finding'
+L_FENCE_MD = 'and nor is a dead .md link in a code fence'
+L_URLS = 'a URL, a mailto link and a // URL are not read as paths'
+L_FRAGQ = 'a fragment or a query after a non-.md target does not stop it being found'
+L_OUTSIDE = 'a target that leaves the repository FAILs, even where the file exists'
+L_PCT = 'a percent-encoded path is decoded before it is looked up'
+L_TITLE = 'a link with a title is read and its dead target FAILs'
+L_IMAGE = 'an image target is a link too'
+L_COUNT = 'the run counts the non-.md targets it read and the directories among them'
+L_FLOOR = 'a corpus with no non-.md target SKIPs, never passes'
+L_FLOOR_MSG = 'and the SKIP says the reader of links that leave the .md pages has gone blind'
+L_ABS = 'a root-relative target (/docs/alpha.md) resolves against the repository root'
+L_BADFRAG = 'an anchor outside [A-Za-z0-9_-] is skipped, not reported (it can never be valid)'
+L_BADFRAG_MD = 'and on an existing .md target too'
+L_MDFRAG_BADCHAR = 'a .md target whose anchor is unfixable still has its FILE checked'
+
 if A.mutations:
     # Every case that expects a FINDING goes red when the run SKIPs instead (the two corpus
     # narrowings below), so the fenced-comment cases that expect one belong to those sets.
@@ -98,6 +129,24 @@ if A.mutations:
         'and a file with an orphan makes the gate exit 1',
         'an UNCLOSED fence outside docs/ FAILs naming its opener',
         'the run reports how many files were fence-censused and how many orphans it found'}
+    # The new cases that expect a FINDING from a non-.md (or unfixable-anchor) link, and the slug case that
+    # expects one: red whenever the run SKIPs instead, like every other case that expects a finding.
+    NONMD_DEAD = {L_NONMD_DEAD, L_DIR_DEAD, L_TITLE, L_IMAGE, L_ABS,
+                  'a dead target in a file outside docs/ is caught too (the examples/ links)',
+                  'and it exits 1', 'and a dead one is still dead with a fragment on it'}
+    NONMD_FINDINGS = {L_NONMD_DEAD, L_DIR_DEAD, L_OUTSIDE, L_TITLE, L_IMAGE, L_ABS, L_MDFRAG_BADCHAR, L_GEN_RAW,
+                      'a dead target in a file outside docs/ is caught too (the examples/ links)',
+                      'and it exits 1', 'and a dead one is still dead with a fragment on it'}
+    # The link-dependent cases the two corpus narrowings share (see the first of them).
+    LINK_DEPENDENT = {
+        L_FLOOR_MSG,
+        'a healthy corpus passes',
+        'it prints the two populations separately, never their sum',
+        'a dead intra-doc anchor is caught',
+        'a link to a file that does not exist is caught',
+        'a broken link in a file outside docs/ is caught',
+        'and it exits 1, not 0',
+        'fixture links are still counted and reported, just not floored'}
     # The worktree denominator case pins the INFO line, so it goes red when the outside population goes.
     WT_DENOM = {'and the file is not in the denominator either'}
     # Each entry: the edit, and the EXACT set of case labels it must redden.
@@ -112,13 +161,7 @@ if A.mutations:
             # own examples-free corpus already expects a SKIP, so it cannot see
             # this — which is why the detection has to come from the healthy-corpus
             # cases rather than from the narrowing case alone.
-            {'a healthy corpus passes',
-             'it prints the two populations separately, never their sum',
-             'a dead intra-doc anchor is caught',
-             'a link to a file that does not exist is caught',
-             'a broken link in a file outside docs/ is caught',
-             'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | ORPHAN_CASES | WT_DENOM),
+            LINK_DEPENDENT | FENCED_FINDINGS | ORPHAN_CASES | WT_DENOM | NONMD_FINDINGS),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
@@ -127,8 +170,8 @@ if A.mutations:
              'the gate fixtures do not vote in the floor they are testing',
              'and the SKIP names the narrowing, not the corpus size'}),
         'the link pattern loses its path segment': (
-            r"""LINK = re.compile(r'\[([^\]]*)\]\(([^)\s#]*\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
-            r"""LINK = re.compile(r'\[([^\]]*)\]\(([A-Za-z0-9_\-]+\.md)?(?:#([A-Za-z0-9_\-]+))?\)')""",
+            r"""ANY_LINK = re.compile(r'\[([^\]]*)\]\(([^)\s]*)(?:\s+""",
+            r"""ANY_LINK = re.compile(r'\[([^\]]*)\]\(([A-Za-z0-9_.#\-]*)(?:\s+""",
             # The same red set as the corpus narrowing for the link-dependent cases, and that is the
             # finding rather than a flaw: either narrowing alone makes every link outside docs/
             # invisible, so they are indistinguishable from the outside. The ORPHAN_CASES are not
@@ -136,15 +179,10 @@ if A.mutations:
             # still go red, only because the corpus's own outside link (which keeps the OUTSIDE floor
             # satisfied) is a path link: the docs/ ~~~ case and the UNCLOSED case (which brings its own
             # path link, `../../docs/alpha.md`, to clear that floor).
-            {'a healthy corpus passes',
-             'it prints the two populations separately, never their sum',
-             'a dead intra-doc anchor is caught',
-             'a link to a file that does not exist is caught',
-             'a broken link in a file outside docs/ is caught',
-             'and it exits 1, not 0',
-             'fixture links are still counted and reported, just not floored'} | FENCED_FINDINGS | WT_DENOM
+            LINK_DEPENDENT | FENCED_FINDINGS | WT_DENOM | NONMD_FINDINGS | {L_COUNT}
             | {'a ~~~ fence in docs/gamma.md FAILs naming both markers, and the phantom link still resolves',
                'an UNCLOSED fence outside docs/ FAILs naming its opener'}),
+
         'gate-fixture links vote in the floor again': (
             """        elif rel.parts[:2] == ('maintenance', 'fixtures'):
             bucket = 'fixture'""",
@@ -159,12 +197,13 @@ if A.mutations:
              'fixture links are still counted and reported, just not floored'}),
 
         'a missing target FILE stops being a finding': (
-            """                if tp not in anchors:
-                    findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
-            """                if tp not in anchors:
-                    pass""",
+            """                    if tp not in anchors:
+                        findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
+            """                    if tp not in anchors:
+                        pass""",
             {'a link to a file that does not exist is caught',
-             'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding'}),
+             'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding',
+             L_MDFRAG_BADCHAR}),
         'headings inside code fences are read as anchors again': (
             """        if no in fenced:
             passed_over += 1
@@ -199,6 +238,70 @@ if A.mutations:
             "doc_fences.orphans_of(str(rel), texts[p])",
             "doc_fences.orphans_of(str(rel), texts[p], doc_fences.ALLOWED_TAGS)",
             {'a ```Java tag outside docs/ is NOT an orphan (the tag allowlist is a docs/ rule)'}),
+        # ---- the slug ----
+        'the tag rule is dropped: the slug is the character rule alone': (
+            "    return char_slug(strip_tags(t))", "    return char_slug(t)",
+            {L_IDS, L_GEN_LINK, L_GEN_RAW}),
+        'an open tag is anything up to a `>` (so <K, T> and <ECS_TYPE> are dropped)': (
+            "    r'<[A-Za-z][A-Za-z0-9-]*(?:' + _ATTR + r')*\\s*/?>'      # open tag",
+            "    r'<[A-Za-z][^>]*>'      # open tag",
+            {L_IDS, L_SHAPES, 'a heading that keeps its text (<K, T> is no tag) is linked by the text'}),
+        'an open tag has no attributes (so <T extends Transaction> is kept)': (
+            "    r'<[A-Za-z][A-Za-z0-9-]*(?:' + _ATTR + r')*\\s*/?>'      # open tag",
+            "    r'<[A-Za-z][A-Za-z0-9-]*\\s*/?>'      # open tag",
+            {L_IDS, L_SHAPES}),
+        'code spans are not protected from the tag rule': (
+            "        out.append(m.group(0))", "        out.append(RAW_HTML.sub('', m.group(0)))",
+            {L_IDS, L_SHAPES, L_CODE_KEEP}),
+        'closing tags are kept': (
+            "    r'|</[A-Za-z][A-Za-z0-9-]*\\s*>'                        # closing tag\n", "",
+            {L_SHAPES}),
+        'comments, processing instructions, declarations and CDATA are kept': (
+            "    r'|<!--.*?-->'                                         # comment\n"
+            "    r'|<\\?.*?\\?>'                                          # processing instruction\n"
+            "    r'|<![A-Za-z][^>]*>'                                   # declaration\n"
+            "    r'|<!\\[CDATA\\[.*?\\]\\]>', re.S)", "    , re.S)",
+            {L_SHAPES}),
+        # ---- every relative target ----
+        'links in code fences are read again': (
+            "            if ln in fenced:\n                continue            # `list[i](x)` in a fence is code, not a link\n", "",
+            {L_FENCE_NONMD, L_FENCE_MD}),
+        'a non-.md target is never looked up': (
+            "                    elif not dest.exists():", "                    elif False:",
+            NONMD_DEAD),
+        'a directory is not an existing target (only files are)': (
+            "                    elif not dest.exists():", "                    elif not dest.is_file():",
+            {L_DIR_LIVE, L_COUNT}),
+        'the outside-the-repository test is removed': (
+            "                    if not dest.is_relative_to(os.path.normpath(str(root))):", "                    if False:",
+            {L_OUTSIDE}),
+        'a URL is read as a path': (
+            "SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:|^//')", "SCHEME = re.compile(r'^\\0')",
+            {L_URLS}),
+        'a query string stays on the path': (
+            "urllib.parse.unquote(path.partition('?')[0])", "urllib.parse.unquote(path)",
+            {L_FRAGQ}),
+        'a percent-encoded path is not decoded': (
+            "urllib.parse.unquote(path.partition('?')[0])", "path.partition('?')[0]",
+            {L_PCT}),
+        'a root-relative target is read from the page, not the root': (
+            "base = root if target.startswith('/') else page.parent", "base = page.parent",
+            {L_ABS}),
+        'the non-.md floor is removed': (
+            "    if other < a.min_other:", "    if False:",
+            {L_FLOOR, L_FLOOR_MSG}),
+        'a link with a title is not read': (
+            "(?:\\s+(?:\"[^\"]*\"|\\\'[^\\\']*\\\'))?\\)')", "\\)')",
+            {L_TITLE}),
+        'an unfixable anchor skips the whole link, file included': (
+            "                        an = None\n", "                        continue\n",
+            {L_MDFRAG_BADCHAR}),
+        'an unfixable anchor is reported as a missing anchor': (
+            "if an is not None and not re.fullmatch(r'[A-Za-z0-9_\\-]+', an):", "if False:",
+            {L_BADFRAG, L_BADFRAG_MD}),
+        'the directories among the non-.md targets are not counted': (
+            "other_dirs += dest.is_dir()", "other_dirs += 0",
+            {L_COUNT}),
         'SKIP shares an exit code with PASS': (
             '        return 2\n    if pop', '        return 0\n    if pop',
             {'a too-small corpus SKIPs with exit 2'}),
@@ -285,6 +388,8 @@ def _docs_only():
     tmp = pathlib.Path(tempfile.mkdtemp())
     shutil.copytree(CORPUS, tmp / 'c')
     shutil.rmtree(tmp / 'c' / 'examples')
+    # one non-.md target (a directory), so the non-.md floor cannot be the one that fires
+    (tmp / 'c' / 'docs' / 'dir.md').write_text('# D\n\n[here](./)\n')
     r = subprocess.run([sys.executable, str(FROM / 'check-links.py'),
                         '--root', str(tmp / 'c'), '--min-links', '4'],
                        capture_output=True, text=True)
@@ -328,6 +433,7 @@ def _production_on_narrowed():
                     root / 'maintenance' / 'fixtures' / 'links')
     bulk = ['# Bulk', '', '## Target', '']
     bulk += [f'- [l{i}](#target)' for i in range(120)]
+    bulk += ['', '[here](./)']      # one non-.md target, so the non-.md floor cannot be the one that fires
     (root / 'docs' / 'bulk.md').write_text('\n'.join(bulk) + '\n')
     r = subprocess.run([sys.executable, str(FROM / 'check-links.py'), '--root', str(root)],
                        capture_output=True, text=True)
@@ -423,13 +529,88 @@ for _rel in ('docs/gamma.md', 'examples/sub/readme.md', 'maintenance/notes.md', 
 check('and a file with an orphan makes the gate exit 1',
       lambda: broken({'examples/sub/readme.md': _TILDE})[0], 1)
 check('an UNCLOSED fence outside docs/ FAILs naming its opener',
-      lambda: broken({'examples/sub/readme.md': '# E\n\n```bash\n# Phantom\n\n[x](../../docs/alpha.md)\n'})[1],
-      ['examples/sub/readme.md:3: fence census orphan (unclosed: the fence opened here (```bash) has no closer before EOF)'])
+      lambda: broken({'examples/sub/readme.md': '# E\n\n[up](../../docs/alpha.md)\n\n```bash\n# Phantom\n'})[1],
+      ['examples/sub/readme.md:5: fence census orphan (unclosed: the fence opened here (```bash) has no closer before EOF)'])
 check('a ```Java tag outside docs/ is NOT an orphan (the tag allowlist is a docs/ rule)',
       lambda: broken({'maintenance/fixtures/doctype/x.md': '# I\n\n```Java\nx\n```\n'})[1], [])
 check('the run reports how many files were fence-censused and how many orphans it found',
       lambda: next((l.strip() for l in broken({'examples/sub/readme.md': _TILDE})[2].split('\n') if 'fence-censused' in l), ''),
       'INFO  3 file(s) fence-censused, 2 orphan marker(s)')
+
+# ---- the slug is GitHub's ----------------------------------------------------
+# Measured ground truth, not a restatement of the regex: for every docs heading at d361e13 with a `<`, the
+# id GitHub gave it; and for 42 heading shapes the text GitHub renders. The module is loaded from FROM so a
+# mutated copy is the one under test.
+import importlib.util
+_spec = importlib.util.spec_from_file_location('check_links_under_test', FROM / 'check-links.py')
+CL = importlib.util.module_from_spec(_spec)
+sys.path.insert(0, str(FROM))
+_spec.loader.exec_module(CL)
+FIX = HERE.parents[0] / 'fixtures' / 'links'
+
+
+def _tsv(name):
+    return [l.rstrip('\n').split('\t') for l in (FIX / name).read_text().splitlines()
+            if l and not l.startswith('#')]
+
+
+IDS = _tsv('gh-heading-ids.tsv')
+SHAPES = _tsv('gh-heading-shapes.tsv')
+check(L_IDS_N, lambda: len(IDS), 51)
+check(L_IDS, lambda: [f'{f}:{n} {h!r} -> {CL.slug(h)} (GitHub {i})' for f, n, h, i in IDS if CL.slug(h) != i], [])
+check(L_IDS_OLD, lambda: len([1 for f, n, h, i in IDS if CL.char_slug(h) != i]), 18)
+check(L_SHAPES_N, lambda: len(SHAPES), 42)
+check(L_SHAPES, lambda: [f'{h!r} -> {CL.strip_tags(h)!r} (GitHub {t!r})' for h, t in SHAPES
+                          if CL.strip_tags(h).replace('`', '').strip() != t], [])
+check(L_CODE_KEEP, lambda: CL.slug('`Codec<T>` x'), 'codect-x')
+check('the character rule alone is what the site shares: it never strips a tag',
+      lambda: (CL.char_slug('Codec<T> x'), CL.char_slug('Codec<K, T> x')), ('codect-x', 'codeck-t-x'))
+_GEN = '# G\n\n## IAsyncEvent<KeyType>\n\n'
+check(L_GEN_LINK, lambda: broken({'docs/gamma.md': _GEN + '[x](#iasyncevent)\n'})[1], [])
+check(L_GEN_RAW, lambda: broken({'docs/gamma.md': _GEN + '[x](#iasynceventkeytype)\n'})[1],
+      ['docs/gamma.md:5 -> gamma.md#iasynceventkeytype (no such anchor)'])
+check('a heading that keeps its text (<K, T> is no tag) is linked by the text',
+      lambda: broken({'docs/gamma.md': '# G\n\n## AssetCodecMapCodec<K, T>\n\n[x](#assetcodecmapcodeck-t)\n'})[1], [])
+
+# ---- every relative target, not only .md ---------------------------------------
+def _nonmd(body, extra=None):
+    return broken({'docs/gamma.md': '# G\n\n' + body, **(extra or {})})
+check(L_NONMD_DEAD, lambda: _nonmd('[x](nope.java)\n')[1],
+      ['docs/gamma.md:3 -> nope.java (no such file or directory)'])
+check(L_NONMD_LIVE, lambda: _nonmd('[x](data.json)\n', {'docs/data.json': '{}'})[1], [])
+check(L_DIR_LIVE, lambda: _nonmd('[x](pack/)\n[y](pack)\n', {'docs/pack/a.json': '{}'})[1], [])
+check(L_DIR_DEAD, lambda: _nonmd('[x](nopack/)\n')[1], ['docs/gamma.md:3 -> nopack/ (no such file or directory)'])
+check('a dead target in a file outside docs/ is caught too (the examples/ links)',
+      lambda: broken({'examples/sub/readme.md': '# E\n\n[up](../../docs/alpha.md)\n[x](src/Gone.java)\n'})[1],
+      ['examples/sub/readme.md:4 -> src/Gone.java (no such file or directory)'])
+check('and it exits 1', lambda: _nonmd('[x](nope.java)\n')[0], 1)
+_FENCED = '```java\nlist[0](nope.java);\n```\n\n```\n[y](ghost.md)\n```\n'
+check(L_FENCE_NONMD, lambda: _nonmd(_FENCED)[1], [])
+check(L_FENCE_MD, lambda: _nonmd('```\n[y](ghost.md#x)\n```\n')[1], [])
+check(L_URLS, lambda: _nonmd('[a](https://example.invalid/x.md)\n[b](mailto:a@b.invalid)\n[c](//example.invalid/y)\n')[1], [])
+check(L_FRAGQ, lambda: _nonmd('[x](data.json#frag)\n[y](data.json?raw=1)\n', {'docs/data.json': '{}'})[1], [])
+check('and a dead one is still dead with a fragment on it',
+      lambda: _nonmd('[x](nope.json#frag)\n')[1], ['docs/gamma.md:3 -> nope.json#frag (no such file or directory)'])
+check(L_OUTSIDE, lambda: _nonmd('[x](../../outside.txt)\n', {'../outside.txt': 'x'})[1],
+      ['docs/gamma.md:3 -> ../../outside.txt (outside the repository)'])
+check(L_PCT, lambda: _nonmd('[x](my%20file.txt)\n', {'docs/my file.txt': 'x'})[1], [])
+check(L_TITLE, lambda: _nonmd('[x](nope.java "a title")\n')[1],
+      ['docs/gamma.md:3 -> nope.java (no such file or directory)'])
+check(L_IMAGE, lambda: _nonmd('![alt](pic.png)\n')[1], ['docs/gamma.md:3 -> pic.png (no such file or directory)'])
+check(L_ABS, lambda: _nonmd('[x](/docs/alpha.md#real-section)\n[y](/docs/nope.json)\n')[1],
+      ['docs/gamma.md:4 -> /docs/nope.json (no such file or directory)'])
+check(L_BADFRAG, lambda: _nonmd('[x](#a.b)\n')[1], [])
+check(L_BADFRAG_MD, lambda: _nonmd('[x](alpha.md#a.b)\n')[1], [])
+check(L_MDFRAG_BADCHAR, lambda: _nonmd('[x](ghost.md#a.b)\n')[1], ['docs/gamma.md:3 -> ghost.md (no such file)'])
+check(L_COUNT, lambda: next((l.strip() for l in _nonmd('[x](pack/)\n[y](data.json)\n',
+                                                         {'docs/pack/a.json': '{}', 'docs/data.json': '{}'})[2].split('\n')
+                             if 'non-.md' in l), ''),
+      'INFO  2 relative non-.md target(s) checked for existence (1 directories)')
+check(L_FLOOR, lambda: subprocess.run([sys.executable, str(FROM / 'check-links.py'), '--root', str(CORPUS),
+                                       '--min-links', '3'], capture_output=True, text=True).returncode, 2)
+check(L_FLOOR_MSG, lambda: 'has gone blind' in subprocess.run(
+    [sys.executable, str(FROM / 'check-links.py'), '--root', str(CORPUS), '--min-links', '3'],
+    capture_output=True, text=True).stdout, True)
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

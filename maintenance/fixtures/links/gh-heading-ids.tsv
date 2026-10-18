@@ -1,0 +1,53 @@
+# Every docs/ heading at d361e13 whose text contains `<`, with the anchor id GitHub's file renderer gave it (`gh api -H 'Accept: application/vnd.github.html' repos/inkthorne/hytale-modding-handbook/contents/docs/X.md?ref=d361e13...`, id of the `user-content-` anchor after the heading), measured 2026-10-18.
+# Columns: file<TAB>line<TAB>heading as written at d361e13<TAB>GitHub id. Read by check-links-fixture.py; the headings are text, not the current docs.
+asset-editor.md	69	EditorClientEvent<KeyType> (Base Class)	editorclientevent-base-class
+codecs.md	60	Codec<T>	codec
+codecs.md	145	KeyedCodec<T>	keyedcodec
+codecs.md	209	BuilderCodec<T>	buildercodec
+codecs.md	378	StringCodecMapCodec<T, C>	stringcodecmapcodect-c
+codecs.md	396	AssetCodecMapCodec<K, T>	assetcodecmapcodeck-t
+codecs.md	421	MapKeyMapCodec<V>	mapkeymapcodec
+codecs.md	443	CodecMapRegistry<T, C>	codecmapregistryt-c
+codecs.md	570	WeightedMapCodec<T>	weightedmapcodec
+collision.md	663	CollisionDataArray<T>	collisiondataarray
+commands.md	734	ArgumentType<D>	argumenttype
+commands.md	752	SingleArgumentType<D>	singleargumenttype
+commands.md	1152	Argument<Arg, D>	argumentarg-d
+components.md	85	Store<ECS_TYPE>	storeecs_type
+components.md	165	Ref<ECS_TYPE>	refecs_type
+components.md	189	Component<ECS_TYPE>	componentecs_type
+components.md	201	ComponentType<ECS_TYPE, T>	componenttypeecs_type-t
+components.md	218	ComponentAccessor<ECS_TYPE>	componentaccessorecs_type
+components.md	245	ArchetypeChunk<ECS_TYPE>	archetypechunkecs_type
+components.md	268	Query<ECS_TYPE>	queryecs_type
+components.md	354	CommandBuffer<ECS_TYPE>	commandbufferecs_type
+components.md	506	Holder<ECS_TYPE>	holderecs_type
+components.md	539	Archetype<ECS_TYPE>	archetypeecs_type
+components.md	574	Resource<ECS_TYPE>	resourceecs_type
+components.md	583	ResourceType<ECS_TYPE, T>	resourcetypeecs_type-t
+components.md	778	ComponentRegistry<ECS_TYPE>	componentregistryecs_type
+components.md	1108	EntityTickingSystem<ECS_TYPE>	entitytickingsystemecs_type
+components.md	1192	RefSystem<ECS_TYPE>	refsystemecs_type
+components.md	1209	HolderSystem<ECS_TYPE>	holdersystemecs_type
+components.md	1222	StoreSystem<ECS_TYPE>	storesystemecs_type
+components.md	1234	DelayedSystem<ECS_TYPE>	delayedsystemecs_type
+components.md	1247	DelayedEntitySystem<ECS_TYPE>	delayedentitysystemecs_type
+components.md	1260	WorldEventSystem<ECS_TYPE, EventType>	worldeventsystemecs_type-eventtype
+components.md	1272	RunWhenPausedSystem<ECS_TYPE>	runwhenpausedsystemecs_type
+components.md	1356	SystemType<ECS_TYPE, T>	systemtypeecs_type-t
+components.md	1369	SpatialSystem<ECS_TYPE>	spatialsystemecs_type
+components.md	1381	SpatialResource<T, ECS_TYPE>	spatialresourcet-ecs_type
+components.md	1394	SpatialStructure<T> / KDTree<T>	spatialstructure--kdtree
+components.md	1424	SpatialData<T>	spatialdata
+components.md	1441	UnknownComponents<ECS_TYPE>	unknowncomponentsecs_type
+encounters.md	42	Asset format — `Server/EncounterManager/<Id>.json`	asset-format--serverencountermanageridjson
+events.md	190	IBaseEvent<KeyType>	ibaseevent
+events.md	202	IEvent<KeyType>	ievent
+events.md	216	IAsyncEvent<KeyType>	iasyncevent
+events.md	299	EventRegistration<KeyType, EventType>	eventregistrationkeytype-eventtype
+interactions-context.md	308	MetaKey<T>	metakey
+inventory.md	1183	ListTransaction<T extends Transaction>	listtransaction
+inventory.md	1191	MoveTransaction<T extends Transaction>	movetransaction
+ui-api.md	133	Value<T>	value
+world-events.md	53	`Server/WorldEvent/Event/<Id>.json` — `WorldEventAsset`	serverworldeventeventidjson--worldeventasset
+world-events.md	101	`Server/WorldEvent/Stage/<Id>.json` — `StageAsset`	serverworldeventstageidjson--stageasset

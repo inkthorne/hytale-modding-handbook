@@ -1,0 +1,44 @@
+# Heading text as typed, then the text GitHub renders for it (POST /markdown, mode gfm, measured 2026-10-18 with `gh api -X POST markdown -f mode=gfm -f text="## <heading>"`), tags dropped, entities decoded.
+# Read by check-links-fixture.py. Columns: heading<TAB>rendered text.
+Foo<T> bar	Foo bar
+Baz<T extends X> q	Baz q
+A<K, T>	A<K, T>
+B<ECS_TYPE>	B<ECS_TYPE>
+C</b> d	C d
+E<!-- x --> f	E f
+I<T/> j	I j
+J<br> k	J k
+`Code<T>` l	Code<T> l
+M<1> n	M<1> n
+O<T,> p	O<T,> p
+Q<Tag-name> r	Q r
+S<T extends Foo<U>> t	S<T extends Foo> t
+U<T =x> v	U<T =x> v
+G<a href="x">link</a> h	Glink h
+W<?php x ?> w	W w
+Y<![CDATA[z]]> y	Y y
+Z<T extends A, B> z	Z<T extends A, B> z
+Foo<T> <U>	Foo
+<T> start	start
+X<T extends Foo<U> >	X<T extends Foo >
+Foo<T extends Bar<?>>	Foo<T extends Bar<?>>
+Foo<T:int>	Foo<T:int>
+Foo< T >	Foo< T >
+List<?>	List<?>
+Foo<T extends>	Foo
+A<B>C<D>	AC
+Map<String, List<T>>	Map<String, List>
+Foo<T	Foo<T
+Foo<a-b c="d">	Foo
+Foo<T x="1" y>	Foo
+Foo<T x='1'>	Foo
+Foo<T x=1>	Foo
+Foo<T x= 1>	Foo
+Foo<T 1x>	Foo<T 1x>
+Foo<T _x>	Foo
+Foo<T/ >	Foo<T/ >
+Foo<T />	Foo
+Foo<1T>	Foo<1T>
+Foo<T-1>	Foo
+Foo<T.x>	Foo<T.x>
+D<!DOCTYPE x> d	D d

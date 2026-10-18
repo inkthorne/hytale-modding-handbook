@@ -89,6 +89,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 - [Operations](./docs/interactions-operations.md) - Operation types
 - [World Interactions](./docs/interactions-world.md) - Spawning and positioning
 - [Combat Interactions](./docs/interactions-combat.md) - Damage and forces
+- [The Double Run](./docs/interactions-double-run.md) - What a chain does on a manager with no remote client (NPCs, hosts)
 
 ### Assets & Events
 - [Assets](./docs/assets.md) - Asset registry

@@ -42,8 +42,8 @@ REAL_PY = shutil.which('python3') or sys.exit('python3 not found on PATH')
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 54
-MIN_MUTATIONS = 73
+MIN_CASES = 69
+MIN_MUTATIONS = 99
 
 BUILD = '9.9.9'
 SRC_ALT, ASSETS_ALT = 'cache-src', 'cache-assets'      # the stub caches: not the snapshots' ~/.cache paths
@@ -67,23 +67,25 @@ def prelude() -> str:
     return 'set -u\n' + v[a:v.index('\n', i) + 1]
 
 
-def floors(text: str) -> tuple[int, int]:
-    m = re.search(r'^DR_MIN_CT=(\d+); DR_MIN_UT=(\d+)$', text, re.M)
-    assert m, 'the section no longer sets DR_MIN_CT and DR_MIN_UT on one line'
-    return int(m.group(1)), int(m.group(2))
+def floors(text: str) -> tuple[int, int, int]:
+    m = re.search(r'^DR_MIN_CT=(\d+); DR_MIN_UT=(\d+); DR_MIN_UM=(\d+)$', text, re.M)
+    assert m, 'the section no longer sets DR_MIN_CT, DR_MIN_UT and DR_MIN_UM on one line'
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
 
 
 # The four probe scripts are stubs, and a stub is a bash function in a `python3` shim on PATH, not a python file: the
 # mutation pass runs every case once per guard, and four interpreter starts per case cost more than the whole budget.
 # The shim answers `python3 -I <probe dir>/<name>.py ARGS` for the four names and passes everything else (the section's
-# own inline `python3 -I - ...` page comparison) to the real python. A stub prints name.out with @SRC@ and @ASSETS@
+# own inline `python3 -I - ...` page comparison) to the real python. The shims are written ONCE, before the pool starts
+# (build_template), and never touched again: a per-case write races a concurrent fork that holds the write fd, and exec of
+# the file then fails with ETXTBSY (review of 94d2a32..3437c5d, MEDIUM-1; seen 1 in 1,620 case runs at load 40). A stub prints name.out with @SRC@ and @ASSETS@
 # replaced by the --src and --assets it was given, writes name.err to stderr, writes name.tables to its --tables
 # file, creates the work dir it is given (the -test ones), logs its argv to argv.log, and exits with name.rc.
 PY_SHIM = '''#!/usr/bin/env bash
 if [ "${1:-}" = "-I" ] && [ "${2:-}" != "-" ]; then
   script="$2"; shift 2
   case "$script" in
-    */usage.py|*/census.py|*/census-test.py|*/usage-test.py)
+    */usage.py|*/census.py|*/census-test.py|*/usage-test.py|*/usage-mutations.py)
       here="$(dirname "$script")"; name="$(basename "$script" .py)"
       echo "$name $*" >> "$here/argv.log"
       src=""; assets=""; tables=""; prev=""
@@ -94,7 +96,7 @@ if [ "${1:-}" = "-I" ] && [ "${2:-}" != "-" ]; then
       [ -f "$here/$name.out" ] && sed -e "s|@SRC@|$src|g" -e "s|@ASSETS@|$assets|g" "$here/$name.out"
       [ -f "$here/$name.err" ] && cat "$here/$name.err" >&2
       if [ "$name" = usage ] && [ -n "$tables" ] && [ -f "$here/usage.tables" ]; then cat "$here/usage.tables" > "$tables"; fi
-      case "$name" in *-test) mkdir -p "$1"; echo x > "$1/payload" ;; esac
+      case "$name" in *-test|*-mutations) mkdir -p "$1"; echo x > "$1/payload" ;; esac
       if [ -f "$here/$name.rc" ]; then exit "$(cat "$here/$name.rc")"; fi
       exit 0 ;;
   esac
@@ -103,6 +105,7 @@ fi
 exec @REAL@ "$@"
 '''
 
+UM_SUMMARY = '---- {b} survived or failed to apply, {c} caught (of the slice {lo}..{hi} of {n})'
 CENSUS = '''build: version=9.9.9 jar_sha=0123456789abcdef src=ok src_files=3 decompiler=jar fedcba
 source: @SRC@
 DENOMINATOR
@@ -138,7 +141,7 @@ PAGE_TAIL = '\n### Outcomes that depend on a field (counted over the run-reached
 PAGE = PAGE_HEAD + TABLES + PAGE_TAIL
 
 
-def build_template(tpl: pathlib.Path, ct: int, ut: int):
+def build_template(tpl: pathlib.Path, ct: int, ut: int, um: int = 22):
     p = tpl / 'probe'
     p.mkdir(parents=True)
     (p / 'census.out').write_text(CENSUS)
@@ -146,6 +149,16 @@ def build_template(tpl: pathlib.Path, ct: int, ut: int):
     (p / 'usage.tables').write_text(TABLES)
     (p / 'census-test.out').write_text(''.join(f'PASS  case {i}\n' for i in range(ct)) + '---- 0 failed\n')
     (p / 'usage-test.out').write_text(''.join(f'PASS  check {i}\n' for i in range(ut)) + '---- 0 failed\n')
+    (p / 'usage-mutations.out').write_text('identity: green\n' + ''.join(f'CAUGHT    #{i} guard {i}\n' for i in range(1, um + 1)) + UM_SUMMARY.format(b=0, c=um, lo=1, hi=um, n=um) + '\n')
+    # the shims: once, here, in directories shared by every case (see PY_SHIM)
+    sd = tpl.parent / 'shims'
+    sd.mkdir()
+    (sd / 'python3').write_text(PY_SHIM.replace('@REAL@', REAL_PY))
+    (sd / 'python3').chmod(0o755)
+    dd = tpl.parent / 'shims-diff'
+    dd.mkdir()
+    (dd / 'diff').write_text(DIFF_SHIM)
+    (dd / 'diff').chmod(0o755)
     (tpl / 'page.md').write_text(PAGE)
     (tpl / SRC_ALT).mkdir()
     (tpl / ASSETS_ALT).mkdir()
@@ -162,7 +175,7 @@ DIFF_SHIM = '#!/usr/bin/env bash\necho "diff: shim: injected failure" >&2\nexit 
 
 def run_section(text: str, tpl: pathlib.Path, work: pathlib.Path, name: str, *, put=None, edit=None, edit_live=None,
                 edit_snap=None, rm=(), rc=None, err=None, page=None, no_src=False, no_assets=False, tmpdir=None,
-                diff_shim=False, extra_env=None):
+                diff_shim=False, extra_env=None, tmp_in_repo=None):
     """Run `text` in a copy of the template. put: {file in probe/: text}. edit: {file: fn(text)} applied to the
     live output AND its snapshot; edit_live / edit_snap: to one side only. Returns (status, output, argv log)."""
     root = work / name
@@ -190,16 +203,19 @@ def run_section(text: str, tpl: pathlib.Path, work: pathlib.Path, name: str, *, 
         shutil.rmtree(root / SRC_ALT)
     if no_assets:
         shutil.rmtree(root / ASSETS_ALT)
-    tmp = root / 'tmp'
+    # the TMPDIR is a sibling of the root, which is the section's working directory (its "repository"): a TMPDIR inside it is a FAIL of its own
+    tmp = work / f'{name}.tmp'
     tmp.mkdir()
-    shims = root / 'shims'
-    shims.mkdir()
-    (shims / 'python3').write_text(PY_SHIM.replace('@REAL@', REAL_PY))
-    (shims / 'python3').chmod(0o755)
-    if diff_shim:
-        (shims / 'diff').write_text(DIFF_SHIM)
-        (shims / 'diff').chmod(0o755)
-    env = dict(os.environ, PATH=f'{shims}{os.pathsep}{os.environ["PATH"]}', TMPDIR=tmpdir or str(tmp), PYTHONDONTWRITEBYTECODE='1',
+    shims = tpl.parent / 'shims'
+    path = (f'{tpl.parent / "shims-diff"}{os.pathsep}' if diff_shim else '') + f'{shims}{os.pathsep}{os.environ["PATH"]}'
+    tmpenv = tmpdir or str(tmp)
+    if tmp_in_repo:
+        (root / 'intmp').mkdir()
+        if tmp_in_repo == 'link':
+            (root / 'lnk').symlink_to(root / 'intmp')
+        tmpenv = {'abs': str(root / 'intmp'), 'rel': 'intmp', 'link': str(root / 'lnk')}[tmp_in_repo]
+        tmp = root / 'intmp'
+    env = dict(os.environ, PATH=path, TMPDIR=tmpenv, PYTHONDONTWRITEBYTECODE='1',
                DR_DIR='probe', DR_PAGE='page.md', DR_BUILD=BUILD)
     env.update(extra_env or {})
     script = (prelude() + f'ASSETS={str(root / ASSETS_ALT)!r}\nSRC_CACHE={str(root / SRC_ALT)!r}\n' + text
@@ -226,13 +242,14 @@ def body(out: str) -> list[str]:
             if l.strip() and not l.startswith(('HARD_FAILS=', '== ', 'DR_TMP_AFTER_SECTION=', 'DR_TMP_CLEARED=', 'TMP_LEFT='))]
 
 
-def clean_lines(ct: int, ut: int) -> list[str]:
+def clean_lines(ct: int, ut: int, um: int) -> list[str]:
     return [
         'INFO  page: 2 tables, 3 rows (7 table lines) of page.md equal the tables usage.py generates',
         'INFO  census.py: 3 name(s), 3 class(es); stdout equals census-9.9.9.txt (11 lines compared, the source: line dropped)',
         'INFO  usage.py: 3 registered type(s), 2 run-reached, 2 table row(s), 0 unknown (limit 5), 0 problem(s); stdout equals usage-9.9.9.txt (8 lines compared, the assets: line dropped)',
         f'INFO  census-test.py: {ct} PASS (floor {ct}), ---- 0 failed; usage-test.py: {ut} PASS (floor {ut}), ---- 0 failed',
-        'PASS  the double-run table holds: 2 run-reached type(s) in 2 row(s), the page tables equal the generated ones, both snapshots equal, both controls green',
+        f'INFO  usage-mutations.py: {um} caught of {um} (floor {um}), 0 survived',
+        'PASS  the double-run table holds: 2 run-reached type(s) in 2 row(s), the page tables equal the generated ones, both snapshots equal, all three controls green',
     ]
 
 
@@ -249,8 +266,8 @@ def trap_exit_problems(text: str) -> list[str]:
 
 
 def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[str, list[str]]:
-    ct, ut = floors(text)
-    CLEAN = clean_lines(ct, ut)
+    ct, ut, um = floors(text)
+    CLEAN = clean_lines(ct, ut, um)
     jobs: list = []
 
     def case(tag, label, kw=None, *, hf, exact=None, must=(), must_not=(), argv=None, ran=True, cleaned=True):
@@ -270,7 +287,8 @@ def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[st
              'usage --assets @ROOT@/cache-assets --src @ROOT@/cache-src --tables @TMP@/tables13b.md',
              'census --src @ROOT@/cache-src',
              'census-test @TMP@/ct --src @ROOT@/cache-src',
-             'usage-test @TMP@/ut --assets @ROOT@/cache-assets --src @ROOT@/cache-src'])
+             'usage-test @TMP@/ut --assets @ROOT@/cache-assets --src @ROOT@/cache-src',
+             'usage-mutations @TMP@/um --assets @ROOT@/cache-assets --src @ROOT@/cache-src'])
     # ---- missing inputs (R2): one WARN and no step runs
     case('nosrc', 'a missing decompiled source cache is one WARN and nothing runs', dict(no_src=True), hf=0, ran=False,
          exact=['WARN  skipped (no decompiled source cache at @ROOT@/cache-src — build-jar-cache.sh)'])
@@ -338,7 +356,22 @@ def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[st
     case('s_diff2', 'diff exits 2 on the snapshots: FAIL naming its status, once per snapshot', dict(diff_shim=True), hf=2,
          must=('FAIL  census: diff of the output and probe/census-9.9.9.txt exited 2', 'FAIL  usage: diff of the output and probe/usage-9.9.9.txt exited 2'))
 
+    # LOW-1: the usage comparison runs whenever usage.py exited 0, whatever its summary lines say
+    two_sum = lambda t: t.replace('   unknown: 0 (limit 5); 0 problem(s)\n', '   unknown: 0 (limit 5); 0 problem(s)\n   unknown: 0 (limit 5); 1 problem(s)\n')
+    case('u_two', 'usage.py exits 0 and prints a second summary line that counts a problem: the usage output is still compared (FAIL), not skipped to a PASS',
+         dict(edit_live={'usage': two_sum}), hf=1, must=('FAIL  usage: stdout differs from probe/usage-9.9.9.txt', '+   unknown: 0 (limit 5); 1 problem(s)'))
+
     # ---- census.py
+    case('c_nometa', 'the census build line says (no cache-meta.txt): its own FAIL, not advice to re-commit the snapshot',
+         dict(edit={'census.out': lambda t: t.replace('build: version=9.9.9 jar_sha=0123456789abcdef src=ok src_files=3 decompiler=jar fedcba', 'build: (no cache-meta.txt)')}), hf=1,
+         must=('FAIL  census.py: no cache-meta.txt beside the source cache @ROOT@/cache-src: the build identity is unknown', 'do not re-commit the snapshot on this account'),
+         must_not=('stdout differs',))
+    # LOW-2: a TMPDIR inside the repository (the section's working directory): one FAIL naming it, no step runs
+    for tag, how, msg in (('tmp_abs', 'abs', 'TMPDIR (@ROOT@/intmp) resolves to @ROOT@/intmp, inside the repository @ROOT@'),
+                          ('tmp_rel', 'rel', 'TMPDIR (intmp) resolves to @ROOT@/intmp, inside the repository @ROOT@'),
+                          ('tmp_link', 'link', 'TMPDIR (@ROOT@/lnk) resolves to @ROOT@/intmp, inside the repository @ROOT@')):
+        case(tag, f'a TMPDIR inside the repository ({how}) is one FAIL naming the cause, and no step runs', dict(tmp_in_repo=how), hf=1, ran=False, cleaned=False,
+             must=('FAIL  double-run: ' + msg, 'none of the six steps ran'))
     case('c_rc1', 'census.py exits 1: FAIL printing stderr', dict(rc={'census': 1}, err={'census': 'census-boom\n'}), hf=1,
          must=('FAIL  census.py exited 1:', '    stderr: census-boom'))
     case('c_nodenom', 'census.py exits 0 but prints no denominator: FAIL, "it ran, or did it?"',
@@ -375,6 +408,13 @@ def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[st
     many_rows = ''.join(f'| `R{i:02d}` | 1 (NPC 1) | read | none | `R.java:{i}` stale |\n' for i in range(60))
     case('p_bigdiff', 'sixty stale rows on the page: FAIL with the first 40 diff lines and the count of all of them', dict(page=with_page(TABLES + many_rows)), hf=1,
          must=('DIFF 64 diff line(s) (the first 40;', 'R05'), must_not=('R50',))
+    hdr_only = '### Once: the simulation pass does nothing (0)\n\n' + HEAD
+    case('p_norows', 'generated tables that hold a heading and no row: FAIL, there is nothing to compare',
+         dict(put={'usage.tables': hdr_only}, page=PAGE_HEAD + hdr_only + PAGE_TAIL), hf=1,
+         must=('EMPTY the generated tables hold 1 table(s) and 0 row(s): there is nothing to compare',))
+    case('p_crlf', 'the span written with CRLF line endings: FAIL (the comparison is byte for byte)',
+         dict(page=PAGE_HEAD + TABLES.replace('\n', '\r\n') + PAGE_TAIL), hf=1,
+         must=('FAIL  page.md does not match the tables usage.py generates (compare status 1):', 'DIFF '))
     case('p_trailing', 'trailing blank lines after the last table differ: still equal (normalised)', dict(page=with_page(TABLES + '\n\n\n')), hf=0, exact=CLEAN)
     case('p_nostart', 'the start anchor is missing from the page: FAIL naming both counts', dict(page=PAGE.replace('### The population (counted)\n\ncounted text', 'x\n\ncounted text').replace('```\n### The population (counted)\n', '```\nx\n')),
          hf=1, must=('ANCHOR page.md: "### The population (counted)" occurs 0 time(s) and "### Outcomes that depend on a field" 1, wanted once each',))
@@ -406,6 +446,33 @@ def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[st
          must=(f'FAIL  usage-test.py printed {ut - 1} PASS line(s), the floor is {ut}',))
     case('t_both', 'both controls fail: two FAILs and no PASS', dict(rc={'census-test': 1, 'usage-test': 1}), hf=2,
          must=('FAIL  census-test.py exited 1:', 'FAIL  usage-test.py exited 1:'))
+
+    # ---- usage-mutations.py (R7): exit 0, one summary line, 0 survived, the slice 1..N, CAUGHT == N, N at least the floor
+    um_sum = lambda **k: (lambda t: re.sub(r'^---- .*$', UM_SUMMARY.format(**k), t, flags=re.M))
+    case('um_rc1', 'usage-mutations.py exits 1: FAIL printing the SURVIVED line and the stderr tail',
+         dict(edit={'usage-mutations.out': lambda t: t + 'SURVIVED  #3 a guard\n'}, rc={'usage-mutations': 1}, err={'usage-mutations': 'um-boom\n'}), hf=1,
+         must=('FAIL  usage-mutations.py exited 1:', '    SURVIVED  #3 a guard', '    stderr: um-boom'))
+    case('um_nosum', 'usage-mutations.py exits 0 and prints no summary line: FAIL, "it ran, or did it?"',
+         dict(edit={'usage-mutations.out': lambda t: re.sub(r'^---- .*\n', '', t, flags=re.M)}), hf=1,
+         must=('FAIL  usage-mutations.py exited 0 but printed its summary line 0 time(s)',))
+    case('um_twice', 'usage-mutations.py prints its summary line twice: FAIL (exactly once)',
+         dict(edit={'usage-mutations.out': lambda t: t + UM_SUMMARY.format(b=0, c=um, lo=1, hi=um, n=um) + '\n'}), hf=1,
+         must=('FAIL  usage-mutations.py exited 0 but printed its summary line 2 time(s)',))
+    case('um_surv', 'usage-mutations.py exits 0 with a survivor in its summary: FAIL',
+         dict(edit={'usage-mutations.out': um_sum(b=1, c=um - 1, lo=1, hi=um, n=um)}), hf=1,
+         must=('FAIL  usage-mutations.py: 1 mutation(s) survived or failed to apply',))
+    case('um_lo', 'usage-mutations.py ran a slice that starts after 1: FAIL',
+         dict(edit={'usage-mutations.out': um_sum(b=0, c=um - 2, lo=3, hi=um, n=um)}), hf=1,
+         must=(f'FAIL  usage-mutations.py ran the slice 3..{um} of {um}, not from 1',))
+    case('um_hi', 'usage-mutations.py ran a slice that stops before the last: FAIL',
+         dict(edit={'usage-mutations.out': um_sum(b=0, c=um - 2, lo=1, hi=um - 2, n=um)}), hf=1,
+         must=(f'FAIL  usage-mutations.py ran the slice 1..{um - 2} of {um}, not to the last',))
+    case('um_caught', 'usage-mutations.py caught fewer than N: FAIL',
+         dict(edit={'usage-mutations.out': um_sum(b=0, c=um - 1, lo=1, hi=um, n=um)}), hf=1,
+         must=(f'FAIL  usage-mutations.py caught {um - 1} of {um} mutations',))
+    case('um_floor', 'usage-mutations.py has fewer mutations than its floor: FAIL',
+         dict(edit={'usage-mutations.out': um_sum(b=0, c=um - 1, lo=1, hi=um - 1, n=um - 1)}), hf=1,
+         must=(f'FAIL  usage-mutations.py has {um - 1} mutation(s), the floor is {um}',))
 
     # ---- everything fails at once: failures add up and no step is skipped by another's failure
     case('all3', 'usage.py and both controls fail: three FAILs, the census and the page are still compared (and pass)',
@@ -464,26 +531,26 @@ def mut(label, old, new, names, expect=None):
 # exists for (they must go red) and `expect` is the exact red set. A mutation whose patch text is no longer unique in the section is an
 # error, not a skipped mutation.
 SKIP_SRC = 'if [ ! -d "$SRC_CACHE" ]; then\n  warn "skipped (no decompiled'
-mut('IDENTITY (no change - the harness control)', 'DR_COMPARED=""\n', 'DR_COMPARED=""\n', [], [])
+mut('IDENTITY (no change - the harness control)', 'DR_COMPARED=""\n', 'DR_COMPARED=""\n', [], ())
 mut('missing source cache not skipped', SKIP_SRC, 'if false; then\n  warn "skipped (no decompiled', ['nosrc'], ('nosrc',))
 mut('missing asset cache not skipped', 'elif [ ! -d "$ASSETS" ]; then', 'elif false; then', ['noassets'], ('noassets',))
 mut('mktemp failure not read', 'if [ -z "$DR_TMP" ]; then\n    fail "double-run:', 'if false; then\n    fail "double-run:', ['mktemp'], ('mktemp',))
 mut('usage.py exit status not read', 'if [ "$RC" -ne 0 ]; then\n      DR_OK=0; fail "usage.py exited', 'if false; then\n      DR_OK=0; fail "usage.py exited', ['u_rc1prob', 'u_rc1none', 'u_rc2'], ('all3', 'u_rc1none', 'u_rc1prob', 'u_rc2'))
 mut('usage.py summary line not required', 'elif [ "${DR_U_OK:-x}" != 1 ]; then', 'elif false; then', ['u_nosum', 'u_onep', 'u_twice'], ('u_nosum', 'u_onep', 'u_twice'))
-mut('usage.py summary accepts any problem count', "DR_U_OK=\"$(dr_count '^   unknown: [0-9]+ \\(limit 5\\); 0 problem\\(s\\)$'", "DR_U_OK=\"$(dr_count '^   unknown: [0-9]+ \\(limit 5\\); [0-9]+ problem\\(s\\)$'", ['u_onep'], ('u_onep',))
+mut('usage.py summary accepts any problem count', "DR_U_OK=\"$(dr_count '^   unknown: [0-9]+ \\(limit 5\\); 0 problem\\(s\\)$'", "DR_U_OK=\"$(dr_count '^   unknown: [0-9]+ \\(limit 5\\); [0-9]+ problem\\(s\\)$'", ['u_onep'], ('u_onep', 'u_two'))
 mut('usage.py population figures not required', '*[!0-9/]*) DR_OK=0; fail "usage.py exited 0 but did not print', '*[!0-9/]*) DR_OK=0; : "usage.py exited 0 but did not print', ['u_norun'], ('u_norun',))
 mut('rows == run-reached not required', 'if [ "$DR_RUN" -eq 0 ] || [ "$DR_ROWS" -ne "$DR_RUN" ]; then', 'if [ "$DR_RUN" -eq 0 ]; then', ['u_rows'], ('u_rows',))
 mut('0 run-reached types accepted', 'if [ "$DR_RUN" -eq 0 ] || [ "$DR_ROWS" -ne "$DR_RUN" ]; then', 'if [ "$DR_ROWS" -ne "$DR_RUN" ]; then', ['u_zero'], ('u_zero',))
-mut('usage snapshot not compared', 'if [ "${DR_U_END:-0}" -eq 1 ]; then', 'if false; then', ['s_usage', 's_wrote', 's_nousnap'], ('healthy', 'p_trailing', 's_diff2', 's_noassetssnap', 's_nousnap', 's_usage', 's_wrote'))
+mut('usage snapshot not compared', 'if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then', 'if false; then', ['s_usage', 's_wrote', 's_nousnap'], ('healthy', 'p_trailing', 's_diff2', 's_noassetssnap', 's_nousnap', 's_usage', 's_wrote', 'u_two'))
 mut('census snapshot not compared', 'elif dr_snapshot census', 'elif true || dr_snapshot census', ['s_census', 's_nocsnap'], ('healthy', 'p_trailing', 's_bigdiff', 's_census', 's_diff2', 's_nocsnap', 's_nosource', 's_snapx', 's_twosrc'))
-mut('the dropped line is not dropped from the live output', 'grep -v -E -e "$drop" "$live" >', 'cat "$live" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'x_static', 'x_staticctl'))
-mut('the dropped line is not dropped from the snapshot', 'grep -v -E -e "$drop" "$snap" >', 'cat "$snap" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'x_static', 'x_staticctl'))
+mut('the dropped line is not dropped from the live output', 'grep -v -E -e "$drop" "$live" >', 'cat "$live" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
+mut('the dropped line is not dropped from the snapshot', 'grep -v -E -e "$drop" "$snap" >', 'cat "$snap" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 mut('exactly-once test of the dropped line removed', 'if [ "${nl:-x}" != 1 ] || [ "${ns:-x}" != 1 ]; then', 'if false; then', ['s_nosource', 's_noassetssnap', 's_twosrc'], ('s_noassetssnap', 's_nosource', 's_twosrc'))
 mut('exactly-once test ignores the live output', 'if [ "${nl:-x}" != 1 ] || [ "${ns:-x}" != 1 ]; then', 'if [ "${ns:-x}" != 1 ]; then', ['s_nosource', 's_twosrc'], ('s_nosource', 's_twosrc'))
 mut('exactly-once test ignores the snapshot', 'if [ "${nl:-x}" != 1 ] || [ "${ns:-x}" != 1 ]; then', 'if [ "${nl:-x}" != 1 ]; then', ['s_noassetssnap'], ('s_noassetssnap',))
 mut('missing snapshot not reported', 'if [ ! -f "$snap" ]; then', 'if false; then', ['s_nocsnap', 's_nousnap'], ('s_nocsnap', 's_nousnap'))
 mut('diff status >= 2 not read', 'if [ "$drc" -ge 2 ]; then', 'if [ "$drc" -ge 3 ]; then', ['s_diff2'], ('s_diff2',))
-mut('a differing snapshot is not a FAIL', 'elif [ "$drc" -eq 1 ]; then', 'elif false; then', ['s_census', 's_usage', 's_wrote', 's_snapx'], ('s_bigdiff', 's_census', 's_snapx', 's_usage', 's_wrote'))
+mut('a differing snapshot is not a FAIL', 'elif [ "$drc" -eq 1 ]; then', 'elif false; then', ['s_census', 's_usage', 's_wrote', 's_snapx'], ('s_bigdiff', 's_census', 's_snapx', 's_usage', 's_wrote', 'u_two'))
 mut('census.py exit status not read', 'if [ "$RC" -ne 0 ]; then\n      DR_OK=0; fail "census.py exited', 'if false; then\n      DR_OK=0; fail "census.py exited', ['c_rc1'], ('c_rc1',))
 mut('census names line not required', 'elif [ "${DR_CN:-x}" != 1 ] || [ "${DR_CC:-x}" != 1 ]; then', 'elif [ "${DR_CC:-x}" != 1 ]; then', ['c_nodenom'], ('c_nodenom',))
 mut('census classes line not required', 'elif [ "${DR_CN:-x}" != 1 ] || [ "${DR_CC:-x}" != 1 ]; then', 'elif [ "${DR_CN:-x}" != 1 ]; then', ['c_noclasses'], ('c_noclasses',))
@@ -492,55 +559,83 @@ mut('a census of 0 classes accepted', 'if [ "$DR_NAMES" -eq 0 ] || [ "$DR_CLASSE
 mut('absent tables file not reported', 'if [ ! -f "$DR_TMP/tables13b.md" ]; then', 'if false; then', ['p_notables', 'u_rc1none', 'u_rc2'], ('p_notables', 'u_rc1none', 'u_rc2'))
 mut('page anchors not required exactly once', 'if len(starts) != 1 or len(ends) != 1:', 'if False:', ['p_nostart', 'p_noend', 'p_dupstart'], ('p_dupstart', 'p_noend', 'p_nostart'))
 mut('a span with no table heading accepted', 'if not first:', 'if False:', ['p_nohead'], ('p_nohead',))
-mut('empty generated tables accepted', 'if not tables or not rows:', 'if False:', ['p_emptygen'], ('p_emptygen',))
-mut('page span not compared with the generated tables', 'if span != want:', 'if False:', ['neg', 'p_extra', 'p_removed', 'p_reorder', 'p_otherhead', 'p_newhead'], ('neg', 'p_bigdiff', 'p_extra', 'p_newhead', 'p_otherhead', 'p_removed', 'p_reorder'))
+mut('empty generated tables accepted', 'if not tables or not rows:', 'if False:', ['p_emptygen'], ('p_emptygen', 'p_norows'))
+mut('page span not compared with the generated tables', 'if span != want:', 'if False:', ['neg', 'p_extra', 'p_removed', 'p_reorder', 'p_otherhead', 'p_newhead'], ('neg', 'p_bigdiff', 'p_crlf', 'p_extra', 'p_newhead', 'p_otherhead', 'p_removed', 'p_reorder'))
 mut('trailing blank lines not normalised', 'while ls and not ls[-1].strip():\n        ls.pop()', 'while False:\n        ls.pop()', ['p_trailing'], ('p_bigdiff', 'p_trailing'))
-mut('fenced headings counted as anchors', 'if l.startswith(\'```\'):\n        fence = not fence', 'if l.startswith(\'```\'):\n        pass', ['healthy'], ('ALLBUT', 'mktemp', 'neg', 'noassets', 'nosrc', 'p_nopage', 'p_notables', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
-mut('end anchor must equal the whole heading', 'ends = [i for i, l in heads if l.startswith(END)]', 'ends = [i for i, l in heads if l == END]', ['healthy'], ('ALLBUT', 'mktemp', 'neg', 'noassets', 'nosrc', 'p_dupstart', 'p_noend', 'p_nopage', 'p_notables', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
-mut('page comparison status not read', 'if [ "$RC" -eq 0 ]; then\n        info "page:', 'if true; then\n        info "page:', ['neg', 'p_extra', 'p_nostart', 'p_nopage'], ('neg', 'p_bigdiff', 'p_dupstart', 'p_emptygen', 'p_extra', 'p_newhead', 'p_noend', 'p_nohead', 'p_nopage', 'p_nostart', 'p_otherhead', 'p_removed', 'p_reorder'))
+mut('fenced headings counted as anchors', 'if l.startswith(\'```\'):\n        fence = not fence', 'if l.startswith(\'```\'):\n        pass', ['healthy'], ('ALLBUT', 'mktemp', 'neg', 'noassets', 'nosrc', 'p_nopage', 'p_notables', 'tmp_abs', 'tmp_link', 'tmp_rel', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
+mut('end anchor must equal the whole heading', 'ends = [i for i, l in heads if l.startswith(END)]', 'ends = [i for i, l in heads if l == END]', ['healthy'], ('ALLBUT', 'mktemp', 'neg', 'noassets', 'nosrc', 'p_dupstart', 'p_noend', 'p_nopage', 'p_notables', 'tmp_abs', 'tmp_link', 'tmp_rel', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
+mut('page comparison status not read', 'if [ "$RC" -eq 0 ]; then\n        info "page:', 'if true; then\n        info "page:', ['neg', 'p_extra', 'p_nostart', 'p_nopage'], ('neg', 'p_bigdiff', 'p_crlf', 'p_dupstart', 'p_emptygen', 'p_extra', 'p_newhead', 'p_noend', 'p_nohead', 'p_nopage', 'p_norows', 'p_nostart', 'p_otherhead', 'p_removed', 'p_reorder'))
 mut('control exit status not read', 'if [ "$rc" -ne 0 ]; then\n    fail "$name exited $rc:"', 'if false; then\n    fail "$name exited $rc:"', ['t_ct1', 't_ut1', 't_both'], ('all3', 't_both', 't_ct1', 't_ut1'))
 mut('control "---- 0 failed" line not required once', 'elif [ "${nz:-x}" != 1 ]; then', 'elif false; then', ['t_ctnosum', 't_utwice'], ('t_ctnosum', 't_utwice'))
 mut('control PASS floor not enforced', 'elif [ "${np:-0}" -lt "$min" ]; then', 'elif false; then', ['t_ctfloor', 't_utfloor'], ('t_ctfloor', 't_utfloor'))
 mut('census-test.py floor is 0', 'dr_control census-test.py "$DR_MIN_CT"', 'dr_control census-test.py 0', ['t_ctfloor'], ('t_ctfloor',))
 mut('usage-test.py floor is 0', 'dr_control usage-test.py "$DR_MIN_UT"', 'dr_control usage-test.py 0', ['t_utfloor'], ('t_utfloor',))
-mut('census-test.py not run', 'if dr_control census-test.py', 'if true || dr_control census-test.py', ['healthy', 't_ct1'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'x_static', 'x_staticctl'))
+mut('census-test.py not run', 'if dr_control census-test.py', 'if true || dr_control census-test.py', ['healthy', 't_ct1'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 mut('usage-test.py not run', 'if dr_control usage-test.py', 'if true || dr_control usage-test.py', ['healthy', 't_ut1'], ('all3', 'healthy', 'p_trailing', 't_both', 't_ct1', 't_ctfloor', 't_ctnosum', 't_ut1', 't_utfloor', 't_utwice'))
 mut('usage.py not given --assets', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--src "$SRC_CACHE" --tables', ['healthy'], ('healthy',))
 mut('usage.py not given --src', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--assets "$ASSETS" --tables', ['healthy'], ('healthy',))
-mut('usage.py not given --tables', ' --tables "$DR_TMP/tables13b.md" >', ' >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'p_notables', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
+mut('usage.py not given --tables', ' --tables "$DR_TMP/tables13b.md" >', ' >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'p_notables', 'tmp_abs', 'tmp_link', 'tmp_rel', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
 mut('census.py not given --src', '"$DR_DIR/census.py" --src "$SRC_CACHE" >', '"$DR_DIR/census.py" >', ['healthy'], ('healthy',))
 mut('census-test.py not given --src', '"$DR_TMP/ct" --src "$SRC_CACHE"', '"$DR_TMP/ct"', ['healthy'], ('healthy',))
 mut('usage-test.py not given --assets', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --src "$SRC_CACHE"', ['healthy'], ('healthy',))
 mut('usage-test.py not given --src', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --assets "$ASSETS"', ['healthy'], ('healthy',))
-mut('temp dir not removed', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    DR_TMP=""\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'x_static', 'x_staticctl'))
-mut('DR_TMP not cleared after the removal', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    rm -rf "$DR_TMP"\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'x_static', 'x_staticctl'))
-mut('PASS printed whatever failed', 'if [ "$DR_OK" -eq 1 ]; then\n      info "census.py:', 'if true; then\n      info "census.py:', ['u_rc1prob'], ('ALLBUT', 'healthy', 'mktemp', 'noassets', 'nosrc', 'p_trailing', 'x_static', 'x_staticctl'))
+mut('temp dir not removed', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    DR_TMP=""\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
+mut('DR_TMP not cleared after the removal', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    rm -rf "$DR_TMP"\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
+mut('PASS printed whatever failed', 'if [ "$DR_OK" -eq 1 ]; then\n      info "census.py:', 'if true; then\n      info "census.py:', ['u_rc1prob'], ('ALLBUT', 'healthy', 'mktemp', 'noassets', 'nosrc', 'p_trailing', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 
 # the failure flag: a FAIL whose branch no longer clears DR_OK lets the PASS line print beside it
 mut('failed usage.py exit status leaves DR_OK set', 'DR_OK=0; fail "usage.py exited $RC', 'fail "usage.py exited $RC', ['u_rc1prob'], ('u_rc1prob',))
 mut('failed usage.py summary line leaves DR_OK set', 'DR_OK=0; fail "usage.py exited 0 but printed the line', 'fail "usage.py exited 0 but printed the line', ['u_nosum', 'u_onep', 'u_twice'], ('u_nosum', 'u_onep', 'u_twice'))
 mut('failed usage.py population figures leave DR_OK set', '*[!0-9/]*) DR_OK=0; fail', '*[!0-9/]*) fail', ['u_norun'], ('u_norun',))
 mut('failed usage.py row count leaves DR_OK set', 'DR_OK=0; fail "usage.py: $DR_ROWS', 'fail "usage.py: $DR_ROWS', ['u_rows', 'u_zero'], ('u_rows', 'u_zero'))
-mut('failed usage snapshot leaves DR_OK set', 'then DR_USAGE_CMP="$DR_COMPARED"; else DR_OK=0; DR_USAGE_CMP=""; fi', 'then DR_USAGE_CMP="$DR_COMPARED"; else DR_USAGE_CMP=""; fi', ['s_usage', 's_wrote', 's_nousnap'], ('s_noassetssnap', 's_nousnap', 's_usage', 's_wrote'))
+mut('failed usage snapshot leaves DR_OK set', 'then DR_USAGE_CMP="$DR_COMPARED"; else DR_OK=0; DR_USAGE_CMP=""; fi', 'then DR_USAGE_CMP="$DR_COMPARED"; else DR_USAGE_CMP=""; fi', ['s_usage', 's_wrote', 's_nousnap'], ('s_noassetssnap', 's_nousnap', 's_usage', 's_wrote', 'u_two'))
 mut('failed census.py exit status leaves DR_OK set', 'DR_OK=0; fail "census.py exited $RC:"', 'fail "census.py exited $RC:"', ['c_rc1'], ('c_rc1',))
 mut('failed census.py denominator leaves DR_OK set', 'DR_OK=0; fail "census.py exited 0 but', 'fail "census.py exited 0 but', ['c_nodenom', 'c_noclasses'], ('c_noclasses', 'c_nodenom'))
 mut('failed census.py empty census leaves DR_OK set', 'DR_OK=0; fail "census.py: $DR_NAMES', 'fail "census.py: $DR_NAMES', ['c_zeronames', 'c_zeroclasses'], ('c_zeroclasses', 'c_zeronames'))
 mut('failed census snapshot leaves DR_OK set', '      else\n        DR_OK=0\n      fi', '      else\n        :\n      fi', ['s_census', 's_nocsnap'], ('s_bigdiff', 's_census', 's_nocsnap', 's_nosource', 's_snapx', 's_twosrc'))
 mut('absent tables file leaves DR_OK set', 'DR_OK=0; fail "the page tables were not compared', 'fail "the page tables were not compared', ['p_notables'], ('p_notables',))
-mut('failed page comparison leaves DR_OK set', 'DR_OK=0; fail "$DR_PAGE does not match', 'fail "$DR_PAGE does not match', ['neg', 'p_extra', 'p_nostart'], ('neg', 'p_bigdiff', 'p_dupstart', 'p_emptygen', 'p_extra', 'p_newhead', 'p_noend', 'p_nohead', 'p_nopage', 'p_nostart', 'p_otherhead', 'p_removed', 'p_reorder'))
+mut('failed page comparison leaves DR_OK set', 'DR_OK=0; fail "$DR_PAGE does not match', 'fail "$DR_PAGE does not match', ['neg', 'p_extra', 'p_nostart'], ('neg', 'p_bigdiff', 'p_crlf', 'p_dupstart', 'p_emptygen', 'p_extra', 'p_newhead', 'p_noend', 'p_nohead', 'p_nopage', 'p_norows', 'p_nostart', 'p_otherhead', 'p_removed', 'p_reorder'))
 mut('failed census-test.py leaves DR_OK set', 'then DR_CT="$DR_PASSES"; else DR_OK=0; fi', 'then DR_CT="$DR_PASSES"; else :; fi', ['t_ct1', 't_ctnosum', 't_ctfloor'], ('t_ct1', 't_ctfloor', 't_ctnosum'))
 mut('failed usage-test.py leaves DR_OK set', 'then DR_UT="$DR_PASSES"; else DR_OK=0; fi', 'then DR_UT="$DR_PASSES"; else :; fi', ['t_ut1', 't_utwice', 't_utfloor'], ('t_ut1', 't_utfloor', 't_utwice'))
 # a failing helper must return failure to its caller
 mut('a missing snapshot does not return failure', '(a game update renames it; DR_BUILD is $DR_BUILD)"; return 1', '(a game update renames it; DR_BUILD is $DR_BUILD)"', ['s_nocsnap', 's_nousnap'], ('s_nocsnap', 's_nousnap'))
 mut('a bad exactly-once test does not return failure', 'would compare something other than the two outputs"; return 1', 'would compare something other than the two outputs"', ['s_nosource', 's_noassetssnap', 's_twosrc'], ('s_noassetssnap', 's_nosource', 's_twosrc'))
 mut('a diff status >= 2 does not return failure', 'exited $drc (0 and 1 are normal)"; return 1', 'exited $drc (0 and 1 are normal)"', ['s_diff2'], ('s_diff2',))
-mut('a differing snapshot does not return failure', "sed -n '1,40p' \"$DR_TMP/$label.diff\" | sed 's/^/    /'; return 1", "sed -n '1,40p' \"$DR_TMP/$label.diff\" | sed 's/^/    /'", ['s_census', 's_usage', 's_wrote', 's_snapx', 's_bigdiff'], ('s_bigdiff', 's_census', 's_snapx', 's_usage', 's_wrote'))
+mut('a differing snapshot does not return failure', "sed -n '1,40p' \"$DR_TMP/$label.diff\" | sed 's/^/    /'; return 1", "sed -n '1,40p' \"$DR_TMP/$label.diff\" | sed 's/^/    /'", ['s_census', 's_usage', 's_wrote', 's_snapx', 's_bigdiff'], ('s_bigdiff', 's_census', 's_snapx', 's_usage', 's_wrote', 'u_two'))
 mut('a failed control exit status does not return failure', "tail -n 20 \"$DR_TMP/$name.err\" | sed 's/^/    stderr: /'; return 1", "tail -n 20 \"$DR_TMP/$name.err\" | sed 's/^/    stderr: /'", ['t_ct1', 't_ut1', 't_both'], ('t_both', 't_ct1', 't_ut1'))
 mut('a missing "---- 0 failed" line does not return failure', 'wanted once - it ran, or did it?"; return 1', 'wanted once - it ran, or did it?"', ['t_ctnosum', 't_utwice'], ('t_ctnosum', 't_utwice'))
 mut('a PASS count under the floor does not return failure', "reports '0 failed' as well\"; return 1", "reports '0 failed' as well\"", ['t_ctfloor', 't_utfloor'], ('t_ctfloor', 't_utfloor'))
 # the diff caps
 mut('the snapshot diff is not capped', "sed -n '1,40p' \"$DR_TMP/$label.diff\"", 'cat "$DR_TMP/$label.diff"', ['s_bigdiff'], ('s_bigdiff',))
 mut('the page diff is not capped', 'for l in d[:40]:', 'for l in d:', ['p_bigdiff'], ('p_bigdiff',))
+
+# ---- review of 94d2a32..3437c5d: LOW-1, LOW-2, LOW-3, MEDIUM-2, R7, the byte-for-byte NIT. `expect` is filled in from the measured sets.
+mut('the usage comparison is gated on the summary line, not on the exit status', 'if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then', 'if [ "${DR_U_END:-0}" -eq 1 ]; then', ['u_two'], ('u_two',))
+mut('a TMPDIR inside the repository is not refused', 'elif case "$DR_TD/" in "$DR_REPO"/*) true ;; *) false ;; esac; then', 'elif false; then', ['tmp_abs', 'tmp_rel', 'tmp_link'], ('tmp_abs', 'tmp_link', 'tmp_rel'))
+mut('TMPDIR is not resolved before the comparison with the repository', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""', 'DR_TD="${TMPDIR:-/tmp}"', ['tmp_rel', 'tmp_link'], ('tmp_link', 'tmp_rel'))
+mut('symlinks in TMPDIR are not followed', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd)" || DR_TD=""', ['tmp_link'], ('tmp_link',))
+mut('a census with no cache-meta.txt is not refused', "elif [ \"$(dr_count '^build: \\(no cache-meta\\.txt\\)$' \"$DR_TMP/census.out\")\" = 1 ]; then", 'elif false; then', ['c_nometa'], ('c_nometa',))
+mut('a census with no cache-meta.txt leaves DR_OK set', 'DR_OK=0; fail "census.py: no cache-meta.txt', 'fail "census.py: no cache-meta.txt', ['c_nometa'], ('c_nometa',))
+mut('generated tables with a heading and no row accepted', 'if not tables or not rows:', 'if not tables:', ['p_norows'], ('p_norows',))
+mut('the page and the generated file are read with universal newlines', "pl = open(page, encoding='utf-8', newline='').read()", "pl = open(page, encoding='utf-8').read()", ['p_crlf'], ('p_crlf',))
+mut('usage-mutations.py exit status not read', 'if [ "$RC" -ne 0 ]; then\n      DR_OK=0; fail "usage-mutations.py exited', 'if false; then\n      DR_OK=0; fail "usage-mutations.py exited', ['um_rc1'], ('um_rc1',))
+mut('usage-mutations.py summary line not required once', 'elif [ "${DR_UM_LINES:-x}" != 1 ]; then', 'elif false; then', ['um_nosum', 'um_twice'], ('um_nosum', 'um_twice'))
+mut('usage-mutations.py survivors not read', 'if [ "$DR_UM_B" -ne 0 ]; then', 'if false; then', ['um_surv'], ('um_surv',))
+mut('usage-mutations.py slice start not read', 'elif [ "$DR_UM_LO" -ne 1 ]; then', 'elif false; then', ['um_lo'], ('um_lo',))
+mut('usage-mutations.py slice end not read', 'elif [ "$DR_UM_HI" -ne "$DR_UM_N" ]; then', 'elif false; then', ['um_hi'], ('um_hi',))
+mut('usage-mutations.py caught count not compared with N', 'elif [ "$DR_UM_C" -ne "$DR_UM_N" ]; then', 'elif false; then', ['um_caught'], ('um_caught',))
+mut('usage-mutations.py floor not enforced', 'elif [ "$DR_UM_N" -lt "$DR_MIN_UM" ]; then', 'elif false; then', ['um_floor'], ('um_floor',))
+mut('usage-mutations.py floor is 0', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=22', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=0', ['um_floor'], ('healthy', 'p_trailing', 'um_caught', 'um_floor', 'um_hi', 'um_lo', 'um_surv'))
+mut('usage-mutations.py not run', 'python3 -I "$DR_DIR/usage-mutations.py"', 'true || python3 -I "$DR_DIR/usage-mutations.py"', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
+mut('usage-mutations.py not given --assets', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --src "$SRC_CACHE"', ['healthy'], ('healthy',))
+mut('usage-mutations.py not given --src', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --assets "$ASSETS"', ['healthy'], ('healthy',))
+mut('failed usage-mutations.py exit status leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py exited $RC', 'fail "usage-mutations.py exited $RC', ['um_rc1'], ('um_rc1',))
+mut('failed usage-mutations.py summary line leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py exited 0 but', 'fail "usage-mutations.py exited 0 but', ['um_nosum', 'um_twice'], ('um_nosum', 'um_twice'))
+mut('usage-mutations.py survivors leave DR_OK set', 'DR_OK=0; fail "usage-mutations.py: $DR_UM_B', 'fail "usage-mutations.py: $DR_UM_B', ['um_surv'], ('um_surv',))
+mut('usage-mutations.py slice start leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not from 1', 'fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not from 1', ['um_lo'], ('um_lo',))
+mut('usage-mutations.py slice end leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not to the last', 'fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not to the last', ['um_hi'], ('um_hi',))
+mut('usage-mutations.py caught count leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py caught', 'fail "usage-mutations.py caught', ['um_caught'], ('um_caught',))
+mut('usage-mutations.py floor leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py has', 'fail "usage-mutations.py has', ['um_floor'], ('um_floor',))
 
 
 def main():
@@ -550,12 +645,12 @@ def main():
     a = ap.parse_args()
     t0 = time.time()
     text = section_text(VERIFY.read_text())
-    ct, ut = floors(text)
+    ct, ut, um = floors(text)
     workers = min(32, os.cpu_count() or 4)
     with tempfile.TemporaryDirectory() as td, concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         work = pathlib.Path(td)
         tpl = work / 'tpl'
-        build_template(tpl, ct, ut)
+        build_template(tpl, ct, ut, um)
         (work / 'base').mkdir()
         res = all_cases(text, tpl, work / 'base', pool)
         # the negative control is judged first: a section that passes a stale page has nothing to say
@@ -627,6 +722,7 @@ def main():
                     print(f'         expected red, stayed green: [{x}] {LABELS[x]}')
                 for x in sorted(red - exp):
                     print(f'         unexpectedly red: [{x}] {LABELS[x]}')
+                    print(f'             because: ' + ' | '.join(mres[x])[:900])
         print(f'FIXTURE time {time.time() - t0:.1f} s')
     return rc
 

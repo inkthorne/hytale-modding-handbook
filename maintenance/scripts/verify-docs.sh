@@ -14,6 +14,9 @@
 # Env overrides:
 #   HYTALE_JAR      Path to HytaleServer.jar
 #   HYTALE_ASSETS   Path to the extracted Assets.zip dir (default ~/.cache/hytale-assets)
+#   HYTALE_SRC_CACHE  Path to the decompiled source cache (default ~/.cache/hytale-jar/src)
+#   DR_DIR, DR_PAGE, DR_BUILD  a seam for check-double-run-fixture.py, which runs the double-run section on
+#                   stub probe scripts; leave them unset (they default to the real probe dir, page and 0.7.2)
 #
 # Exit code: non-zero if any HARD check fails. Advisory/INFO checks never fail
 # the run (they print findings for human review).
@@ -51,8 +54,8 @@ else
 fi
 JAR="${HYTALE_JAR:-$ROOT/install/release/package/game/latest/Server/HytaleServer.jar}"
 ASSETS="${HYTALE_ASSETS:-$HOME/.cache/hytale-assets}"
-# Decompiled source cache (maintenance/scripts/build-jar-cache.sh). Only the
-# "Type"-value gate reads it; every other check works off the jar or the assets.
+# Decompiled source cache (maintenance/scripts/build-jar-cache.sh). Read by the "Type"-value,
+# asset-id, Default, requiredness and double-run gates; the others work off the jar or the assets.
 SRC_CACHE="${HYTALE_SRC_CACHE:-$HOME/.cache/hytale-jar/src}"
 
 section "Environment"
@@ -363,8 +366,11 @@ section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could
 # trap (an interrupted or exiting run would otherwise leave two 28k-40k-row copies behind). This is
 # the only EXIT trap in this script: a second one would replace it, so chain it
 # (trap -p EXIT) if one is ever added; check-asset-drift-fixture.py fails on any other `trap` word outside a comment.
+# It also removes DR_TMP, the double-run section's temp dir (census-test.py's copy of the source is 57 MB), so an
+# interrupted run leaves neither; that section sets DR_TMP empty when it has removed it, as this one does (review of
+# 94d2a32..3437c5d, LOW-4). An unset or empty DR_TMP makes `rm -rf ""`, which does nothing.
 DRIFT_TMP=""
-trap 'rm -rf "${DRIFT_TMP:-}"' EXIT
+trap 'rm -rf "${DRIFT_TMP:-}" "${DR_TMP:-}"' EXIT
 DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
 if [ -z "$DRIFT_TMP" ]; then
   fail "asset drift: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - neither the Common nor the Server/Cosmetics drift was computed"
@@ -1169,7 +1175,7 @@ section "[HARD] The double-run table matches the population and the source"
 # (CLAUDE.md said "verify-docs.sh runs none of these"), so after a game update the census, the
 # usage snapshot, the verdict table and the page went stale with every gate green. This runs the
 # STATIC half of maintenance/probes/double-run; the measuring half (run.sh, verdicts.sh, 72 server
-# runs) is not run here and stays by hand. Five steps, each its own FAIL:
+# runs) is not run here and stays by hand. Six steps, each its own FAIL:
 #   usage.py    exit 0 and exactly one `unknown: N (limit 5); 0 problem(s)` line. Any other status is a
 #               FAIL that prints every PROBLEM and FAIL line and the last 20 lines of stderr
 #               (usage.py returns 1 for no Server/NPC, an empty seed set, a crash and table problems);
@@ -1179,7 +1185,9 @@ section "[HARD] The double-run table matches the population and the source"
 #               cache path and so move with HYTALE_SRC_CACHE / HYTALE_ASSETS; each pattern must match
 #               exactly once on both sides, or it would drop nothing (a comparison that quietly
 #               compares less) or everything. The `build:` line stays: it names the jar's sha, so it is
-#               the line that goes red at an update. usage.py writes its tables to tables13b.md, so the
+#               the line that goes red at an update. A `build: (no cache-meta.txt)` line is its own FAIL
+#               (the identity is unknown; the snapshot must not be re-committed on its account). The usage
+#               comparison runs whenever usage.py exited 0, whatever its summary line says; usage.py writes its tables to tables13b.md, so the
 #               `wrote the page tables to` line equals the snapshot's and needs no exception;
 #   the page    the span of the page from the first `###` heading after `### The population (counted)` to
 #               `### Outcomes that depend on a field` equals the generated tables byte for byte (trailing
@@ -1188,10 +1196,12 @@ section "[HARD] The double-run table matches the population and the source"
 #               check (every generated line occurs somewhere on the page) saw none of them;
 #   the controls  census-test.py and usage-test.py, each in a work dir of its own, each needing exit 0,
 #               exactly one `---- 0 failed` line and at least DR_MIN_CT / DR_MIN_UT PASS lines (a
-#               control that visits nothing prints `0 failed` too).
-# usage-mutations.py (each guard of usage.py deleted in a copy; 22 mutations, 419 s measured on a loaded
-# machine, over the 3 min that item 14 allowed for a place in this section) stays by hand: CLAUDE.md records
-# when to run it. It takes --assets and --src, so a run by hand can use the same caches.
+#               control that visits nothing prints `0 failed` too);
+#   the mutations  usage-mutations.py (each of 22 guards of usage.py deleted in a copy; usage-test.py must go red
+#               on each): exit 0 and one summary line that says 0 survived, the slice 1..N and CAUGHT == N, N at
+#               least DR_MIN_UM. Item 14 pre-registered "3 min or less runs here": 171.6 s measured at load 9-14
+#               (review of 94d2a32..3437c5d), 419 s at load 20-35, so on a quiet machine it does. It takes the
+#               section's own --assets and --src.
 # AT A GAME UPDATE THIS GOES RED, on purpose, after build-jar-cache.sh: the census `build:` line, the
 # verdict table's deciding lines, the page tables, census-test.py's README labels and usage-test.py's pins
 # all move with the source. Re-reading what moved and re-committing the table, the page tables and the
@@ -1206,12 +1216,14 @@ section "[HARD] The double-run table matches the population and the source"
 # check-double-run-fixture.py runs this text on stub scripts. Not covered: the prose figures outside the
 # seven tables (the population paragraph, the per-field counts table, "13 measured, 45 read"), the
 # file:line pins in the page's prose, and the coarse sim check.
-# One temporary directory, removed when the section ends; there is no exit and no EXIT hook in this
-# section (the asset-drift section owns the only one).
+# One temporary directory, removed when the section ends. There is no exit and no EXIT hook in this
+# section: the asset-drift section owns the only one, and it removes DR_TMP too, so an interrupted run
+# leaves neither (census-test.py's copy of the source is 57 MB). A TMPDIR inside the repository is one
+# FAIL naming it and no step runs: usage.py refuses to write its tables there, and usage-test.py is VOID.
 DR_DIR="${DR_DIR:-maintenance/probes/double-run}"
 DR_PAGE="${DR_PAGE:-docs/interactions-double-run.md}"
 DR_BUILD="${DR_BUILD:-0.7.2}"
-DR_MIN_CT=16; DR_MIN_UT=87
+DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=22
 DR_COMPARED=""
 # dr_count ERE FILE: the number of lines of FILE that match; empty if grep itself failed
 dr_count() { grep -c -E -e "$1" "$2" 2>/dev/null; }
@@ -1252,14 +1264,18 @@ dr_control() {
   fi
   DR_PASSES="$np"
 }
+DR_REPO="$(pwd -P)"
+DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""
 if [ ! -d "$SRC_CACHE" ]; then
   warn "skipped (no decompiled source cache at $SRC_CACHE — build-jar-cache.sh)"
 elif [ ! -d "$ASSETS" ]; then
   warn "skipped (no asset cache)"
+elif case "$DR_TD/" in "$DR_REPO"/*) true ;; *) false ;; esac; then
+  fail "double-run: TMPDIR (${TMPDIR:-/tmp}) resolves to $DR_TD, inside the repository $DR_REPO - usage.py refuses to write its tables there and usage-test.py is VOID; set TMPDIR to a directory outside the repository - none of the six steps ran"
 else
   DR_TMP="$(mktemp -d)" || DR_TMP=""
   if [ -z "$DR_TMP" ]; then
-    fail "double-run: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - none of the five steps ran"
+    fail "double-run: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - none of the six steps ran"
   else
     DR_OK=1
     # ---- usage.py: the table check and the population
@@ -1286,7 +1302,7 @@ else
       esac
     fi
     # ---- the snapshots (only when usage.py ran to its summary line)
-    if [ "${DR_U_END:-0}" -eq 1 ]; then
+    if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then
       if dr_snapshot usage '^assets: ' "$DR_TMP/usage.out" "$DR_DIR/usage-$DR_BUILD.txt"; then DR_USAGE_CMP="$DR_COMPARED"; else DR_OK=0; DR_USAGE_CMP=""; fi
     else
       DR_USAGE_CMP=""
@@ -1306,6 +1322,8 @@ else
       DR_CLASSES="$(sed -n 's/^  distinct classes: \([0-9][0-9]*\); classes carrying.*/\1/p' "$DR_TMP/census.out")"
       if [ "$DR_NAMES" -eq 0 ] || [ "$DR_CLASSES" -eq 0 ]; then
         DR_OK=0; fail "census.py: $DR_NAMES name(s) in $DR_CLASSES class(es) - a census that visited nothing"
+      elif [ "$(dr_count '^build: \(no cache-meta\.txt\)$' "$DR_TMP/census.out")" = 1 ]; then
+        DR_OK=0; fail "census.py: no cache-meta.txt beside the source cache $SRC_CACHE: the build identity is unknown, so its output cannot be compared with the snapshot - do not re-commit the snapshot on this account; rebuild the cache with build-jar-cache.sh or point HYTALE_SRC_CACHE at the real one"
       elif dr_snapshot census '^source: ' "$DR_TMP/census.out" "$DR_DIR/census-$DR_BUILD.txt"; then
         DR_CENSUS_CMP="$DR_COMPARED"
       else
@@ -1321,8 +1339,8 @@ else
 import difflib, sys
 page, gen = sys.argv[1], sys.argv[2]
 START, END = '### The population (counted)', '### Outcomes that depend on a field'
-pl = open(page, encoding='utf-8').read().split('\n')
-gl = open(gen, encoding='utf-8').read().split('\n')
+pl = open(page, encoding='utf-8', newline='').read().split('\n')
+gl = open(gen, encoding='utf-8', newline='').read().split('\n')
 fence, heads = False, []
 for i, l in enumerate(pl):
     if l.startswith('```'):
@@ -1371,11 +1389,42 @@ PY
     DR_CT=""; DR_UT=""
     if dr_control census-test.py "$DR_MIN_CT" "$DR_TMP/ct" --src "$SRC_CACHE"; then DR_CT="$DR_PASSES"; else DR_OK=0; fi
     if dr_control usage-test.py "$DR_MIN_UT" "$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"; then DR_UT="$DR_PASSES"; else DR_OK=0; fi
+    DR_UM=""
+    python3 -I "$DR_DIR/usage-mutations.py" "$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE" > "$DR_TMP/um.out" 2> "$DR_TMP/um.err"; RC=$?
+    DR_UM_ERE='^---- [0-9]+ survived or failed to apply, [0-9]+ caught \(of the slice [0-9]+\.\.[0-9]+ of [0-9]+\)$'
+    DR_UM_LINES="$(dr_count "$DR_UM_ERE" "$DR_TMP/um.out")"
+    if [ "$RC" -ne 0 ]; then
+      DR_OK=0; fail "usage-mutations.py exited $RC:"
+      grep -E '^(SURVIVED|ERROR|VOID)' "$DR_TMP/um.out" | sed 's/^/    /'
+      tail -n 20 "$DR_TMP/um.err" | sed 's/^/    stderr: /'
+    elif [ "${DR_UM_LINES:-x}" != 1 ]; then
+      DR_OK=0; fail "usage-mutations.py exited 0 but printed its summary line ${DR_UM_LINES:-?} time(s), wanted once - it ran, or did it?"
+    else
+      DR_UM_B="$(sed -n 's/^---- \([0-9][0-9]*\) survived or failed to apply, [0-9][0-9]* caught (of the slice [0-9][0-9]*\.\.[0-9][0-9]* of [0-9][0-9]*)$/\1/p' "$DR_TMP/um.out")"
+      DR_UM_C="$(sed -n 's/^---- [0-9][0-9]* survived or failed to apply, \([0-9][0-9]*\) caught (of the slice [0-9][0-9]*\.\.[0-9][0-9]* of [0-9][0-9]*)$/\1/p' "$DR_TMP/um.out")"
+      DR_UM_LO="$(sed -n 's/^---- [0-9][0-9]* survived or failed to apply, [0-9][0-9]* caught (of the slice \([0-9][0-9]*\)\.\.[0-9][0-9]* of [0-9][0-9]*)$/\1/p' "$DR_TMP/um.out")"
+      DR_UM_HI="$(sed -n 's/^---- [0-9][0-9]* survived or failed to apply, [0-9][0-9]* caught (of the slice [0-9][0-9]*\.\.\([0-9][0-9]*\) of [0-9][0-9]*)$/\1/p' "$DR_TMP/um.out")"
+      DR_UM_N="$(sed -n 's/^---- [0-9][0-9]* survived or failed to apply, [0-9][0-9]* caught (of the slice [0-9][0-9]*\.\.[0-9][0-9]* of \([0-9][0-9]*\))$/\1/p' "$DR_TMP/um.out")"
+      if [ "$DR_UM_B" -ne 0 ]; then
+        DR_OK=0; fail "usage-mutations.py: $DR_UM_B mutation(s) survived or failed to apply (rc 0 and still a survivor)"
+      elif [ "$DR_UM_LO" -ne 1 ]; then
+        DR_OK=0; fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not from 1 - the guards before it were not tried"
+      elif [ "$DR_UM_HI" -ne "$DR_UM_N" ]; then
+        DR_OK=0; fail "usage-mutations.py ran the slice $DR_UM_LO..$DR_UM_HI of $DR_UM_N, not to the last - the guards after it were not tried"
+      elif [ "$DR_UM_C" -ne "$DR_UM_N" ]; then
+        DR_OK=0; fail "usage-mutations.py caught $DR_UM_C of $DR_UM_N mutations - an uncaught guard is a guard nobody tests"
+      elif [ "$DR_UM_N" -lt "$DR_MIN_UM" ]; then
+        DR_OK=0; fail "usage-mutations.py has $DR_UM_N mutation(s), the floor is $DR_MIN_UM - an emptied list prints 'slice 1..0 of 0' and exits 0"
+      else
+        DR_UM="$DR_UM_C"
+      fi
+    fi
     if [ "$DR_OK" -eq 1 ]; then
       info "census.py: $DR_NAMES name(s), $DR_CLASSES class(es); stdout equals census-$DR_BUILD.txt ($DR_CENSUS_CMP lines compared, the source: line dropped)"
       info "usage.py: $DR_TYPES registered type(s), $DR_RUN run-reached, $DR_ROWS table row(s), $DR_UNK unknown (limit 5), 0 problem(s); stdout equals usage-$DR_BUILD.txt ($DR_USAGE_CMP lines compared, the assets: line dropped)"
       info "census-test.py: $DR_CT PASS (floor $DR_MIN_CT), ---- 0 failed; usage-test.py: $DR_UT PASS (floor $DR_MIN_UT), ---- 0 failed"
-      pass "the double-run table holds: $DR_RUN run-reached type(s) in $DR_ROWS row(s), the page tables equal the generated ones, both snapshots equal, both controls green"
+      info "usage-mutations.py: $DR_UM caught of $DR_UM_N (floor $DR_MIN_UM), 0 survived"
+      pass "the double-run table holds: $DR_RUN run-reached type(s) in $DR_ROWS row(s), the page tables equal the generated ones, both snapshots equal, all three controls green"
     fi
     rm -rf "$DR_TMP"
     DR_TMP=""

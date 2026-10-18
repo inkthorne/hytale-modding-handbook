@@ -42,8 +42,8 @@ ANCHOR = 'section "[HARD] Asset drift vs baseline'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 29
-MIN_MUTATIONS = 29
+MIN_CASES = 30
+MIN_MUTATIONS = 30
 
 REAL = {n: shutil.which(n) for n in ('sort', 'diff', 'grep')}
 for _n, _p in REAL.items():
@@ -366,6 +366,11 @@ def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
     mk = 'DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""\n'
     case('an exit inside the section still removes the temp dir (the EXIT trap)',
          go(inject=(mk, mk + 'echo "work" > "$DRIFT_TMP/x"; exit 7\n')), hf=None, want_rc=7, cleaned='exit')
+    # LOW-4 of the review of 94d2a32..3437c5d: the same trap also removes DR_TMP, the double-run section's temp dir. DR_TMP is made
+    # BEFORE the exit (as the double-run section makes it before its steps), and only the trap can remove it.
+    mk2 = 'DR_TMP="$(mktemp -d)"; echo "work" > "$DR_TMP/x"\n'
+    case('an exit inside the section also removes the double-run section\'s DR_TMP (the EXIT trap)',
+         go(inject=(mk, mk2 + mk + 'echo "work" > "$DRIFT_TMP/x"; exit 7\n')), hf=None, want_rc=7, cleaned='exit')
     res[CASE['trapcount']] = trap_problems(VERIFY.read_text())
     # the predicate's own control: it must see a second trap in the forms a line-start match misses
     seen = [trap_problems(VERIFY.read_text() + tail) for tail in ("\ntrue; trap 'echo replaced' EXIT\n", "\nx=1 && trap - EXIT\n", "\n( trap 'x' EXIT )\n")]
@@ -443,6 +448,7 @@ CASE = {
     'zeroSH': 'a hash script that exits 0 with no rows: FAIL naming the side, not the whole baseline removed',
     'zeroSB': 'the Server baseline holds 0 rows: FAIL naming the side, no count',
     'early': 'an exit inside the section still removes the temp dir (the EXIT trap)',
+    'early2': 'an exit inside the section also removes the double-run section\'s DR_TMP (the EXIT trap)',
     'trapcount': "verify-docs.sh sets exactly one EXIT trap, the drift section's (a second would replace it)",
     'trapcontrol': "the trap check sees a second trap written as `true; trap ...`, `x && trap - EXIT` or `( trap ... )`",
     'sortBp': 'a baseline sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
@@ -486,7 +492,9 @@ mut('Server guard ignores an empty generated index', 'if [ "$N_BASE" -eq 0 ] || 
     'if [ "$N_BASE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)', ['zeroSH'], ['zeroSH'])
 mut('Server guard ignores an empty baseline', 'if [ "$N_BASE" -eq 0 ] || [ "$N_LIVE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)',
     'if [ "$N_LIVE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)', ['zeroSB'], ['zeroSB'])
-mut('EXIT trap removed', "trap 'rm -rf \"${DRIFT_TMP:-}\"' EXIT\n", '', ['early'], ['early'])
+TRAP = "trap 'rm -rf \"${DRIFT_TMP:-}\" \"${DR_TMP:-}\"' EXIT\n"
+mut('EXIT trap removed', TRAP, '', ['early', 'early2'], ['early', 'early2'])
+mut('EXIT trap does not remove DR_TMP', TRAP, "trap 'rm -rf \"${DRIFT_TMP:-}\"' EXIT\n", ['early2'], ['early2'])
 mut('section-end rm -rf removed', '  rm -rf "$DRIFT_TMP"\n', '', ['healthy'], ['sortBp', 'sortLp', 'both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortL', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
 mut('DRIFT_TMP not cleared after the section-end rm', '  DRIFT_TMP=""      # the EXIT cleanup must not act on a path that is already gone\n', '', ['healthy'],
     ['both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortBp', 'sortL', 'sortLp', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])

@@ -2,17 +2,20 @@
 """
 usage-mutations.py -- is every guard added to usage.py by the review of b0b119a..c4e97d1 tested by usage-test.py?
 
-    python3 -I maintenance/probes/double-run/usage-mutations.py WORKDIR [FROM TO]
+    python3 -I maintenance/probes/double-run/usage-mutations.py WORKDIR [FROM TO] [--assets DIR] [--src DIR]
 
 For each guard it writes a copy of usage.py with that one guard deleted (the text patch is the guard, named below) and runs usage-test.py against the copy: the
 test must go red (exit 1 or 2, or a crash). A mutation that leaves the test green means the test is not about that guard. The unmutated copy is the identity
 control: it must exit 0, else every verdict below proves nothing, and the run is VOID. Each patch must also apply: a patch whose text is no longer in
 usage.py is an error, not a skipped mutation (a guard that was reworded is a guard nobody tests).
 
-WORKDIR must be absent, empty, or carry the marker .double-run-usage-mutations. FROM TO (1-based, inclusive) run a slice; one run of usage-test.py takes about 6 s.
+WORKDIR must be absent, empty, or carry the marker .double-run-usage-mutations. FROM TO (1-based, inclusive) run a slice; one run of usage-test.py takes about 14 s.
+--assets and --src are passed to every usage-test.py run (item 14: verify-docs.sh hands over its own caches; the defaults are the usual ones).
+The last line is `---- B survived or failed to apply, C caught (of the slice FROM..TO of N)`. A caller that wants every guard tested reads C == N and N at
+least its floor: a MUTATIONS emptied to nothing prints `slice 1..0 of 0` and exits 0, which says nothing about any guard.
 """
 from __future__ import annotations
-import pathlib, shutil, subprocess, sys
+import argparse, pathlib, shutil, subprocess, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 MARK = '.double-run-usage-mutations'
@@ -45,16 +48,25 @@ MUTATIONS = [
     ('MINOR-3 check_table: an outcome may sit on any sim label', "            if ok_sims is not None and sim_class(sim) not in ok_sims:\n", "            if False:\n"),
     ('MINOR-3 check_table: a name that is not a registered type is not reported', "            problems.append(f'{tsv.name}:{n}: {t} is not a registered interaction type')\n", "            pass\n"),
     ('MINOR-3 sim_class: via-<hook>:<kind> labels are compared whole', "    return re.sub(r'^via-[^:]+:', 'via-*:', label)", "    return label"),
+    ('item 14 --tables: a FILE inside the repository is written', "        if out == repo or repo in out.parents:\n", "        if False:\n"),
+    ('item 14 --tables: the verdict table can be named as FILE', "        if out == pathlib.Path(args.table).resolve():\n", "        if False:\n"),
+    ('item 14 --tables: FILE is not resolved (a symlink to the repository or to the table passes)', "        out, repo = pathlib.Path(args.tables).resolve(), HERE.parents[2]\n",
+     "        out, repo = pathlib.Path(args.tables).absolute(), HERE.parents[2]\n"),
 ]
 
 
 def main():
-    if len(sys.argv) < 2 or not sys.argv[1].startswith('/'):
-        print('usage: usage-mutations.py ABSOLUTE_WORKDIR [FROM TO]', file=sys.stderr)
+    ap = argparse.ArgumentParser()
+    ap.add_argument('work')
+    ap.add_argument('slice', nargs='*', type=int, help='FROM TO')
+    ap.add_argument('--assets', default=str(pathlib.Path.home() / '.cache/hytale-assets'))
+    ap.add_argument('--src', default=str(pathlib.Path.home() / '.cache/hytale-jar/src'))
+    args = ap.parse_args()
+    if not args.work.startswith('/') or len(args.slice) not in (0, 2):
+        print('usage: usage-mutations.py ABSOLUTE_WORKDIR [FROM TO] [--assets DIR] [--src DIR]', file=sys.stderr)
         return 3
-    work = pathlib.Path(sys.argv[1]).resolve()
-    lo = int(sys.argv[2]) if len(sys.argv) > 2 else 1
-    hi = int(sys.argv[3]) if len(sys.argv) > 3 else len(MUTATIONS)
+    work = pathlib.Path(args.work).resolve()
+    lo, hi = args.slice if args.slice else (1, len(MUTATIONS))
     if work.exists() and not (work / MARK).exists() and (not work.is_dir() or any(work.iterdir())):
         print(f'FAIL  {work} exists, is not empty and has no marker; give a new path', file=sys.stderr)
         return 3
@@ -71,7 +83,7 @@ def main():
         for f in ('census.py', 'usage-test.py', 'verdict-table.tsv'):
             shutil.copy(HERE / f, tree / f)
         (tree / 'usage.py').write_text(text)
-        r = subprocess.run([sys.executable, '-I', str(tree / 'usage-test.py'), str(work / 'ut')], capture_output=True, text=True, timeout=300)
+        r = subprocess.run([sys.executable, '-I', str(tree / 'usage-test.py'), str(work / 'ut'), '--assets', args.assets, '--src', args.src], capture_output=True, text=True, timeout=300)
         shutil.rmtree(work / 'ut', ignore_errors=True)
         first = next((l for l in r.stdout.split('\n') if l.startswith(('FAIL', 'VOID'))), r.stderr.strip().split('\n')[-1] if r.stderr.strip() else '')
         return r.returncode, first
@@ -81,7 +93,7 @@ def main():
         print(f'VOID  the unmutated copy of usage.py is not green on usage-test.py (rc {rc}: {first})')
         return 2
     print('identity: green')
-    bad = 0
+    bad = caught = 0
     for n, (name, old, new) in enumerate(MUTATIONS, 1):
         if not lo <= n <= hi:
             continue
@@ -94,8 +106,9 @@ def main():
             print(f'SURVIVED  #{n} {name}')
             bad += 1
         else:
+            caught += 1
             print(f'CAUGHT    #{n} {name}  (rc {rc}: {first[:150]})')
-    print(f'---- {bad} survived or failed to apply (of the slice {lo}..{hi} of {len(MUTATIONS)})')
+    print(f'---- {bad} survived or failed to apply, {caught} caught (of the slice {lo}..{hi} of {len(MUTATIONS)})')
     return 1 if bad else 0
 
 

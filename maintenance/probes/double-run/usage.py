@@ -818,8 +818,18 @@ def main():
     ap.add_argument('--assets', default=str(pathlib.Path.home() / '.cache/hytale-assets'))
     ap.add_argument('--src', default=str(pathlib.Path.home() / '.cache/hytale-jar/src'))
     ap.add_argument('--table', default=str(HERE / 'verdict-table.tsv'), help='the verdict table to check against the population (default: verdict-table.tsv)')
-    ap.add_argument('--tables', metavar='FILE', help='write the per-outcome tables of docs/interactions-double-run.md (population counts joined with the verdict table) to FILE')
+    ap.add_argument('--tables', metavar='FILE', help='write the per-outcome tables of docs/interactions-double-run.md (population counts joined with the verdict table) to FILE, which must resolve outside the repository and is not --table (refused with exit 2 otherwise)')
     args = ap.parse_args()
+    if args.tables:
+        # --tables WRITES its file. Read as an input it overwrote verdict-table.tsv, exited 0 and printed nothing unusual (item 14, 2026-10-18); the damage showed
+        # only on the next run. So FILE must resolve (symlinks followed) outside the repository, and must not be --table. Checked before anything is read.
+        out, repo = pathlib.Path(args.tables).resolve(), HERE.parents[2]
+        if out == repo or repo in out.parents:
+            print(f'FAIL  --tables {args.tables} resolves to {out}, inside the repository; this option writes its file, so give it a scratch path outside {repo}', file=sys.stderr)
+            return 2
+        if out == pathlib.Path(args.table).resolve():
+            print(f'FAIL  --tables {args.tables} is the verdict table (--table {args.table}); this option writes its file and would overwrite it', file=sys.stderr)
+            return 2
     server = pathlib.Path(args.assets) / 'Server'
     if not (server / 'NPC').is_dir():
         print(f'FAIL  no {home(server)}/NPC', file=sys.stderr)

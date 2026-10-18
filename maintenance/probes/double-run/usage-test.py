@@ -35,7 +35,7 @@ Review of b0b119a..c4e97d1 added, each with the negative control that shows the 
            the old per-row rule (the hook is declared at the recorded line) passed both
 """
 from __future__ import annotations
-import argparse, json, pathlib, re, shutil, sys
+import argparse, contextlib, io, json, pathlib, re, shutil, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -446,6 +446,70 @@ def main():
     check('MINOR-3: a row for a name that is not a registered interaction type is reported', any('NotAType is not a registered interaction type' in x for x in pr), pr)
     check('MINOR-3: every shipped row is accepted by the outcome/sim mapping (the mapping was decided from the rows and holds for all of them)',
           not [x for x in usage.check_table(tsv, src, runset, info)[0] if 'cannot sit' in x or 'class chain' in x])
+    # ---- R6 (item 14): --tables FILE WRITES its file. It once overwrote verdict-table.tsv (read as an input, run with the table's own name) and exited 0.
+    # The guard refuses, before anything is read, a FILE that resolves (symlinks followed) inside the repository or to --table. The cases call the CLI as
+    # a subprocess on the planted tree (cheap) and never aim at a tracked file: a deleted guard would clobber it. The repository is HERE.parents[2], so in
+    # usage-mutations.py's copy it is the copy. The scratch directory is made outside it, else an allowed write would be refused for the wrong reason.
+    repo = HERE.parents[2]
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix='usage-tables-guard-')).resolve()
+    try:
+        if repo == scratch or repo in scratch.parents:
+            print(f'VOID  the scratch directory {scratch} is inside the repository {repo}: an allowed write would be refused for the wrong reason')
+            return 2
+        table_copy = scratch / 'table.tsv'
+        shutil.copy(HERE / 'verdict-table.tsv', table_copy)
+        table_bytes = table_copy.read_bytes()
+
+        def cli(tables, table=None):
+            cmd = [sys.executable, '-I', str(HERE / 'usage.py'), '--assets', str(work), '--src', a.src, '--tables', str(tables)]
+            if table is not None:
+                cmd += ['--table', str(table)]
+            r_ = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            return r_.returncode, r_.stdout, r_.stderr
+
+        # negative control: a path the guard allows is written (the instrument can see a write, so "no file was created" below can fail). It runs main()
+        # in this process with the registry already read above: a subprocess would read the 6,829-file source cache again, about 4 s a call
+        ctl = scratch / 'control.md'
+        argv0, reg0 = sys.argv, usage.registry
+        sys.argv = ['usage.py', '--assets', str(work), '--src', a.src, '--tables', str(ctl)]
+        usage.registry = lambda src_: info
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err_io:
+                rc_ = usage.main()
+        finally:
+            sys.argv, usage.registry = argv0, reg0
+        err_ = err_io.getvalue()
+        if not ctl.is_file():
+            print(f'VOID  --tables to a scratch path outside the repository wrote nothing (rc {rc_}: {err_.strip()[-200:]}): "no file was created" below could never fail')
+            return 2
+        check('--tables guard, control: a path outside the repository that is not --table is written (rc 0 or 1, the file exists)', rc_ in (0, 1) and ctl.is_file(), (rc_, err_[-200:]))
+        inrepo = HERE / 'zz-tables-guard-probe.md'
+        if inrepo.exists() or inrepo.is_symlink():
+            print(f'VOID  {inrepo} exists: the in-repository case must aim at a path that is not there')
+            return 2
+        link = scratch / 'link-to-repo.md'
+        link.symlink_to(inrepo)
+        link_t = scratch / 'link-to-table.md'
+        link_t.symlink_to(table_copy)
+        try:
+            rc_, _, err_ = cli(inrepo)
+            check('--tables guard: a FILE inside the repository is refused (exit 2, message names the repository), and no file is created',
+                  rc_ == 2 and 'inside the repository' in err_ and not inrepo.exists(), (rc_, err_[-200:], inrepo.exists()))
+            inrepo.unlink(missing_ok=True)
+            rc_, _, err_ = cli(link)
+            check('--tables guard: a symlink outside the repository that points inside it is refused (symlinks are followed), and the target is not created',
+                  rc_ == 2 and 'inside the repository' in err_ and not inrepo.exists(), (rc_, err_[-200:], inrepo.exists()))
+            inrepo.unlink(missing_ok=True)
+        finally:
+            inrepo.unlink(missing_ok=True)
+        rc_, _, err_ = cli(table_copy, table=table_copy)
+        check('--tables guard: FILE equal to --table is refused (exit 2, message names the verdict table), and the table is unchanged',
+              rc_ == 2 and 'is the verdict table' in err_ and table_copy.read_bytes() == table_bytes, (rc_, err_[-200:]))
+        rc_, _, err_ = cli(link_t, table=table_copy)
+        check('--tables guard: a symlink to --table is refused too, and the table is unchanged',
+              rc_ == 2 and 'is the verdict table' in err_ and table_copy.read_bytes() == table_bytes, (rc_, err_[-200:]))
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     # the page tables: one row per run-reached type
     tb = usage.page_tables(real, trows)
     check('--tables: one table row per run-reached type', len([l for l in tb.split('\n') if l.startswith('| `')]) == len(runset), len(tb))

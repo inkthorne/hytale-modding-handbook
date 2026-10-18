@@ -36,11 +36,13 @@ RUNS ON (item 13b, R6)
       host        under an object whose Type is SpawnInteraction: the host InteractionHost.spawnHost builds
       A-entity    under an object whose Type is SpawnAbilityEntity, LaunchAbilityProjectile or
                   SplitAbilityProjectile: the ability entity's or ability projectile's own manager, built
-                  with `new InteractionManager(null, ...)` (AbilityEntitySpawner.java:59, AbilityProjectileLauncher.java:102)
+                  with `new InteractionManager(null, ...)` (AbilityEntitySpawner.java:59, AbilityProjectileLauncher.java:102).
+                  Not the ProjectileSpawn chain of that projectile: it runs on the shooter's manager
+                  (ProjectileModule.onProjectileSpawnInteraction, :206), so it keeps the caster's label
   A type reached only as A-caster runs on a player's manager and is outside the double run.
 """
 from __future__ import annotations
-import argparse, collections, json, pathlib, sys
+import argparse, collections, json, pathlib, re, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -54,8 +56,25 @@ HELD_ROOT_KEYS = ('HotbarItems', 'OffHandItems')       # BuilderRole.java:280-28
 CARRIERS = {'SpawnInteraction': 'host', 'SpawnAbilityEntity': 'A-entity', 'LaunchAbilityProjectile': 'A-entity',
             'SplitAbilityProjectile': 'A-entity'}
 LABEL_OF_SEED = {'npc': 'NPC', 'encounter': 'encounter', 'ability': 'A-caster'}
+# calls that write an inventory slot, found in a type's class chain (the held-slot walk, item 13b R2)
+SLOT_WRITE_APIS = ('setActiveSlot', 'setItemStackForSlot', 'removeItemStackFromSlot', 'removeItemStack', 'addItemStack',
+                   'addOrDropItemStack', 'moveItemStack', 'putItemStack', 'replaceItemStackInSlot')
+# ModifyInventory's paths, read from ModifyInventoryInteraction.firstRun (file:line of the decompiled cache): field -> (the write, calls setHeldItem?)
+MODIFY_INVENTORY_PATHS = {
+    'ItemToRemove': ('combinedHotbarFirst.removeItemStack (:101)', False),
+    'AdjustHeldItemQuantity': ('removeItemStackFromSlot then context.setHeldItem (:113); a positive value adds a stack (:115)', True),
+    'ItemToAdd': ('addOrDropItemStack (:119)', False),
+    'AdjustHeldItemDurability': ('setItemStackForSlot then context.setHeldItem (:145-149)', True),
+}
 # per-type fields whose value decides the outcome; counted over the run-reached objects (item 13b, R6)
-FIELD_TABLE: dict[str, list[str]] = {'ChangeStat': ['Behaviour']}
+FIELD_TABLE: dict[str, list[str]] = {
+    'ChangeStat': ['Behaviour'],                                            # absent = Add (ChangeStatBaseInteraction.java:44)
+    'Explode': ['Config.DamageEntities', 'Config.DamageBlocks'],            # absent = true, true (ExplosionConfig.java:79-80)
+    'TriggerCooldown': ['Cooldown.Charges', 'UseAbilityCooldown'],          # absent Charges = DEFAULT_CHARGE_TIMES {0.0}: 1 charge (InteractionManager.java:81)
+    'Repeat': ['Repeat'],                                                   # absent = 1
+    'ApplyForce': ['Duration', 'ChangeVelocityType'],                       # absent Duration = 0, absent ChangeVelocityType = Set (ApplyForceInteraction.java:127)
+    'ModifyInventory': ['RequiredGameMode'],
+}
 
 
 def home(s: object) -> str:
@@ -74,7 +93,10 @@ def walk(o, label, path='', inside=False, key=''):
         t = o.get('Type')
         child = CARRIERS.get(t, label) if isinstance(t, str) else label
         for k, v in o.items():
-            yield from walk(v, child, f'{path}/{k}', inside or k == 'Interactions', k)
+            # an ability projectile's ProjectileSpawn chain runs on the shooter's manager (ProjectileModule.onProjectileSpawnInteraction, :206);
+            # only its hit, miss and bounce chains run on the projectile's own manager (AbilityProjectileLauncher.java:102)
+            lab = 'A-caster' if child == 'A-entity' and k == 'ProjectileSpawn' else child
+            yield from walk(v, lab, f'{path}/{k}', inside or k == 'Interactions', k)
     elif isinstance(o, list):
         for i, v in enumerate(o):
             yield from walk(v, label, f'{path}[{i}]', inside, key)
@@ -333,35 +355,142 @@ def analyse(server: pathlib.Path, types: set):
     return r
 
 
-def field_counts(a: Assets, types, objs_run, t, field, overrides=None):
-    """Value of `field` on each distinct run-reached object of type t, resolved through Parent (the child wins); '(absent)' if none."""
+def resolve_field(a: Assets, o, dotted: str):
+    """The value of a (dotted) field on object o, looked up leaf-wise through its Parent chain (the child wins); None when no object in the chain sets it."""
+    parts = dotted.split('.')
+    cur, seen = o, set()
+    while isinstance(cur, dict):
+        v = cur
+        for p in parts:
+            v = v.get(p) if isinstance(v, dict) else None
+            if v is None:
+                break
+        if v is not None:
+            return v
+        par = cur.get('Parent')
+        if not isinstance(par, str) or par in seen:
+            return None
+        seen.add(par)
+        cur = next((x for x in (a.load(pf) for pf in a.base.get(par, [])) if isinstance(x, dict)), None)
+    return None
+
+
+def object_at(a: Assets, f, path, overrides=None):
+    d = (overrides or {}).get(pathlib.Path(f)) or a.load(pathlib.Path(f))
+    o = d
+    try:
+        for tok in [x for x in path.replace('[', '/[').split('/') if x]:
+            o = o[int(tok[1:-1])] if tok.startswith('[') else o[tok]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return o
+
+
+def field_counts(a: Assets, types, objs_run, t, field, overrides=None, exposed_only=False):
+    """Value of `field` on each distinct run-reached object of type t (dotted paths allowed; resolved leaf-wise through Parent); '(absent)' if none.
+    exposed_only drops the objects reached only as an ability caster (a player's manager, one pass)."""
     out = collections.Counter()
-    for (f, path) in objs_run.get(t, {}):
+    for (f, path), labs in objs_run.get(t, {}).items():
+        if exposed_only and labs == {'A-caster'}:
+            continue
+        o = object_at(a, f, path, overrides)
+        if o is None:
+            out['(object not found)'] += 1
+            continue
+        val = resolve_field(a, o, field)
+        out['(absent)' if val is None else json.dumps(val)] += 1
+    return out
+
+
+OUTCOMES = ('doubled', 'desync', 'refuses', 'same-twice', 'guarded', 'once', 'flow', 'reads', 'none', 'unknown')
+BASES = ('measured', 'read')
+MAX_UNKNOWN = 5      # item 13b R5: more than this fails the item
+
+
+def check_table(tsv: pathlib.Path, src_root: pathlib.Path, run_types: set):
+    """Re-check verdict-table.tsv against the run-reached population and the decompiled source. Returns (problems, rows).
+    Problems: a run-reached type without a row, a row for a type that is not run-reached, a duplicate row, a word outside the vocabularies,
+    a deciding hook that is not declared at the recorded line of the recorded file, more unknowns than MAX_UNKNOWN."""
+    problems, rows, seen = [], [], set()
+    if not tsv.exists():
+        return [f'{tsv.name} does not exist'], rows
+    for n, line in enumerate(tsv.read_text().split('\n'), 1):
+        if not line.strip() or line.startswith('#'):
+            continue
+        c = line.split('\t')
+        if len(c) != 8:
+            problems.append(f'{tsv.name}:{n}: {len(c)} columns, wanted 8')
+            continue
+        t, outcome, basis, write, hook, file, ln, reason = c
+        rows.append(dict(type=t, outcome=outcome, basis=basis, write=write, hook=hook, file=file, line=ln, reason=reason))
+        if t in seen:
+            problems.append(f'{tsv.name}:{n}: duplicate row for {t}')
+        seen.add(t)
+        if outcome not in OUTCOMES:
+            problems.append(f'{tsv.name}:{n}: {t}: outcome {outcome!r} is not one of {", ".join(OUTCOMES)}')
+        if basis not in BASES:
+            problems.append(f'{tsv.name}:{n}: {t}: basis {basis!r} is not one of {", ".join(BASES)}')
+        src = src_root / 'com/hypixel/hytale' / file
+        try:
+            text = src.read_text().split('\n')
+            ok = re.search(r'\bvoid ' + re.escape(hook) + r'\(', text[int(ln) - 1]) is not None
+        except (OSError, ValueError, IndexError):
+            ok = False
+        if not ok:
+            problems.append(f'{tsv.name}:{n}: {t}: {file}:{ln} does not declare {hook}( (the source moved or the row is wrong)')
+    for t in sorted(run_types - seen):
+        problems.append(f'run-reached type {t} has no row in {tsv.name}')
+    for t in sorted(seen - run_types):
+        problems.append(f'{tsv.name} has a row for {t}, which is not run-reached')
+    unknown = [r['type'] for r in rows if r['outcome'] == 'unknown']
+    if len(unknown) > MAX_UNKNOWN:
+        problems.append(f'{len(unknown)} unknown verdicts ({", ".join(unknown)}), more than {MAX_UNKNOWN}')
+    return problems, rows
+
+
+def modify_inventory_walk(a: Assets, run_objs, overrides):
+    """Every run-reached ModifyInventory object, with the fields that write a slot (resolved through Parent), its RequiredGameMode gate and
+    OnItemChangeBehavior, and what follows by the rule of the held-slot walk. Returns (rows, Counter of kinds)."""
+    rows, tot = [], collections.Counter()
+    for (f, path) in sorted(run_objs.get('ModifyInventory', {})):
         d = (overrides or {}).get(pathlib.Path(f)) or a.load(pathlib.Path(f))
         o = d
         try:
             for tok in [x for x in path.replace('[', '/[').split('/') if x]:
                 o = o[int(tok[1:-1])] if tok.startswith('[') else o[tok]
         except (KeyError, IndexError, TypeError):
-            out['(object not found)'] += 1
+            tot['object not found'] += 1
             continue
-        val, seen = None, set()
-        cur = o
-        while isinstance(cur, dict):
-            if field in cur:
-                val = cur[field]
-                break
-            par = cur.get('Parent')
-            if not isinstance(par, str) or par in seen:
-                break
-            seen.add(par)
-            nxt = [a.load(pf) for pf in a.base.get(par, [])]
-            cur = next((n for n in nxt if isinstance(n, dict)), None)
-        out['(absent)' if val is None else json.dumps(val)] += 1
-    return out
 
+        def get(name, o=o):
+            cur, seen = o, set()
+            while isinstance(cur, dict):
+                if name in cur:
+                    return cur[name]
+                par = cur.get('Parent')
+                if not isinstance(par, str) or par in seen:
+                    return None
+                seen.add(par)
+                cur = next((x for x in (a.load(pf) for pf in a.base.get(par, [])) if isinstance(x, dict)), None)
+            return None
+        gate = get('RequiredGameMode')
+        beh = get('OnItemChangeBehavior') or 'ItemChanged (the default)'
+        active = [k for k in MODIFY_INVENTORY_PATHS if get(k) not in (None, 0, 0.0)]
+        writes_no_held = [k for k in active if not MODIFY_INVENTORY_PATHS[k][1]]
+        if gate is not None:
+            kind, verdict = 'inert (RequiredGameMode)', f'inert: RequiredGameMode {gate} and no Player component, returns before any write (ModifyInventoryInteraction.java:97)'
+        elif not active:
+            kind, verdict = 'no write', 'no write'
+        elif not writes_no_held:
+            kind, verdict = 'setHeldItem only', 'writes through context.setHeldItem: never trips the check; the effect is doubled (measured InvAdjSelf1) unless the stack is exhausted'
+        elif beh == 'Ignore':
+            kind, verdict = 'slot write, Ignore', 'writes the slot without setHeldItem, Ignore: no check, doubled'
+        else:
+            kind, verdict = 'CANDIDATE', f'CANDIDATE: writes {writes_no_held} without setHeldItem, behaviour {beh}, wait Server: desync when owner == entity'
+        tot[kind] += 1
+        rows.append((f, path, active, gate, beh, kind, verdict))
+    return rows, tot
 
-# ------------------------------------------------------------------ the program
 
 def registry(src: pathlib.Path):
     tree = census.Tree(src)
@@ -373,7 +502,9 @@ def registry(src: pathlib.Path):
         ch = census.Chain(tree, fq)
         lab, _ = census.sim_pass(ch)
         w, _ = census.wait_of(ch)
-        info[s.name] = (lab, w)
+        writes = {api for c in ch.classes for api in SLOT_WRITE_APIS if re.search(r'\.' + api + r'\(|\b' + api + r'\(', c.masked[c.body_start:c.body_end])}
+        holds = any(re.search(r'\bsetHeldItem\(', c.masked[c.body_start:c.body_end]) for c in ch.classes)
+        info[s.name] = (lab, w, writes, holds)
     return info
 
 
@@ -381,6 +512,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--assets', default=str(pathlib.Path.home() / '.cache/hytale-assets'))
     ap.add_argument('--src', default=str(pathlib.Path.home() / '.cache/hytale-jar/src'))
+    ap.add_argument('--table', default=str(HERE / 'verdict-table.tsv'), help='the verdict table to check against the population (default: verdict-table.tsv)')
     args = ap.parse_args()
     server = pathlib.Path(args.assets) / 'Server'
     if not (server / 'NPC').is_dir():
@@ -470,19 +602,47 @@ def main():
         print(f'   in the run-reached population and not in 1: {r["run_only"]}')
 
     print()
-    print('4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent)')
+    print('4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent), then over those not reached only as an ability caster')
     for t, fields in FIELD_TABLE.items():
         for f in fields:
             c = field_counts(a, types, r['run_objs'], t, f, r['overrides'])
-            print(f'   {t}.{f}: ' + ', '.join(f'{k}={v}' for k, v in sorted(c.items())) + f'  (total {sum(c.values())})')
+            e = field_counts(a, types, r['run_objs'], t, f, r['overrides'], exposed_only=True)
+            print(f'   {t}.{f}: ' + ', '.join(f'{k}={v}' for k, v in sorted(c.items())) + f'  (total {sum(c.values())}); on a manager with no remote client: '
+                  + ', '.join(f'{k}={v}' for k, v in sorted(e.items())) + f'  (total {sum(e.values())})')
+
+    print()
+    print('5. THE HELD-SLOT WALK (item 13b, R2): run-reached operations that write an inventory slot')
+    writers = sorted(t for t in run if info[t][2])
+    print(f'   scanned the class chain of each of the {len(run)} run-reached types for {", ".join(SLOT_WRITE_APIS)}: {len(writers)} write: '
+          + (", ".join(f"{t} ({', '.join(sorted(info[t][2]))})" for t in writers) or 'none'))
+    indirect = sorted(t for t in run if info[t][3] and t not in writers)
+    print(f'   types that call context.setHeldItem but make no direct slot write above: {", ".join(indirect) or "none"} (their writes go through BlockPlaceUtils; read: PlaceBlock needs the client\'s block position and a block interaction\'s server hook runs once, so neither doubles a slot write)')
+    print('   the item-change check (Interaction.tickInternal, :288-291) trips when the item in the slot no longer matches context.getHeldItem(), the')
+    print('   OnItemChangeBehavior is not Ignore, and the context is not a proxy (owner != entity). A write that calls context.setHeldItem keeps')
+    print('   the context in step and never trips it. Fail and Finish run the hook anyway (tickInternal returns false); only ItemChanged skips it.')
+    rows, tot = modify_inventory_walk(a, r['run_objs'], r['overrides'])
+    for t in writers:
+        if t != 'ModifyInventory':
+            print(f'   {t}: not analysed here (no field table); read its class')
+    for f, path, active, gate, beh, kind, verdict in rows:
+        print(f'   {a.rel(f)} {path}: fields {active or "-"}, gate {gate}, behaviour {beh}: {verdict}')
+    print('   walk total: ' + ', '.join(f'{k} {v}' for k, v in sorted(tot.items())) + f'  (of {sum(tot.values())} ModifyInventory objects; EquipItem and ChangeActiveSlot write the slot too but are item-only, not run-reached)')
 
     cand = [t for t in run if info[t][0] in ('firstRun', 'tick0', 'tick0+')]
     print()
     print(f'CANDIDATES: {len(cand)} run-reached types whose simulation pass runs the server pass\'s method (sim firstRun/tick0/tick0+)')
     print(f'   ' + ', '.join(sorted(cand)))
     print()
+    problems, trows = check_table(pathlib.Path(args.table), pathlib.Path(args.src), set(run))
+    byo = collections.Counter(x['outcome'] for x in trows)
+    byb = collections.Counter(x['basis'] for x in trows)
+    print(f'6. VERDICT TABLE ({pathlib.Path(args.table).name}): {len(trows)} rows for {len(run)} run-reached types; outcomes ' + ', '.join(f'{k} {v}' for k, v in sorted(byo.items())) + '; basis ' + ', '.join(f'{k} {v}' for k, v in sorted(byb.items())))
+    for p in problems:
+        print(f'   PROBLEM  {p}')
+    print(f'   unknown: {byo.get("unknown", 0)} (limit {MAX_UNKNOWN}); {len(problems)} problem(s)')
+    print()
     print(f'registered types never reached by either population: {len(types - set(allc) - set(run))} of {len(types)}')
-    return 0
+    return 1 if problems else 0
 
 
 if __name__ == '__main__':

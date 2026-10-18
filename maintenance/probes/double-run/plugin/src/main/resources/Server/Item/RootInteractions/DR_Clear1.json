@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "ClearEntityEffect", "EntityEffectId": "Drop_Rare", "Entity": "Target" } ] }

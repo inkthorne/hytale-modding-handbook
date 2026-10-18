@@ -12,7 +12,11 @@
 set -u
 scratch="${1:?usage: verdicts.sh SCRATCH}"
 fails=0; void=0
-strip() { sed 's/\x1b\[[0-9;]*m//g' "$scratch/$1.log" 2>/dev/null; }
+# The logs are stripped of colour once, into a cache, not at every read (the 13b cases made the judge take 4 s; it is under 1 s now).
+cache="$(mktemp -d)" || { echo "FAIL  cannot make a temp dir" >&2; exit 3; }
+trap 'rm -rf -- "$cache"' EXIT
+for f in "$scratch"/*.log; do [ -e "$f" ] && sed 's/\x1b\[[0-9;]*m//g' "$f" > "$cache/$(basename "$f")"; done
+strip() { cat "$cache/$1.log" 2>/dev/null; }
 have() { [ -s "$scratch/$1.log" ] && [ -s "$scratch/$1.result" ]; }
 ok()   { printf 'PASS  %s\n' "$1"; }
 bad()  { printf 'FAIL  %s\n' "$1"; fails=$((fails+1)); }
@@ -230,6 +234,159 @@ if need Damage1.realnpc Damage1.remote; then
   elif [ "$(field "$(result_line Damage1.realnpc)" damage_raised)" != 1 ]; then bad "real NPC Damage1: $(field "$(result_line Damage1.realnpc)" damage_raised) Damage event(s) raised, predicted 1"
   elif feq "$n" "$u"; then ok "real NPC (Chicken hits a Sheep), its own manager: DamageEntity lands once (1 Damage event raised, health $n = the unit $u)"
   else bad "real NPC Damage1: read '$n', predicted the unit $u"; fi
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Item 13b. The same discipline: a unit control on the flagged manager, a dose control where the type can be doubled in a chain,
+# the abort/state check on every run, and a sensitivity control (the same harness reads 2 x for a doubled type).
+
+# Explode (doubled): the Sheep target's health and the number of Damage events raised at it (environment source, not counted by the
+# entity-source counters of DamageEntity).
+block Explode target_health_delta "Explode (doubled)" 2 "firstRun runs in both passes and damages the target directly" Finished Finished
+if [ "$(result_line Explode1.remote)" ] && [ "$(result_line Explode2.remote)" ] && [ "$(result_line Explode1.npc)" ]; then
+  ev1=$(field "$(result_line Explode1.remote)" damage_other_raised); ev2=$(field "$(result_line Explode2.remote)" damage_other_raised); evn=$(field "$(result_line Explode1.npc)" damage_other_raised)
+  if [ "$ev1" = 1 ] && [ "$ev2" = 2 ]; then
+    [ "$evn" = 2 ] && ok "Explode Explode1.npc: 2 Damage events (environment source) raised at the target on the NPC-shaped manager (remote: 1 and 2 for one and two)" || bad "Explode Explode1.npc raised $evn Damage event(s) at the target, predicted 2"
+  else voidc "Explode event counter: Explode1.remote raised '$ev1', Explode2.remote '$ev2' (wanted 1 and 2)"; fi
+fi
+
+# used TOTAL CASE: charges a cooldown of TOTAL charges has used in CASE (TOTAL - cooldown_charges), NaN when there is none
+used() { local c; c=$(field "$(result_line "$2")" cooldown_charges); awk -v t="$1" -v c="$c" 'BEGIN{ if (c == "" || c == "NaN") print "NaN"; else printf "%g", t - c }'; }
+# TriggerCooldown: deductCharge() once per pass. With 3 charges the NPC-shaped manager uses 2 where the flagged one uses 1 (doubled);
+# with 1 charge both use the one there is (the same result twice). Unit control: Cooldown1.remote uses 1; dose control: Cooldown2.remote uses 2.
+if need Cooldown1.remote Cooldown2.remote Cooldown1.npc CooldownOne1.remote CooldownOne1.npc; then
+  u1=$(used 3 Cooldown1.remote); u2=$(used 3 Cooldown2.remote); un=$(used 3 Cooldown1.npc); o1=$(used 1 CooldownOne1.remote); on=$(used 1 CooldownOne1.npc); why=""
+  if [ "$(exceptions Cooldown1.remote)" != 0 ] || [ "$(exceptions Cooldown2.remote)" != 0 ] || [ "$(exceptions Cooldown1.npc)" != 0 ] || [ "$(exceptions CooldownOne1.remote)" != 0 ] || [ "$(exceptions CooldownOne1.npc)" != 0 ]; then
+    voidc "TriggerCooldown: an exception in a run that should have none"
+  elif why=$(flawed Cooldown1.remote Finished) || why=$(flawed Cooldown2.remote Finished) || why=$(flawed CooldownOne1.remote Finished); then
+    voidc "TriggerCooldown control run does not count: $why"
+  elif ! feq "$u1" 1; then voidc "TriggerCooldown unit control: Cooldown1.remote used '$u1' of 3 charges, wanted 1"
+  elif ! feq "$u2" 2; then voidc "TriggerCooldown dose control: Cooldown2.remote used '$u2' of 3 charges, wanted 2"
+  elif ! feq "$o1" 1; then voidc "TriggerCooldown unit control: CooldownOne1.remote used '$o1' of 1 charge, wanted 1"
+  else
+    ok "TriggerCooldown controls: one on remote uses $u1 of 3 charges, two use $u2, one of 1 charge uses $o1"
+    if why=$(flawed Cooldown1.npc Finished); then bad "TriggerCooldown Cooldown1.npc: the run does not count, $why"
+    elif feq "$un" "$(fmul "$u1" 2)"; then ok "TriggerCooldown Cooldown1.npc (3 charges): $un = 2 x the unit (deductCharge ran in both passes)"
+    else bad "TriggerCooldown Cooldown1.npc: used '$un' of 3 charges, predicted 2 x the unit $u1"; fi
+    if why=$(flawed CooldownOne1.npc Finished); then bad "TriggerCooldown CooldownOne1.npc: the run does not count, $why"
+    elif feq "$on" "$o1"; then ok "TriggerCooldown CooldownOne1.npc (1 charge): $on = the unit, not 2 x (deductCharge stops at 0; Cooldown1.npc on the same harness used $un)"
+    else bad "TriggerCooldown CooldownOne1.npc: used '$on' of 1 charge, predicted the unit $o1"; fi
+  fi
+fi
+
+# ApplyForce (once): the force is applied in the simulation pass only, and a flagged manager has no simulation pass, so the flagged
+# control reads ZERO (the client applies it): it is a finding, not a unit. The unit is the configured force (5.0, DR_Force1.json), the
+# dose control is two ApplyForce in one chain on the same NPC-shaped manager (10.0), and the verdict is the single one reading 5.0.
+FORCE=5
+if need Force1.remote Force2.remote Force1.npc Force2.npc; then
+  f0=$(field "$(result_line Force1.remote)" force_instructions); f1=$(field "$(result_line Force1.npc)" force_instructions); f2=$(field "$(result_line Force2.npc)" force_instructions); why=""
+  if [ "$(exceptions Force1.remote)" != 0 ] || [ "$(exceptions Force1.npc)" != 0 ] || [ "$(exceptions Force2.npc)" != 0 ]; then voidc "ApplyForce: an exception in a run that should have none"
+  elif why=$(flawed Force1.remote Failed) || why=$(flawed Force2.remote Failed) || why=$(flawed Force2.npc Finished); then voidc "ApplyForce control run does not count: $why"
+  elif ! feq "$(field "$(result_line Force2.remote)" force_instructions)" 0 || ! feq "$f0" 0; then voidc "ApplyForce flagged control: the flagged manager applied a force ($f0, $(field "$(result_line Force2.remote)" force_instructions)); the reading that it applies none is the premise of the unit"
+  elif ! feq "$f2" "$(fmul "$FORCE" 2)"; then voidc "ApplyForce dose control: Force2.npc read '$f2', wanted 2 x the configured force $FORCE"
+  else
+    ok "ApplyForce controls: the flagged manager applies no force (client-side), two ApplyForce on the NPC-shaped manager apply $f2 = 2 x $FORCE"
+    if why=$(flawed Force1.npc Finished); then bad "ApplyForce Force1.npc: the run does not count, $why"
+    elif feq "$f1" "$FORCE"; then ok "ApplyForce Force1.npc: $f1 = the configured force once (applied in the simulation pass; the server pass only reads the stored state)"
+    else bad "ApplyForce Force1.npc: read '$f1', predicted the configured force $FORCE once"; fi
+  fi
+fi
+
+# Repeat (guarded): the fork is made in the server pass only; unit and dose are projectile entities of the forked LaunchProjectile.
+block Repeat projectiles "Repeat (guarded)" 1 "the fork is made once, in tick0, and recorded in the instance store" Failed Finished
+
+# ClearEntityEffect (the same result twice): an effect applied to the target first. Negative control: Clear0.npc runs a chain that
+# clears nothing and the effect is still there, so the instrument sees a present effect. Unit control: Clear1.remote clears it.
+if need Clear0.npc Clear1.remote Clear1.npc; then
+  p0=$(field "$(result_line Clear0.npc)" effect_present); pr=$(field "$(result_line Clear1.remote)" effect_present); pn=$(field "$(result_line Clear1.npc)" effect_present); why=""
+  if [ "$(exceptions Clear0.npc)" != 0 ] || [ "$(exceptions Clear1.remote)" != 0 ] || [ "$(exceptions Clear1.npc)" != 0 ]; then voidc "ClearEntityEffect: an exception in a run that should have none"
+  elif why=$(flawed Clear0.npc Finished) || why=$(flawed Clear1.remote Finished); then voidc "ClearEntityEffect control run does not count: $why"
+  elif ! feq "$p0" 1; then voidc "ClearEntityEffect negative control: Clear0.npc read effect_present '$p0', wanted 1 (the harness must see the effect when nothing clears it)"
+  elif ! feq "$pr" 0; then voidc "ClearEntityEffect unit control: Clear1.remote read effect_present '$pr', wanted 0"
+  elif why=$(flawed Clear1.npc Finished); then bad "ClearEntityEffect Clear1.npc: the run does not count, $why"
+  elif feq "$pn" "$pr"; then ok "ClearEntityEffect Clear1.npc: effect_present $pn = the flagged manager's $pr (the end state is the same; a chain that clears nothing leaves it at $p0)"
+  else bad "ClearEntityEffect Clear1.npc: effect_present '$pn', predicted $pr"; fi
+fi
+
+# Projectile (once): spawned in the server pass; the simulation pass (simulateFirstRun) only records the aim. Like ApplyForce, the flagged manager
+# reads ZERO here (the client spawns it, and the chain ends Failed waiting for it), so the unit is one NPC-shaped spawn and the dose control is two
+# in a chain on the same manager (2).
+if need Proj1.remote Proj2.remote Proj1.npc Proj2.npc; then
+  p0=$(field "$(result_line Proj1.remote)" projectiles_new); p2=$(field "$(result_line Proj2.npc)" projectiles_new); p1=$(field "$(result_line Proj1.npc)" projectiles_new); why=""
+  if [ "$(exceptions Proj1.remote)" != 0 ] || [ "$(exceptions Proj1.npc)" != 0 ] || [ "$(exceptions Proj2.npc)" != 0 ]; then voidc "Projectile: an exception in a run that should have none"
+  elif why=$(flawed Proj1.remote Failed) || why=$(flawed Proj2.remote Failed) || why=$(flawed Proj2.npc Finished); then voidc "Projectile control run does not count: $why"
+  elif ! feq "$p0" 0 || ! feq "$(field "$(result_line Proj2.remote)" projectiles_new)" 0; then voidc "Projectile flagged control: the flagged manager spawned a projectile ($p0); the reading that the client spawns it is the premise"
+  elif ! feq "$p2" 2; then voidc "Projectile dose control: Proj2.npc read '$p2' projectile entities, wanted 2"
+  elif why=$(flawed Proj1.npc Finished); then bad "Projectile Proj1.npc: the run does not count, $why"
+  elif feq "$p1" 1; then ok "Projectile Proj1.npc: $p1 projectile entity (flagged: none, the client spawns it; two in a chain on this manager: $p2)"
+  else bad "Projectile Proj1.npc: read '$p1' projectile entities, predicted 1"; fi
+fi
+
+# ModifyInventory AdjustHeldItemQuantity -1 with owner == the running entity: it sets the held item through the context
+# (context.setHeldItem), so the item-change check does not trip. Stack of 5: the NPC-shaped manager removes 2 where the flagged one removes 1
+# (doubled). Stack of 1: both remove the one there is (the second pass finds no held item).
+if need InvAdjSelf1.remote InvAdjSelf2.remote InvAdjSelf1.npc InvAdjOneSelf1.remote InvAdjOneSelf1.npc; then
+  u1=$(field "$(result_line InvAdjSelf1.remote)" inv_items_delta); u2=$(field "$(result_line InvAdjSelf2.remote)" inv_items_delta); un=$(field "$(result_line InvAdjSelf1.npc)" inv_items_delta)
+  o1=$(field "$(result_line InvAdjOneSelf1.remote)" inv_items_delta); on=$(field "$(result_line InvAdjOneSelf1.npc)" inv_items_delta); why=""
+  if [ "$(exceptions InvAdjSelf1.remote)" != 0 ] || [ "$(exceptions InvAdjSelf2.remote)" != 0 ] || [ "$(exceptions InvAdjSelf1.npc)" != 0 ] || [ "$(exceptions InvAdjOneSelf1.remote)" != 0 ] || [ "$(exceptions InvAdjOneSelf1.npc)" != 0 ]; then
+    voidc "ModifyInventory AdjustHeldItemQuantity: an exception in a run that should have none"
+  elif why=$(flawed InvAdjSelf1.remote Finished) || why=$(flawed InvAdjSelf2.remote Finished) || why=$(flawed InvAdjOneSelf1.remote Finished); then voidc "ModifyInventory AdjustHeldItemQuantity control run does not count: $why"
+  elif ! fneg "$u1"; then voidc "ModifyInventory AdjustHeldItemQuantity unit control: InvAdjSelf1.remote read '$u1', wanted a drop"
+  elif ! feq "$u2" "$(fmul "$u1" 2)"; then voidc "ModifyInventory AdjustHeldItemQuantity dose control: InvAdjSelf2.remote read '$u2', wanted 2 x $u1"
+  elif ! feq "$o1" "$u1"; then voidc "ModifyInventory AdjustHeldItemQuantity unit control: InvAdjOneSelf1.remote read '$o1', wanted $u1"
+  else
+    ok "ModifyInventory AdjustHeldItemQuantity controls: one on remote removes $(fmul "$u1" -1), two remove $(fmul "$u2" -1), a stack of 1 loses $(fmul "$o1" -1)"
+    if why=$(flawed InvAdjSelf1.npc Finished); then bad "ModifyInventory InvAdjSelf1.npc: the run does not count, $why"
+    elif feq "$un" "$(fmul "$u1" 2)"; then ok "ModifyInventory AdjustHeldItemQuantity -1, stack of 5, owner == entity: $un = 2 x the unit (doubled; setHeldItem keeps the item-change check quiet: no desync)"
+    else bad "ModifyInventory InvAdjSelf1.npc: read '$un', predicted 2 x the unit $u1"; fi
+    if why=$(flawed InvAdjOneSelf1.npc Finished); then bad "ModifyInventory InvAdjOneSelf1.npc: the run does not count, $why"
+    elif feq "$on" "$o1"; then ok "ModifyInventory AdjustHeldItemQuantity -1, stack of 1: $on = the unit (the second pass finds no held item; InvAdjSelf1.npc, a stack of 5 on the same harness, read $un)"
+    else bad "ModifyInventory InvAdjOneSelf1.npc: read '$on', predicted the unit $o1"; fi
+  fi
+fi
+
+# DestroyBlock (the same result twice): performBlockBreak returns when the block is already air (BlockHarvestUtils.java:172). Unit control:
+# Destroy1.remote raises one BreakBlockEvent and the block is gone. Destroy2.remote (two DestroyBlock at one block) also raises one: the second finds air,
+# so the dose cannot be made with one block; the sensitivity is the event and the block id the instrument sees change.
+if need Destroy1.remote Destroy2.remote Destroy1.npc; then
+  e1=$(field "$(result_line Destroy1.remote)" break_events); e2=$(field "$(result_line Destroy2.remote)" break_events); en=$(field "$(result_line Destroy1.npc)" break_events)
+  b0=$(field "$(result_line Destroy1.remote)" block_id_before); b1=$(field "$(result_line Destroy1.remote)" block_id_after); bn=$(field "$(result_line Destroy1.npc)" block_id_after); why=""
+  if [ "$(exceptions Destroy1.remote)" != 0 ] || [ "$(exceptions Destroy2.remote)" != 0 ] || [ "$(exceptions Destroy1.npc)" != 0 ]; then voidc "DestroyBlock: an exception in a run that should have none"
+  elif why=$(flawed Destroy1.remote Finished) || why=$(flawed Destroy2.remote Finished); then voidc "DestroyBlock control run does not count: $why"
+  elif ! feq "$e1" 1 || ! fpos "$b0" || ! feq "$b1" 0; then voidc "DestroyBlock unit control: Destroy1.remote raised '$e1' BreakBlockEvent(s) and the block went '$b0' -> '$b1', wanted 1 event and a solid block turned to 0"
+  elif ! feq "$e2" 1; then voidc "DestroyBlock second-break control: Destroy2.remote raised '$e2' BreakBlockEvent(s), wanted 1 (the second DestroyBlock finds air)"
+  elif why=$(flawed Destroy1.npc Finished); then bad "DestroyBlock Destroy1.npc: the run does not count, $why"
+  elif feq "$en" 1 && feq "$bn" 0; then ok "DestroyBlock Destroy1.npc: $en BreakBlockEvent and the block gone ($b0 -> $bn), as on the flagged manager (a second break finds air: Destroy2.remote raised $e2)"
+  else bad "DestroyBlock Destroy1.npc: raised '$en' BreakBlockEvent(s), block '$b0' -> '$bn'; predicted 1 and 0"; fi
+fi
+
+# Real NPC (fidelity, 13b): the same cases on a shipped Chicken's own manager. A real NPC cannot be flagged, so its unit is the host's flagged
+# control and the check is the count or end state, not the amount (the geometry differs: the explosion's damage per event depends on distance).
+# realverdict LABEL CASE STATE VALUE EXPECTED WHAT: VOID when the subject was not on an NPC manager or the run does not count, else PASS/FAIL.
+realverdict() {
+  local label="$1" c="$2" st="$3" v="$4" e="$5" what="$6" why
+  if ! realnpc_manager "$c"; then voidc "$label: the subject's manager is not an NPCInteractionSimulationHandler one"
+  elif why=$(flawed "$c" "$st"); then voidc "$label does not count: $why"
+  elif feq "$v" "$e"; then ok "$label: $v ($what)"
+  else bad "$label: read '$v', predicted $e ($what)"; fi
+}
+if need Explode1.realnpc Explode1.remote; then
+  realverdict "real NPC (Chicken hits a Sheep) Explode" Explode1.realnpc Finished "$(field "$(result_line Explode1.realnpc)" damage_other_raised)" 2 "2 Damage events raised at the target where the flagged host raised $(field "$(result_line Explode1.remote)" damage_other_raised): doubled"
+fi
+if need Cooldown1.realnpc Cooldown1.remote; then
+  realverdict "real NPC TriggerCooldown (3 charges)" Cooldown1.realnpc Finished "$(used 3 Cooldown1.realnpc)" "$(fmul "$(used 3 Cooldown1.remote)" 2)" "charges used, 2 x the flagged unit: doubled"
+fi
+if need Proj1.realnpc Proj2.npc; then
+  realverdict "real NPC Projectile" Proj1.realnpc Finished "$(field "$(result_line Proj1.realnpc)" projectiles_new)" 1 "1 projectile entity: once"
+fi
+if need Repeat1.realnpc Repeat1.remote; then
+  realverdict "real NPC Repeat" Repeat1.realnpc Finished "$(field "$(result_line Repeat1.realnpc)" projectiles)" "$(field "$(result_line Repeat1.remote)" projectiles)" "the flagged unit of forked projectiles: guarded"
+fi
+if need Clear1.realnpc Clear0.npc; then
+  realverdict "real NPC ClearEntityEffect" Clear1.realnpc Finished "$(field "$(result_line Clear1.realnpc)" effect_present)" 0 "effect cleared (a chain that clears nothing leaves $(field "$(result_line Clear0.npc)" effect_present)): the same result twice"
+fi
+if need Destroy1.realnpc Destroy1.remote; then
+  realverdict "real NPC DestroyBlock" Destroy1.realnpc Finished "$(field "$(result_line Destroy1.realnpc)" break_events)" 1 "1 BreakBlockEvent, block gone: the same result twice"
 fi
 
 echo "---- $fails failed, $void void"

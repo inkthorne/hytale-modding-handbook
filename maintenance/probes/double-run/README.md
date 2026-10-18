@@ -16,8 +16,9 @@ python3 -I maintenance/probes/double-run/usage.py             # the 13b populati
 python3 -I maintenance/probes/double-run/usage-test.py "$WORK"   # plant item edges and carriers in a small tree; usage.py must count only the held, Attack-tagged ones
 maintenance/probes/double-run/build.sh                         # plugin/build/libs/double-run-probe.jar
 maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see the header of run.sh
-maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (24 PASS on the pass quoted below)
-maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red
+maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (46 PASS on the pass quoted below; 24 of them are 13a's)
+maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red (VT_ONLY=REGEX runs the matching ones)
+maintenance/probes/double-run/verdicts-mutations.sh "$SCRATCH" "$WORK" [FROM TO]  # damage the judge: each 13b guard removed in turn must turn a sabotage red
 python3 -I maintenance/probes/double-run/census-test.py "$WORK"    # plant defects in a copy of the source; census.py must see each
 maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-run/run.sh" .double-run-case "Log1 Damage1.npc remote"
 ```
@@ -351,6 +352,75 @@ An NPC spawns, ticks and runs a chain headless in a section kept loaded with `ad
 `resetActiveTimer`; no player is needed. The host driver agreed with the real NPC on all four. What the host does
 not reproduce: the real NPC's group filter (below) and its own AI.
 
+## Item 13b results (2026-10-17, same build, java 25.0.4.1, `HytaleServer.jar` 0.7.2)
+
+**The pass.** 68 server runs (the boot, then 67 cases), 19-25 s each, in a scratch directory outside the repo, with
+`--auth-mode offline`, `--disable-sentry`, `--bind 127.0.0.1:5599`, under `timeout`, one at a time: the 13a cases again
+(the harness changed under them: new counters in the result line, the colour-stripped log cache in the judge) and the 13b cases.
+`verdicts.sh`: **46 PASS, 0 failed, 0 void** (24 from 13a, 22 new). The cases and the controls:
+
+| Type | Cases | Unit control (flagged host) | Dose / sensitivity control | NPC-shaped | Real `Chicken` | Verdict |
+|------|-------|-----------------------------|----------------------------|------------|----------------|---------|
+| `Explode` | `Explode1/2.remote`, `Explode1.npc`, `.realnpc` | health -1.0, 1 `Damage` event (environment source) at the `Sheep` | two copies: -2.0, 2 events | **-2.0, 2 events** | 2 events | **doubled** |
+| `TriggerCooldown` | `Cooldown1/2.remote`, `Cooldown1.npc`, `CooldownOne1.remote/npc`, `Cooldown1.realnpc` | 3 charges: 1 used | two copies: 2 used | **3 charges: 2 used; 1 charge: 1 used** | 2 of 3 used | **doubled with 3 charges, the same result twice with 1** |
+| `ApplyForce` | `Force1/2.remote`, `Force1/2.npc` | the flagged manager applies **+0.0** (no simulation pass; the client applies it) | two copies on the NPC-shaped manager: +10.0 | **+5.0 (the configured force, once)** | not run (the NPC's physics consumes the velocity) | **once** |
+| `Repeat` | `Repeat1/2.remote`, `Repeat1.npc`, `.realnpc` | 1 forked projectile | two `Repeat`: 2 | **1** | 1 | **guarded** |
+| `ClearEntityEffect` | `Clear0.npc`, `Clear1.remote`, `Clear1.npc`, `.realnpc` | effect cleared | negative control: a chain that clears nothing leaves it (1.0) | **cleared** | cleared | **the same result twice** (end state; the second removal cannot be counted) |
+| `Projectile` | `Proj1/2.remote`, `Proj1/2.npc`, `Proj1.realnpc` | the flagged manager spawns **0** (the client spawns it) and the chain ends `Failed` | two copies on the NPC-shaped manager: 2 | **1** | 1 | **once** |
+| `ModifyInventory` `AdjustHeldItemQuantity` -1 | `InvAdjSelf1/2.remote`, `InvAdjSelf1.npc`, `InvAdjOneSelf1.remote/npc` | stack of 5: -1; stack of 1: -1 | two copies: -2 | **stack of 5: -2, stack of 1: -1**; no desync | not run (no hotbar) | **doubled** (the same result with a stack of 1) |
+| `DestroyBlock` | `Destroy1/2.remote`, `Destroy1.npc`, `.realnpc` | 1 `BreakBlockEvent`, block 953 -> 0 | the dose cannot be made at one block: two copies raise 1 event, the second finds air | **1 event, block gone** | 1 event | **the same result twice** |
+
+`verdicts.sh` requires, for every row, the unit control, the dose control or its stated substitute, the abort/state check of
+`flawed()` on every run (`ApplyForce`, `Repeat` and `Projectile` remote controls end `Failed`: their chains wait for a client that
+never comes, after the effect has landed, or, for `ApplyForce` and `Projectile`, without an effect at all), and for the real-NPC
+rows the manager line. `ApplyForce` and `Projectile` have no flagged unit: a flagged manager has no simulation pass and the
+client does the work, so the unit is the configured force (5.0) and the dose control is two copies on the same NPC-shaped manager.
+
+**Predictions against measurements** (those committed in `9cbc36d` before any run; the harness cases they name did not exist then):
+
+| Prediction | Measured | |
+|------------|----------|-|
+| `Explode`: doubled | doubled | held |
+| `TriggerCooldown`: doubled with 3 charges, the same result twice with 1 | exactly that | held |
+| `ApplyForce`: once, "1 instruction queued, **as flagged**" | once (+5.0, two copies +10.0); **the flagged manager applies +0.0** | the verdict held; "as flagged" is **refuted** (the flagged control reads 0, the instrument had to read the velocity, not the queue: `GenericVelocityInstructionSystem` empties the queue every tick) |
+| `Repeat`: guarded | guarded | held |
+| `ClearEntityEffect`: the same result twice | the same end state | held |
+| `DestroyBlock`: **breaks twice** (read; "may change nothing") | **1 `BreakBlockEvent`; the second pass finds air** (`BlockHarvestUtils.java:172`) | **refuted**, and the advisor's reading too |
+| `TriggerSpawnMarkers`: **triggers twice** (read) | not run (needs a spawn marker); reading `SpawnMarkerEntity.trigger`: it returns false while `spawnCount > 0` (`:816`), which the first trigger sets (`:402`), so each marker fires once | **refuted by reading**: the verdict is *guarded*, still read |
+| `Simple`, `StatsCondition`, `Interrupt` | not run | read; unchanged |
+| the held-slot walk: empty | 0 candidates among 17 `ModifyInventory` objects | held |
+
+Added after the predictions were committed, so **not pre-registered**: `Projectile` (the most used NPC projectile launcher, 145 objects;
+reading: `simulateFirstRun` only records the aim), `ModifyInventory`'s `AdjustHeldItemQuantity` (reading: `setHeldItem` keeps the
+item-change check quiet, so no desync, and `firstRun` runs again; it was written down only in the verdict table) and the real-NPC runs
+of the others. The calibration rule (R4) did not fire: the three calibration types agreed on their verdicts, and no read verdict rests on the flagged control of
+`ApplyForce`. `DestroyBlock` is not a calibration type; the read verdicts that rest on "a second pass finds the world already changed"
+are `DestroyBlock` itself (measured) and none other: `BreakBlock`, `ChangeState` and `PlaceFluid` are `once` because their simulation hook is empty.
+
+**The held-slot walk (R2; `usage.py`, section 5).** The class chains of the 48 run-reached types were scanned for calls that write an inventory slot
+(`setActiveSlot`, `setItemStackForSlot`, `removeItemStackFromSlot`, `removeItemStack`, `addItemStack`, `addOrDropItemStack`, `moveItemStack`,
+`putItemStack`, `replaceItemStackInSlot`): only `ModifyInventory` writes one directly (`PlaceBlock` and `PlaceFluid` call `setHeldItem` and write through
+`BlockPlaceUtils`; `EquipItem` and `ChangeActiveSlot` write the slot but are item-only). Of its **17** run-reached objects, **14** carry `RequiredGameMode`
+(`Adventure`: the arrow chains) and are inert on a manager with no `Player` component (`ModifyInventoryInteraction.java:97`), **3** use `AdjustHeldItemQuantity`
+-1 (`Skeleton_Elite_Shield_Guard_Broken_Effects` with `Ignore`, `Tests/ModifyInventory`, `Item_Throw`), which calls `context.setHeldItem` (`:113`) and never trips the
+item-change check, and **0** write `ItemToRemove`, `ItemToAdd` or the durability without a gate. So the desync of 13a (a `Server` wait, owner == entity, a write
+that bypasses `setHeldItem`) has **no shipped instance**; no real-NPC reproduction was attempted. What the walk found instead is the doubled consumption above.
+`usage-test.py` plants an ungated `ItemToRemove` (must be the one candidate), a gated one and a gated one inherited through `Parent` (inert), both `Adjust` paths (cannot trip) and a
+write under `Ignore`.
+
+**The population and the table** are in `usage-0.7.2.txt` and `verdict-table.tsv`: 48 run-reached types of 135 (the 13a count of 58 included 10 reachable only through
+a field that names an item); **12 measured, 36 read, 0 unknown**; outcomes: doubled 3 (`ChangeStat`, `ModifyInventory`, `Explode`), refuses 1 (`AttachBeam`, which no shipped
+chain reaches on a manager with no remote client: its one object is in a `ProjectileSpawn` chain, which runs on the shooter's manager), the same result twice 4, guarded 4,
+once 20, flow 8, reads 7, none 1 (`PlaceBlock`). `usage.py` re-checks the table against the population and the source on every run: a type without a row, a row for a type not run-reached,
+a deciding hook that is not declared at its recorded line, a word outside the vocabularies, more than 5 unknowns.
+
+**What the tests are.** `verdicts-test.sh` damages the logs one way at a time (122 damages at the end of 13b, 68 of them new: each new verdict has its dose, unit,
+negative, sensitivity, abort, state, exception and real-NPC manager controls broken in turn). `verdicts-mutations.sh` damages the judge: it replaces each guard of the 13b part of
+`verdicts.sh` with `false` (one at a time, 46 guards) and requires the damaged judge to go red, either on the unharmed run (the guard is a verdict's own gate) or on one of the block's sabotages.
+The first pass found 20 guards that survived: 13 because the block filter did not select the sabotage that covers them (the labels named the case, not the type; the filter and the labels were fixed), and 7 because no sabotage existed (the exception check of five blocks, the abort of `InvAdjOneSelf1.npc`, the aborted control runs of `DestroyBlock`; added). The second pass left none: 46 guards, 46 caught (36 by one of the block's sabotages, 10 because the unharmed logs already turn the damaged judge red, the guard being a verdict's own gate).
+`usage-test.py` (41 checks) plants the bait, held weapons with and without the tag, `Compute`, `Parent`, off-hand, a key outside `AttackType`, `InteractionVars`, the three carriers, an ability
+projectile's `ProjectileSpawn` and `ProjectileHit`, the held-slot walk cases and the table variants, and was run against mutated copies of `usage.py`.
+
 ## Refuted or changed by the runs
 
 - **The page's reading "a held-slot change from an interaction that runs for its own entity desyncs an NPC-shaped
@@ -378,6 +448,18 @@ not reproduce: the real NPC's group filter (below) and its own AI.
   (`Self` for livestock). The target is a Sheep. `ActionAttack`'s `damageFriendlies` would also lift it.
 - **First `Beam` runs lost their target** (same section defect) and the first `Log1.realnpc` read VOID (the verdict's grep
   predated the `self=` field of the driver's line).
+- **13b: `DestroyBlock` "breaks twice" (the advisor's reading, R3).** Measured: 1 `BreakBlockEvent`, the block gone; the second `performBlockBreak`
+  returns at `targetBlockTypeId == 0` (`BlockHarvestUtils.java:172`). *The same result twice.*
+- **13b: `TriggerSpawnMarkers` "triggers twice" (R3).** Read, not run: `SpawnMarkerEntity.trigger` returns false while `spawnCount > 0` (`:816`) and the first trigger sets it (`:402`). *Guarded per marker.*
+- **13b: `ApplyForce` "1 instruction, as flagged".** The verdict (once) held; the flagged control reads zero, since a flagged manager has no simulation pass. The first cut counted the queued
+  instructions (0 everywhere): `GenericVelocityInstructionSystem` empties the queue every tick and adds it into the velocity, so the harness reads the host's vertical velocity.
+- **13b: `Projectile` read 0 projectiles on every case.** It spawns an entity with the newer `Projectile` component, not `ProjectileComponent` (what `Watch.Projectiles` counted);
+  a second counter (`projectiles_new`) was added. The flagged control still reads 0, now for the reason in the table.
+- **13b: the first label walk put `AttachBeam` on an ability projectile's own manager** (it sits in the chain-hook projectile's config). It is under `ProjectileSpawn`, which runs on the shooter's
+  manager (`ProjectileModule.onProjectileSpawnInteraction`, `:206`); only `ProjectileHit` and `ProjectileMiss` run on the projectile's. `usage.py` now keeps the caster's label under `ProjectileSpawn`
+  (planted and tested). Without that fix the table would have listed a shipped refusal that no chain reaches.
+- **13b harness defects.** `verdicts-test.sh` copied each case directory (a gigabyte for 68 cases) for every one of its damages; it copies the logs and result files now.
+  `verdicts-mutations.sh`'s first pass listed the real-NPC guards a second time under the last block, and counted a mutation that turned the unharmed run red as caught without saying so; it now reports which.
 - **Prediction citations.** Every `file:line` here is of the decompiled cache; the engine's stack frames differ
   (`InteractionManager.java:1128`, `:862`, `:865` for `simulationTick`, `doTickChain` in a stack trace of `Log1.npc`).
 
@@ -390,6 +472,8 @@ not reproduce: the real NPC's group filter (below) and its own AI.
 | `usage.py`, `usage-0.7.2.txt` | The 13b population (run-reached types, item-only types, the manager each runs on, per-field counts) |
 | `usage-test.py` | Plants the defects above in a small asset tree and requires `usage.py` to see each; reproduces 58/46/12 on the real assets |
 | `build.sh`, `run.sh` | Build the plugin; run one case (header lists them) with the scratch guard of `../beams/run.sh` |
-| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (54 damages) |
+| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (122 damages at the end of 13b) |
+| `verdicts-mutations.sh` | Damages the judge instead: replaces each 13b guard of `verdicts.sh` with `false`, one at a time, and requires the sabotages of that block to go red |
+| `verdict-table.tsv` | The 13b verdict for each of the 48 run-reached types (outcome, read or measured, how the write lands, the deciding hook and line); `usage.py` re-checks it against the population and the source |
 | `plugin/` | The probe plugin: `Driver` (stages one case), `Watch` (counters at the target), the three `ProbeLog*` types and `ProbeInvNone` (`ModifyInventory` with the wait changed to `None`), and the `DR_*` root interactions |
 | `../beams/guard-test.sh` | Tests the shared guard; takes this directory's `run.sh` and marker as arguments (and still passes for the beams `run.sh`) |

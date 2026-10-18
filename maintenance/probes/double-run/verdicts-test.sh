@@ -35,18 +35,22 @@ if [ -e "$work" ] && [ ! -f "$work/.double-run-verdicts-test" ]; then
   if [ ! -d "$work" ] || [ -n "$(ls -A -- "$work")" ]; then echo "FAIL  WORKDIR $work exists, is not empty and has no marker; give a new path" >&2; exit 3; fi
 fi
 rm -rf -- "$work"; mkdir -p "$work"; : > "$work/.double-run-verdicts-test"
-fresh() { rm -rf "$work/c"; mkdir "$work/c"; cp -a "$good"/. "$work/c"/; }
+# Only the logs and result files are copied: verdicts.sh reads nothing else, and the case directories (universe, mods) of a good run weigh a gigabyte.
+fresh() { rm -rf "$work/c"; mkdir "$work/c"; cp -a "$good"/*.log "$good"/*.result "$work/c"/; }
 fresh
 base="$(bash "$here/verdicts.sh" "$work/c")"; brc=$?
 npass=$(printf '%s\n' "$base" | /usr/bin/grep -c '^PASS')
 if [ "$brc" != 0 ] || [ "$npass" -lt 10 ]; then echo "VOID  the unharmed copy is not clean (rc $brc, $npass PASS)"; printf '%s\n' "$base" | /usr/bin/grep -v '^PASS'; exit 2; fi
 echo "baseline: $npass PASS, rc 0"
-fails=0
+fails=0; nrun=0
 # edit the DR RESULT line of a case: field=value
 setfield() { # case field value
   sed -i "s/\\( $2=\\)[^ ]*/\\1$3/" "$work/c/$1.log"
 }
 expect() { # label, wanted-rc, fragment, expected-PASS-count-lost
+  # VT_ONLY=REGEX runs only the sabotages whose label matches (verdicts-mutations.sh uses it to run one block's cases per mutation)
+  if [ -n "${VT_ONLY:-}" ] && ! printf '%s' "$1" | /usr/bin/grep -Eq -- "$VT_ONLY"; then return 0; fi
+  nrun=$((nrun+1))
   local out rc lost
   out="$(bash "$here/verdicts.sh" "$work/c")"; rc=$?
   lost=$(( npass - $(printf '%s\n' "$out" | /usr/bin/grep -c '^PASS') ))
@@ -117,5 +121,87 @@ for c in Stat1 Damage1 Beam1 Log1; do
   elif [ "$c" = Log1 ]; then expect "$c.realnpc: subject not on an NPC manager" 2 "Log1.realnpc: the subject's manager" 1
   else expect "$c.realnpc: subject not on an NPC manager" 2 "real NPC $c: the subject's manager" 1; fi
 done
-echo "---- $fails failed"
-[ "$fails" = 0 ]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Item 13b: a sabotage for each new verdict. Same rule: the damaged verdict turns VOID (a control) or FAIL (the verdict) with the message,
+# and at most the PASS lines of its own block go.
+# Explode (a block of three PASS lines: controls, the health verdict, the event count)
+fresh; setfield Explode2.remote target_health_delta -1.0; expect "Explode dose control broken" 2 "Explode (doubled) dose control" 3
+fresh; setfield Explode1.remote target_health_delta 0.0; expect "Explode unit control broken" 2 "Explode (doubled) unit control" 3
+fresh; setfield Explode1.npc target_health_delta -1.0; expect "Explode read as once" 1 "Explode1.npc: read -1.0, predicted 2 x unit" 1
+fresh; setfield Explode1.npc damage_other_raised 1; expect "Explode raised one event" 1 "Explode1.npc raised 1 Damage event(s) at the target, predicted 2" 1
+fresh; setfield Explode2.remote damage_other_raised 1; expect "Explode event counter broken on the dose control" 2 "Explode event counter" 1
+fresh; addline Explode1.npc "$SYNC"; expect "Explode1.npc: a desync line" 1 "Explode1.npc: the run does not count" 1
+fresh; addline Explode1.remote "$REMV"; expect "Explode1.remote control: a caught tick exception" 2 "control run Explode1.remote does not count" 3
+fresh; sed -i 's/chain_server_state=Finished/chain_server_state=Failed/' "$work/c/Explode2.remote.log"; expect "Explode2.remote control: chain Failed" 2 "control run Explode2.remote does not count" 3
+fresh; rm -f "$work/c/Explode1.npc.log"; expect "Explode1.npc log missing" 1 "no log/result for case Explode1.npc" 3
+fresh; setfield Explode1.realnpc damage_other_raised 1; expect "real NPC Explode raised one event" 1 "real NPC (Chicken hits a Sheep) Explode: read '1', predicted 2" 1
+fresh; sed -i 's/simulationHandler=NPCInteractionSimulationHandler/simulationHandler=InteractionSimulationHandler/; s/DR manager=realnpc/DR manager=remote/' "$work/c/Explode1.realnpc.log"; expect "Explode1.realnpc: subject not on an NPC manager" 2 "Explode: the subject's manager" 1
+fresh; addline Explode1.realnpc "$GONE"; expect "Explode1.realnpc: an entity REMOVED" 2 "real NPC (Chicken hits a Sheep) Explode does not count" 1
+# TriggerCooldown (controls, the 3-charge verdict, the 1-charge verdict)
+fresh; setfield Cooldown2.remote cooldown_charges 2.0; expect "TriggerCooldown dose control broken" 2 "TriggerCooldown dose control" 3
+fresh; setfield Cooldown1.remote cooldown_charges 3.0; expect "TriggerCooldown unit control broken (nothing used)" 2 "TriggerCooldown unit control: Cooldown1.remote" 4
+fresh; setfield CooldownOne1.remote cooldown_charges 1.0; expect "TriggerCooldown one-charge unit control broken" 2 "TriggerCooldown unit control: CooldownOne1.remote" 3
+fresh; setfield Cooldown1.npc cooldown_charges 2.0; expect "TriggerCooldown read as once with 3 charges" 1 "Cooldown1.npc: used '1' of 3 charges, predicted 2 x the unit" 1
+fresh; setfield CooldownOne1.npc cooldown_charges -1.0; expect "TriggerCooldown read as doubled with 1 charge" 1 "CooldownOne1.npc: used '2' of 1 charge, predicted the unit" 1
+fresh; addline Cooldown1.npc "$SYNC"; expect "Cooldown1.npc: a desync line" 1 "TriggerCooldown Cooldown1.npc: the run does not count" 1
+fresh; addline CooldownOne1.npc "$REMV"; expect "CooldownOne1.npc: a caught tick exception" 1 "TriggerCooldown CooldownOne1.npc: the run does not count" 1
+fresh; addline Cooldown1.remote "$REMV"; expect "Cooldown1.remote control: a caught tick exception" 2 "TriggerCooldown control run does not count" 3
+fresh; echo "Exception in thread Thread[#1,WorldThread - default" >> "$work/c/Cooldown1.npc.log"; expect "Cooldown1.npc: an exception" 2 "TriggerCooldown: an exception in a run that should have none" 3
+fresh; setfield Cooldown1.realnpc cooldown_charges 2.0; expect "real NPC TriggerCooldown read as once" 1 "real NPC TriggerCooldown (3 charges): read '1', predicted 2" 1
+# ApplyForce (controls, the verdict)
+fresh; setfield Force2.npc force_instructions 5.0; expect "ApplyForce dose control broken" 2 "ApplyForce dose control" 2
+fresh; setfield Force1.remote force_instructions 5.0; expect "ApplyForce flagged manager applied a force" 2 "ApplyForce flagged control" 2
+fresh; setfield Force1.npc force_instructions 10.0; expect "ApplyForce read as doubled" 1 "ApplyForce Force1.npc: read '10.0'" 1
+fresh; setfield Force1.npc force_instructions 0.0; expect "ApplyForce read as never applied" 1 "ApplyForce Force1.npc: read '0.0'" 1
+fresh; sed -i 's/chain_server_state=Failed/chain_server_state=Finished/' "$work/c/Force1.remote.log"; expect "Force1.remote control: chain Finished" 2 "ApplyForce control run does not count" 2
+fresh; addline Force1.npc "$GONE"; expect "Force1.npc: an entity REMOVED" 1 "ApplyForce Force1.npc: the run does not count" 1
+# Repeat (a block of two PASS lines)
+fresh; setfield Repeat2.remote projectiles 1; expect "Repeat dose control broken" 2 "Repeat (guarded) dose control" 2
+fresh; setfield Repeat1.remote projectiles 0; expect "Repeat unit control broken" 2 "Repeat (guarded) unit control" 3
+fresh; setfield Repeat1.npc projectiles 2; expect "Repeat read as doubled" 1 "Repeat1.npc: read 2, predicted 1 x unit" 1
+fresh; sed -i 's/chain_server_state=Failed/chain_server_state=Finished/' "$work/c/Repeat1.remote.log"; expect "Repeat1.remote control: chain Finished" 2 "control run Repeat1.remote does not count" 2
+fresh; addline Repeat1.npc "$REMV"; expect "Repeat1.npc: a caught tick exception" 1 "Repeat1.npc: the run does not count" 1
+fresh; setfield Repeat1.realnpc projectiles 2; expect "real NPC Repeat read as doubled" 1 "real NPC Repeat: read '2', predicted 1" 1
+# ClearEntityEffect
+fresh; setfield Clear0.npc effect_present 0.0; expect "ClearEntityEffect negative control broken (nothing to see)" 2 "ClearEntityEffect negative control" 2
+fresh; setfield Clear1.remote effect_present 1.0; expect "ClearEntityEffect unit control broken" 2 "ClearEntityEffect unit control" 1
+fresh; setfield Clear1.npc effect_present 1.0; expect "ClearEntityEffect effect left on the NPC-shaped manager" 1 "Clear1.npc: effect_present '1.0', predicted 0.0" 1
+fresh; addline Clear1.npc "$SYNC"; expect "Clear1.npc: a desync line" 1 "ClearEntityEffect Clear1.npc: the run does not count" 1
+fresh; addline Clear0.npc "$REMV"; expect "Clear0.npc control: a caught tick exception" 2 "ClearEntityEffect control run does not count" 2
+fresh; setfield Clear1.realnpc effect_present 1.0; expect "real NPC ClearEntityEffect left the effect" 1 "real NPC ClearEntityEffect: read '1.0', predicted 0" 1
+# Projectile
+fresh; setfield Proj1.remote projectiles_new 1; expect "Projectile flagged manager spawned one" 2 "Projectile flagged control" 1
+fresh; setfield Proj2.npc projectiles_new 1; expect "Projectile dose control broken" 2 "Projectile dose control" 2
+fresh; setfield Proj1.npc projectiles_new 2; expect "Projectile read as doubled" 1 "Proj1.npc: read '2' projectile entities, predicted 1" 1
+fresh; sed -i 's/chain_server_state=Failed/chain_server_state=Finished/' "$work/c/Proj1.remote.log"; expect "Proj1.remote control: chain Finished" 2 "Projectile control run does not count" 1
+fresh; addline Proj1.npc "$REMV"; expect "Proj1.npc: a caught tick exception" 1 "Projectile Proj1.npc: the run does not count" 1
+fresh; setfield Proj1.realnpc projectiles_new 2; expect "real NPC Projectile read as doubled" 1 "real NPC Projectile: read '2', predicted 1" 1
+# ModifyInventory AdjustHeldItemQuantity
+fresh; setfield InvAdjSelf2.remote inv_items_delta -1.0; expect "AdjustHeldItemQuantity dose control broken" 2 "AdjustHeldItemQuantity dose control" 3
+fresh; setfield InvAdjSelf1.remote inv_items_delta 0.0; expect "AdjustHeldItemQuantity unit control broken" 2 "AdjustHeldItemQuantity unit control: InvAdjSelf1.remote" 3
+fresh; setfield InvAdjOneSelf1.remote inv_items_delta -2.0; expect "AdjustHeldItemQuantity stack-of-1 unit control broken" 2 "AdjustHeldItemQuantity unit control: InvAdjOneSelf1.remote" 3
+fresh; setfield InvAdjSelf1.npc inv_items_delta -1.0; expect "AdjustHeldItemQuantity read as once" 1 "InvAdjSelf1.npc: read '-1.0', predicted 2 x the unit" 1
+fresh; setfield InvAdjOneSelf1.npc inv_items_delta -2.0; expect "AdjustHeldItemQuantity stack of 1 read as doubled" 1 "InvAdjOneSelf1.npc: read '-2.0', predicted the unit" 1
+fresh; addline InvAdjSelf1.npc "$SYNC"; expect "InvAdjSelf1.npc: a desync line" 1 "InvAdjSelf1.npc: the run does not count" 1
+fresh; addline InvAdjSelf1.remote "$GONE"; expect "InvAdjSelf1.remote control: an entity REMOVED" 2 "AdjustHeldItemQuantity control run does not count" 3
+# DestroyBlock
+fresh; setfield Destroy1.remote break_events 0; expect "DestroyBlock unit control broken (no event)" 2 "DestroyBlock unit control" 2
+fresh; setfield Destroy1.remote block_id_after 953; expect "DestroyBlock unit control broken (block still there)" 2 "DestroyBlock unit control" 2
+fresh; setfield Destroy2.remote break_events 2; expect "DestroyBlock second-break control broken" 2 "DestroyBlock second-break control" 2
+fresh; setfield Destroy1.npc break_events 2; expect "DestroyBlock read as broken twice" 1 "DestroyBlock Destroy1.npc: raised '2' BreakBlockEvent(s)" 1
+fresh; setfield Destroy1.npc block_id_after 953; expect "DestroyBlock left the block" 1 "DestroyBlock Destroy1.npc: raised '1' BreakBlockEvent(s), block '953' -> '953'" 1
+fresh; addline Destroy1.npc "$GONE"; expect "Destroy1.npc: an entity REMOVED" 1 "DestroyBlock Destroy1.npc: the run does not count" 1
+fresh; setfield Destroy1.realnpc break_events 2; expect "real NPC DestroyBlock read as broken twice" 1 "real NPC DestroyBlock: read '2', predicted 1" 1
+# exception in a run that should have none: one per custom block (the guard is one condition; Explode and Repeat use block(), tested above)
+EXC="Exception in thread Thread[#1,WorldThread - default"
+fresh; echo "$EXC" >> "$work/c/Force1.npc.log"; expect "ApplyForce: an exception in a run that should have none" 2 "ApplyForce: an exception in a run that should have none" 2
+fresh; echo "$EXC" >> "$work/c/Clear1.npc.log"; expect "ClearEntityEffect: an exception in a run that should have none" 2 "ClearEntityEffect: an exception in a run that should have none" 2
+fresh; echo "$EXC" >> "$work/c/Proj1.npc.log"; expect "Projectile: an exception in a run that should have none" 2 "Projectile: an exception in a run that should have none" 1
+fresh; echo "$EXC" >> "$work/c/InvAdjSelf1.npc.log"; expect "AdjustHeldItemQuantity: an exception in a run that should have none" 2 "AdjustHeldItemQuantity: an exception in a run that should have none" 3
+fresh; echo "$EXC" >> "$work/c/Destroy1.npc.log"; expect "DestroyBlock: an exception in a run that should have none" 2 "DestroyBlock: an exception in a run that should have none" 2
+fresh; addline InvAdjOneSelf1.npc "$REMV"; expect "InvAdjOneSelf1.npc: a caught tick exception" 1 "InvAdjOneSelf1.npc: the run does not count" 1
+fresh; addline Destroy1.remote "$SYNC"; expect "Destroy1.remote control: a desync line" 2 "DestroyBlock control run does not count" 3
+fresh; addline Destroy2.remote "$REMV"; expect "Destroy2.remote control: a caught tick exception" 2 "DestroyBlock control run does not count" 3
+echo "---- $fails failed, $nrun sabotage(s) run"
+[ "$nrun" -gt 0 ] && [ "$fails" = 0 ]

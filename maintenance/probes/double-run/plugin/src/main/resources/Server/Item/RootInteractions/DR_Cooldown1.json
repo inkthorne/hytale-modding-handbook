@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "TriggerCooldown", "Cooldown": { "Id": "DR_CD", "Cooldown": 60, "Charges": [ 60, 60, 60 ] } } ] }

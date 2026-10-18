@@ -18,10 +18,19 @@ import javax.annotation.Nonnull;
 /** Counters at the target of an effect: how many projectile entities appeared, how many BeamComponents were added. */
 final class Watch {
     static final AtomicInteger PROJECTILES = new AtomicInteger();
+    /** Entities that carry the newer Projectile component (what ProjectileModule.spawnProjectile builds for the Projectile interaction). */
+    static final AtomicInteger PROJECTILES_NEW = new AtomicInteger();
+    /** BreakBlockEvents raised, whoever breaks (DestroyBlock's performBlockBreak invokes one per call that finds a block). */
+    static final AtomicInteger BREAKS = new AtomicInteger();
     static final AtomicInteger BEAMS_ADDED = new AtomicInteger();
     static final AtomicInteger BEAMS_SET = new AtomicInteger();
     static final AtomicInteger DAMAGE_RAISED = new AtomicInteger();
     static final AtomicInteger DAMAGE_DELIVERED = new AtomicInteger();
+    /** Damage events at the TARGET whose source is not an entity (Explode's environment source): raised, and delivered after the filters. */
+    static final AtomicInteger DAMAGE_OTHER_RAISED = new AtomicInteger();
+    static final AtomicInteger DAMAGE_OTHER_DELIVERED = new AtomicInteger();
+    /** The entity whose damage events DAMAGE_OTHER_* count; set by Driver. */
+    static volatile Ref<EntityStore> TARGET;
 
     private Watch() {
     }
@@ -71,6 +80,9 @@ final class Watch {
             if (damage.getSource() instanceof com.hypixel.hytale.server.core.modules.entity.damage.Damage.EntitySource) {
                 DAMAGE_RAISED.incrementAndGet();
                 Log.p("Damage RAISED on %s amount=%s source=%s", chunk.getReferenceTo(index), damage.getAmount(), damage.getSource());
+            } else if (chunk.getReferenceTo(index).equals(TARGET)) {
+                DAMAGE_OTHER_RAISED.incrementAndGet();
+                Log.p("Damage RAISED(other) on %s amount=%s source=%s", chunk.getReferenceTo(index), damage.getAmount(), damage.getSource());
             }
         }
     }
@@ -93,6 +105,9 @@ final class Watch {
                            @Nonnull CommandBuffer<EntityStore> buffer, @Nonnull com.hypixel.hytale.server.core.modules.entity.damage.Damage damage) {
             if (damage.getSource() instanceof com.hypixel.hytale.server.core.modules.entity.damage.Damage.EntitySource && !damage.isCancelled()) {
                 DAMAGE_DELIVERED.incrementAndGet();
+            } else if (!(damage.getSource() instanceof com.hypixel.hytale.server.core.modules.entity.damage.Damage.EntitySource)
+                       && !damage.isCancelled() && chunk.getReferenceTo(index).equals(TARGET)) {
+                DAMAGE_OTHER_DELIVERED.incrementAndGet();
             }
             Log.p("Damage event on %s amount=%s cancelled=%s source=%s", chunk.getReferenceTo(index), damage.getAmount(),
                 damage.isCancelled(), damage.getSource());
@@ -114,6 +129,42 @@ final class Watch {
         @Override
         public void onEntityRemove(@Nonnull Ref<EntityStore> ref, @Nonnull RemoveReason reason,
                                    @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
+        }
+    }
+
+    static final class ProjectilesNew extends RefSystem<EntityStore> {
+        @Override
+        public Query<EntityStore> getQuery() {
+            return com.hypixel.hytale.server.core.modules.projectile.component.Projectile.getComponentType();
+        }
+
+        @Override
+        public void onEntityAdded(@Nonnull Ref<EntityStore> ref, @Nonnull AddReason reason,
+                                  @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
+            Log.p("Projectile (new component) ADDED reason=%s ref=%s n=%d", reason, ref, PROJECTILES_NEW.incrementAndGet());
+        }
+
+        @Override
+        public void onEntityRemove(@Nonnull Ref<EntityStore> ref, @Nonnull RemoveReason reason,
+                                   @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
+        }
+    }
+
+    static final class Breaks extends com.hypixel.hytale.component.system.EntityEventSystem<EntityStore, com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent> {
+        Breaks() {
+            super(com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent.class);
+        }
+
+        @Override
+        public void handle(int index, @Nonnull com.hypixel.hytale.component.ArchetypeChunk<EntityStore> chunk, @Nonnull Store<EntityStore> store,
+                           @Nonnull CommandBuffer<EntityStore> buffer, @Nonnull com.hypixel.hytale.server.core.event.events.ecs.BreakBlockEvent event) {
+            Log.p("BreakBlockEvent n=%d block=%s at %s", BREAKS.incrementAndGet(), event.getBlockType().getId(), event.getTargetBlock());
+        }
+
+        @Nonnull
+        @Override
+        public Query<EntityStore> getQuery() {
+            return Query.any();
         }
     }
 

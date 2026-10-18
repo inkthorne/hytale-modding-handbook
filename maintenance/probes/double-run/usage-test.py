@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE))
 import usage                                         # noqa: E402
 
 TYPES = {'ChangeStat', 'ModifyInventory', 'Explode', 'Repeat', 'Interrupt', 'Condition', 'ClearEntityEffect',
-         'StatsCondition', 'TriggerCooldown', 'Simple', 'Selector', 'Charging', 'Wielding', 'Projectile'}
+         'StatsCondition', 'TriggerCooldown', 'Simple', 'Selector', 'Charging', 'Wielding', 'Projectile', 'SendMessage', 'PullEntityAbility', 'GroundedCondition'}
 MARK = '.double-run-usage-test'
 
 
@@ -48,7 +48,7 @@ def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bai
         shutil.rmtree(server)
     tag = {'Tags': {'Attack': ['Melee']}}
     # --- interactions, one type each
-    for name, t in [('Int_Held', 'Explode'), ('Int_NotAttack', 'ModifyInventory'), ('Int_Bait', 'ChangeStat'),
+    for name, t in [('Int_Held', 'Explode'), ('Int_NotAttack', 'SendMessage'), ('Int_Bait', 'ChangeStat'),
                     ('Int_Compute', 'Repeat'), ('Int_Parent', 'Interrupt'), ('Int_Off', 'Condition'),
                     ('Int_Entity', 'ClearEntityEffect'), ('Int_Cast', 'StatsCondition'), ('Int_Host', 'TriggerCooldown'),
                     ('Int_Plain', 'Simple'), ('Int_Swap', 'Charging'),
@@ -62,7 +62,13 @@ def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bai
     put(server, 'Item/RootInteractions/Root_Parent.json', {'Interactions': ['Int_Parent'], **tag})
     put(server, 'Item/RootInteractions/Root_Off.json', {'Interactions': ['Int_Off'], **tag})
     put(server, 'Item/RootInteractions/Root_Swap.json', {'Interactions': ['Int_Swap'], **tag})
-    put(server, 'Item/RootInteractions/Root_Plain.json', {'Interactions': ['Int_Plain']})
+    put(server, 'Item/RootInteractions/Root_Plain.json', {'Interactions': ['Int_Plain', 'Int_MI_Remove', 'Int_MI_Gate', 'Int_MI_Adjust', 'Int_MI_Ignore', 'Int_MI_Child', 'Int_MI_Dur']})
+    put(server, 'Item/Interactions/Int_MI_Remove.json', {'Type': 'ModifyInventory', 'ItemToRemove': {'Id': 'X', 'Quantity': 1}})
+    put(server, 'Item/Interactions/Int_MI_Gate.json', {'Type': 'ModifyInventory', 'RequiredGameMode': 'Adventure', 'ItemToRemove': {'Id': 'X', 'Quantity': 1}})
+    put(server, 'Item/Interactions/Int_MI_Adjust.json', {'Type': 'ModifyInventory', 'AdjustHeldItemQuantity': -1})
+    put(server, 'Item/Interactions/Int_MI_Ignore.json', {'Type': 'ModifyInventory', 'OnItemChangeBehavior': 'Ignore', 'ItemToAdd': {'Id': 'X', 'Quantity': 1}})
+    put(server, 'Item/Interactions/Int_MI_Child.json', {'Parent': 'Int_MI_Gate'})
+    put(server, 'Item/Interactions/Int_MI_Dur.json', {'Type': 'ModifyInventory', 'AdjustHeldItemDurability': -2.0})
     put(server, 'Item/RootInteractions/Root_Host.json', {'Interactions': ['Int_Host']})
     put(server, 'Item/RootInteractions/Root_Entity.json', {'Interactions': ['Int_Entity']})
     # --- items
@@ -91,6 +97,11 @@ def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bai
         'Type': 'Selector', 'Next': 'Int_Cast',
         'Interactions': [{'Type': 'SpawnAbilityEntity', 'Repeats': [{'Chain': {'Interactions': [{'Type': 'ClearEntityEffect'}]}}]}]})
     put(server, 'Item/RootInteractions/Abilities/Root_Cast.json', {'Interactions': ['Cast']})
+    # an ability projectile: its ProjectileSpawn chain runs on the shooter, its ProjectileHit chain on the projectile's own manager
+    put(server, 'Item/Interactions/Abilities/Launch.json', {'Type': 'LaunchAbilityProjectile', 'Projectile': 'Proj_Cfg'})
+    put(server, 'Item/RootInteractions/Abilities/Root_Launch.json', {'Interactions': ['Launch']})
+    put(server, 'ProjectileConfigs/Proj_Cfg.json', {'Interactions': {'ProjectileSpawn': {'Interactions': [{'Type': 'PullEntityAbility'}]},
+                                                                      'ProjectileHit': {'Interactions': [{'Type': 'GroundedCondition'}]}}})
     (server / 'EncounterManager').mkdir(parents=True, exist_ok=True)
     (server / 'Abilities').mkdir(parents=True, exist_ok=True)
 
@@ -132,13 +143,13 @@ def main():
         print(f'VOID  the planted tree is not what the test thinks: {r["n_npc"]} NPC seeds, {len(r["held"]["attack"])} held items with an Attack root')
         return 2
     # the instrument must SEE the defects first: the 13a graph reaches the bait's ChangeStat and the non-Attack ModifyInventory
-    if not {'ChangeStat', 'ModifyInventory'} <= allc:
-        print('VOID  the 13a graph does not reach the bait (ChangeStat) or the non-Attack weapon (ModifyInventory): the planted item edges are invisible')
+    if not {'ChangeStat', 'SendMessage'} <= allc:
+        print('VOID  the 13a graph does not reach the bait (ChangeStat) or the non-Attack weapon (SendMessage): the planted item edges are invisible')
         return 2
     check('13a graph: an AttractiveItemSet item edge reaches ChangeStat (the defect is visible)', 'ChangeStat' in allc)
     check('run-reached: the AttractiveItemSet bait does NOT count (ChangeStat)', 'ChangeStat' not in run, sorted(run))
     check('run-reached: a held weapon with an Attack-tagged root counts (Explode)', 'Explode' in run, sorted(run))
-    check('run-reached: a held weapon whose root is not tagged Attack does not count (ModifyInventory)', 'ModifyInventory' not in run, sorted(run))
+    check('run-reached: a held weapon whose root is not tagged Attack does not count (SendMessage)', 'SendMessage' not in run, sorted(run))
     check('run-reached: a weapon held through Compute + Modify.Weapons counts (Repeat)', 'Repeat' in run, sorted(run))
     check('run-reached: a weapon whose Interactions come from its Parent counts (Interrupt)', 'Interrupt' in run, sorted(run))
     check('run-reached: an OffHandItems item with an Attack-tagged root counts (Condition)', 'Condition' in run, sorted(run))
@@ -156,8 +167,18 @@ def main():
     check('label: a plain NPC chain runs on NPC', lab.get('Simple') == {'NPC'}, lab.get('Simple'))
     check('label: SpawnInteraction hands its root to a host', lab.get('TriggerCooldown') == {'host'}, lab.get('TriggerCooldown'))
     check('label: a SpawnAbilityEntity Repeats chain runs on the ability entity', lab.get('ClearEntityEffect') == {'A-entity'}, lab.get('ClearEntityEffect'))
+    check("label: an ability projectile's ProjectileSpawn chain runs on the caster", lab.get('PullEntityAbility') == {'A-caster'}, lab.get('PullEntityAbility'))
+    check("label: an ability projectile's ProjectileHit chain runs on the projectile's own manager", lab.get('GroundedCondition') == {'A-entity'}, lab.get('GroundedCondition'))
     check('label: a plain ability cast runs on the caster', lab.get('StatsCondition') == {'A-caster'}, lab.get('StatsCondition'))
     base = run
+    rows, tot = usage.modify_inventory_walk(r['assets'], r['run_objs'], r['overrides'])
+    kinds = {Path_.name: k for (f, p_, act, gate, beh, k, v) in rows for Path_ in [pathlib.Path(f)]}
+    check('held-slot walk: ItemToRemove with no gate and no Ignore is the one CANDIDATE', kinds.get('Int_MI_Remove.json') == 'CANDIDATE' and tot['CANDIDATE'] == 1, dict(tot))
+    check('held-slot walk: RequiredGameMode makes it inert, also through a Parent', kinds.get('Int_MI_Gate.json') == 'inert (RequiredGameMode)' and kinds.get('Int_MI_Child.json') == 'inert (RequiredGameMode)', kinds)
+    check('held-slot walk: AdjustHeldItemQuantity and AdjustHeldItemDurability write through setHeldItem and cannot trip',
+          kinds.get('Int_MI_Adjust.json') == 'setHeldItem only' and kinds.get('Int_MI_Dur.json') == 'setHeldItem only', kinds)
+    check('held-slot walk: a slot write under Ignore is not a candidate', kinds.get('Int_MI_Ignore.json') == 'slot write, Ignore', kinds)
+    check('held-slot walk: the 6 planted ModifyInventory objects are all seen', sum(tot.values()) == 6, dict(tot))
 
     # ---- sabotages: each must move exactly one type
     def moved(label, kw, gained=(), lost=()):
@@ -168,7 +189,7 @@ def main():
         check(label, ok, f'gained {sorted(now - base)}, lost {sorted(base - now)}; wanted +{sorted(gained)} -{sorted(lost)}')
 
     moved("sabotage: Root_Held loses its Attack tag -> Explode and the item's InteractionVars (Wielding) leave", dict(attack_held=False), lost=['Explode', 'Wielding'])
-    moved("sabotage: Root_NotAttack gains the tag -> ModifyInventory and the item's InteractionVars (Projectile) join", dict(attack_notattack=True), gained=['ModifyInventory', 'Projectile'])
+    moved("sabotage: Root_NotAttack gains the tag -> SendMessage and the item's InteractionVars (Projectile) join", dict(attack_notattack=True), gained=['SendMessage', 'Projectile'])
     moved("sabotage: the bait item is held -> only ChangeStat joins", dict(bait_held=True), gained=['ChangeStat'])
     plant(server)
 
@@ -179,10 +200,10 @@ def main():
         old = types_of(usage.analyse(server, TYPES))
     finally:
         usage.reach = orig
-    if not {'ChangeStat', 'ModifyInventory'} <= old:
+    if not {'ChangeStat', 'SendMessage'} <= old:
         print('VOID  with every item id an edge, the run-reached walk still misses the bait: the negative control cannot see the defect')
         return 2
-    check('negative control: under the 13a rule (item ids are edges) the bait and the non-Attack weapon are counted', {'ChangeStat', 'ModifyInventory'} <= old)
+    check('negative control: under the 13a rule (item ids are edges) the bait and the non-Attack weapon are counted', {'ChangeStat', 'SendMessage'} <= old)
 
     # ---- the real data
     assets = pathlib.Path(a.assets) / 'Server'
@@ -206,6 +227,51 @@ def main():
     check('real: the 12 types that fall out without item edges are the brief\'s', fell == want, fell)
     check('real: the run-reached population sits between the two (no type outside the 13a population)',
           set(ni) <= set(real['run']) <= set(allr), (sorted(set(real['run']) - set(allr)), sorted(set(ni) - set(real['run']))))
+    # ---- the verdict table is re-checked against the population and the source
+    tsv = HERE / 'verdict-table.tsv'
+    src = pathlib.Path(a.src)
+    runset = set(real['run'])
+    probs, trows = usage.check_table(tsv, src, runset)
+    if not trows:
+        print('VOID  verdict-table.tsv has no rows')
+        return 2
+    check('verdict table: the shipped table has a row for each of the run-reached types and every deciding line holds', not probs and len(trows) == len(runset), probs[:3])
+    base_lines = tsv.read_text().split('\n')
+    tdir = work / 'tsv'
+    tdir.mkdir()
+
+    def variant(name, edit):
+        lines = edit(list(base_lines))
+        p = tdir / name
+        p.write_text('\n'.join(lines))
+        return usage.check_table(p, src, runset)[0]
+    first = next(i for i, l in enumerate(base_lines) if l and not l.startswith('#'))
+    cols = base_lines[first].split('\t')
+    pr = variant('missing.tsv', lambda L: L[:first] + L[first + 1:])
+    check('verdict table: a deleted row is reported ("has no row")', any('has no row' in x and cols[0] in x for x in pr), pr)
+    pr = variant('extra.tsv', lambda L: L + ['\t'.join(['ApplyBlockEntity', 'once', 'read', 'none', 'firstRun', cols[5], cols[6], 'x'])])
+    check('verdict table: a row for a type that is not run-reached is reported', any('not run-reached' in x for x in pr), pr)
+    pr = variant('dup.tsv', lambda L: L + [L[first]])
+    check('verdict table: a duplicate row is reported', any('duplicate row' in x for x in pr), pr)
+    pr = variant('shift.tsv', lambda L: L[:first] + [L[first].replace('\t' + cols[6] + '\t', '\t' + str(int(cols[6]) + 1) + '\t')] + L[first + 1:])
+    check('verdict table: a deciding line that moved is reported', any('does not declare' in x and cols[0] in x for x in pr), pr)
+    pr = variant('badword.tsv', lambda L: L[:first] + [L[first].replace('\t' + cols[1] + '\t', '\tmaybe\t')] + L[first + 1:])
+    check('verdict table: an outcome outside the vocabulary is reported', any("outcome 'maybe'" in x for x in pr), pr)
+    pr = variant('badbasis.tsv', lambda L: L[:first] + [L[first].replace('\t' + cols[2] + '\t', '\tguessed\t')] + L[first + 1:])
+    check('verdict table: a basis outside the vocabulary is reported', any("basis 'guessed'" in x for x in pr), pr)
+
+    def six_unknown(L):
+        out, n = [], 0
+        for l in L:
+            c = l.split('\t')
+            if l and not l.startswith('#') and len(c) == 8 and n < usage.MAX_UNKNOWN + 1:
+                c[1] = 'unknown'
+                n += 1
+                l = '\t'.join(c)
+            out.append(l)
+        return out
+    pr = variant('unknown.tsv', six_unknown)
+    check('verdict table: more than K = 5 unknown verdicts fail', any('more than' in x for x in pr), pr)
     print(f'---- {len(fails)} failed')
     return 1 if fails else 0
 

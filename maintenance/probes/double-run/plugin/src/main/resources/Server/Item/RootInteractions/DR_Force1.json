@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "ApplyForce", "WaitForGround": false, "RunTime": 0.5, "ChangeVelocityType": "Add", "Forces": [ { "Direction": { "Y": 1 }, "Force": 5.0 } ] } ] }

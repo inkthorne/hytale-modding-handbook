@@ -28,6 +28,8 @@ public class DrPlugin extends JavaPlugin {
         getCodecRegistry(Interaction.CODEC).register("ProbeLogQ", ProbeLogQuietInteraction.class, ProbeLogQuietInteraction.CODEC);
         getCodecRegistry(Interaction.CODEC).register("ProbeInvNone", ProbeInvNoneInteraction.class, ProbeInvNoneInteraction.CODEC);
         getEntityStoreRegistry().registerSystem(new Watch.Projectiles());
+        getEntityStoreRegistry().registerSystem(new Watch.ProjectilesNew());
+        getEntityStoreRegistry().registerSystem(new Watch.Breaks());
         getEntityStoreRegistry().registerSystem(new Watch.Lifecycle());
         getEntityStoreRegistry().registerSystem(new Watch.DamageSeen());
         getEntityStoreRegistry().registerSystem(new Watch.DamageRaised());

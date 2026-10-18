@@ -61,15 +61,15 @@ seeds: NPC 1858 files; encounter 67; ability 68
    TriggerSpawnMarkers          firstRun   None    NPC                                     2    0    0    2     2
    UseBlock                     via-simulateInteractWithBlock:other Client  NPC                                     2    0    0    2     6
    ApplyAbilityEffects          no-op      None    A-caster                                0    0    1    1     1
-   AttachBeam                   firstRun   None    A-entity                                0    0    1    1     1
+   AttachBeam                   firstRun   None    A-caster                                0    0    1    1     1
    GroundedCondition            own        None    A-caster                                0    0    1    1     1
    PlaceBlock                   tick0+     Client  NPC                                     1    0    0    1     4
    PullEntityAbility            no-op      None    A-caster,A-entity                       0    0    2    1     1
    SendMessage                  no-op      None    NPC                                     1    0    0    1     1
    SpawnAbilityEntity           no-op      None    A-caster                                0    0    1    1     1
 
-   runs on a player's manager only (A-caster, one pass; outside the double run unless an NPC casts it): 5: ApplyAbilityEffects, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, SpawnAbilityEntity
-   on a manager with no remote client (NPC, encounter, host, A-entity): 43
+   runs on a player's manager only (A-caster, one pass; outside the double run unless an NPC casts it): 6: ApplyAbilityEffects, AttachBeam, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, SpawnAbilityEntity
+   on a manager with no remote client (NPC, encounter, host, A-entity): 42
 
 3. ITEM-ONLY TYPES (10): reached from a seed only through a string that names an item
    ChangeActiveSlot           item edge in field Weapons
@@ -93,10 +93,46 @@ seeds: NPC 1858 files; encounter 67; ability 68
    SurfaceDrawPlaceBlock      item edge in field AttractiveItemSet
        NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary] > Item/Interactions/Creative/Creative_Place_SurfaceDraw.json [SurfaceDrawInteractions=Creative_Place_SurfaceDraw]   object at 
 
-4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent)
-   ChangeStat.Behaviour: "Add"=4, "Min"=14, "Set"=33, (absent)=63  (total 114)
+4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent), then over those not reached only as an ability caster
+   ChangeStat.Behaviour: "Add"=4, "Min"=14, "Set"=33, (absent)=63  (total 114); on a manager with no remote client: "Add"=4, "Min"=14, "Set"=33, (absent)=51  (total 102)
+   Explode.Config.DamageEntities: true=10  (total 10); on a manager with no remote client: true=10  (total 10)
+   Explode.Config.DamageBlocks: false=7, true=3  (total 10); on a manager with no remote client: false=7, true=3  (total 10)
+   TriggerCooldown.Cooldown.Charges: (absent)=16  (total 16); on a manager with no remote client: (absent)=3  (total 3)
+   TriggerCooldown.UseAbilityCooldown: (absent)=4, true=12  (total 16); on a manager with no remote client: (absent)=3  (total 3)
+   Repeat.Repeat: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=1  (total 24); on a manager with no remote client: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=1  (total 24)
+   ApplyForce.Duration: (absent)=22  (total 22); on a manager with no remote client: (absent)=22  (total 22)
+   ApplyForce.ChangeVelocityType: "Add"=2, "Set"=17, (absent)=3  (total 22); on a manager with no remote client: "Add"=2, "Set"=17, (absent)=3  (total 22)
+   ModifyInventory.RequiredGameMode: "Adventure"=14, (absent)=3  (total 17); on a manager with no remote client: "Adventure"=14, (absent)=3  (total 17)
+
+5. THE HELD-SLOT WALK (item 13b, R2): run-reached operations that write an inventory slot
+   scanned the class chain of each of the 48 run-reached types for setActiveSlot, setItemStackForSlot, removeItemStackFromSlot, removeItemStack, addItemStack, addOrDropItemStack, moveItemStack, putItemStack, replaceItemStackInSlot: 1 write: ModifyInventory (addOrDropItemStack, removeItemStack, removeItemStackFromSlot, setItemStackForSlot)
+   types that call context.setHeldItem but make no direct slot write above: PlaceBlock, PlaceFluid (their writes go through BlockPlaceUtils; read: PlaceBlock needs the client's block position and a block interaction's server hook runs once, so neither doubles a slot write)
+   the item-change check (Interaction.tickInternal, :288-291) trips when the item in the slot no longer matches context.getHeldItem(), the
+   OnItemChangeBehavior is not Ignore, and the context is not a proxy (owner != entity). A write that calls context.setHeldItem keeps
+   the context in step and never trips it. Fail and Finish run the hook anyway (tickInternal returns false); only ItemChanged skips it.
+   Item/Interactions/NPCs/Undead/Skeleton_Elite/Skeleton_Elite_Shield_Guard_Broken_Effects.json /Failed/Interactions[0]: fields ['AdjustHeldItemQuantity'], gate None, behaviour Ignore: writes through context.setHeldItem: never trips the check; the effect is doubled (measured InvAdjSelf1) unless the stack is exhausted
+   Item/Interactions/Tests/ModifyInventory.json : fields ['AdjustHeldItemQuantity'], gate None, behaviour ItemChanged (the default): writes through context.setHeldItem: never trips the check; the effect is doubled (measured InvAdjSelf1) unless the stack is exhausted
+   Item/Interactions/Weapons/Common/StatAmmoReload/Common_StatAmmoReload_ItemConsume.json : fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Primary/Weapon_Crossbow_Primary_Overcharge_Start.json /Next/0.8: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Primary/Weapon_Crossbow_Primary_Overcharge_Start.json /Next/0.8/Next/Next/0.5/Next/0.75: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Primary/Weapon_Crossbow_Primary_Overcharge_Start.json /Next/0.8/Next/Next/0.5/Next/0.75/Next/Next/1: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Primary/Weapon_Crossbow_Primary_Overcharge_Start.json /Next/0.8/Next/Next/0.5/Next/0.75/Next/Next/1/Next/Next/1.25: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Primary/Weapon_Crossbow_Primary_Overcharge_Start.json /Next/0.8/Next/Next/0.5/Next/0.75/Next/Next/1/Next/Next/1.25/Next/Next/1.5: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Crossbow/Weapon_Crossbow_Arrow_Inventory_Condition.json : fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Item/Attacks/Throw/Item_Throw.json /Next/Interactions[1]/Interactions[0]: fields ['AdjustHeldItemQuantity'], gate None, behaviour ItemChanged (the default): writes through context.setHeldItem: never trips the check; the effect is doubled (measured InvAdjSelf1) unless the stack is exhausted
+   Item/Interactions/Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot.json /Next/Failed/Next/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Interactions/Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot.json /Next/Failed/Next/Interactions[1]/Next/Next: fields ['ItemToAdd'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Ancient_Steel.json /InteractionVars/Arrow_Inventory_Condition/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Ancient_Steel.json /InteractionVars/Reload_ItemConsume/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json /InteractionVars/Arrow_Inventory_Condition/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json /InteractionVars/Reload_ItemConsume/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/RootInteractions/Weapons/Shortbow/Root_Weapon_Shortbow_Secondary_Guard.json /Interactions[0]/Next/Next: fields ['ItemToAdd'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   walk total: inert (RequiredGameMode) 14, setHeldItem only 3  (of 17 ModifyInventory objects; EquipItem and ChangeActiveSlot write the slot too but are item-only, not run-reached)
 
 CANDIDATES: 19 run-reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+)
    ApplyForce, AttachBeam, ChangeStat, ClearEntityEffect, Condition, CooldownCondition, DamageEntity, DestroyBlock, DurabilityCondition, EffectCondition, Explode, Interrupt, ModifyInventory, PlaceBlock, Repeat, Simple, StatsCondition, TriggerCooldown, TriggerSpawnMarkers
+
+6. VERDICT TABLE (verdict-table.tsv): 48 rows for 48 run-reached types; outcomes doubled 3, flow 8, guarded 4, none 1, once 20, reads 7, refuses 1, same-twice 4; basis measured 12, read 36
+   unknown: 0 (limit 5); 0 problem(s)
 
 registered types never reached by either population: 77 of 135

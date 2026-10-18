@@ -1,0 +1,1 @@
+{ "Interactions": [ { "Type": "Explode", "Config": { "DamageEntities": true, "DamageBlocks": false, "EntityDamage": 3.0, "EntityDamageRadius": 8 } }, { "Type": "Explode", "Config": { "DamageEntities": true, "DamageBlocks": false, "EntityDamage": 3.0, "EntityDamageRadius": 8 } } ] }

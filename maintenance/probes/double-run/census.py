@@ -424,7 +424,8 @@ def main():
         print(f'FAIL  {root} is not a decompiled-source tree', file=sys.stderr)
         return 1
     tree = Tree(root)
-    meta = root.parent / 'cache-meta.txt'
+    # resolve first: HYTALE_SRC_CACHE may be a symlink, and cache-meta.txt sits beside the REAL cache (review of 94d2a32..3437c5d, MEDIUM-2)
+    meta = root.resolve().parent / 'cache-meta.txt'
     ident = meta.read_text().replace('\n', ' ') if meta.exists() else '(no cache-meta.txt)'
     reg = interaction_registry(tree)
 

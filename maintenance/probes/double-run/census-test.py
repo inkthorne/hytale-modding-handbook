@@ -208,6 +208,21 @@ def main():
         else:
             print(f'FAIL  {label}: rows moved {moved} (wanted {names}), ' + ', '.join(f'{n} {k} is {got[n]} (wanted {w})' for n, k, w in expect))
             fails += 1
+    # a --src that is a symlink: cache-meta.txt sits beside the real cache, not beside the link (review of 94d2a32..3437c5d, MEDIUM-2).
+    # The defect needs a link whose parent holds no cache-meta.txt, and the real cache's parent holds one; the control is that precondition.
+    (work / 'cache-meta.txt').write_text('version=planted jar_sha=0123\n')
+    (work / 'via').mkdir()
+    (work / 'via' / 'src').symlink_to(copy)
+    if (work / 'via' / 'cache-meta.txt').exists() or not (copy.parent / 'cache-meta.txt').exists():
+        print('VOID  the symlink case is not set up: the link\'s parent must hold no cache-meta.txt and the real cache\'s parent one')
+        return 2
+    out = subprocess.run([sys.executable, '-I', str(CENSUS), '--src', str(work / 'via' / 'src')], capture_output=True, text=True)
+    first = out.stdout.split('\n')[0]
+    if first == 'build: version=planted jar_sha=0123 ':
+        print('PASS  a --src that is a symlink finds cache-meta.txt beside the real cache: ' + first)
+    else:
+        print(f'FAIL  a --src that is a symlink does not find the cache-meta.txt beside the real cache: {first!r}')
+        fails += 1
     print(f'---- {fails} failed')
     return 1 if fails else 0
 

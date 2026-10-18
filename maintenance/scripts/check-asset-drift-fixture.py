@@ -42,8 +42,8 @@ ANCHOR = 'section "[HARD] Asset drift vs baseline'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 30
-MIN_MUTATIONS = 30
+MIN_CASES = 31
+MIN_MUTATIONS = 31
 
 REAL = {n: shutil.which(n) for n in ('sort', 'diff', 'grep')}
 for _n, _p in REAL.items():
@@ -371,6 +371,14 @@ def all_cases(text: str, tpl, work) -> dict[str, list[str]]:
     mk2 = 'DR_TMP="$(mktemp -d)"; echo "work" > "$DR_TMP/x"\n'
     case('an exit inside the section also removes the double-run section\'s DR_TMP (the EXIT trap)',
          go(inject=(mk, mk2 + mk + 'echo "work" > "$DRIFT_TMP/x"; exit 7\n')), hf=None, want_rc=7, cleaned='exit')
+    # MAJOR-1 of the verify pass of 3437c5d..ee2b164: the EXIT trap also removes DR_TMP, so a DR_TMP the caller's
+    # shell exported must be emptied before the trap is set; a healthy run with one exported leaves that directory alone.
+    victim = work / 'inherited-dr-tmp'
+    victim.mkdir(parents=True, exist_ok=True)
+    (victim / 'keep').write_text('the caller\'s file\n')
+    case(CASE['inherit'], go(shims={'DR_TMP': str(victim)}), hf=0, exact=CLEAN)
+    if not (victim / 'keep').exists():
+        res[CASE['inherit']].append(f'the EXIT trap removed the DR_TMP the caller exported ({victim})')
     res[CASE['trapcount']] = trap_problems(VERIFY.read_text())
     # the predicate's own control: it must see a second trap in the forms a line-start match misses
     seen = [trap_problems(VERIFY.read_text() + tail) for tail in ("\ntrue; trap 'echo replaced' EXIT\n", "\nx=1 && trap - EXIT\n", "\n( trap 'x' EXIT )\n")]
@@ -449,6 +457,7 @@ CASE = {
     'zeroSB': 'the Server baseline holds 0 rows: FAIL naming the side, no count',
     'early': 'an exit inside the section still removes the temp dir (the EXIT trap)',
     'early2': 'an exit inside the section also removes the double-run section\'s DR_TMP (the EXIT trap)',
+    'inherit': 'a DR_TMP exported by the caller survives the run: it is emptied before the EXIT trap is set',
     'trapcount': "verify-docs.sh sets exactly one EXIT trap, the drift section's (a second would replace it)",
     'trapcontrol': "the trap check sees a second trap written as `true; trap ...`, `x && trap - EXIT` or `( trap ... )`",
     'sortBp': 'a baseline sort that writes 2 rows then exits 2: FAIL on the status, not a count of the short index',
@@ -479,8 +488,8 @@ mut('sort failure is a WARN, not a FAIL', 'fail "asset drift (Common): could not
 mut('hash failure is a WARN, not a FAIL', 'fail "asset drift (Server/Cosmetics): hash-server-assets.sh exited', 'warn "asset drift (Server/Cosmetics): hash-server-assets.sh exited', ['hash123', 'hash1', 'hashsort'], ['hash123', 'hash1', 'hashsort', 'both'])
 mut('Common live denominator counts the baseline', 'compared with $N_LIVE live row(s)', 'compared with $N_BASE live row(s)', ['drift'], ['drift', 'dose1', 'dose3'])
 mut('Server denominator counts the baseline', 'compared with $N_LIVE row(s) hashed', 'compared with $N_BASE row(s) hashed', ['drift'], ['drift', 'dose1', 'dose3'])
-mut('Common denominator not printed', 'info "Common index:', ': "Common index:', ['healthy'], ['healthy', 'drift', 'dose1', 'dose3', 'skipS', 'skipSB'])
-mut('Server denominator not printed', 'info "Server/Cosmetics index:', ': "Server/Cosmetics index:', ['healthy'], ['healthy', 'drift', 'dose1', 'dose3', 'skipC', 'skipCL'])
+mut('Common denominator not printed', 'info "Common index:', ': "Common index:', ['healthy'], ['healthy', 'drift', 'dose1', 'dose3', 'skipS', 'skipSB', 'inherit'])
+mut('Server denominator not printed', 'info "Server/Cosmetics index:', ': "Server/Cosmetics index:', ['healthy'], ['healthy', 'drift', 'dose1', 'dose3', 'skipC', 'skipCL', 'inherit'])
 mut('Common skip WARN dropped', 'warn "skipped (missing baseline or live index)"', ': "skipped"', ['skipC'], ['skipC', 'skipCL'])
 mut('Server skip WARN dropped', 'warn "Server-assets drift skipped (missing ServerAssetsIndex.hashes baseline or extracted Server/)"', ': "skipped"', ['skipS'], ['skipS', 'skipSB'])
 
@@ -494,10 +503,11 @@ mut('Server guard ignores an empty baseline', 'if [ "$N_BASE" -eq 0 ] || [ "$N_L
     'if [ "$N_LIVE" -eq 0 ]; then\n        fail "asset drift (Server/Cosmetics)', ['zeroSB'], ['zeroSB'])
 TRAP = "trap 'rm -rf \"${DRIFT_TMP:-}\" \"${DR_TMP:-}\"' EXIT\n"
 mut('EXIT trap removed', TRAP, '', ['early', 'early2'], ['early', 'early2'])
+mut('an exported DR_TMP is not emptied before the trap', 'DR_TMP=""          # never the caller\'s: whatever', '#DR_TMP=""          # never the caller\'s: whatever', ['inherit'], ['inherit'])
 mut('EXIT trap does not remove DR_TMP', TRAP, "trap 'rm -rf \"${DRIFT_TMP:-}\"' EXIT\n", ['early2'], ['early2'])
-mut('section-end rm -rf removed', '  rm -rf "$DRIFT_TMP"\n', '', ['healthy'], ['sortBp', 'sortLp', 'both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortL', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
+mut('section-end rm -rf removed', '  rm -rf "$DRIFT_TMP"\n', '', ['healthy'], ['sortBp', 'sortLp', 'both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortL', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH', 'inherit'])
 mut('DRIFT_TMP not cleared after the section-end rm', '  DRIFT_TMP=""      # the EXIT cleanup must not act on a path that is already gone\n', '', ['healthy'],
-    ['both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortBp', 'sortL', 'sortLp', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH'])
+    ['both', 'diffC', 'diffS', 'dose1', 'dose3', 'drift', 'grepC', 'grepS', 'hash1', 'hash123', 'hashsort', 'healthy', 'skipC', 'skipCL', 'skipS', 'skipSB', 'sortB', 'sortBoth', 'sortBp', 'sortL', 'sortLp', 'zeroCB', 'zeroCL', 'zeroSB', 'zeroSH', 'inherit'])
 mut('Common condition ignores the live index', '[ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]',
     '[ -f maintenance/baseline/CommonAssetsIndex.hashes ]', ['skipCL'], ['skipCL'])
 mut('Common condition ignores the baseline', '[ -f maintenance/baseline/CommonAssetsIndex.hashes ] && [ -f "$ASSETS/CommonAssetsIndex.hashes" ]',

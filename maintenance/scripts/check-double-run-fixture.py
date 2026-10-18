@@ -42,8 +42,8 @@ REAL_PY = shutil.which('python3') or sys.exit('python3 not found on PATH')
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 69
-MIN_MUTATIONS = 99
+MIN_CASES = 70
+MIN_MUTATIONS = 100
 
 BUILD = '9.9.9'
 SRC_ALT, ASSETS_ALT = 'cache-src', 'cache-assets'      # the stub caches: not the snapshots' ~/.cache paths
@@ -209,6 +209,8 @@ def run_section(text: str, tpl: pathlib.Path, work: pathlib.Path, name: str, *, 
     shims = tpl.parent / 'shims'
     path = (f'{tpl.parent / "shims-diff"}{os.pathsep}' if diff_shim else '') + f'{shims}{os.pathsep}{os.environ["PATH"]}'
     tmpenv = tmpdir or str(tmp)
+    if tmpdir == 'REL-OUT':      # a relative TMPDIR outside the repository: the sibling, named from the section's cwd
+        tmpenv = os.path.join('..', tmp.name)
     if tmp_in_repo:
         (root / 'intmp').mkdir()
         if tmp_in_repo == 'link':
@@ -227,8 +229,11 @@ def run_section(text: str, tpl: pathlib.Path, work: pathlib.Path, name: str, *, 
     log = (probe / 'argv.log').read_text() if (probe / 'argv.log').exists() else ''
     # the temp paths are reported as @ROOT@ and @TMP@, so an expected line need not know them
     left = len(list(tmp.iterdir()))
-    out = re.sub(re.escape(str(tmp)) + r'/tmp\.[A-Za-z0-9]+', '@TMP@', out).replace(str(root), '@ROOT@')
-    log = re.sub(re.escape(str(tmp)) + r'/tmp\.[A-Za-z0-9]+', '@TMP@', log).replace(str(root), '@ROOT@')
+    # the section makes DR_TMP in the RESOLVED TMPDIR, so both spellings of the temp dir are reported as @TMP@
+    for t in sorted({str(tmp), os.path.realpath(tmp)}, key=len, reverse=True):
+        out = re.sub(re.escape(t) + r'/tmp\.[A-Za-z0-9]+', '@TMP@', out)
+        log = re.sub(re.escape(t) + r'/tmp\.[A-Za-z0-9]+', '@TMP@', log)
+    out, log = out.replace(str(root), '@ROOT@'), log.replace(str(root), '@ROOT@')
     return p.returncode, out + f'TMP_LEFT={left}\n', log
 
 
@@ -282,13 +287,18 @@ def all_cases(text: str, tpl: pathlib.Path, work: pathlib.Path, pool) -> dict[st
     # ---- the negative control comes first and is judged first (see main): the page with one row changed
     case('neg', 'NEGATIVE CONTROL: a page with one row of its tables changed is a FAIL (a section that passes a stale page says nothing)',
          dict(page=with_page(TABLES.replace('first', 'FIRST'))), hf=1, must=('FAIL  page.md does not match the tables usage.py generates',))
+    healthy_argv = [
+        'usage --assets @ROOT@/cache-assets --src @ROOT@/cache-src --tables @TMP@/tables13b.md',
+        'census --src @ROOT@/cache-src',
+        'census-test @TMP@/ct --src @ROOT@/cache-src',
+        'usage-test @TMP@/ut --assets @ROOT@/cache-assets --src @ROOT@/cache-src',
+        'usage-mutations @TMP@/um --assets @ROOT@/cache-assets --src @ROOT@/cache-src']
     case('healthy', 'healthy: every step prints its denominator; the cache paths differ from the snapshots\' and the source:/assets: lines are dropped',
-         hf=0, exact=CLEAN, argv=[
-             'usage --assets @ROOT@/cache-assets --src @ROOT@/cache-src --tables @TMP@/tables13b.md',
-             'census --src @ROOT@/cache-src',
-             'census-test @TMP@/ct --src @ROOT@/cache-src',
-             'usage-test @TMP@/ut --assets @ROOT@/cache-assets --src @ROOT@/cache-src',
-             'usage-mutations @TMP@/um --assets @ROOT@/cache-assets --src @ROOT@/cache-src'])
+         hf=0, exact=CLEAN, argv=healthy_argv)
+    # LOW-1 of the verify pass of 3437c5d..ee2b164: a relative TMPDIR outside the repository is healthy, and every work
+    # dir handed to a step is absolute (census-test, usage-test and usage-mutations refuse a relative one)
+    case('tmp_relout', 'a relative TMPDIR outside the repository passes, and every work dir handed to a step is absolute',
+         dict(tmpdir='REL-OUT'), hf=0, exact=CLEAN, argv=healthy_argv)
     # ---- missing inputs (R2): one WARN and no step runs
     case('nosrc', 'a missing decompiled source cache is one WARN and nothing runs', dict(no_src=True), hf=0, ran=False,
          exact=['WARN  skipped (no decompiled source cache at @ROOT@/cache-src — build-jar-cache.sh)'])
@@ -541,8 +551,8 @@ mut('usage.py summary accepts any problem count', "DR_U_OK=\"$(dr_count '^   unk
 mut('usage.py population figures not required', '*[!0-9/]*) DR_OK=0; fail "usage.py exited 0 but did not print', '*[!0-9/]*) DR_OK=0; : "usage.py exited 0 but did not print', ['u_norun'], ('u_norun',))
 mut('rows == run-reached not required', 'if [ "$DR_RUN" -eq 0 ] || [ "$DR_ROWS" -ne "$DR_RUN" ]; then', 'if [ "$DR_RUN" -eq 0 ]; then', ['u_rows'], ('u_rows',))
 mut('0 run-reached types accepted', 'if [ "$DR_RUN" -eq 0 ] || [ "$DR_ROWS" -ne "$DR_RUN" ]; then', 'if [ "$DR_ROWS" -ne "$DR_RUN" ]; then', ['u_zero'], ('u_zero',))
-mut('usage snapshot not compared', 'if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then', 'if false; then', ['s_usage', 's_wrote', 's_nousnap'], ('healthy', 'p_trailing', 's_diff2', 's_noassetssnap', 's_nousnap', 's_usage', 's_wrote', 'u_two'))
-mut('census snapshot not compared', 'elif dr_snapshot census', 'elif true || dr_snapshot census', ['s_census', 's_nocsnap'], ('healthy', 'p_trailing', 's_bigdiff', 's_census', 's_diff2', 's_nocsnap', 's_nosource', 's_snapx', 's_twosrc'))
+mut('usage snapshot not compared', 'if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then', 'if false; then', ['s_usage', 's_wrote', 's_nousnap'], ('healthy', 'p_trailing', 's_diff2', 's_noassetssnap', 's_nousnap', 's_usage', 's_wrote', 'u_two', 'tmp_relout'))
+mut('census snapshot not compared', 'elif dr_snapshot census', 'elif true || dr_snapshot census', ['s_census', 's_nocsnap'], ('healthy', 'p_trailing', 's_bigdiff', 's_census', 's_diff2', 's_nocsnap', 's_nosource', 's_snapx', 's_twosrc', 'tmp_relout'))
 mut('the dropped line is not dropped from the live output', 'grep -v -E -e "$drop" "$live" >', 'cat "$live" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 mut('the dropped line is not dropped from the snapshot', 'grep -v -E -e "$drop" "$snap" >', 'cat "$snap" >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 's_diff2', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 mut('exactly-once test of the dropped line removed', 'if [ "${nl:-x}" != 1 ] || [ "${ns:-x}" != 1 ]; then', 'if false; then', ['s_nosource', 's_noassetssnap', 's_twosrc'], ('s_noassetssnap', 's_nosource', 's_twosrc'))
@@ -571,17 +581,17 @@ mut('control PASS floor not enforced', 'elif [ "${np:-0}" -lt "$min" ]; then', '
 mut('census-test.py floor is 0', 'dr_control census-test.py "$DR_MIN_CT"', 'dr_control census-test.py 0', ['t_ctfloor'], ('t_ctfloor',))
 mut('usage-test.py floor is 0', 'dr_control usage-test.py "$DR_MIN_UT"', 'dr_control usage-test.py 0', ['t_utfloor'], ('t_utfloor',))
 mut('census-test.py not run', 'if dr_control census-test.py', 'if true || dr_control census-test.py', ['healthy', 't_ct1'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
-mut('usage-test.py not run', 'if dr_control usage-test.py', 'if true || dr_control usage-test.py', ['healthy', 't_ut1'], ('all3', 'healthy', 'p_trailing', 't_both', 't_ct1', 't_ctfloor', 't_ctnosum', 't_ut1', 't_utfloor', 't_utwice'))
-mut('usage.py not given --assets', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--src "$SRC_CACHE" --tables', ['healthy'], ('healthy',))
-mut('usage.py not given --src', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--assets "$ASSETS" --tables', ['healthy'], ('healthy',))
+mut('usage-test.py not run', 'if dr_control usage-test.py', 'if true || dr_control usage-test.py', ['healthy', 't_ut1'], ('all3', 'healthy', 'p_trailing', 't_both', 't_ct1', 't_ctfloor', 't_ctnosum', 't_ut1', 't_utfloor', 't_utwice', 'tmp_relout'))
+mut('usage.py not given --assets', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--src "$SRC_CACHE" --tables', ['healthy'], ('healthy', 'tmp_relout'))
+mut('usage.py not given --src', '--assets "$ASSETS" --src "$SRC_CACHE" --tables', '--assets "$ASSETS" --tables', ['healthy'], ('healthy', 'tmp_relout'))
 mut('usage.py not given --tables', ' --tables "$DR_TMP/tables13b.md" >', ' >', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'p_notables', 'tmp_abs', 'tmp_link', 'tmp_rel', 'u_rc1none', 'u_rc2', 'x_static', 'x_staticctl'))
-mut('census.py not given --src', '"$DR_DIR/census.py" --src "$SRC_CACHE" >', '"$DR_DIR/census.py" >', ['healthy'], ('healthy',))
-mut('census-test.py not given --src', '"$DR_TMP/ct" --src "$SRC_CACHE"', '"$DR_TMP/ct"', ['healthy'], ('healthy',))
-mut('usage-test.py not given --assets', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --src "$SRC_CACHE"', ['healthy'], ('healthy',))
-mut('usage-test.py not given --src', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --assets "$ASSETS"', ['healthy'], ('healthy',))
+mut('census.py not given --src', '"$DR_DIR/census.py" --src "$SRC_CACHE" >', '"$DR_DIR/census.py" >', ['healthy'], ('healthy', 'tmp_relout'))
+mut('census-test.py not given --src', '"$DR_TMP/ct" --src "$SRC_CACHE"', '"$DR_TMP/ct"', ['healthy'], ('healthy', 'tmp_relout'))
+mut('usage-test.py not given --assets', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --src "$SRC_CACHE"', ['healthy'], ('healthy', 'tmp_relout'))
+mut('usage-test.py not given --src', '"$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/ut" --assets "$ASSETS"', ['healthy'], ('healthy', 'tmp_relout'))
 mut('temp dir not removed', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    DR_TMP=""\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
 mut('DR_TMP not cleared after the removal', '    rm -rf "$DR_TMP"\n    DR_TMP=""\n', '    rm -rf "$DR_TMP"\n', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
-mut('PASS printed whatever failed', 'if [ "$DR_OK" -eq 1 ]; then\n      info "census.py:', 'if true; then\n      info "census.py:', ['u_rc1prob'], ('ALLBUT', 'healthy', 'mktemp', 'noassets', 'nosrc', 'p_trailing', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
+mut('PASS printed whatever failed', 'if [ "$DR_OK" -eq 1 ]; then\n      info "census.py:', 'if true; then\n      info "census.py:', ['u_rc1prob'], ('ALLBUT', 'healthy', 'mktemp', 'noassets', 'nosrc', 'p_trailing', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl', 'tmp_relout'))
 
 # the failure flag: a FAIL whose branch no longer clears DR_OK lets the PASS line print beside it
 mut('failed usage.py exit status leaves DR_OK set', 'DR_OK=0; fail "usage.py exited $RC', 'fail "usage.py exited $RC', ['u_rc1prob'], ('u_rc1prob',))
@@ -611,8 +621,9 @@ mut('the page diff is not capped', 'for l in d[:40]:', 'for l in d:', ['p_bigdif
 
 # ---- review of 94d2a32..3437c5d: LOW-1, LOW-2, LOW-3, MEDIUM-2, R7, the byte-for-byte NIT. `expect` is filled in from the measured sets.
 mut('the usage comparison is gated on the summary line, not on the exit status', 'if [ "$RC" -eq 0 ] || [ "${DR_U_END:-0}" -eq 1 ]; then', 'if [ "${DR_U_END:-0}" -eq 1 ]; then', ['u_two'], ('u_two',))
+mut('DR_TMP made in the unresolved TMPDIR', 'DR_TMP="$([ -n "$DR_TD" ] && mktemp -d "$DR_TD/tmp.XXXXXXXXXX")" || DR_TMP=""', 'DR_TMP="$(mktemp -d)" || DR_TMP=""', ['tmp_relout'], ('tmp_relout',))
 mut('a TMPDIR inside the repository is not refused', 'elif case "$DR_TD/" in "$DR_REPO"/*) true ;; *) false ;; esac; then', 'elif false; then', ['tmp_abs', 'tmp_rel', 'tmp_link'], ('tmp_abs', 'tmp_link', 'tmp_rel'))
-mut('TMPDIR is not resolved before the comparison with the repository', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""', 'DR_TD="${TMPDIR:-/tmp}"', ['tmp_rel', 'tmp_link'], ('tmp_link', 'tmp_rel'))
+mut('TMPDIR is not resolved before the comparison with the repository', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""', 'DR_TD="${TMPDIR:-/tmp}"', ['tmp_rel', 'tmp_link'], ('tmp_link', 'tmp_rel', 'tmp_relout'))
 mut('symlinks in TMPDIR are not followed', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || DR_TD=""', 'DR_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd)" || DR_TD=""', ['tmp_link'], ('tmp_link',))
 mut('a census with no cache-meta.txt is not refused', "elif [ \"$(dr_count '^build: \\(no cache-meta\\.txt\\)$' \"$DR_TMP/census.out\")\" = 1 ]; then", 'elif false; then', ['c_nometa'], ('c_nometa',))
 mut('a census with no cache-meta.txt leaves DR_OK set', 'DR_OK=0; fail "census.py: no cache-meta.txt', 'fail "census.py: no cache-meta.txt', ['c_nometa'], ('c_nometa',))
@@ -625,10 +636,10 @@ mut('usage-mutations.py slice start not read', 'elif [ "$DR_UM_LO" -ne 1 ]; then
 mut('usage-mutations.py slice end not read', 'elif [ "$DR_UM_HI" -ne "$DR_UM_N" ]; then', 'elif false; then', ['um_hi'], ('um_hi',))
 mut('usage-mutations.py caught count not compared with N', 'elif [ "$DR_UM_C" -ne "$DR_UM_N" ]; then', 'elif false; then', ['um_caught'], ('um_caught',))
 mut('usage-mutations.py floor not enforced', 'elif [ "$DR_UM_N" -lt "$DR_MIN_UM" ]; then', 'elif false; then', ['um_floor'], ('um_floor',))
-mut('usage-mutations.py floor is 0', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=22', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=0', ['um_floor'], ('healthy', 'p_trailing', 'um_caught', 'um_floor', 'um_hi', 'um_lo', 'um_surv'))
+mut('usage-mutations.py floor is 0', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=22', 'DR_MIN_CT=17; DR_MIN_UT=87; DR_MIN_UM=0', ['um_floor'], ('healthy', 'p_trailing', 'um_caught', 'um_floor', 'um_hi', 'um_lo', 'um_surv', 'tmp_relout'))
 mut('usage-mutations.py not run', 'python3 -I "$DR_DIR/usage-mutations.py"', 'true || python3 -I "$DR_DIR/usage-mutations.py"', ['healthy'], ('ALLBUT', 'mktemp', 'noassets', 'nosrc', 'tmp_abs', 'tmp_link', 'tmp_rel', 'x_static', 'x_staticctl'))
-mut('usage-mutations.py not given --assets', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --src "$SRC_CACHE"', ['healthy'], ('healthy',))
-mut('usage-mutations.py not given --src', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --assets "$ASSETS"', ['healthy'], ('healthy',))
+mut('usage-mutations.py not given --assets', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --src "$SRC_CACHE"', ['healthy'], ('healthy', 'tmp_relout'))
+mut('usage-mutations.py not given --src', '"$DR_TMP/um" --assets "$ASSETS" --src "$SRC_CACHE"', '"$DR_TMP/um" --assets "$ASSETS"', ['healthy'], ('healthy', 'tmp_relout'))
 mut('failed usage-mutations.py exit status leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py exited $RC', 'fail "usage-mutations.py exited $RC', ['um_rc1'], ('um_rc1',))
 mut('failed usage-mutations.py summary line leaves DR_OK set', 'DR_OK=0; fail "usage-mutations.py exited 0 but', 'fail "usage-mutations.py exited 0 but', ['um_nosum', 'um_twice'], ('um_nosum', 'um_twice'))
 mut('usage-mutations.py survivors leave DR_OK set', 'DR_OK=0; fail "usage-mutations.py: $DR_UM_B', 'fail "usage-mutations.py: $DR_UM_B', ['um_surv'], ('um_surv',))

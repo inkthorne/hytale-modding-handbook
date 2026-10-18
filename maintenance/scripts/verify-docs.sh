@@ -368,8 +368,12 @@ section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could
 # (trap -p EXIT) if one is ever added; check-asset-drift-fixture.py fails on any other `trap` word outside a comment.
 # It also removes DR_TMP, the double-run section's temp dir (census-test.py's copy of the source is 57 MB), so an
 # interrupted run leaves neither; that section sets DR_TMP empty when it has removed it, as this one does (review of
-# 94d2a32..3437c5d, LOW-4). An unset or empty DR_TMP makes `rm -rf ""`, which does nothing.
+# 94d2a32..3437c5d, LOW-4). An unset or empty DR_TMP makes `rm -rf ""`, which does nothing. DR_TMP is set empty
+# here, before the trap: a DR_TMP exported by the caller's shell would otherwise be removed on exit whenever the
+# double-run section does not assign it (a missing cache, a refused TMPDIR, an interrupt before it starts)
+# (verify pass of 3437c5d..ee2b164, MAJOR-1).
 DRIFT_TMP=""
+DR_TMP=""          # never the caller's: whatever this names is removed on exit
 trap 'rm -rf "${DRIFT_TMP:-}" "${DR_TMP:-}"' EXIT
 DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
 if [ -z "$DRIFT_TMP" ]; then
@@ -981,11 +985,11 @@ section "[HARD] The gates' own fixtures pass"
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # check-asset-drift-fixture.py --mutations (the "Asset drift vs baseline" section above, run as text
-# under sort, diff and grep shims and stub hash scripts: 30 cases and 30 mutations including the
+# under sort, diff and grep shims and stub hash scripts: 31 cases and 31 mutations including the
 # identity control, after a negative control that reproduces the section's pre-fix false green)
 # takes ~19 s (18.6-19.5 s over five runs), so it is run here.
 # check-double-run-fixture.py --mutations (the "double-run table" section above, run as text on stub
-# probe scripts, its own page and snapshots: 69 cases and 99 mutations including the identity control,
+# probe scripts, its own page and snapshots: 70 cases and 100 mutations including the identity control,
 # after a negative control that a stale page must FAIL) takes 41 s on a machine at load 11-20 and 150 s
 # at load 30-60, 1.6 s for the cases alone, so it is run here. Its mutation pass runs on a thread pool,
 # and its shims are written once before the pool starts (a per-case write failed with ETXTBSY under load).
@@ -1274,7 +1278,9 @@ elif [ ! -d "$ASSETS" ]; then
 elif case "$DR_TD/" in "$DR_REPO"/*) true ;; *) false ;; esac; then
   fail "double-run: TMPDIR (${TMPDIR:-/tmp}) resolves to $DR_TD, inside the repository $DR_REPO - usage.py refuses to write its tables there and usage-test.py is VOID; set TMPDIR to a directory outside the repository - none of the six steps ran"
 else
-  DR_TMP="$(mktemp -d)" || DR_TMP=""
+  # in the resolved TMPDIR, so DR_TMP is absolute even when TMPDIR is relative (the controls refuse a relative work dir;
+  # verify pass of 3437c5d..ee2b164, LOW-1)
+  DR_TMP="$([ -n "$DR_TD" ] && mktemp -d "$DR_TD/tmp.XXXXXXXXXX")" || DR_TMP=""
   if [ -z "$DR_TMP" ]; then
     fail "double-run: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - none of the six steps ran"
   else

@@ -2,6 +2,10 @@
 
 A Hytale server-plugin & asset API reference, with the descriptions, gotchas, and working examples to build with.
 
+**Verified against Hytale 0.7.2 (build-34).** Each page carries its own "Verified against" stamp, and a game update can
+invalidate any of them until the next re-verification pass. Each verified build is tagged on the
+[releases page](https://github.com/inkthorne/hytale-modding-handbook/releases).
+
 ## Documentation
 
 Every page under `docs/` is listed below; `verify-docs.sh` fails when one is not.
@@ -132,11 +136,27 @@ Demonstrates the ECS ticking-system pattern with:
 - Counting entities by component (`Total`/`Players`/`NPCs`/`Other`)
 - Pushing live values to a `CustomUIHud` overlay
 
+### [examples/events/](./examples/events/)
+Demonstrates both event mechanisms side by side:
+- The global event bus (`PlayerConnectEvent`, `PlayerDisconnectEvent`)
+- An ECS `EntityEventSystem` for `BreakBlockEvent`, filtered to players
+
+### [examples/item-respawner/](./examples/item-respawner/)
+Demonstrates a stateful, editable placeable block with:
+- A custom block whose `BlockEntity` attaches a `Component<ChunkStore>`
+- A ticking system over the chunk store that spawns an item entity and respawns it once it is gone
+- The spawned item's identity persisted across reloads, and a press-F GUI that edits the block's state
+
 ### [examples/custom-food/](./examples/custom-food/)
 A no-code, no-art **Pack** (pure JSON, no Java) for beginners:
 - Adds a custom food item by extending the real `Template_Food`
 - Reuses an existing in-game icon and real heal/buff effects — nothing to compile or draw
 - Teaches the "copy a template, override a few fields" pattern at the heart of JSON modding
+
+### [examples/custom-drop/](./examples/custom-drop/)
+A second no-code **Pack**, building on `custom-food`:
+- Overrides the chicken's shipped loot table so the Hearty Snack drops in the world
+- Shows that packs compose: it references `custom-food`'s item by id, so both packs must be installed
 
 ## Requirements
 

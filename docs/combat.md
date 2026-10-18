@@ -597,38 +597,38 @@ The flow, for a player whose `DeathComponent` was just added:
 
 - `DeathSystems$PlayerDeathScreen` (an `OnDeathSystem`, query `Player` **and** `TransformComponent`)
   runs. As of 0.6.3 it first settles the **game-mode-on-death / hardcore** bookkeeping:
-  - It reads `World.getGameModeTypeOnDeath()` — the world's `DeathConfig.GameModeTypeOnDeath`,
-    falling back to the server-wide `HytaleServerConfig.Defaults.GameModeTypeOnDeath`. **If that does
-    not name a real `GameModeType` asset, none of the hardcore logic runs** and the ordinary respawn
-    screen opens (a `null` is silent; a non-null unknown id logs
-    `GameModeTypeOnDeath %s is not a known GameModeType`).
-  - Otherwise a life is burned. `HytaleServerConfig.Defaults` also gained `HardcoreMode`
-    (`None` / `PerPlayer` / `Global`) and `HardcoreLives`. `PerPlayer` decrements the `PlayerLives`
-    component (`com.hypixel.hytale.server.core.modules.entity.component.PlayerLives`); `Global`
-    decrements the shared pool held in the `HardcoreState` universe resource (see
-    [universe-saves.md → Universe resources](universe-saves.md#universe-resources)). Two shortcuts
-    matter: `HardcoreMode: None` reports **zero lives left immediately** (so *every* death takes the
-    permadeath branch below), and a player whose effective `GameMode` is not `Adventure` reports
-    `-1` and never permadies.
-  - **Lives left ≠ 0** → the ordinary respawn screen, carrying the remaining count.
-    **Lives left == 0** → `GameModeTypes.enterOnDeath(ref, store, gameModeTypeId)` removes the
-    `DeathComponent` and moves the player into that game-mode type (the id the server writes for
-    hardcore saves is `HardcoreSpectator`; see
-    [player.md → Spectator Mode](player.md#spectator-mode)).
+    - It reads `World.getGameModeTypeOnDeath()` — the world's `DeathConfig.GameModeTypeOnDeath`,
+      falling back to the server-wide `HytaleServerConfig.Defaults.GameModeTypeOnDeath`. **If that does
+      not name a real `GameModeType` asset, none of the hardcore logic runs** and the ordinary respawn
+      screen opens (a `null` is silent; a non-null unknown id logs
+      `GameModeTypeOnDeath %s is not a known GameModeType`).
+    - Otherwise a life is burned. `HytaleServerConfig.Defaults` also gained `HardcoreMode`
+      (`None` / `PerPlayer` / `Global`) and `HardcoreLives`. `PerPlayer` decrements the `PlayerLives`
+      component (`com.hypixel.hytale.server.core.modules.entity.component.PlayerLives`); `Global`
+      decrements the shared pool held in the `HardcoreState` universe resource (see
+      [universe-saves.md → Universe resources](universe-saves.md#universe-resources)). Two shortcuts
+      matter: `HardcoreMode: None` reports **zero lives left immediately** (so *every* death takes the
+      permadeath branch below), and a player whose effective `GameMode` is not `Adventure` reports
+      `-1` and never permadies.
+    - **Lives left ≠ 0** → the ordinary respawn screen, carrying the remaining count.
+      **Lives left == 0** → `GameModeTypes.enterOnDeath(ref, store, gameModeTypeId)` removes the
+      `DeathComponent` and moves the player into that game-mode type (the id the server writes for
+      hardcore saves is `HardcoreSpectator`; see
+      [player.md → Spectator Mode](player.md#spectator-mode)).
 - Then, **if `DeathComponent.isShowDeathMenu()` is true**, it opens the death screen via
   `player.getPageManager().openCustomPage(ref, store, page)`, where `page` comes from one of
   `RespawnPage`'s static factories (the constructor is private as of 0.6.3):
-  - `RespawnPage.forRespawn(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, livesRemaining)`
-    — the normal screen (a `livesRemaining` greater than 0 adds a "lives remaining" note), or
-  - `RespawnPage.forPermadeath(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, permadeathMessage)`
-    — used **only** when the entered `GameModeType` defines a `DeathScreenMessage` (or a global
-    hardcore game-over is active). It hides the Respawn button and shows a Spectate button whose only
-    action **closes the page without respawning**. If the game-mode type defines no such message,
-    **no screen opens at all** — the player simply wakes up inside the new game-mode type.
+    - `RespawnPage.forRespawn(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, livesRemaining)`
+      — the normal screen (a `livesRemaining` greater than 0 adds a "lives remaining" note), or
+    - `RespawnPage.forPermadeath(playerRef, deathMessage, displayDataOnDeathScreen, deathItemLoss, permadeathMessage)`
+      — used **only** when the entered `GameModeType` defines a `DeathScreenMessage` (or a global
+      hardcore game-over is active). It hides the Respawn button and shows a Spectate button whose only
+      action **closes the page without respawning**. If the game-mode type defines no such message,
+      **no screen opens at all** — the player simply wakes up inside the new game-mode type.
 - **`RespawnPage` *is* the respawn trigger.** Both exit paths of the normal (`forRespawn`) page call
   `DeathComponent.respawn(...)`:
-  - the **Respawn button** (`handleDataEvent`, action `"Confirm"`), and
-  - **`RespawnPage.onDismiss(...)`** — if the entity still has a `DeathComponent`.
+    - the **Respawn button** (`handleDataEvent`, action `"Confirm"`), and
+    - **`RespawnPage.onDismiss(...)`** — if the entity still has a `DeathComponent`.
 
 Because `PageManager` holds a **single** current page and `openCustomPage(...)` fires the **previous
 page's `onDismiss`** before showing the new one (see [ui-api.md → Live updates & page replacement](ui-api.md#live-updates--page-replacement)),

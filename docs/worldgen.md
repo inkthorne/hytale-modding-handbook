@@ -380,21 +380,21 @@ void shutdown()                                // default method, no-op
   `StillNeededSection.test(int x, int y, int z)` and `SectionPriority.fetchPriority(int x, int y, int z)`.
   0.7.2 adds two more abstract methods, so an existing `Cubic` implementation must add them:
 
-  ```java
-  CompletableFuture<GeneratedColumn> generateColumn(int seed, long index, int x, int z,
-                                                    LongPredicate stillNeeded,
-                                                    Long2FloatFunction priority)
-  int[] predictSurfaceTops(int seed, int x, int z)
-  ```
+    ```java
+    CompletableFuture<GeneratedColumn> generateColumn(int seed, long index, int x, int z,
+                                                      LongPredicate stillNeeded,
+                                                      Long2FloatFunction priority)
+    int[] predictSurfaceTops(int seed, int x, int z)
+    ```
 
-  The cubic path is taken only when **both** the world's chunk loader is an `IChunkLoader.Cubic` and the
-  generator is an `IWorldGen.Cubic`. A new column is then built from one `generateColumn(...)` call (the
-  column-level data — a `GeneratedColumn` carries the per-column tint) plus one per-section `generate(...)`
-  for each of its 10 sections; otherwise the column-level `generate(...)` above is used and its
-  `GeneratedChunk` converted with `toHolder()`. For a newly generated column the chunk store also calls
-  `predictSurfaceTops(seed, x, z)` and seeds the column's tree heightmap with the result, one surface Y per
-  block column (1,024 entries). `ChunkStore.supportsCubicSections()` is true when either the loader or the
-  generator is cubic.
+    The cubic path is taken only when **both** the world's chunk loader is an `IChunkLoader.Cubic` and the
+    generator is an `IWorldGen.Cubic`. A new column is then built from one `generateColumn(...)` call (the
+    column-level data — a `GeneratedColumn` carries the per-column tint) plus one per-section `generate(...)`
+    for each of its 10 sections; otherwise the column-level `generate(...)` above is used and its
+    `GeneratedChunk` converted with `toHolder()`. For a newly generated column the chunk store also calls
+    `predictSurfaceTops(seed, x, z)` and seeds the column's tree heightmap with the result, one surface Y per
+    block column (1,024 entries). `ChunkStore.supportsCubicSections()` is true when either the loader or the
+    generator is cubic.
 - The world's active generator hangs off the chunk store:
   `world.getChunkStore()` → `ChunkStore.getGenerator()` / `setGenerator(IWorldGen)` /
   `shutdownGenerator()`. As of 0.7.2 these are declared on `ChunkGrid`, which `ChunkStore` now extends.

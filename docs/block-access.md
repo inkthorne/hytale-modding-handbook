@@ -644,14 +644,14 @@ coordinates throughout.
   `ChunkSection.markNeedsSaving()` after `BlockSection.setTicking` returns `true`.
 - **A section lookup above y 319 (or below 0) completes with `null`** → the world cannot supply that
   section. Which half is missing decides the fix:
-  - loading a stored off-range section needs a cubic **loader** (`IChunkLoader.Cubic`; in 0.7.2 the
-    `RocksDb` storage provider), and
-  - generating a new one needs a cubic loader **and** a cubic generator (`IWorldGen.Cubic`).
+    - loading a stored off-range section needs a cubic **loader** (`IChunkLoader.Cubic`; in 0.7.2 the
+      `RocksDb` storage provider), and
+    - generating a new one needs a cubic loader **and** a cubic generator (`IWorldGen.Cubic`).
 
-  `SectionReader.canHoldY(y)` answers neither question, since it is `true` when either half is cubic.
-  A cubic loader with the default generator, or the default storage with `CubicTestWorldGenProvider`,
-  both report `canHoldY(400) == true`, and both return `null` at y 400 for a section that was never
-  stored there.
+    `SectionReader.canHoldY(y)` answers neither question, since it is `true` when either half is cubic.
+    A cubic loader with the default generator, or the default storage with `CubicTestWorldGenProvider`,
+    both report `canHoldY(400) == true`, and both return `null` at y 400 for a section that was never
+    stored there.
 
 ---
 

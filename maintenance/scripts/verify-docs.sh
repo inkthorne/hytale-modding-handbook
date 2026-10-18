@@ -290,6 +290,31 @@ else
 fi
 
 # =====================================================================
+# The site (Zensical, i.e. Python-Markdown) must show what GitHub shows. maintenance/site/handbook_md.py absorbs
+# the renderer differences it can (a list after a paragraph line, adjacent blockquotes, inline HTML, backslash
+# escapes); this section refuses the two kinds the source itself decides: a heading with a generic outside a
+# code span (GitHub drops `<KeyType>` from the id, keeps `<K, T>`) and a list child indented under 4 spaces
+# (CommonMark nests at the parent's content column, Python-Markdown at 4). See check-site-markdown.py for the
+# measurements. check-site-fixture.py runs THIS text under a corpus of planted defects.
+section "[HARD] Docs markdown renders the same on GitHub and on the site"
+OUT="$(python3 maintenance/scripts/check-site-markdown.py 2>&1)"; RC=$?
+echo "$OUT" | grep -E '^  INFO'
+MD_PAGES="$(echo "$OUT" | sed -n 's/^  INFO  \([0-9]*\) page(s), \([0-9]*\) heading(s) and \([0-9]*\) list item(s) read$/\1/p')"
+MD_HEADS="$(echo "$OUT" | sed -n 's/^  INFO  \([0-9]*\) page(s), \([0-9]*\) heading(s) and \([0-9]*\) list item(s) read$/\2/p')"
+MD_ITEMS="$(echo "$OUT" | sed -n 's/^  INFO  \([0-9]*\) page(s), \([0-9]*\) heading(s) and \([0-9]*\) list item(s) read$/\3/p')"
+if [ "$RC" -ne 0 ] && [ "$RC" -ne 1 ]; then
+  fail "check-site-markdown.py exited $RC, so nothing was linted:"
+  echo "$OUT" | sed 's/^/    /'
+elif [ -z "$MD_PAGES" ] || [ "$MD_PAGES" -eq 0 ] || [ "${MD_HEADS:-0}" -eq 0 ] || [ "${MD_ITEMS:-0}" -eq 0 ]; then
+  fail "the markdown lint read ${MD_PAGES:-no} page(s), ${MD_HEADS:-no} heading(s) and ${MD_ITEMS:-no} list item(s) - a lint that read nothing is a broken check, not a clean run"
+elif [ "$RC" -eq 1 ]; then
+  fail "docs markdown that GitHub and the site would render differently:"
+  echo "$OUT" | grep -E '^  FAIL' | sed 's/^  FAIL  /    /'
+else
+  pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): no generic outside a code span in a heading, no list child indented under 4"
+fi
+
+# =====================================================================
 section "[ADVISORY] Referenced asset files exist"
 # High-signal media references (.blockymodel/.blockyanim/.png/.ogg under
 # Common/Server). JSON paths are skipped — many are illustrative examples.
@@ -993,6 +1018,9 @@ section "[HARD] The gates' own fixtures pass"
 # after a negative control that a stale page must FAIL) takes 41 s on a machine at load 11-20 and 150 s
 # at load 30-60, 1.6 s for the cases alone, so it is run here. Its mutation pass runs on a thread pool,
 # and its shims are written once before the pool starts (a per-case write failed with ETXTBSY under load).
+# check-site-fixture.py --mutations (the docs-site gates: the sections "Docs markdown renders the same on GitHub and on the
+# site", and, as they are added, the sidebar and the site build, each run as text in a temp root with planted defects,
+# and the scripts they call) is wired here for the same reason as the drift one.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -1010,6 +1038,7 @@ check-links-fixture.py --mutations
 check-doc-fences-fixture.py --mutations
 check-asset-drift-fixture.py --mutations
 check-double-run-fixture.py --mutations
+check-site-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,

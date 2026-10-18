@@ -1,0 +1,8 @@
+# The one direct dependency of the docs site. requirements.txt is `uv pip compile` output (hashes for every wheel
+# of every platform, so maintainers on Linux, macOS and Windows and the CI runner install the same bytes):
+#   uv pip compile maintenance/site/requirements.in --universal --generate-hashes --python-version 3.12 \
+#       --only-binary :all: -o maintenance/site/requirements.txt
+# and is installed only with `--require-hashes --only-binary :all:` (maintenance/scripts/site-env.sh does, and
+# so does .github/workflows/pages.yml). A public repo's deploy installs nothing that is not hashed.
+# Changing the pin is its own item: see maintenance/site/README.md.
+zensical==0.0.71

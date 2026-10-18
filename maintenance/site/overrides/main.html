@@ -1,0 +1,38 @@
+{#-
+  The head tags the Jekyll site got from jekyll-seo-tag, which Zensical does not emit: google-site-verification,
+  og:* and twitter:* from the page title, description and URL, and JSON-LD typed by the page's `seo: type`
+  frontmatter (the home page, which declares none, is a WebSite as it was). <meta name=description> and the
+  canonical link come from Zensical itself. Every attribute value goes through `|e` (autoescape is off in this
+  environment: a quote in a description would otherwise end the attribute), and the JSON-LD through `tojson`.
+-#}
+{% extends "base.html" %}
+{% block extrahead %}
+  {% set title = (page.meta and page.meta.title) or page.title | striptags %}
+  {% set description = (page.meta and page.meta.description) or config.site_description %}
+  {% set url = page.canonical_url %}
+  {% set is_home = page.url in ('', 'index.html') %}
+  {% if config.extra.google_site_verification %}
+    <meta name="google-site-verification" content="{{ config.extra.google_site_verification | e }}">
+  {% endif %}
+  <meta property="og:title" content="{{ title | e }}">
+  <meta property="og:locale" content="en_US">
+  {% if description %}
+    <meta property="og:description" content="{{ description | e }}">
+  {% endif %}
+  {% if url %}
+    <meta property="og:url" content="{{ url | e }}">
+  {% endif %}
+  <meta property="og:site_name" content="{{ config.site_name | e }}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{{ title | e }}">
+  {% set seo_type = page.meta.seo.type if (page.meta and page.meta.seo) else ("WebSite" if is_home else "") %}
+  {% if seo_type %}
+    {% if is_home %}
+      {% set ld = {"@context": "https://schema.org", "@type": seo_type, "description": description, "headline": title, "name": config.site_name, "url": url} %}
+    {% else %}
+      {% set ld = {"@context": "https://schema.org", "@type": seo_type, "description": description, "headline": title, "url": url} %}
+    {% endif %}
+    <script type="application/ld+json">{{ ld | tojson }}</script>
+  {% endif %}
+{% endblock %}

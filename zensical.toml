@@ -1,0 +1,97 @@
+# The docs site (https://inkthorne.github.io/hytale-modding-handbook/), built by Zensical from docs/ by
+# .github/workflows/pages.yml. Build it locally the way verify-docs.sh does:
+#   maintenance/scripts/site-env.sh                     # once: the pinned venv, installed with --require-hashes
+#   PYTHONPATH=maintenance/site HANDBOOK_REF=main ~/.cache/handbook-site/venv/bin/zensical build --clean
+# The pins are maintenance/site/requirements.txt. CLAUDE.md says what a zensical bump must re-run.
+#
+# docs_dir and site_dir must lie inside this file's directory, and zensical writes `.cache/` beside it and
+# serves a stale HANDBOOK_REF out of it, so every build here passes --clean (both are in .gitignore).
+
+[project]
+site_name = "Hytale Modding Handbook"
+site_description = "The Hytale Modding Handbook — a server-plugin & asset API reference with the descriptions, gotchas, and working examples."
+site_url = "https://inkthorne.github.io/hytale-modding-handbook/"
+repo_url = "https://github.com/inkthorne/hytale-modding-handbook"
+edit_uri = "edit/main/docs/"
+docs_dir = "docs"
+# Every page keeps its Jekyll URL (`commands.html`), so no old link or search result moves.
+use_directory_urls = false
+
+# The sidebar is generated from README.md. Edit README.md and run maintenance/scripts/generate-site-nav.py
+# --write; verify-docs.sh fails when the block below differs from a fresh generation.
+# BEGIN GENERATED NAV (maintenance/scripts/generate-site-nav.py from README.md; do not edit by hand)
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [ { "Overview" = "00-overview.md" }, { "Documentation Index" = "01-index.md" }, { "Pack vs Plugin Structure" = "02-structure.md" }, { "Plugin Lifecycle" = "plugin-lifecycle.md" }, { "Permissions" = "permissions.md" } ] },
+  { "Core Systems" = [ { "Components" = "components.md" }, { "Codecs" = "codecs.md" }, { "Networking" = "networking.md" }, { "Math" = "math.md" } ] },
+  { "Commands & UI" = [ { "Commands" = "commands.md" }, { "UI" = "ui.md" }, { "UI Elements" = "ui-elements.md" }, { "UI Styling" = "ui-styling.md" }, { "UI Templates" = "ui-templates.md" }, { "UI API" = "ui-api.md" }, { "i18n" = "i18n.md" } ] },
+  { "World & Environment" = [ { "World" = "world.md" }, { "World Chunks" = "world-chunks.md" }, { "Block Access" = "block-access.md" }, { "World & Chunk Lifecycle Events" = "world-lifecycle-events.md" }, { "World Events" = "world-events.md" }, { "Universes & Saves" = "universe-saves.md" }, { "Trigger Volumes" = "trigger-volumes.md" }, { "Camera" = "camera.md" }, { "Blocks" = "blocks.md" }, { "Connected Blocks" = "blocks-connected.md" }, { "Blocks Java API" = "blocks-java-api.md" }, { "Fluids" = "fluids.md" }, { "Prefabs" = "prefabs.md" }, { "Prefab Categories" = "prefabs-categories.md" }, { "Collision" = "collision.md" } ] },
+  { "Entities" = [ { "Entities" = "entities.md" }, { "Player" = "player.md" }, { "NPC" = "npc.md" }, { "NPC Roles" = "npc-roles.md" }, { "NPC Spawning" = "npc-spawning.md" }, { "NPC Combat" = "npc-combat.md" }, { "Encounters" = "encounters.md" }, { "Abilities and Runes" = "abilities.md" }, { "Mounts" = "mounts.md" }, { "Deployables" = "deployables.md" }, { "Beams" = "beams.md" }, { "Drops" = "drops.md" }, { "Projectiles" = "projectiles.md" } ] },
+  { "Combat & Effects" = [ { "Combat" = "combat.md" }, { "Effects & Stats" = "effects-stats.md" } ] },
+  { "Items" = [ { "Items" = "items.md" }, { "Block Items" = "items-blocks.md" }, { "Consumables" = "items-consumables.md" }, { "Crafting" = "items-crafting.md" }, { "Tools" = "items-tools.md" }, { "Weapons" = "items-weapons.md" } ] },
+  { "World Generation" = [ { "World Generation" = "worldgen.md" }, { "Zones" = "worldgen-zones.md" }, { "Biomes" = "worldgen-biomes.md" }, { "Terrain" = "worldgen-terrain.md" }, { "Caves" = "worldgen-caves.md" }, { "Prefabs" = "worldgen-prefabs.md" } ] },
+  { "Interactions" = [ { "Interactions" = "interactions.md" }, { "Flow Control" = "interactions-flow.md" }, { "Combo System" = "interactions-combo.md" }, { "Context" = "interactions-context.md" }, { "Operations" = "interactions-operations.md" }, { "World Interactions" = "interactions-world.md" }, { "Combat Interactions" = "interactions-combat.md" }, { "The Double Run" = "interactions-double-run.md" } ] },
+  { "Assets & Events" = [ { "Assets" = "assets.md" }, { "Asset Editor" = "asset-editor.md" }, { "Blockymodel Format" = "blockymodel-format.md" }, { "Blockyanim Format" = "blockyanim-format.md" }, { "Audio" = "audio.md" }, { "Music" = "audio-music.md" }, { "Events" = "events.md" }, { "Adventure" = "adventure.md" }, { "Singleplayer" = "singleplayer.md" } ] },
+  { "Utilities" = [ { "Inventory" = "inventory.md" }, { "Tasks" = "tasks.md" } ] },
+]
+# END GENERATED NAV
+
+[project.theme]
+language = "en"
+custom_dir = "maintenance/site/overrides"
+features = [
+  "content.action.edit",
+  "content.code.copy",
+  "content.code.select",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+# The google-site-verification token the Jekyll site carried in docs/_config.yml; overrides/main.html emits it.
+[project.extra]
+google_site_verification = "lda6iuJ9CP3rDGQrFaLuMYyygR61GKYVzTFU8vCwSac"
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+tables = {}
+# The site's anchors are GitHub's: the character rule (maintenance/site/handbook_md.py github(), which is
+# check-links.py's char_slug), and GitHub's -N numbering of duplicates, applied by the extension below.
+toc.permalink = true
+toc.slugify = { object = "handbook_md.github" }
+pymdownx.betterem = {}
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}
+pymdownx.tasklist.custom_checkbox = true
+# Links that leave docs/ go to github.com at HANDBOOK_REF (default main); duplicate anchors get -N; a list after a
+# paragraph line is a list and two adjacent blockquotes are two boxes, as on GitHub. No list extension from PyPI is
+# used: see handbook_md.py (d) for what mdx_breakless_lists and mdx_truly_sane_lists were measured to do.
+handbook_md.base = "https://github.com/inkthorne/hytale-modding-handbook"

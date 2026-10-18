@@ -24,16 +24,27 @@ and then the sabotages that must move exactly one type:
 Each sabotage must also leave every other planted type where it was. Last, on the real extracted assets: the 13a
 population is 58 types with ModifyInventory 38 and ChangeStat 135; with no item edge it is 46 (2 and 25), and the 12
 types the brief names fall out. A run that cannot show the planted defect, or whose real figures differ, is VOID (exit 2).
+
+Review of b0b119a..c4e97d1 added, each with the negative control that shows the defect first:
+  MINOR-2  a template item whose InteractionVars two held children inherit: its object is counted once (the keying by the child's file counted it twice)
+  MAJOR-1  the routes no asset string names: a block's Collision* (also in a state variant), OnBreak*, a stat's Min/MaxValueEffects, RunRootInteraction
+           effects of a volume that targets Npc (asset, instance data, prefab) or that a signal runs, and an item an NPC wears with an Equipped root; each
+           with its own label and a decoy that must not count (a Primary root of a block, a Player-only volume, an item no NPC wears). The walk without
+           the routes does not reach any of them.
+  MINOR-3  check_table: a deciding file outside the type's class chain, and an outcome its census sim label cannot carry (Explode=once), are problems;
+           the old per-row rule (the hook is declared at the recorded line) passed both
 """
 from __future__ import annotations
-import argparse, json, pathlib, shutil, sys
+import argparse, json, pathlib, re, shutil, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import usage                                         # noqa: E402
 
 TYPES = {'ChangeStat', 'ModifyInventory', 'Explode', 'Repeat', 'Interrupt', 'Condition', 'ClearEntityEffect',
-         'StatsCondition', 'TriggerCooldown', 'Simple', 'Selector', 'Charging', 'Wielding', 'Projectile', 'SendMessage', 'PullEntityAbility', 'GroundedCondition'}
+         'StatsCondition', 'TriggerCooldown', 'Simple', 'Selector', 'Charging', 'Wielding', 'Projectile', 'SendMessage', 'PullEntityAbility', 'GroundedCondition',
+         'Serial', 'ChangeState', 'RemoveEntity', 'BreakBlock', 'DestroyBlock', 'SpawnNPC', 'ApplyEffect', 'DamageEntity', 'SendBeacon', 'ApplyForce', 'Replace',
+         'Parallel', 'AttachBeam', 'Mount', 'LaunchProjectile', 'Camera', 'CancelChain', 'Door'}
 MARK = '.double-run-usage-test'
 
 
@@ -43,7 +54,7 @@ def put(root: pathlib.Path, rel: str, doc) -> None:
     p.write_text(json.dumps(doc))
 
 
-def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bait_held=False) -> None:
+def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bait_held=False, vol_npc='Npc', vol_player='Player') -> None:
     if server.exists():
         shutil.rmtree(server)
     tag = {'Tags': {'Attack': ['Melee']}}
@@ -104,6 +115,48 @@ def plant(server: pathlib.Path, *, attack_held=True, attack_notattack=False, bai
                                                                       'ProjectileHit': {'Interactions': [{'Type': 'GroundedCondition'}]}}})
     (server / 'EncounterManager').mkdir(parents=True, exist_ok=True)
     (server / 'Abilities').mkdir(parents=True, exist_ok=True)
+    plant_review(server, vol_npc, vol_player)
+
+
+def plant_review(server: pathlib.Path, vol_npc='Npc', vol_player='Player') -> None:
+    """What the review of b0b119a..c4e97d1 added to the tree (MINOR-2, MAJOR-1)."""
+    tag = {'Tags': {'Attack': ['Melee']}}
+    for name, t in [('Int_Shared', 'Serial'), ('Int_Own', 'Selector'), ('Int_Pair', 'Mount'), ('Int_Decoy', 'Camera'), ('Int_Death', 'CancelChain'),
+                    ('Int_Collide', 'ChangeState'), ('Int_Leave', 'RemoveEntity'), ('Int_Break', 'SpawnNPC'), ('Int_VolPlayer', 'DamageEntity'), ('Int_VolSignal', 'SendBeacon'),
+                    ('Int_VolInst', 'ApplyForce'), ('Int_VolPrefab', 'Replace'), ('Int_VolNpc', 'LaunchProjectile'), ('Int_Worn', 'Parallel'), ('Int_Unworn', 'AttachBeam')]:
+        put(server, f'Item/Interactions/{name}.json', {'Type': t})
+    for name, i in [('Root_Pair', 'Int_Pair'), ('Root_Decoy', 'Int_Decoy'), ('Root_Death', 'Int_Death'), ('Root_Collide', 'Int_Collide'), ('Root_Leave', 'Int_Leave'),
+                    ('Root_Break', 'Int_Break'), ('Root_VolPlayer', 'Int_VolPlayer'), ('Root_VolSignal', 'Int_VolSignal'),
+                    ('Root_VolInst', 'Int_VolInst'), ('Root_VolPrefab', 'Int_VolPrefab'), ('Root_VolNpc', 'Int_VolNpc'), ('Root_Worn', 'Int_Worn'), ('Root_Unworn', 'Int_Unworn')]:
+        put(server, f'Item/RootInteractions/{name}.json', {'Interactions': [i], **(tag if name == 'Root_Pair' else {})})
+    # MINOR-2: a template whose InteractionVars two held children inherit; one child overrides the var, so the template's is the other child's
+    put(server, 'Item/Items/Template_Pair.json', {'Interactions': {'Primary': 'Root_Pair'},
+                                                       'InteractionVars': {'Shared': {'Interactions': [{'Type': 'Serial'}]}, 'Own': {'Interactions': [{'Type': 'Serial'}]},
+                                                                           'Dead': {'Interactions': [{'Type': 'Door'}]}}})
+    put(server, 'Item/Items/Weapon_Kid_A.json', {'Parent': 'Template_Pair', 'InteractionVars': {'Dead': {'Interactions': [{'Type': 'Mount'}]}}})
+    put(server, 'Item/Items/Weapon_Kid_B.json', {'Parent': 'Template_Pair', 'InteractionVars': {'Own': {'Interactions': [{'Type': 'Selector'}]}, 'Dead': {'Interactions': [{'Type': 'Mount'}]}}})
+    put(server, 'NPC/Roles/Npc_D.json', {'HotbarItems': ['Weapon_Kid_A', 'Weapon_Kid_B']})
+    # MAJOR-1: the routes. A block's Collision chain (and one in a state variant), an OnBreak chain, a block with both, a decoy Primary root
+    put(server, 'Item/Items/Block_Collide.json', {'BlockType': {'Interactions': {'CollisionEnter': 'Root_Collide', 'Primary': 'Root_Decoy'},
+                                                                 'State': {'Definitions': {'Open': {'Interactions': {'CollisionLeave': 'Root_Leave'}}}}}})
+    put(server, 'Item/Items/Block_Break.json', {'BlockType': {'Interactions': {'OnBreak': 'Root_Break'}}})
+    put(server, 'Item/Block/Blocks/Block_Both.json', {'Interactions': {'Collision': {'Interactions': [{'Type': 'BreakBlock'}]}, 'OnBreakImpact': {'Interactions': [{'Type': 'DestroyBlock'}]}}})
+    put(server, 'Entity/Stats/Stat_Test.json', {'InitialValue': 1, 'MinValueEffects': {'Interactions': {'Interactions': [{'Type': 'ApplyEffect', 'EffectId': 'E'}]}}, 'MaxValueEffects': {'TriggerAtZero': True}})
+    put(server, 'Entity/Stats/Stat_Decoy.json', {'InitialValue': 1})
+    # trigger volumes: an NPC volume (asset), a Player volume (decoy), a Player volume with a signal event, instance data, a prefab, a missing root
+    put(server, 'TriggerVolumes/Effects/Vol_Npc.json', {'Effects': [{'Type': 'RunRootInteraction', 'Event': 'ENTER', 'RootInteraction': 'Root_VolNpc'},
+                                                                      {'Type': 'RunRootInteraction', 'Event': 'TICK', 'RootInteraction': 'Root_Missing'}], 'TargetTypes': [vol_npc]})
+    put(server, 'TriggerVolumes/Effects/Vol_Player.json', {'Effects': [{'Type': 'RunRootInteraction', 'Event': 'ENTER', 'RootInteraction': 'Root_VolPlayer'}], 'TargetTypes': [vol_player]})
+    put(server, 'TriggerVolumes/Effects/Vol_Signal.json', {'Effects': [{'Type': 'RunRootInteraction', 'Event': 'SIGNAL_RECEIVED', 'RootInteraction': 'Root_VolSignal'}], 'TargetTypes': ['Player']})
+    put(server, 'Instances/Inst/resources/TriggerVolumeData.json', {'Volumes': {'v1': {'TargetTypes': ['Npc'], 'Effects': [{'Type': 'RunRootInteraction', 'Event': 'TICK', 'RootInteraction': 'Root_VolInst'}]}}})
+    put(server, 'Prefabs/P.prefab.json', {'entities': [{'Components': {'TriggerVolume': {'TargetTypes': ['Npc'], 'Effects': [{'Type': 'RunRootInteraction', 'Event': 'ENTER', 'RootInteraction': 'Root_VolPrefab'}]}}}]})
+    # held and worn items: an NPC wears an item with an Equipped root (through Armor); another item has a Held root and nobody holds it
+    put(server, 'Item/Items/Armor_Eq.json', {'Interactions': {'Equipped': {'Interactions': ['Int_Worn']}, 'Primary': 'Root_Decoy'}})
+    put(server, 'Item/Items/Item_HeldUnworn.json', {'Interactions': {'Held': {'Interactions': ['Int_Unworn']}}})
+    put(server, 'NPC/Roles/Npc_E.json', {'Armor': ['Armor_Eq']})
+    # DeathInteraction: one that names a root, one that names nothing
+    put(server, 'NPC/Roles/Npc_F.json', {'DeathInteraction': 'Root_Death'})
+    put(server, 'NPC/Roles/Npc_G.json', {'DeathInteraction': 'Root_NotThere'})
 
 
 def types_of(r, key='run'):
@@ -139,7 +192,7 @@ def main():
     plant(server)
     r = usage.analyse(server, TYPES)
     run, allc = types_of(r), set(r['all_edges'])
-    if r['n_npc'] != 3 or not r['held']['attack']:
+    if r['n_npc'] != 7 or not r['held']['attack']:
         print(f'VOID  the planted tree is not what the test thinks: {r["n_npc"]} NPC seeds, {len(r["held"]["attack"])} held items with an Attack root')
         return 2
     # the instrument must SEE the defects first: the 13a graph reaches the bait's ChangeStat and the non-Attack ModifyInventory
@@ -160,8 +213,8 @@ def main():
     h = r['held']
     check('held strings: 1 droplist reference and 1 id that is no item are counted and given no edge',
           len(h['droplist']) == 1 and len(h['missing']) == 1, (len(h['droplist']), len(h['missing'])))
-    check('held items with an Attack root: 4 strings (Held, Compute, Parent, Off); 1 without (NotAttack)',
-          len(h['attack']) == 4 and len(h['no_attack']) == 1, (len(h['attack']), len(h['no_attack'])))
+    check('held items with an Attack root: 6 strings (Held, Compute, Parent, Off, the two kids of Template_Pair); 1 without (NotAttack)',
+          len(h['attack']) == 6 and len(h['no_attack']) == 1, (len(h['attack']), len(h['no_attack'])))
     check('compute names are read from the roles: Weapons', h['fields'] == ['Weapons'], h['fields'])
     lab = r['labels']
     check('label: a plain NPC chain runs on NPC', lab.get('Simple') == {'NPC'}, lab.get('Simple'))
@@ -170,6 +223,55 @@ def main():
     check("label: an ability projectile's ProjectileSpawn chain runs on the caster", lab.get('PullEntityAbility') == {'A-caster'}, lab.get('PullEntityAbility'))
     check("label: an ability projectile's ProjectileHit chain runs on the projectile's own manager", lab.get('GroundedCondition') == {'A-entity'}, lab.get('GroundedCondition'))
     check('label: a plain ability cast runs on the caster', lab.get('StatsCondition') == {'A-caster'}, lab.get('StatsCondition'))
+    # ---- MINOR-2: an object is keyed by the file that defines it. Negative control first: keyed by the held item's own file, as before the review, the template's
+    # InteractionVars are counted once per held child (Serial: Shared via both kids, Own via Weapon_Kid_A, = 3), and the instrument must see that
+    orig_by = usage.Assets.by_definer
+    usage.Assets.by_definer = lambda self, stem, field, keys=None: ([(self.items[stem][0], self.item_vars(stem))] if field == 'InteractionVars' else orig_by(self, stem, field, keys))
+    try:
+        old_objs = usage.analyse(server, TYPES)['run_objs']
+    finally:
+        usage.Assets.by_definer = orig_by
+    if len(old_objs.get('Serial', {})) != 3:
+        print(f'VOID  keyed by the child, the planted template is counted {len(old_objs.get("Serial", {}))} time(s), wanted 3: the duplicate is invisible')
+        return 2
+    check('keyed by the held item\'s own file (the old rule) a template shared by two held children is counted once per child (the defect is visible: Serial 3)', True)
+    ser = r['run_objs'].get('Serial', {})
+    check('MINOR-2: a template shared by two held children is counted once: Serial 2 (Shared, and Own for the child that did not override it), both defined in Template_Pair',
+          len(ser) == 2 and all(pathlib.Path(f).name == 'Template_Pair.json' for f, _ in ser), sorted(ser))
+    sel = [k for k in r['run_objs'].get('Selector', {}) if pathlib.Path(k[0]).name == 'Weapon_Kid_B.json']
+    check("MINOR-2: a var a child overrides is counted at the child's file, once (Selector at Weapon_Kid_B)", len(sel) == 1, sel)
+    check("MINOR-2: a template var that every held child overrides never runs and is not counted (Door)", 'Door' not in run, sorted(run))
+
+    # ---- MAJOR-1: the routes. The walk without them does not reach any of these types (the defect), with them each has its own label; a decoy per route does not count
+    route_types = {'ChangeState': 'NPC collision', 'RemoveEntity': 'NPC collision', 'BreakBlock': 'NPC collision', 'DestroyBlock': 'NPC block break',
+                   'SpawnNPC': 'NPC block break', 'ApplyEffect': 'NPC stat effect', 'LaunchProjectile': 'NPC trigger volume', 'SendBeacon': 'NPC trigger volume',
+                   'ApplyForce': 'NPC trigger volume', 'Replace': 'NPC trigger volume', 'Parallel': 'NPC held item'}
+    seen_by_base = sorted(set(route_types) & set(r['run_base']))
+    if seen_by_base:
+        print(f'VOID  the walk without the routes already reaches {seen_by_base}: the planted routes are invisible to the control')
+        return 2
+    check('MAJOR-1 negative control: the walk without the routes reaches none of the 11 planted route types', not seen_by_base)
+    for t, want in route_types.items():
+        check(f'MAJOR-1: {t} is reached with the label {want!r} and no other', lab.get(t) == {want}, lab.get(t))
+    check('MAJOR-1: a block\'s Primary root, a Player-only volume\'s root and an item no NPC wears do not count (Camera, DamageEntity, AttachBeam)',
+          not ({'Camera', 'DamageEntity', 'AttachBeam'} & set(run)), sorted(run))
+    rv = r['routes']['volume']
+    check('MAJOR-1: 6 RunRootInteraction effects found in the planted volumes; 4 run on an NPC, 1 names no root, 1 is a Player volume',
+          (len(rv['effects']), len(rv['taken']), len(rv['missing'])) == (6, 4, 1), (len(rv['effects']), len(rv['taken']), len(rv['missing'])))
+    check('MAJOR-1: a block with a Collision and an OnBreakImpact chain is two seeds with two labels (BreakBlock only on collision, DestroyBlock only on block break)',
+          lab.get('BreakBlock') == {'NPC collision'} and lab.get('DestroyBlock') == {'NPC block break'})
+    check('MAJOR-1: the route counts of the planted tree: collision 2 seed files, block break 2, stat 1, volume 4, held 1',
+          tuple(len(r['routes'][k]['seeds']) for k in ('collision', 'blockbreak', 'stat', 'volume', 'held')) == (2, 2, 1, 4, 1),
+          tuple(len(r['routes'][k]['seeds']) for k in ('collision', 'blockbreak', 'stat', 'volume', 'held')))
+    inline = {}
+    for t_ in ('BreakBlock', 'DestroyBlock', 'ApplyEffect'):
+        for (f_, path_), labs_ in r['run_objs'].get(t_, {}).items():
+            o_ = usage.object_at(r['assets'], f_, path_, r['overrides'], labs_)
+            inline[t_] = (o_ or {}).get('Type')
+    check('MAJOR-1: an object inside a route\'s document is found again by (file, path, labels), also for a block that has two routes', inline == {'BreakBlock': 'BreakBlock', 'DestroyBlock': 'DestroyBlock', 'ApplyEffect': 'ApplyEffect'}, inline)
+    check('MAJOR-1: a DeathInteraction that names a root is reached by the string walk; one that names none is reported as not reached',
+          sorted((pathlib.Path(p_).name, rid, ok) for p_, rid, ok in r['death']) == [('Npc_F.json', 'Root_Death', True), ('Npc_G.json', 'Root_NotThere', False)], r['death'])
+    check('MAJOR-1: a DeathInteraction root is a plain NPC chain (CancelChain on NPC)', lab.get('CancelChain') == {'NPC'}, lab.get('CancelChain'))
     base = run
     rows, tot = usage.modify_inventory_walk(r['assets'], r['run_objs'], r['overrides'])
     kinds = {Path_.name: k for (f, p_, act, gate, beh, k, v) in rows for Path_ in [pathlib.Path(f)]}
@@ -191,6 +293,8 @@ def main():
     moved("sabotage: Root_Held loses its Attack tag -> Explode and the item's InteractionVars (Wielding) leave", dict(attack_held=False), lost=['Explode', 'Wielding'])
     moved("sabotage: Root_NotAttack gains the tag -> SendMessage and the item's InteractionVars (Projectile) join", dict(attack_notattack=True), gained=['SendMessage', 'Projectile'])
     moved("sabotage: the bait item is held -> only ChangeStat joins", dict(bait_held=True), gained=['ChangeStat'])
+    moved("sabotage: the Player-only volume targets Npc -> only DamageEntity joins (the route is the volume's TargetTypes)", dict(vol_player='Npc'), gained=['DamageEntity'])
+    moved("sabotage: the Npc volume targets Player -> only LaunchProjectile leaves", dict(vol_npc='Player'), lost=['LaunchProjectile'])
     plant(server)
 
     # ---- negative control: the 13a rule (every item id is an edge) must count the bait and the non-Attack weapon
@@ -225,8 +329,23 @@ def main():
     check('real: with no item edge it is 46 types, ModifyInventory 2, ChangeStat 25',
           (len(ni), ni.get('ModifyInventory'), ni.get('ChangeStat')) == (46, 2, 25), (len(ni), ni.get('ModifyInventory'), ni.get('ChangeStat')))
     check('real: the 12 types that fall out without item edges are the brief\'s', fell == want, fell)
-    check('real: the run-reached population sits between the two (no type outside the 13a population)',
-          set(ni) <= set(real['run']) <= set(allr), (sorted(set(real['run']) - set(allr)), sorted(set(ni) - set(real['run']))))
+    check('real: the run-reached population of the seeds without the routes sits between the two (no type outside the 13a population)',
+          set(ni) <= set(real['run_base']) <= set(allr), (sorted(set(real['run_base']) - set(allr)), sorted(set(ni) - set(real['run_base']))))
+    want10 = ['ChangeBlock', 'ExitInstance', 'HubPortal', 'LaunchPad', 'Portal', 'PortalReturn', 'SpawnNPC', 'TeleportConfigInstance', 'TeleportInstance', 'Teleporter']
+    check('real: the 48 types of 13b are reproduced by the seeds without the routes', len(real['run_base']) == 48, len(real['run_base']))
+    check('real: the routes add the 10 types the review found (58 in all), all of them from the collision route but SpawnNPC, which the block-break route reaches too',
+          sorted(set(real['run']) - set(real['run_base'])) == want10 and len(real['run']) == 58
+          and sorted(real['routes']['collision']['new']) == want10 and real['routes']['blockbreak']['new'] == ['SpawnNPC'] and not real['routes']['stat']['new'] and not real['routes']['volume']['new'],
+          (sorted(set(real['run']) - set(real['run_base'])), len(real['run'])))
+    check('real: seed files per route (collision, block break, stat, volume, held) are 58, 2, 3, 12, 0',
+          tuple(len(real['routes'][k]['seeds']) for k in ('collision', 'blockbreak', 'stat', 'volume', 'held')) == (58, 2, 3, 12, 0),
+          tuple(len(real['routes'][k]['seeds']) for k in ('collision', 'blockbreak', 'stat', 'volume', 'held')))
+    # MINOR-2 by a route that shares nothing with usage.py: the reviewer's dupcount re-keyed 4,272 rows to 4,127 distinct objects
+    check('real: the objects of the seeds without the routes are 4127, each keyed by the file that defines it (the reviewer counted 4,272 rows, 4,127 distinct)',
+          sum(len(v) for v in real['run_base_objs'].values()) == 4127, sum(len(v) for v in real['run_base_objs'].values()))
+    check('real: every DeathInteraction a role names is reached by the string walk (3 files)', len(real['death']) == 3 and all(ok for _, _, ok in real['death']), real['death'])
+    check('real: no item an NPC holds or wears carries a Held, HeldOffhand or Equipped root (the held route is empty at 0.7.2)', not real['routes']['held']['hits'] and real['routes']['held']['worn_strings'] > 0,
+          (real['routes']['held']['hits'], real['routes']['held']['worn_strings']))
     # ---- the verdict table is re-checked against the population and the source
     tsv = HERE / 'verdict-table.tsv'
     src = pathlib.Path(a.src)
@@ -244,7 +363,7 @@ def main():
         lines = edit(list(base_lines))
         p = tdir / name
         p.write_text('\n'.join(lines))
-        return usage.check_table(p, src, runset)[0]
+        return usage.check_table(p, src, runset, info)[0]
     first = next(i for i, l in enumerate(base_lines) if l and not l.startswith('#'))
     cols = base_lines[first].split('\t')
     pr = variant('missing.tsv', lambda L: L[:first] + L[first + 1:])
@@ -272,6 +391,55 @@ def main():
         return out
     pr = variant('unknown.tsv', six_unknown)
     check('verdict table: more than K = 5 unknown verdicts fail', any('more than' in x for x in pr), pr)
+
+    # ---- MINOR-3: the deciding file must be in the type's class chain, and the outcome must be one its census sim label can carry.
+    # The reviewer's planted rows: ChangeStat=once citing ApplyEffectInteraction.java:91 simulateFirstRun, and Explode=once. The old per-row rule (the hook is declared at the
+    # recorded line of the recorded file) passed both; that is the defect, and the instrument must see it before the new rules are credited.
+    def old_rule(cols):
+        try:
+            text = (src / 'com/hypixel/hytale' / cols[5]).read_text().split('\n')
+            return re.search(r'\bvoid ' + re.escape(cols[4]) + r'\(', text[int(cols[6]) - 1]) is not None
+        except (OSError, ValueError, IndexError):
+            return False
+
+    def edit_row(L, t, **kw):
+        names = ['type', 'outcome', 'basis', 'write', 'hook', 'file', 'line', 'reason']
+        out = list(L)
+        for i, l in enumerate(out):
+            c = l.split('\t')
+            if l and not l.startswith('#') and c[0] == t:
+                d = dict(zip(names, c))
+                d.update(kw)
+                out[i] = '\t'.join(d[k] for k in names)
+                return out, [d[k] for k in names]
+        raise KeyError(t)
+    ae = next(l.split('\t') for l in base_lines if l.startswith('ApplyEffect\t'))
+    wrong = dict(outcome='once', basis='read', hook=ae[4], file=ae[5], line=ae[6])
+    L1, cols1 = edit_row(base_lines, 'ChangeStat', **wrong)
+    L2, cols2 = edit_row(base_lines, 'Explode', outcome='once')
+    L3, cols3 = edit_row(base_lines, 'ChangeStat', hook=ae[4], file=ae[5], line=ae[6])
+    if not (old_rule(cols1) and old_rule(cols2) and old_rule(cols3)):
+        print('VOID  the old per-row rule does not accept the planted wrong rows: the defect is not reproduced')
+        return 2
+    check('MINOR-3 negative control: the old per-row rule (hook declared at the recorded line) accepts ChangeStat=once citing ApplyEffectInteraction, Explode=once, and ChangeStat citing ApplyEffectInteraction', True)
+    pr = variant('minor3a.tsv', lambda L: edit_row(L, 'ChangeStat', **wrong)[0])
+    check('MINOR-3: ChangeStat=once citing ApplyEffectInteraction.java:91 is reported twice: the file is not in ChangeStat\'s class chain, and once cannot sit on sim firstRun',
+          any('ApplyEffectInteraction.java is not in the class chain of ChangeStat' in x for x in pr) and any('ChangeStat: outcome once cannot sit on sim firstRun' in x for x in pr), pr)
+    pr = variant('minor3b.tsv', lambda L: edit_row(L, 'Explode', outcome='once')[0])
+    check('MINOR-3: Explode=once is reported (its simulation pass runs firstRun again), and the file is accepted (it is in the chain)',
+          any('Explode: outcome once cannot sit on sim firstRun' in x for x in pr) and not any('class chain' in x for x in pr), pr)
+    pr = variant('minor3c.tsv', lambda L: edit_row(L, 'ChangeStat', hook=ae[4], file=ae[5], line=ae[6])[0])
+    check('MINOR-3: a doubled ChangeStat citing a hook of another class is reported for the file alone (doubled can sit on sim firstRun)',
+          any('ApplyEffectInteraction.java is not in the class chain of ChangeStat' in x for x in pr) and not any('cannot sit' in x for x in pr), pr)
+    pr = variant('minor3d.tsv', lambda L: edit_row(L, 'ApplyEffect', outcome='doubled')[0])
+    check('MINOR-3: ApplyEffect=doubled is reported (its simulation pass does nothing, so nothing runs twice)', any('ApplyEffect: outcome doubled cannot sit on sim no-op' in x for x in pr), pr)
+    pr = variant('minor3e.tsv', lambda L: L + ['\t'.join(['NotAType', 'once', 'read', 'none', cols[4], cols[5], cols[6], 'x'])])
+    check('MINOR-3: a row for a name that is not a registered interaction type is reported', any('NotAType is not a registered interaction type' in x for x in pr), pr)
+    check('MINOR-3: every shipped row is accepted by the outcome/sim mapping (the mapping was decided from the rows and holds for all of them)',
+          not [x for x in usage.check_table(tsv, src, runset, info)[0] if 'cannot sit' in x or 'class chain' in x])
+    # the page tables: one row per run-reached type
+    tb = usage.page_tables(real, trows)
+    check('--tables: one table row per run-reached type', len([l for l in tb.split('\n') if l.startswith('| `')]) == len(runset), len(tb))
     print(f'---- {len(fails)} failed')
     return 1 if fails else 0
 

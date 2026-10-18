@@ -12,66 +12,94 @@ seeds: NPC 1858 files; encounter 67; ability 68
    held-item strings in NPC files: 202 (86 distinct): 140 with an Attack-tagged root (47 distinct items), 59 with no Attack-tagged root, 2 droplist references, 1 not an item id
    with no item edge at all (the 13a seeds): 46 types; ModifyInventory 2 objects, ChangeStat 25; 12 of the 58 fall out: ChangeActiveSlot, ContextualUseNPC, CycleBlockGroup, DragPlaceBlock, DurabilityCondition, EquipItem, ExtrudePlaceBlock, MovementCondition, PlaceModeSelect, RefillContainer, SpawnNPC, SurfaceDrawPlaceBlock
    held weapons and off-hand items with an Attack-tagged root bring back 2: DurabilityCondition, MovementCondition
-   run-reached: 48 of 135 types; ModifyInventory 17 objects, ChangeStat 114
-   item-only (in 1, not in 2): 10; in 2 and not in 1: 0
-   not reached by either: 77
+   run-reached by the seeds above (NPC, encounter, ability, held weapons): 48 of 135 types; ModifyInventory 15 objects, ChangeStat 102
+   run-reached with the routes of 2b added: 58 of 135 types; ModifyInventory 15 objects, ChangeStat 106
+   item-only (in 1, not in 2): 9; in 2 and not in 1: 9
+   not reached by either: 68
    seeds added to 1: EncounterManager adds types none; WorldEvent adds none
    dropping Item/Interactions/Tests from the nodes loses types: none
+   dropping Item/Interactions/Tests from the run-reached walk (routes included) loses types: ['PlaceBlock']
 
-   type                         sim        wait    runs on                               npc  enc abil  sum  all-edges
-   Simple                       tick0+     None    A-caster,A-entity,NPC,encounter,host 1229    5   28 1247  1374
-   DamageEntity                 tick0      None    A-caster,A-entity,NPC,encounter,host  749    2   29  761   823
-   Replace                      own        None    A-entity,NPC                          506    0    3  508   674
-   Selector                     no-op      Client  A-caster,A-entity,NPC,encounter,host  383    3   12  389   424
-   Parallel                     own        None    A-caster,NPC                          258    0    9  267   304
-   ApplyEffect                  no-op      None    A-caster,A-entity,NPC,encounter,host  121    3   56  155   161
-   Projectile                   own        Client  NPC,encounter,host                    141    5    0  145    99
-   Serial                       own        None    A-caster,A-entity,NPC,host            128    0   18  132   135
-   ChangeStat                   firstRun   None    A-caster,NPC                          102    0   12  114   135
-   StatsCondition               firstRun   None    A-caster,NPC                           49    0   14   62    84
-   Wielding                     own+       Client  NPC                                    60    0    0   60    60
-   RemoveEntity                 no-op      None    A-entity,NPC,encounter,host            48    8    3   54    43
-   Chaining                     own        Client  NPC                                    53    0    0   53    70
-   EffectCondition              firstRun   None    A-caster,A-entity,NPC                  38    0   12   42    48
-   LaunchProjectile             no-op      None    NPC                                    42    0    0   42    55
-   Charging                     own        Client  A-caster,NPC                           32    0    2   33    52
-   ClearEntityEffect            firstRun   None    A-caster,A-entity,NPC,host             32    0   16   26    31
-   Repeat                       tick0+     None    NPC                                    24    0    0   24    26
-   ApplyForce                   tick0+     Client  NPC                                    22    0    0   22    31
-   ModifyInventory              firstRun   Server  NPC                                    17    0    0   17    38
-   TriggerCooldown              firstRun   None    A-caster,NPC                            3    0   13   16    16
-   SendBeacon                   no-op      None    NPC,encounter                          10    1    0   11    10
-   Explode                      firstRun   None    A-entity,NPC                            9    0    2   10    10
-   LaunchAbilityProjectile      no-op      None    A-caster                                0    0    9    9     9
-   DurabilityCondition          firstRun   None    NPC                                     8    0    0    8     7
-   TriggerAbilityFX             no-op      None    A-caster,A-entity,host                  2    0   11    8     8
-   ChangeState                  via-simulateInteractWithBlock:no-op Client  NPC,host                                7    0    0    6    11
-   Condition                    tick0+     None    NPC                                     6    0    0    6    18
-   DestroyBlock                 firstRun   None    NPC                                     5    0    0    5     5
-   SpawnTriggerVolume           no-op      None    NPC,encounter,host                      4    1    0    5     3
-   BreakBlock                   via-simulateInteractWithBlock:no-op Client  NPC                                     4    0    0    4     6
-   PlaceFluid                   via-simulateInteractWithBlock:no-op Client  NPC                                     4    0    0    4     6
-   BlockCondition               via-simulateInteractWithBlock:other Client  NPC                                     3    0    0    3     3
-   CooldownCondition            firstRun   None    NPC                                     3    0    0    3     3
-   GrantAbilityCharges          no-op      None    A-caster                                0    0    2    2     2
-   Interrupt                    firstRun   None    A-caster,A-entity,NPC                   2    0    2    2     2
-   MovementCondition            own        Client  NPC                                     2    0    0    2     2
-   SignalNearbyVolumes          no-op      None    NPC,host                                2    0    0    2     2
-   SplitAbilityProjectile       no-op      None    A-caster,A-entity                       0    0    4    2     2
-   TriggerSpawnMarkers          firstRun   None    NPC                                     2    0    0    2     2
-   UseBlock                     via-simulateInteractWithBlock:other Client  NPC                                     2    0    0    2     6
-   ApplyAbilityEffects          no-op      None    A-caster                                0    0    1    1     1
-   AttachBeam                   firstRun   None    A-caster                                0    0    1    1     1
-   GroundedCondition            own        None    A-caster                                0    0    1    1     1
-   PlaceBlock                   tick0+     Client  NPC                                     1    0    0    1     4
-   PullEntityAbility            no-op      None    A-caster,A-entity                       0    0    2    1     1
-   SendMessage                  no-op      None    NPC                                     1    0    0    1     1
-   SpawnAbilityEntity           no-op      None    A-caster                                0    0    1    1     1
+2b. CHAIN-START ROUTES THAT NO ASSET STRING NAMES (each read in the source; a seed with its own label; the types and objects it adds to the walk above)
+   NPC collision: 58 seed file(s); reaches 19 types, 122 objects; types not in the 48 above: ChangeBlock, ExitInstance, HubPortal, LaunchPad, Portal, PortalReturn, SpawnNPC, TeleportConfigInstance, TeleportInstance, Teleporter; objects added to types already in it: Condition 29, ApplyEffect 25, Simple 16, ChangeState 11, DestroyBlock 3, ApplyForce 2, BlockCondition 2, BreakBlock 1, Serial 1
+       Collision, CollisionEnter and CollisionLeave of the block or fluid an NPC moves into: MotionControllerBase.processTriggers (:1138, EnableTriggers defaults to true, :142) -> CollisionResult.defaultTriggerBlocksProcessing (:262-334, living entities only) -> doCollisionInteraction (:336) on the colliding entity's own manager
+   NPC block break: 2 seed file(s); reaches 1 types, 2 objects; types not in the 48 above: SpawnNPC; objects added to types already in it: none
+       OnBreak and OnBreakImpact of a block an NPC breaks (DestroyBlock, BreakBlock, Explode): BlockHarvestUtils.fireOnBreakInteraction (:849) -> queueBlockInteraction (:863) runs it on the breaker's manager, or on a host when the breaker has none (:872)
+   NPC stat effect: 3 seed file(s); reaches 5 types, 9 objects; types not in the 48 above: none; objects added to types already in it: ApplyEffect 2, ChangeStat 2, ClearEntityEffect 1, EffectCondition 1
+       MinValueEffects and MaxValueEffects Interactions of an entity stat: EntityStatsSystems.Changes (:244, every living entity with a manager, :251) -> runInteractions (:327-336) on the entity's own manager. Every living entity carries every stat type (EntityStatMap.update)
+   NPC trigger volume: 12 seed file(s); reaches 19 types, 112 objects; types not in the 48 above: none; objects added to types already in it: Simple 14, ApplyEffect 10, Serial 10, SignalNearbyVolumes 10, EffectCondition 7, Selector 7, ClearEntityEffect 5, RemoveEntity 5, SendBeacon 4, Parallel 3, StatsCondition 3, ChangeStat 2, DamageEntity 2, Interrupt 2, Repeat 2, SpawnTriggerVolume 2, ApplyForce 1, Projectile 1
+       RunRootInteraction effects (RunRootInteractionEffect.java:41-64) run on TriggerContext.getEntityRef(), the entity that triggered the volume. A volume's TargetTypes decide which (TriggerVolumeTickingSystem.java:344,785-801: anything that is not a player, an item drop or a projectile is NPC), and a queued SIGNAL_RECEIVED has no target filter, its actor being whoever sent the signal (TriggerVolumeManager.enqueueVolumeEvent), an NPC through the SignalNearbyVolumes interaction or the SignalTaggedVolumes action
+   NPC held item: 0 seed file(s); reaches 0 types, 0 objects; types not in the 48 above: none; objects added to types already in it: none
+       Held, HeldOffhand and Equipped of the item an NPC holds or wears: NPCInteractionSystems.TickHeldInteractionsSystem (:49-55) -> InteractionManager.tryRunHeldInteraction (:1177) every tick
+   trigger volumes: 51 RunRootInteraction effects in Server/; 40 run on an NPC (the volume targets Npc, or the event is SIGNAL_RECEIVED); 11 do not (Player-only volumes: ENTER, TICK, BLOCK_USED run on the player); 0 name no RootInteraction asset: none
+   held and worn items: 210 strings in HotbarItems, OffHandItems and Armor (and the parameters they Compute from); 0 name an item with a Held, HeldOffhand or Equipped root
+       (items that carry them at all: Held 2, HeldOffhand 1, Equipped 2; none is held or worn by an NPC file)
+   death: 3 NPC file(s) name a DeathInteraction (RoleBuilderSystem.java:160-161 -> DeathSystems.java:549, on the dying NPC's own manager); 3 of their roots are reached by the string walk already; the unarmed fallback (Item/Unarmed/Interactions/Empty.json) has a Death root: no
+
+   type                         sim                                   wait     sum all-edges  runs on (objects by manager label; sum = distinct objects, an object reached under two labels counts under each)
+   Simple                       tick0+                                None    1215      1374  NPC 1152, host 15, encounter 5, ability entity or projectile 8, ability caster 20, NPC collision 22, NPC trigger volume 16
+   DamageEntity                 tick0                                 None     750       823  NPC 731, host 5, encounter 2, ability entity or projectile 15, ability caster 14, NPC trigger volume 5
+   Replace                      own                                   None     508       674  NPC 506, ability entity or projectile 3, NPC trigger volume 2
+   Selector                     no-op                                 Client   396       424  NPC 378, host 5, encounter 3, ability entity or projectile 6, ability caster 6, NPC trigger volume 9
+   Parallel                     own                                   None     270       304  NPC 258, ability caster 9, NPC trigger volume 3
+   ApplyEffect                  no-op                                 None     179       161  NPC 101, host 7, encounter 3, ability entity or projectile 13, ability caster 43, NPC collision 27, NPC stat effect 4, NPC trigger volume 13
+   Serial                       own                                   None     131       135  NPC 108, host 8, ability entity or projectile 9, ability caster 9, NPC collision 1, NPC stat effect 1, NPC trigger volume 12
+   Projectile                   own                                   Client   126        99  NPC 99, host 22, encounter 5, NPC trigger volume 1
+   ChangeStat                   firstRun                              None     106       135  NPC 90, ability caster 12, NPC stat effect 2, NPC trigger volume 2
+   StatsCondition               firstRun                              None      65        84  NPC 49, ability caster 14, NPC trigger volume 4
+   RemoveEntity                 no-op                                 None      59        43  NPC 38, host 10, encounter 8, ability entity or projectile 3, NPC trigger volume 5
+   Wielding                     own+                                  Client    57        60  NPC 57
+   Chaining                     own                                   Client    53        70  NPC 53
+   EffectCondition              firstRun                              None      50        48  NPC 38, ability entity or projectile 4, ability caster 8, NPC stat effect 1, NPC trigger volume 7
+   LaunchProjectile             no-op                                 None      42        55  NPC 42
+   Condition                    tick0+                                None      35        18  NPC 6, NPC collision 31
+   ClearEntityEffect            firstRun                              None      32        31  NPC 25, host 7, ability entity or projectile 8, ability caster 8, NPC stat effect 1, NPC trigger volume 11
+   Charging                     own                                   Client    26        52  NPC 25, ability caster 2
+   Repeat                       tick0+                                None      26        26  NPC 24, NPC trigger volume 2
+   ApplyForce                   tick0+                                Client    25        31  NPC 22, NPC collision 2, NPC trigger volume 1
+   ChangeState                  via-simulateInteractWithBlock:no-op   Client    17        11  NPC 3, host 4, NPC collision 12
+   TriggerCooldown              firstRun                              None      16        16  NPC 3, ability caster 13
+   ModifyInventory              firstRun                              Server    15        38  NPC 15
+   SendBeacon                   no-op                                 None      15        10  NPC 10, encounter 1, NPC trigger volume 5
+   SignalNearbyVolumes          no-op                                 None      12         2  NPC 1, host 1, NPC trigger volume 10
+   Explode                      firstRun                              None      10        10  NPC 9, ability entity or projectile 2
+   LaunchAbilityProjectile      no-op                                 None       9         9  ability caster 9
+   DestroyBlock                 firstRun                              None       8         5  NPC 5, NPC collision 3
+   TriggerAbilityFX             no-op                                 None       8         8  host 2, ability entity or projectile 6, ability caster 5
+   DurabilityCondition          firstRun                              None       7         7  NPC 7
+   SpawnTriggerVolume           no-op                                 None       7         3  NPC 3, host 1, encounter 1, NPC trigger volume 2
+   BlockCondition               via-simulateInteractWithBlock:other   Client     5         3  NPC 3, NPC collision 3
+   BreakBlock                   via-simulateInteractWithBlock:no-op   Client     5         6  NPC 4, NPC collision 2
+   Interrupt                    firstRun                              None       4         2  NPC 2, ability entity or projectile 1, ability caster 1, NPC trigger volume 2
+   PlaceFluid                   via-simulateInteractWithBlock:no-op   Client     4         6  NPC 4
+   SpawnNPC                     via-simulateInteractWithBlock:no-op   Client     4         1  NPC collision 2, NPC block break 2
+   ChangeBlock                  via-simulateInteractWithBlock:other   Client     3         0  NPC collision 3
+   CooldownCondition            firstRun                              None       3         3  NPC 3
+   HubPortal                    firstRun                              Server     3         0  NPC collision 3
+   TeleportInstance             firstRun                              Server     3         0  NPC collision 3
+   ExitInstance                 firstRun                              Server     2         0  NPC collision 2
+   GrantAbilityCharges          no-op                                 None       2         2  ability caster 2
+   MovementCondition            own                                   Client     2         2  NPC 2
+   Portal                       via-simulateInteractWithBlock:no-op   Server     2         0  NPC collision 2
+   SplitAbilityProjectile       no-op                                 None       2         2  ability entity or projectile 2, ability caster 2
+   TriggerSpawnMarkers          firstRun                              None       2         2  NPC 2
+   UseBlock                     via-simulateInteractWithBlock:other   Client     2         6  NPC 2
+   ApplyAbilityEffects          no-op                                 None       1         1  ability caster 1
+   AttachBeam                   firstRun                              None       1         1  ability caster 1
+   GroundedCondition            own                                   None       1         1  ability caster 1
+   LaunchPad                    via-simulateInteractWithBlock:no-op   Server     1         0  NPC collision 1
+   PlaceBlock                   tick0+                                Client     1         4  NPC 1
+   PortalReturn                 via-simulateInteractWithBlock:other   Server     1         0  NPC collision 1
+   PullEntityAbility            no-op                                 None       1         1  ability entity or projectile 1, ability caster 1
+   SendMessage                  no-op                                 None       1         1  NPC 1
+   SpawnAbilityEntity           no-op                                 None       1         1  ability caster 1
+   TeleportConfigInstance       via-simulateInteractWithBlock:no-op   Server     1         0  NPC collision 1
+   Teleporter                   via-simulateInteractWithBlock:other   Server     1         0  NPC collision 1
 
    runs on a player's manager only (A-caster, one pass; outside the double run unless an NPC casts it): 6: ApplyAbilityEffects, AttachBeam, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, SpawnAbilityEntity
-   on a manager with no remote client (NPC, encounter, host, A-entity): 42
+   on a manager with no remote client (NPC, encounter, host, A-entity): 52
 
-3. ITEM-ONLY TYPES (10): reached from a seed only through a string that names an item
+3. ITEM-ONLY TYPES (9): reached from a seed only through a string that names an item
    ChangeActiveSlot           item edge in field Weapons
        NPC/Roles/Intelligent/Faction/Outlander/Outlander_Stalker.json > Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json [Weapons=Weapon_Crossbow_Iron] > Item/Items/Weapon/Crossbow/Template_Weapon_Crossbow.json [Parent=Template_Weapon_Crossbow] > Item/RootInteractions/Weapons/Crossbow/Root_Weapon_Crossbow_Swap_From.json [SwapFrom=Root_Weapon_Crossbow_Swap_From] > Item/Interactions/Weapons/Crossbow/Weapon_Crossbow_Swap_From.json [Interactions=Weapon_Crossbow_Swap_From]   object at /Failed
    ContextualUseNPC           item edge in field HarvestInteractionRequiredItems
@@ -88,24 +116,24 @@ seeds: NPC 1858 files; encounter 67; ability 68
        NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary]   object at /Failed
    RefillContainer            item edge in field HarvestInteractionRequiredItems
        NPC/Roles/Creature/Livestock/Tamed/Tamed_Cow.json > Item/Items/Container/Container_Bucket.json [HarvestInteractionRequiredItems=Container_Bucket]   object at /Interactions/Secondary/Interactions[0]/Failed
-   SpawnNPC                   item edge in field Item
-       NPC/Roles/_Core/Tests/Test_Pet_Lantern.json > Item/Items/EggSpawner/Egg_Spawner_Lantern.json [Item=Egg_Spawner_Lantern]   object at /Interactions/Primary/Interactions[0]
    SurfaceDrawPlaceBlock      item edge in field AttractiveItemSet
        NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary] > Item/Interactions/Creative/Creative_Place_SurfaceDraw.json [SurfaceDrawInteractions=Creative_Place_SurfaceDraw]   object at 
+   in the run-reached population and not in 1: ['ChangeBlock', 'ExitInstance', 'HubPortal', 'LaunchPad', 'Portal', 'PortalReturn', 'TeleportConfigInstance', 'TeleportInstance', 'Teleporter']
 
 4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent), then over those not reached only as an ability caster
-   ChangeStat.Behaviour: "Add"=4, "Min"=14, "Set"=33, (absent)=63  (total 114); on a manager with no remote client: "Add"=4, "Min"=14, "Set"=33, (absent)=51  (total 102)
+   ChangeStat.Behaviour: "Add"=4, "Min"=14, "Set"=35, (absent)=53  (total 106); on a manager with no remote client: "Add"=4, "Min"=14, "Set"=35, (absent)=41  (total 94)
    Explode.Config.DamageEntities: true=10  (total 10); on a manager with no remote client: true=10  (total 10)
    Explode.Config.DamageBlocks: false=7, true=3  (total 10); on a manager with no remote client: false=7, true=3  (total 10)
    TriggerCooldown.Cooldown.Charges: (absent)=16  (total 16); on a manager with no remote client: (absent)=3  (total 3)
    TriggerCooldown.UseAbilityCooldown: (absent)=4, true=12  (total 16); on a manager with no remote client: (absent)=3  (total 3)
-   Repeat.Repeat: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=1  (total 24); on a manager with no remote client: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=1  (total 24)
-   ApplyForce.Duration: (absent)=22  (total 22); on a manager with no remote client: (absent)=22  (total 22)
-   ApplyForce.ChangeVelocityType: "Add"=2, "Set"=17, (absent)=3  (total 22); on a manager with no remote client: "Add"=2, "Set"=17, (absent)=3  (total 22)
-   ModifyInventory.RequiredGameMode: "Adventure"=14, (absent)=3  (total 17); on a manager with no remote client: "Adventure"=14, (absent)=3  (total 17)
+   Repeat.Repeat: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=3  (total 26); on a manager with no remote client: -1=1, 1=4, 14=2, 15=2, 2=4, 3=5, 35=2, 4=2, 5=1, 7=3  (total 26)
+   ApplyForce.Duration: (absent)=24, 0.0=1  (total 25); on a manager with no remote client: (absent)=24, 0.0=1  (total 25)
+   ApplyForce.ChangeVelocityType: "Add"=2, "Set"=19, (absent)=4  (total 25); on a manager with no remote client: "Add"=2, "Set"=19, (absent)=4  (total 25)
+   ModifyInventory.RequiredGameMode: "Adventure"=12, (absent)=3  (total 15); on a manager with no remote client: "Adventure"=12, (absent)=3  (total 15)
+   TriggerSpawnMarkers.Count: (absent)=2  (total 2); on a manager with no remote client: (absent)=2  (total 2)
 
 5. THE HELD-SLOT WALK (item 13b, R2): run-reached operations that write an inventory slot
-   scanned the class chain of each of the 48 run-reached types for setActiveSlot, setItemStackForSlot, removeItemStackFromSlot, removeItemStack, addItemStack, addOrDropItemStack, moveItemStack, putItemStack, replaceItemStackInSlot: 1 write: ModifyInventory (addOrDropItemStack, removeItemStack, removeItemStackFromSlot, setItemStackForSlot)
+   scanned the class chain of each of the 58 run-reached types for setActiveSlot, setItemStackForSlot, removeItemStackFromSlot, removeItemStack, addItemStack, addOrDropItemStack, moveItemStack, putItemStack, replaceItemStackInSlot: 1 write: ModifyInventory (addOrDropItemStack, removeItemStack, removeItemStackFromSlot, setItemStackForSlot)
    types that call context.setHeldItem but make no direct slot write above: PlaceBlock, PlaceFluid (their writes go through BlockPlaceUtils; read: PlaceBlock needs the client's block position and a block interaction's server hook runs once, so neither doubles a slot write)
    the item-change check (Interaction.tickInternal, :288-291) trips when the item in the slot no longer matches context.getHeldItem(), the
    OnItemChangeBehavior is not Ignore, and the context is not a proxy (owner != entity). A write that calls context.setHeldItem keeps
@@ -122,17 +150,28 @@ seeds: NPC 1858 files; encounter 67; ability 68
    Item/Interactions/Weapons/Item/Attacks/Throw/Item_Throw.json /Next/Interactions[1]/Interactions[0]: fields ['AdjustHeldItemQuantity'], gate None, behaviour ItemChanged (the default): writes through context.setHeldItem: never trips the check; the effect is doubled (measured InvAdjSelf1) unless the stack is exhausted
    Item/Interactions/Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot.json /Next/Failed/Next/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
    Item/Interactions/Weapons/Shortbow/Primary/Shoot/Weapon_Shortbow_Primary_Shoot.json /Next/Failed/Next/Interactions[1]/Next/Next: fields ['ItemToAdd'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
-   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Ancient_Steel.json /InteractionVars/Arrow_Inventory_Condition/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
-   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Ancient_Steel.json /InteractionVars/Reload_ItemConsume/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
-   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json /InteractionVars/Arrow_Inventory_Condition/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
-   Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json /InteractionVars/Reload_ItemConsume/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Template_Weapon_Crossbow.json /InteractionVars/Arrow_Inventory_Condition/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
+   Item/Items/Weapon/Crossbow/Template_Weapon_Crossbow.json /InteractionVars/Reload_ItemConsume/Interactions[0]: fields ['ItemToRemove'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
    Item/RootInteractions/Weapons/Shortbow/Root_Weapon_Shortbow_Secondary_Guard.json /Interactions[0]/Next/Next: fields ['ItemToAdd'], gate Adventure, behaviour ItemChanged (the default): inert: RequiredGameMode Adventure and no Player component, returns before any write (ModifyInventoryInteraction.java:97)
-   walk total: inert (RequiredGameMode) 14, setHeldItem only 3  (of 17 ModifyInventory objects; EquipItem and ChangeActiveSlot write the slot too but are item-only, not run-reached)
+   walk total: inert (RequiredGameMode) 12, setHeldItem only 3  (of 15 ModifyInventory objects; EquipItem and ChangeActiveSlot write the slot too but are item-only, not run-reached)
 
-CANDIDATES: 19 run-reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+)
-   ApplyForce, AttachBeam, ChangeStat, ClearEntityEffect, Condition, CooldownCondition, DamageEntity, DestroyBlock, DurabilityCondition, EffectCondition, Explode, Interrupt, ModifyInventory, PlaceBlock, Repeat, Simple, StatsCondition, TriggerCooldown, TriggerSpawnMarkers
+CANDIDATES: 22 run-reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+)
+   ApplyForce, AttachBeam, ChangeStat, ClearEntityEffect, Condition, CooldownCondition, DamageEntity, DestroyBlock, DurabilityCondition, EffectCondition, ExitInstance, Explode, HubPortal, Interrupt, ModifyInventory, PlaceBlock, Repeat, Simple, StatsCondition, TeleportInstance, TriggerCooldown, TriggerSpawnMarkers
 
-6. VERDICT TABLE (verdict-table.tsv): 48 rows for 48 run-reached types; outcomes doubled 3, flow 8, guarded 4, none 1, once 20, reads 7, refuses 1, same-twice 4; basis measured 12, read 36
+6. VERDICT TABLE (verdict-table.tsv): 58 rows for 58 run-reached types; outcomes doubled 3, flow 8, guarded 4, none 6, once 24, reads 7, refuses 2, same-twice 4; basis measured 13, read 45
+   outcome -> the census `sim` labels it can sit on (a row outside is a PROBLEM; the deciding file must also be in the type's class chain):
+      doubled     firstRun, firstRun+, tick0, tick0+
+      desync      firstRun, firstRun+, tick0, tick0+
+      refuses     firstRun, firstRun+, tick0, tick0+
+      same-twice  firstRun, firstRun+, tick0, tick0+
+      guarded     firstRun, firstRun+, own, own+, tick0, tick0+
+      once        no-op, own, own+, tick0+, via-*:no-op, via-*:other
+      flow        own, own+, tick0+, via-*:no-op, via-*:other
+      reads       any
+      none        any
+      unknown     any
+   rows by (outcome, sim): doubled/firstRun 3; flow/own 5; flow/own+ 1; flow/tick0+ 1; flow/via-*:other 1; guarded/firstRun 1; guarded/own 1; guarded/tick0 1; guarded/tick0+ 1; none/firstRun 2; none/tick0+ 1; none/via-*:no-op 2; none/via-*:other 1; once/no-op 15; once/own 1; once/tick0+ 1; once/via-*:no-op 5; once/via-*:other 2; reads/firstRun 4; reads/own 1; reads/tick0+ 1; reads/via-*:other 1; refuses/firstRun 2; same-twice/firstRun 4
    unknown: 0 (limit 5); 0 problem(s)
+   wrote the page tables to tables13b.md
 
-registered types never reached by either population: 77 of 135
+registered types never reached by either population: 68 of 135

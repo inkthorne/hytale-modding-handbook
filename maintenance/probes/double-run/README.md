@@ -25,13 +25,13 @@ maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-r
 ```
 
 **What `verify-docs.sh` runs of this (item 14).** The static half: the section "The double-run table matches the population and the source"
-runs `usage.py`, `census.py`, `census-test.py` and `usage-test.py` on every run, on the caches `verify-docs.sh` itself resolves, and goes red when
+runs `usage.py`, `census.py`, `census-test.py`, `usage-test.py` and `usage-mutations.py` on every run, on the caches `verify-docs.sh` itself resolves, and goes red when
 `usage.py` exits non-zero or does not print its `unknown: N (limit 5); 0 problem(s)` line; when the stdout of `census.py` or `usage.py` differs
 from `census-0.7.2.txt` or `usage-0.7.2.txt` (but for the `source: ` and `assets: ` lines, which name the cache); when the span of
 `docs/interactions-double-run.md` between `### The population (counted)` and `### Outcomes that depend on a field` differs from the
 `usage.py --tables` output by a row, a heading or an order; or when either control exits non-zero, lacks its `---- 0 failed` line or prints fewer
 PASS lines than its floor (17 and 87); or when `usage-mutations.py` exits non-zero, leaves a survivor, runs a partial slice, catches fewer than N of
-N mutations or has fewer than 22 (171.6 s at load 9-14, 419 s at load 20-35). `check-double-run-fixture.py` tests that section (69 cases, 99 mutations). **Not run:** the measuring half
+N mutations or has fewer than 22 (171.6 s at load 9-14, 419 s at load 20-35). `check-double-run-fixture.py` tests that section (70 cases, 100 mutations; the 70th case is a relative `TMPDIR` outside the repository, which must pass with every work dir absolute, verify pass of 3437c5d..ee2b164, LOW-1). **Not run:** the measuring half
 (`run.sh`, `verdicts.sh`, `verdicts-test.sh`, `verdicts-mutations.sh`). **Not covered even when it is green:** the prose
 figures outside the seven tables (the population paragraph, the per-field counts table, "13 measured, 45 read"), the `file:line` pins in the page's
 prose (a table row's deciding hook is checked, its prose pin is not), and the coarse `sim` check (LOW-A below). **At a game update** the section goes red

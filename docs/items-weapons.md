@@ -13,7 +13,7 @@ seo:
 
 This page documents weapon items — swords, daggers, shields, battleaxes, bows, maces, and crossbows — each built from a formal `Template_Weapon_*` with combo interactions, signature abilities, and per-tier damage overrides.
 
-> **Weapons NPCs hold.** An NPC with no `Attack` set runs the held weapon's root for its attack type, if that root is tagged `Attack`. That chain runs on the NPC's manager, which has no remote client, so the server runs each operation twice; see [the double run](interactions-double-run.md#what-each-of-the-48-types-does) for what that does to each type.
+> **Weapons NPCs hold.** An NPC with no `Attack` set runs the held weapon's root for its attack type, if that root is tagged `Attack`. That chain runs on the NPC's manager, which has no remote client, so the server runs each operation twice; see [the double run](interactions-double-run.md#what-each-run-reached-type-does) for what that does to each type.
 
 ## Overview
 

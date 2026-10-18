@@ -92,7 +92,7 @@ Only the **config** schema can run interactions, so it's the one you need to app
 custom on-hit logic. Hit routing: a **terrain/wall** hit fires **`ProjectileMiss`**; a **direct entity**
 hit fires **`ProjectileHit`** (confirmed in vanilla `Projectile_Config_Ice_Ball`, which restates both).
 
-**Which manager runs a chain.** `ProjectileSpawn` runs on the shooter's `InteractionManager`; `ProjectileHit` and `ProjectileMiss` run on the projectile's own manager if it has one (ability projectiles do), otherwise on the shooter's. A shot an NPC fires therefore runs all three on the NPC's manager, which has no remote client, and the server runs each operation twice: an `Explode` in the `ProjectileHit` chain damages the target twice, a `DamageEntity` once. [The double run](interactions-double-run.md#what-each-of-the-48-types-does) has the verdict per type.
+**Which manager runs a chain.** `ProjectileSpawn` runs on the shooter's `InteractionManager`; `ProjectileHit` and `ProjectileMiss` run on the projectile's own manager if it has one (ability projectiles do), otherwise on the shooter's. A shot an NPC fires therefore runs all three on the NPC's manager, which has no remote client, and the server runs each operation twice: an `Explode` in the `ProjectileHit` chain damages the target twice, a `DamageEntity` once. [The double run](interactions-double-run.md#what-each-run-reached-type-does) has the verdict per type.
 
 ### Gotchas authoring config-projectile `Interactions`
 

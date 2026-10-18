@@ -152,6 +152,8 @@ corresponding `…effect.builtin.<Name>Effect` class or use the in-game inspecto
 
 `Origin` keys take an `EffectOrigin`: `VolumeOrigin`, `Entity`, `Event`, or `WorldAbsolute` (0.6.3+).
 
+`RunRootInteraction` runs the chain on the manager of the entity that triggered the volume. When the volume's `TargetTypes` holds `Npc`, or when the event is a `SIGNAL_RECEIVED` that an NPC sent (through the `SignalNearbyVolumes` interaction or the `SignalTaggedVolumes` action), that is the NPC's own `InteractionManager`, which has no remote client: the server runs each operation in a simulation pass and a server pass. [The double run](interactions-double-run.md#the-population-counted) says what that does to each type.
+
 ### The `ShowEventTitle` interaction is a different type with the same name
 
 `Interaction.CODEC` also registers a `ShowEventTitle`, and it is **not** the effect in the table

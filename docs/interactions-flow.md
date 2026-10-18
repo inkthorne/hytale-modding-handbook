@@ -13,7 +13,7 @@ seo:
 
 This page covers the control-flow interactions: composing interactions in sequence or parallel, branching on game state, looping, variable substitution, and target selection.
 
-> **Chains NPCs run.** NPC attack chains are built from these types on a manager with no remote client, so the server runs each operation twice. `Serial`, `Parallel` and `Replace` add nothing of their own (the effect is their children's), `Repeat` forks once, the conditions only read, and `TriggerCooldown` spends a cooldown's charge in each pass (the default one charge is safe). [The double run](interactions-double-run.md#what-each-of-the-48-types-does) has the verdict for each type.
+> **Chains NPCs run.** NPC attack chains are built from these types on a manager with no remote client, so the server runs each operation twice. `Serial`, `Parallel` and `Replace` add nothing of their own (the effect is their children's), `Repeat` forks once, the conditions only read, and `TriggerCooldown` spends a cooldown's charge in each pass (the default one charge is safe). [The double run](interactions-double-run.md#what-each-run-reached-type-does) has the verdict for each type.
 
 > **Reading the examples.** An example that names a shipped source file is taken from the shipped
 > assets. In the others, every id that starts with `MyMod_` is a placeholder for an interaction (or,
@@ -1849,7 +1849,7 @@ resolution above applies. Of the 19 shipped `TriggerCooldown` objects, 12 (in th
 `{ "Type": "TriggerCooldown", "UseAbilityCooldown": true }` with no `Cooldown` object at all (see the ability-cast example under
 [Parallel](#parallel)); the other 7 name a `Cooldown` with an `Id` and a duration (two potions, the fire trap, the charged-shot release and three NPC poison cooldowns), and none lists `Charges`.
 
-> **On an NPC's manager.** The manager has no remote client, so `firstRun` runs in both passes and each one spends a charge. With the default single charge the second spend finds none and the result is the same as once, which is what every shipped object gets; a cooldown whose `Charges` lists three entries used two of them (measured, one use). See [the double run](interactions-double-run.md#what-each-of-the-48-types-does).
+> **On an NPC's manager.** The manager has no remote client, so `firstRun` runs in both passes and each one spends a charge. With the default single charge the second spend finds none and the result is the same as once, which is what every shipped object gets; a cooldown whose `Charges` lists three entries used two of them (measured, one use). See [the double run](interactions-double-run.md#what-each-run-reached-type-does).
 
 ### InteractionCooldown Configuration
 

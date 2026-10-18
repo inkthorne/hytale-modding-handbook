@@ -910,6 +910,8 @@ use, with their usage counts in 0.7.2:
 | `OnBreakImpact` | Break impact resolved | 2 | 0.6.3+ — queued by `BlockHarvestUtils.queueOnBreakImpactInteraction` |
 | `ProjectileHit` | A projectile hits the block | 2 | `InteractionType` new in 0.7.2; the two goblin `Throwable_Explosive_Barrel` blocks |
 
+> **On an NPC.** A `Collision`, `CollisionEnter` or `CollisionLeave` chain also starts when an NPC moves into the block, because every NPC motion controller processes triggers, and an `OnBreak` or `OnBreakImpact` chain when an NPC breaks it. The chain runs on the NPC's own `InteractionManager`, which has no remote client, so the server runs each operation in a simulation pass and a server pass. [The double run](interactions-double-run.md#the-population-counted) lists the types those chains reach (58 shipped block and fluid files carry a collision chain) and what each does on such a manager.
+
 ### Example: Interactive Block
 
 ```json

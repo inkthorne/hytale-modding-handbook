@@ -627,6 +627,8 @@ two assets (`Stamina.json`, `GlidingActive.json`) and `MaxValueEffects` in five
 `DeployablePreview.json`, which declare it as an empty `{}`). So three assets populate a
 bound at all — all under `Server/Entity/Stats/`.
 
+The chain runs on the manager of the entity whose stat reached the bound, and every living entity carries every stat type, an NPC included. An NPC's manager has no remote client, so the server runs each operation in a simulation pass and a server pass; [the double run](interactions-double-run.md#the-population-counted) says what that does to each type (the three shipped chains use `ApplyEffect`, `ChangeStat` with `Set`, `ClearEntityEffect`, `EffectCondition` and `Serial`).
+
 None of them kills the entity, and **there is no `Kill` interaction**: `Interaction.CODEC`
 registers 135 names in 0.7.2 and none of them is `Kill`. The `Kill` you may find in the jar is an
 NPC *sensor* core-component type, registered into a different registry entirely — see

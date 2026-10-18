@@ -551,7 +551,7 @@ def main():
     t0 = time.time()
     text = section_text(VERIFY.read_text())
     ct, ut = floors(text)
-    workers = min(16, os.cpu_count() or 4)
+    workers = min(32, os.cpu_count() or 4)
     with tempfile.TemporaryDirectory() as td, concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         work = pathlib.Path(td)
         tpl = work / 'tpl'

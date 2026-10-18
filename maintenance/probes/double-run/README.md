@@ -139,6 +139,47 @@ the 206 objects with `"Type": "ChangeStat"` in `Server/` (every `.json` that par
 do not parse are under `World/` and `Prefabs/` and none names `ChangeStat`), `Behaviour` is absent in 98, `Add` in 5,
 `Set` in 89, `Min` in 14 and `Max` in none.
 
+## Item 13b predictions (written and committed before any 13b measurement)
+
+Written after reading the sources named below and after the population (`usage.py`, above) was fixed. No 13b run
+had been made when this section was committed; the harness cases it names did not yet exist. File:line are of the
+decompiled cache. A prediction that a measurement refutes stays here, with the number, under "Refuted or changed".
+
+**The measured types and the calibration set (R3, R4).** Units are read from the remote-client control, as in 13a.
+
+| Type | Case | Prediction on the NPC-shaped manager | Read, from |
+|------|------|--------------------------------------|------------|
+| `Explode` | `Explode1` (`Config`: `DamageEntities` true, `DamageBlocks` false, a Sheep target 3 blocks away) | **doubled**: the Sheep's health delta is 2 x the unit, and 2 `Damage` events (environment source) are raised where the flagged manager raises 1 | `ExplodeInteraction.firstRun` (`:52-91`) is a `SimpleInstantInteraction` that does not override `simulateFirstRun`, so both passes run it; `ExplosionUtils.processTargetEntity` calls `DamageSystems.executeDamage` directly (`:255`), and block damage would be `performBlockDamage` (`:166`); nothing is stored in the instance store |
+| `TriggerCooldown` | `Cooldown1` (a cooldown of 3 charges), `CooldownOne1` (the default, 1 charge) | **doubled with 3 charges**: 1 charge left where the flagged manager leaves 2; **the same result twice with 1 charge**: 0 left, as flagged | `TriggerCooldownInteraction.resetCooldown` ends in `cooldown.deductCharge()` (`:106-109`), and `deductCharge` subtracts one while `chargeCount > 0` (`CooldownHandler.java:101-103`); `resetCooldown` and `setCooldownMax` are idempotent. The outcome depends on the charge count |
+| `ApplyForce` (calibration) | `Force1` (a `Velocity` component on the host) | **once**: 1 instruction queued, as flagged | the force is applied only in `simulateTick0` (`:195-224`, `if (firstRun \|\| duration > 0 && time < duration)`); `tick0` returns on `firstRun` (`:158-160`) and later reads the client state the simulation pass stored. Duration 0: one pass applies it |
+| `Repeat` (calibration) | `Repeat1` (a fork of `LaunchProjectile`; `Repeat` 1) | **guarded**: 1 projectile, as flagged | `RepeatInteraction.tick0` forks (`:80`) and stores `FORKED_CHAIN` in the instance store; `simulateTick0` (`:89-114`) only reads it. The simulation pass runs first and finds no chain; the server pass forks |
+| `ClearEntityEffect` (calibration) | `Clear1` (an effect applied to the Sheep first, then cleared) | **the same result twice**: the effect is gone, as flagged | `firstRun` calls `removeEffect` (`ClearEntityEffectInteraction.java:50`); removing an absent effect changes nothing. The harness cannot count the second removal: this is a claim about the end state |
+| `TriggerSpawnMarkers` | not run | **triggers twice** (read) | `firstRun` queues `trigger` (`:64,74`) in each pass; with `Count` > 0 the reservoir sample (`:69`) can pick different markers in each pass. Needs a spawn marker in range |
+| `DestroyBlock` | tried only if the harness can give it a target block cheaply | **breaks twice** (read): `performBlockBreak` runs in both passes (`:59`) | the second pass finds the block already gone and may change nothing: the page will say which |
+| `Simple` | not run | **no server-side effect of its own** (read) | `SimpleInteraction.tick0` only jumps to the failed label (`:55-58`); `simulateTick0` calls it with the server-failed state copied in for a `Server` wait |
+| `StatsCondition` | not run | **reads only** (read) | `firstRun` (`:36-47`) reads the stat map and sets `Failed`; running it twice reads the same stats unless the first pass's `ChangeStat` changed them. In the shipped chains the stat gate runs before the `ChangeStat` that spends |
+| `Interrupt` | not run | **the same result twice** (read, with a doubt: it cancels the chains of the target entity, which may include the chain running it) | `firstRun` (`InterruptInteraction.java:64-81`) |
+
+The calibration rule (R4): if a measured calibration type disagrees with its prediction, every read verdict resting on
+the same mechanism is downgraded to `unknown` on the page. The mechanisms the read verdicts rest on:
+
+- **M-sim-empty**: `simulateFirstRun` or `simulateTick0` is empty, so the work runs once (`LaunchProjectile` measured in 13a).
+- **M-firstrun-again**: the default `simulateFirstRun` calls `firstRun` again, so a non-idempotent `firstRun` runs twice
+  (`ChangeStat`, `ModifyInventory` measured in 13a; `Explode`, `TriggerCooldown` here).
+- **M-guard**: the type's own code runs its effect once, behind a first-run test or the instance store (`DamageEntity`
+  in 13a; `ApplyForce` and `Repeat` here).
+- **M-idempotent**: the effect is a write that a second call leaves as it is (`ChangeStat` `Set` in 13a; `ClearEntityEffect` here).
+- **M-reads**: the type only reads state and chooses a branch (`StatsCondition`, `EffectCondition`, ...); no measurement.
+
+**The held-slot walk (R2), predicted.** Reading `Interaction.tickInternal` (`:288-291`), a desync needs three things at
+once: the held item no longer matches `context.getHeldItem()`, `OnItemChangeBehavior` is not `Ignore`, and the
+context is not a proxy. `ModifyInventory`'s `AdjustHeldItemQuantity` and durability paths call `context.setHeldItem`
+(`:113,149`) and so do not trip it; `ItemToRemove` / `ItemToAdd` (`:101,118-119`) and `EquipItem` (`EquipItemInteraction.java:62`) can.
+Prediction: zero shipped run-reached operations that write the held slot or the active slot without
+`context.setHeldItem` under a `Server` wait with the owner the running entity and a behaviour other than `Ignore`. The one
+shipped `ModifyInventory` case (`Skeleton_Elite_Shield_Guard_Broken_Effects`, `/Failed/Interactions[0]`) has
+`AdjustHeldItemQuantity` -1 and `Ignore`. A desync is tried on a real NPC only if the walk finds a hit.
+
 ## Results (one pass, 2026-10-17, java 25.0.4.1, `HytaleServer.jar` 0.7.2)
 
 `verdicts.sh` on the final pass: **24 PASS, 0 failed, 0 void**. The final pass is 32 server runs (the boot, then
@@ -226,7 +267,7 @@ run-reached objects; 206 over all of `Server/`, the figure 13a quoted) are taken
 `usage-test.py` plants an `AttractiveItemSet` bait, a held weapon with and without an `Attack` root, a weapon held
 through `Compute`, one that inherits its `Interactions`, an off-hand item, a key outside `AttackType`, `InteractionVars`
 and the three carriers, runs three sabotages that must each move exactly the named types, shows the 13a rule counts
-the bait (the negative control), reproduces the 58/46/12 figures on the real assets, and was run against eight
+the bait (the negative control), reproduces the 58/46/12 figures on the real assets, and was run against nine
 mutated copies of `usage.py` (each guard deleted: the tag test, the `Compute` names, the `AttackType` keys, the parent
 chain, the carriers, the droplist and missing-id counts, the `InteractionVars`), each of which turns at least one check red.
 

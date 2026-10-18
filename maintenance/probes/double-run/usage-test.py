@@ -343,6 +343,15 @@ def main():
     # MINOR-2 by a route that shares nothing with usage.py: the reviewer's dupcount re-keyed 4,272 rows to 4,127 distinct objects
     check('real: the objects of the seeds without the routes are 4127, each keyed by the file that defines it (the reviewer counted 4,272 rows, 4,127 distinct)',
           sum(len(v) for v in real['run_base_objs'].values()) == 4127, sum(len(v) for v in real['run_base_objs'].values()))
+    # why the run-reached Projectile count (145) was larger than the all-edges one (99): it was not a subset. The 13a graph had no encounter seeds (26 Projectile objects),
+    # and the child-keyed duplicates added 20. Keyed by definer and with the encounter seeds in the all-edges walk, the seeds without the routes are a subset of it.
+    enc_ = [(p_, 'encounter') for p_ in real['assets'].files_under('EncounterManager')]
+    objs_all_enc, _ = usage.reach(real['assets'], set(info), real['seeds_all'] + enc_, 'all')
+    outside = {t_: len(set(v_) - set(objs_all_enc.get(t_, {}))) for t_, v_ in real['run_base_objs'].items()}
+    check('real: every object of the seeds without the routes is also an object of the all-edges walk with the encounter seeds added (a subset; Projectile 125 of 125)',
+          not any(outside.values()) and len(real['run_base_objs']['Projectile']) == len(objs_all_enc['Projectile']) == 125, {t_: n_ for t_, n_ in outside.items() if n_})
+    check('real: the all-edges walk without the encounter seeds has 99 Projectile objects, 26 fewer (the surplus the 13b count showed over 13a\'s was the encounters and the duplicates)',
+          len(real['all_objs']['Projectile']) == 99 and len(set(real['run_base_objs']['Projectile']) - set(real['all_objs']['Projectile'])) == 26)
     check('real: every DeathInteraction a role names is reached by the string walk (3 files)', len(real['death']) == 3 and all(ok for _, _, ok in real['death']), real['death'])
     check('real: no item an NPC holds or wears carries a Held, HeldOffhand or Equipped root (the held route is empty at 0.7.2)', not real['routes']['held']['hits'] and real['routes']['held']['worn_strings'] > 0,
           (real['routes']['held']['hits'], real['routes']['held']['worn_strings']))

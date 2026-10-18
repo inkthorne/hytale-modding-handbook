@@ -7,18 +7,19 @@ runs headless: no client, no user.
 Two things are here. `census.py` (and `usage.py`) read the decompiled source and decide, for every
 registered interaction type, which pass reaches its work. The plugin and `run.sh` then **measure** the
 effect at a target for a calibration set of shipped types, each with its controls. The census is
-**read**; the calibration runs are **measured**. The page `docs/interactions.md` marks every statement
+**read**; the calibration runs are **measured**. The page `docs/interactions-double-run.md` marks every statement
 with one or the other.
 
 ```bash
 python3 -I maintenance/probes/double-run/census.py            # the census; --check prints only the denominator
-python3 -I maintenance/probes/double-run/usage.py             # the 13b population: which types NPC, encounter and ability chains reach, and on which manager
-python3 -I maintenance/probes/double-run/usage-test.py "$WORK"   # plant item edges and carriers in a small tree; usage.py must count only the held, Attack-tagged ones
+python3 -I maintenance/probes/double-run/usage.py             # the 13b population: which types NPC, encounter and ability chains and the engine's own chain starters reach, and on which manager; --tables FILE writes the page's tables
+python3 -I maintenance/probes/double-run/usage-test.py "$WORK"   # plant item edges, carriers, routes and table defects in a small tree; usage.py must see each, and only those (82 checks)
+python3 -I maintenance/probes/double-run/usage-mutations.py "$WORK" [FROM TO]  # delete each of 19 guards in a copy of usage.py; usage-test.py must go red on each (a run is about 6 s)
 maintenance/probes/double-run/build.sh                         # plugin/build/libs/double-run-probe.jar
 maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see the header of run.sh
-maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (46 PASS on the pass quoted below; 24 of them are 13a's)
-maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red (VT_ONLY=REGEX runs the matching ones)
-maintenance/probes/double-run/verdicts-mutations.sh "$SCRATCH" "$WORK" [FROM TO]  # damage the judge: each 13b guard removed in turn must turn a sabotage red
+maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (49 PASS on the pass quoted below; 24 of them are 13a's, 22 the first 13b pass's, 3 the review's ExitInstance)
+maintenance/probes/double-run/verdicts-test.sh "$SCRATCH" "$WORK"  # sabotage the logs; each damage must turn its verdict red (146 damages; VT_ONLY=REGEX runs the matching ones)
+maintenance/probes/double-run/verdicts-mutations.sh "$SCRATCH" "$WORK" [FROM TO]  # damage the judge: each 13b guard removed in turn must turn a sabotage red (54 guards)
 python3 -I maintenance/probes/double-run/census-test.py "$WORK"    # plant defects in a copy of the source; census.py must see each
 maintenance/probes/beams/guard-test.sh "$WORK" "$PWD/maintenance/probes/double-run/run.sh" .double-run-case "Log1 Damage1.npc remote"
 ```
@@ -247,23 +248,29 @@ is an edge, items included**. That over-counts: an NPC's `AttractiveItemSet`, `I
    the NPC `AttackType` keys (`Primary`, `Secondary`, `Ability1`-`4`) is tagged `Attack` (`ActionAttack.java:148-160`:
    with no `Attack` set an NPC runs the held item's root, and only a root tagged `Attack`). The item's `Interactions`
    resolve through its `Parent`; its `InteractionVars` (and its parents') are counted as part of the chain (an
-   over-approximation: only the variables a root names run). **48 of 135** types; `ModifyInventory` 17, `ChangeStat`
-   114. Encounter seeds (`EncounterManager`) are included and add no type; `WorldEvent` seeds add none; dropping
-   `Item/Interactions/Tests` loses none (printed on every run).
-3. **The item-only types**: the 10 in population 1 and not in 2, each with the shortest path from a seed and the field its
-   item edge sits in. `DurabilityCondition` and `MovementCondition` are among the 12 that fall out without item edges and
-   come back because an NPC holds a weapon whose `Attack` root uses them.
+   over-approximation: only the variables a root names run). **48 of 135** types from these seeds (`ModifyInventory` 15
+   objects, `ChangeStat` 102 since the review keyed an object by the file that defines it; 17 and 114 before), and **58
+   of 135** with the engine's own chain starters of the review section below added (`ChangeStat` 106). Encounter seeds
+   (`EncounterManager`) are included and add no type; `WorldEvent` seeds add none; dropping `Item/Interactions/Tests` from
+   the nodes loses none of the 13a graph's types and, of the run-reached ones, `PlaceBlock` (printed on every run).
+3. **The item-only types**: the 9 in population 1 and not in 2 (10 before the routes: `SpawnNPC` is back through the block
+   routes), each with the shortest path from a seed and the field its item edge sits in. `DurabilityCondition` and
+   `MovementCondition` are among the 12 that fall out without item edges and come back because an NPC holds a weapon whose
+   `Attack` root uses them.
 
 **Runs on** (R6). Every state of the walk carries the manager the chain runs on: `NPC` (an NPC seed; a projectile it
 fires runs `ProjectileSpawn` on the NPC's manager), `encounter`, `A-caster` (an ability seed: the caster's manager, which for a
 player has a remote client and runs ONE pass, `AbilityChargeActivator.java:105-125`), `host` (under an object whose
 `Type` is `SpawnInteraction`) and `A-entity` (under `SpawnAbilityEntity`, `LaunchAbilityProjectile` or
 `SplitAbilityProjectile`: `AbilityEntitySpawner.java:59`, `AbilityProjectileLauncher.java:102`, built with
-`new InteractionManager(null, ...)`). A shared file gets every label that reaches it. 5 of the 48 types are reached
-only as `A-caster` (`ApplyAbilityEffects`, `GrantAbilityCharges`, `GroundedCondition`, `LaunchAbilityProjectile`,
-`SpawnAbilityEntity`); the other 43 run on a manager with no remote client.
+`new InteractionManager(null, ...)`) and the five route labels of the review section (`NPC collision`, `NPC block break`,
+`NPC stat effect`, `NPC trigger volume`, `NPC held item`: each the NPC's own manager, reached by that route). A shared file
+gets every label that reaches it. 6 of the 58 types are reached only as `A-caster` (`ApplyAbilityEffects`, `AttachBeam`,
+`GrantAbilityCharges`, `GroundedCondition`, `LaunchAbilityProjectile`, `SpawnAbilityEntity`); the other 52 run on a manager
+with no remote client. (This paragraph said "5 of the 48 ... the other 43" until the review of b0b119a..c4e97d1, LOW-3: it
+left `AttachBeam` out of the list, and the page and the output of `usage.py` already said 6 and 42.)
 
-The per-field counts the page quotes (ChangeStat `Behaviour`: `Add` 4, `Set` 33, `Min` 14, absent 63 over the 114
+The per-field counts the page quotes (ChangeStat `Behaviour`: `Add` 4, `Set` 35, `Min` 14, absent 53 over the 106
 run-reached objects; 206 over all of `Server/`, the figure 13a quoted) are taken over this population.
 `usage-test.py` plants an `AttractiveItemSet` bait, a held weapon with and without an `Attack` root, a weapon held
 through `Compute`, one that inherits its `Interactions`, an off-hand item, a key outside `AttackType`, `InteractionVars`
@@ -397,10 +404,10 @@ of the others. The calibration rule (R4) did not fire: the three calibration typ
 `ApplyForce`. `DestroyBlock` is not a calibration type; the read verdicts that rest on "a second pass finds the world already changed"
 are `DestroyBlock` itself (measured) and none other: `BreakBlock`, `ChangeState` and `PlaceFluid` are `once` because their simulation hook is empty.
 
-**The held-slot walk (R2; `usage.py`, section 5).** The class chains of the 48 run-reached types were scanned for calls that write an inventory slot
+**The held-slot walk (R2; `usage.py`, section 5).** The class chains of the run-reached types (48 at the time, 58 since the review) were scanned for calls that write an inventory slot
 (`setActiveSlot`, `setItemStackForSlot`, `removeItemStackFromSlot`, `removeItemStack`, `addItemStack`, `addOrDropItemStack`, `moveItemStack`,
 `putItemStack`, `replaceItemStackInSlot`): only `ModifyInventory` writes one directly (`PlaceBlock` and `PlaceFluid` call `setHeldItem` and write through
-`BlockPlaceUtils`; `EquipItem` and `ChangeActiveSlot` write the slot but are item-only). Of its **17** run-reached objects, **14** carry `RequiredGameMode`
+`BlockPlaceUtils`; `EquipItem` and `ChangeActiveSlot` write the slot but are item-only). Of its run-reached objects (**17** at the time, **15** since the review keyed an object by the file that defines it), **14** (now **12**) carry `RequiredGameMode`
 (`Adventure`: the arrow chains) and are inert on a manager with no `Player` component (`ModifyInventoryInteraction.java:97`), **3** use `AdjustHeldItemQuantity`
 -1 (`Skeleton_Elite_Shield_Guard_Broken_Effects` with `Ignore`, `Tests/ModifyInventory`, `Item_Throw`), which calls `context.setHeldItem` (`:113`) and never trips the
 item-change check, and **0** write `ItemToRemove`, `ItemToAdd` or the durability without a gate. So the desync of 13a (a `Server` wait, owner == entity, a write
@@ -408,18 +415,96 @@ that bypasses `setHeldItem`) has **no shipped instance**; no real-NPC reproducti
 `usage-test.py` plants an ungated `ItemToRemove` (must be the one candidate), a gated one and a gated one inherited through `Parent` (inert), both `Adjust` paths (cannot trip) and a
 write under `Ignore`.
 
-**The population and the table** are in `usage-0.7.2.txt` and `verdict-table.tsv`: 48 run-reached types of 135 (the 13a count of 58 included 10 reachable only through
-a field that names an item); **12 measured, 36 read, 0 unknown**; outcomes: doubled 3 (`ChangeStat`, `ModifyInventory`, `Explode`), refuses 1 (`AttachBeam`, which no shipped
-chain reaches on a manager with no remote client: its one object is in a `ProjectileSpawn` chain, which runs on the shooter's manager), the same result twice 4, guarded 4,
-once 20, flow 8, reads 7, none 1 (`PlaceBlock`). `usage.py` re-checks the table against the population and the source on every run: a type without a row, a row for a type not run-reached,
-a deciding hook that is not declared at its recorded line, a word outside the vocabularies, more than 5 unknowns.
+**The population and the table** are in `usage-0.7.2.txt` and `verdict-table.tsv`. At the end of 13b: 48 run-reached types of 135 (the 13a count of 58 included 10 reachable only through
+a field that names an item); 12 measured, 36 read, 0 unknown; doubled 3, refuses 1, the same result twice 4, guarded 4, once 20, flow 8, reads 7, none 1. **Since the review of
+b0b119a..c4e97d1: 58 types, 13 measured, 45 read, 0 unknown**; doubled 3 (`ChangeStat`, `ModifyInventory`, `Explode`), refuses 2 (`AttachBeam`, which no shipped chain reaches on a manager with no
+remote client: its one object is in a `ProjectileSpawn` chain, which runs on the shooter's manager; and `ExitInstance`, measured), the same result twice 4, guarded 4, once 24, flow 8, reads 7,
+none 6. `usage.py` re-checks the table against the population and the source on every run: a type without a row, a row for a type not run-reached, a duplicate row, a deciding hook that is not
+declared at its recorded line, a deciding file that is not in the type's class chain, an outcome that its census `sim` label cannot carry, a word outside the vocabularies, more than 5 unknowns.
 
-**What the tests are.** `verdicts-test.sh` damages the logs one way at a time (122 damages at the end of 13b, 68 of them new: each new verdict has its dose, unit,
+**What the tests are.** `verdicts-test.sh` damages the logs one way at a time (122 damages at the end of 13b, 146 since the review; at the end of 13b 68 of them were new: each new verdict has its dose, unit,
 negative, sensitivity, abort, state, exception and real-NPC manager controls broken in turn). `verdicts-mutations.sh` damages the judge: it replaces each guard of the 13b part of
-`verdicts.sh` with `false` (one at a time, 46 guards) and requires the damaged judge to go red, either on the unharmed run (the guard is a verdict's own gate) or on one of the block's sabotages.
+`verdicts.sh` with `false` (one at a time, 46 guards; 54 since the review) and requires the damaged judge to go red, either on the unharmed run (the guard is a verdict's own gate) or on one of the block's sabotages.
 The first pass found 20 guards that survived: 13 because the block filter did not select the sabotage that covers them (the labels named the case, not the type; the filter and the labels were fixed), and 7 because no sabotage existed (the exception check of five blocks, the abort of `InvAdjOneSelf1.npc`, the aborted control runs of `DestroyBlock`; added). The second pass left none: 46 guards, 46 caught (36 by one of the block's sabotages, 10 because the unharmed logs already turn the damaged judge red, the guard being a verdict's own gate).
-`usage-test.py` (41 checks) plants the bait, held weapons with and without the tag, `Compute`, `Parent`, off-hand, a key outside `AttackType`, `InteractionVars`, the three carriers, an ability
+`usage-test.py` (41 checks at the end of 13b, 82 since the review) plants the bait, held weapons with and without the tag, `Compute`, `Parent`, off-hand, a key outside `AttackType`, `InteractionVars`, the three carriers, an ability
 projectile's `ProjectileSpawn` and `ProjectileHit`, the held-slot walk cases and the table variants, and was run against mutated copies of `usage.py`.
+
+## Review of b0b119a..c4e97d1 (what changed, with the measurements)
+
+**MAJOR-1: the population missed the chains the engine starts itself.** The walk followed asset strings from NPC, encounter, ability and held-weapon files. Some chains are started by
+the engine, on an entity's own manager, from a field of a block, a stat or a volume, and no NPC file names them. Re-derived by listing every caller of `initChain`, `queueExecuteChain`,
+`executeChain` and `startChain` in the decompiled source (24 files) and reading each for the manager it runs on, instead of adding the three routes the reviewer's `routes.py` found.
+Each route is a seed with its own label in the "runs on" column; `usage-test.py` plants one of each with a decoy and shows the walk without the routes reaches none of them.
+
+| Route (label) | What starts the chain, and the line that decides it | Seeds at 0.7.2 | Types it adds |
+|---------------|-----------------------------------------------------|---------------:|---------------|
+| NPC collision | `Collision`, `CollisionEnter`, `CollisionLeave` of the block or fluid the entity moves into. `MotionControllerBase.processTriggers` (`:1138`; `EnableTriggers` defaults to true, `:142`) is called by every NPC motion controller (`MotionControllerWalk`, `Fly`, `Dive`, `Base`), and reaches `CollisionResult.defaultTriggerBlocksProcessing` (`:262-334`, `entity instanceof LivingEntity`) and `doCollisionInteraction` (`:336`) on the colliding entity's manager. A state variant of a block carries its own `Interactions` | 58 files | 10: `ChangeBlock`, `ExitInstance`, `HubPortal`, `LaunchPad`, `Portal`, `PortalReturn`, `SpawnNPC`, `TeleportConfigInstance`, `TeleportInstance`, `Teleporter` |
+| NPC block break | `OnBreak`, `OnBreakImpact`. `DestroyBlockInteraction` passes the owning entity as the breaker (`:40-42`), `BlockHarvestUtils.fireOnBreakInteraction` (`:849`) and `queueBlockInteraction` (`:863`) run the root on the breaker's manager, or on a host when the breaker has none (`:872`) | 2 files (the two spider cocoons) | none new (`SpawnNPC`) |
+| NPC stat effect | `MinValueEffects` / `MaxValueEffects`. `EntityStatsSystems.Changes` (`:244-253`) queries every living entity with a manager and `runInteractions` (`:327-336`) runs the root on it; `EntityStatMap.update` allocates every stat type for every entity | 3 files (`Immunity`, `Stamina`, `GlidingActive`) | none |
+| NPC trigger volume | `RunRootInteraction` effects: `RunRootInteractionEffect.execute` (`:41-64`) runs on `TriggerContext.getEntityRef()`. `TriggerVolumeTickingSystem` filters the entities of a volume by `TargetTypes` (`:344`), and `resolveTargetType` returns `NPC` for anything that is not a player, an item drop or a projectile (`:791-801`). A queued `SIGNAL_RECEIVED` has no target filter: its actor is whoever sent the signal (`SendSignalEffect`, `SignalNearbyVolumesInteraction`, `ActionSignalTaggedVolumes`), and `Dungeon_Feastmaster_Charge_HitBlock` (an NPC chain) signals the `FoodPile` volumes whose root `Root_NPC_Dungeon_Feastmaster_Pile_Crash` then runs on that NPC | 12 root files, from 40 of the 51 `RunRootInteraction` effects in `Server/` (volume assets, `Instances/*/resources/TriggerVolumeData.json`, prefabs) | none new |
+| NPC held item | `Held`, `HeldOffhand`, `Equipped`. `NPCInteractionSystems.TickHeldInteractionsSystem` (`:49-55`) calls `tryRunHeldInteraction` (`InteractionManager.java:1177`) for the active hotbar item, the active utility item and each armor slot, every tick | 0: four items carry one (`Debug_Continue`, `Debug_Continue_Equip`, `Debug_Continue_Equip_Legs`, `Weapon_Bomb_Continuous`) and no NPC file names them (the held and worn strings, 210 of them, were read through `Compute` parameters) | none |
+
+The 11 other `RunRootInteraction` effects belong to volumes whose `TargetTypes` is only `Player` and fire on `ENTER`, `TICK` or `BLOCK_USED`; they run on the player. That includes
+`Forgotten_Temple_Persistance_Resync` (`GameFlagCondition`), which the reviewer's volume seed ran: the seed took every root, whatever its target. Read and found to start no chain on a manager
+with no remote client, each with the line that decides it:
+
+| Caller | Why it is empty or already covered |
+|--------|-----------------------------------|
+| `DeathSystems` (`:549`) | The root is `Interactions.getInteractionId(Death)`; for an NPC, `RoleBuilderSystem.java:160-161` sets it from the role's `DeathInteraction`, a string in 3 role files that the walk follows (`usage.py` section 2b: 3 of 3 reached). The unarmed fallback `Item/Unarmed/Interactions/Empty.json` has no `Death` root |
+| `InventoryUtils.moveItem`, `SwapFrom` (`:250`) | Reached only inside `if (playerComponent != null && hotbarComponent != null && ...)` (`:219`): a player moving an item |
+| `ChangeActiveSlot`, `SwapTo` fork | Item-only: only an NPC field that names an item reaches the type |
+| `GameModeTypeState` (`:263`) | A game-mode swap of a player |
+| `PlayerItemEntityPickupSystem` (`:123`) | Queries the player spatial structure |
+| `BlockInteractionUtils.runRootInteractionOnBlock` (`:55`) | Called by `OpenChapterRewardsInteraction` and `ConfirmationPage` (a player's confirmation page) |
+| `DamageSystems` Wielding (`:514`) | `BlockedInteractions` is a string field of the `Wielding` interaction, already an edge of the walk |
+| `ProjectileModule` (`:220`), `StandardPhysicsProvider` (`:194,222`), `AbilityEntityRepeatSystem` (`:66`), `AbilityChargeActivator` | Roots named by projectile configs and ability assets, which are seeds |
+| `ActionAttack`, `ActionBlockHitInteraction`, `ActionEntityHitInteraction`, `ActionCombatAbility`, `AbilityCombatAction`, `BodyMotionCharge`, `ActionSpawnInteraction` | Roots named by strings of NPC files, which are seeds |
+
+The population is 58 types: the 48 from the asset strings, plus the 10 of the collision route. 6 are reached only as an ability caster, 52 run on a manager with no remote client. Dropping
+`Item/Interactions/Tests` from the nodes loses `PlaceBlock` (only `Test_Place_Block` reaches it); the shortest path to `ChangeBlock` and `TeleportInstance` runs through a test interaction
+(`Item/Interactions/Tests/ChangeBlock`, `.../TeleportInstance`), but dropping that directory loses neither. New verdicts, all in `verdict-table.tsv` with the deciding line: `ExitInstance` **refuses** (measured below);
+`HubPortal`, `Portal`, `PortalReturn`, `TeleportConfigInstance`, `TeleportInstance` **none** (each returns or fails when the entity has no `Player` or `PlayerRef` component, and a manager with no
+remote client has none: `HubPortalInteraction.java:81-84`, `EnterPortalInteraction.java:68-71`, `ReturnPortalInteraction.java:45-53`, `TeleportConfigInstanceInteraction.java:58-61`,
+`TeleportInstanceInteraction.java:120-123`); `LaunchPad`, `SpawnNPC`, `Teleporter`, `ChangeBlock` **once** (the server hook does the work, the simulation hook is empty or only reads or copies the server state).
+No new type is doubled or desyncs. `unknown`: 0 (limit 5).
+
+**ExitInstance, measured** (4 runs; `Exit1.remote`, `Exit2.remote`, `Exit1.npc`, `Exit1.realnpc`, controls and sabotages as for `AttachBeam`). Read before the run: `firstRun` reaches
+`InstancesPlugin.exitInstance` (`ExitInstanceInteraction.java:46`), which queues `ensureAndGetComponent(TeleportHistory)` and `addComponent(Teleport)` (`InstancesPlugin.java:418,423`); the guard
+on the `Teleport` archetype in `firstRun` (`:43`) reads the store through `commandBuffer.getArchetype` (`CommandBuffer.java:66-68`), which the first pass's queued adds have not changed, so the second
+pass queues both again: **refuses**. Measured: flagged unit control 1 `Teleport` added, no exception, chain `Finished`; the dose control (two on the flagged manager) 1 added and then
+`Entity already contains component type`; the NPC-shaped host and a real `Chicken` (its own `NPCInteractionSimulationHandler` manager) 1 added and then the exception, on the world thread, and the
+world reloads. **Changed by the run:** the component the exception names is `TeleportHistory`, not `Teleport`: the second `ensureAndGetComponent` is the first queued add to collide. The
+verdict held, the line did not. The harness needs an `InstanceEntityConfig` return point on the subject (`dr.instanceReturn`): with none, in a world that is not an instance, `exitInstance` throws
+`Player is not in an instance` (`InstancesPlugin.java:384`) from the first pass and the double run never shows. The prediction was written in the reading above, before the run, but not committed before it.
+
+**MINOR-1: `TriggerSpawnMarkers` is "guarded" only when the spawn succeeds and `Count` is 0.** With `Count` above 0 the reservoir sample (`TriggerSpawnMarkersInteraction.java:69`) runs in each pass and
+can pick different markers, up to `2 x Count` (`npc-spawning.md` already said so); and `spawnCount` is set only on success (`SpawnMarkerEntity.java:402`), so a spawn that fails leaves it at 0, both
+passes try, and `fail()` (`:759-776`) counts both: the marker is marked validation-failed after 3 summons instead of 5 (`nextFailRemovesMarker`, `:783`). Read, not run (no spawn marker in the harness). The
+row and the page's field table say both; `usage.py` now counts `Count` over the population (2 objects, both absent).
+
+**MINOR-2: an object is keyed by the file that defines it.** `usage.py` keyed objects by (the held item's own file, path), and a held item's `InteractionVars` are merged from its `Parent` chain, so
+a template two held children inherit was counted once per child (`Template_Weapon_Crossbow` under `Weapon_Crossbow_Iron` and `Weapon_Crossbow_Ancient_Steel`). `Assets.by_definer` credits each var to the
+nearest file in the chain that defines it (a var every held child overrides is not counted: its template version never runs). 4,272 rows are 4,127 distinct objects, the figure the reviewer's
+`dupcount.py` reaches by a route that shares no code with `usage.py`; `usage-test.py` asserts 4,127. Moved: `ChangeStat` 114 -> 102 objects (90 on a manager with no remote client), `ModifyInventory` 17 ->
+15 (12 gated), `Projectile` 145 -> 125, `Simple` 1,247 -> 1,185, `DamageEntity` 761 -> 748, `Serial` 132 -> 120, `ApplyEffect` 155 -> 142, `Charging` 33 -> 26, `Wielding` 60 -> 57, `DurabilityCondition` 8 -> 7.
+**Why the run-reached `Projectile` count (145) was larger than the all-edges count (99):** it was not a subset. The 13a graph had no encounter seeds (26 `Projectile` objects are reached only from
+`Server/EncounterManager`), and the child-keyed duplicates added 20 (145 = 99 + 26 + 20). Keyed by definer, and with the encounter seeds in the all-edges walk, every one of the 4,127 objects is also an object
+of the all-edges walk (`usage-test.py`: 0 outside, `Projectile` 125 of 125). With the routes the run-reached walk is no longer a subset: the volume route adds objects (`Projectile` 126) that no
+asset string reaches.
+
+**MINOR-3: the table check rejects a wrong row.** `check_table` accepted `ChangeStat = once` citing `ApplyEffectInteraction.java:91` `simulateFirstRun`, and `Explode = once`, with 0 problems and exit 0,
+because its only per-row source check was that the hook is declared at the recorded line. It now also requires (a) the deciding file to be in the type's census class chain (`Chain(type).classes`) and (b) the
+outcome to be one its census `sim` label can carry. The mapping, printed by `usage.py` on every run and decided from what each outcome claims, then checked against all 58 rows (none falls outside):
+an effect run by both passes (`doubled`, `desync`, `refuses`, `same-twice`) needs `firstRun`, `firstRun+`, `tick0` or `tick0+` (the simulation pass reaches the server pass's method again); `guarded`
+those or `own`, `own+`; `once` needs `no-op`, `own`, `own+`, `tick0+`, `via-*:no-op` or `via-*:other`; `flow` needs `own`, `own+`, `tick0+`, `via-*:no-op` or `via-*:other`; `reads`, `none` and
+`unknown` take any. The rows by (outcome, sim) are printed too. `usage-test.py` plants the reviewer's rows and shows the old per-row rule accepts all three.
+
+**MINOR-4, LOW-1.** `realverdict` now has the `Exception in thread` guard and the Destroy real-NPC verdict reads `block_id_before` and `block_id_after`; sabotages and mutations for both. **LOW-2.** The `Interrupt`
+row's reason ("a second pass finds none") was false: `cancelChains` sets `Failed` and sends a cancel packet but removes no chain (`InteractionManager.java:1007-1014`), so the second pass cancels the same
+chains again to the same end state (a target manager with a `PlayerRef` gets a second `CancelInteractionChain`); the verdict (the same result twice) holds. **Corrections to the page's rows (NITs):** `Wielding`'s
+`simulateTick0` also calls `super.simulateTick0` (`ChargingInteraction`'s, `WieldingInteraction.java:194`); `Charging` writes `DamageDataComponent.setLastChargeTime` in `tick0` (`:219`), so its Write is "direct", not
+"none"; the page's controls are stated per type; and the bucketing rule (a type is filed under its worst case on a manager with no remote client) is stated. A correction to the commit message of the
+usage.py commit of this review: it says `usage-test.py` has 106 checks; it has 82 (the count was a guess before the run).
 
 ## Refuted or changed by the runs
 
@@ -448,6 +533,12 @@ projectile's `ProjectileSpawn` and `ProjectileHit`, the held-slot walk cases and
   (`Self` for livestock). The target is a Sheep. `ActionAttack`'s `damageFriendlies` would also lift it.
 - **First `Beam` runs lost their target** (same section defect) and the first `Log1.realnpc` read VOID (the verdict's grep
   predated the `self=` field of the driver's line).
+- **Review of b0b119a..c4e97d1: "the population is 48 types" (MAJOR-1).** It was the types asset strings reach. The engine's own chain starters add 10 (58 in all), found by listing the callers of
+  `initChain` and not by following strings. One of the 10, `ExitInstance`, refuses (measured); the other nine land once or return for want of a `Player` component. The 13b figures that the 48 carried
+  (12 measured, 36 read; ChangeStat 114 objects, 102 on such a manager; ModifyInventory 17, 14 gated) are 13, 45, 106 (94), 15 (12) now.
+- **Review: "the run-reached Projectile count is larger than the all-edges count" (MINOR-2).** Not a subset: the all-edges walk had no encounter seeds (26 objects) and the child-keyed duplicates added 20. Both are
+  gone from the base walk (see the review section).
+- **Review: ExitInstance's read, "the second add of `Teleport` throws".** The exception names `TeleportHistory` (the second `ensureAndGetComponent` collides first). The verdict held.
 - **13b: `DestroyBlock` "breaks twice" (the advisor's reading, R3).** Measured: 1 `BreakBlockEvent`, the block gone; the second `performBlockBreak`
   returns at `targetBlockTypeId == 0` (`BlockHarvestUtils.java:172`). *The same result twice.*
 - **13b: `TriggerSpawnMarkers` "triggers twice" (R3).** Read, not run: `SpawnMarkerEntity.trigger` returns false while `spawnCount > 0` (`:816`) and the first trigger sets it (`:402`). *Guarded per marker.*
@@ -469,11 +560,12 @@ projectile's `ProjectileSpawn` and `ProjectileHit`, the held-slot walk cases and
 |------|------------|
 | `census.py`, `census-0.7.2.txt` | The census and its output at 0.7.2 (re-run at the next build and diff) |
 | `census-test.py` | Plants sixteen defects in a copy of the source; the census must see each and nothing else |
-| `usage.py`, `usage-0.7.2.txt` | The 13b population (run-reached types, item-only types, the manager each runs on, per-field counts) |
-| `usage-test.py` | Plants the defects above in a small asset tree and requires `usage.py` to see each; reproduces 58/46/12 on the real assets |
+| `usage.py`, `usage-0.7.2.txt` | The 13b population (run-reached types, item-only types, the manager each runs on, the five routes no asset string names, per-field counts); `--tables FILE` writes the page's tables |
+| `usage-test.py` | Plants the defects above, the routes with their decoys, the shared template and the wrong table rows in a small asset tree and requires `usage.py` to see each (82 checks); reproduces 58/46/12 and 4,127 on the real assets |
+| `usage-mutations.py` | Deletes each of 19 guards of `usage.py` in a copy and requires `usage-test.py` to go red (all 19 do; about 6 s each) |
 | `build.sh`, `run.sh` | Build the plugin; run one case (header lists them) with the scratch guard of `../beams/run.sh` |
-| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (122 damages at the end of 13b) |
-| `verdicts-mutations.sh` | Damages the judge instead: replaces each 13b guard of `verdicts.sh` with `false`, one at a time, and requires the sabotages of that block to go red |
-| `verdict-table.tsv` | The 13b verdict for each of the 48 run-reached types (outcome, read or measured, how the write lands, the deciding hook and line); `usage.py` re-checks it against the population and the source |
+| `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (146 damages since the review) |
+| `verdicts-mutations.sh` | Damages the judge instead: replaces each 13b guard of `verdicts.sh` with `false` (54 since the review), one at a time, and requires the sabotages of that block to go red |
+| `verdict-table.tsv` | The 13b verdict for each of the 58 run-reached types (outcome, read or measured, how the write lands, the deciding hook and line); `usage.py` re-checks it against the population and the source |
 | `plugin/` | The probe plugin: `Driver` (stages one case), `Watch` (counters at the target), the three `ProbeLog*` types and `ProbeInvNone` (`ModifyInventory` with the wait changed to `None`), and the `DR_*` root interactions |
 | `../beams/guard-test.sh` | Tests the shared guard; takes this directory's `run.sh` and marker as arguments (and still passes for the beams `run.sh`) |

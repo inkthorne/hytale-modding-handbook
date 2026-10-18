@@ -1157,6 +1157,227 @@ else
 fi
 
 # =====================================================================
+section "[HARD] The double-run table matches the population and the source"
+# Item 14. docs/interactions-double-run.md classifies every interaction type that an NPC, an
+# encounter, an ability or the engine's own chain starters run, and its seven per-outcome tables are
+# the output of usage.py --tables, pasted in by hand. Until this section nothing ran the probes
+# (CLAUDE.md said "verify-docs.sh runs none of these"), so after a game update the census, the
+# usage snapshot, the verdict table and the page went stale with every gate green. This runs the
+# STATIC half of maintenance/probes/double-run; the measuring half (run.sh, verdicts.sh, 72 server
+# runs) is not run here and stays by hand. Five steps, each its own FAIL:
+#   usage.py    exit 0 and exactly one `unknown: N (limit 5); 0 problem(s)` line. Any other status is a
+#               FAIL that prints every PROBLEM and FAIL line and the last 20 lines of stderr
+#               (usage.py returns 1 for no Server/NPC, an empty seed set, a crash and table problems);
+#   census.py   exit 0 and its denominator lines;
+#   snapshots   stdout of census.py and of usage.py equals census-$DR_BUILD.txt / usage-$DR_BUILD.txt
+#               in the probe directory, but for ONE line each, `source: ` and `assets: `, which name the
+#               cache path and so move with HYTALE_SRC_CACHE / HYTALE_ASSETS; each pattern must match
+#               exactly once on both sides, or it would drop nothing (a comparison that quietly
+#               compares less) or everything. The `build:` line stays: it names the jar's sha, so it is
+#               the line that goes red at an update. usage.py writes its tables to tables13b.md, so the
+#               `wrote the page tables to` line equals the snapshot's and needs no exception;
+#   the page    the span of the page from the first `###` heading after `### The population (counted)` to
+#               `### Outcomes that depend on a field` equals the generated tables byte for byte (trailing
+#               blank lines aside). Both anchors must occur exactly once. A stale extra row, a reordered
+#               row, a row under another heading and an added heading are all a difference; the old
+#               check (every generated line occurs somewhere on the page) saw none of them;
+#   the controls  census-test.py and usage-test.py, each in a work dir of its own, each needing exit 0,
+#               exactly one `---- 0 failed` line and at least DR_MIN_CT / DR_MIN_UT PASS lines (a
+#               control that visits nothing prints `0 failed` too).
+# usage-mutations.py (each guard of usage.py deleted in a copy; 22 mutations, 419 s measured on a loaded
+# machine, over the 3 min that item 14 allowed for a place in this section) stays by hand: CLAUDE.md records
+# when to run it. It takes --assets and --src, so a run by hand can use the same caches.
+# AT A GAME UPDATE THIS GOES RED, on purpose, after build-jar-cache.sh: the census `build:` line, the
+# verdict table's deciding lines, the page tables, census-test.py's README labels and usage-test.py's pins
+# all move with the source. Re-reading what moved and re-committing the table, the page tables and the
+# two snapshots is a judgment step (invariant 3's boundary): nothing here regenerates them, and a
+# regenerated snapshot would certify itself. update-build.sh exits verify-docs.sh's status, so it exits 1
+# at every update until then.
+# Inputs: this run's $ASSETS and $SRC_CACHE, passed to every script, so an override is honoured. A missing
+# one is ONE WARN and no step runs, as for the asset-id gate above: the section reads the extracted
+# assets and the decompiled source and nothing else, and a missing cache is the state build-jar-cache.sh
+# leaves when it is interrupted, so a FAIL would fire on a machine that has not built them. DR_DIR,
+# DR_PAGE and DR_BUILD are read from the environment, defaulting to the real ones, so that
+# check-double-run-fixture.py runs this text on stub scripts. Not covered: the prose figures outside the
+# seven tables (the population paragraph, the per-field counts table, "13 measured, 45 read"), the
+# file:line pins in the page's prose, and the coarse sim check.
+# One temporary directory, removed when the section ends; there is no exit and no EXIT hook in this
+# section (the asset-drift section owns the only one).
+DR_DIR="${DR_DIR:-maintenance/probes/double-run}"
+DR_PAGE="${DR_PAGE:-docs/interactions-double-run.md}"
+DR_BUILD="${DR_BUILD:-0.7.2}"
+DR_MIN_CT=16; DR_MIN_UT=87
+DR_COMPARED=""
+# dr_count ERE FILE: the number of lines of FILE that match; empty if grep itself failed
+dr_count() { grep -c -E -e "$1" "$2" 2>/dev/null; }
+# dr_snapshot LABEL DROP_ERE LIVE SNAPSHOT: LIVE equals SNAPSHOT but for the one line DROP_ERE matches in each
+dr_snapshot() {
+  local label="$1" drop="$2" live="$3" snap="$4" nl ns nc drc
+  if [ ! -f "$snap" ]; then
+    fail "$label: the snapshot $snap does not exist (a game update renames it; DR_BUILD is $DR_BUILD)"; return 1
+  fi
+  nl="$(dr_count "$drop" "$live")"; ns="$(dr_count "$drop" "$snap")"
+  if [ "${nl:-x}" != 1 ] || [ "${ns:-x}" != 1 ]; then
+    fail "$label: the line /$drop/ occurs ${nl:-?} time(s) in the live output and ${ns:-?} in $snap, wanted once in each - it is dropped from the comparison because it names the cache path, and a pattern that dropped nothing or several lines would compare something other than the two outputs"; return 1
+  fi
+  grep -v -E -e "$drop" "$live" > "$DR_TMP/$label.live"; grep -v -E -e "$drop" "$snap" > "$DR_TMP/$label.snap"
+  nc="$(wc -l < "$DR_TMP/$label.live")"
+  diff -u --label "$snap" --label "this run" "$DR_TMP/$label.snap" "$DR_TMP/$label.live" > "$DR_TMP/$label.diff"; drc=$?
+  if [ "$drc" -ge 2 ]; then
+    fail "$label: diff of the output and $snap exited $drc (0 and 1 are normal)"; return 1
+  elif [ "$drc" -eq 1 ]; then
+    fail "$label: stdout differs from $snap ($(wc -l < "$DR_TMP/$label.diff") diff lines, the first 40; --- is the snapshot, +++ this run); re-read the rows that moved and re-commit the snapshot, never regenerate it blind:"
+    sed -n '1,40p' "$DR_TMP/$label.diff" | sed 's/^/    /'; return 1
+  fi
+  DR_COMPARED="$nc"
+}
+# dr_control NAME MIN WORK [ARGS...]: run a negative control; it must exit 0, print one `---- 0 failed` and MIN PASS lines
+dr_control() {
+  local name="$1" min="$2" work="$3" rc nz np; shift 3
+  python3 -I "$DR_DIR/$name" "$work" "$@" > "$DR_TMP/$name.out" 2> "$DR_TMP/$name.err"; rc=$?
+  nz="$(dr_count '^---- 0 failed$' "$DR_TMP/$name.out")"; np="$(dr_count '^PASS  ' "$DR_TMP/$name.out")"
+  if [ "$rc" -ne 0 ]; then
+    fail "$name exited $rc:"
+    grep -E '^(FAIL|VOID)' "$DR_TMP/$name.out" | sed 's/^/    /'
+    tail -n 20 "$DR_TMP/$name.err" | sed 's/^/    stderr: /'; return 1
+  elif [ "${nz:-x}" != 1 ]; then
+    fail "$name exited 0 but printed the line '---- 0 failed' ${nz:-?} time(s), wanted once - it ran, or did it?"; return 1
+  elif [ "${np:-0}" -lt "$min" ]; then
+    fail "$name printed ${np:-0} PASS line(s), the floor is $min - a control that visits less than it did reports '0 failed' as well"; return 1
+  fi
+  DR_PASSES="$np"
+}
+if [ ! -d "$SRC_CACHE" ]; then
+  warn "skipped (no decompiled source cache at $SRC_CACHE — build-jar-cache.sh)"
+elif [ ! -d "$ASSETS" ]; then
+  warn "skipped (no asset cache)"
+else
+  DR_TMP="$(mktemp -d)" || DR_TMP=""
+  if [ -z "$DR_TMP" ]; then
+    fail "double-run: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - none of the five steps ran"
+  else
+    DR_OK=1
+    # ---- usage.py: the table check and the population
+    python3 -I "$DR_DIR/usage.py" --assets "$ASSETS" --src "$SRC_CACHE" --tables "$DR_TMP/tables13b.md" > "$DR_TMP/usage.out" 2> "$DR_TMP/usage.err"; RC=$?
+    DR_U_END="$(dr_count '^   unknown: [0-9]+ \(limit 5\); [0-9]+ problem\(s\)$' "$DR_TMP/usage.out")"
+    DR_U_OK="$(dr_count '^   unknown: [0-9]+ \(limit 5\); 0 problem\(s\)$' "$DR_TMP/usage.out")"
+    DR_TYPES=""; DR_RUN=""; DR_ROWS=""; DR_UNK=""
+    if [ "$RC" -ne 0 ]; then
+      DR_OK=0; fail "usage.py exited $RC (1: a PROBLEM line, no Server/NPC, an empty seed set or a crash; 2: a refused argument):"
+      grep -E '^ *(PROBLEM|FAIL)' "$DR_TMP/usage.out" | sed 's/^ */    /'
+      tail -n 20 "$DR_TMP/usage.err" | sed 's/^/    stderr: /'
+    elif [ "${DR_U_OK:-x}" != 1 ]; then
+      DR_OK=0; fail "usage.py exited 0 but printed the line 'unknown: N (limit 5); 0 problem(s)' ${DR_U_OK:-?} time(s), wanted once - it ran, or did it?"
+    else
+      DR_TYPES="$(sed -n 's/^registered interaction types: \([0-9][0-9]*\)$/\1/p' "$DR_TMP/usage.out")"
+      DR_RUN="$(sed -n 's/^   run-reached with the routes of 2b added: \([0-9][0-9]*\) of [0-9][0-9]* types;.*/\1/p' "$DR_TMP/usage.out")"
+      DR_ROWS="$(sed -n 's/^6\. VERDICT TABLE ([^)]*): \([0-9][0-9]*\) rows for [0-9][0-9]* run-reached types;.*/\1/p' "$DR_TMP/usage.out")"
+      DR_UNK="$(sed -n 's/^   unknown: \([0-9][0-9]*\) (limit 5); 0 problem(s)$/\1/p' "$DR_TMP/usage.out")"
+      case "${DR_TYPES:-x}/${DR_RUN:-x}/${DR_ROWS:-x}" in
+        *[!0-9/]*) DR_OK=0; fail "usage.py exited 0 but did not print its population figures once each (registered types '${DR_TYPES:-}', run-reached '${DR_RUN:-}', verdict table rows '${DR_ROWS:-}') - a denominator that is not there cannot be read" ;;
+        *) if [ "$DR_RUN" -eq 0 ] || [ "$DR_ROWS" -ne "$DR_RUN" ]; then
+             DR_OK=0; fail "usage.py: $DR_ROWS verdict table row(s) for $DR_RUN run-reached type(s) - the table must have one row per run-reached type, and 0 of them is not a population"
+           fi ;;
+      esac
+    fi
+    # ---- the snapshots (only when usage.py ran to its summary line)
+    if [ "${DR_U_END:-0}" -eq 1 ]; then
+      if dr_snapshot usage '^assets: ' "$DR_TMP/usage.out" "$DR_DIR/usage-$DR_BUILD.txt"; then DR_USAGE_CMP="$DR_COMPARED"; else DR_OK=0; DR_USAGE_CMP=""; fi
+    else
+      DR_USAGE_CMP=""
+      [ "$RC" -eq 0 ] || info "the usage snapshot was not compared: usage.py did not reach its summary line"
+    fi
+    python3 -I "$DR_DIR/census.py" --src "$SRC_CACHE" > "$DR_TMP/census.out" 2> "$DR_TMP/census.err"; RC=$?
+    DR_CN="$(dr_count '^  names registered \(miner sites\): [0-9]+; distinct names: [0-9]+$' "$DR_TMP/census.out")"
+    DR_CC="$(dr_count '^  distinct classes: [0-9]+; classes carrying more than one name: [0-9]+$' "$DR_TMP/census.out")"
+    DR_NAMES=""; DR_CLASSES=""; DR_CENSUS_CMP=""
+    if [ "$RC" -ne 0 ]; then
+      DR_OK=0; fail "census.py exited $RC:"
+      tail -n 20 "$DR_TMP/census.err" | sed 's/^/    stderr: /'
+    elif [ "${DR_CN:-x}" != 1 ] || [ "${DR_CC:-x}" != 1 ]; then
+      DR_OK=0; fail "census.py exited 0 but printed its denominator lines ${DR_CN:-?} and ${DR_CC:-?} time(s) (the names line, the classes line), wanted once each - it ran, or did it?"
+    else
+      DR_NAMES="$(sed -n 's/^  names registered (miner sites): \([0-9][0-9]*\); distinct names: [0-9][0-9]*$/\1/p' "$DR_TMP/census.out")"
+      DR_CLASSES="$(sed -n 's/^  distinct classes: \([0-9][0-9]*\); classes carrying.*/\1/p' "$DR_TMP/census.out")"
+      if [ "$DR_NAMES" -eq 0 ] || [ "$DR_CLASSES" -eq 0 ]; then
+        DR_OK=0; fail "census.py: $DR_NAMES name(s) in $DR_CLASSES class(es) - a census that visited nothing"
+      elif dr_snapshot census '^source: ' "$DR_TMP/census.out" "$DR_DIR/census-$DR_BUILD.txt"; then
+        DR_CENSUS_CMP="$DR_COMPARED"
+      else
+        DR_OK=0
+      fi
+    fi
+    # ---- the page: the span between the anchors equals the generated tables
+    DR_PAGE_MSG=""
+    if [ ! -f "$DR_TMP/tables13b.md" ]; then
+      DR_OK=0; fail "the page tables were not compared: usage.py wrote no $DR_TMP/tables13b.md (see its FAIL above)"
+    else
+      DR_PAGE_MSG="$(python3 -I - "$DR_PAGE" "$DR_TMP/tables13b.md" 2> "$DR_TMP/page.err" <<'PY'
+import difflib, sys
+page, gen = sys.argv[1], sys.argv[2]
+START, END = '### The population (counted)', '### Outcomes that depend on a field'
+pl = open(page, encoding='utf-8').read().split('\n')
+gl = open(gen, encoding='utf-8').read().split('\n')
+fence, heads = False, []
+for i, l in enumerate(pl):
+    if l.startswith('```'):
+        fence = not fence
+    elif not fence and l.startswith('### '):
+        heads.append((i, l))
+starts = [i for i, l in heads if l == START]
+ends = [i for i, l in heads if l.startswith(END)]
+if len(starts) != 1 or len(ends) != 1:
+    print(f'ANCHOR {page}: "{START}" occurs {len(starts)} time(s) and "{END}" {len(ends)}, wanted once each')
+    sys.exit(2)
+first = [i for i, _ in heads if starts[0] < i < ends[0]]
+if not first:
+    print(f'ANCHOR {page}: no ### heading between "{START}" and "{END}"')
+    sys.exit(2)
+def trim(ls):
+    ls = list(ls)
+    while ls and not ls[-1].strip():
+        ls.pop()
+    return ls
+span, want = trim(pl[first[0]:ends[0]]), trim(gl)
+tables = sum(1 for l in want if l.startswith('### '))
+rows = sum(1 for l in want if l.startswith('| `'))
+tlines = sum(1 for l in want if l.startswith('|'))
+if not tables or not rows:
+    print(f'EMPTY the generated tables hold {tables} table(s) and {rows} row(s): there is nothing to compare')
+    sys.exit(3)
+if span != want:
+    d = list(difflib.unified_diff(want, span, 'generated by usage.py --tables', f'{page}, the span between the anchors', lineterm='', n=1))
+    print(f'DIFF {len(d)} diff line(s) (the first 40; --- is the generated text, +++ the page)')
+    for l in d[:40]:
+        print('  ' + l[:200])
+    sys.exit(1)
+print(f'{tables} tables, {rows} rows ({tlines} table lines)')
+PY
+)"; RC=$?
+      if [ "$RC" -eq 0 ]; then
+        info "page: ${DR_PAGE_MSG} of $DR_PAGE equal the tables usage.py generates"
+      else
+        DR_OK=0; fail "$DR_PAGE does not match the tables usage.py generates (compare status $RC):"
+        printf '%s\n' "$DR_PAGE_MSG" | sed 's/^/    /'
+        tail -n 20 "$DR_TMP/page.err" | sed 's/^/    stderr: /'
+      fi
+    fi
+    # ---- the negative controls, each in a work dir of its own
+    DR_CT=""; DR_UT=""
+    if dr_control census-test.py "$DR_MIN_CT" "$DR_TMP/ct" --src "$SRC_CACHE"; then DR_CT="$DR_PASSES"; else DR_OK=0; fi
+    if dr_control usage-test.py "$DR_MIN_UT" "$DR_TMP/ut" --assets "$ASSETS" --src "$SRC_CACHE"; then DR_UT="$DR_PASSES"; else DR_OK=0; fi
+    if [ "$DR_OK" -eq 1 ]; then
+      info "census.py: $DR_NAMES name(s), $DR_CLASSES class(es); stdout equals census-$DR_BUILD.txt ($DR_CENSUS_CMP lines compared, the source: line dropped)"
+      info "usage.py: $DR_TYPES registered type(s), $DR_RUN run-reached, $DR_ROWS table row(s), $DR_UNK unknown (limit 5), 0 problem(s); stdout equals usage-$DR_BUILD.txt ($DR_USAGE_CMP lines compared, the assets: line dropped)"
+      info "census-test.py: $DR_CT PASS (floor $DR_MIN_CT), ---- 0 failed; usage-test.py: $DR_UT PASS (floor $DR_MIN_UT), ---- 0 failed"
+      pass "the double-run table holds: $DR_RUN run-reached type(s) in $DR_ROWS row(s), the page tables equal the generated ones, both snapshots equal, both controls green"
+    fi
+    rm -rf "$DR_TMP"
+    DR_TMP=""
+  fi
+fi
+
+# =====================================================================
 section "[HARD] Every documented Default is the value the field holds"
 # Queued gate 1, step 5. A `| Key | Type | Default |` table is the most falsifiable
 # thing on a JSON page and nothing read the Default column: check-symbols.py skips

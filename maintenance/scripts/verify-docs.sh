@@ -981,7 +981,7 @@ section "[HARD] The gates' own fixtures pass"
 # 99 cases, 48 mutations including the identity control) takes ~7 s, so it is run here
 # rather than by hand.
 # check-asset-drift-fixture.py --mutations (the "Asset drift vs baseline" section above, run as text
-# under sort, diff and grep shims and stub hash scripts: 29 cases and 29 mutations including the
+# under sort, diff and grep shims and stub hash scripts: 30 cases and 30 mutations including the
 # identity control, after a negative control that reproduces the section's pre-fix false green)
 # takes ~19 s (18.6-19.5 s over five runs), so it is run here.
 # check-double-run-fixture.py --mutations (the "double-run table" section above, run as text on stub

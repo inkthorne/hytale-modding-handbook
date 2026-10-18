@@ -12,7 +12,8 @@ with one or the other.
 
 ```bash
 python3 -I maintenance/probes/double-run/census.py            # the census; --check prints only the denominator
-python3 -I maintenance/probes/double-run/usage.py             # which types NPC and ability chains reach
+python3 -I maintenance/probes/double-run/usage.py             # the 13b population: which types NPC, encounter and ability chains reach, and on which manager
+python3 -I maintenance/probes/double-run/usage-test.py "$WORK"   # plant item edges and carriers in a small tree; usage.py must count only the held, Attack-tagged ones
 maintenance/probes/double-run/build.sh                         # plugin/build/libs/double-run-probe.jar
 maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see the header of run.sh
 maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (24 PASS on the pass quoted below)
@@ -190,14 +191,44 @@ Managers with no `PlayerRef` (read; `new InteractionManager(null, ...)`): NPCs (
 `InteractionSystems.java:216`. A projectile's `ProjectileSpawn` chain runs on its **creator's** manager
 (`ProjectileModule.onProjectileSpawnInteraction`, `:206`): an NPC's, for an NPC-fired projectile.
 
-### The sample (`usage.py`, output in `usage-0.7.2.txt`; fixed before the verdicts)
+### The population (`usage.py`, output in `usage-0.7.2.txt`; item 13b, fixed before any 13b measurement)
 
-Of the 135 types, 58 are reached from a shipped NPC role or ability chain (`registered types never reached:
-77`). Of the 26 reached types whose simulation pass reaches the same method, in order of use: `Simple`
-(1,378 objects), `DamageEntity` (825), **`ChangeStat` (135)**, `StatsCondition` (85), `EffectCondition` (52),
-`ClearEntityEffect` (39), **`ModifyInventory` (38)**, ... `ChangeStat` is the most used type that is neither a
-timer, a condition nor `DamageEntity` and whose effect (`EntityStatMap.addStatValue`) adds. The counts are
-"reachable" (a string equal to an asset id is an edge), an over-count by construction.
+13a's sample was "58 of 135 types are reached", counted over a graph in which **any string equal to an asset id
+is an edge, items included**. That over-counts: an NPC's `AttractiveItemSet`, `Items`, `ProduceItem` or
+`HarvestInteractionRequiredItems` names an item and starts no chain. Without item edges 12 of the 58 fall out, and
+`ModifyInventory` goes from 38 objects to 2 and `ChangeStat` from 135 to 25. `usage.py` now prints three populations:
+
+1. **The 13a population** (all-edges): 58 of 135 types; `ModifyInventory` 38, `ChangeStat` 135. Kept so the figure reproduces.
+2. **The run-reached population**: an `Item/Items` id is an edge only when the item is *held* (the role's `HotbarItems`
+   and `OffHandItems`, and the parameters they `Compute` from: `Weapons`, `OffHand`, `Weapon`, `HotbarItems`, read from
+   the roles, found at the role's top level, in `Modify.NAME` and in `Parameters.NAME.Value`) and its root for one of
+   the NPC `AttackType` keys (`Primary`, `Secondary`, `Ability1`-`4`) is tagged `Attack` (`ActionAttack.java:148-160`:
+   with no `Attack` set an NPC runs the held item's root, and only a root tagged `Attack`). The item's `Interactions`
+   resolve through its `Parent`; its `InteractionVars` (and its parents') are counted as part of the chain (an
+   over-approximation: only the variables a root names run). **48 of 135** types; `ModifyInventory` 17, `ChangeStat`
+   114. Encounter seeds (`EncounterManager`) are included and add no type; `WorldEvent` seeds add none; dropping
+   `Item/Interactions/Tests` loses none (printed on every run).
+3. **The item-only types**: the 10 in population 1 and not in 2, each with the shortest path from a seed and the field its
+   item edge sits in. `DurabilityCondition` and `MovementCondition` are among the 12 that fall out without item edges and
+   come back because an NPC holds a weapon whose `Attack` root uses them.
+
+**Runs on** (R6). Every state of the walk carries the manager the chain runs on: `NPC` (an NPC seed; a projectile it
+fires runs `ProjectileSpawn` on the NPC's manager), `encounter`, `A-caster` (an ability seed: the caster's manager, which for a
+player has a remote client and runs ONE pass, `AbilityChargeActivator.java:105-125`), `host` (under an object whose
+`Type` is `SpawnInteraction`) and `A-entity` (under `SpawnAbilityEntity`, `LaunchAbilityProjectile` or
+`SplitAbilityProjectile`: `AbilityEntitySpawner.java:59`, `AbilityProjectileLauncher.java:102`, built with
+`new InteractionManager(null, ...)`). A shared file gets every label that reaches it. 5 of the 48 types are reached
+only as `A-caster` (`ApplyAbilityEffects`, `GrantAbilityCharges`, `GroundedCondition`, `LaunchAbilityProjectile`,
+`SpawnAbilityEntity`); the other 43 run on a manager with no remote client.
+
+The per-field counts the page quotes (ChangeStat `Behaviour`: `Add` 4, `Set` 33, `Min` 14, absent 63 over the 114
+run-reached objects; 206 over all of `Server/`, the figure 13a quoted) are taken over this population.
+`usage-test.py` plants an `AttractiveItemSet` bait, a held weapon with and without an `Attack` root, a weapon held
+through `Compute`, one that inherits its `Interactions`, an off-hand item, a key outside `AttackType`, `InteractionVars`
+and the three carriers, runs three sabotages that must each move exactly the named types, shows the 13a rule counts
+the bait (the negative control), reproduces the 58/46/12 figures on the real assets, and was run against eight
+mutated copies of `usage.py` (each guard deleted: the tag test, the `Compute` names, the `AttackType` keys, the parent
+chain, the carriers, the droplist and missing-id counts, the `InteractionVars`), each of which turns at least one check red.
 
 ### Calibration set (measured; effect at the target, `verdicts.sh`)
 
@@ -315,7 +346,8 @@ not reproduce: the real NPC's group filter (below) and its own AI.
 |------|------------|
 | `census.py`, `census-0.7.2.txt` | The census and its output at 0.7.2 (re-run at the next build and diff) |
 | `census-test.py` | Plants sixteen defects in a copy of the source; the census must see each and nothing else |
-| `usage.py`, `usage-0.7.2.txt` | Which types shipped NPC roles and ability chains reach (the R6 sample) |
+| `usage.py`, `usage-0.7.2.txt` | The 13b population (run-reached types, item-only types, the manager each runs on, per-field counts) |
+| `usage-test.py` | Plants the defects above in a small asset tree and requires `usage.py` to see each; reproduces 58/46/12 on the real assets |
 | `build.sh`, `run.sh` | Build the plugin; run one case (header lists them) with the scratch guard of `../beams/run.sh` |
 | `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (54 damages) |
 | `plugin/` | The probe plugin: `Driver` (stages one case), `Watch` (counters at the target), the three `ProbeLog*` types and `ProbeInvNone` (`ModifyInventory` with the wait changed to `None`), and the `DR_*` root interactions |

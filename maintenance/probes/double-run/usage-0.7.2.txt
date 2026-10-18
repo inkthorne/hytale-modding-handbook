@@ -1,95 +1,102 @@
 assets: ~/.cache/hytale-assets/Server
-nodes: 6643 files in 6135 ids (Item/Interactions, Item/RootInteractions, ProjectileConfigs, Projectiles, Item/Items, Abilities)
-seeds: NPC 1858 files; ability 68 files
-reached files: NPC 3558, ability 99
+registered interaction types: 135
+nodes: 2683 files in 2198 ids (Item/Interactions, Item/RootInteractions, ProjectileConfigs, Projectiles, Abilities); 3960 item files in 3960 ids (Item/Items, an edge target in the all-edges graph only)
+seeds: NPC 1858 files; encounter 67; ability 68
 
-Types reached, by objects (NPC / ability), with the census sim label.
-type                         sim           npc   abil    sum
-Simple                       tick0+       1352     26   1378
-DamageEntity                 tick0         810     15    825
-Replace                      own           672      3    675
-Selector                     no-op         419      6    425
-Parallel                     own           295      9    304
-ApplyEffect                  no-op         125     43    168
-Serial                       own           130      9    139
-ChangeStat                   firstRun      123     12    135
-Projectile                   own            99      0     99
-StatsCondition               firstRun       71     14     85
-Chaining                     own            70      0     70
-Wielding                     own+           60      0     60
-LaunchProjectile             no-op          55      0     55
-Charging                     own            51      2     53
-EffectCondition              firstRun       44      8     52
-RemoveEntity                 no-op          40      3     43
-ClearEntityEffect            firstRun       31      8     39
-ModifyInventory              firstRun       38      0     38
-ApplyForce                   tick0+         31      0     31
-Repeat                       tick0+         26      0     26
-Condition                    tick0+         18      0     18
-TriggerCooldown              firstRun        3     13     16
-ChangeState                  via-simulateInteractWithBlock:no-op     11      0     11
-Explode                      firstRun        9      2     11
-SendBeacon                   no-op          10      0     10
-ChangeActiveSlot             own             9      0      9
-LaunchAbilityProjectile      no-op           0      9      9
-EquipItem                    firstRun        8      0      8
-TriggerAbilityFX             no-op           2      6      8
-ContextualUseNPC             firstRun        7      0      7
-DurabilityCondition          firstRun        7      0      7
-BreakBlock                   via-simulateInteractWithBlock:no-op      6      0      6
-PlaceFluid                   via-simulateInteractWithBlock:no-op      6      0      6
-UseBlock                     via-simulateInteractWithBlock:other      6      0      6
-DestroyBlock                 firstRun        5      0      5
-PlaceBlock                   tick0+          4      0      4
-RefillContainer              firstRun        4      0      4
-BlockCondition               via-simulateInteractWithBlock:other      3      0      3
-CooldownCondition            firstRun        3      0      3
-DragPlaceBlock               tick0+          3      0      3
-Interrupt                    firstRun        2      1      3
-SpawnTriggerVolume           no-op           3      0      3
-CycleBlockGroup              via-simulateInteractWithBlock:no-op      2      0      2
-GrantAbilityCharges          no-op           0      2      2
-MovementCondition            own             2      0      2
-SignalNearbyVolumes          no-op           2      0      2
-SplitAbilityProjectile       no-op           0      2      2
-TriggerSpawnMarkers          firstRun        2      0      2
-ApplyAbilityEffects          no-op           0      1      1
-AttachBeam                   firstRun        0      1      1
-ExtrudePlaceBlock            tick0+          1      0      1
-GroundedCondition            own             0      1      1
-PlaceModeSelect              tick0           1      0      1
-PullEntityAbility            no-op           0      1      1
-SendMessage                  no-op           1      0      1
-SpawnAbilityEntity           no-op           0      1      1
-SpawnNPC                     via-simulateInteractWithBlock:no-op      1      0      1
-SurfaceDrawPlaceBlock        tick0+          1      0      1
+1. THE 13a POPULATION (every string equal to an asset id is an edge, items included; NPC + ability seeds)
+   58 of 135 registered types reached; ModifyInventory 38 objects, ChangeStat 135
 
-CANDIDATES: 26 reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+), most used first:
-  Simple                       tick0+   npc=1352 ability=  26
-  DamageEntity                 tick0    npc= 810 ability=  15
-  ChangeStat                   firstRun npc= 123 ability=  12
-  StatsCondition               firstRun npc=  71 ability=  14
-  EffectCondition              firstRun npc=  44 ability=   8
-  ClearEntityEffect            firstRun npc=  31 ability=   8
-  ModifyInventory              firstRun npc=  38 ability=   0
-  ApplyForce                   tick0+   npc=  31 ability=   0
-  Repeat                       tick0+   npc=  26 ability=   0
-  Condition                    tick0+   npc=  18 ability=   0
-  TriggerCooldown              firstRun npc=   3 ability=  13
-  Explode                      firstRun npc=   9 ability=   2
-  EquipItem                    firstRun npc=   8 ability=   0
-  ContextualUseNPC             firstRun npc=   7 ability=   0
-  DurabilityCondition          firstRun npc=   7 ability=   0
-  DestroyBlock                 firstRun npc=   5 ability=   0
-  PlaceBlock                   tick0+   npc=   4 ability=   0
-  RefillContainer              firstRun npc=   4 ability=   0
-  CooldownCondition            firstRun npc=   3 ability=   0
-  DragPlaceBlock               tick0+   npc=   3 ability=   0
-  Interrupt                    firstRun npc=   2 ability=   1
-  TriggerSpawnMarkers          firstRun npc=   2 ability=   0
-  AttachBeam                   firstRun npc=   0 ability=   1
-  ExtrudePlaceBlock            tick0+   npc=   1 ability=   0
-  PlaceModeSelect              tick0    npc=   1 ability=   0
-  SurfaceDrawPlaceBlock        tick0+   npc=   1 ability=   0
+2. THE RUN-REACHED POPULATION
+   An Item/Items id is an edge only when the item is held and its root for an AttackType key is tagged Attack (ActionAttack.java:148-160).
+   held-item fields: HotbarItems, OffHandItems, and the parameters they Compute from: HotbarItems, OffHand, Weapon, Weapons
+   held-item strings in NPC files: 202 (86 distinct): 140 with an Attack-tagged root (47 distinct items), 59 with no Attack-tagged root, 2 droplist references, 1 not an item id
+   with no item edge at all (the 13a seeds): 46 types; ModifyInventory 2 objects, ChangeStat 25; 12 of the 58 fall out: ChangeActiveSlot, ContextualUseNPC, CycleBlockGroup, DragPlaceBlock, DurabilityCondition, EquipItem, ExtrudePlaceBlock, MovementCondition, PlaceModeSelect, RefillContainer, SpawnNPC, SurfaceDrawPlaceBlock
+   held weapons and off-hand items with an Attack-tagged root bring back 2: DurabilityCondition, MovementCondition
+   run-reached: 48 of 135 types; ModifyInventory 17 objects, ChangeStat 114
+   item-only (in 1, not in 2): 10; in 2 and not in 1: 0
+   not reached by either: 77
+   seeds added to 1: EncounterManager adds types none; WorldEvent adds none
+   dropping Item/Interactions/Tests from the nodes loses types: none
 
-registered types never reached by either seed set: 77 of 135
+   type                         sim        wait    runs on                               npc  enc abil  sum  all-edges
+   Simple                       tick0+     None    A-caster,A-entity,NPC,encounter,host 1229    5   28 1247  1374
+   DamageEntity                 tick0      None    A-caster,A-entity,NPC,encounter,host  749    2   29  761   823
+   Replace                      own        None    A-entity,NPC                          506    0    3  508   674
+   Selector                     no-op      Client  A-caster,A-entity,NPC,encounter,host  383    3   12  389   424
+   Parallel                     own        None    A-caster,NPC                          258    0    9  267   304
+   ApplyEffect                  no-op      None    A-caster,A-entity,NPC,encounter,host  121    3   56  155   161
+   Projectile                   own        Client  NPC,encounter,host                    141    5    0  145    99
+   Serial                       own        None    A-caster,A-entity,NPC,host            128    0   18  132   135
+   ChangeStat                   firstRun   None    A-caster,NPC                          102    0   12  114   135
+   StatsCondition               firstRun   None    A-caster,NPC                           49    0   14   62    84
+   Wielding                     own+       Client  NPC                                    60    0    0   60    60
+   RemoveEntity                 no-op      None    A-entity,NPC,encounter,host            48    8    3   54    43
+   Chaining                     own        Client  NPC                                    53    0    0   53    70
+   EffectCondition              firstRun   None    A-caster,A-entity,NPC                  38    0   12   42    48
+   LaunchProjectile             no-op      None    NPC                                    42    0    0   42    55
+   Charging                     own        Client  A-caster,NPC                           32    0    2   33    52
+   ClearEntityEffect            firstRun   None    A-caster,A-entity,NPC,host             32    0   16   26    31
+   Repeat                       tick0+     None    NPC                                    24    0    0   24    26
+   ApplyForce                   tick0+     Client  NPC                                    22    0    0   22    31
+   ModifyInventory              firstRun   Server  NPC                                    17    0    0   17    38
+   TriggerCooldown              firstRun   None    A-caster,NPC                            3    0   13   16    16
+   SendBeacon                   no-op      None    NPC,encounter                          10    1    0   11    10
+   Explode                      firstRun   None    A-entity,NPC                            9    0    2   10    10
+   LaunchAbilityProjectile      no-op      None    A-caster                                0    0    9    9     9
+   DurabilityCondition          firstRun   None    NPC                                     8    0    0    8     7
+   TriggerAbilityFX             no-op      None    A-caster,A-entity,host                  2    0   11    8     8
+   ChangeState                  via-simulateInteractWithBlock:no-op Client  NPC,host                                7    0    0    6    11
+   Condition                    tick0+     None    NPC                                     6    0    0    6    18
+   DestroyBlock                 firstRun   None    NPC                                     5    0    0    5     5
+   SpawnTriggerVolume           no-op      None    NPC,encounter,host                      4    1    0    5     3
+   BreakBlock                   via-simulateInteractWithBlock:no-op Client  NPC                                     4    0    0    4     6
+   PlaceFluid                   via-simulateInteractWithBlock:no-op Client  NPC                                     4    0    0    4     6
+   BlockCondition               via-simulateInteractWithBlock:other Client  NPC                                     3    0    0    3     3
+   CooldownCondition            firstRun   None    NPC                                     3    0    0    3     3
+   GrantAbilityCharges          no-op      None    A-caster                                0    0    2    2     2
+   Interrupt                    firstRun   None    A-caster,A-entity,NPC                   2    0    2    2     2
+   MovementCondition            own        Client  NPC                                     2    0    0    2     2
+   SignalNearbyVolumes          no-op      None    NPC,host                                2    0    0    2     2
+   SplitAbilityProjectile       no-op      None    A-caster,A-entity                       0    0    4    2     2
+   TriggerSpawnMarkers          firstRun   None    NPC                                     2    0    0    2     2
+   UseBlock                     via-simulateInteractWithBlock:other Client  NPC                                     2    0    0    2     6
+   ApplyAbilityEffects          no-op      None    A-caster                                0    0    1    1     1
+   AttachBeam                   firstRun   None    A-entity                                0    0    1    1     1
+   GroundedCondition            own        None    A-caster                                0    0    1    1     1
+   PlaceBlock                   tick0+     Client  NPC                                     1    0    0    1     4
+   PullEntityAbility            no-op      None    A-caster,A-entity                       0    0    2    1     1
+   SendMessage                  no-op      None    NPC                                     1    0    0    1     1
+   SpawnAbilityEntity           no-op      None    A-caster                                0    0    1    1     1
+
+   runs on a player's manager only (A-caster, one pass; outside the double run unless an NPC casts it): 5: ApplyAbilityEffects, GrantAbilityCharges, GroundedCondition, LaunchAbilityProjectile, SpawnAbilityEntity
+   on a manager with no remote client (NPC, encounter, host, A-entity): 43
+
+3. ITEM-ONLY TYPES (10): reached from a seed only through a string that names an item
+   ChangeActiveSlot           item edge in field Weapons
+       NPC/Roles/Intelligent/Faction/Outlander/Outlander_Stalker.json > Item/Items/Weapon/Crossbow/Weapon_Crossbow_Iron.json [Weapons=Weapon_Crossbow_Iron] > Item/Items/Weapon/Crossbow/Template_Weapon_Crossbow.json [Parent=Template_Weapon_Crossbow] > Item/RootInteractions/Weapons/Crossbow/Root_Weapon_Crossbow_Swap_From.json [SwapFrom=Root_Weapon_Crossbow_Swap_From] > Item/Interactions/Weapons/Crossbow/Weapon_Crossbow_Swap_From.json [Interactions=Weapon_Crossbow_Swap_From]   object at /Failed
+   ContextualUseNPC           item edge in field HarvestInteractionRequiredItems
+       NPC/Roles/Creature/Livestock/Tamed/Tamed_Cow.json > Item/Items/Container/Container_Bucket.json [HarvestInteractionRequiredItems=Container_Bucket] > Item/Interactions/Bucket/Bucket_Milk_Cow.json [Failed=Bucket_Milk_Cow]   object at 
+   CycleBlockGroup            item edge in field Item
+       NPC/Roles/Intelligent/Temple/Templates/Template_Goblin_Lab_Scrapper.json > Item/Items/Tool/Hammer/Tool_Hammer_Crude.json [Item=Tool_Hammer_Crude]   object at /Interactions/Primary/Interactions[0]
+   DragPlaceBlock             item edge in field AttractiveItemSet
+       NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary] > Item/Interactions/Creative/Creative_Place_Replace.json [ReplaceInteractions=Creative_Place_Replace]   object at 
+   EquipItem                  item edge in field Armor
+       NPC/Roles/_Core/Tests/Combat/Test_Entity_Effect_Condition.json > Item/Items/Armor/Iron/Armor_Iron_Chest.json [Armor=Armor_Iron_Chest]   object at /Interactions/Primary/Interactions[0]
+   ExtrudePlaceBlock          item edge in field AttractiveItemSet
+       NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary] > Item/Interactions/Creative/Creative_Place_Extrude.json [ExtrudeInteractions=Creative_Place_Extrude]   object at 
+   PlaceModeSelect            item edge in field AttractiveItemSet
+       NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary]   object at /Failed
+   RefillContainer            item edge in field HarvestInteractionRequiredItems
+       NPC/Roles/Creature/Livestock/Tamed/Tamed_Cow.json > Item/Items/Container/Container_Bucket.json [HarvestInteractionRequiredItems=Container_Bucket]   object at /Interactions/Secondary/Interactions[0]/Failed
+   SpawnNPC                   item edge in field Item
+       NPC/Roles/_Core/Tests/Test_Pet_Lantern.json > Item/Items/EggSpawner/Egg_Spawner_Lantern.json [Item=Egg_Spawner_Lantern]   object at /Interactions/Primary/Interactions[0]
+   SurfaceDrawPlaceBlock      item edge in field AttractiveItemSet
+       NPC/Roles/Creature/Livestock/Chicken_Desert.json > Item/Items/Plant/Crop/Cotton/Plant_Crop_Cotton_Item.json [AttractiveItemSet=Plant_Crop_Cotton_Item] > Item/Interactions/Block_Secondary.json [Secondary=Block_Secondary] > Item/Interactions/Creative/Creative_Place_SurfaceDraw.json [SurfaceDrawInteractions=Creative_Place_SurfaceDraw]   object at 
+
+4. PER-FIELD COUNTS over the run-reached objects (distinct file+path; the value resolved through Parent)
+   ChangeStat.Behaviour: "Add"=4, "Min"=14, "Set"=33, (absent)=63  (total 114)
+
+CANDIDATES: 19 run-reached types whose simulation pass runs the server pass's method (sim firstRun/tick0/tick0+)
+   ApplyForce, AttachBeam, ChangeStat, ClearEntityEffect, Condition, CooldownCondition, DamageEntity, DestroyBlock, DurabilityCondition, EffectCondition, Explode, Interrupt, ModifyInventory, PlaceBlock, Repeat, Simple, StatsCondition, TriggerCooldown, TriggerSpawnMarkers
+
+registered types never reached by either population: 77 of 135

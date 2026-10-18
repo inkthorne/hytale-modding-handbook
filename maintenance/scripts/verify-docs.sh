@@ -985,9 +985,10 @@ section "[HARD] The gates' own fixtures pass"
 # identity control, after a negative control that reproduces the section's pre-fix false green)
 # takes ~19 s (18.6-19.5 s over five runs), so it is run here.
 # check-double-run-fixture.py --mutations (the "double-run table" section above, run as text on stub
-# probe scripts, its own page and snapshots: 54 cases and 73 mutations including the identity control,
-# after a negative control that a stale page must FAIL) takes ~27 s on a machine at load 22, 0.4 s for
-# the cases alone, so it is run here. Its mutation pass runs on a thread pool.
+# probe scripts, its own page and snapshots: 69 cases and 99 mutations including the identity control,
+# after a negative control that a stale page must FAIL) takes 41 s on a machine at load 11-20 and 150 s
+# at load 30-60, 1.6 s for the cases alone, so it is run here. Its mutation pass runs on a thread pool,
+# and its shims are written once before the pool starts (a per-case write failed with ETXTBSY under load).
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading

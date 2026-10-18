@@ -12,9 +12,9 @@ with one or the other.
 
 ```bash
 python3 -I maintenance/probes/double-run/census.py            # the census; --check prints only the denominator
-python3 -I maintenance/probes/double-run/usage.py             # the 13b population: which types NPC, encounter and ability chains and the engine's own chain starters reach, and on which manager; --tables FILE writes the page's tables (FILE must resolve outside the repository and is not --table: exit 2 otherwise)
+python3 -I maintenance/probes/double-run/usage.py             # the 13b population: which types NPC, encounter and ability chains and the engine's own chain starters reach, and on which manager; --tables FILE writes the page's tables (FILE must resolve outside the repository and is not --table: exit 2 otherwise; the test is on the resolved path, so a hard link to a repository file from outside the repository is written through, and from a git worktree the main checkout counts as outside)
 python3 -I maintenance/probes/double-run/usage-test.py "$WORK"   # plant item edges, carriers, routes and table defects in a small tree; usage.py must see each, and only those (87 checks)
-python3 -I maintenance/probes/double-run/usage-mutations.py "$WORK" [FROM TO]  # delete each of 22 guards in a copy of usage.py; usage-test.py must go red on each (22 caught in 419 s on a loaded machine; also takes --assets DIR --src DIR)
+python3 -I maintenance/probes/double-run/usage-mutations.py "$WORK" [FROM TO]  # delete each of 22 guards in a copy of usage.py; usage-test.py must go red on each (22 caught: 171.6 s at load 9-14, 419 s at load 20-35; run by verify-docs.sh; also takes --assets DIR --src DIR)
 maintenance/probes/double-run/build.sh                         # plugin/build/libs/double-run-probe.jar
 maintenance/probes/double-run/run.sh "$SCRATCH" Damage1.npc    # one case; see the header of run.sh
 maintenance/probes/double-run/verdicts.sh "$SCRATCH"           # judge the logs (49 PASS on the pass quoted below; 24 of them are 13a's, 22 the first 13b pass's, 3 the review's ExitInstance)
@@ -30,8 +30,9 @@ runs `usage.py`, `census.py`, `census-test.py` and `usage-test.py` on every run,
 from `census-0.7.2.txt` or `usage-0.7.2.txt` (but for the `source: ` and `assets: ` lines, which name the cache); when the span of
 `docs/interactions-double-run.md` between `### The population (counted)` and `### Outcomes that depend on a field` differs from the
 `usage.py --tables` output by a row, a heading or an order; or when either control exits non-zero, lacks its `---- 0 failed` line or prints fewer
-PASS lines than its floor (16 and 87). `check-double-run-fixture.py` tests that section (54 cases, 73 mutations). **Not run:** the measuring half
-(`run.sh`, `verdicts.sh`, `verdicts-test.sh`, `verdicts-mutations.sh`) and `usage-mutations.py` (419 s). **Not covered even when it is green:** the prose
+PASS lines than its floor (17 and 87); or when `usage-mutations.py` exits non-zero, leaves a survivor, runs a partial slice, catches fewer than N of
+N mutations or has fewer than 22 (171.6 s at load 9-14, 419 s at load 20-35). `check-double-run-fixture.py` tests that section (69 cases, 99 mutations). **Not run:** the measuring half
+(`run.sh`, `verdicts.sh`, `verdicts-test.sh`, `verdicts-mutations.sh`). **Not covered even when it is green:** the prose
 figures outside the seven tables (the population paragraph, the per-field counts table, "13 measured, 45 read"), the `file:line` pins in the page's
 prose (a table row's deciding hook is checked, its prose pin is not), and the coarse `sim` check (LOW-A below). **At a game update** the section goes red
 after `build-jar-cache.sh`: the census `build:` line, the verdict table, the page's tables and both snapshots move, and so do `census-test.py`'s six
@@ -574,10 +575,10 @@ usage.py commit of this review: it says `usage-test.py` has 106 checks; it has 8
 | File | What it is |
 |------|------------|
 | `census.py`, `census-0.7.2.txt` | The census and its output at 0.7.2 (re-run at the next build and diff) |
-| `census-test.py` | Plants sixteen defects in a copy of the source; the census must see each and nothing else |
+| `census-test.py` | Plants sixteen defects in a copy of the source; the census must see each and nothing else; a 17th check shows that a `--src` that is a symlink finds `cache-meta.txt` beside the real cache |
 | `usage.py`, `usage-0.7.2.txt` | The 13b population (run-reached types, item-only types, the manager each runs on, the five routes no asset string names, per-field counts); `--tables FILE` writes the page's tables |
 | `usage-test.py` | Plants the defects above, the routes with their decoys, the shared template and the wrong table rows in a small asset tree and requires `usage.py` to see each (87 checks); reproduces 58/46/12 and 4,127 on the real assets |
-| `usage-mutations.py` | Deletes each of 22 guards of `usage.py` in a copy and requires `usage-test.py` to go red (all 22 do; 419 s in all on a loaded machine, so it stays by hand) |
+| `usage-mutations.py` | Deletes each of 22 guards of `usage.py` in a copy and requires `usage-test.py` to go red (all 22 do; 171.6 s at load 9-14, 419 s at load 20-35; verify-docs.sh runs it) |
 | `build.sh`, `run.sh` | Build the plugin; run one case (header lists them) with the scratch guard of `../beams/run.sh` |
 | `verdicts.sh`, `verdicts-test.sh` | Judge the logs; VOID when a control fails, FAIL when a run does not count (an aborted tick, the wrong chain state, a subject that was not on an NPC manager). The test damages the logs one way at a time (146 damages since the review) |
 | `verdicts-mutations.sh` | Damages the judge instead: replaces each 13b guard of `verdicts.sh` with `false` (54 since the review), one at a time, and requires the sabotages of that block to go red |

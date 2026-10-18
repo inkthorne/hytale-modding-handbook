@@ -978,6 +978,10 @@ section "[HARD] The gates' own fixtures pass"
 # under sort, diff and grep shims and stub hash scripts: 29 cases and 29 mutations including the
 # identity control, after a negative control that reproduces the section's pre-fix false green)
 # takes ~19 s (18.6-19.5 s over five runs), so it is run here.
+# check-double-run-fixture.py --mutations (the "double-run table" section above, run as text on stub
+# probe scripts, its own page and snapshots: 54 cases and 73 mutations including the identity control,
+# after a negative control that a stale page must FAIL) takes ~27 s on a machine at load 22, 0.4 s for
+# the cases alone, so it is run here. Its mutation pass runs on a thread pool.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -994,6 +998,7 @@ check-defaults-fixture.py --mutations
 check-links-fixture.py --mutations
 check-doc-fences-fixture.py --mutations
 check-asset-drift-fixture.py --mutations
+check-double-run-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,

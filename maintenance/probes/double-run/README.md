@@ -506,6 +506,8 @@ chains again to the same end state (a target manager with a `PlayerRef` gets a s
 "none"; the page's controls are stated per type; and the bucketing rule (a type is filed under its worst case on a manager with no remote client) is stated. A correction to the commit message of the
 usage.py commit of this review: it says `usage-test.py` has 106 checks; it has 82 (the count was a guess before the run).
 
+**The review's verify pass (c4e97d1..eb443c2) left two gaps, recorded rather than closed.** LOW-A: the `sim` mapping above lets `none`, `reads` and `unknown` take any label, and cannot separate `doubled`, `same-twice` and `refuses`; a planted `Explode = none` with `ChangeStat = reads` passes with 0 problems. A `none` row's real ground is a `Player`/`PlayerRef` guard, which no `sim` label expresses; checking that line like the hook line would close it. LOW-B: the `ExitInstance` verdicts count `Teleport` adds on every entity (`Watch.Teleports`) and the refusal line names no entity, so a stray add on another entity would still pass; in the measured runs the add is the subject's (in `Exit1.realnpc` the Chicken's index moved from 7 to 5 when two other entities unloaded, `Store.java:676-683`), and no sabotage plants two adds. The verify pass also fixed one stale figure: the `ModifyInventory` row said 14 of 17 gated objects, from before objects were keyed by their defining file; it is 12 of 15.
+
 ## Refuted or changed by the runs
 
 - **The page's reading "a held-slot change from an interaction that runs for its own entity desyncs an NPC-shaped

@@ -13,6 +13,8 @@ seo:
 
 This page covers the entity- and world-affecting interactions: spawning and removing entities, launching projectiles, messaging, opening UI, manipulating inventory and blocks, state transitions, and movement mechanics.
 
+> **Chains NPCs run.** These types run on NPC, host and ability-projectile managers, which have no remote client, so the server runs each operation twice. `RemoveEntity`, `LaunchProjectile`, `Projectile` and `SendMessage` land once; `Explode` damages twice and `ModifyInventory` with `AdjustHeldItemQuantity` removes twice. [The double run](interactions-double-run.md#what-each-of-the-48-types-does) has the verdict for each of the 48 types NPCs and abilities use.
+
 ## Overview
 
 Defined as JSON interaction assets (server classes under `com.hypixel.hytale.server.core.modules.interaction.interaction.config`) and provides:
@@ -465,6 +467,8 @@ held-item adjustments still go through the context's held item and slot. A faile
 > in each `Weapon_Stick_Fire_Projectile_Charged_*` node, not at the entry), so grep the whole chain
 > before assuming a weapon is free.
 
+> **On an NPC's manager.** With `RequiredGameMode` set the node returns at once, because an NPC has no `Player` component (14 of the 17 shipped objects NPC chains run: the arrows of the bows and crossbows). Without it, `AdjustHeldItemQuantity` -1 removes one item in each pass (a stack of 5 became 3; a stack of 1 loses its one item either way), and `ItemToRemove` or `ItemToAdd` under a `Server` wait with the owner the running entity desyncs the passes and removes the entity (measured; no shipped object does that). See [the double run](interactions-double-run.md#what-each-of-the-48-types-does) and [the item-change check](interactions-double-run.md#the-item-change-check-and-the-pass-order).
+
 ### IncreaseBackpackCapacity
 
 **Package:** `com.hypixel.hytale.server.core.modules.interaction.interaction.config.server.IncreaseBackpackCapacityInteraction`
@@ -708,6 +712,8 @@ Behavior (from the decompiled source):
 - **Explosion origin**, in priority order: the `HIT_LOCATION` meta value if present; else the targeted block's center (for collision-triggered interaction types); else the executing entity's position.
 - If the executing entity is a projectile, damage is attributed as a projectile source (shooter = owning entity); otherwise the environment source `DAMAGE_SOURCE_EXPLOSION` is used, whose type string is the translation key `server.general.deathCause.explosion` as of 0.7.2 (it was the bare `"explosion"` before).
 - 0.7.2+: with `DamageBlocks` on, each block is tested against the world's `AllowBlockBreaking` / `BlockBreakingBypassTag` (see [BreakBlock](#breakblock)), so an explosion in a no-break world leaves untagged blocks intact.
+
+- **On an NPC's, host's or ability projectile's manager the explosion happens twice.** Those managers have no remote client, so `firstRun` runs in both passes and nothing guards it: a `Sheep` in range lost health twice and had two `Damage` events raised at it (measured), and with `DamageBlocks` on the blocks take the damage twice (read). It applies to 9 shipped NPC objects and 2 on ability projectiles. A projectile that a player fires runs its `ProjectileHit` chain on the player's manager, once. See [the double run](interactions-double-run.md#what-each-of-the-48-types-does).
 
 ---
 

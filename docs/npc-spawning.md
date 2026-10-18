@@ -427,6 +427,7 @@ Behavior notes:
 - **A marker that already has live NPCs will not re-fire.** `SpawnMarkerEntity.trigger()` returns
   false while its spawn count is above zero, so repeatedly using a summon item does not stack more
   NPCs onto the same marker — it re-arms only as the ones it spawned are removed.
+- **An NPC's summon chain runs the interaction in both passes.** The NPC's manager has no remote client ([the double run](interactions-double-run.md#what-each-of-the-48-types-does)), so `firstRun` queues `trigger()` twice. The second `trigger()` finds the marker already spawned (`spawnCount > 0`) and returns false, so each marker fires once. With `Count` above 0 the reservoir sample runs in each pass and the two passes can pick different markers, so up to `2 x Count` markers fire (read; neither shipped summon chain sets `Count`).
 - **A marker whose position validation is pending or failed ignores the trigger** (0.7.2+).
   `trigger()` checks the marker's `SpawnMarkerValidation` component and returns false, logging
   `Marker %s ignored a manual trigger because validation is %s` (`pending` or `failed`) at `FINE`.

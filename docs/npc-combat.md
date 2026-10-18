@@ -26,6 +26,8 @@ To give a creature the lightweight melee:
 
 Neutral animals ship with this machinery **off by default**: `Template_Animal_Neutral` exposes `Attack` (default `""`) and `AttackWhenStartled` (default `false`) and has a dormant "startled" retaliation in its `Flee` state. Set `AttackWhenStartled: true` plus an `Attack` interaction to enable it. The cleanest "give a creature a bite" exemplar is `Server/NPC/Roles/Undead/Chicken_Undead.json` (a `Template_Predator` variant that sets `"Attack": "Root_NPC_Attack_Melee"` and overrides the start anim + damage). The instruction pattern itself lives in `Template_Predator.json`: a target-in-`AttackDistance` + line-of-sight gate, `HeadMotion: Aim`, `ActionsBlocking`, then `Timeout (pre-delay) → Attack → Timeout (post-delay)`.
 
+> **These chains run twice per operation.** An NPC's `InteractionManager` has no remote client, so each operation of the chain below runs in a simulation pass and a server pass. The damage in `NPC_Attack_Melee_Damage` lands once (`DamageEntity` is guarded), but a `ChangeStat` with `Behaviour` `Add` or an `Explode` you add to the chain lands twice. See [the double run](interactions-double-run.md#what-each-of-the-48-types-does).
+
 ### The interaction-var chain
 
 `Attack: "Root_NPC_Attack_Melee"` walks a chain of interactions (under `Server/Item/…/NPCs/`), each of which `Replace`s a **named var** with a default you can override at the role level:

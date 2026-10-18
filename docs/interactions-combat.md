@@ -13,6 +13,8 @@ seo:
 
 This page covers the combat and effects interactions: target selection, dealing damage, applying forces and status effects, modifying stats, and interrupting other entities.
 
+> **Chains NPCs run.** The attack chains of NPCs, and the hit chains of ability projectiles, use these types on a manager with no remote client, so the server runs each operation twice. `DamageEntity`, `ApplyForce` and `ClearEntityEffect` give the same result as once; `ChangeStat` with `Behaviour` `Add`, the default, lands twice. [The double run](interactions-double-run.md#what-each-of-the-48-types-does) has the verdict for each of the 48 types NPCs and abilities use.
+
 Examples taken from shipped assets name their file. In the others, an id that starts with `MyMod_` is a
 placeholder for an asset of your own.
 
@@ -980,6 +982,8 @@ interaction.
 from the literal `StatModifiers` and adjusts each entry by the matching interaction modifier on the
 user's **equipped armour** — additive modifiers are summed onto the amount, then a multiplier
 modifier reduces it by `max(0, 1 − multiplier)` — before applying it. It too always targets the user.
+
+> **On an NPC's manager `Behaviour` `Add` lands twice.** The manager has no remote client, so `firstRun` runs in a simulation pass and again in the server pass: a `+5` chain changed `SignatureCharges` by +10 (measured; a flagged, player-style manager: +5). `Set`, `Min` and `Max` give the same result as once. Of the 102 shipped `ChangeStat` objects that run on such managers, 55 add (no `Behaviour`, or `Add`), 33 `Set` and 14 `Min`; the 12 in ability casts run on the caster's manager. See [the double run](interactions-double-run.md#what-each-of-the-48-types-does).
 
 ### StatModifiers
 

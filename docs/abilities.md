@@ -480,6 +480,8 @@ them with the other types. `OpenAbilityBench` and `MarkAbilityBenchIntroSeen` ar
 [SimpleInstantInteraction](interactions.md#simpleinstantinteraction). Seven act on the server only:
 each leaves `simulateFirstRun` empty. `GroundedCondition` runs its check in both.
 
+**Which manager runs a cast.** The cast chain runs on the caster's `InteractionManager` (`AbilityChargeActivator.java:105-126`); a player's has a remote client and runs each operation once. Two chains run elsewhere: the `Repeats` chains of a `SpawnAbilityEntity` run on the entity's own manager (`AbilityEntityRepeatSystem.java:49-67`), and the `ProjectileHit` and `ProjectileMiss` chains of an ability projectile run on the projectile's own manager. Both are built with `new InteractionManager(null, ...)` (`AbilityEntitySpawner.java:59`, `AbilityProjectileLauncher.java:102`), which has no remote client, so there the server runs every operation twice: `Explode` and a `ChangeStat` `Add` land twice. The projectile's `ProjectileSpawn` chain runs on the caster's. See [the double run](interactions-double-run.md#what-each-of-the-48-types-does).
+
 ### LaunchAbilityProjectile
 
 **Package:** `com.hypixel.hytale.builtin.abilities.interaction.LaunchAbilityProjectileInteraction`

@@ -13,6 +13,8 @@ seo:
 
 This page covers the combo-system interactions: chaining attacks together with timing windows, branching on tap vs hold, charge-and-release mechanics, and the flag/cancel machinery that coordinates chains.
 
+> **Chains NPCs run.** An NPC's `Chaining`, `Charging` and `Wielding` run on a manager with no remote client, so each operation runs in a simulation pass and a server pass: the simulation pass picks the branch, and the server pass follows it. [The double run](interactions-double-run.md#what-each-of-the-48-types-does) has the verdict for each type.
+
 Examples taken from shipped assets name their file. The others are patterns, and every id in them
 that starts with `MyMod_` is a placeholder for an interaction of your own; all other ids in them
 name shipped assets.

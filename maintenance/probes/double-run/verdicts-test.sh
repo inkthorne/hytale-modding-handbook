@@ -24,6 +24,7 @@
 #     in a verdict run (-> FAIL "does not count") and in a control run (-> VOID "control run"), one reason at a time
 #   * the sim= flag (isUseSimulationState) of the ProbeLog lines not following the pass -> FAIL, and VOID on the control
 #   * a real-NPC log whose subject was not on an NPCInteractionSimulationHandler manager -> VOID "subject's manager"
+#   * (review of b0b119a..c4e97d1) a world-thread exception in a real-NPC log -> VOID, for each real-NPC verdict; the DestroyBlock real-NPC block ids
 # Each case also checks that the sabotaged verdict line is the ONLY change: the other verdict blocks keep their
 # PASS count (a damage that turns everything red would pass the checks above for the wrong reason).
 set -u
@@ -203,5 +204,15 @@ fresh; echo "$EXC" >> "$work/c/Destroy1.npc.log"; expect "DestroyBlock: an excep
 fresh; addline InvAdjOneSelf1.npc "$REMV"; expect "InvAdjOneSelf1.npc: a caught tick exception" 1 "InvAdjOneSelf1.npc: the run does not count" 1
 fresh; addline Destroy1.remote "$SYNC"; expect "Destroy1.remote control: a desync line" 2 "DestroyBlock control run does not count" 3
 fresh; addline Destroy2.remote "$REMV"; expect "Destroy2.remote control: a caught tick exception" 2 "DestroyBlock control run does not count" 3
+# ---------------------------------------------------------------------------------------------------------------------
+# Review of b0b119a..c4e97d1. MINOR-4: realverdict() skipped the "Exception in thread" guard, so a world-thread exception appended to a real-NPC log
+# left the verdict at PASS. One sabotage per real-NPC verdict (the guard is one condition in realverdict; each caller is exercised).
+for c in Explode1 Cooldown1 Proj1 Repeat1 Clear1 Destroy1; do
+  fresh; echo "$EXC" >> "$work/c/$c.realnpc.log"
+  expect "$c.realnpc: an exception in a run that should have none" 2 "an exception in a run that should have none" 1
+done
+# LOW-1: the Destroy1.realnpc verdict says "block gone"; the block ids are read.
+fresh; setfield Destroy1.realnpc block_id_after 953; expect "real NPC DestroyBlock left the block (block_id_after 953)" 1 "real NPC DestroyBlock: the block is '953' -> '953', predicted gone (0)" 1
+fresh; setfield Destroy1.realnpc block_id_before 0; expect "real NPC DestroyBlock had no solid block to break (block_id_before 0)" 2 "real NPC DestroyBlock: the target block was '0' before the chain" 1
 echo "---- $fails failed, $nrun sabotage(s) run"
 [ "$nrun" -gt 0 ] && [ "$fails" = 0 ]

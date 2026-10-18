@@ -3,13 +3,13 @@
 #   maintenance/probes/double-run/verdicts-mutations.sh GOODRUN WORKDIR [FROM TO]
 #
 # verdicts-test.sh damages the LOGS and checks that the judge notices. This script damages the JUDGE: for every guard in the 13b part
-# of verdicts.sh (each `if`/`elif ... ; then` line after the "Item 13b" marker, and the three tests of realverdict) it writes a copy of
+# of verdicts.sh (each `if`/`elif ... ; then` line after the "Item 13b" marker, including the real-NPC blocks after realverdict, and the tests of realverdict) it writes a copy of
 # verdicts.sh in which that one condition is replaced by `false` (the guard never fires), and runs verdicts-test.sh against the copy with
 # VT_ONLY set to the sabotages of that guard's block. Every mutation must turn that run RED: a guard that can be deleted while its block's
 # sabotages stay green is not tested by them (the rule: delete the check, run the suite, a test that stays green is not about that check).
 #
 # The unmutated copy is the identity control: it must stay green on every block (else the mutations prove nothing). FROM TO (1-based, inclusive)
-# run a slice of the mutations (a slice of about 5 fits the 600 s foreground limit; the whole list is about 60). WORKDIR must be absent, empty, or
+# run a slice of the mutations (a slice of about 5 fits the 600 s foreground limit; the whole list is about 70). WORKDIR must be absent, empty, or
 # carry the marker .double-run-verdicts-mutations.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,7 +49,8 @@ for i in range(real, real + 8):
     if re.match(r'^\s*(if|elif) ', lines[i]):
         emit(i, REAL_KEY)
 cur = None
-for i in range(start, real):
+# every line of the 13b part: the blocks before realverdict() and the real-NPC blocks after it (the function itself is handled above)
+for i in [i for i in range(start, len(lines)) if not real <= i < real + 9]:
     l = lines[i]
     mm = re.search(r'(?:need|result_line) ([A-Za-z0-9]+)\.', l)
     if mm and re.match(r'^\s*if ', l) and ('need ' in l or 'result_line' in l):

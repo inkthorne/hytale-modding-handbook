@@ -366,6 +366,7 @@ fi
 realverdict() {
   local label="$1" c="$2" st="$3" v="$4" e="$5" what="$6" why
   if ! realnpc_manager "$c"; then voidc "$label: the subject's manager is not an NPCInteractionSimulationHandler one"
+  elif [ "$(exceptions "$c")" != 0 ]; then voidc "$label: an exception in a run that should have none"
   elif why=$(flawed "$c" "$st"); then voidc "$label does not count: $why"
   elif feq "$v" "$e"; then ok "$label: $v ($what)"
   else bad "$label: read '$v', predicted $e ($what)"; fi
@@ -385,8 +386,12 @@ fi
 if need Clear1.realnpc Clear0.npc; then
   realverdict "real NPC ClearEntityEffect" Clear1.realnpc Finished "$(field "$(result_line Clear1.realnpc)" effect_present)" 0 "effect cleared (a chain that clears nothing leaves $(field "$(result_line Clear0.npc)" effect_present)): the same result twice"
 fi
+# The verdict says "block gone", so the block id the run saw before and after is read too (review of b0b119a..c4e97d1, LOW-1): a solid block before, 0 after.
 if need Destroy1.realnpc Destroy1.remote; then
-  realverdict "real NPC DestroyBlock" Destroy1.realnpc Finished "$(field "$(result_line Destroy1.realnpc)" break_events)" 1 "1 BreakBlockEvent, block gone: the same result twice"
+  rb0=$(field "$(result_line Destroy1.realnpc)" block_id_before); rb1=$(field "$(result_line Destroy1.realnpc)" block_id_after)
+  if ! fpos "$rb0"; then voidc "real NPC DestroyBlock: the target block was '$rb0' before the chain, wanted a solid block"
+  elif ! feq "$rb1" 0; then bad "real NPC DestroyBlock: the block is '$rb0' -> '$rb1', predicted gone (0)"
+  else realverdict "real NPC DestroyBlock" Destroy1.realnpc Finished "$(field "$(result_line Destroy1.realnpc)" break_events)" 1 "1 BreakBlockEvent, block $rb0 -> $rb1: the same result twice"; fi
 fi
 
 echo "---- $fails failed, $void void"

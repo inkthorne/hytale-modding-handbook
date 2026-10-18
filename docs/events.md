@@ -187,7 +187,7 @@ getEventRegistry().register((short) 100, PlayerConnectEvent.class, event -> {
 
 Core interfaces and classes that events extend or implement.
 
-### IBaseEvent<KeyType>
+### `IBaseEvent<KeyType>`
 
 **Package:** `com.hypixel.hytale.event`
 
@@ -199,7 +199,7 @@ public interface IBaseEvent<KeyType> {
 }
 ```
 
-### IEvent<KeyType>
+### `IEvent<KeyType>`
 
 **Package:** `com.hypixel.hytale.event`
 
@@ -213,7 +213,7 @@ public interface IEvent<KeyType> extends IBaseEvent<KeyType> {
 }
 ```
 
-### IAsyncEvent<KeyType>
+### `IAsyncEvent<KeyType>`
 
 **Package:** `com.hypixel.hytale.event`
 
@@ -296,7 +296,7 @@ EcsEvent                      (ECS events handled by EntityEventSystem)
 
 ---
 
-## EventRegistration<KeyType, EventType>
+## `EventRegistration<KeyType, EventType>`
 
 **Package:** `com.hypixel.hytale.event`
 

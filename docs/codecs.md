@@ -57,7 +57,7 @@ ExtraInfo                       per-encode/decode context (validation, version, 
 
 ## Core Codec Types
 
-### Codec<T>
+### `Codec<T>`
 **Package:** `com.hypixel.hytale.codec`
 
 Base interface for all codecs. It extends `RawJsonCodec<T>` and `SchemaConvertable<T>`.
@@ -142,7 +142,7 @@ EnumCodec<MyEnum> enumCodec = new EnumCodec<>(MyEnum.class);
 
 ---
 
-### KeyedCodec<T>
+### `KeyedCodec<T>`
 **Package:** `com.hypixel.hytale.codec`
 
 A concrete class that pairs a child `Codec<T>` with a string key. It reads/writes that key inside a `BsonDocument` and is the building block for object fields and for `ItemStack` metadata.
@@ -206,7 +206,7 @@ object is present.
 
 ## BuilderCodec — codecs for objects
 
-### BuilderCodec<T>
+### `BuilderCodec<T>`
 **Package:** `com.hypixel.hytale.codec.builder`
 
 `BuilderCodec` is a concrete `Codec<T>` (it also implements `DirectDecodeCodec`, `InheritCodec`, and `ValidatableCodec`). It is the standard way to define a codec for a plain Java object. You build one with the static `builder(...)` factory and a fluent API; each field is a `KeyedCodec` plus a setter (`BiConsumer<T, F>`) and a getter (`Function<T, F>`).
@@ -375,7 +375,7 @@ protected void setup() {
 
 These map a string discriminator (a `"Type"`-style key) or a class to a child codec, so a document can select which concrete codec deserializes it.
 
-### StringCodecMapCodec<T, C>
+### `StringCodecMapCodec<T, C>`
 **Package:** `com.hypixel.hytale.codec.lookup`
 
 Abstract base for codecs that dispatch on a string key. It is **abstract** — you do not instantiate it directly with `new StringCodecMapCodec<>("Type", SomeClass.class)`. Concrete subclasses (such as `AssetCodecMapCodec`) provide a usable implementation. Its constructors take the discriminator key and flags:
@@ -393,7 +393,7 @@ public abstract class StringCodecMapCodec<T, C extends Codec<? extends T>>
 }
 ```
 
-### AssetCodecMapCodec<K, T>
+### `AssetCodecMapCodec<K, T>`
 **Package:** `com.hypixel.hytale.assetstore.codec`
 
 A concrete `StringCodecMapCodec` for polymorphic JSON assets (`T extends JsonAsset<K>`). This is what real assets such as `Interaction.CODEC` use. Its constructor takes the **key codec plus id and asset-data getters/setters** (5 args, or 6 with a leading type-key string) — **not** a single `MyAsset.CODEC`:
@@ -418,7 +418,7 @@ public class AssetCodecMapCodec<K, T extends JsonAsset<K>>
 }
 ```
 
-### MapKeyMapCodec<V>
+### `MapKeyMapCodec<V>`
 **Package:** `com.hypixel.hytale.codec.lookup`
 
 A concrete map codec keyed by `Class<? extends V>`. The constructor is **no-arg**; you register types after construction via `register(Class, String, Codec)`:
@@ -440,7 +440,7 @@ public class MapKeyMapCodec<V> extends AMapProvidedMapCodec<...> {
 
 ## Registering Custom Types via the Plugin Registry
 
-### CodecMapRegistry<T, C>
+### `CodecMapRegistry<T, C>`
 **Package:** `com.hypixel.hytale.server.core.plugin.registry`
 
 A plugin obtains a registry for a given map codec through `PluginBase.getCodecRegistry(...)`, then registers concrete types. Registration is **3-arg**: `register(String id, Class<? extends T> type, C codec)` — note the explicit `Class` argument (there is no 2-arg `register("name", instance)`).
@@ -567,7 +567,7 @@ A `Codec<com.hypixel.hytale.protocol.Color>`. Encodes to a `#RRGGBB` hex string;
 
 > **`CodecException` messages carry the key path.** When a codec throws with an `ExtraInfo` in hand, `getMessage()` is the bare message plus the offending key and source (`<message> '<key>' \nFrom: '<value>'`). As of 0.6.3 `CodecException.getRawMessage()` returns the bare message on its own — match on that (or on a fragment) rather than on the full `getMessage()` text.
 
-### WeightedMapCodec<T>
+### `WeightedMapCodec<T>`
 
 A `Codec<IWeightedMap<T>>` (`com.hypixel.hytale.common.map.IWeightedMap`) for `T extends IWeightedElement` — the JSON form is an array of weighted-element documents. Used by asset families like drop containers and spawn markers.
 

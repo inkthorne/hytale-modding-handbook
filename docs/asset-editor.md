@@ -66,7 +66,7 @@ EditorClientEvent<KeyType> (base — exposes EditorClient)
 
 ---
 
-## EditorClientEvent<KeyType> (Base Class)
+## `EditorClientEvent<KeyType>` (Base Class)
 
 **Package:** `com.hypixel.hytale.builtin.asseteditor.event`
 

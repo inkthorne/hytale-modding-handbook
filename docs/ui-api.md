@@ -130,7 +130,7 @@ Area setWidth(int width)
 Area setHeight(int height)
 ```
 
-### Value<T>
+### `Value<T>`
 **Package:** `com.hypixel.hytale.server.core.ui`
 
 Generic value container supporting literal values or document references for dynamic binding.

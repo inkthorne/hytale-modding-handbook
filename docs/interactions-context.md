@@ -305,7 +305,7 @@ public void tick(..., InteractionContext context, ...) {
 
 The meta system provides type-safe key-value storage for passing data between operations during interaction execution.
 
-#### MetaKey<T>
+#### `MetaKey<T>`
 
 `MetaKey<T>` is a type-safe key class that identifies stored values and enforces their type at compile time.
 

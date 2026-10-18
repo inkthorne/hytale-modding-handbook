@@ -731,7 +731,7 @@ CommandRegistration registration = getCommandRegistry().registerCommand(new MyCo
 
 ---
 
-## ArgumentType<D>
+## `ArgumentType<D>`
 **Package:** `com.hypixel.hytale.server.core.command.system.arguments.types`
 
 Abstract base class for command argument types. Extend this to create custom argument types.
@@ -749,7 +749,7 @@ boolean isGreedyString()     // Whether this consumes the rest of the line
 ArgumentType<D> withSharedSuggestions(ArgumentType<?> other)  // Reuse another type's suggestion cache (return type narrowed to ArgumentType<D> in 0.6.3)
 ```
 
-### SingleArgumentType<D>
+### `SingleArgumentType<D>`
 Base class for arguments that consume a single input token:
 
 ```java
@@ -1149,7 +1149,7 @@ private static final SingleArgumentType<Fluid> FLUID_ARG =
 
 ---
 
-## Argument<Arg, D>
+## `Argument<Arg, D>`
 **Package:** `com.hypixel.hytale.server.core.command.system.arguments.system`
 
 The base of every argument object — `RequiredArg`, `OptionalArg`, `DefaultArg`, `FlagArg`.

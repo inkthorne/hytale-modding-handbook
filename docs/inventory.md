@@ -1180,7 +1180,7 @@ public void giveItem(PlayerRef playerRef, Player player, String itemId, int quan
 }
 ```
 
-### ListTransaction<T extends Transaction>
+### `ListTransaction<T extends Transaction>`
 ```java
 boolean succeeded()
 List<T> getList()
@@ -1188,7 +1188,7 @@ int size()
 static <T> ListTransaction<T> getEmptyTransaction(boolean success)
 ```
 
-### MoveTransaction<T extends Transaction>
+### `MoveTransaction<T extends Transaction>`
 Wraps source and destination transactions for move operations.
 
 ### TagTransaction

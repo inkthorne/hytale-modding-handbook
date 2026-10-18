@@ -82,7 +82,7 @@ ComponentRegistry (per ECS type: EntityStore / ChunkStore)
 
 ## Core Types
 
-### Store<ECS_TYPE>
+### `Store<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Container for entities and their components. Implements `ComponentAccessor`.
@@ -162,7 +162,7 @@ void assertThread()
 
 ---
 
-### Ref<ECS_TYPE>
+### `Ref<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Lightweight reference to an entity in a store. Used as a pointer to access entity data.
@@ -186,7 +186,7 @@ Invalidation is engine-side (package-private) — a `Ref` becomes invalid when i
 
 ---
 
-### Component<ECS_TYPE>
+### `Component<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Interface for all components. Must be cloneable.
@@ -198,7 +198,7 @@ default Component<ECS_TYPE> cloneSerializable()
 
 ---
 
-### ComponentType<ECS_TYPE, T>
+### `ComponentType<ECS_TYPE, T>`
 **Package:** `com.hypixel.hytale.component`
 
 Type descriptor for a component. Used to get/set components.
@@ -215,7 +215,7 @@ boolean requiresComponentType(ComponentType<ECS_TYPE, ?> type)
 
 ---
 
-### ComponentAccessor<ECS_TYPE>
+### `ComponentAccessor<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Interface for accessing components. Store implements this.
@@ -242,7 +242,7 @@ Holder<ECS_TYPE> removeEntity(Ref<ECS_TYPE> ref, Holder<ECS_TYPE> outHolder, Rem
 
 ---
 
-### ArchetypeChunk<ECS_TYPE>
+### `ArchetypeChunk<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Used in `EntityEventSystem` handlers and iteration to access components by entity index.
@@ -265,7 +265,7 @@ See [Events API - ECS Events](events.md#ecs-events-entityeventsystem) for usage 
 
 ---
 
-### Query<ECS_TYPE>
+### `Query<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.query`
 
 Interface for filtering entities by their component composition. Used with `Store.forEachChunk()`, `Store.getEntityCountFor()`, and as the return type for `EntityEventSystem.getQuery()`.
@@ -351,7 +351,7 @@ int count = store.getEntityCountFor(playerQuery);
 
 ---
 
-### CommandBuffer<ECS_TYPE>
+### `CommandBuffer<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Buffer for deferred entity/component operations during ECS system iteration. Implements `ComponentAccessor`. Used in `EntityEventSystem.handle()` and `EntityTickingSystem.tick()` to safely modify entities while iterating.
@@ -503,7 +503,7 @@ public class MyEventSystem extends EntityEventSystem<EntityStore, MyEvent> {
 
 ## Blueprint and Composition Types
 
-### Holder<ECS_TYPE>
+### `Holder<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Blueprint/template for creating entities. Use to define entity composition before adding to store. `Holder` has no public constructor — obtain one via `registry.newHolder()`.
@@ -536,7 +536,7 @@ Ref<EntityStore> entityRef = store.addEntity(holder, AddReason.SPAWN);
 
 ---
 
-### Archetype<ECS_TYPE>
+### `Archetype<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Describes the composition of components for entities. Implements `Query<ECS_TYPE>`.
@@ -571,7 +571,7 @@ Archetype<ECS_TYPE> getSerializableArchetype(ComponentRegistry.Data<ECS_TYPE> da
 
 ## Resource Types
 
-### Resource<ECS_TYPE>
+### `Resource<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Interface for world-level singleton resources (not per-entity). Like `Component`, it extends `Cloneable` and has one abstract method:
@@ -580,7 +580,7 @@ Interface for world-level singleton resources (not per-entity). Like `Component`
 Resource<ECS_TYPE> clone()   // implement for your resource classes
 ```
 
-### ResourceType<ECS_TYPE, T>
+### `ResourceType<ECS_TYPE, T>`
 **Package:** `com.hypixel.hytale.component`
 
 Type descriptor for resources.
@@ -775,7 +775,7 @@ The synchronous lookup returns `null` for an unloaded section. To load on demand
 
 ---
 
-## ComponentRegistry<ECS_TYPE>
+## `ComponentRegistry<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component`
 
 Registry for components, resources, systems, and event types. Access via `EntityStore.REGISTRY` or `ChunkStore.REGISTRY`.
@@ -1105,7 +1105,7 @@ store.replaceResource(MyWorldResource.getResourceType(), newResource);
 
 For per-frame entity processing, extend `EntityTickingSystem`.
 
-### EntityTickingSystem<ECS_TYPE>
+### `EntityTickingSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system.tick`
 
 Abstract base class for systems that process entities every tick. Part of the system hierarchy:
@@ -1189,7 +1189,7 @@ protected void setup() {
 | Handle an ECS event targeted at an entity | `EntityEventSystem<ECS_TYPE, Event>` | see [Events API](events.md#ecs-events-entityeventsystem) |
 | Handle a world-level ECS event | `WorldEventSystem<ECS_TYPE, Event>` | `handle(store, buffer, event)` |
 
-### RefSystem<ECS_TYPE>
+### `RefSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system`
 
 Lifecycle callbacks fired when an entity matching `getQuery()` is added to or removed from the store. You get a live `Ref` plus a `CommandBuffer`, so you can read components and queue follow-up mutations safely.
@@ -1206,7 +1206,7 @@ This is the standard "player joined the world" hook: a `RefSystem<EntityStore>` 
 
 > **Note the asymmetric names:** `onEntityAdded` (past tense) but `onEntityRemove` (present) — `RefSystem` fires *after* the entity is in the store and *before* it leaves. The `HolderSystem` pair is mirrored: `onEntityAdd` / `onEntityRemoved`.
 
-### HolderSystem<ECS_TYPE>
+### `HolderSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system`
 
 Like `RefSystem`, but the callbacks receive the entity's `Holder` (blueprint) instead of a live `Ref` — `onEntityAdd` runs *before* the entity is inserted (you can still add/adjust components on the holder), and `onEntityRemoved` runs *after* removal with the removed entity's data.
@@ -1219,7 +1219,7 @@ public abstract Query<ECS_TYPE> getQuery()   // from QuerySystem
 
 Reach for `HolderSystem` to guarantee an entity enters the store fully equipped (the engine uses it to ensure components exist on matching entities before any other system sees them). For a given entity, `HolderSystem.onEntityAdd` fires before `RefSystem.onEntityAdded`; on removal, `RefSystem.onEntityRemove` fires before `HolderSystem.onEntityRemoved`.
 
-### StoreSystem<ECS_TYPE>
+### `StoreSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system`
 
 Callbacks tied to the *system's* lifecycle, not any entity's — fired when the system is attached to / detached from a `Store` (e.g. on registration, per world).
@@ -1231,7 +1231,7 @@ public abstract void onSystemRemovedFromStore(Store<ECS_TYPE> store)
 
 Use it to initialize or clean up per-world state (seed a `Resource`, hook external services). It has no query and never iterates entities.
 
-### DelayedSystem<ECS_TYPE>
+### `DelayedSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system`
 
 A `TickingSystem` that only does work every `intervalSec` seconds instead of every tick. It accumulates delta time in an internal per-store resource and calls `delayedTick` once the interval elapses.
@@ -1244,7 +1244,7 @@ public abstract void delayedTick(float dt, int systemIndex, Store<ECS_TYPE> stor
 
 Use for periodic store-wide jobs (cleanup sweeps, notifications) that would be wasteful every tick. The `dt` passed to `delayedTick` is the **full accumulated time** since the last delayed tick (≥ `intervalSec`), not the per-tick delta — scale any rate-based math by it.
 
-### DelayedEntitySystem<ECS_TYPE>
+### `DelayedEntitySystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system.tick`
 
 `EntityTickingSystem` with the same interval gating as `DelayedSystem`: you implement the usual per-entity `tick(dt, index, chunk, store, buffer)` and `getQuery()`, but entities are only processed once per interval.
@@ -1257,7 +1257,7 @@ public float getIntervalSec()
 
 The interval is tracked store-wide (one hidden resource), so all matching entities are processed together in the same burst tick, each receiving the accumulated `dt`. The engine uses this for things like periodic sleep-state packets.
 
-### WorldEventSystem<ECS_TYPE, EventType>
+### `WorldEventSystem<ECS_TYPE, EventType>`
 **Package:** `com.hypixel.hytale.component.system`
 
 Handles world-level ECS events — events invoked on the store itself (`store.invoke(event)` / `buffer.invoke(event)`) rather than on a target entity. The counterpart of `EntityEventSystem` for events with no entity.
@@ -1269,7 +1269,7 @@ public abstract void handle(Store<ECS_TYPE> store, CommandBuffer<ECS_TYPE> buffe
 
 The event class must be registered via `registerWorldEventType` (see [ComponentRegistry](#componentregistryecs_type)) and extend `EcsEvent`. Note the `handle` signature has no `index`/`ArchetypeChunk`/`Ref` — there is no target entity; use the `CommandBuffer` for any entity mutations.
 
-### RunWhenPausedSystem<ECS_TYPE>
+### `RunWhenPausedSystem<ECS_TYPE>`
 **Package:** `com.hypixel.hytale.component.system.tick`
 
 Marker interface (no methods) extending `TickableSystem`. When a world is paused, the store's normal tick is replaced by a paused tick that runs **only** systems implementing this interface — everything else is skipped.
@@ -1353,7 +1353,7 @@ public enum OrderPriority { CLOSEST, CLOSE, NORMAL, FURTHER, FURTHEST }
 > `System dependency isn't registered:`) — see [Gotchas](#gotchas--errors); register the anchor
 > system before the dependent one.
 
-### SystemType<ECS_TYPE, T>
+### `SystemType<ECS_TYPE, T>`
 **Package:** `com.hypixel.hytale.component`
 
 Type descriptor for a registered system class — the system-side analogue of `ComponentType`. Obtained from `ComponentRegistry.registerSystemType(Class)`; key members are `getTypeClass()`, `isType(ISystem)`, `getIndex()`, and `getRegistry()`. The engine uses it to schedule whole categories of systems (ticking, run-when-paused), and `SystemTypeDependency` orders a system relative to *every* system of a type. Most plugins never need it directly — `SystemDependency` on a concrete class covers the common case.
@@ -1366,7 +1366,7 @@ Type descriptor for a registered system class — the system-side analogue of `C
 
 The spatial package maintains per-world positional indexes so systems can answer "what's near this point?" without scanning every entity. The engine registers spatial systems for players, NPCs, items, and more; each one keeps a `SpatialResource` up to date every tick.
 
-### SpatialSystem<ECS_TYPE>
+### `SpatialSystem<ECS_TYPE>`
 
 Abstract `TickingSystem` that rebuilds a spatial index each tick from every entity matching `getQuery()`, using `getPosition` to extract each entity's position.
 
@@ -1378,7 +1378,7 @@ public abstract Query<ECS_TYPE> getQuery()   // from QuerySystem
 
 To publish your own index: register a `SpatialResource` as a resource, then register a `SpatialSystem` subclass pointing at its `ResourceType`. Consumers query through the resource, never the system.
 
-### SpatialResource<T, ECS_TYPE>
+### `SpatialResource<T, ECS_TYPE>`
 
 The world-level `Resource` holding the index: a `SpatialData` buffer of positions plus the queryable `SpatialStructure`.
 
@@ -1391,7 +1391,7 @@ public static <ECS_TYPE> List<Ref<ECS_TYPE>> getThreadLocalReferenceList()
 
 `getThreadLocalReferenceList()` returns a reusable scratch list for query results (cleared on every call) — handy as the `results` argument to the `collect*` methods, but don't hold onto it across calls.
 
-### SpatialStructure<T> / KDTree<T>
+### `SpatialStructure<T>` / `KDTree<T>`
 
 `SpatialStructure` is the query interface; `KDTree` is the standard implementation (its constructor takes a `Predicate<T>` filter applied to every collected result).
 
@@ -1421,7 +1421,7 @@ spatial.getSpatialStructure().collect(position, 16.0, nearby);
 > reflect positions as of the last rebuild — up to one tick old. Re-check live positions via
 > `TransformComponent` if exactness matters.
 
-### SpatialData<T>
+### `SpatialData<T>`
 
 The flat position + payload buffer a structure is rebuilt from — parallel arrays of `Vector3d` and data entries. Mostly internal plumbing; you only touch it when feeding a structure manually.
 
@@ -1438,7 +1438,7 @@ T getData(int index)
 
 ---
 
-## UnknownComponents<ECS_TYPE>
+## `UnknownComponents<ECS_TYPE>`
 
 **Package:** `com.hypixel.hytale.component.data.unknown`
 

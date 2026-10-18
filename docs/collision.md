@@ -660,7 +660,7 @@ boolean hasMinimumThickness()
 
 ---
 
-## CollisionDataArray<T>
+## `CollisionDataArray<T>`
 **Package:** `com.hypixel.hytale.server.core.modules.collision`
 
 Generic container for collision data elements. Used internally by `CollisionResult` for managing block collisions, character collisions, and triggers.

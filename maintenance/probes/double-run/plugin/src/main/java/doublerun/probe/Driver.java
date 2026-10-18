@@ -65,6 +65,8 @@ import org.joml.Vector3d;
  *                   running entity's manager (read by reflection; NaN when there is none). The 13b TriggerCooldown cases
  *   dr.velocity     true: the host gets a Velocity and a MovementStatesComponent; the RESULT line reports force_instructions,
  *                   the vertical velocity of the host (the sum of the applied instructions; a host has no physics, so nothing else moves it). The name is kept from the first cut that counted queued instructions
+ *   dr.instanceReturn true: the SUBJECT gets an InstanceEntityConfig whose return point is the default world, so ExitInstance (InstancesPlugin.exitInstance)
+ *                   reaches its addComponent(Teleport) in a world that is not an instance; the RESULT line reports teleports_added
  *   dr.effect       an EntityEffect id: it is applied to the TARGET (infinitely) before the chain starts; the RESULT line
  *                   reports effect_present, 1 or 0 at the target
  *
@@ -333,6 +335,13 @@ final class Driver {
 
         // Let the NPCs finish their own set-up before the chain starts.
         long startAfter = real || targetRef != null ? 1500 : 200;
+        if (Boolean.getBoolean("dr.instanceReturn")) {
+            // exitInstance(): the entity's own InstanceEntityConfig return point, else the world's (and a world that is not an instance throws "Player is not in an instance")
+            var cfg = store.ensureAndGetComponent(subjectRef, com.hypixel.hytale.builtin.instances.config.InstanceEntityConfig.getComponentType());
+            cfg.setReturnPoint(new com.hypixel.hytale.builtin.instances.config.WorldReturnPoint(world.getWorldConfig().getUuid(),
+                new com.hypixel.hytale.math.vector.Transform(base.x, base.y, base.z, 0.0f, 0.0f, 0.0f), false, null, null));
+            Log.p("DR subject has an InstanceEntityConfig return point in world %s", world.getName());
+        }
         final InteractionManager manager0 = im;
         HytaleServer.SCHEDULED_EXECUTOR.schedule(() -> world.execute(() -> {
             try {
@@ -392,6 +401,7 @@ final class Driver {
         final int proj0 = Watch.PROJECTILES.get();
         final int projNew0 = Watch.PROJECTILES_NEW.get();
         final int beams0 = Watch.BEAMS_ADDED.get();
+        final int teleports0 = Watch.TELEPORTS_ADDED.get();
         final int raised0 = Watch.DAMAGE_RAISED.get();
         final int delivered0 = Watch.DAMAGE_DELIVERED.get();
         final int otherRaised0 = Watch.DAMAGE_OTHER_RAISED.get();
@@ -430,18 +440,18 @@ final class Driver {
             Log.p("DR RESULT case=%s manager=%s self=%s target_health_delta=%s target_%s_delta=%s subject_%s_delta=%s"
                     + " inv_items_delta=%s projectiles=%d beams_added=%d damage_raised=%d damage_delivered=%d"
                     + " break_events=%d block_id_before=%d block_id_after=%d projectiles_new=%d damage_other_raised=%d damage_other_delivered=%d cooldown_charges=%s cooldown_charges_before=%s force_instructions=%s effect_present=%s"
-                    + " chain_server_state=%s chains_left=%d",
+                    + " teleports_added=%d chain_server_state=%s chains_left=%d",
                 rootId, manager, self, tHealth1 - tHealth0, statId, tStat1 - tStat0, statId, sStat1 - sStat0,
                 inventoryItems(store, owner) - inv0, Watch.PROJECTILES.get() - proj0, Watch.BEAMS_ADDED.get() - beams0,
                 Watch.DAMAGE_RAISED.get() - raised0, Watch.DAMAGE_DELIVERED.get() - delivered0,
                 Watch.BREAKS.get() - breaks0, blockBefore, blockAt == null ? -1 : blockId(world, blockAt[0], blockAt[1], blockAt[2]),
                 Watch.PROJECTILES_NEW.get() - projNew0, Watch.DAMAGE_OTHER_RAISED.get() - otherRaised0, Watch.DAMAGE_OTHER_DELIVERED.get() - otherDelivered0,
                 cooldownCharges(im, cooldownId), charges0, forceInstructions(store, subject) - instr0, effectPresent(store, target, effectId),
-                chain.getServerState(), im.getChains().size());
+                Watch.TELEPORTS_ADDED.get() - teleports0, chain.getServerState(), im.getChains().size());
         };
         HytaleServer.SCHEDULED_EXECUTOR.schedule(() -> world.execute(collect), settleMs, TimeUnit.MILLISECONDS);
         // If the world thread died, world.execute never runs. The counters are atomics and can still be read.
-        HytaleServer.SCHEDULED_EXECUTOR.schedule(() -> Log.p("DR FALLBACK case=%s manager=%s projectiles=%d beams_added=%d (read from the scheduler thread)",
-            rootId, manager, Watch.PROJECTILES.get() - proj0, Watch.BEAMS_ADDED.get() - beams0), settleMs + 2500, TimeUnit.MILLISECONDS);
+        HytaleServer.SCHEDULED_EXECUTOR.schedule(() -> Log.p("DR FALLBACK case=%s manager=%s projectiles=%d beams_added=%d teleports_added=%d (read from the scheduler thread)",
+            rootId, manager, Watch.PROJECTILES.get() - proj0, Watch.BEAMS_ADDED.get() - beams0, Watch.TELEPORTS_ADDED.get() - teleports0), settleMs + 2500, TimeUnit.MILLISECONDS);
     }
 }

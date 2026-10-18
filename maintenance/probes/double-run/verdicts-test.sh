@@ -24,7 +24,8 @@
 #     in a verdict run (-> FAIL "does not count") and in a control run (-> VOID "control run"), one reason at a time
 #   * the sim= flag (isUseSimulationState) of the ProbeLog lines not following the pass -> FAIL, and VOID on the control
 #   * a real-NPC log whose subject was not on an NPCInteractionSimulationHandler manager -> VOID "subject's manager"
-#   * (review of b0b119a..c4e97d1) a world-thread exception in a real-NPC log -> VOID, for each real-NPC verdict; the DestroyBlock real-NPC block ids
+#   * (review of b0b119a..c4e97d1) a world-thread exception in a real-NPC log -> VOID, for each real-NPC verdict; the DestroyBlock real-NPC block ids;
+#     the ExitInstance controls and verdicts
 # Each case also checks that the sabotaged verdict line is the ONLY change: the other verdict blocks keep their
 # PASS count (a damage that turns everything red would pass the checks above for the wrong reason).
 set -u
@@ -214,5 +215,22 @@ done
 # LOW-1: the Destroy1.realnpc verdict says "block gone"; the block ids are read.
 fresh; setfield Destroy1.realnpc block_id_after 953; expect "real NPC DestroyBlock left the block (block_id_after 953)" 1 "real NPC DestroyBlock: the block is '953' -> '953', predicted gone (0)" 1
 fresh; setfield Destroy1.realnpc block_id_before 0; expect "real NPC DestroyBlock had no solid block to break (block_id_before 0)" 2 "real NPC DestroyBlock: the target block was '0' before the chain" 1
+# MAJOR-1: ExitInstance (refuses; controls: one on remote adds one Teleport and does not throw, two on remote add one and are refused)
+fresh; sed -i 's/Teleport ADDED/x/' "$work/c/Exit1.remote.log"; expect "ExitInstance unit control broken (no Teleport ADDED)" 2 "ExitInstance unit control: Exit1.remote has 0 Teleport ADDED" 3
+fresh; echo "$EXC" >> "$work/c/Exit1.remote.log"; expect "ExitInstance unit control throws" 2 "ExitInstance unit control: Exit1.remote has 1 Teleport ADDED and 1 exception" 3
+fresh; sed -i 's/Entity already contains component type/x/g' "$work/c/Exit2.remote.log"; expect "ExitInstance dose control: the refusal line deleted" 2 "ExitInstance dose control: Exit2.remote has 1 Teleport ADDED and 0 refusal" 3
+fresh; addline Exit1.remote "$SYNC"; expect "Exit1.remote control: a desync line" 2 "ExitInstance control run does not count: it has a 'not in sync'" 3
+fresh; addline Exit2.remote "$REMV"; expect "Exit2.remote control: a caught tick exception" 2 "ExitInstance control run does not count: it has a caught tick exception" 3
+fresh; sed -i 's/chain_server_state=Finished/chain_server_state=NotFinished/' "$work/c/Exit1.remote.log"; expect "Exit1.remote control: chain NotFinished" 2 "ExitInstance control run does not count: chain_server_state='NotFinished'" 3
+fresh; sed -i 's/Entity already contains component type/x/g' "$work/c/Exit1.npc.log"; expect "ExitInstance Exit1.npc: no refusal (reads as once)" 1 "ExitInstance Exit1.npc: 1 Teleport ADDED, 0 refusal" 1
+fresh; sed -i 's/Teleport ADDED/x/' "$work/c/Exit1.npc.log"; expect "ExitInstance Exit1.npc: no Teleport ADDED" 1 "ExitInstance Exit1.npc: 0 Teleport ADDED" 1
+fresh; addline Exit1.npc "$REMV"; expect "Exit1.npc: a caught tick exception" 1 "ExitInstance Exit1.npc:" 1
+fresh; sed -i 's/Exception in thread Thread/Exception in x/' "$work/c/Exit1.npc.log"; expect "ExitInstance Exit1.npc: the exception is not on the world thread" 1 "ExitInstance Exit1.npc:" 1
+fresh; sed -i 's/Teleport ADDED/x/' "$work/c/Exit1.realnpc.log"; expect "ExitInstance Exit1.realnpc: no Teleport ADDED" 1 "ExitInstance Exit1.realnpc: 0 Teleport ADDED" 1
+fresh; sed -i 's/Entity already contains component type/x/g' "$work/c/Exit1.realnpc.log"; expect "ExitInstance Exit1.realnpc: no refusal" 1 "ExitInstance Exit1.realnpc: 1 Teleport ADDED, 0 refusal" 1
+fresh; addline Exit1.realnpc "$SYNC"; expect "Exit1.realnpc: a desync line" 1 "ExitInstance Exit1.realnpc:" 1
+fresh; sed -i 's/Exception in thread Thread/Exception in x/' "$work/c/Exit1.realnpc.log"; expect "ExitInstance Exit1.realnpc: the exception is not on the world thread" 1 "ExitInstance Exit1.realnpc:" 1
+fresh; sed -i 's/simulationHandler=NPCInteractionSimulationHandler/simulationHandler=InteractionSimulationHandler/; s/DR manager=realnpc/DR manager=remote/' "$work/c/Exit1.realnpc.log"; expect "Exit1.realnpc: subject not on an NPC manager" 1 "ExitInstance Exit1.realnpc:" 1
+fresh; rm -f "$work/c/Exit2.remote.log"; expect "Exit2.remote log missing" 1 "no log/result for case Exit2.remote" 3
 echo "---- $fails failed, $nrun sabotage(s) run"
 [ "$nrun" -gt 0 ] && [ "$fails" = 0 ]

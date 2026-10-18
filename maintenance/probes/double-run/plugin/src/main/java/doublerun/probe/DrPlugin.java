@@ -34,6 +34,7 @@ public class DrPlugin extends JavaPlugin {
         getEntityStoreRegistry().registerSystem(new Watch.DamageSeen());
         getEntityStoreRegistry().registerSystem(new Watch.DamageRaised());
         getEntityStoreRegistry().registerSystem(new Watch.Beams());
+        getEntityStoreRegistry().registerSystem(new Watch.Teleports());
     }
 
     @Override

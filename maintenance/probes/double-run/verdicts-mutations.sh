@@ -30,7 +30,7 @@ start = next(i for i, l in enumerate(lines) if l.startswith('# Item 13b.'))
 real = next(i for i, l in enumerate(lines) if l.startswith('realverdict() {'))
 # case-name prefix -> regex over the sabotage labels of that block (a label names the case, or the type, or both)
 KEYS = [('Explode', 'Explode'), ('Cooldown', 'Cooldown'), ('Force', 'Force'), ('Repeat', 'Repeat'), ('Clear', 'Clear'),
-        ('Proj', 'Proj'), ('InvAdj', 'InvAdj|AdjustHeldItemQuantity'), ('Destroy', 'Destroy')]
+        ('Proj', 'Proj'), ('InvAdj', 'InvAdj|AdjustHeldItemQuantity'), ('Destroy', 'Destroy'), ('Exit', 'Exit')]
 REAL_KEY = 'realnpc|real NPC'
 rows = []
 def cond_of(l):
@@ -78,7 +78,7 @@ runsuite() { # dir only-regex -> rc and the last line
 }
 mkdir -p "$work/id"; cp "$here/verdicts.sh" "$here/verdicts-test.sh" "$work/id/"
 if [ "$from" = 1 ]; then
-  out="$(runsuite "$work/id" 'Explode|Cooldown|Force|Repeat|Clear|Proj|InvAdj|AdjustHeldItemQuantity|Destroy|realnpc|real NPC')"; rc=$?
+  out="$(runsuite "$work/id" 'Explode|Cooldown|Force|Repeat|Clear|Proj|InvAdj|AdjustHeldItemQuantity|Destroy|Exit|realnpc|real NPC')"; rc=$?
   last=$(printf '%s\n' "$out" | tail -n 1)
   if [ "$rc" != 0 ]; then echo "VOID  the unmutated judge is not green on the 13b sabotages ($last)"; printf '%s\n' "$out" | /usr/bin/grep -v '^PASS' | sed -n 1,10p; exit 2; fi
   echo "identity: green ($last)"

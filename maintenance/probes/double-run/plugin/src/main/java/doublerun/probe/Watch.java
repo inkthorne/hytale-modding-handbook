@@ -24,6 +24,8 @@ final class Watch {
     static final AtomicInteger BREAKS = new AtomicInteger();
     static final AtomicInteger BEAMS_ADDED = new AtomicInteger();
     static final AtomicInteger BEAMS_SET = new AtomicInteger();
+    /** Teleport components added (ExitInstance queues addComponent(Teleport)). */
+    static final AtomicInteger TELEPORTS_ADDED = new AtomicInteger();
     static final AtomicInteger DAMAGE_RAISED = new AtomicInteger();
     static final AtomicInteger DAMAGE_DELIVERED = new AtomicInteger();
     /** Damage events at the TARGET whose source is not an entity (Explode's environment source): raised, and delivered after the filters. */
@@ -196,6 +198,37 @@ final class Watch {
 
         @Override
         public void onComponentRemoved(@Nonnull Ref<EntityStore> ref, @Nonnull BeamComponent component,
+                                       @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
+        }
+    }
+
+    static final class Teleports extends RefChangeSystem<EntityStore, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport> {
+        @Nonnull
+        @Override
+        public Query<EntityStore> getQuery() {
+            return com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.getComponentType();
+        }
+
+        @Nonnull
+        @Override
+        public ComponentType<EntityStore, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport> componentType() {
+            return com.hypixel.hytale.server.core.modules.entity.teleport.Teleport.getComponentType();
+        }
+
+        @Override
+        public void onComponentAdded(@Nonnull Ref<EntityStore> ref, @Nonnull com.hypixel.hytale.server.core.modules.entity.teleport.Teleport component,
+                                     @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
+            Log.p("Teleport ADDED ref=%s n=%d", ref, TELEPORTS_ADDED.incrementAndGet());
+        }
+
+        @Override
+        public void onComponentSet(@Nonnull Ref<EntityStore> ref, com.hypixel.hytale.server.core.modules.entity.teleport.Teleport oldComponent,
+                                   @Nonnull com.hypixel.hytale.server.core.modules.entity.teleport.Teleport newComponent, @Nonnull Store<EntityStore> store,
+                                   @Nonnull CommandBuffer<EntityStore> buffer) {
+        }
+
+        @Override
+        public void onComponentRemoved(@Nonnull Ref<EntityStore> ref, @Nonnull com.hypixel.hytale.server.core.modules.entity.teleport.Teleport component,
                                        @Nonnull Store<EntityStore> store, @Nonnull CommandBuffer<EntityStore> buffer) {
         }
     }

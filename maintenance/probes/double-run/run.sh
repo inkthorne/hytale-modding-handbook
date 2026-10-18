@@ -19,7 +19,10 @@
 #                   CooldownOne1 (the same with 1 charge), Force1 Force2 (ApplyForce; the host gets a Velocity), Repeat1 Repeat2 (a fork of
 #                   LaunchProjectile), Clear1 (ClearEntityEffect of an effect applied to the Sheep first) and Clear0 (the same set-up, a chain
 #                   that clears nothing: the instrument sees the effect still present), Proj1 Proj2 (the Projectile type), and InvAdjSelf1 InvAdjSelf2
-#                   InvAdjOneSelf1 (ModifyInventory AdjustHeldItemQuantity -1, owner == entity, the active slot holding 5 Food_Egg, and 1 for AdjOne)
+#                   InvAdjOneSelf1 (ModifyInventory AdjustHeldItemQuantity -1, owner == entity, the active slot holding 5 Food_Egg, and 1 for AdjOne),
+#                   Destroy1 Destroy2 (DestroyBlock of the first solid block below the host; the RESULT line carries break_events and the block id
+#                   before and after) and Exit1 Exit2 (ExitInstance; the subject gets an InstanceEntityConfig return point so that exitInstance reaches
+#                   its addComponent(Teleport) in a world that is not an instance; the RESULT line carries teleports_added)
 #                   (the suffix is the number of times the type is in the chain). InvSelf1 is Inv1 with the
 #                   owner == the running entity (no proxy context), see dr.self in Driver.java; InvIgnoreSelf1 is
 #                   the same with "OnItemChangeBehavior": "Ignore" in the interaction. InvNoneSelf1 is InvSelf1 with the
@@ -31,7 +34,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 scratch="${1:?usage: run.sh SCRATCH CASE}"; case_="${2:?usage: run.sh SCRATCH CASE}"
 
 refuse() { echo "FAIL  $*" >&2; exit 3; }
-roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 StatSet1 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1 Explode1 Explode2 Cooldown1 Cooldown2 CooldownOne1 Force1 Force2 Repeat1 Repeat2 Clear1 Clear0 Proj1 Proj2 InvAdjSelf1 InvAdjSelf2 InvAdjOneSelf1 Destroy1 Destroy2"
+roots="Log1 Damage1 Damage2 Launch1 Launch2 Stat1 Stat2 StatSet1 Beam1 Beam2 Inv1 Inv2 InvSelf1 InvIgnoreSelf1 InvNoneSelf1 LogS1 LogQ1 Explode1 Explode2 Cooldown1 Cooldown2 CooldownOne1 Force1 Force2 Repeat1 Repeat2 Clear1 Clear0 Proj1 Proj2 InvAdjSelf1 InvAdjSelf2 InvAdjOneSelf1 Destroy1 Destroy2 Exit1 Exit2"
 mgrs="npc remote realnpc"
 root=""; mgr=""
 # listed WORD LIST...: WORD is exactly one of the list's elements. (A substring test of the joined list accepted
@@ -85,6 +88,7 @@ else
     Cooldown*) jvm+=(-Ddr.cooldownId=DR_CD) ;;
     Force*) jvm+=(-Ddr.velocity=true) ;;
     Destroy*) jvm+=(-Ddr.destroyBlock=true -Ddr.targetRole=none) ;;
+    Exit*) jvm+=(-Ddr.instanceReturn=true -Ddr.targetRole=none) ;;
   esac
 fi
 

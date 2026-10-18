@@ -360,6 +360,34 @@ if need Destroy1.remote Destroy2.remote Destroy1.npc; then
   else bad "DestroyBlock Destroy1.npc: raised '$en' BreakBlockEvent(s), block '$b0' -> '$bn'; predicted 1 and 0"; fi
 fi
 
+# ExitInstance (review of b0b119a..c4e97d1, MAJOR-1; refuses, the AttachBeam mechanism): exitInstance() queues ensureAndGetComponent(TeleportHistory) and
+# addComponent(Teleport); the archetype guard of firstRun reads the store, which the first pass's queued adds have not changed, so the second pass queues
+# both again and the flush throws "Entity already contains component type". The subject has an InstanceEntityConfig return point (dr.instanceReturn), because a
+# world that is not an instance throws "Player is not in an instance" before any add. Unit control: one ExitInstance on the flagged manager adds one Teleport and
+# does not throw; dose control: two on the flagged manager add one and the second is refused (the instrument sees an add and sees the refusal).
+# refused CASE ADDEDWORD: one ADDEDWORD line, at least one 'Entity already contains component type' line, a run that was not otherwise aborted (WANTED '-': the world
+# thread dies before the RESULT line), and the exception on the world thread.
+refused() {
+  [ "$(count "$1" "$2")" = 1 ] && [ "$(count "$1" 'Entity already contains component type')" -ge 1 ] && ! flawed "$1" - >/dev/null && strip "$1" | /usr/bin/grep -q 'Exception in thread Thread\[#[0-9]*,WorldThread - default'
+}
+if need Exit1.remote Exit2.remote Exit1.npc; then
+  if [ "$(count Exit1.remote 'Teleport ADDED')" != 1 ] || [ "$(exceptions Exit1.remote)" != 0 ]; then
+    voidc "ExitInstance unit control: Exit1.remote has $(count Exit1.remote 'Teleport ADDED') Teleport ADDED and $(exceptions Exit1.remote) exception(s)"
+  elif [ "$(count Exit2.remote 'Teleport ADDED')" != 1 ] || [ "$(count Exit2.remote 'Entity already contains component type')" -lt 1 ]; then
+    voidc "ExitInstance dose control: Exit2.remote has $(count Exit2.remote 'Teleport ADDED') Teleport ADDED and $(count Exit2.remote 'Entity already contains component type') refusal line(s)"
+  elif why=$(flawed Exit1.remote Finished) || why=$(flawed Exit2.remote -); then
+    voidc "ExitInstance control run does not count: $why"
+  else
+    ok "ExitInstance controls: one on remote adds one Teleport and does not throw; two on remote add one and the second is refused"
+    if refused Exit1.npc 'Teleport ADDED'; then ok "ExitInstance Exit1.npc: refuses: one Teleport ADDED, then 'Entity already contains component type' on the world thread"
+    else bad "ExitInstance Exit1.npc: $(count Exit1.npc 'Teleport ADDED') Teleport ADDED, $(count Exit1.npc 'Entity already contains component type') refusal line(s), or the run was aborted or has no world-thread exception"; fi
+  fi
+fi
+if need Exit1.realnpc Exit1.remote Exit2.remote && [ "$(count Exit1.remote 'Teleport ADDED')" = 1 ] && [ "$(exceptions Exit1.remote)" = 0 ] && [ "$(count Exit2.remote 'Entity already contains component type')" -ge 1 ]; then
+  if realnpc_manager Exit1.realnpc && refused Exit1.realnpc 'Teleport ADDED'; then ok "ExitInstance on a real NPC (Chicken), its own manager: refuses: one Teleport ADDED, then 'Entity already contains component type' on the world thread"
+  else bad "ExitInstance Exit1.realnpc: $(count Exit1.realnpc 'Teleport ADDED') Teleport ADDED, $(count Exit1.realnpc 'Entity already contains component type') refusal line(s); on an NPC manager: $(realnpc_manager Exit1.realnpc && echo yes || echo no); or the run was aborted or has no world-thread exception"; fi
+fi
+
 # Real NPC (fidelity, 13b): the same cases on a shipped Chicken's own manager. A real NPC cannot be flagged, so its unit is the host's flagged
 # control and the check is the count or end state, not the amount (the geometry differs: the explosion's damage per event depends on distance).
 # realverdict LABEL CASE STATE VALUE EXPECTED WHAT: VOID when the subject was not on an NPC manager or the run does not count, else PASS/FAIL.

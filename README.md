@@ -15,6 +15,8 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 
 ### Getting Started
 - [Overview](./docs/00-overview.md) - Introduction and getting started
+- [Documentation Index](./docs/01-index.md) - Where to find each reference page
+- [Pack vs Plugin Structure](./docs/02-structure.md) - Directory layout and manifests for packs and plugins
 - [Plugin Lifecycle](./docs/plugin-lifecycle.md) - Setup, lifecycle, and server events
 - [Permissions](./docs/permissions.md) - Permission system
 

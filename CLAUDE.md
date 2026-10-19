@@ -8,6 +8,8 @@ This is a complete reference for Hytale server plugin development containing:
 - **docs/**: Comprehensive API documentation. The page count is deliberately not written here — `verify-docs.sh` prints the live figure (`N page(s) measured`) on every run, and this line carried "65" for long enough to outlast three new pages.
 - **examples/**: Standalone, runnable mods — six Gradle plugin projects plus two no-code asset packs
 
+The docs are published at https://inkthorne.github.io/hytale-modding-handbook/, built by Zensical (`zensical.toml`, `maintenance/site/`, `.github/workflows/pages.yml`); see "The docs site" below.
+
 Refer to `docs/00-overview.md` for guidance when implementing Java code for plugins.
 
 ## Build Commands
@@ -169,6 +171,69 @@ Run the regression checker alone after doc edits (or before trusting/extending a
 
 It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): every `com.hypixel.*` class referenced in docs resolves via `javap`; every documented **member symbol** in `Receiver.member` form (where `Receiver` is a real jar class) exists on that class — walking superclasses for inherited members (`maintenance/scripts/check-symbols.py`, calibrated to skip JSON/DSL key paths, prose negative examples, locally-declared example types, and private-but-present members); all anchor links resolve — the gate is **cross-doc**, not intra-doc as its own section label long said: a link naming a target file is checked against that file's anchors; all example projects compile; and the asset drift vs the two baselines could be computed. Each half reads the status of every step that feeds its count (both sorts, `hash-server-assets.sh`, `diff`, the count), and a failed step is a FAIL naming the step and its status, with no count and no "still apply" line. A side of either index with 0 rows is a FAIL too, not a count. Each half prints the rows it compared. Drift that could not be computed is a FAIL rather than a WARN because verify-docs runs before the baseline refresh at a game update, where real-drift WARNs are expected and a "could not compute" WARN would be lost among them. Checks report a denominator where they can ("N doc(s) scanned, M of K candidates examined", "5 of 1091 java block(s)") — a check that narrates only its failures cannot be audited, and the snippet gate in particular is opt-in and covers a small fraction of the corpus by design. The doc-type consistency check is calibrated by `maintenance/scripts/doctype-skiplist.txt`, whose header records the audit method; stale entries are reported rather than left to re-suppress silently. **Advisory/INFO**: referenced asset paths exist, and **asset drift found vs the two baselines**, a WARN — `maintenance/baseline/CommonAssetsIndex.hashes` (Hytale's own Common index) and `maintenance/baseline/ServerAssetsIndex.hashes` (our generated index of `Server/`+`Cosmetics/`, where the JSON data configs live — regenerate via `maintenance/scripts/hash-server-assets.sh`); changed assets mean re-verifying the docs that reference them. See `maintenance/baseline/README.md` for the drift workflow; refresh both baselines after re-verifying against a new build.
 
+## The docs site
+
+The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Jekyll and Just the Docs build). `.github/workflows/pages.yml` deploys it on every push to `main`. The workflow has no `paths` filter, so a change to the slug, a script or the workflow itself cannot skip a deploy. `use_directory_urls = false` keeps every Jekyll URL (`commands.html`). `docs/_config.yml` and `docs/_sass/` stay for the rollback, and they are published as static files until a separate commit removes them.
+
+**Inputs.**
+- `zensical.toml`.
+- `maintenance/site/`:
+  - `requirements.txt`: zensical 0.0.71, with a sha256 for every wheel on every platform, made by `uv pip compile --universal --generate-hashes --python-version 3.12 --only-binary :all:`;
+  - `handbook_md.py`, the Python-Markdown extension;
+  - `overrides/main.html`, the head tags;
+  - `check-extension.py`;
+  - `README.md`.
+- **The sidebar** is README.md's `## Documentation` list. `maintenance/scripts/generate-site-nav.py --write` writes it between two marker comments, so never edit it by hand.
+
+**Local build.**
+- **The venv.** `maintenance/scripts/site-env.sh` creates `~/.cache/handbook-site/venv` from the lock, with `--require-hashes --only-binary :all:`.
+- **Without it, verify-docs WARNs.** verify-docs reads `HANDBOOK_SITE_PY` (default: that venv's python). Without it, it skips only the build, with one WARN, which breaks the zero-WARN invariant. Run `site-env.sh` on any machine that runs verify-docs.
+- **Why a copy of the tree.** zensical writes `.cache/` beside its config, and that cache once served a stale `HANDBOOK_REF`. Its `site_dir` and `docs_dir` must also lie inside the config's directory. So every build runs in a copy of the tree, with `build --clean`.
+- **Ignored paths.** `site/` and `.cache/` are in `.gitignore`, anchored: an unanchored `site/` also ignored `maintenance/site`.
+
+**What the extension does, and why.** Everything is measured against the live Jekyll pages and GitHub's own rendering (`POST /markdown`).
+- (a) A link that leaves docs/ (`../examples/…`, `../CLAUDE.md`) becomes a github.com blob or tree link at `HANDBOOK_REF`. The source keeps relative links, so a local clone still works.
+- (b) Duplicate headings are numbered `-N`, as GitHub does; `toc.unique` numbers them `_N`.
+- (c) `toc.slugify` is check-links' `char_slug`.
+- (d) A list after a paragraph line is a list, in a quote and after a fence too, and never inside a fence.
+- (e) Adjacent `>` blocks stay two boxes.
+- (f) Inline HTML follows CommonMark, so `<K, T>` stays text.
+- (g) Backslash escapes cover the ASCII punctuation Python-Markdown does not know.
+
+`mdx_breakless_lists` and `mdx_truly_sane_lists` are deliberately not used. The first adds a blank line inside code fences (7 of 2,066 blocks). The second splits loose lists and breaks 4-space nesting.
+
+**The gates, all [HARD].**
+- **"The sidebar is generated from README.md and holds every docs page once."** It FAILs when:
+  - the committed block differs from a generation;
+  - the generator read 0 categories or 0 pages, or a page count other than the README-listing gate's LISTED;
+  - a docs page is missing from the sidebar or is in it twice, an entry names no file, or Home is not first.
+- **"Docs markdown renders the same on GitHub and on the site"** (`check-site-markdown.py`). It FAILs on:
+  - a heading with a `<` outside a code span;
+  - a list child (an item, paragraph, table, or a fence after a blank line) indented less than 4 spaces past its parent. CommonMark nests at the content column, Python-Markdown at 4.
+
+  At d361e13 it reported 48 headings and 15 list children; now 0.
+- **"The site builds with no unexplained warning."** It builds in a temp dir outside the repo (`SITE_TMP`, removed by the one EXIT trap and emptied before the trap is set). It prints `P page(s) built in T s; W warning(s), E explained`. It FAILs on:
+  - a `.md` in a subdirectory of docs/, checked before the venv test, so it FAILs even on a machine with no venv: the link rewrite resolves `../` against docs/ and assumes it is flat;
+  - a non-zero exit, fewer than 79 `.html` files, or a TMPDIR inside the repo;
+  - `check-site-build.py`, which judges zensical's output as a grammar. The one explained warning is `page does not exist` at a markdown link whose target resolves outside docs/ to an existing repo path. Its count must equal the number of rewritten `.md` links;
+  - `check-site-links.py`, which uses the standard library only and shares nothing with zensical. Every same-site href and src must resolve, every fragment must be an id, and every GitHub blob or tree link at the built ref must name an existing path. The floors are 79 pages, 1 internal link and 9 rewritten links. Every anchor that `check-links.anchors_of` computes must be a heading id of its built page. Measured: 79 pages, 41,795 internal links, 3,311 anchors.
+- **The fixture.** `check-site-fixture.py --mutations` holds all three: 129 cases and 116 mutations, or 108 and 93 without the venv. Its docstring lists its parts.
+
+**Authoring rules those gates enforce.**
+- A generic in a heading goes in backticks: ``### `Codec<T>` `` (id `codect`).
+- A nested list item, or a block inside an item, is indented 4 spaces past its parent.
+
+**A zensical bump is its own item.** The link rewrite and the `toc.unique` patch ride on the Python-Markdown path, which upstream (`zensical/markdown/render.py`) plans to move to Rust. A bump can remove them without a warning. After one, re-run, in this order:
+1. `check-extension.py`;
+2. the parity comparison: li, ol, ul, table, tr, pre, blockquote and h2-h4 counts, the text, and the heading ids, against GitHub's rendering and the previous build;
+3. the anchor cross-check;
+4. `check-site-links.py`;
+5. the negative control: d361e13's docs, built with the character slug only, no `handbook_md` and no heading fixes, must fail exactly the 9 outside links and the 7 anchor links.
+
+**Rollout and rollback.**
+- **Rollout:** Settings > Pages > Source: GitHub Actions, then push, then watch the run.
+- **Rollback:** set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`. This works only while `docs/_config.yml` and `docs/_sass/` exist.
+
 ## Maintenance invariants
 
 Hard-won rules from the 2026-07-19 quality pass and the 2026-09-03 0.6.3 update pass. Treat these as repo law, not suggestions:
@@ -235,6 +300,12 @@ Hard-won rules from the 2026-07-19 quality pass and the 2026-09-03 0.6.3 update 
 
    **The trap pair, restated.** `CustomConnectedBlockTemplateAsset`'s `Shapes` is `new KeyedCodec("Shapes", new MapCodec<…>, true)`. It is **raw**, so a pattern expecting `KeyedCodec<T>` skips it and undercounts the codec; and it is `strict_null`, not required: deleting it from a shipped asset still decodes. `ConnectedBlockPatternRule` declares a key also named `Shapes` as `new KeyedCodec("Shapes", new SetCodec<…>(…, true))`: two arguments, the `true` inside the inner constructor, and not `strict_null`. Nothing but which paren the `true` sits inside tells them apart, so an argument splitter must track `<>` as well as `()`. The attribution still matters, but the dangerous direction moved. A parser mistake now only misplaces a flag; **calling a flag-only key required** is what tells a modder to write a key the engine does not want, and no shipped asset can contradict it. 608 keys are in that state in the parser's population, and the review of the 0.7.2 pass found 34 handbook claims of this and related kinds. Evidence in `maintenance/registry-oracle-notes.md` §5.
 8. **A review finding is fixed by a follow-up commit, never by touching the reviewed commit.** Once a commit exists, do not amend it, rebase it, or hang a `git notes` correction on it — write the fix as a new commit whose message says what was wrong and cites the review. This is not a history-purity rule; it is about where the information ends up. A `git notes` correction lives in `refs/notes/commits`, which no clone fetches by default, no gate reads, no page renders and no grep of the working tree finds — so a correction filed there is invisible to exactly the people the correction is for. It happened on 2026-09-04: a wrong claim in `79075d7`'s message (that `TriggerSpawnMarkers`' `Count: 0` contradicted its codec doc, when the two agree) was corrected by a note, and the correction reached the repo only when the note was noticed and moved into `maintenance/registry-oracle-notes.md`. **A fact worth correcting is worth committing.** If the wrong claim is in a commit message only, the follow-up commit is where the correction goes; if it is also a claim about the subject matter, it belongs in the docs or the notes file as well, because that is what the next session actually reads. The related memory rule — repair with `git notes` rather than a rewrite — is about content accidentally filed under an unrelated *subject* during parallel work, and does not extend to correcting claims.
+9. **A page must render the same on GitHub and on the site.** Readers reach the docs both ways, and an anchor that works in one and not the other breaks a link silently. So:
+   - a generic in a heading goes in a code span (``### `Codec<T>` ``);
+   - nested list content is indented 4 spaces past its parent;
+   - docs/ stays flat, with no `.md` in a subdirectory.
+
+   verify-docs FAILs on each; see "The docs site".
 
 Two of the three follow-up levers are now built (2026-07-19): the **snippet-compilation hard gate** (`maintenance/scripts/check-snippets.py`, run by `verify-docs.sh`) — any ` ```java ` block starting with `package ` is a complete compilation unit and must compile against the jar; same-doc same-package blocks co-compile, fragments are exempt; write new walkthrough code as complete units so it opts in. (The class of bug it catches is real: 18 snippets called `sendMessage` on the entity `Player`, which has no such method — the symbol checker cannot type local variables, and its first run also exposed a fabricated `AssetStore` walkthrough.) And **`docs/llms.txt`** for AI-retrieval findability — generated from page frontmatter by `maintenance/scripts/generate-llms-txt.sh`; regenerate + commit when pages or descriptions change (verify-docs WARNs when stale). The remaining lever: expanding the coverage advisory's denominator beyond `server.core`/`component`/`math` to the `builtin.*` packages.
 
@@ -255,14 +326,23 @@ Before the reader existed, the column-0 readers could not see 3 java and 1 json 
 
 Fixtures:
 - `check-doc-fences-fixture.py --mutations`: 99 cases and 48 mutations counting the identity control, about 9 s. It plants a defect in a blockquoted and an indented fence for every gate, and each gate run with its old regex goes red on it.
-- `check-asset-drift-fixture.py --mutations`: 31 cases and 31 mutations counting the identity control, about 19 s (18.6-19.5 s over five runs; 51 s at load 25-30). It runs verify-docs.sh's own "Asset drift vs baseline" section, cut out by its header and run under verify-docs.sh's `set -u`, with `sort`, `diff` and `grep` shims and stub hash scripts. It first runs a negative control: the section as it stood at fbbb664 (`maintenance/fixtures/asset-drift/section-fbbb664.sh`) must reproduce three defects, among them "0 changed Common assets … still apply" with both sorts failing.
+- `check-asset-drift-fixture.py --mutations`: 33 cases and 33 mutations counting the identity control (31 and 31 before item 15 put `SITE_TMP` in the same EXIT trap), about 19 s (18.6-19.5 s over five runs; 51 s at load 25-30). It runs verify-docs.sh's own "Asset drift vs baseline" section, cut out by its header and run under verify-docs.sh's `set -u`, with `sort`, `diff` and `grep` shims and stub hash scripts. It first runs a negative control: the section as it stood at fbbb664 (`maintenance/fixtures/asset-drift/section-fbbb664.sh`) must reproduce three defects, among them "0 changed Common assets … still apply" with both sorts failing.
   - **Sort failures.** The sort shim can fail having written nothing, which the 0-row guard also catches, or having written two rows first (`SHIM_SORT_PARTIAL`). Only the second reaches the sort-status guard by itself, so each side has both cases (verify pass of 2e87bc6..cf01883, LOW-A).
   - **Mutations.** Each guard, each single sort side, the FAIL severity, both denominators, the 0-row FAIL on each side of each half, and each of the four skip conditions has a mutation with its exact red set pinned.
-  - **Cleanup.** Every case has a TMPDIR of its own and asserts that nothing is left in it, that the section removed its dir before it ended, and that `DRIFT_TMP` was cleared. Two cases exit inside the section, so only the EXIT trap can clean up; the second makes the double-run section's `DR_TMP` as well, and the trap removes both. A third runs with a `DR_TMP` exported by the caller, which must survive: verify-docs.sh empties `DR_TMP` before it sets the trap (verify pass of 3437c5d..ee2b164, MAJOR-1: at ee2b164 an exported `DR_TMP` was deleted on exit whenever the double-run section did not assign it, measured on the real script).
+  - **Cleanup.** Every case has a TMPDIR of its own and asserts that nothing is left in it, that the section removed its dir before it ended, and that `DRIFT_TMP` was cleared. Two cases exit inside the section, so only the EXIT trap can clean up; the second makes the double-run section's `DR_TMP` as well, and the trap removes both. The site-build section's `SITE_TMP` has the same two cases: an exit inside the section removes it, and an exported one survives. A third runs with a `DR_TMP` exported by the caller, which must survive: verify-docs.sh empties `DR_TMP` before it sets the trap (verify pass of 3437c5d..ee2b164, MAJOR-1: at ee2b164 an exported `DR_TMP` was deleted on exit whenever the double-run section did not assign it, measured on the real script).
   - **The trap check.** A case fails on any non-comment line of verify-docs.sh that names `trap`, other than the section's own EXIT trap. A second case shows it sees `true; trap …`, `x && trap - EXIT` and `( trap … )`. The word in a string or a trailing comment fails it too. Chain any later EXIT trap.
 - `check-double-run-fixture.py --mutations`: the double-run section run as text on stub probe scripts (a bash function behind a `python3` shim), with its own page and snapshots. 70 cases and 100 mutations counting the identity control, with the exact red set of each pinned. A negative control comes first: a page with one cell changed must FAIL. The shims are written once before the thread pool starts (a per-case write failed with ETXTBSY: 2 red of 2,592 case runs at load 50, 0 of 6,624 at load 107 after the fix). 41.5 s at load 11-20, 150 s at load 30-60; the cost is process spawns. Run by verify-docs.sh in the fixtures section.
 - `check-type-values-fixture.py --mutations`: 28 cases and 19 mutations. Its `run_wrapper()` runs verify-docs.sh's own type-values section around the checker, so the wrapper is tested for echoing a collapse guard's cause. Under review MINOR-2 it did not: the three guards printed `FAIL` at column 0, the wrapper's `^  (FAIL|SKIP)` found nothing, and it reported a misleading "stale skiplist".
-- `check-links-fixture.py --mutations`: 35 checks and 12 mutations counting the identity control.
+- `check-links-fixture.py --mutations`: 67 checks and 31 mutations counting the identity control (35 and 12 before item 15).
+- `check-site-fixture.py --mutations`: the docs-site sections; see "The docs site".
+
+**check-links slugs headings as GitHub does (item 15, 2026-10-18).** Its `slug()` drops inline HTML outside code spans, using CommonMark's open-tag grammar: `<KeyType>`, `<T>` and `<T extends Transaction>` are dropped, while `<K, T>`, `<Arg, D>` and `<ECS_TYPE>` stay as text. It is fitted to two tables:
+- `maintenance/fixtures/links/gh-heading-ids.tsv`: 51 ids read from GitHub's rendering at d361e13 with `gh api -H 'Accept: application/vnd.github.html' …/contents/docs/X.md?ref=d361e13`;
+- `gh-heading-shapes.tsv`: 42 shapes, read with `POST /markdown`.
+
+The character rule alone misses 18 of the 51. The old `slug()` lacked the rule, so links into `asset-editor.md:58` and `player.md:265` were broken on GitHub while the gate passed them.
+
+check-links also reads every relative link target now, of any extension or a directory, and the target must exist. Before, its `LINK` regex matched `.md` targets only, so 8 links into `../examples/` were never read. Links on fenced lines are not read. A floor (`--min-other`, 1) fails a run that read no non-`.md` target. Measured at item 15: 2,302 links in 147 files (2,179 under docs/, 113 outside it, 10 in gate fixtures) and 38 non-`.md` targets (30 of them directories).
 
 **Headings inside fences (2026-10-16).** A `# comment` line in a bash fence matches a heading pattern, so heading readers took it for a heading. In check-links that is a phantom anchor: a link to a nonexistent section whose slug equalled the comment would pass. The four heading readers (check-links, section_binder, the doc-type `_sections`, the gotcha `## ` scan) now take headings only from lines outside `doc_fences.parse(text).fence_lines`.
 - **The tracked tree** had 7 such lines: docs/00-overview.md:105, 02-structure.md:412, i18n.md:61, ui-templates.md:451, CLAUDE.md:18 and :22, and the doctype fixture-j diagram line. No link targeted any, and no binder, doc-type, gotcha or check-defaults figure moved. check-links prints how many fenced heading-shaped lines it passed over.

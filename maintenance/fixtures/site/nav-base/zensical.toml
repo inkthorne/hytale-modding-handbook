@@ -1,0 +1,9 @@
+[project]
+site_name = "Fixture"
+# BEGIN GENERATED NAV (maintenance/scripts/generate-site-nav.py from README.md; do not edit by hand)
+nav = [
+  { "Home" = "index.md" },
+  { "First" = [ { "Alpha" = "a.md" }, { "Beta" = "b.md" } ] },
+  { "Second" = [ { "Gamma" = "c.md" } ] },
+]
+# END GENERATED NAV

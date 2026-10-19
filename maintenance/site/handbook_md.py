@@ -20,7 +20,8 @@ and this module makes the site agree with GitHub rather than the other way round
     builds ...": every anchor check-links computes must be an id in the built page), not assumed.
 
 (d) LISTS AFTER A PARAGRAPH LINE. GitHub starts a list where a bullet (or `1.`) follows a paragraph line;
-    Python-Markdown needs a blank line, and reads the list as run-on text without one (143 lists on 57 pages).
+    Python-Markdown needs a blank line, and reads the list as run-on text without one (the preprocessor adds 162 blank
+    lines on 63 pages: lists after a paragraph line, in blockquotes, and after a closed fence).
     `mdx_breakless_lists` does the same job and was measured to add a blank line INSIDE code fences wherever a
     fenced line looks like a list item (` * comment` in Javadoc, `1. step` in a diagram): 7 of 2,066 code
     blocks changed. `ListBreaks` below is its replacement, fence-aware by doc_fences.py's reader and

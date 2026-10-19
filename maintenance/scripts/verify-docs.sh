@@ -290,6 +290,79 @@ else
 fi
 
 # =====================================================================
+# The sidebar of the docs site is README.md's Documentation list: Home, then each `###` category in order with
+# its pages under the README link text. maintenance/scripts/generate-site-nav.py writes the `nav` array of
+# zensical.toml between two marker comments and nothing else edits it. This section FAILs when the committed
+# block differs from a fresh generation, when the generator read nothing or a different number of pages than
+# the README-listing gate's LISTED (a page the README lists but the generator dropped, or the reverse), and,
+# by reading the committed nav itself rather than the generator's word, when a docs page is missing from it,
+# appears twice, a nav entry names a file that does not exist, or Home is not first. RM_LISTED is the figure of
+# "Every docs page is listed in README.md" above; check-site-fixture.py defines it before it runs this text.
+section "[HARD] The sidebar is generated from README.md and holds every docs page once"
+NAV_OUT="$(python3 maintenance/scripts/generate-site-nav.py --check 2>&1)"; NAV_RC=$?
+NAV_CATS="$(echo "$NAV_OUT" | sed -n 's/^NAV \([0-9]*\) categories, \([0-9]*\) pages$/\1/p')"
+NAV_PAGES="$(echo "$NAV_OUT" | sed -n 's/^NAV \([0-9]*\) categories, \([0-9]*\) pages$/\2/p')"
+NAV_READ="$(python3 - <<'NAVPY'
+import glob, os
+try:
+    import tomllib
+except ImportError:      # python < 3.11
+    import tomli as tomllib
+nav = tomllib.load(open("zensical.toml", "rb"))["project"]["nav"]
+def pages(items):
+    for it in items:
+        for label, v in it.items():
+            if isinstance(v, list):
+                yield from pages(v)
+            else:
+                yield v
+listed = list(pages(nav))
+docs = sorted(os.path.basename(f) for f in glob.glob("docs/*.md"))
+print(f"NAVPAGES {len(listed)}")
+print(f"DOCSPAGES {len(docs)}")
+for d in docs:
+    if d not in listed:
+        print(f"MISSING {d}")
+for d in sorted({x for x in listed if listed.count(x) > 1}):
+    print(f"TWICE {d}")
+for x in listed:
+    if not os.path.isfile(os.path.join("docs", x)):
+        print(f"NOFILE {x}")
+first_label, first = next(iter(nav[0].items()), (None, None)) if nav else (None, None)
+if first != "index.md":
+    print(f"HOME {first_label}")
+NAVPY
+)"; NAV_PYRC=$?
+NAV_N="$(echo "$NAV_READ" | awk '/^NAVPAGES/{print $2}')"
+NAV_D="$(echo "$NAV_READ" | awk '/^DOCSPAGES/{print $2}')"
+if [ "$NAV_RC" -ne 0 ] && [ "$NAV_RC" -ne 1 ]; then
+  fail "generate-site-nav.py exited $NAV_RC, so the sidebar cannot be compared with README.md:"
+  echo "$NAV_OUT" | sed 's/^/    /'
+elif [ -z "$NAV_CATS" ] || [ "$NAV_CATS" -eq 0 ] || [ "${NAV_PAGES:-0}" -eq 0 ]; then
+  fail "the sidebar generator read ${NAV_CATS:-no} categor(ies) and ${NAV_PAGES:-no} page(s) from README.md - a generator that found nothing is a broken check, not a clean run"
+elif [ "${NAV_N:-0}" -eq 0 ] || [ "${NAV_D:-0}" -eq 0 ]; then
+  fail "could not read the nav of zensical.toml or the docs pages (exit $NAV_PYRC): ${NAV_READ:-no output}"
+else
+  NAV_BAD=0
+  if [ "$NAV_RC" -eq 1 ]; then
+    fail "the nav in zensical.toml differs from a fresh generation from README.md (run maintenance/scripts/generate-site-nav.py --write)"
+    NAV_BAD=1
+  fi
+  if [ "$NAV_PAGES" != "${RM_LISTED:-}" ]; then
+    fail "the generator read $NAV_PAGES page(s) from README.md, the README-listing gate counts ${RM_LISTED:-none} listed (a docs page the generator dropped or invented)"
+    NAV_BAD=1
+  fi
+  if echo "$NAV_READ" | grep -qE '^(MISSING|TWICE|NOFILE|HOME) '; then
+    fail "the committed sidebar is not every docs page once:"
+    echo "$NAV_READ" | sed -n 's/^MISSING /      docs page missing from the sidebar: /p; s/^TWICE /      docs page in the sidebar twice: /p; s/^NOFILE /      sidebar entry names a file that does not exist: docs\//p; s/^HOME /      the first sidebar entry is not Home (index.md): /p'
+    NAV_BAD=1
+  fi
+  if [ "$NAV_BAD" -eq 0 ]; then
+    pass "sidebar = README: $NAV_CATS categories and $NAV_PAGES pages generated, equal to the README-listing gate's $RM_LISTED; the committed nav holds $NAV_N of $NAV_D docs pages (Home first, each once, each file present)"
+  fi
+fi
+
+# =====================================================================
 # The site (Zensical, i.e. Python-Markdown) must show what GitHub shows. maintenance/site/handbook_md.py absorbs
 # the renderer differences it can (a list after a paragraph line, adjacent blockquotes, inline HTML, backslash
 # escapes); this section refuses the two kinds the source itself decides: a heading with a generic outside a

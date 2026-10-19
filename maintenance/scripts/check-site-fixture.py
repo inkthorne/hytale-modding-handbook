@@ -10,6 +10,8 @@ a red set not yet pinned is printed as MEASURED and fails the run, so a number i
 
   markdown   the section "Docs markdown renders the same on GitHub and on the site" and
              maintenance/scripts/check-site-markdown.py (the lint it runs).
+  nav        the section "The sidebar is generated from README.md and holds every docs page once" and
+             maintenance/scripts/generate-site-nav.py.
 
 WHY THE SECTION'S TEXT AND NOT A COPY OF ITS LOGIC. The same reason as the drift fixture's: a helper with a
 fixture of its own tests the helper and leaves the wrapper that reads the helper's status and denominators
@@ -32,11 +34,12 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 19
-MIN_MUTATIONS = 14
+MIN_CASES = 41
+MIN_MUTATIONS = 35
 
 SECTION_MD = 'section "[HARD] Docs markdown renders the same on GitHub and on the site"'
-SCRIPTS_MD = ('check-site-markdown.py', 'check-links.py', 'doc_fences.py')
+SECTION_NAV = 'section "[HARD] The sidebar is generated from README.md and holds every docs page once"'
+SCRIPTS = ('check-site-markdown.py', 'check-links.py', 'doc_fences.py', 'generate-site-nav.py')
 
 
 def cut(src: str, anchor: str) -> str:
@@ -66,14 +69,14 @@ class World:
         self.base = base
         base.mkdir(parents=True, exist_ok=True)
         src = VERIFY.read_text()
-        self.sections = {'md': cut(src, SECTION_MD)}
+        self.sections = {'md': cut(src, SECTION_MD), 'nav': cut(src, SECTION_NAV)}
         for key, (old, new) in (section_edits or {}).items():
             if self.sections[key].count(old) != 1:
                 raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {self.sections[key].count(old)} time(s) in the {key} section')
             self.sections[key] = self.sections[key].replace(old, new, 1)
         self.scripts = base / 'scripts'
         self.scripts.mkdir()
-        for name in SCRIPTS_MD:
+        for name in SCRIPTS:
             shutil.copy2(HERE / name, self.scripts / name)
         for name, (old, new) in (script_edits or {}).items():
             body = (self.scripts / name).read_text()
@@ -228,6 +231,121 @@ def md_cases(w: World) -> dict[str, list[str]]:
     return res
 
 
+
+# ============================== part 2: the sidebar ==============================
+
+CASE_NAV = {
+    'healthy': 'nav: a tree whose committed sidebar is the generation passes, with the figures of both sides',
+    'stale': 'nav: a committed sidebar that differs from a fresh generation FAILs and says how to regenerate',
+    'label': 'nav: a README link text changed since the generation FAILs (the sidebar label is the README text)',
+    'order': 'nav: two categories swapped in the README FAIL (order is the README\'s)',
+    'missing': 'nav: a docs page the README does not list is missing from the sidebar and FAILs by name',
+    'twice': 'nav: a page listed under two categories is refused by the generator, by name',
+    'ghost': 'nav: a README link to a page that does not exist is refused by the generator, by name',
+    'zero': 'nav: a README with no category is a FAIL naming the empty read, not a clean run',
+    'silent': 'nav: a generator that exits 0 having printed nothing is a FAIL, not a clean run',
+    'zero_cats': 'nav: a generator that reports 0 categories beside 3 pages is a FAIL, not a clean run',
+    'zero_pages': 'nav: a generator that reports 0 pages beside 2 categories is a FAIL, not a clean run',
+    'emptynav': 'nav: a committed sidebar with no entry is a FAIL naming the unreadable nav',
+    'nodocs': 'nav: a tree with no docs page is a FAIL naming the unreadable docs, not a clean run',
+    'listed': 'nav: a page count different from the README-listing gate\'s LISTED FAILs',
+    'emptycat': 'nav: a category with no page is not a sidebar group',
+    'section': 'nav: pages listed after the Documentation section (Examples) are not read',
+    'read_twice': 'nav: a committed sidebar naming a page twice FAILs by name (read from the toml, not the generator)',
+    'read_nofile': 'nav: a committed sidebar entry naming a file that does not exist FAILs by name',
+    'read_home': 'nav: a committed sidebar whose first entry is not Home FAILs',
+    'read_missing': 'nav: a docs page absent from the committed sidebar FAILs by name (read from the toml)',
+    'badtoml': 'nav: an unreadable zensical.toml is a FAIL, not a pass',
+    'exit': 'nav: a generator that crashes (exit 3) is a FAIL naming the status',
+}
+
+NAV_PASS = ('PASS  sidebar = README: 2 categories and 3 pages generated, equal to the README-listing gate\'s 3; '
+            'the committed nav holds 4 of 4 docs pages (Home first, each once, each file present)')
+STUB_NAV = '#!/usr/bin/env python3\nimport sys\nprint("NAV 2 categories, 3 pages", file=sys.stderr)\n'
+
+
+def nav_toml(nav_lines: str) -> str:
+    return ('[project]\nsite_name = "Fixture"\n# BEGIN GENERATED NAV (maintenance/scripts/generate-site-nav.py from README.md; '
+            'do not edit by hand)\nnav = [\n' + nav_lines + ']\n# END GENERATED NAV\n')
+
+
+def nav_cases(w: World) -> dict[str, list[str]]:
+    res: dict[str, list[str]] = {}
+
+    def sec(files=None, drop=(), listed='3'):
+        return w.run('nav', w.root('nav', 'nav-base', files, drop), env={'RM_LISTED': listed})
+
+    def verdict(key, got, *, hf, must=(), must_not=(), exact=None):
+        rc, out, h = got
+        pr = []
+        if h != hf:
+            pr.append(f'HARD_FAILS {h}, wanted {hf}')
+        if exact is not None and lines(out) != exact:
+            pr.append(f'lines {lines(out)!r}, wanted {exact!r}')
+        pr += [f'missing {m!r}' for m in must if m not in out]
+        pr += [f'unexpected {m!r}' for m in must_not if m in out]
+        res[CASE_NAV[key]] = pr
+
+    readme = (FIX / 'nav-base' / 'README.md').read_text()
+    toml = (FIX / 'nav-base' / 'zensical.toml').read_text()
+    home = '  { "Home" = "index.md" },\n'
+    first = '  { "First" = [ { "Alpha" = "a.md" }, { "Beta" = "b.md" } ] },\n'
+    second = '  { "Second" = [ { "Gamma" = "c.md" } ] },\n'
+
+    verdict('healthy', sec(), hf=0, exact=[NAV_PASS])
+    verdict('stale', sec({'zensical.toml': toml.replace('"Alpha"', '"Alfa"')}), hf=1,
+            must=('the nav in zensical.toml differs from a fresh generation from README.md (run maintenance/scripts/generate-site-nav.py --write)',),
+            must_not=('PASS',))
+    verdict('label', sec({'README.md': readme.replace('[Alpha]', '[Alpha page]')}), hf=1,
+            must=('differs from a fresh generation',), must_not=('PASS',))
+    swapped = readme.replace('### First\n- [Alpha](./docs/a.md) - the first page\n- [Beta](./docs/b.md) - the second page\n\n### Second\n- [Gamma](./docs/c.md) - the third page\n',
+                             '### Second\n- [Gamma](./docs/c.md) - the third page\n\n### First\n- [Alpha](./docs/a.md) - the first page\n- [Beta](./docs/b.md) - the second page\n')
+    assert swapped != readme
+    verdict('order', sec({'README.md': swapped}), hf=1, must=('differs from a fresh generation',), must_not=('PASS',))
+    # a page the README does not list: the generator's count (2) is also not LISTED's, but the committed nav is read itself
+    verdict('missing', sec({'README.md': readme.replace('### Second\n- [Gamma](./docs/c.md) - the third page\n', ''),
+                            'zensical.toml': nav_toml(home + first)}, listed='2'), hf=1,
+            must=('docs page missing from the sidebar: c.md',), must_not=('PASS',))
+    verdict('twice', sec({'README.md': readme.replace('- [Gamma](./docs/c.md) - the third page', '- [Gamma](./docs/c.md) - the third page\n- [Alpha again](./docs/a.md) - twice')}), hf=1,
+            must=('generate-site-nav.py exited 2', 'a.md is listed twice in README (under \'First\' and \'Second\')'), must_not=('PASS',))
+    verdict('ghost', sec({'README.md': readme.replace('./docs/c.md', './docs/ghost.md')}), hf=1,
+            must=('generate-site-nav.py exited 2', 'README lists ghost.md under \'Second\', and docs/ghost.md does not exist'), must_not=('PASS',))
+    verdict('zero', sec({'README.md': '# T\n\n## Documentation\n\nnothing listed\n'}), hf=1,
+            must=('generate-site-nav.py exited 2',), must_not=('PASS',))
+    verdict('silent', sec({'maintenance/scripts/generate-site-nav.py': '#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n'}), hf=1,
+            must=('the sidebar generator read no categor(ies) and no page(s) from README.md',), must_not=('PASS',))
+    verdict('zero_cats', sec({'maintenance/scripts/generate-site-nav.py': STUB_NAV.replace('2 categories, 3 pages', '0 categories, 3 pages')}), hf=1,
+            must=('the sidebar generator read 0 categor(ies) and 3 page(s) from README.md',), must_not=('PASS',))
+    verdict('zero_pages', sec({'maintenance/scripts/generate-site-nav.py': STUB_NAV.replace('2 categories, 3 pages', '2 categories, 0 pages')}), hf=1,
+            must=('the sidebar generator read 2 categor(ies) and 0 page(s) from README.md',), must_not=('PASS',))
+    verdict('listed', sec(listed='4'), hf=1,
+            must=('the generator read 3 page(s) from README.md, the README-listing gate counts 4 listed',), must_not=('PASS',))
+    verdict('emptycat', sec({'README.md': readme.replace('### Second', '### Empty\n\n### Second')}), hf=0,
+            exact=[NAV_PASS])
+    # (the Examples section of the base README lists docs/a.md again; read, it would be a second listing and the generator would refuse)
+    verdict('section', sec(), hf=0, must=('PASS',), must_not=('twice',))
+
+    # the committed toml read by the section itself, the generator stubbed to agree (3 pages, exit 0)
+    stub = {'maintenance/scripts/generate-site-nav.py': STUB_NAV}
+    verdict('read_twice', sec({**stub, 'zensical.toml': nav_toml(home + first + '  { "Again" = [ { "Alpha" = "a.md" } ] },\n' + second)}), hf=1,
+            must=('docs page in the sidebar twice: a.md',), must_not=('PASS',))
+    verdict('read_nofile', sec({**stub, 'zensical.toml': nav_toml(home + first + second.replace('c.md', 'c.md" }, { "Ghost" = "ghost.md'))}), hf=1,
+            must=('sidebar entry names a file that does not exist: docs/ghost.md',), must_not=('PASS',))
+    verdict('read_home', sec({**stub, 'zensical.toml': nav_toml(first + home + second)}), hf=1,
+            must=('the first sidebar entry is not Home (index.md): First',), must_not=('PASS',))
+    verdict('read_missing', sec({**stub, 'zensical.toml': nav_toml(home + first)}), hf=1,
+            must=('docs page missing from the sidebar: c.md',), must_not=('PASS',))
+    verdict('emptynav', sec({**stub, 'zensical.toml': nav_toml('')}), hf=1,
+            must=('could not read the nav of zensical.toml or the docs pages',), must_not=('PASS',))
+    verdict('nodocs', sec({**stub}, drop=('docs/index.md', 'docs/a.md', 'docs/b.md', 'docs/c.md')), hf=1,
+            must=('could not read the nav of zensical.toml or the docs pages',), must_not=('PASS',))
+    verdict('badtoml', sec({**stub, 'zensical.toml': 'this is = not [valid toml\n'}), hf=1,
+            must=('could not read the nav of zensical.toml',), must_not=('PASS',))
+    verdict('exit', sec({'maintenance/scripts/generate-site-nav.py': '#!/usr/bin/env python3\nimport sys\nsys.exit(3)\n'}), hf=1,
+            must=('generate-site-nav.py exited 3, so the sidebar cannot be compared with README.md',), must_not=('PASS',))
+    return res
+
+
 # ============================== the mutation table ==============================
 
 MUTATIONS: dict = {}
@@ -286,7 +404,54 @@ mut('the pass line drops the denominators', ('section', 'md'),
     'pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): ', 'pass "linted: ',
     ['healthy'], ['healthy'])
 
-PARTS = {'md': (CASE_MD, md_cases)}
+
+# ---- the sidebar ----
+GEN = 'generate-site-nav.py'
+mut('the generator reads past the Documentation section', ('script', GEN), "e = readme.find('\\n## ', s + 1)", 'e = -1',
+    ['section'], ['healthy', 'section', 'stale', 'label', 'order', 'missing', 'emptycat', 'listed'], part='nav')
+mut('a page listed twice is not refused', ('script', GEN), "if page in seen:", 'if False:',
+    ['twice'], ['twice'], part='nav')
+mut('a README link to a missing page is not refused', ('script', GEN), "if not (root / 'docs' / page).is_file():", 'if False:',
+    ['ghost'], ['ghost'], part='nav')
+mut('an empty category is a sidebar group', ('script', GEN), "if c[1]]", "]",
+    ['emptycat'], ['emptycat'], part='nav')
+mut('Home is not first', ('script', GEN), "lines = [BEGIN, 'nav = [', '  { \"Home\" = \"index.md\" },']", "lines = [BEGIN, 'nav = [']",
+    ['healthy'], ['healthy', 'missing', 'emptycat', 'section', 'listed'], part='nav')
+mut('the generator exits 0 on an empty read', ('script', GEN), "if ncat == 0 or npage == 0 or problems:", 'if problems:',
+    ['zero'], ['zero'], part='nav')
+mut('--check never fails', ('script', GEN), '    if new != toml:', '    if False:',
+    ['stale'], ['stale', 'label', 'order'], part='nav')
+mut('the section does not read the generator\'s exit status', ('section', 'nav'),
+    'if [ "$NAV_RC" -ne 0 ] && [ "$NAV_RC" -ne 1 ]; then', 'if false; then',
+    ['exit'], ['exit', 'twice', 'ghost', 'zero'], part='nav')
+mut('the section does not require a category', ('section', 'nav'),
+    '[ -z "$NAV_CATS" ] || [ "$NAV_CATS" -eq 0 ] || ', '',
+    ['zero_cats'], ['zero_cats'], part='nav')
+mut('the section does not require a page from the generator', ('section', 'nav'),
+    ' || [ "${NAV_PAGES:-0}" -eq 0 ]; then\n  fail "the sidebar generator read', '; then\n  fail "the sidebar generator read',
+    ['zero_pages'], ['zero_pages'], part='nav')
+mut('the committed-vs-generated difference is not a FAIL', ('section', 'nav'),
+    'if [ "$NAV_RC" -eq 1 ]; then', 'if false; then',
+    ['stale'], ['stale', 'label', 'order'], part='nav')
+mut('the page count is not compared with LISTED', ('section', 'nav'),
+    'if [ "$NAV_PAGES" != "${RM_LISTED:-}" ]; then', 'if false; then',
+    ['listed'], ['listed'], part='nav')
+mut('an empty committed sidebar is readable', ('section', 'nav'),
+    '[ "${NAV_N:-0}" -eq 0 ] || ', '',
+    ['emptynav'], ['emptynav'], part='nav')
+mut('a tree with no docs page is readable', ('section', 'nav'),
+    ' || [ "${NAV_D:-0}" -eq 0 ]; then', '; then',
+    ['nodocs'], ['nodocs'], part='nav')
+mut('a page missing from the sidebar is not reported', ('section', 'nav'), "s/^MISSING /      docs page missing from the sidebar: /p; ", '',
+    ['read_missing'], ['read_missing', 'missing'], part='nav')
+mut('a page in the sidebar twice is not reported', ('section', 'nav'), "s/^TWICE /      docs page in the sidebar twice: /p; ", '',
+    ['read_twice'], ['read_twice'], part='nav')
+mut('a sidebar entry naming a missing file is not reported', ('section', 'nav'), "s/^NOFILE /      sidebar entry names a file that does not exist: docs\\//p; ", '',
+    ['read_nofile'], ['read_nofile'], part='nav')
+mut('Home first is not required', ('section', 'nav'), 'if first != "index.md":\n    print(f"HOME {first_label}")', 'pass',
+    ['read_home'], ['read_home'], part='nav')
+
+PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases)}
 
 
 def apply_edit(where, old, new):

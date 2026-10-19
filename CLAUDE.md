@@ -273,7 +273,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 
 **Rollout and rollback.**
 - **Rollout:** Settings > Pages > Source: GitHub Actions, then push, then watch the run.
-- **Rollback:** the Jekyll build no longer exists in the tree. To bring it back, restore its files by path, not by reverting item 18's commit (fd59eb3): that commit also touched Home's frontmatter, CLAUDE.md and zensical.toml, so a revert conflicts once any of those lines has moved (review of fd59eb3, MEDIUM-1). Run `git checkout fd59eb3^ -- docs/_config.yml docs/_sass`, and put `nav_order: 0` back in docs/index.md's frontmatter so that Home stays first in the Just the Docs nav. Then set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`.
+- **Rollback:** the Jekyll build no longer exists in the tree. To bring it back, restore its files by path, not by reverting item 18's commit (fd59eb3): that commit also touched Home's frontmatter, CLAUDE.md and zensical.toml, so a revert conflicts once any of those lines has moved (review of fd59eb3, MEDIUM-1). Run `git checkout fd59eb3^ -- docs/_config.yml docs/_sass`, and put `nav_order: 0` back in docs/index.md's frontmatter so that Home stays first in the Just the Docs nav. Commit both and push to main: `git checkout` only stages the files, and the legacy builder reads main on GitHub. Then set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`.
 
 ## Maintenance invariants
 

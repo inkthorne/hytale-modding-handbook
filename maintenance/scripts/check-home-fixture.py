@@ -25,8 +25,8 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
-MIN_CASES = 33
-MIN_MUTATIONS = 28
+MIN_CASES = 45
+MIN_MUTATIONS = 41
 fails: list[str] = []
 seen: list[str] = []
 
@@ -138,12 +138,24 @@ L_JAR_EMPTY = 'a jar with no com/hypixel class FAILs'
 L_FENCED = 'a list inside a code fence is not read'
 L_MULTI = 'every code span after API: is a call: a second one that is no jar class is found'
 L_RC = 'a finding exits 1'
+L_MARKER = 'a list item in the section that is not `- ` at column 0 (`*`, `+`, `1.`, indented) FAILs, naming the line'
+L_MARKER_OK = 'and a bold paragraph start, a `-` inside a sentence and a marker in a code fence are no list item'
+L_CONT = 'a line that continues a row on the next line FAILs, naming the line'
+L_CONT_OK = 'and a paragraph after a blank line, the text right under a group heading, and an indented intro line above the groups are no continuation'
+L_CONT_INDENT = 'an indented line after a blank line is the row\'s own paragraph and FAILs too'
+L_REF = 'a reference-style link in the section (full, collapsed, shortcut) FAILs, wherever its definition is'
+L_REF_OK = 'and brackets that no definition makes a link are text, no finding'
+L_JAR_CORRUPT = 'a jar that is not a zip FAILs, saying it could not be read'
+L_JAR_COUNT = 'and so does the count: --jar given, names read, none resolved or reported (the jar was never used)'
+L_NEG_BROKEN = 'a NEG that cannot be evaluated, or a check-symbols.py that does not parse, is a named FAIL, never a traceback'
+L_SKIP_FINDINGS = 'a SKIP (no section, no list) still prints the paragraph findings, and exits 1 for them'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 ALL_CASES = {L_HEALTHY, L_LINE, L_LINE_NOJAR, L_PDIFF, L_PWRAP, L_PTAIL, L_PEND, L_PNONE, L_PTWICE, L_PFENCE, L_FILE, L_NOSECTION,
              L_NOLIST, L_SECTION_END, L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM, L_FRAG, L_FRAG_OK, L_GROUP, L_ITEMOUT, L_NOSYM,
              L_FIELD, L_NEG, L_NEG_ASSET, L_NEG_READ, L_NEG_MISSING, L_JAR, L_JAR_NESTED, L_JAR_EMPTY, L_FENCED, L_MULTI,
-             L_RC}
+             L_RC, L_MARKER, L_MARKER_OK, L_CONT, L_CONT_OK, L_CONT_INDENT, L_REF, L_REF_OK, L_JAR_CORRUPT, L_JAR_COUNT,
+             L_NEG_BROKEN, L_SKIP_FINDINGS}
 
 # ---- the mutations -----------------------------------------------------------------------------------------
 if A.mutations:
@@ -167,18 +179,18 @@ if A.mutations:
             {L_PTWICE}),
         'a differing paragraph is not a finding': (
             "if len(paras) == 2 and paras['README.md'] != paras['docs/index.md']:", "if False:",
-            {L_PDIFF, L_PTAIL}),
+            {L_PDIFF, L_PTAIL, L_SKIP_FINDINGS}),
         'a missing README.md or docs/index.md is not a finding': (
             "            findings.append(f'{rel}: the file is missing')\n            continue",
             "            continue",
             {L_FILE}),
         'a Home without the section does not SKIP': (
-            "        if start is None:\n            print(f'  SKIP  docs/index.md has no",
-            "        if False:\n            print(f'  SKIP  docs/index.md has no",
-            {L_NOSECTION}),
+            "        if start is None:\n            return skip(",
+            "        if False:\n            return skip(",
+            {L_NOSECTION, L_SKIP_FINDINGS}),
         'a section without a list item does not SKIP': (
-            "        if not rows:\n            print(", "        if False:\n            print(",
-            {L_NOLIST}),
+            "        if not rows:\n            return skip(", "        if False:\n            return skip(",
+            {L_NOLIST, L_SKIP_FINDINGS}),
         'the section runs to the end of the page': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines))", "if False), len(lines))",
             {L_SECTION_END}),
@@ -210,11 +222,11 @@ if A.mutations:
             "                if neg is not None and neg.search(l):", "                if False:",
             {L_NEG, L_NEG_READ}),
         'the denial words are a copy, not check-symbols.py\'s list': (
-            "        neg = neg_pattern()", "        neg = re.compile(r'\\b(not|no)\\b', re.I)",
-            {L_NEG, L_NEG_READ, L_NEG_MISSING}),
+            "        neg, neg_why = neg_pattern()", "        neg, neg_why = re.compile(r'\\b(not|no)\\b', re.I), None",
+            {L_NEG, L_NEG_READ, L_NEG_MISSING, L_NEG_BROKEN}),
         'an unreadable NEG is not a finding': (
             "        if neg is None:\n            findings.append(", "        if False:\n            findings.append(",
-            {L_NEG_MISSING}),
+            {L_NEG_MISSING, L_NEG_BROKEN}),
         'a receiver need not be a class': (
             "                        if m.group(1) in jar:", "                        if True:",
             {L_JAR, L_MULTI}),
@@ -226,13 +238,52 @@ if A.mutations:
             {L_JAR_EMPTY}),
         'lists inside code fences are read': (
             "        if n in fenced:\n            continue\n        if l.startswith('### '):", "        if l.startswith('### '):",
-            {L_FENCED}),
+            {L_FENCED, L_MARKER_OK}),
         'only the first code span after API: is read': (
             "(?:, )?)+)'", "(?:, )?))'",
             {L_MULTI}),
         'a finding exits 0': (
             "    if findings:\n        return 1", "    if findings:\n        return 0",
-            {L_RC}),
+            {L_RC, L_NEG_BROKEN, L_JAR_CORRUPT}),
+        'a list item with another marker or an indent is read as no item at all': (
+            "            if m:\n                unseen.append(", "            if False:\n                unseen.append(",
+            {L_MARKER}),
+        'a line that goes on with the row is not a finding': (
+            "            elif kind not in ('none', None) and (prev or l[0] in ' \\t'):", "            elif False:",
+            {L_CONT, L_CONT_INDENT}),
+        'only a line directly under a row continues it, not an indented one after a blank': (
+            "(prev or l[0] in ' \\t'):", "(prev):",
+            {L_CONT_INDENT}),
+        'only an indented line continues a row, not one directly under it': (
+            "(prev or l[0] in ' \\t'):", "(l[0] in ' \\t'):",
+            {L_CONT}),
+        'text above the first group continues too': (
+            "            elif kind not in ('none', None) and (prev", "            elif (prev",
+            {L_CONT_OK}),
+        'a reference-style link is not a finding': (
+            "            if key in defs:", "            if False:",
+            {L_REF}),
+        'every bracket pair is a reference-style link, defined or not': (
+            "            if key in defs:", "            if True:",
+            {L_REF_OK}),
+        'a definition counts only inside the section': (
+            "        if n in fenced:\n            continue\n        d = DEF.match(l)", "        if n in fenced or not start < n <= end:\n            continue\n        d = DEF.match(l)",
+            {L_REF}),
+        'an unreadable jar is not a finding of its own': (
+            "                findings.append(f'--jar {a.jar} could not be read: {e}')", "                pass",
+            {L_JAR_CORRUPT}),
+        'a name that was neither resolved nor reported is not a finding': (
+            "        if a.jar and nresolved + nunresolved != nsyms:", "        if False:",
+            {L_JAR_COUNT}),
+        'a NEG that cannot be evaluated is a traceback': (
+            "    except Exception as e:                      # noqa: BLE001", "    except KeyboardInterrupt as e:                      # noqa: BLE001",
+            {L_NEG_BROKEN}),
+        'a page with no section or list drops the paragraph findings': (
+            "                print('  FAIL  ' + f)", "                pass",
+            {L_SKIP_FINDINGS}),
+        'a page with no section or list exits 2 despite its findings': (
+            "            return 1 if findings else 2", "            return 2",
+            {L_SKIP_FINDINGS}),
     }
     print(f'MUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     if len(MUTATIONS) < MIN_MUTATIONS:
@@ -385,12 +436,94 @@ def _no_neg():
 
 check(L_NEG_MISSING, _no_neg, ['check-symbols.py has no NEG assignment to read: the gate cannot tell which rows it skips'])
 
+
+def _bad_symbols(edit):
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    try:
+        for f in FROM.glob('*.py'):
+            shutil.copy2(f, tmp / f.name)
+        cs = (tmp / 'check-symbols.py').read_text()
+        assert 'NEG = re.compile(' in cs
+        (tmp / 'check-symbols.py').write_text(edit(cs))
+        rc, bad, out = broken(from_dir=tmp)
+        return rc, [b.split(' (')[0] for b in bad], 'Traceback' in out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+check(L_NEG_BROKEN, lambda: (_bad_symbols(lambda cs: cs.replace('NEG = re.compile(', 'NEG = re.compile(NO_SUCH_NAME + ', 1)),
+                             _bad_symbols(lambda cs: cs + '\ndef (:\n')),
+      ((1, ['check-symbols.py: its NEG could not be read'], False), (1, ['check-symbols.py: its NEG could not be read'], False)))
+
+_DIFFERS = PARA.replace(' own ', ' own-ish ')
+_SKIPS = (home(para=_DIFFERS).replace('## Find it by task', '## Elsewhere'),
+          '# H\n\n' + _DIFFERS + '\n\n## Find it by task\n\nJust prose.\n\n## Next\n')
+check(L_SKIP_FINDINGS, lambda: tuple((r[0], len(r[1]), 'a broken check, not a clean run' in r[2]) for r in (broken(i) for i in _SKIPS)),
+      ((1, 1, True), (1, 1, True)))
+
+# ---- what the row reader reads ---------------------------------------------------------------------------
+def _lead(n, text):
+    return f'docs/index.md:{n} is a list item that starts "{text}", and the row reader reads only "- " at column 0'
+
+
+_ROWTXT = '**x** — [a](a.md#b). Key: `Parent`.'
+check(L_MARKER, lambda: (broken(home(after=f'\n* {_ROWTXT}\n'))[1], broken(home(after=f'\n+ {_ROWTXT}\n'))[1],
+                         broken(home(after=f'\n1. {_ROWTXT}\n'))[1], broken(home(after=f'\n  - {_ROWTXT}\n'))[1],
+                         broken(home(after=f'\n2) {_ROWTXT}\n'))[1]),
+      ([_lead(30, '* ')], [_lead(30, '+ ')], [_lead(30, '1. ')], [_lead(30, '  - ')], [_lead(30, '2) ')]))
+check(L_MARKER_OK, lambda: broken(home(after='\n**Note.** not a row.\n\nA sentence - with a dash, and *emphasis* in it.\n\n'
+                                       '```md\n* fenced\n1. fenced\n  - fenced\n```\n'))[1], [])
+
+_CONT = 'continues the row above; a row is one line, and every check on it reads that line only'
+check(L_CONT, lambda: broken(_with_api(api_row(6) + '\nsecond line of the row'))[1],
+      [f'docs/index.md:21 {_CONT}'])
+check(L_CONT_INDENT, lambda: broken(_with_api(api_row(6) + '\n\n    its own paragraph'))[1],
+      [f'docs/index.md:22 {_CONT}'])
+check(L_CONT_OK, lambda: (broken(home(after='\n**Note.** a paragraph after a blank line.\n'))[1],
+                          broken(home().replace('### In Java (plugins)\n\n', '### In Java (plugins)\nText right under it.\n\n'))[1],
+                          broken(home(intro='Intro line one.\n    an indented second line.\n\n'))[1]),
+      ([], [], []))
+
+_REFROW = api_row(6).replace('[Page 6](page6.md#section-6)', '[Page 6]%s')
+_REFHOME = lambda suffix, defn: home(api_rows=[api_row(i) for i in range(6)] + [_REFROW % suffix], tail=f'\n{defn}\n')
+_REFMSG = lambda text: f'docs/index.md:20 has a reference-style link {text}: the gate reads inline links only, so a #fragment there is unchecked'
+check(L_REF, lambda: (broken(_REFHOME('[r6]', '[r6]: page6.md#section-6'))[1],
+                      broken(_REFHOME('[]', '[page 6]: page6.md#section-6'))[1],
+                      broken(_REFHOME('', '[Page 6]: page6.md#section-6'))[1]),
+      ([_REFMSG('[Page 6][r6]')], [_REFMSG('[Page 6][]')], [_REFMSG('[Page 6]')]))
+check(L_REF_OK, lambda: broken(_with_api(api_row(6) + ' Pass [x][nodef] or [bare] here.'))[1], [])
+
 # ---- the jar -----------------------------------------------------------------------------------------------
 check(L_JAR, lambda: broken(_with_api(api_row(6, recv='Ghost')))[1],
       ['docs/index.md:20 names Ghost.doIt, and Ghost is no class of the jar'])
 check(L_JAR_NESTED, lambda: broken(_with_api(api_row(6, recv='HudManager')), nested=('HudManager',))[1], [])
-check(L_JAR_EMPTY, lambda: [b.split(' ', 1)[0] + ' ' + b.split(' ', 2)[2] for b in broken(jar_names=(), nested=())[1]],
+check(L_JAR_EMPTY, lambda: [b.split(' ', 1)[0] + ' ' + b.split(' ', 2)[2] for b in broken(jar_names=(), nested=())[1]
+                            if 'holds no com/hypixel class' in b],
       ['--jar holds no com/hypixel class'])
+
+
+def _corrupt_jar():
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    try:
+        (tmp / 'docs').mkdir()
+        (tmp / 'README.md').write_text(README)
+        (tmp / 'docs/index.md').write_text(home())
+        j = tmp / 'bad.jar'
+        j.write_bytes(b'this is not a zip file')
+        return run(tmp, j)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _fail_bodies(out):
+    return [l.strip()[6:].strip() for l in out.split('\n') if l.strip().startswith('FAIL')]
+
+
+check(L_JAR_CORRUPT, lambda: (_corrupt_jar()[0], [b.split(' ', 2)[2].split(':')[0] for b in _fail_bodies(_corrupt_jar()[1])
+                                                 if 'could not be read' in b]),
+      (1, ['could not be read']))
+check(L_JAR_COUNT, lambda: [b.split(': ', 1)[1] for b in _fail_bodies(_corrupt_jar()[1]) if 'never looked up' in b],
+      ['7 name(s) read from the rows, 0 resolved and 0 reported unresolved; the rest were never looked up'])
 check(L_FENCED, lambda: broken(home(after='\n```md\n- **x** — [a](a.md). API: `z`.\n### Bogus\n```\n'))[1], [])
 check(L_RC, lambda: broken(home(para='Other.'))[0], 1)
 

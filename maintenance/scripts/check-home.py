@@ -30,7 +30,16 @@ broke into four fragments, and the column that held the example was cut off. A l
     drift;
   * with --jar, the receiver of each of those names resolves to a class of the jar. check-symbols skips a receiver
     that is no jar class, so a mistyped class name there is a pass in both, and this closes it;
-  * an Asset key row names the key or asset in a code span after `Key:`.
+  * an Asset key row names the key or asset in a code span after `Key:`;
+  * a row is read at its first line only, from the `- ` at column 0. So the section FAILs on what that reader would
+    not see: a list item written any other way (`*`, `+`, `1.`, `2)`, indented, in a quote), a line that continues a
+    row (directly under it, or indented after a blank line), and a reference-style link (`[x][r]`, `[x][]`, `[x]` with
+    a definition anywhere in the file), whose #fragment the inline-link reader never reads. A row is one line; this
+    gate does not fold a second line into the first, it refuses it;
+  * with --jar, every name read from the rows is either resolved in the jar or reported unresolved; a name that is
+    neither means the jar was not used (an unreadable or empty jar is a FAIL of its own, and this says so again by count);
+  * a check-symbols.py whose NEG cannot be read or evaluated is a named FAIL, and a page with no section or no list
+    still prints the paragraph findings (exit 1 when there are any, 2 when there are none).
 Not held: that the section a row links answers the task, and that the call is the current route. Those are read by a
 person, per row (the item 16 audit); a deprecated route is found by `@Deprecated` in the decompiled source.
 
@@ -54,6 +63,10 @@ ROWS_MIN, ROWS_MAX = 12, 18
 GROUPS = {'In Java': 'api', 'In JSON': 'asset'}
 FIELD = {'api': 'API', 'asset': 'Key'}
 CODE = re.compile(r'`([^`\n]+)`')
+MARKER = re.compile(r'^[ \t>]*(?:[-*+]|\d{1,9}[.)])[ \t]')
+DEF = re.compile(r'^ {0,3}\[([^\]]+)\]:[ \t]*\S')
+REF = re.compile(r'\[([^\[\]]+)\](\[([^\[\]]*)\])?')
+CONT = 'continues the row above; a row is one line, and every check on it reads that line only'
 SYMBOL = re.compile(r'\b([A-Z][A-Za-z0-9_]*)\.([a-z_][A-Za-z0-9_]*)\b')
 
 
@@ -73,12 +86,20 @@ def verified_paragraphs(text: str):
 
 
 def neg_pattern():
-    """check-symbols.py's NEG, read from its source so the two cannot drift."""
-    tree = ast.parse((HERE / 'check-symbols.py').read_text())
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'NEG' for t in node.targets):
-            return eval(compile(ast.Expression(node.value), 'check-symbols.py', 'eval'), {'re': re})
-    return None
+    """check-symbols.py's NEG, read from its source so the two cannot drift. -> (pattern, None), or (None, why) when
+    the file does not parse, has no NEG assignment, or the assignment does not evaluate to a pattern."""
+    try:
+        tree = ast.parse((HERE / 'check-symbols.py').read_text())
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'NEG' for t in node.targets):
+                pat = eval(compile(ast.Expression(node.value), 'check-symbols.py', 'eval'), {'re': re})
+                if not hasattr(pat, 'search'):
+                    raise TypeError(f'NEG is a {type(pat).__name__}, not a compiled pattern')
+                return pat, None
+    except Exception as e:                      # noqa: BLE001 - the point is that nothing here is a traceback
+        return None, (f'check-symbols.py: its NEG could not be read ({type(e).__name__}: {e}); '
+                      f'the gate cannot tell which rows it skips')
+    return None, 'check-symbols.py has no NEG assignment to read: the gate cannot tell which rows it skips'
 
 
 def jar_names(jar: pathlib.Path):
@@ -93,9 +114,10 @@ def jar_names(jar: pathlib.Path):
 
 def items(lines, start: int, end: int, fenced):
     """-> ([(line number, line, kind)] for the list items on lines start..end, [(line number, heading)] of groups
-    that are neither In Java nor In JSON). An item belongs to the nearest `###` heading above it, kind 'none' when there is
-    none and None when that heading is no group."""
-    out, bad, kind = [], [], 'none'
+    that are neither In Java nor In JSON, [(line number, text)] of what the row reader cannot see). An item belongs to
+    the nearest `###` heading above it, kind 'none' when there is none and None when that heading is no group. What it
+    cannot see is a list item that is not `- ` at column 0, and, inside a group, a line that goes on with the row above."""
+    out, bad, unseen, kind, prev = [], [], [], 'none', False
     for n in range(start, end + 1):
         l = lines[n - 1]
         if n in fenced:
@@ -105,9 +127,49 @@ def items(lines, start: int, end: int, fenced):
             kind = next((v for k, v in GROUPS.items() if h.startswith(k)), None)
             if kind is None:
                 bad.append((n, h))
+            prev = False
         elif l.startswith('- '):
             out.append((n, l, kind))
-    return out, bad
+            prev = True
+        elif not l.strip() or l.startswith('#'):
+            prev = False
+        else:
+            m = MARKER.match(l)
+            if m:
+                unseen.append((n, f'is a list item that starts "{m.group(0)}", and the row reader reads only "- " at column 0'))
+                prev = False
+            elif kind not in ('none', None) and (prev or l[0] in ' \t'):
+                unseen.append((n, CONT))
+                prev = True
+            else:
+                prev = False
+    return out, bad, unseen
+
+
+def reference_links(lines, start: int, end: int, fenced):
+    """-> [(line number, text)] of the reference-style links on lines start..end whose label some definition anywhere in
+    the file gives. Code spans are masked; `[text](dest)` is an inline link and `[text]` with no definition is text."""
+    defs = set()
+    for n, l in enumerate(lines, 1):
+        if n in fenced:
+            continue
+        d = DEF.match(l)
+        if d:
+            defs.add(' '.join(d.group(1).lower().split()))
+    out = []
+    for n in range(start, end + 1):
+        if n in fenced:
+            continue
+        l = re.sub(r'`[^`\n]*`', lambda m: ' ' * len(m.group(0)), lines[n - 1])
+        if DEF.match(l):
+            continue
+        for m in REF.finditer(l):
+            if m.group(2) is None and l[m.end():m.end() + 1] == '(':
+                continue
+            key = ' '.join((m.group(3) or m.group(1)).lower().split())
+            if key in defs:
+                out.append((n, m.group(0)))
+    return out
 
 
 def main() -> int:
@@ -145,20 +207,30 @@ def main() -> int:
         fenced = doc_fences.parse(text).fence_lines
         lines = text.split('\n')
         start = next((n for n, l in enumerate(lines, 1) if n not in fenced and l.rstrip() == SECTION), None)
+        def skip(why):
+            # the paragraph findings are real whatever the second half could not read
+            for f in findings:
+                print('  FAIL  ' + f)
+            print(f'  SKIP  {why} - a broken check, not a clean run')
+            return 1 if findings else 2
+
         if start is None:
-            print(f'  SKIP  docs/index.md has no `{SECTION}` section - a broken check, not a clean run')
-            return 2
+            return skip(f'docs/index.md has no `{SECTION}` section')
         end = next((n - 1 for n in range(start + 1, len(lines) + 1)
                     if n not in fenced and lines[n - 1].startswith('## ')), len(lines))
-        rows, badgroups = items(lines, start + 1, end, fenced)
+        rows, badgroups, unseen = items(lines, start + 1, end, fenced)
         if not rows:
-            print(f'  SKIP  `{SECTION}` holds no list item - a broken check, not a clean run')
-            return 2
+            return skip(f'`{SECTION}` holds no list item')
         for n, h in badgroups:
             findings.append(f'docs/index.md:{n} the group `### {h}` is neither `In Java` nor `In JSON`')
-        neg = neg_pattern()
+        for n, why in unseen:
+            findings.append(f'docs/index.md:{n} {why}')
+        for n, text in reference_links(lines, start + 1, end, fenced):
+            findings.append(f'docs/index.md:{n} has a reference-style link {text}: the gate reads inline links only, '
+                            f'so a #fragment there is unchecked')
+        neg, neg_why = neg_pattern()
         if neg is None:
-            findings.append('check-symbols.py has no NEG assignment to read: the gate cannot tell which rows it skips')
+            findings.append(neg_why)
         jar = None
         if a.jar:
             try:
@@ -170,6 +242,7 @@ def main() -> int:
                     findings.append(f'--jar {a.jar} holds no com/hypixel class')
                     jar = None
         rowlines = set()
+        nunresolved = 0
         for n, l, kind in rows:
             if kind == 'none':
                 findings.append(f'docs/index.md:{n} is a list item above any `In Java` or `In JSON` group')
@@ -194,8 +267,12 @@ def main() -> int:
                         if m.group(1) in jar:
                             nresolved += 1
                         else:
+                            nunresolved += 1
                             findings.append(f'docs/index.md:{n} names {m.group(1)}.{m.group(2)}, '
                                             f'and {m.group(1)} is no class of the jar')
+        if a.jar and nresolved + nunresolved != nsyms:
+            findings.append(f'--jar {a.jar}: {nsyms} name(s) read from the rows, {nresolved} resolved and '
+                            f'{nunresolved} reported unresolved; the rest were never looked up')
         total = nrows['api'] + nrows['asset']
         if not ROWS_MIN <= total <= ROWS_MAX:
             findings.append(f'`{SECTION}` has {total} rows, wanted {ROWS_MIN} to {ROWS_MAX}')

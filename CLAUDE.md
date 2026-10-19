@@ -257,7 +257,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 
     A row is one line, read from its `- ` at column 0. So the section FAILs on a list item written any other way (`*`, `+`, `1.`, `2)`, indented, quoted); on a continuation line (directly under a row, or indented after a blank line; refused, not folded); and on a reference-style link (`[x][r]`, `[x][]`, or `[x]` with a definition anywhere in the file), whose fragment the inline-link reader never sees; and on a raw `<a>` tag outside a code span, which that reader does not read either. With no section or no list it still prints the paragraph findings (exit 1 if any, else 2). It prints `8 API and 10 Asset key rows, 26 page link(s) …, 9 resolved in the jar`. `API:` is the label, not `Call:`, because two of the names are methods you override (`EntityEventSystem.handle`, `EntityTickingSystem.tick`).
   - **What it does not hold:** that a linked section answers the task, or that the API is the current way to do it. A reviewer reads each row. The rows were audited at item 16 and re-audited after its review: no API or class `@Deprecated`, `InventoryComponent` rather than `Inventory`, `block-access.md` for blocks; the item-use row starts at the item's `Interactions` map, and the drops, worldgen, weapon and NPC rows name the wiring (`DropList`, `WorldGen.WorldStructure`, `Weapon`, Variants retuning a role under `Modify`).
-- **Fixtures.** `check-example-lists-fixture.py --mutations` (41 cases, 46 mutations counting the identity control) and `check-home-fixture.py --mutations` (48 and 45). The mutation runners take an optional target file; two mutations of each target check-links.py's `reference_uses`. verify-docs.sh runs both; it now runs 15 fixtures (the 15th is `generate-llms-txt-fixture.py --mutations`; see the llms.txt note under the follow-up levers).
+- **Fixtures.** `check-example-lists-fixture.py --mutations` (41 cases, 46 mutations counting the identity control, 25 s) and `check-home-fixture.py --mutations` (48 and 45, 24 s). Both mutation runners require each child run to print a `FIXTURE N check(s)` line with N at least MIN_CASES, and the IDENTITY run to exit 0 (1f0aa5a). Before that, a raised floor or an early crash left them green. The mutation runners take an optional target file; two mutations of each target check-links.py's `reference_uses`. verify-docs.sh runs both; it now runs 15 fixtures (the 15th is `generate-llms-txt-fixture.py --mutations`; see the llms.txt note under the follow-up levers).
 - **The stamp INFO.** It exempts the navigation pages {index, 00, 01, 02, examples}, and its predicate is the Doc type line carrying `**Verified against N**` (74 of 74 topic pages). It is INFO, so it cannot fail.
 - **Ungated claims on Home.** "How to read a page" is held by nothing but that INFO. Measured by the review of ec18b64..a32c01f on the 79 pages: the Doc type line on 79 of 79, the stamp on 74 of 74 topic pages, and a section titled exactly "Gotchas & Errors" on 60 of 79 ("most pages"; any `## Gotchas` heading, 63). The implementer's first figures, "of 78", were taken before examples.md existed. `**Package:**` is not claimed: 24 of 79 pages lack it.
 - **Rows are lists, not a table.** A four-column table broke the code names over several lines at 390 px and cut off its last column (90f8cd9). A table needs CSS in `overrides/` first.
@@ -361,11 +361,42 @@ Two of the three follow-up levers are now built (2026-07-19): the **snippet-comp
 - the tracked `examples/` directories, with the Type and "What it demonstrates" cells of their rows in `examples/README.md`.
 
 Regenerate and commit with `python3 maintenance/scripts/generate-llms-txt.py > docs/llms.txt` when pages, descriptions, categories or examples change.
-- **The gate.** The [HARD] section "llms.txt generates, and docs/llms.txt is current" FAILs on a generator that exits non-zero, on empty output, on a missing or disagreeing `LLMS <c> categories, <p> pages, <e> examples` line (11, 79 and 8 at 6622815), and on fewer page links than docs/*.md files. A file that merely differs is a WARN. The old `generate | cmp` read a crashed generator that had printed the file as PASS, and empty output as stale.
-- **The generator exits 2, with nothing on stdout,** on: no categories; a page in no category or in two; a listed page or Home without a title or description; a Verified-against paragraph not found exactly once; an examples table whose header is not exactly `| Example | Type | What it demonstrates | Commands |`, a row that is not four cells, a Type other than Pack or Plugin, or a tracked example directory without a row.
-- **Links stay on the rendered `.html` pages.** Raw markdown was proposed and measured: the text of the HTML (scripts and styles dropped) is within 10% of the markdown (commands.html 57,455 bytes of text against commands.md's 58,982; items 25,137 against 27,400), so the 5x was bytes on the wire only, and raw markdown cannot link the examples' directories. One line gives the raw-markdown URL pattern.
-- **The summary claims only what a [HARD] section holds:** class references, `Class.member` symbols, discriminator values and asset ids at typed positions in JSON examples, complete `package` snippets and the example plugins compiling, links and anchors. It says that JSON enum values, required keys and bare method lists are not machine-checked. The old summary claimed "every documented JSON key traces" and "compile in CI"; CI builds the site only.
-- **The fixture.** `generate-llms-txt-fixture.py --mutations`: 53 cases, 49 mutations including the identity control, about 15 s. It also runs the verify-docs section as text, with the old section as a negative control. Two pins no guard mutation reddens: G_REORDER and that negative control.
+- **The gate.** The [HARD] section "llms.txt generates, and docs/llms.txt is current" FAILs on a generator that exits non-zero and on empty output.
+    - **The LLMS line.** The generator's stderr must carry exactly one `LLMS <c> categories, <p> pages, <e> examples` line, digits only. Two such lines made the old test error and PASS (reproduced).
+    - **Each figure is recounted.** The section counts each from the output by another route, and each disagreement is its own named FAIL:
+        - pages are the distinct page URLs in the output, and must also equal the number of docs/*.md files (`find -type f`; equal, not at least);
+        - examples are the distinct example tree links, and must also equal the top-level directories of `git ls-files -z -- examples/`; a failing git is its own FAIL;
+        - categories are the `## ` headings other than Start here, Examples and Source.
+    - The figures are 11, 79 and 8 at 11aafe2.
+    - A file that merely differs is a WARN.
+    - The old `generate | cmp` read a crashed generator that had printed the file as PASS, and empty output as stale.
+- **The generator exits 2, with nothing on stdout,** on:
+    - no categories, or a page in no category or in two;
+    - a listed page or Home with an empty title or description, or one written in a form the site's YAML reader could read differently:
+        - a block scalar (`>`, `|`), an anchor, alias or tag (`&`, `*`, `!`), or a flow collection;
+        - a quoted value with an escape or a doubled quote, or a quote that does not close;
+        - a plain value with a trailing ` #` comment or a `: `;
+        - a value that continues on the next indented line;
+    - a Verified-against paragraph not found exactly once;
+    - an examples table whose header is not exactly `| Example | Type | What it demonstrates | Commands |`;
+    - a table row that is not four cells, that links something other than a tracked example directory (below it, or nothing), or whose Type is not Pack or Plugin;
+    - a tracked example directory without a row, no tracked example directory, or no git work tree.
+
+  The key is read from its own line only. `\s*` after the colon crossed the newline, so an empty `description:` printed the next frontmatter line (review of 8b48c97, MAJOR-1). The examples are read with `git ls-files -z`, so a non-ASCII directory name is read, not quoted.
+- **Links stay on the rendered `.html` pages.** Raw markdown was proposed and measured: the text of the HTML (scripts and styles dropped) is within 10% of the markdown (commands.html 57,455 characters of text against commands.md's 58,982; items 25,137 against 27,400), so the 5x was bytes on the wire only, and raw markdown cannot link the examples' directories. One line gives the raw-markdown URL pattern.
+- **The summary claims only what a [HARD] section holds, with the exceptions stated.** Each clause was checked against the gate's own output before it went in (review of 8b48c97, MEDIUM-1/2/3). It claims:
+    - the `com.hypixel.*` class names exist;
+    - `Class.member` references exist on that class, except on prose lines with a negation word (check-symbols' NEG: no, not, instead, removed and the like);
+    - `Type` and `Op` values in JSON examples are registered under that key or used under it by a shipped asset. check-type-values checks exactly those two keys; Id, type and Slot are mixed keys, and a fabricated value under them passes;
+    - asset ids at typed key positions in JSON examples exist;
+    - complete `package` examples and the example plugins compile;
+    - relative links and section anchors resolve.
+
+  It then says nothing else is machine-checked: prose and behaviour claims, calls in Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, and asset ids at untyped positions. The old summary claimed "every documented JSON key traces" and "compile in CI"; CI builds the site only.
+- **Home's `description:` is also the site root's meta description, og:description and WebSite JSON-LD description** (item 17's review, MEDIUM-4). Until item 17 gave Home a frontmatter description, these came from the site config: "The Hytale Modding Handbook — a server-plugin & asset API reference with the descriptions, gotchas, and working examples." The description now begins "The Hytale Modding Handbook, a server-plugin and asset API reference. Start here: ...", so it serves the site and llms.txt.
+- **The fixture.** `generate-llms-txt-fixture.py --mutations`: 76 cases, 74 mutations including the identity control, about 43 s (each section case runs `git init`).
+    - It also runs the verify-docs section as text on a stub generator, with a transcription of the old section (simplified messages) as a negative control. That control is the one pin no guard mutation reddens.
+    - Its mutation runner, like check-home-fixture's and check-example-lists-fixture's, requires every child to print `FIXTURE N check(s)` with N at least MIN_CASES, and the IDENTITY child to exit 0. Before 1f0aa5a, MIN_CASES raised to 9999 left `--mutations` exiting 0 with "all expected red sets matched" in all three.
 
 The remaining lever: expanding the coverage advisory's denominator beyond `server.core`/`component`/`math` to the `builtin.*` packages.
 

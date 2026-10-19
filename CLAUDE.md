@@ -173,7 +173,7 @@ It auto-resolves the jar/assets per-platform. **Hard gates** (fail the run): eve
 
 ## The docs site
 
-The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Jekyll and Just the Docs build). `.github/workflows/pages.yml` deploys it on every push to `main`. The workflow has no `paths` filter, so a change to the slug, a script or the workflow itself cannot skip a deploy. `use_directory_urls = false` keeps every Jekyll URL (`commands.html`). `docs/_config.yml` and `docs/_sass/` stay for the rollback, and they are published as static files until a separate commit removes them.
+The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Jekyll and Just the Docs build). `.github/workflows/pages.yml` deploys it on every push to `main`. The workflow has no `paths` filter, so a change to the slug, a script or the workflow itself cannot skip a deploy. `use_directory_urls = false` keeps every Jekyll URL (`commands.html`). The Jekyll files (`docs/_config.yml`, `docs/_sass/`) and Home's Just the Docs `nav_order` were removed in item 18 (2026-10-19), with the maintainer's approval. Until then the site published them as static files: `<site>/_config.yml` returned 200.
 
 **Inputs.**
 - `zensical.toml`.
@@ -273,7 +273,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 
 **Rollout and rollback.**
 - **Rollout:** Settings > Pages > Source: GitHub Actions, then push, then watch the run.
-- **Rollback:** set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`. This works only while `docs/_config.yml` and `docs/_sass/` exist.
+- **Rollback:** the Jekyll build no longer exists in the tree. To bring it back, first `git revert` item 18's removal commit, which restores `docs/_config.yml`, `docs/_sass/` and Home's `nav_order`. Then set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`.
 
 ## Maintenance invariants
 

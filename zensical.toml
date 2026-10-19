@@ -67,7 +67,7 @@ scheme = "default"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to dark mode"
 
-# The google-site-verification token the Jekyll site carried in docs/_config.yml; overrides/main.html emits it.
+# The google-site-verification token the Jekyll site carried in docs/_config.yml (removed in item 18); overrides/main.html emits it.
 [project.extra]
 google_site_verification = "lda6iuJ9CP3rDGQrFaLuMYyygR61GKYVzTFU8vCwSac"
 

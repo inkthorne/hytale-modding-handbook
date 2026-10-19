@@ -1,7 +1,6 @@
 ---
 title: Home
 description: "The Hytale Modding Handbook, a server-plugin and asset API reference. Start here: who it is for, tasks with the section and the Java call or JSON key that does each, how to read a page, and the build it was verified against."
-nav_order: 0
 ---
 
 # Hytale Modding Handbook

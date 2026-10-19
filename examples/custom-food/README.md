@@ -188,9 +188,11 @@ time and reloading:
    no `Custom Food`-related errors means the pack loaded.
 3. **Give yourself the item.** In-game, use the give command with the item's id:
    ```
-   /give Food_Hearty_Snack 1
+   /give Food_Hearty_Snack
    ```
-   (The id is the JSON file's name without `.json`. Item ids are case-sensitive.)
+   (The id is the JSON file's name without `.json`. Item ids are case-sensitive. This gives one item: the command's
+   `quantity` is an option, so `--quantity 5` gives five, and `/give <player> Food_Hearty_Snack` gives it to another
+   player. `/give Food_Hearty_Snack 1` does not work: with two words the command's other variant reads the first as a player name.)
 4. **Switch to Adventure mode.** Food can only be eaten in **Adventure** mode — the
    consume interaction is gated to it (`"RequiredGameMode": "Adventure"`). In Creative,
    right-click *throws* the item instead of eating it. Switch with:

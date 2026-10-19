@@ -30,7 +30,7 @@ This example wires together several ideas:
 ## What you'll see
 
 1. Obtain the **Item Respawner** (creative inventory → search "Item Respawner",
-   or `/give <player> Item_Respawner_Block 1`) and place it — a marble pedestal.
+   or `/give <player> Item_Respawner_Block`) and place it — a marble pedestal.
 2. A crossbow drops on top within a tick.
 3. In **creative mode**, **press F** on the pedestal → a settings GUI with an
    **item id** field and a **respawn delay** field. Change them and hit *Save

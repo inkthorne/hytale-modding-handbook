@@ -40,7 +40,7 @@ README = f'# R\n\n{PARA}\n\n## Documentation\n\nText.\n'
 
 def api_row(i, recv=None, extra=''):
     r = recv or RECEIVERS[i % len(RECEIVERS)]
-    return f'- **Do thing {i}{extra}** — [Page {i}](page{i}.md#section-{i}). Call: `{r}.doIt`.'
+    return f'- **Do thing {i}{extra}** — [Page {i}](page{i}.md#section-{i}). API: `{r}.doIt`.'
 
 
 def asset_row(i):
@@ -126,8 +126,8 @@ L_FRAG = 'a page link without a #fragment FAILs, naming the line and the link'
 L_FRAG_OK = 'a link to a non-.md file or a URL needs no fragment'
 L_GROUP = 'a ### group that is neither In Java nor In JSON FAILs, naming it'
 L_ITEMOUT = 'a list item above any group FAILs, naming the line'
-L_NOSYM = 'an API row whose Call: names no Receiver.member FAILs'
-L_FIELD = 'a row without its Call: or Key: field and a code span FAILs, naming the line'
+L_NOSYM = 'an API row whose API: names no Receiver.member FAILs'
+L_FIELD = 'a row without its API: or Key: field and a code span FAILs, naming the line'
 L_NEG = 'an API row holding a word check-symbols reads as a denial FAILs, naming the word'
 L_NEG_ASSET = 'and the same word in an Asset key row is no finding (check-symbols checks no symbol there)'
 L_NEG_READ = 'the word list is check-symbols.py\'s NEG, not a copy: a word only that list holds is found'
@@ -136,7 +136,7 @@ L_JAR = 'a receiver that is no class of the jar FAILs, naming it'
 L_JAR_NESTED = 'a nested class is a receiver by its own name'
 L_JAR_EMPTY = 'a jar with no com/hypixel class FAILs'
 L_FENCED = 'a list inside a code fence is not read'
-L_MULTI = 'every code span after Call: is a call: a second one that is no jar class is found'
+L_MULTI = 'every code span after API: is a call: a second one that is no jar class is found'
 L_RC = 'a finding exits 1'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
@@ -227,7 +227,7 @@ if A.mutations:
         'lists inside code fences are read': (
             "        if n in fenced:\n            continue\n        if l.startswith('### '):", "        if l.startswith('### '):",
             {L_FENCED}),
-        'only the first code span after Call: is read': (
+        'only the first code span after API: is read': (
             "(?:, )?)+)'", "(?:, )?))'",
             {L_MULTI}),
         'a finding exits 0': (
@@ -320,7 +320,7 @@ _NOSEC = home().replace('## Find it by task', '## Elsewhere')
 check(L_NOSECTION, lambda: (broken(_NOSEC)[0], 'a broken check, not a clean run' in broken(_NOSEC)[2]), (2, True))
 _NOLISTS = '# H\n\n' + PARA + '\n\n## Find it by task\n\nJust prose.\n\n## Next\n'
 check(L_NOLIST, lambda: (broken(_NOLISTS)[0], 'holds no list item' in broken(_NOLISTS)[2]), (2, True))
-_late = '\n## Later\n\n- **x** — [a](a.md). Call: `Mystery`.\n'
+_late = '\n## Later\n\n- **x** — [a](a.md). API: `Mystery`.\n'
 check(L_SECTION_END, lambda: broken(home(after=_late))[1], [])
 
 # ---- row count ---------------------------------------------------------------------------------------------
@@ -344,19 +344,19 @@ check(L_FRAG_OK, lambda: broken(_with_api(api_row(6)[:-1] + ' Example: [Ex](../e
                                           '[d](../examples/e/).'))[1], [])
 
 # ---- structure ---------------------------------------------------------------------------------------------
-_EXTRA = '\n### Extra\n\n- **x** — [a](a.md#b). Call: `A.b`.\n'
+_EXTRA = '\n### Extra\n\n- **x** — [a](a.md#b). API: `A.b`.\n'
 check(L_GROUP, lambda: broken(home(after=_EXTRA))[1],
       ['docs/index.md:30 the group `### Extra` is neither `In Java` nor `In JSON`'])
-check(L_ITEMOUT, lambda: broken(home(intro='- **x** — [a](a.md#b). Call: `A.b`.\n\n'))[1],
+check(L_ITEMOUT, lambda: broken(home(intro='- **x** — [a](a.md#b). API: `A.b`.\n\n'))[1],
       ['docs/index.md:12 is a list item above any `In Java` or `In JSON` group'])
 _NOCALL = 'doIt`.'
 check(L_NOSYM, lambda: broken(_with_api(api_row(6).replace('`' + RECEIVERS[6 % len(RECEIVERS)] + '.doIt`', '`doIt`')))[1],
-      ['docs/index.md:20 names no Receiver.member call after `Call:`'])
-check(L_FIELD, lambda: (broken(_with_api(api_row(6).replace('Call:', 'See:')))[1],
+      ['docs/index.md:20 names no Receiver.member call after `API:`'])
+check(L_FIELD, lambda: (broken(_with_api(api_row(6).replace('API:', 'See:')))[1],
                         broken(_with_api(api_row(6).replace('`' + RECEIVERS[6 % len(RECEIVERS)] + '.doIt`', 'doIt')))[1],
                         broken(home(asset_rows=[asset_row(100 + i) for i in range(4)] + ['- **Make asset** — [P](p.md#s). Key: Parent.']))[1]),
-      (['docs/index.md:20 has no `Call: ` field with a code span'],
-       ['docs/index.md:20 has no `Call: ` field with a code span'],
+      (['docs/index.md:20 has no `API: ` field with a code span'],
+       ['docs/index.md:20 has no `API: ` field with a code span'],
        ['docs/index.md:28 has no `Key: ` field with a code span']))
 check(L_MULTI, lambda: broken(_with_api(api_row(6).replace('.doIt`.', '.doIt`, `Ghost.doIt`.')))[1],
       ['docs/index.md:20 names Ghost.doIt, and Ghost is no class of the jar'])
@@ -391,7 +391,7 @@ check(L_JAR, lambda: broken(_with_api(api_row(6, recv='Ghost')))[1],
 check(L_JAR_NESTED, lambda: broken(_with_api(api_row(6, recv='HudManager')), nested=('HudManager',))[1], [])
 check(L_JAR_EMPTY, lambda: [b.split(' ', 1)[0] + ' ' + b.split(' ', 2)[2] for b in broken(jar_names=(), nested=())[1]],
       ['--jar holds no com/hypixel class'])
-check(L_FENCED, lambda: broken(home(after='\n```md\n- **x** — [a](a.md). Call: `z`.\n### Bogus\n```\n'))[1], [])
+check(L_FENCED, lambda: broken(home(after='\n```md\n- **x** — [a](a.md). API: `z`.\n### Bogus\n```\n'))[1], [])
 check(L_RC, lambda: broken(home(para='Other.'))[0], 1)
 
 # ---- the report --------------------------------------------------------------------------------------------

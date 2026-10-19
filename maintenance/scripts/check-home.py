@@ -17,13 +17,13 @@ that does it, so the properties that make a row useful are held. A row is a list
 `In Java ...` (an `API` group) or `In JSON ...` (an `Asset key` group). It is a list and not a table because a table of
 four columns did not survive a 390 px screen: the browser squeezed the code column until `CommandRegistry.registerCommand`
 broke into four fragments, and the column that held the example was cut off. A list item wraps at spaces.
-  * a row is `- **Task** - links. Call: `Receiver.member`. Example: [name](path).` (an API row) or `... Key: `Parent`.`
+  * a row is `- **Task** - links. API: `Receiver.member`. Example: [name](path).` (an API row) or `... Key: `Parent`.`
     (an Asset key row); the Example field is optional;
   * every link to a .md page carries a #fragment (a row that sends a reader to the top of a 1,500-line page has not
     answered the task; check-links holds the fragment to a real heading);
   * the row count is within 12..18 (Home is a door, not a second index);
   * a `###` group under the section is `In Java` or `In JSON`, and nothing else;
-  * an API row names its main call as `Receiver.member` in the code span after `Call:`, which check-symbols then
+  * an API row names its main call as `Receiver.member` in the code span after `API:`, which check-symbols then
     checks against the jar; and the row is not a line check-symbols would skip. check-symbols treats any prose line
     holding one of its negation words (no, not, never, instead, removed, deprecated, ...) as a denial and ignores the
     symbols on it. The word list is read from check-symbols.py itself (its NEG assignment, by ast), so the two cannot
@@ -52,7 +52,7 @@ PARA = '**Verified against Hytale'
 SECTION = '## Find it by task'
 ROWS_MIN, ROWS_MAX = 12, 18
 GROUPS = {'In Java': 'api', 'In JSON': 'asset'}
-FIELD = {'api': 'Call', 'asset': 'Key'}
+FIELD = {'api': 'API', 'asset': 'Key'}
 CODE = re.compile(r'`([^`\n]+)`')
 SYMBOL = re.compile(r'\b([A-Z][A-Za-z0-9_]*)\.([a-z_][A-Za-z0-9_]*)\b')
 
@@ -184,7 +184,7 @@ def main() -> int:
             elif kind == 'api':
                 syms = [m for c in CODE.findall(field.group(1)) for m in SYMBOL.finditer(c)]
                 if not syms:
-                    findings.append(f'docs/index.md:{n} names no Receiver.member call after `Call:`')
+                    findings.append(f'docs/index.md:{n} names no Receiver.member call after `API:`')
                 nsyms += len(syms)
                 if neg is not None and neg.search(l):
                     findings.append(f'docs/index.md:{n} holds a word check-symbols reads as a denial '

@@ -582,10 +582,33 @@ else
   if [ -z "$SITE_TMP" ]; then
     fail "site build: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - nothing was built"
   else
-    mkdir -p "$SITE_TMP/maintenance/scripts"
-    cp -R zensical.toml docs "$SITE_TMP/"
-    cp -R maintenance/site "$SITE_TMP/maintenance/"
-    cp maintenance/scripts/check-links.py maintenance/scripts/doc_fences.py "$SITE_TMP/maintenance/scripts/"
+    # The whole tree the deploy builds: what git tracks plus what it does not ignore, minus .claude/ (worktrees and
+    # session files live there; .git/info/exclude hides them on one machine only). The extension decides tree or blob
+    # for `../examples/ui` (no trailing slash) by asking whether the directory exists, so a copy without examples/
+    # built that link as a blob where CI builds a tree (review of d361e13..9f19ac9, LOW-1).
+    SITE_C0="$(python3 -c 'import time; print(time.time())')"
+    git ls-files -z --cached --others --exclude-standard -- . ':(exclude).claude' | python3 -c '
+import os, shutil, sys
+dest, n = sys.argv[1], 0
+for raw in sys.stdin.buffer.read().split(b"\0"):
+    if not raw:
+        continue
+    src = os.fsdecode(raw)
+    if not os.path.lexists(src):          # tracked and deleted in the work tree
+        continue
+    out = os.path.join(dest, src)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    shutil.copy2(src, out, follow_symlinks=False)
+    n += 1
+print(n)' "$SITE_TMP" > "$SITE_TMP.copied"; SITE_CP=("${PIPESTATUS[@]}")
+    SITE_NCOPIED="$(cat "$SITE_TMP.copied")"; rm -f "$SITE_TMP.copied"
+    SITE_C1="$(python3 -c 'import time; print(time.time())')"
+    SITE_CP_OK=1
+    if [ "${SITE_CP[0]}" -ne 0 ] || [ "${SITE_CP[1]}" -ne 0 ] || [ -z "$SITE_NCOPIED" ] || [ "$SITE_NCOPIED" -eq 0 ]; then
+      SITE_CP_OK=0; fail "site build: could not copy the tree to $SITE_TMP (git ls-files exited ${SITE_CP[0]}, the copy ${SITE_CP[1]}, ${SITE_NCOPIED:-no} file(s) copied; the section needs a git work tree)"
+    fi
+    info "copied ${SITE_NCOPIED:-0} file(s) of the tree in $(awk -v a="$SITE_C0" -v b="$SITE_C1" 'BEGIN{printf "%.1f", b-a}') s"
+    if [ "$SITE_CP_OK" -eq 1 ]; then      # (not re-indented: the block below is the unchanged build and its checks)
     SITE_T0="$(python3 -c 'import time; print(time.time())')"       # not date +%s%N: the BSD date has no %N
     ( cd "$SITE_TMP" && PYTHONPATH=maintenance/site HANDBOOK_REF="$SITE_REF" NO_COLOR=1 "$SITE_PY" -m zensical build --clean ) > "$SITE_TMP/build.log" 2>&1; SITE_RC=$?
     SITE_T1="$(python3 -c 'import time; print(time.time())')"
@@ -615,6 +638,7 @@ else
     fi
     if [ "$SITE_OK" -eq 1 ]; then
       pass "$SITE_HTML page(s) built in $SITE_SECS s; $SITE_W warning(s), $SITE_E explained"
+    fi
     fi
     rm -rf "$SITE_TMP"
     SITE_TMP=""        # the EXIT cleanup must not act on a path that is already gone

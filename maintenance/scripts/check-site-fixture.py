@@ -41,8 +41,8 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 116            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
-MIN_MUTATIONS = 98
+MIN_CASES = 121            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_MUTATIONS = 106
 MIN_EXT_CASES = 22
 MIN_EXT_MUTATIONS = 26
 
@@ -689,6 +689,7 @@ STUB = '''#!/usr/bin/env bash
 # prints a planted log. STUB_RECORD, STUB_SITE, STUB_LOG and STUB_RC come from the fixture.
 echo "$PWD" > "$STUB_RECORD/cwd"; echo "${HANDBOOK_REF:-}" > "$STUB_RECORD/ref"; echo "${PYTHONPATH:-}" > "$STUB_RECORD/pythonpath"
 echo "$*" > "$STUB_RECORD/args"; echo "${NO_COLOR:-}" > "$STUB_RECORD/no_color"
+find . -type f -not -path './site/*' | sed 's#^\./##' | sort > "$STUB_RECORD/files"; [ -d examples/ui ] && echo yes > "$STUB_RECORD/examples_ui_dir"
 [ -n "${STUB_SITE:-}" ] && cp -R "$STUB_SITE" ./site
 cat "$STUB_LOG"
 exit "${STUB_RC:-0}"
@@ -711,6 +712,11 @@ CASE_SITE = {
     'not_flat_novenv': 'site: ... and that FAIL does not wait for the venv: with none, it is still a FAIL and not a skip',
     'tmp_inside': 'site: a TMPDIR inside the repository is a FAIL naming it, nothing built',
     'mktemp': 'site: a TMPDIR that cannot be used is its own FAIL, nothing built',
+    'tree_copy': 'site: the copy holds the whole tree the deploy builds (examples/ included), so a directory link without a slash is a tree',
+    'tree_untracked': 'site: untracked files that git does not ignore are copied, ignored ones are not',
+    'tree_claude': 'site: an untracked .claude/ file is never copied',
+    'tree_deleted': 'site: a tracked file deleted from the work tree does not stop the copy',
+    'tree_nogit': 'site: a root that is not a git work tree is a FAIL naming the copy, and nothing is built',
     'exit_trap': 'site: an exit inside the section still removes the temp dir (the EXIT trap)',
 }
 
@@ -722,9 +728,21 @@ def site_cases(w: World) -> dict[str, list[str]]:
     PRE = f'SITE_TMP=""\n{TRAP}\n'
 
     def run(*, log=None, rc=0, site_edits=None, rewritten=9, n_pages=79, files=None, drop=(), tmpdir='ok', py='stub', env=None, inject=None,
-            rewritten_md=True):
+            rewritten_md=True, git=True, untracked=None, deleted=()):
         n[0] += 1
         root = w.root('site', 'site-base', files, drop)
+        if git:
+            # the section copies what git lists (tracked, and untracked-not-ignored), so the root must be a work tree
+            g = ['git', '-c', 'user.email=fixture@invalid', '-c', 'user.name=fixture', '-c', 'init.defaultBranch=main']
+            subprocess.run(g + ['init', '-q'], cwd=root, check=True)
+            subprocess.run(g + ['add', '-A'], cwd=root, check=True, capture_output=True)
+            subprocess.run(g + ['commit', '-q', '-m', 'fixture'], cwd=root, check=True, capture_output=True)
+        for rel, body in (untracked or {}).items():
+            f = root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(body)
+        for rel in deleted:
+            (root / rel).unlink()
         work = w.base / f'site-work-{n[0]}'
         work.mkdir()
         record = work / 'record'
@@ -827,6 +845,30 @@ def site_cases(w: World) -> dict[str, list[str]]:
     r = run(tmpdir='missing')
     v('mktemp', r, hf=1, must=('FAIL  site build: could not create a temporary directory (mktemp -d failed',), must_not=('PASS',), left=None)
     res[CASE_SITE['mktemp']] += nb(r)
+
+    # the tree copy
+    r = run(untracked={'notes/untracked.txt': 'u\n', 'ignored.txt': 'x\n', '.claude/session.lock': 'x\n', '.claude/worktrees/a/README.md': 'x\n'},
+            files={'.gitignore': 'ignored.txt\n'})
+    seen = (rec(r, 'files') or '').split('\n')
+    v('tree_copy', r, hf=0, must=('INFO  copied ',), must_not=('  FAIL  ',))
+    pr = res[CASE_SITE['tree_copy']]
+    for want in ('examples/ui/A.java', 'examples/custom-food/pack.json', 'CLAUDE.md', 'docs/a.md', 'maintenance/site/README.md', 'zensical.toml'):
+        if want not in seen:
+            pr.append(f'{want} is not in the copy zensical ran in')
+    if rec(r, 'examples_ui_dir') != 'yes':
+        pr.append('examples/ui is not a directory in the copy: ../examples/ui would be a blob here and a tree in CI')
+    pr = res.setdefault(CASE_SITE['tree_untracked'], [])
+    if 'notes/untracked.txt' not in seen:
+        pr.append('an untracked file git does not ignore was not copied')
+    if 'ignored.txt' in seen:
+        pr.append('a file the .gitignore names was copied')
+    pr = res.setdefault(CASE_SITE['tree_claude'], [])
+    pr += [f'{f} was copied' for f in seen if f.startswith('.claude/')]
+    r = run(files={'notes/old.txt': 'x\n'}, deleted=('notes/old.txt',))
+    v('tree_deleted', r, hf=0, must=('INFO  copied ',), must_not=('  FAIL  ',))
+    r = run(git=False)
+    v('tree_nogit', r, hf=1, must=('FAIL  site build: could not copy the tree to ',), must_not=('PASS', 'INFO  SITE'))
+    res[CASE_SITE['tree_nogit']] += nb(r)
 
     # an exit inside the section, after the temp dir exists: only the EXIT trap can remove it
     mk = 'SITE_T0="$(python3 -c \'import time; print(time.time())\')"       # not date +%s%N: the BSD date has no %N\n'
@@ -1217,7 +1259,7 @@ mut('a TMPDIR inside the repository is allowed', ('section', 'site'), 'elif case
 mut('a failed mktemp is not read', ('section', 'site'), '  if [ -z "$SITE_TMP" ]; then', '  if false; then',
     ['mktemp'], ['mktemp'], part='site')
 mut('the build runs in the tree, not in a copy', ('section', 'site'), '    ( cd "$SITE_TMP" && PYTHONPATH', '    ( cd "$SITE_REPO" && PYTHONPATH',
-    ['called', 'nopollute'], ['called', 'dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained'], part='site')
+    ['called', 'nopollute'], ['called', 'dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained', 'tree_copy', 'tree_deleted', 'tree_claude', 'tree_untracked'], part='site')
 mut('the build is not run with --clean', ('section', 'site'), 'build --clean )', 'build )',
     ['called'], ['called'], part='site')
 mut('HANDBOOK_REF is not set', ('section', 'site'), 'HANDBOOK_REF="$SITE_REF" ', '',
@@ -1227,7 +1269,7 @@ mut('PYTHONPATH is not set', ('section', 'site'), 'PYTHONPATH=maintenance/site '
 mut('NO_COLOR is not set', ('section', 'site'), ' NO_COLOR=1 ', ' ',
     ['called'], ['called'], part='site')
 mut('the section does not remove its temp dir', ('section', 'site'), '    rm -rf "$SITE_TMP"\n    SITE_TMP=""', '    SITE_TMP=""',
-    ['healthy', 'nopollute'], ['dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained'], part='site')
+    ['healthy', 'nopollute'], ['dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained', 'tree_copy', 'tree_deleted', 'tree_nogit'], part='site')
 
 # ---- the extension (skipped, and said so, without the site venv) ----
 EXTM = 'handbook_md.py'
@@ -1298,6 +1340,25 @@ mut('the pipe rewrite ignores code held in the html stash (inlinehilite)', ('ext
 mut('the pipe rewrite reaches code outside tables', ('ext', EXTM), '        for cell in root.iter():\n            if cell.tag in ("td", "th"):', '        for cell in [root]:\n            if True:',
     ['table_pipe'], ['table_pipe'], part='ext')
 
+# ---- the tree copy ----
+GLS = "git ls-files -z --cached --others --exclude-standard -- . ':(exclude).claude'"
+mut('only the files the build names are copied', ('section', 'site'), GLS, "printf 'zensical.toml\\0docs/a.md\\0docs/b.md\\0maintenance/site/README.md\\0'",
+    ['tree_copy'], ['tree_copy', 'tree_nogit', 'tree_untracked'], part='site')
+mut('untracked files are not copied', ('section', 'site'), 'git ls-files -z --cached --others', 'git ls-files -z --cached',
+    ['tree_untracked'], ['tree_untracked'], part='site')
+mut('tracked files are not copied', ('section', 'site'), 'git ls-files -z --cached --others', 'git ls-files -z --others',
+    ['tree_copy'], ['called', 'dead_link', 'exit_trap', 'few_html', 'garbage', 'healthy', 'issues', 'rc', 'rewritten', 'tree_copy', 'tree_deleted', 'unexplained'], part='site')
+mut('ignored files are copied', ('section', 'site'), '--cached --others --exclude-standard', '--cached --others',
+    ['tree_untracked'], ['tree_untracked'], part='site')
+mut('.claude/ is copied', ('section', 'site'), " -- . ':(exclude).claude'", '',
+    ['tree_claude'], ['tree_claude'], part='site')
+mut('a tracked file deleted from the work tree stops the copy', ('section', 'site'), '    if not os.path.lexists(src):          # tracked and deleted in the work tree\n        continue\n', '',
+    ['tree_deleted'], ['tree_deleted'], part='site')
+mut('a failed copy is not read', ('section', 'site'), '    if [ "${SITE_CP[0]}" -ne 0 ] || [ "${SITE_CP[1]}" -ne 0 ] || [ -z "$SITE_NCOPIED" ] || [ "$SITE_NCOPIED" -eq 0 ]; then', '    if false; then',
+    ['tree_nogit'], ['tree_nogit'], part='site')
+mut('the build runs after a failed copy', ('section', 'site'), '    if [ "$SITE_CP_OK" -eq 1 ]; then', '    if true; then',
+    ['tree_nogit'], ['tree_nogit'], part='site')
+
 PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
          'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases), 'wf': (CASE_WF, wf_cases)}
 if EXT_PY:
@@ -1355,7 +1416,12 @@ def main():
         def one(item):
             k, (label, (where, old, new, part, names, expect)) = item
             kw, edit = apply_edit(where, old, new)
-            mres = run_part(part, World(work / f'm{k}', **{kw: edit}))
+            try:
+                mres = run_part(part, World(work / f'm{k}', **{kw: edit}))
+            finally:
+                # a world holds about 3,000 files (a 79-page site per site case); 130 of them exhausted the inodes of a
+                # shared tmpfs, so each is removed as soon as its red set is known
+                shutil.rmtree(work / f'm{k}', ignore_errors=True)
             return label, part, names, expect, {c for c, v in mres.items() if v}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:

@@ -567,13 +567,14 @@ SITE_REF="verify-docs-ref"
 SITE_URL="$(sed -n 's/^site_url = "\(.*\)"$/\1/p' zensical.toml 2>/dev/null)"
 SITE_REPO="$(pwd -P)"
 SITE_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || SITE_TD=""
-if [ ! -x "$SITE_PY" ]; then
+if [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then
+  # before the venv test: a docs/ that is not flat is the repository's fault, whether or not this machine can build
+  fail "docs/ is not flat: the link rewrite resolves ../ against docs/ and assumes no subdirectory. Page(s) below docs/:"
+  find docs -mindepth 2 -name '*.md' | sort | sed 's/^/      /'
+elif [ ! -x "$SITE_PY" ]; then
   warn "skipped (no site venv: $SITE_PY is not an executable; maintenance/scripts/site-env.sh creates it, or set HANDBOOK_SITE_PY)"
 elif [ -z "$SITE_URL" ]; then
   fail "the site build cannot run: zensical.toml has no site_url line"
-elif [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then
-  fail "docs/ is not flat: the link rewrite resolves ../ against docs/ and assumes no subdirectory. Page(s) below docs/:"
-  find docs -mindepth 2 -name '*.md' | sort | sed 's/^/      /'
 elif case "$SITE_TD/" in "$SITE_REPO"/*) true ;; *) false ;; esac; then
   fail "site build: TMPDIR (${TMPDIR:-/tmp}) resolves to $SITE_TD, inside the repository $SITE_REPO - the build copies the tree to a temp dir and must not write into it; set TMPDIR to a directory outside the repository - nothing was built"
 else
@@ -585,10 +586,10 @@ else
     cp -R zensical.toml docs "$SITE_TMP/"
     cp -R maintenance/site "$SITE_TMP/maintenance/"
     cp maintenance/scripts/check-links.py maintenance/scripts/doc_fences.py "$SITE_TMP/maintenance/scripts/"
-    SITE_T0="$(date +%s%N)"
+    SITE_T0="$(python3 -c 'import time; print(time.time())')"       # not date +%s%N: the BSD date has no %N
     ( cd "$SITE_TMP" && PYTHONPATH=maintenance/site HANDBOOK_REF="$SITE_REF" NO_COLOR=1 "$SITE_PY" -m zensical build --clean ) > "$SITE_TMP/build.log" 2>&1; SITE_RC=$?
-    SITE_T1="$(date +%s%N)"
-    SITE_SECS="$(awk -v a="$SITE_T0" -v b="$SITE_T1" 'BEGIN{printf "%.1f", (b-a)/1e9}')"
+    SITE_T1="$(python3 -c 'import time; print(time.time())')"
+    SITE_SECS="$(awk -v a="$SITE_T0" -v b="$SITE_T1" 'BEGIN{printf "%.1f", b-a}')"
     SITE_HTML="$(find "$SITE_TMP/site" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
     SITE_OK=1
     if [ "$SITE_RC" -ne 0 ]; then

@@ -41,7 +41,7 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 107            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_CASES = 108            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
 MIN_MUTATIONS = 93
 MIN_EXT_CASES = 21
 MIN_EXT_MUTATIONS = 23
@@ -694,6 +694,7 @@ CASE_SITE = {
     'no_venv': 'site: a missing venv is one WARN and nothing else runs',
     'no_url': 'site: a zensical.toml with no site_url is a FAIL, nothing built',
     'not_flat': 'site: a .md below docs/ is a FAIL naming it, nothing built',
+    'not_flat_novenv': 'site: ... and that FAIL does not wait for the venv: with none, it is still a FAIL and not a skip',
     'tmp_inside': 'site: a TMPDIR inside the repository is a FAIL naming it, nothing built',
     'mktemp': 'site: a TMPDIR that cannot be used is its own FAIL, nothing built',
     'exit_trap': 'site: an exit inside the section still removes the temp dir (the EXIT trap)',
@@ -804,6 +805,8 @@ def site_cases(w: World) -> dict[str, list[str]]:
     r = run(files={'docs/sub/x.md': '# x\n'})
     v('not_flat', r, hf=1, must=('FAIL  docs/ is not flat:', 'docs/sub/x.md'), must_not=('PASS',))
     res[CASE_SITE['not_flat']] += nb(r)
+    r = run(files={'docs/sub/x.md': '# x\n'}, py='/nonexistent/venv/bin/python')
+    v('not_flat_novenv', r, hf=1, must=('FAIL  docs/ is not flat:', 'docs/sub/x.md'), must_not=('PASS', 'WARN'))
     r = run(tmpdir='inside')
     v('tmp_inside', r, hf=1, must=('FAIL  site build: TMPDIR (', 'inside the repository', 'nothing was built'), must_not=('PASS',), left=None)
     res[CASE_SITE['tmp_inside']] += nb(r)
@@ -812,7 +815,7 @@ def site_cases(w: World) -> dict[str, list[str]]:
     res[CASE_SITE['mktemp']] += nb(r)
 
     # an exit inside the section, after the temp dir exists: only the EXIT trap can remove it
-    mk = 'SITE_T0="$(date +%s%N)"\n'
+    mk = 'SITE_T0="$(python3 -c \'import time; print(time.time())\')"       # not date +%s%N: the BSD date has no %N\n'
     r = run(inject=(mk, 'echo work > "$SITE_TMP/x"; exit 7\n'))
     pr = res.setdefault(CASE_SITE['exit_trap'], [])
     if r['code'] != 7:
@@ -1085,12 +1088,12 @@ mut('the warning judge\'s status is not read', ('section', 'site'), '    if [ "$
     ['unexplained', 'issues', 'rewritten', 'garbage'], ['garbage', 'issues', 'rewritten', 'unexplained'], part='site')
 mut('the rewritten .md count is not handed to the judge', ('section', 'site'), ' --rewritten-md "${SITE_REWRITTEN_MD:--1}"', '',
     ['rewritten'], ['rewritten'], part='site')
-mut('a missing venv is not skipped', ('section', 'site'), 'if [ ! -x "$SITE_PY" ]; then', 'if false; then',
+mut('a missing venv is not skipped', ('section', 'site'), 'elif [ ! -x "$SITE_PY" ]; then', 'elif false; then',
     ['no_venv'], ['no_venv'], part='site')
 mut('a missing site_url is not refused', ('section', 'site'), 'elif [ -z "$SITE_URL" ]; then', 'elif false; then',
     ['no_url'], ['no_url'], part='site')
-mut('docs/ need not be flat', ('section', 'site'), """elif [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then""", 'elif false; then',
-    ['not_flat'], ['not_flat'], part='site')
+mut('docs/ need not be flat', ('section', 'site'), """if [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then""", 'if false; then',
+    ['not_flat'], ['not_flat', 'not_flat_novenv'], part='site')
 mut('a TMPDIR inside the repository is allowed', ('section', 'site'), 'elif case "$SITE_TD/" in "$SITE_REPO"/*) true ;; *) false ;; esac; then', 'elif false; then',
     ['tmp_inside'], ['tmp_inside'], part='site')
 mut('a failed mktemp is not read', ('section', 'site'), '  if [ -z "$SITE_TMP" ]; then', '  if false; then',

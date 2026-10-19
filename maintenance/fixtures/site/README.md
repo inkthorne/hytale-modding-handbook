@@ -17,3 +17,8 @@ that mutation is a red case. `site-base/` is the tree the site-build section cop
 files the built pages' GitHub links name, and `maintenance/site/`. There are no HTML or log corpora on disk: the
 fixture writes a built site (79 pages) and the zensical logs it needs, because a defect is one edited line of
 them and the case that plants it should say which.
+
+The extension's own cases are not here but in `maintenance/site/check-extension.py`, which needs the site venv
+(`markdown` and `pymdownx`); the fixture runs it with `$HANDBOOK_SITE_PY`, on the real extension and on a copy
+with one line of `handbook_md.py` changed per mutation. With no venv that part is skipped and the `FIXTURE` line
+says how many cases and mutations it did not run, so a machine without the venv can tell a short run from a full one.

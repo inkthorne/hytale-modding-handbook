@@ -1237,6 +1237,10 @@ section "[HARD] The gates' own fixtures pass"
 # check-example-lists-fixture.py --mutations (the three lists of examples against `git ls-files examples/`: 41 cases and 46
 # mutations including the identity control, each with its exact red set; ~25 s) and check-home-fixture.py --mutations (the
 # Home page's Verified-against paragraph against README.md's, and its task lists: 48 cases and 45 mutations, ~25 s) are run here.
+# generate-llms-txt-fixture.py --mutations (docs/llms.txt's generator on throwaway git repositories, and the "llms.txt generates, and
+# docs/llms.txt is current" section above run as text on a stub generator: 53 cases and 49 mutations including the identity control,
+# each with its exact red set, after a negative control that the section's old `generate | cmp` form reads a crashed generator as
+# current; ~14 s) is run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -1257,6 +1261,7 @@ check-double-run-fixture.py --mutations
 check-site-fixture.py --mutations
 check-example-lists-fixture.py --mutations
 check-home-fixture.py --mutations
+generate-llms-txt-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,
@@ -1747,17 +1752,47 @@ else
 fi
 
 # =====================================================================
-section "[ADVISORY] llms.txt is current"
-# docs/llms.txt is generated from page frontmatter (see generate-llms-txt.sh);
-# regenerate + commit it whenever pages or descriptions change.
-if [ -f docs/llms.txt ]; then
-  if ./maintenance/scripts/generate-llms-txt.sh | cmp -s - docs/llms.txt; then
-    pass "docs/llms.txt matches a fresh regeneration"
-  else
-    warn "docs/llms.txt is stale — regenerate: ./maintenance/scripts/generate-llms-txt.sh > docs/llms.txt"
-  fi
+section "[HARD] llms.txt generates, and docs/llms.txt is current"
+# docs/llms.txt is what an AI tool reads first, so each claim its summary makes is one of the [HARD] sections of this
+# script (the generator's docstring and the commit that rewrote it map them): class references resolve, documented
+# symbols resolve, discriminator values and asset ids in JSON examples resolve, complete snippets and the example
+# projects compile, links and anchors resolve. This section holds the file itself. It runs the generator, reads its
+# status (until 2026-10-19 `generate | cmp` took cmp's status, so a generator that crashed read as "stale"), and
+# FAILs on a non-zero status, on empty output, on its denominator line missing or disagreeing with a count of the
+# page links in the output, and on fewer page links than docs/*.md files. A file that merely differs is a WARN with
+# the regenerate command. The temp dir is removed here, not by a trap: the one EXIT trap of this script is the asset
+# drift section's (check-asset-drift-fixture fails on any other).
+LLMS_TMP="$(mktemp -d)"
+if [ -z "$LLMS_TMP" ] || [ ! -d "$LLMS_TMP" ]; then
+  fail "mktemp -d failed, so the llms.txt generator was not run"
 else
-  warn "docs/llms.txt missing — generate: ./maintenance/scripts/generate-llms-txt.sh > docs/llms.txt"
+  python3 maintenance/scripts/generate-llms-txt.py >"$LLMS_TMP/out" 2>"$LLMS_TMP/err"
+  LLMS_RC=$?
+  LLMS_N="$(grep -cE '^- \[[^]]*\]\(https://inkthorne\.github\.io/hytale-modding-handbook/[^)]*\.html\)' "$LLMS_TMP/out")"
+  LLMS_DOCS="$(find docs -maxdepth 1 -name '*.md' | wc -l)"
+  LLMS_LINE="$(sed -n 's/^LLMS //p' "$LLMS_TMP/err")"
+  LLMS_MARK="$(printf '%s\n' "$LLMS_LINE" | sed -n 's/^[0-9][0-9]* categories, \([0-9][0-9]*\) pages, [0-9][0-9]* examples$/\1/p')"
+  if [ "$LLMS_RC" -ne 0 ]; then
+    fail "generate-llms-txt.py exited $LLMS_RC (docs/llms.txt is not checked against a generator that failed):"
+    sed 's/^  FAIL  //; s/^/    /' "$LLMS_TMP/err"
+  elif [ ! -s "$LLMS_TMP/out" ]; then
+    fail "generate-llms-txt.py exited 0 and wrote nothing"
+  elif [ -z "$LLMS_MARK" ]; then
+    fail "generate-llms-txt.py printed no 'LLMS <c> categories, <p> pages, <e> examples' line on stderr (got: ${LLMS_LINE:-nothing})"
+  elif [ "$LLMS_MARK" -ne "$LLMS_N" ]; then
+    fail "generate-llms-txt.py says $LLMS_MARK pages, its output holds $LLMS_N page links"
+  elif [ "$LLMS_N" -lt "$LLMS_DOCS" ]; then
+    fail "the llms.txt output links $LLMS_N page(s), docs/ holds $LLMS_DOCS .md files: a page is missing from it"
+  else
+    if [ ! -f docs/llms.txt ]; then
+      warn "docs/llms.txt missing — generate: python3 maintenance/scripts/generate-llms-txt.py > docs/llms.txt"
+    elif cmp -s "$LLMS_TMP/out" docs/llms.txt; then
+      pass "llms.txt generates ($LLMS_LINE; $LLMS_N of $LLMS_DOCS docs pages linked) and docs/llms.txt matches it"
+    else
+      warn "docs/llms.txt is stale — regenerate: python3 maintenance/scripts/generate-llms-txt.py > docs/llms.txt"
+    fi
+  fi
+  rm -rf "$LLMS_TMP"
 fi
 
 # =====================================================================

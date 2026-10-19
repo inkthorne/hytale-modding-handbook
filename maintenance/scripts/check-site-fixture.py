@@ -12,6 +12,11 @@ a red set not yet pinned is printed as MEASURED and fails the run, so a number i
              maintenance/scripts/check-site-markdown.py (the lint it runs).
   nav        the section "The sidebar is generated from README.md and holds every docs page once" and
              maintenance/scripts/generate-site-nav.py.
+  links      maintenance/scripts/check-site-links.py on planted HTML (a built site made here, 79 small pages).
+  build      maintenance/scripts/check-site-build.py on planted zensical logs.
+  site       the section "The site builds with no unexplained warning", with a stub in place of zensical (a shell
+             script that copies a planted site into ./site and prints a planted log), so every branch of the
+             section runs in a second, not in the 4 s a real build takes, and the real one is run by verify-docs.
 
 WHY THE SECTION'S TEXT AND NOT A COPY OF ITS LOGIC. The same reason as the drift fixture's: a helper with a
 fixture of its own tests the helper and leaves the wrapper that reads the helper's status and denominators
@@ -34,12 +39,14 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 41
-MIN_MUTATIONS = 35
+MIN_CASES = 107
+MIN_MUTATIONS = 93
 
 SECTION_MD = 'section "[HARD] Docs markdown renders the same on GitHub and on the site"'
 SECTION_NAV = 'section "[HARD] The sidebar is generated from README.md and holds every docs page once"'
-SCRIPTS = ('check-site-markdown.py', 'check-links.py', 'doc_fences.py', 'generate-site-nav.py')
+SECTION_SITE = 'section "[HARD] The site builds with no unexplained warning"'
+SCRIPTS = ('check-site-markdown.py', 'check-links.py', 'doc_fences.py', 'generate-site-nav.py',
+           'check-site-links.py', 'check-site-build.py')
 
 
 def cut(src: str, anchor: str) -> str:
@@ -69,7 +76,7 @@ class World:
         self.base = base
         base.mkdir(parents=True, exist_ok=True)
         src = VERIFY.read_text()
-        self.sections = {'md': cut(src, SECTION_MD), 'nav': cut(src, SECTION_NAV)}
+        self.sections = {'md': cut(src, SECTION_MD), 'nav': cut(src, SECTION_NAV), 'site': cut(src, SECTION_SITE)}
         for key, (old, new) in (section_edits or {}).items():
             if self.sections[key].count(old) != 1:
                 raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {self.sections[key].count(old)} time(s) in the {key} section')
@@ -99,9 +106,19 @@ class World:
             f.write_text(body)
         return root
 
-    def run(self, key: str, root: pathlib.Path, *, env=None):
+    def py(self, script: str, *args, cwd=None):
+        """Run one of the (possibly mutated) scripts directly. -> (exit status, stdout + stderr)"""
+        p = subprocess.run([sys.executable, str(self.scripts / script), *map(str, args)], capture_output=True, text=True,
+                           cwd=cwd, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
+        return p.returncode, ANSI.sub('', p.stdout + p.stderr)
+
+    def run(self, key: str, root: pathlib.Path, *, env=None, inject=None, pre='', post=''):
         """Run section `key` in `root`. -> (exit status, output without colours, HARD_FAILS)"""
-        script = prelude() + self.sections[key] + 'echo "HARD_FAILS=$HARD_FAILS"\n'
+        text = self.sections[key]
+        if inject:
+            assert text.count(inject[0]) == 1, f'the injection site occurs {text.count(inject[0])} time(s)'
+            text = text.replace(inject[0], inject[1], 1)
+        script = prelude() + pre + text + post + 'echo "HARD_FAILS=$HARD_FAILS"\n'
         e = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', **(env or {}))
         p = subprocess.run(['bash', '-c', script], capture_output=True, text=True, cwd=root, env=e)
         out = ANSI.sub('', p.stdout + p.stderr)
@@ -346,6 +363,454 @@ def nav_cases(w: World) -> dict[str, list[str]]:
     return res
 
 
+
+# ============================== part 3: check-site-links.py on planted HTML ==============================
+
+GH = 'https://github.com/inkthorne/hytale-modding-handbook'
+SITE_URL = 'https://inkthorne.github.io/hytale-modding-handbook/'
+REF = 'REFTOKEN'
+GH_PATHS = ['CLAUDE.md', 'examples/ui/A.java', 'examples/ui/B.java', 'examples/ui/C.java', 'examples/events/',
+            'examples/events/D.java', 'examples/custom-food/', 'examples/commands/E.java', 'examples/inventory/F.java']
+
+CASE_LINKS = {
+    'healthy': 'links: a built site whose links all resolve passes, with every figure printed',
+    'dead_file': 'links: a link to a page the build did not write FAILs naming page and target',
+    'dead_frag': 'links: a #fragment that is no id in its target page FAILs',
+    'self_frag': 'links: a #fragment on the page itself is checked too',
+    'name_attr': 'links: an <a name=...> is an anchor as well as an id',
+    'frag_css': 'links: a fragment on a target that is not HTML is not looked up',
+    'dir_ok': 'links: dir/ resolves to dir/index.html, and a dead dir/ FAILs',
+    'asset': 'links: a missing image, script or stylesheet FAILs',
+    'root_rel': 'links: a root-relative link outside the site\'s path FAILs, the site\'s own path is the site',
+    'abs_site': 'links: an absolute URL under site_url is checked as a page, a dead one FAILs',
+    'offsite': 'links: off-site links, mailto: and javascript: are counted and never looked up',
+    'escape': 'links: a link out of the built directory FAILs',
+    'query': 'links: a query string does not stop a link resolving, a percent-encoded path is decoded',
+    'blob_ok': 'links: a GitHub blob link to an existing file is clean and counted as rewritten',
+    'blob_dir': 'links: a blob link to a directory FAILs',
+    'tree_file': 'links: a tree link to a file FAILs',
+    'gh_dead': 'links: a GitHub link to a path that is not in the repository FAILs',
+    'gh_ref': 'links: a GitHub link at another ref is checked for its path and not counted as rewritten',
+    'gh_malformed': 'links: a blob/tree link of this repository with no ref and path FAILs',
+    'md_count': 'links: the rewritten links to .md files are counted',
+    'floor_pages': 'links: fewer than 79 pages is a FAIL whatever else is true',
+    'floor_internal': 'links: 0 internal links is a FAIL',
+    'floor_rewritten': 'links: fewer than 9 rewritten links is a FAIL',
+    'anchors_ok': 'links: every anchor check-links computes for a docs page is a heading id of its built page',
+    'anchors_missing': 'links: an anchor with no heading id in the built page FAILs naming the nearest built id',
+    'anchors_nonheading': 'links: an id on a non-heading element is not a heading id',
+    'anchors_nopage': 'links: a docs page with no built page FAILs',
+    'anchors_zero': 'links: a cross-check that read no docs page FAILs',
+    'nodir': 'links: a site directory that does not exist exits 2',
+}
+
+
+def page_html(title: str, body: str = '', head: bool = True) -> str:
+    head_links = '<link rel="stylesheet" href="assets/s.css"><script src="assets/j.js"></script>' if head else ''
+    return (f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title>{head_links}</head>'
+            f'<body><a href="#__skip" id="__skip">skip</a><h1 id="{title}">{title}</h1>{body}</body></html>\n')
+
+
+def gh_link(path: str, kind: str | None = None, ref: str = REF) -> str:
+    kind = kind or ('tree' if path.endswith('/') else 'blob')
+    return f'<a href="{GH}/{kind}/{ref}/{path.rstrip("/")}">g</a>'
+
+
+def home_body(rewritten: int = 9, ref: str = REF) -> str:
+    return ''.join(gh_link(p, ref=ref) for p in GH_PATHS[:rewritten]) + '<a href="a.html#one">a</a><a href="b.html">b</a>'
+
+
+def make_site(root: pathlib.Path, *, n_pages=79, rewritten=9, edits: dict | None = None, home_extra='', ref: str = REF):
+    """A small built site: index.html (with `rewritten` GitHub links at REF), a.html and b.html (the pages of the
+    docs corpus), padding pages up to `n_pages` html files, assets. `edits` replaces or adds files, a value of
+    None removes one; `home_extra` is appended to the home page's body."""
+    site = root / 'site'
+    (site / 'assets').mkdir(parents=True)
+    (site / 'assets' / 's.css').write_text('body{}')
+    (site / 'assets' / 'j.js').write_text('//')
+    pages = {'index.html': page_html('home', home_body(rewritten, ref) + home_extra),
+             'a.html': page_html('a', '<h2 id="one">One</h2><h2 id="one-1">One again</h2><a href="index.html">home</a>'),
+             'b.html': page_html('b', '<a href="index.html">home</a>')}
+    k = 0
+    while len(pages) < n_pages:
+        k += 1
+        pages[f'pad{k:02d}.html'] = page_html(f'pad{k}', '<a href="index.html">home</a>')
+    for name, html in (edits or {}).items():
+        if html is None:
+            pages.pop(name, None)
+        else:
+            pages[name] = html
+    for name, html in pages.items():
+        f = site / name
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(html)
+    return site
+
+
+def make_repo(root: pathlib.Path, extra_docs=()):
+    repo = root / 'repo'
+    for rel in ('CLAUDE.md', 'examples/ui/A.java', 'examples/ui/B.java', 'examples/ui/C.java', 'examples/events/D.java',
+                'examples/custom-food/pack.json', 'examples/commands/E.java', 'examples/inventory/F.java'):
+        f = repo / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text('x')
+    (repo / 'docs').mkdir(exist_ok=True)
+    (repo / 'docs' / 'a.md').write_text('# a\n\n## One\n\n## One\n')     # anchors: a, one, one-1
+    (repo / 'docs' / 'b.md').write_text('# b\n')                          # anchors: b
+    for name in extra_docs:
+        (repo / 'docs' / name).write_text('# extra\n')
+    return repo
+
+
+def links_cases(w: World) -> dict[str, list[str]]:
+    res: dict[str, list[str]] = {}
+    n = [0]
+
+    def run(*, docs=False, extra_docs=(), docs_dir=None, site_arg=None, ref=REF, flags=(), **site_kw):
+        n[0] += 1
+        root = w.base / f'links-{n[0]}'
+        root.mkdir()
+        repo = make_repo(root, extra_docs)
+        site = site_arg or make_site(root, **site_kw)
+        args = [site, '--repo', repo, '--ref', ref, '--site-url', SITE_URL, *flags]
+        if docs or docs_dir:
+            args += ['--docs', docs_dir or repo / 'docs']
+        return w.py('check-site-links.py', *args)
+
+    def verdict(key, got, *, rc, must=(), must_not=()):
+        code, out = got
+        pr = res.setdefault(CASE_LINKS[key], [])
+        if code != rc:
+            pr.append(f'exit {code}, wanted {rc}: {out[-300:]!r}')
+        pr += [f'missing {m!r}' for m in must if m not in out]
+        pr += [f'unexpected {m!r}' for m in must_not if m in out]
+
+    # healthy: the exact SITE line (the figures of the planted site: 79 pages, one a.html#one link, 9 GitHub links)
+    verdict('healthy', run(), rc=0, must=(f'SITE 79 page(s) parsed, 317 internal link(s) resolved (80 with a fragment), '
+                                           f'9 off-site link(s) counted, not fetched, 9 rewritten GitHub link(s) at {REF} (1 to .md files)',))
+    X = lambda body: dict(home_extra=body)
+    verdict('dead_file', run(**X('<a href="ghost.html">g</a>')), rc=1,
+            must=('FAIL  index.html: a ghost.html -> no such file in the built site (ghost.html)',))
+    verdict('dead_frag', run(**X('<a href="a.html#nope">g</a>')), rc=1,
+            must=("FAIL  index.html: a a.html#nope -> no element with id 'nope' in a.html",))
+    verdict('self_frag', run(**X('<a href="#nope">g</a><a href="#home">h</a>')), rc=1,
+            must=("index.html: a #nope -> no element with id 'nope' in index.html",), must_not=("'home'",))
+    verdict('name_attr', run(edits={'a.html': page_html('a', '<h2 id="one">One</h2><a name="old-anchor"></a>')}, **X('<a href="a.html#old-anchor">g</a>')), rc=0)
+    verdict('frag_css', run(**X('<a href="assets/s.css#nothing">g</a>')), rc=0)
+    verdict('dir_ok', run(edits={'sub/index.html': page_html('sub', head=False)}, **X('<a href="sub/">s</a>')), rc=0)
+    verdict('dir_ok', run(**X('<a href="nosub/">s</a>')), rc=1, must=('nosub/ -> no such file in the built site (nosub/index.html)',))
+    verdict('asset', run(**X('<img src="assets/missing.png"><script src="assets/missing.js"></script>'
+                             '<link rel="stylesheet" href="assets/missing.css">')), rc=1,
+            must=('img assets/missing.png', 'script assets/missing.js', 'link assets/missing.css'))
+    verdict('root_rel', run(**X('<a href="/elsewhere/x.html">e</a>')), rc=1,
+            must=('index.html: a /elsewhere/x.html is root-relative; the site is served from a sub-path',))
+    verdict('root_rel', run(**X('<a href="/hytale-modding-handbook/a.html#one">e</a>')), rc=0)
+    verdict('abs_site', run(**X(f'<a href="{SITE_URL}a.html#one">ok</a><a href="{SITE_URL}ghost.html">dead</a>')), rc=1,
+            must=('index.html: a ghost.html -> no such file in the built site (ghost.html)',), must_not=('a.html#one ->',))
+    verdict('offsite', run(**X('<a href="https://example.invalid/x">e</a><a href="mailto:a@b.invalid">m</a>'
+                               '<a href="javascript:void(0)">j</a>')), rc=0, must=('10 off-site link(s) counted, not fetched',))
+    verdict('escape', run(**X('<a href="../../outside.html">o</a>')), rc=1,
+            must=('index.html: a ../../outside.html -> no such file in the built site',))
+    verdict('query', run(edits={'my page.html': page_html('mp')}, **X('<a href="a.html?x=1#one">q</a><a href="my%20page.html">p</a>')), rc=0)
+
+    verdict('blob_ok', run(**X(gh_link('examples/ui/A.java'))), rc=0, must=(f'10 rewritten GitHub link(s) at {REF}',))
+    verdict('blob_dir', run(**X(gh_link('examples/ui', 'blob'))), rc=1,
+            must=("names 'examples/ui', which is not a file in the repository",))
+    verdict('tree_file', run(**X(gh_link('examples/ui/A.java', 'tree'))), rc=1,
+            must=("names 'examples/ui/A.java', which is not a directory in the repository",))
+    verdict('gh_dead', run(**X(gh_link('examples/ghost/G.java'))), rc=1,
+            must=("names 'examples/ghost/G.java', which is not a file in the repository",))
+    verdict('gh_ref', run(**X(gh_link('examples/ui/A.java', ref='main'))), rc=0, must=('9 rewritten GitHub link(s)',))
+    verdict('gh_ref', run(**X(gh_link('examples/ghost.java', ref='main'))), rc=1, must=("names 'examples/ghost.java'",))
+    verdict('gh_malformed', run(**X(f'<a href="{GH}/blob/">g</a>')), rc=1,
+            must=(f'is not of the form {GH}/(blob|tree)/<ref>/<path>',))
+    verdict('md_count', run(**X(gh_link('CLAUDE.md'))), rc=0, must=(f'10 rewritten GitHub link(s) at {REF} (2 to .md files)',))
+
+    verdict('floor_pages', run(n_pages=78), rc=1, must=('only 78 page(s) were parsed, floor is 79',))
+    # no internal link anywhere: every page is bare (no head links) and the home page holds only GitHub links,
+    # so the rewritten floor is met and only the internal-links floor can fire
+    nolink = lambda t: f'<!doctype html><html><head><title>{t}</title></head><body><h1 id="{t}">{t}</h1></body></html>\n'
+    bare = {name: nolink(name[:-5]) for name in ['a.html', 'b.html'] + [f'pad{k:02d}.html' for k in range(1, 77)]}
+    bare['index.html'] = nolink('home').replace('</h1>', '</h1>' + home_body(9).split('<a href="a.html')[0])
+    verdict('floor_internal', run(edits=bare, extra_docs=()), rc=1, must=('0 internal links were found',))
+    verdict('floor_rewritten', run(rewritten=8), rc=1, must=(f'8 link(s) were rewritten to GitHub at {REF}, floor is 9',))
+
+    # the --docs cross-check
+    verdict('anchors_ok', run(docs=True), rc=0, must=('ANCHORS 4 heading anchor(s) of 2 docs page(s)',))
+    verdict('anchors_missing', run(docs=True, edits={'a.html': page_html('a', '<h2 id="one">One</h2>')}), rc=1,
+            must=("docs/a.md: anchor 'one-1' (check-links) is not a heading id of a.html (nearest built id: one)",))
+    verdict('anchors_nonheading', run(docs=True, edits={'a.html': page_html('a', '<h2 id="x">x</h2><div id="one">d</div><div id="one-1">d</div>')}), rc=1,
+            must=("anchor 'one' (check-links) is not a heading id of a.html", "anchor 'one-1' (check-links) is not a heading id of a.html"))
+    verdict('anchors_nopage', run(docs=True, extra_docs=('zzz.md',)), rc=1, must=('docs/zzz.md: no built page zzz.html',))
+    n[0] += 1
+    empty = w.base / f'links-empty-docs-{n[0]}'
+    empty.mkdir()
+    verdict('anchors_zero', run(docs_dir=empty), rc=1, must=('the anchor cross-check read 0 pages or 0 anchors',))
+    verdict('nodir', run(site_arg=w.base / 'no-such-site-dir'), rc=2, must=('is not a directory',))
+    return res
+
+
+# ============================== part 4: check-site-build.py on planted logs ==============================
+
+CASE_BUILD = {
+    'clean': 'build: a build with no issues passes and prints its figures',
+    'explained': 'build: the ../CLAUDE.md warning (page does not exist, a link out of docs/ to a path in the repo) is explained',
+    'rewritten_ok': 'build: --rewritten-md equal to the explained count passes',
+    'rewritten_less': 'build: --rewritten-md below the explained count FAILs (a warning for a link the build did not rewrite)',
+    'rewritten_more': 'build: --rewritten-md above the explained count FAILs (a rewritten link the build did not warn about)',
+    'missing_page': 'build: a page that is really missing (the link resolves inside docs/) is unexplained',
+    'outside_nopath': 'build: a link out of docs/ to a path the repository does not have is unexplained',
+    'anchor': 'build: an anchor warning is unexplained, whatever the link',
+    'unknown_kind': 'build: a warning of a kind never seen is unexplained',
+    'not_a_target': 'build: a position that is not the target of a [text](target) link is unexplained',
+    'shown_line': 'build: a source line the build shows that is not the line of docs/ is unexplained',
+    'summary_less': 'build: an issue count below the warnings parsed FAILs',
+    'summary_more': 'build: an issue count above the warnings parsed FAILs',
+    'no_summary': 'build: a log with no issue count FAILs',
+    'garbage': 'build: a line that is not a line of a zensical build FAILs, with the word Warning nowhere in it',
+    'no_start': 'build: a log that does not start with "Build started" FAILs',
+    'no_finish': 'build: a log with no "Build finished in" (the build died) FAILs',
+    'unclosed': 'build: a warning block that never closes FAILs',
+    'ansi': 'build: ANSI colour sequences are stripped (zensical ignores NO_COLOR for the marker line)',
+    'nolog': 'build: a missing log exits 2',
+    'nodocs': 'build: a --docs that is not a directory exits 2',
+}
+
+BUILD_CMD = 'CLAUDE.md'
+
+
+def block(msg: str, file: str, line: int, col: int, src: str, marker_len: int = 12) -> str:
+    return (f'Warning: {msg}\n    ╭─[ {file}:{line}:{col} ]\n    │\n {line} │ {src}\n    │ {" " * (col - 1)}{"─" * marker_len}\n'
+            f'    │ {" " * (col - 1)}╰─ {msg}\n────╯\n')
+
+
+def build_log(blocks: list[str], *, summary: str | None = '', start=True, finish='Build finished in 3.85s', tail=''):
+    n = len(blocks)
+    if summary == '':
+        summary = 'No issues found' if n == 0 else (f'{n} issue found' if n == 1 else f'{n} issues found')
+    return ('Build started\n' if start else '') + ''.join(blocks) + (summary + '\n' if summary else '') + (finish + '\n' if finish else '') + tail
+
+
+def build_cases(w: World) -> dict[str, list[str]]:
+    res: dict[str, list[str]] = {}
+    n = [0]
+    src_line = 'See [CLAUDE.md](../CLAUDE.md) for the details.'
+    col = src_line.index('](') + 3        # 1-based column of the target's first character
+
+    def run(log: str, *, docs_line=src_line, flags=(), nolog=False, nodocs=False):
+        n[0] += 1
+        root = w.base / f'build-{n[0]}'
+        (root / 'docs').mkdir(parents=True)
+        (root / 'docs' / 'page.md').write_text(f'# Page\n\n{docs_line}\n')
+        (root / 'CLAUDE.md').write_text('x')
+        (root / 'sub').mkdir()
+        (root / 'sub' / 'inside.md').write_text('x')
+        if not nolog:
+            (root / 'build.log').write_text(log)
+        return w.py('check-site-build.py', root / 'build.log', '--docs', root / ('docs' if not nodocs else 'nope'), '--repo', root, *flags)
+
+    def verdict(key, got, *, rc, must=(), must_not=()):
+        code, out = got
+        pr = res.setdefault(CASE_BUILD[key], [])
+        if code != rc:
+            pr.append(f'exit {code}, wanted {rc}: {out[-300:]!r}')
+        pr += [f'missing {m!r}' for m in must if m not in out]
+        pr += [f'unexpected {m!r}' for m in must_not if m in out]
+
+    good = block('page does not exist', 'page.md', 3, col, src_line)
+    verdict('clean', run(build_log([])), rc=0, must=('BUILD 0 warning(s), 0 explained, 0 issue(s) reported, finished in 3.85s',), must_not=('FAIL',))
+    verdict('explained', run(build_log([good])), rc=0, must=('BUILD 1 warning(s), 1 explained, 1 issue(s) reported',), must_not=('FAIL',))
+    verdict('rewritten_ok', run(build_log([good]), flags=('--rewritten-md', '1')), rc=0, must=('1 explained',), must_not=('FAIL',))
+    verdict('rewritten_less', run(build_log([good]), flags=('--rewritten-md', '0')), rc=1,
+            must=('FAIL  1 warning(s) explained, but check-site-links.py counted 0 rewritten .md link(s)',))
+    verdict('rewritten_more', run(build_log([]), flags=('--rewritten-md', '1')), rc=1,
+            must=('FAIL  0 warning(s) explained, but check-site-links.py counted 1 rewritten .md link(s)',))
+    inside = 'Read [other](inside.md) too.'
+    verdict('missing_page', run(build_log([block('page does not exist', 'page.md', 3, inside.index('](') + 3, inside)]), docs_line=inside), rc=1,
+            must=("unexplained warning at page.md:3:", "resolves inside docs/, so the page really is missing"))
+    ghost = 'See [x](../ghost/Nope.java) here.'
+    verdict('outside_nopath', run(build_log([block('page does not exist', 'page.md', 3, ghost.index('](') + 3, ghost)]), docs_line=ghost), rc=1,
+            must=("resolves outside docs/ to", "which is not a path in the repository"))
+    verdict('anchor', run(build_log([block('anchor does not exist', 'page.md', 3, col, src_line)])), rc=1,
+            must=('FAIL  unexplained warning at page.md:3:' + str(col) + ': anchor does not exist',), must_not=('1 explained',))
+    verdict('unknown_kind', run(build_log([block('something new', 'page.md', 3, col, src_line)])), rc=1,
+            must=(f'FAIL  unexplained warning at page.md:3:{col}: something new',))
+    verdict('not_a_target', run(build_log([block('page does not exist', 'page.md', 3, 1, src_line)])), rc=1,
+            must=('the position is not the target of a [text](target) link',))
+    verdict('shown_line', run(build_log([block('page does not exist', 'page.md', 3, col, 'a different line than the page has')])), rc=1,
+            must=('the source line the build shows is not docs/page.md:3',))
+    verdict('summary_less', run(build_log([good], summary='No issues found')), rc=1,
+            must=('the build reports 0 issue(s) and 1 warning block(s) were parsed',))
+    verdict('summary_more', run(build_log([good], summary='2 issues found')), rc=1,
+            must=('the build reports 2 issue(s) and 1 warning block(s) were parsed',))
+    verdict('no_summary', run(build_log([], summary=None)), rc=1, must=('the build printed no issue count',))
+    verdict('garbage', run(build_log([], tail='Error: could not read the thing\n')), rc=1,
+            must=("is not a line of a zensical build",), must_not=('Warning',))
+    verdict('no_start', run(build_log([], start=False)), rc=1, must=('"Build started" appears 0 time(s), not once',))
+    verdict('no_finish', run(build_log([], finish='')), rc=1, must=('"Build finished in ..." appears 0 time(s), not once: the build did not finish',))
+    verdict('unclosed', run(build_log([good.replace('────╯\n', '')])), rc=1, must=('a warning block that never closed',))
+    verdict('ansi', run(re.sub(r'(Warning:)', '\x1b[33m\\1\x1b[0m', build_log([good]))), rc=0, must=('1 explained',), must_not=('FAIL',))
+    verdict('nolog', run('', nolog=True), rc=2, must=('cannot read the build log',))
+    verdict('nodocs', run(build_log([]), nodocs=True), rc=2, must=('is not a directory',))
+    return res
+
+
+# ============================== part 5: the site-build section, with a stub in place of zensical ==============================
+
+SITE_REF = 'verify-docs-ref'
+
+STUB = '''#!/usr/bin/env bash
+# stands in for `python -m zensical build --clean`: records how it was called, copies a planted site into ./site and
+# prints a planted log. STUB_RECORD, STUB_SITE, STUB_LOG and STUB_RC come from the fixture.
+echo "$PWD" > "$STUB_RECORD/cwd"; echo "${HANDBOOK_REF:-}" > "$STUB_RECORD/ref"; echo "${PYTHONPATH:-}" > "$STUB_RECORD/pythonpath"
+echo "$*" > "$STUB_RECORD/args"; echo "${NO_COLOR:-}" > "$STUB_RECORD/no_color"
+[ -n "${STUB_SITE:-}" ] && cp -R "$STUB_SITE" ./site
+cat "$STUB_LOG"
+exit "${STUB_RC:-0}"
+'''
+
+CASE_SITE = {
+    'healthy': 'site: a clean stubbed build passes, naming pages, seconds, warnings and explained',
+    'called': 'site: zensical is run as `-m zensical build --clean` in a copy of the tree, with HANDBOOK_REF, PYTHONPATH and NO_COLOR set',
+    'nopollute': 'site: nothing is written into the repository, and the temp dir is gone when the section ends',
+    'rc': 'site: a build that exits non-zero FAILs and says so',
+    'few_html': 'site: fewer than 79 .html files written FAILs naming the count',
+    'dead_link': 'site: a dead link in the built site FAILs with the checker\'s line',
+    'unexplained': 'site: a warning that is not the explained one FAILs by name',
+    'issues': 'site: an issue count that differs from the warnings parsed FAILs',
+    'rewritten': 'site: an explained warning with no rewritten .md link in the built pages FAILs',
+    'garbage': 'site: a build whose output has a line outside the grammar FAILs',
+    'no_venv': 'site: a missing venv is one WARN and nothing else runs',
+    'no_url': 'site: a zensical.toml with no site_url is a FAIL, nothing built',
+    'not_flat': 'site: a .md below docs/ is a FAIL naming it, nothing built',
+    'tmp_inside': 'site: a TMPDIR inside the repository is a FAIL naming it, nothing built',
+    'mktemp': 'site: a TMPDIR that cannot be used is its own FAIL, nothing built',
+    'exit_trap': 'site: an exit inside the section still removes the temp dir (the EXIT trap)',
+}
+
+
+def site_cases(w: World) -> dict[str, list[str]]:
+    res: dict[str, list[str]] = {}
+    n = [0]
+    TRAP = re.search(r"^trap .*EXIT$", VERIFY.read_text(), re.M).group(0)
+    PRE = f'SITE_TMP=""\n{TRAP}\n'
+
+    def run(*, log=None, rc=0, site_edits=None, rewritten=9, n_pages=79, files=None, drop=(), tmpdir='ok', py='stub', env=None, inject=None,
+            rewritten_md=True):
+        n[0] += 1
+        root = w.root('site', 'site-base', files, drop)
+        work = w.base / f'site-work-{n[0]}'
+        work.mkdir()
+        record = work / 'record'
+        record.mkdir()
+        tmp = work / 'tmp'
+        tmp.mkdir()
+        edits = dict(site_edits or {})
+        site = make_site(work, n_pages=n_pages, rewritten=rewritten, ref=SITE_REF, edits=edits)
+        if not rewritten_md:
+            # swap the CLAUDE.md link for a file link, so the built pages hold no rewritten .md link
+            idx = site / 'index.html'
+            idx.write_text(idx.read_text().replace('/blob/' + SITE_REF + '/CLAUDE.md', '/blob/' + SITE_REF + '/examples/ui/A.java'))
+        stub = work / 'stub-zensical'
+        stub.write_text(STUB)
+        stub.chmod(0o755)
+        line = 'See [CLAUDE.md](../CLAUDE.md) for the details.'
+        explained = block('page does not exist', 'b.md', 3, line.index('](') + 3, line)
+        logtext = log if log is not None else build_log([explained])
+        (work / 'build.log').write_text(logtext)
+        e = {'HANDBOOK_SITE_PY': str(stub) if py == 'stub' else py, 'STUB_RECORD': str(record), 'STUB_SITE': str(site),
+             'STUB_LOG': str(work / 'build.log'), 'STUB_RC': str(rc), 'TMPDIR': {'ok': str(tmp), 'inside': str(root / 'tmpin'),
+                                                                                  'missing': str(work / 'no-such-tmp')}[tmpdir]}
+        if tmpdir == 'inside':
+            (root / 'tmpin').mkdir()
+        e.update(env or {})
+        # the real trap and an empty SITE_TMP before it, as the drift section sets them in verify-docs.sh
+        post = ('echo "SITE_TMP_AFTER_SECTION=$([ -d "${SITE_TMP:-}" ] && echo present || echo gone)"\n'
+                'echo "SITE_TMP_CLEARED=$([ -z "${SITE_TMP:-}" ] && echo yes || echo no)"\n')
+        code, out, h = w.run('site', root, env=e, inject=inject, pre=PRE, post=post)
+        left = len(list(tmp.iterdir())) if tmp.exists() else -1
+        return dict(code=code, out=out, hf=h, root=root, record=record, tmp=tmp, left=left, work=work)
+
+    def v(key, r, *, hf, must=(), must_not=(), left=0, called=None):
+        pr = res.setdefault(CASE_SITE[key], [])
+        if r['hf'] != hf:
+            pr.append(f'HARD_FAILS {r["hf"]}, wanted {hf}: {lines(r["out"])[-4:]!r}')
+        pr += [f'missing {m!r}' for m in must if m not in r['out']]
+        pr += [f'unexpected {m!r}' for m in must_not if m in r['out']]
+        if left is not None and r['left'] != left:
+            pr.append(f'{r["left"]} entr(ies) left in TMPDIR, wanted {left}')
+
+    def rec(r, name):
+        f = r['record'] / name
+        return f.read_text().strip() if f.exists() else None
+
+    r = run()
+    v('healthy', r, hf=0, must=('INFO  SITE 79 page(s) parsed', 'INFO  ANCHORS 4 heading anchor(s) of 2 docs page(s)'), must_not=('  FAIL  ', 'WARN'))
+    m = re.search(r'^  PASS  79 page\(s\) built in [0-9]+\.[0-9] s; 1 warning\(s\), 1 explained$', r['out'], re.M)
+    if not m:
+        res[CASE_SITE['healthy']].append(f'no PASS line of the form "79 page(s) built in T s; 1 warning(s), 1 explained": {lines(r["out"])!r}')
+    pr = res.setdefault(CASE_SITE['called'], [])
+    tmp_root = str(r['tmp'])
+    cwd = rec(r, 'cwd') or ''
+    if not cwd.startswith(tmp_root) or cwd.startswith(str(r['root'])):
+        pr.append(f'zensical ran in {cwd!r}, wanted a copy under {tmp_root} and not in the tree {r["root"]}')
+    for name, want in (('args', '-m zensical build --clean'), ('ref', SITE_REF), ('pythonpath', 'maintenance/site'), ('no_color', '1')):
+        if rec(r, name) != want:
+            pr.append(f'{name}: {rec(r, name)!r}, wanted {want!r}')
+    pr = res.setdefault(CASE_SITE['nopollute'], [])
+    if (r['root'] / 'site').exists() or (r['root'] / '.cache').exists():
+        pr.append('the section wrote site/ or .cache/ into the tree')
+    if r['left'] != 0:
+        pr.append(f'{r["left"]} entr(ies) left in TMPDIR')
+    if 'SITE_TMP_AFTER_SECTION=gone' not in r['out']:
+        pr.append('the section left its temp dir in place when it ended')
+    if 'SITE_TMP_CLEARED=yes' not in r['out']:
+        pr.append('the section left SITE_TMP set to the removed path (the EXIT trap would act on it)')
+
+    v('rc', run(rc=1), hf=1, must=('FAIL  zensical build exited 1:',), must_not=('PASS',))
+    v('few_html', run(n_pages=78), hf=2, must=('FAIL  the build wrote 78 .html file(s), at least 79 are expected (78 docs pages and 404.html)',), must_not=('PASS',))
+    v('dead_link', run(site_edits={'index.html': page_html('home', home_body(9, SITE_REF) + '<a href="ghost.html">g</a>')}), hf=1,
+      must=('FAIL  check-site-links.py found problems in the built site (exit 1):', 'ghost.html -> no such file in the built site'), must_not=('PASS',))
+    extra = block('page does not exist', 'a.md', 1, 3, '# a')
+    v('unexplained', run(log=build_log([block('page does not exist', 'b.md', 3, 'See [CLAUDE.md](../CLAUDE.md) for the details.'.index('](') + 3,
+                                              'See [CLAUDE.md](../CLAUDE.md) for the details.'), extra])), hf=1,
+      must=('FAIL  the build output is not a clean zensical build (check-site-build.py exit 1):', 'unexplained warning at a.md:1:3'), must_not=('PASS',))
+    line = 'See [CLAUDE.md](../CLAUDE.md) for the details.'
+    v('issues', run(log=build_log([block('page does not exist', 'b.md', 3, line.index('](') + 3, line)], summary='3 issues found')), hf=1,
+      must=('the build reports 3 issue(s) and 1 warning block(s) were parsed',), must_not=('PASS',))
+    v('rewritten', run(rewritten_md=False), hf=1,
+      must=('1 warning(s) explained, but check-site-links.py counted 0 rewritten .md link(s)',), must_not=('PASS',))
+    v('garbage', run(log=build_log([], tail='Error: it broke\n')), hf=1, must=('is not a line of a zensical build',), must_not=('PASS',))
+
+    r = run(py='/nonexistent/venv/bin/python')
+    v('no_venv', r, hf=0, must=('WARN  skipped (no site venv: /nonexistent/venv/bin/python is not an executable;',), must_not=('PASS', '  FAIL  '))
+    if rec(r, 'cwd') is not None:
+        res[CASE_SITE['no_venv']].append('zensical ran although the venv was missing')
+    nb = lambda r: [] if rec(r, 'cwd') is None else ['zensical ran']
+    r = run(files={'zensical.toml': '[project]\nsite_name = "x"\n'})
+    v('no_url', r, hf=1, must=('FAIL  the site build cannot run: zensical.toml has no site_url line',), must_not=('PASS',))
+    res[CASE_SITE['no_url']] += nb(r)
+    r = run(files={'docs/sub/x.md': '# x\n'})
+    v('not_flat', r, hf=1, must=('FAIL  docs/ is not flat:', 'docs/sub/x.md'), must_not=('PASS',))
+    res[CASE_SITE['not_flat']] += nb(r)
+    r = run(tmpdir='inside')
+    v('tmp_inside', r, hf=1, must=('FAIL  site build: TMPDIR (', 'inside the repository', 'nothing was built'), must_not=('PASS',), left=None)
+    res[CASE_SITE['tmp_inside']] += nb(r)
+    r = run(tmpdir='missing')
+    v('mktemp', r, hf=1, must=('FAIL  site build: could not create a temporary directory (mktemp -d failed',), must_not=('PASS',), left=None)
+    res[CASE_SITE['mktemp']] += nb(r)
+
+    # an exit inside the section, after the temp dir exists: only the EXIT trap can remove it
+    mk = 'SITE_T0="$(date +%s%N)"\n'
+    r = run(inject=(mk, 'echo work > "$SITE_TMP/x"; exit 7\n'))
+    pr = res.setdefault(CASE_SITE['exit_trap'], [])
+    if r['code'] != 7:
+        pr.append(f'harness exit {r["code"]}, wanted 7')
+    if r['left'] != 0:
+        pr.append(f'{r["left"]} entr(ies) left in TMPDIR: the trap did not remove SITE_TMP')
+    return res
+
+
 # ============================== the mutation table ==============================
 
 MUTATIONS: dict = {}
@@ -451,7 +916,132 @@ mut('a sidebar entry naming a missing file is not reported', ('section', 'nav'),
 mut('Home first is not required', ('section', 'nav'), 'if first != "index.md":\n    print(f"HOME {first_label}")', 'pass',
     ['read_home'], ['read_home'], part='nav')
 
-PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases)}
+# ---- check-site-links.py ----
+LNK = 'check-site-links.py'
+mut('a missing page is not a finding', ('script', LNK), "            if target not in files:", '            if False:',
+    ['dead_file'], ['abs_site', 'asset', 'dead_file', 'dir_ok', 'escape'], part='links')
+mut('a fragment is not looked up', ('script', LNK), "if frag and target.endswith('.html'):", 'if False:',
+    ['dead_frag'], ['dead_frag', 'healthy', 'self_frag'], part='links')
+mut('a fragment is looked up in any target, css included', ('script', LNK), "if frag and target.endswith('.html'):", 'if frag:',
+    ['frag_css'], ['frag_css'], part='links')
+mut('an <a name> is not an anchor', ('script', LNK), "        for k in ('id', 'name'):", "        for k in ('id',):",
+    ['name_attr'], ['name_attr'], part='links')
+mut('a directory link is not resolved to its index', ('script', LNK), "if path.endswith('/') or (target not in files and f'{target}/index.html' in files):", 'if False:',
+    ['dir_ok'], ['dir_ok'], part='links')
+mut('img and script sources are not links', ('script', LNK), "'img': 'src', 'script': 'src', ", '',
+    ['asset'], ['asset', 'healthy'], part='links')
+mut('a root-relative link is never refused', ('script', LNK), "            if url.startswith('/'):", '            if False:',
+    ['root_rel'], ['root_rel'], part='links')
+mut('the site path is not stripped from a root-relative link', ('script', LNK), "            if site_path and url.startswith(site_path):", '            if False:',
+    ['root_rel'], ['root_rel'], part='links')
+mut('an absolute URL under site_url is off-site', ('script', LNK), "if site_url and url.startswith(site_url):", 'if False:',
+    ['abs_site'], ['abs_site'], part='links')
+mut('off-site links are not counted', ('script', LNK), '                    offsite += 1', '                    offsite += 0',
+    ['offsite'], ['healthy', 'offsite'], part='links')
+mut('mailto: and javascript: are looked up as files', ('script', LNK), "            elif sp.scheme:\n                other += 1                  # mailto:, javascript:, data:, tel:\n                continue\n", '',
+    ['offsite'], ['offsite'], part='links')
+mut('a query string stays on the path', ('script', LNK), "path = urllib.parse.unquote(sp.path)", "path = urllib.parse.unquote(sp.path + ('?' + sp.query if sp.query else ''))",
+    ['query'], ['query'], part='links')
+mut('a percent-encoded path is not decoded', ('script', LNK), "path = urllib.parse.unquote(sp.path)", "path = sp.path",
+    ['query'], ['query'], part='links')
+mut('a GitHub link is not checked against the repository', ('script', LNK), "                        if not ok:", "                        if False:",
+    ['blob_dir'], ['blob_dir', 'gh_dead', 'gh_ref', 'tree_file'], part='links')
+mut('blob and tree are not told apart', ('script', LNK), "ok = target.is_file() if kind == 'blob' else target.is_dir()", 'ok = target.exists()',
+    ['blob_dir'], ['blob_dir', 'tree_file'], part='links')
+mut('every GitHub link counts as rewritten, whatever its ref', ('script', LNK), "                        if ref == a.ref:", '                        if True:',
+    ['gh_ref'], ['gh_ref'], part='links')
+mut('a GitHub link at another ref is not checked for its path', ('script', LNK), "                        if not ok:", "                        if not ok and ref == a.ref:",
+    ['gh_ref'], ['gh_ref'], part='links')
+mut('a malformed blob/tree link is let through', ('script', LNK), "                    elif url.startswith(repo_url + '/blob/') or url.startswith(repo_url + '/tree/'):", '                    elif False:',
+    ['gh_malformed'], ['gh_malformed'], part='links')
+mut('.md targets among the rewritten are not counted', ('script', LNK), "rewritten_md += path.endswith('.md')", 'rewritten_md += 0',
+    ['md_count'], ['healthy', 'md_count'], part='links')
+mut('the page floor is removed', ('script', LNK), '    if len(htmls) < a.min_pages:', '    if False:',
+    ['floor_pages'], ['floor_pages'], part='links')
+mut('the internal-link floor is removed', ('script', LNK), '    if internal == 0:', '    if False:',
+    ['floor_internal'], ['floor_internal'], part='links')
+mut('the rewritten floor is removed', ('script', LNK), '    if rewritten < a.min_rewritten:', '    if False:',
+    ['floor_rewritten'], ['floor_rewritten'], part='links')
+mut('the anchor cross-check looks anywhere, not in headings', ('script', LNK), 'have = page(built).heading_ids', 'have = page(built).ids',
+    ['anchors_nonheading'], ['anchors_nonheading'], part='links')
+mut('the anchor cross-check is skipped', ('script', LNK), '    if a.docs:\n', '    if False:\n',
+    ['anchors_ok', 'anchors_missing'], ['anchors_missing', 'anchors_nonheading', 'anchors_nopage', 'anchors_ok', 'anchors_zero'], part='links')
+mut('a docs page with no built page is let through', ('script', LNK), "            if built not in files:\n                fails.append(f'docs/{md.name}: no built page {built}')\n                continue\n", '',
+    ['anchors_nopage'], ['anchors_nopage'], part='links')
+mut('a cross-check that read nothing is let through', ('script', LNK), "        if n_pages == 0 or n_anchors == 0:", '        if False:',
+    ['anchors_zero'], ['anchors_zero'], part='links')
+mut('a missing site directory is not refused', ('script', LNK), '    if not site.is_dir():', '    if False:',
+    ['nodir'], ['nodir'], part='links')
+
+# ---- check-site-build.py ----
+BLD = 'check-site-build.py'
+mut('an unexplained message is explained', ('script', BLD), "        if b['msg'] != 'page does not exist':", '        if False:',
+    ['anchor', 'unknown_kind'], ['anchor', 'unknown_kind'], part='build')
+mut('a link that resolves inside docs/ is explained', ('script', BLD), "        if dest is None or dest == docs_abs or docs_abs in dest.parents:", '        if dest is None:',
+    ['missing_page'], ['missing_page'], part='build')
+mut('a path outside docs/ need not exist in the repository', ('script', BLD), "        if repo_abs not in dest.parents or not dest.exists():", '        if repo_abs not in dest.parents:',
+    ['outside_nopath'], ['outside_nopath'], part='build')
+mut('a position that is not a link target is explained', ('script', BLD), "        if col < 3 or text[col - 3:col - 1] != '](':", '        if False:',
+    ['not_a_target'], ['not_a_target'], part='build')
+mut('the source line the build shows is not compared', ('script', BLD), "        if shown and shown[0].rstrip() != text.rstrip():", '        if False:',
+    ['shown_line'], ['shown_line'], part='build')
+mut('the issue count is not compared with the warnings', ('script', BLD), '    elif summary != len(blocks):', '    elif False:',
+    ['summary_less', 'summary_more'], ['summary_less', 'summary_more'], part='build')
+mut('a missing issue count is let through', ('script', BLD), '    if summary is None:', '    if False:',
+    ['no_summary'], ['no_summary'], part='build')
+mut('an unknown line is let through', ('script', BLD), "            fails.append(f'build output line {no}: {l!r} is not a line of a zensical build')", '            pass',
+    ['garbage'], ['garbage'], part='build')
+mut('"Build started" is not required', ('script', BLD), '    if started != 1:', '    if False:',
+    ['no_start'], ['no_start'], part='build')
+mut('"Build finished" is not required', ('script', BLD), '    if finished != 1:', '    if False:',
+    ['no_finish'], ['no_finish'], part='build')
+mut('an unclosed block is let through', ('script', BLD), '    if cur is not None:\n        fails.append', '    if False:\n        fails.append',
+    ['unclosed'], ['unclosed'], part='build')
+mut('ANSI sequences are not stripped', ('script', BLD), "lines = [ANSI.sub('', l).rstrip() for l in log.splitlines()]", 'lines = [l.rstrip() for l in log.splitlines()]',
+    ['ansi'], ['ansi'], part='build')
+mut('the rewritten count is not compared', ('script', BLD), '    if a.rewritten_md is not None and e != a.rewritten_md:', '    if False:',
+    ['rewritten_less', 'rewritten_more'], ['rewritten_less', 'rewritten_more'], part='build')
+mut('an unreadable log is not refused', ('script', BLD), "        print(f'  FAIL  cannot read the build log {a.log}: {e}')\n        return 2", "        print('x')\n        return 0",
+    ['nolog'], ['nolog'], part='build')
+mut('a docs dir that is not a directory is not refused', ('script', BLD), '    if not docs.is_dir():', '    if False:',
+    ['nodocs'], ['nodocs'], part='build')
+
+# ---- the site-build section ----
+mut('the section does not read the build status', ('section', 'site'), '    if [ "$SITE_RC" -ne 0 ]; then', '    if false; then',
+    ['rc'], ['rc'], part='site')
+mut('the .html floor is removed', ('section', 'site'), '    if [ "$SITE_HTML" -lt 79 ]; then', '    if false; then',
+    ['few_html'], ['few_html'], part='site')
+mut('the link checker\'s status is not read', ('section', 'site'), '    if [ "$SITE_LRC" -ne 0 ]; then', '    if false; then',
+    ['dead_link', 'few_html'], ['dead_link', 'few_html'], part='site')
+mut('the warning judge\'s status is not read', ('section', 'site'), '    if [ "$SITE_WRC" -ne 0 ] || [ -z "$SITE_W" ]; then', '    if false; then',
+    ['unexplained', 'issues', 'rewritten', 'garbage'], ['garbage', 'issues', 'rewritten', 'unexplained'], part='site')
+mut('the rewritten .md count is not handed to the judge', ('section', 'site'), ' --rewritten-md "${SITE_REWRITTEN_MD:--1}"', '',
+    ['rewritten'], ['rewritten'], part='site')
+mut('a missing venv is not skipped', ('section', 'site'), 'if [ ! -x "$SITE_PY" ]; then', 'if false; then',
+    ['no_venv'], ['no_venv'], part='site')
+mut('a missing site_url is not refused', ('section', 'site'), 'elif [ -z "$SITE_URL" ]; then', 'elif false; then',
+    ['no_url'], ['no_url'], part='site')
+mut('docs/ need not be flat', ('section', 'site'), """elif [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then""", 'elif false; then',
+    ['not_flat'], ['not_flat'], part='site')
+mut('a TMPDIR inside the repository is allowed', ('section', 'site'), 'elif case "$SITE_TD/" in "$SITE_REPO"/*) true ;; *) false ;; esac; then', 'elif false; then',
+    ['tmp_inside'], ['tmp_inside'], part='site')
+mut('a failed mktemp is not read', ('section', 'site'), '  if [ -z "$SITE_TMP" ]; then', '  if false; then',
+    ['mktemp'], ['mktemp'], part='site')
+mut('the build runs in the tree, not in a copy', ('section', 'site'), '    ( cd "$SITE_TMP" && PYTHONPATH', '    ( cd "$SITE_REPO" && PYTHONPATH',
+    ['called', 'nopollute'], ['called', 'dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained'], part='site')
+mut('the build is not run with --clean', ('section', 'site'), 'build --clean )', 'build )',
+    ['called'], ['called'], part='site')
+mut('HANDBOOK_REF is not set', ('section', 'site'), 'HANDBOOK_REF="$SITE_REF" ', '',
+    ['called'], ['called'], part='site')
+mut('PYTHONPATH is not set', ('section', 'site'), 'PYTHONPATH=maintenance/site ', '',
+    ['called'], ['called'], part='site')
+mut('NO_COLOR is not set', ('section', 'site'), ' NO_COLOR=1 ', ' ',
+    ['called'], ['called'], part='site')
+mut('the section does not remove its temp dir', ('section', 'site'), '    rm -rf "$SITE_TMP"\n    SITE_TMP=""', '    SITE_TMP=""',
+    ['healthy', 'nopollute'], ['dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained'], part='site')
+
+PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
+         'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases)}
 
 
 def apply_edit(where, old, new):

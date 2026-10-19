@@ -469,10 +469,13 @@ section "[HARD] Asset drift vs baseline (drift found is a WARN; drift that could
 # 94d2a32..3437c5d, LOW-4). An unset or empty DR_TMP makes `rm -rf ""`, which does nothing. DR_TMP is set empty
 # here, before the trap: a DR_TMP exported by the caller's shell would otherwise be removed on exit whenever the
 # double-run section does not assign it (a missing cache, a refused TMPDIR, an interrupt before it starts)
-# (verify pass of 3437c5d..ee2b164, MAJOR-1).
+# (verify pass of 3437c5d..ee2b164, MAJOR-1). SITE_TMP, the site-build section's temp dir, is handled the same way: set
+# empty here, before the trap, so one the caller exported is never removed, and set empty again when its section has
+# removed it. That section runs after this one, so the trap exists when SITE_TMP is first assigned.
 DRIFT_TMP=""
 DR_TMP=""          # never the caller's: whatever this names is removed on exit
-trap 'rm -rf "${DRIFT_TMP:-}" "${DR_TMP:-}"' EXIT
+SITE_TMP=""        # likewise: the site-build section's copy of the tree and its output (see the paragraph above)
+trap 'rm -rf "${DRIFT_TMP:-}" "${DR_TMP:-}" "${SITE_TMP:-}"' EXIT
 DRIFT_TMP="$(mktemp -d)" || DRIFT_TMP=""
 if [ -z "$DRIFT_TMP" ]; then
   fail "asset drift: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - neither the Common nor the Server/Cosmetics drift was computed"
@@ -541,6 +544,80 @@ else
   fi
   rm -rf "$DRIFT_TMP"
   DRIFT_TMP=""      # the EXIT cleanup must not act on a path that is already gone
+fi
+
+# =====================================================================
+# The docs site is built by Zensical (maintenance/site/requirements.txt pins it), from a copy of the tree made in
+# a temp dir OUTSIDE the repository: zensical writes `.cache/` beside its config and once served a stale
+# HANDBOOK_REF out of it, and its site_dir and docs_dir must lie inside the config's directory. The copy holds
+# zensical.toml, docs/, maintenance/site/ and the two scripts the extension loads (check-links.py for the slug,
+# doc_fences.py), in the repository's layout, because the extension resolves its paths from __file__.
+# The build runs with HANDBOOK_REF set to a token that no authored GitHub link uses, so the links it rewrote
+# can be counted. `zensical build` exits 0 with warnings and its `--strict` would abort on the one expected
+# warning (../CLAUDE.md, which it validates as a source path although the extension has rewritten it), so the
+# output is judged by check-site-build.py (a grammar of a build; the same script judges the deploy build in
+# .github/workflows/pages.yml) and the built HTML by check-site-links.py, which shares nothing with Zensical.
+# The temp dir is SITE_TMP, in the one EXIT trap of the asset-drift section above and emptied before that trap is
+# set; it is removed when this section ends. A missing venv is one WARN and the section is skipped, as a missing
+# asset cache skips the others (maintenance/scripts/site-env.sh creates it). check-site-fixture.py runs THIS text
+# with a stub in place of zensical.
+section "[HARD] The site builds with no unexplained warning"
+SITE_PY="${HANDBOOK_SITE_PY:-$HOME/.cache/handbook-site/venv/bin/python}"
+SITE_REF="verify-docs-ref"
+SITE_URL="$(sed -n 's/^site_url = "\(.*\)"$/\1/p' zensical.toml 2>/dev/null)"
+SITE_REPO="$(pwd -P)"
+SITE_TD="$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)" || SITE_TD=""
+if [ ! -x "$SITE_PY" ]; then
+  warn "skipped (no site venv: $SITE_PY is not an executable; maintenance/scripts/site-env.sh creates it, or set HANDBOOK_SITE_PY)"
+elif [ -z "$SITE_URL" ]; then
+  fail "the site build cannot run: zensical.toml has no site_url line"
+elif [ -n "$(find docs -mindepth 2 -name '*.md' 2>/dev/null)" ]; then
+  fail "docs/ is not flat: the link rewrite resolves ../ against docs/ and assumes no subdirectory. Page(s) below docs/:"
+  find docs -mindepth 2 -name '*.md' | sort | sed 's/^/      /'
+elif case "$SITE_TD/" in "$SITE_REPO"/*) true ;; *) false ;; esac; then
+  fail "site build: TMPDIR (${TMPDIR:-/tmp}) resolves to $SITE_TD, inside the repository $SITE_REPO - the build copies the tree to a temp dir and must not write into it; set TMPDIR to a directory outside the repository - nothing was built"
+else
+  SITE_TMP="$([ -n "$SITE_TD" ] && mktemp -d "$SITE_TD/tmp.XXXXXXXXXX")" || SITE_TMP=""
+  if [ -z "$SITE_TMP" ]; then
+    fail "site build: could not create a temporary directory (mktemp -d failed; is TMPDIR=${TMPDIR:-/tmp} a writable directory?) - nothing was built"
+  else
+    mkdir -p "$SITE_TMP/maintenance/scripts"
+    cp -R zensical.toml docs "$SITE_TMP/"
+    cp -R maintenance/site "$SITE_TMP/maintenance/"
+    cp maintenance/scripts/check-links.py maintenance/scripts/doc_fences.py "$SITE_TMP/maintenance/scripts/"
+    SITE_T0="$(date +%s%N)"
+    ( cd "$SITE_TMP" && PYTHONPATH=maintenance/site HANDBOOK_REF="$SITE_REF" NO_COLOR=1 "$SITE_PY" -m zensical build --clean ) > "$SITE_TMP/build.log" 2>&1; SITE_RC=$?
+    SITE_T1="$(date +%s%N)"
+    SITE_SECS="$(awk -v a="$SITE_T0" -v b="$SITE_T1" 'BEGIN{printf "%.1f", (b-a)/1e9}')"
+    SITE_HTML="$(find "$SITE_TMP/site" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"
+    SITE_OK=1
+    if [ "$SITE_RC" -ne 0 ]; then
+      SITE_OK=0; fail "zensical build exited $SITE_RC:"
+      sed 's/\x1b\[[0-9;]*m//g' "$SITE_TMP/build.log" | sed -n '1,30p' | sed 's/^/    /'
+    fi
+    if [ "$SITE_HTML" -lt 79 ]; then
+      SITE_OK=0; fail "the build wrote $SITE_HTML .html file(s), at least 79 are expected (78 docs pages and 404.html)"
+    fi
+    SITE_LINKS="$(python3 maintenance/scripts/check-site-links.py "$SITE_TMP/site" --repo "$SITE_REPO" --ref "$SITE_REF" --site-url "$SITE_URL" --docs docs 2>&1)"; SITE_LRC=$?
+    SITE_REWRITTEN_MD="$(echo "$SITE_LINKS" | sed -n 's/^SITE .* rewritten GitHub link(s) at [^ ]* (\([0-9][0-9]*\) to \.md files)$/\1/p')"
+    echo "$SITE_LINKS" | grep -E '^(SITE|ANCHORS) ' | sed 's/^/  INFO  /'
+    if [ "$SITE_LRC" -ne 0 ]; then
+      SITE_OK=0; fail "check-site-links.py found problems in the built site (exit $SITE_LRC):"
+      echo "$SITE_LINKS" | grep -E '^  FAIL' | sed 's/^  FAIL  /    /' | sed -n '1,40p'
+    fi
+    SITE_WARN="$(python3 maintenance/scripts/check-site-build.py "$SITE_TMP/build.log" --docs docs --repo "$SITE_REPO" --rewritten-md "${SITE_REWRITTEN_MD:--1}" 2>&1)"; SITE_WRC=$?
+    SITE_W="$(echo "$SITE_WARN" | sed -n 's/^BUILD \([0-9][0-9]*\) warning(s), \([0-9][0-9]*\) explained, \([0-9][0-9]*\) issue(s) reported.*$/\1/p')"
+    SITE_E="$(echo "$SITE_WARN" | sed -n 's/^BUILD \([0-9][0-9]*\) warning(s), \([0-9][0-9]*\) explained, \([0-9][0-9]*\) issue(s) reported.*$/\2/p')"
+    if [ "$SITE_WRC" -ne 0 ] || [ -z "$SITE_W" ]; then
+      SITE_OK=0; fail "the build output is not a clean zensical build (check-site-build.py exit $SITE_WRC):"
+      echo "$SITE_WARN" | grep -E '^  FAIL' | sed 's/^  FAIL  /    /' | sed -n '1,40p'
+    fi
+    if [ "$SITE_OK" -eq 1 ]; then
+      pass "$SITE_HTML page(s) built in $SITE_SECS s; $SITE_W warning(s), $SITE_E explained"
+    fi
+    rm -rf "$SITE_TMP"
+    SITE_TMP=""        # the EXIT cleanup must not act on a path that is already gone
+  fi
 fi
 
 # =====================================================================

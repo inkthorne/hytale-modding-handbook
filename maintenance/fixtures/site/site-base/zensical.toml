@@ -1,0 +1,4 @@
+[project]
+site_name = "Fixture"
+site_url = "https://inkthorne.github.io/hytale-modding-handbook/"
+docs_dir = "docs"

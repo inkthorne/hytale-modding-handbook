@@ -6,11 +6,47 @@
   environment: a quote in a description would otherwise end the attribute), and the JSON-LD through `tojson`.
 -#}
 {% extends "base.html" %}
+{#-
+  site_meta is base.html's block copied with ONE change: the home page's canonical link is the site root, as Jekyll
+  said (`.../hytale-modding-handbook/`), where Zensical gives `.../index.html` (review of d361e13..9f19ac9, LOW-5). The
+  copy is zensical 0.0.71's; a bump re-reads it (maintenance/site/README.md). og:url and the JSON-LD url below are the
+  same root, and check-site-links.py compares all three with the page's own URL. (The copy leaves out the llmstxt and
+  alternate-language links of the original, which this site's config never turns on.)
+-#}
+{% block site_meta %}
+  {% set home = page.url in ('', 'index.html') %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  {% if page.meta and page.meta.description %}
+    <meta name="description" content="{{ page.meta.description }}">
+  {% elif config.site_description %}
+    <meta name="description" content="{{ config.site_description }}">
+  {% endif %}
+  {% if page.meta and page.meta.author %}
+    <meta name="author" content="{{ page.meta.author }}">
+  {% elif config.site_author %}
+    <meta name="author" content="{{ config.site_author }}">
+  {% endif %}
+  {% if home and config.site_url %}
+    <link rel="canonical" href="{{ config.site_url }}">
+  {% elif page.canonical_url %}
+    <link rel="canonical" href="{{ page.canonical_url }}">
+  {% endif %}
+  {% if page.previous_page %}
+    <link rel="prev" href="{{ page.previous_page.url | url }}">
+  {% endif %}
+  {% if page.next_page %}
+    <link rel="next" href="{{ page.next_page.url | url }}">
+  {% endif %}
+  {% set href = config.theme.favicon | d("assets/images/favicon.png") %}
+  <link rel="icon" href="{{ href | url }}">
+  <meta name="generator" content="{{ generator }}">
+{% endblock %}
 {% block extrahead %}
   {% set title = (page.meta and page.meta.title) or page.title | striptags %}
   {% set description = (page.meta and page.meta.description) or config.site_description %}
-  {% set url = page.canonical_url %}
   {% set is_home = page.url in ('', 'index.html') %}
+  {% set url = config.site_url if is_home and config.site_url else page.canonical_url %}
   {% if config.extra.google_site_verification %}
     <meta name="google-site-verification" content="{{ config.extra.google_site_verification | e }}">
   {% endif %}

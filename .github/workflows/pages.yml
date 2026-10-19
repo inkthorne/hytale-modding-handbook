@@ -55,7 +55,6 @@ jobs:
         env:
           HANDBOOK_REF: ${{ github.sha }}
           PYTHONPATH: maintenance/site
-          NO_COLOR: '1'
         run: |
           rc=0
           python -m zensical build --clean > build.log 2>&1 || rc=$?

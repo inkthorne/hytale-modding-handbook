@@ -27,14 +27,15 @@ a blank line inside the item) indented fewer than 4 spaces past its parent's mar
 indented to the parent's content (2 spaces under `- `, 3 under `1. `), which is what the docs were written to;
 Python-Markdown needs 4, and reads a 2-space nested item as a sibling and a 2-space fence as the end of the
 list (the items after it start a new `<ul>`). A child indented 4 past its parent is a child on both. Measured
-at d361e13: 9 nested items on 2 pages (block-access.md, combat.md) and 2 continuation blocks (worldgen.md,
-interactions-double-run.md).
+at d361e13: 15 findings on 4 pages, 9 nested items (block-access.md 2, combat.md 7) and 6 child blocks that follow a
+blank line or are fences (block-access.md:651, interactions-double-run.md 95, 103 and 252, worldgen.md 383 and
+390). The first version of this text said 9 and 2: it had not counted the fences and tables.
 
   python3 maintenance/scripts/check-site-markdown.py [--root DIR] [--fix]
 
 --fix re-indents every flagged child block (itself and what hangs from it) by the missing spaces, which
 changes whitespace and nothing else. Exit 0 clean, 1 findings, 2 the corpus is absent or empty.
-Prints `SCANNED <pages> page(s), <headings> heading(s) read, <list items> list item(s) read`.
+Prints `INFO  <pages> page(s), <headings> heading(s) and <list items> list item(s) read`.
 """
 from __future__ import annotations
 import argparse, importlib.util, pathlib, re, sys

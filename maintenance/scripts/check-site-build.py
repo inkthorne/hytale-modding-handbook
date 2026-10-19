@@ -18,8 +18,10 @@ FAIL:
     No issues found | <N> issue(s) found
     Build finished in <time>
 
-The run is expected with NO_COLOR=1; any ANSI sequence is stripped anyway (zensical ignores NO_COLOR for the
-marker line). The count in the summary must equal the number of warning blocks.
+zensical colours its output whatever the environment (NO_COLOR, CLICOLOR_FORCE, TERM=dumb and a pipe instead of a
+terminal were each tried, 12 environments, and every line stayed coloured; review of d361e13..9f19ac9), so the ANSI
+sequences are stripped here and no variable is set to ask for plain text. The count in the summary must equal the
+number of warning blocks.
 
 WHAT IS EXPLAINED. Exactly one kind of warning is expected, and only when it is what it looks like: `page does
 not exist`, at a position (file:line:col, col the first character of a link's target) where the source line

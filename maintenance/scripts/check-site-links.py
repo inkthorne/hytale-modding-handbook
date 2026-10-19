@@ -27,10 +27,20 @@ WHAT IS CHECKED
     the duplicate numbering are the extension's; that they agree with GitHub's is measured here, per page.
     A FAIL names the page, the anchor and the nearest heading id the build has.
 
+  - With --site-url: every page's `<link rel="canonical">`, `og:url` and JSON-LD `url` that it has equals the page's
+    own URL, and index.html must have a canonical, which is the site root (Jekyll said `.../hytale-modding-handbook/`;
+    Zensical says `.../index.html` unless the override changes it; review of d361e13..9f19ac9, LOW-5). 404.html is not
+    compared (it is served at any path).
+
 FLOORS. Exit 1, whatever else is true, when fewer than --min-pages pages (every .html under SITE_DIR) were
-parsed (78 docs pages and 404.html = 79), when there are 0 internal links, or when fewer than --min-rewritten
-links were rewritten (9 leave docs/ today: 8 into ../examples/ and ../CLAUDE.md). A checker that visited
-nothing is not a clean run.
+parsed (78 docs pages and 404.html = 79), when fewer than --min-internal internal links or --min-fragments
+fragment links were resolved, or when fewer than --min-rewritten links were rewritten (9 leave docs/ today: 8
+into ../examples/ and ../CLAUDE.md). A checker that visited nothing is not a clean run, and neither is one that
+visited a third of the site: measured on this tree, 41,795 internal links and 33,792 of them with a fragment, so
+the floors are about half of that (20,000 and 16,000). A floor of 1, which this had, passes a build in which only
+the first page's links were read, or in which the fragment check read nothing; half the measured figure
+passes the growth the docs will see and fails a partial collapse. They rot as the docs shrink; lower them in
+the same commit that removes the pages, with the figure in the message.
 
 Prints `SITE <p> page(s) parsed, <n> internal link(s) resolved (<f> with a fragment), <o> off-site link(s)
 counted, not fetched, <r> rewritten GitHub link(s) at <ref> (<m> to .md files)` and, with --docs, an
@@ -48,6 +58,8 @@ HEADINGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
 class Page(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
+        self.canonical = self.og_url = self.ld_url = None
+        self._ld = None
         self.ids: set[str] = set()
         self.heading_ids: set[str] = set()
         self.links: list[tuple[str, str]] = []      # (tag, url)
@@ -59,11 +71,27 @@ class Page(HTMLParser):
                 self.ids.add(a[k])
         if tag in HEADINGS and a.get('id'):
             self.heading_ids.add(a['id'])
+        if tag == 'link' and a.get('rel') == 'canonical':
+            self.canonical = a.get('href')
+        if tag == 'meta' and a.get('property') == 'og:url':
+            self.og_url = a.get('content')
+        if tag == 'script' and a.get('type') == 'application/ld+json':
+            self._ld = []
         attr = LINK_ATTRS.get(tag)
         if attr and a.get(attr) is not None:
             self.links.append((tag, a[attr]))
 
     handle_startendtag = handle_starttag
+
+    def handle_data(self, data):
+        if self._ld is not None:
+            self._ld.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == 'script' and self._ld is not None:
+            m = re.search(r'"url"\s*:\s*"([^"]*)"', ''.join(self._ld))
+            self.ld_url = m.group(1) if m else None
+            self._ld = None
 
 
 def parse(path: pathlib.Path) -> Page:
@@ -83,6 +111,8 @@ def main() -> int:
     ap.add_argument('--docs', default='')
     ap.add_argument('--min-pages', type=int, default=79)
     ap.add_argument('--min-rewritten', type=int, default=9)
+    ap.add_argument('--min-internal', type=int, default=20000)
+    ap.add_argument('--min-fragments', type=int, default=16000)
     a = ap.parse_args()
     site = pathlib.Path(a.site)
     repo = pathlib.Path(a.repo)
@@ -160,6 +190,18 @@ def main() -> int:
                 if frag not in page(target).ids:
                     fails.append(f'{rel}: {tag} {url} -> no element with id {frag!r} in {target}')
 
+    if site_url:
+        for rel in htmls:
+            if rel == '404.html':
+                continue
+            pg = page(rel)
+            want = site_url if rel == 'index.html' else site_url + rel
+            if rel == 'index.html' and pg.canonical is None:
+                fails.append(f'{rel}: no <link rel="canonical">; the home page needs one, and it is {site_url}')
+            for what, got in (('canonical', pg.canonical), ('og:url', pg.og_url), ('JSON-LD url', pg.ld_url)):
+                if got is not None and got != want:
+                    fails.append(f'{rel}: {what} is {got}, the page\'s own URL is {want}')
+
     print(f'SITE {len(htmls)} page(s) parsed, {internal} internal link(s) resolved ({with_frag} with a fragment), '
           f'{offsite} off-site link(s) counted, not fetched, {rewritten} rewritten GitHub link(s) at {a.ref} '
           f'({rewritten_md} to .md files)')
@@ -191,8 +233,10 @@ def main() -> int:
 
     if len(htmls) < a.min_pages:
         fails.append(f'only {len(htmls)} page(s) were parsed, floor is {a.min_pages}: the build is incomplete or this is the wrong directory')
-    if internal == 0:
-        fails.append('0 internal links were found: a checker that read none is not a clean run')
+    if internal < a.min_internal:
+        fails.append(f'{internal} internal link(s) were found, floor is {a.min_internal}: a checker that read a fraction of the site is not a clean run')
+    if with_frag < a.min_fragments:
+        fails.append(f'{with_frag} link(s) with a fragment were resolved, floor is {a.min_fragments}: the fragment check read a fraction of the site')
     if rewritten < a.min_rewritten:
         fails.append(f'{rewritten} link(s) were rewritten to GitHub at {a.ref}, floor is {a.min_rewritten}: '
                      f'handbook_md.py did not rewrite the links that leave docs/')

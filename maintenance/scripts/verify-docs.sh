@@ -610,7 +610,7 @@ print(n)' "$SITE_TMP" > "$SITE_TMP.copied"; SITE_CP=("${PIPESTATUS[@]}")
     info "copied ${SITE_NCOPIED:-0} file(s) of the tree in $(awk -v a="$SITE_C0" -v b="$SITE_C1" 'BEGIN{printf "%.1f", b-a}') s"
     if [ "$SITE_CP_OK" -eq 1 ]; then      # (not re-indented: the block below is the unchanged build and its checks)
     SITE_T0="$(python3 -c 'import time; print(time.time())')"       # not date +%s%N: the BSD date has no %N
-    ( cd "$SITE_TMP" && PYTHONPATH=maintenance/site HANDBOOK_REF="$SITE_REF" NO_COLOR=1 "$SITE_PY" -m zensical build --clean ) > "$SITE_TMP/build.log" 2>&1; SITE_RC=$?
+    ( cd "$SITE_TMP" && PYTHONPATH=maintenance/site HANDBOOK_REF="$SITE_REF" "$SITE_PY" -m zensical build --clean ) > "$SITE_TMP/build.log" 2>&1; SITE_RC=$?
     SITE_T1="$(python3 -c 'import time; print(time.time())')"
     SITE_SECS="$(awk -v a="$SITE_T0" -v b="$SITE_T1" 'BEGIN{printf "%.1f", b-a}')"
     SITE_HTML="$(find "$SITE_TMP/site" -name '*.html' 2>/dev/null | wc -l | tr -d ' ')"

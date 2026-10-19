@@ -41,8 +41,8 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 123            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
-MIN_MUTATIONS = 109
+MIN_CASES = 129            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_MUTATIONS = 116
 MIN_EXT_CASES = 27
 MIN_EXT_MUTATIONS = 31
 
@@ -425,6 +425,12 @@ CASE_LINKS = {
     'gh_ref': 'links: a GitHub link at another ref is checked for its path and not counted as rewritten',
     'gh_malformed': 'links: a blob/tree link of this repository with no ref and path FAILs',
     'md_count': 'links: the rewritten links to .md files are counted',
+    'canon_home': 'links: a home page whose canonical is index.html, not the site root, FAILs',
+    'canon_og_ld': 'links: og:url and the JSON-LD url are compared with the page\'s own URL too',
+    'canon_page': 'links: another page with a canonical that is not its own URL FAILs',
+    'canon_missing': 'links: a home page with no canonical FAILs',
+    'floors_default': 'links: the production floors (20,000 internal links, 16,000 with a fragment) FAIL a small site',
+    'floor_frag': 'links: too few links with a fragment is a FAIL even when the internal links suffice',
     'floor_pages': 'links: fewer than 79 pages is a FAIL whatever else is true',
     'floor_internal': 'links: 0 internal links is a FAIL',
     'floor_rewritten': 'links: fewer than 9 rewritten links is a FAIL',
@@ -452,7 +458,7 @@ def home_body(rewritten: int = 9, ref: str = REF) -> str:
     return ''.join(gh_link(p, ref=ref) for p in GH_PATHS[:rewritten]) + '<a href="a.html#one">a</a><a href="b.html">b</a>'
 
 
-def make_site(root: pathlib.Path, *, n_pages=79, rewritten=9, edits: dict | None = None, home_extra='', ref: str = REF):
+def make_site(root: pathlib.Path, *, n_pages=79, rewritten=9, edits: dict | None = None, home_extra='', ref: str = REF, bulk: int = 0):
     """A small built site: index.html (with `rewritten` GitHub links at REF), a.html and b.html (the pages of the
     docs corpus), padding pages up to `n_pages` html files, assets. `edits` replaces or adds files, a value of
     None removes one; `home_extra` is appended to the home page's body."""
@@ -467,6 +473,10 @@ def make_site(root: pathlib.Path, *, n_pages=79, rewritten=9, edits: dict | None
     while len(pages) < n_pages:
         k += 1
         pages[f'pad{k:02d}.html'] = page_html(f'pad{k}', '<a href="index.html">home</a>')
+    if bulk:
+        # the section runs check-site-links with its production floors (20,000 internal links, 16,000 with a fragment),
+        # so a planted site that is meant to pass them carries that many links on one page
+        pages['pad01.html'] = page_html('pad1', '<a href="index.html">home</a>' + '<a href="index.html#__skip">.</a>' * bulk)
     for name, html in (edits or {}).items():
         if html is None:
             pages.pop(name, None)
@@ -475,6 +485,10 @@ def make_site(root: pathlib.Path, *, n_pages=79, rewritten=9, edits: dict | None
     for name, html in pages.items():
         f = site / name
         f.parent.mkdir(parents=True, exist_ok=True)
+        if 'rel="canonical"' not in html and 'no canonical here' not in html and '</head>' in html and '/' not in name:
+            url = SITE_URL if name == 'index.html' else SITE_URL + name
+            html = html.replace('</head>', f'<link rel="canonical" href="{url}"><meta property="og:url" content="{url}">'
+                                           f'<script type="application/ld+json">{{"@type":"WebSite","url":"{url}"}}</script></head>', 1)
         f.write_text(html)
     return site
 
@@ -498,7 +512,7 @@ def links_cases(w: World) -> dict[str, list[str]]:
     res: dict[str, list[str]] = {}
     n = [0]
 
-    def run(*, docs=False, extra_docs=(), docs_dir=None, site_arg=None, ref=REF, flags=(), **site_kw):
+    def run(*, docs=False, extra_docs=(), docs_dir=None, site_arg=None, ref=REF, flags=('--min-internal', '100', '--min-fragments', '50'), **site_kw):
         n[0] += 1
         root = w.base / f'links-{n[0]}'
         root.mkdir()
@@ -518,7 +532,7 @@ def links_cases(w: World) -> dict[str, list[str]]:
         pr += [f'unexpected {m!r}' for m in must_not if m in out]
 
     # healthy: the exact SITE line (the figures of the planted site: 79 pages, one a.html#one link, 9 GitHub links)
-    verdict('healthy', run(), rc=0, must=(f'SITE 79 page(s) parsed, 317 internal link(s) resolved (80 with a fragment), '
+    verdict('healthy', run(), rc=0, must=(f'SITE 79 page(s) parsed, 396 internal link(s) resolved (80 with a fragment), '
                                            f'9 off-site link(s) counted, not fetched, 9 rewritten GitHub link(s) at {REF} (1 to .md files)',))
     X = lambda body: dict(home_extra=body)
     verdict('dead_file', run(**X('<a href="ghost.html">g</a>')), rc=1,
@@ -561,10 +575,24 @@ def links_cases(w: World) -> dict[str, list[str]]:
     verdict('floor_pages', run(n_pages=78), rc=1, must=('only 78 page(s) were parsed, floor is 79',))
     # no internal link anywhere: every page is bare (no head links) and the home page holds only GitHub links,
     # so the rewritten floor is met and only the internal-links floor can fire
-    nolink = lambda t: f'<!doctype html><html><head><title>{t}</title></head><body><h1 id="{t}">{t}</h1></body></html>\n'
+    nolink = lambda t: f'<!doctype html><html><head><title>{t}</title><meta name="x" content="no canonical here"></head><body><h1 id="{t}">{t}</h1></body></html>\n'
     bare = {name: nolink(name[:-5]) for name in ['a.html', 'b.html'] + [f'pad{k:02d}.html' for k in range(1, 77)]}
     bare['index.html'] = nolink('home').replace('</h1>', '</h1>' + home_body(9).split('<a href="a.html')[0])
-    verdict('floor_internal', run(edits=bare, extra_docs=()), rc=1, must=('0 internal links were found',))
+    verdict('floor_internal', run(edits=bare, extra_docs=()), rc=1, must=('0 internal link(s) were found, floor is 100',))
+    verdict('floor_frag', run(flags=('--min-internal', '100', '--min-fragments', '81')), rc=1,
+            must=('80 link(s) with a fragment were resolved, floor is 81',), must_not=('internal link(s) were found',))
+    verdict('floors_default', run(flags=()), rc=1,
+            must=('internal link(s) were found, floor is 20000', 'link(s) with a fragment were resolved, floor is 16000'))
+    verdict('canon_home', run(edits={'index.html': page_html('home', home_body(9)).replace('</head>', f'<link rel="canonical" href="{SITE_URL}index.html"></head>')}), rc=1,
+            must=(f"index.html: canonical is {SITE_URL}index.html, the page's own URL is {SITE_URL}",))
+    base = page_html('home', home_body(9))
+    verdict('canon_og_ld', run(edits={'index.html': base.replace('</head>', f'<link rel="canonical" href="{SITE_URL}"><meta property="og:url" content="{SITE_URL}index.html"></head>')}), rc=1,
+            must=(f"index.html: og:url is {SITE_URL}index.html",))
+    res[CASE_LINKS['canon_og_ld']] += [] if 'JSON-LD url is' in run(edits={'index.html': base.replace('</head>', f'<link rel="canonical" href="{SITE_URL}"><script type="application/ld+json">{{"url":"{SITE_URL}index.html"}}</script></head>')})[1] else \
+        ['a JSON-LD url of index.html was not compared']
+    verdict('canon_page', run(edits={'b.html': page_html('b', '<a href="index.html">home</a>').replace('</head>', f'<link rel="canonical" href="{SITE_URL}other.html"></head>')}), rc=1,
+            must=(f"b.html: canonical is {SITE_URL}other.html, the page's own URL is {SITE_URL}b.html",))
+    verdict('canon_missing', run(edits={'index.html': base.replace('</head>', '<meta name="x" content="no canonical here"></head>')}), rc=1, must=('index.html: no <link rel="canonical">',))
     verdict('floor_rewritten', run(rewritten=8), rc=1, must=(f'8 link(s) were rewritten to GitHub at {REF}, floor is 9',))
 
     # the --docs cross-check
@@ -604,7 +632,7 @@ CASE_BUILD = {
     'no_start': 'build: a log that does not start with "Build started" FAILs',
     'no_finish': 'build: a log with no "Build finished in" (the build died) FAILs',
     'unclosed': 'build: a warning block that never closes FAILs',
-    'ansi': 'build: ANSI colour sequences are stripped (zensical ignores NO_COLOR for the marker line)',
+    'ansi': 'build: ANSI colour sequences are stripped (zensical colours every line whatever the environment)',
     'nolog': 'build: a missing log exits 2',
     'nodocs': 'build: a --docs that is not a directory exits 2',
 }
@@ -700,8 +728,8 @@ STUB = '''#!/usr/bin/env bash
 # stands in for `python -m zensical build --clean`: records how it was called, copies a planted site into ./site and
 # prints a planted log. STUB_RECORD, STUB_SITE, STUB_LOG and STUB_RC come from the fixture.
 echo "$PWD" > "$STUB_RECORD/cwd"; echo "${HANDBOOK_REF:-}" > "$STUB_RECORD/ref"; echo "${PYTHONPATH:-}" > "$STUB_RECORD/pythonpath"
-echo "$*" > "$STUB_RECORD/args"; echo "${NO_COLOR:-}" > "$STUB_RECORD/no_color"
-find . -type f -not -path './site/*' | sed 's#^\./##' | sort > "$STUB_RECORD/files"; [ -d examples/ui ] && echo yes > "$STUB_RECORD/examples_ui_dir"
+echo "$*" > "$STUB_RECORD/args"
+find . -type f -not -path './site/*' | sed 's#^\\./##' | sort > "$STUB_RECORD/files"; [ -d examples/ui ] && echo yes > "$STUB_RECORD/examples_ui_dir"
 [ -n "${STUB_SITE:-}" ] && cp -R "$STUB_SITE" ./site
 cat "$STUB_LOG"
 exit "${STUB_RC:-0}"
@@ -709,7 +737,7 @@ exit "${STUB_RC:-0}"
 
 CASE_SITE = {
     'healthy': 'site: a clean stubbed build passes, naming pages, seconds, warnings and explained',
-    'called': 'site: zensical is run as `-m zensical build --clean` in a copy of the tree, with HANDBOOK_REF, PYTHONPATH and NO_COLOR set',
+    'called': 'site: zensical is run as `-m zensical build --clean` in a copy of the tree, with HANDBOOK_REF and PYTHONPATH set',
     'nopollute': 'site: nothing is written into the repository, and the temp dir is gone when the section ends',
     'rc': 'site: a build that exits non-zero FAILs and says so',
     'few_html': 'site: fewer than 79 .html files written FAILs naming the count',
@@ -762,7 +790,7 @@ def site_cases(w: World) -> dict[str, list[str]]:
         tmp = work / 'tmp'
         tmp.mkdir()
         edits = dict(site_edits or {})
-        site = make_site(work, n_pages=n_pages, rewritten=rewritten, ref=SITE_REF, edits=edits)
+        site = make_site(work, n_pages=n_pages, rewritten=rewritten, ref=SITE_REF, edits=edits, bulk=20100)
         if not rewritten_md:
             # swap the CLAUDE.md link for a file link, so the built pages hold no rewritten .md link
             idx = site / 'index.html'
@@ -810,7 +838,7 @@ def site_cases(w: World) -> dict[str, list[str]]:
     cwd = rec(r, 'cwd') or ''
     if not cwd.startswith(tmp_root) or cwd.startswith(str(r['root'])):
         pr.append(f'zensical ran in {cwd!r}, wanted a copy under {tmp_root} and not in the tree {r["root"]}')
-    for name, want in (('args', '-m zensical build --clean'), ('ref', SITE_REF), ('pythonpath', 'maintenance/site'), ('no_color', '1')):
+    for name, want in (('args', '-m zensical build --clean'), ('ref', SITE_REF), ('pythonpath', 'maintenance/site')):
         if rec(r, name) != want:
             pr.append(f'{name}: {rec(r, name)!r}, wanted {want!r}')
     pr = res.setdefault(CASE_SITE['nopollute'], [])
@@ -1169,7 +1197,7 @@ LNK = 'check-site-links.py'
 mut('a missing page is not a finding', ('script', LNK), "            if target not in files:", '            if False:',
     ['dead_file'], ['abs_site', 'asset', 'dead_file', 'dir_ok', 'escape'], part='links')
 mut('a fragment is not looked up', ('script', LNK), "if frag and target.endswith('.html'):", 'if False:',
-    ['dead_frag'], ['dead_frag', 'healthy', 'self_frag'], part='links')
+    ['dead_frag'], ['dead_frag', 'healthy', 'self_frag', 'blob_ok', 'gh_ref', 'frag_css', 'query', 'root_rel', 'name_attr', 'dir_ok', 'anchors_ok', 'offsite', 'md_count', 'floor_frag'], part='links')
 mut('a fragment is looked up in any target, css included', ('script', LNK), "if frag and target.endswith('.html'):", 'if frag:',
     ['frag_css'], ['frag_css'], part='links')
 mut('an <a name> is not an anchor', ('script', LNK), "        for k in ('id', 'name'):", "        for k in ('id',):",
@@ -1183,7 +1211,7 @@ mut('a root-relative link is never refused', ('script', LNK), "            if ur
 mut('the site path is not stripped from a root-relative link', ('script', LNK), "            if site_path and url.startswith(site_path):", '            if False:',
     ['root_rel'], ['root_rel'], part='links')
 mut('an absolute URL under site_url is off-site', ('script', LNK), "if site_url and url.startswith(site_url):", 'if False:',
-    ['abs_site'], ['abs_site'], part='links')
+    ['abs_site'], ['abs_site', 'healthy', 'offsite'], part='links')
 mut('off-site links are not counted', ('script', LNK), '                    offsite += 1', '                    offsite += 0',
     ['offsite'], ['healthy', 'offsite'], part='links')
 mut('mailto: and javascript: are looked up as files', ('script', LNK), "            elif sp.scheme:\n                other += 1                  # mailto:, javascript:, data:, tel:\n                continue\n", '',
@@ -1206,8 +1234,24 @@ mut('.md targets among the rewritten are not counted', ('script', LNK), "rewritt
     ['md_count'], ['healthy', 'md_count'], part='links')
 mut('the page floor is removed', ('script', LNK), '    if len(htmls) < a.min_pages:', '    if False:',
     ['floor_pages'], ['floor_pages'], part='links')
-mut('the internal-link floor is removed', ('script', LNK), '    if internal == 0:', '    if False:',
-    ['floor_internal'], ['floor_internal'], part='links')
+mut('the internal-link floor is removed', ('script', LNK), '    if internal < a.min_internal:', '    if False:',
+    ['floor_internal'], ['floor_internal', 'floors_default'], part='links')
+mut('a canonical that is not the page\'s own URL is let through', ('script', LNK), "                if got is not None and got != want:", '                if False:',
+    ['canon_home'], ['canon_home', 'canon_og_ld', 'canon_page'], part='links')
+mut('the home page needs no canonical', ('script', LNK), "            if rel == 'index.html' and pg.canonical is None:", '            if False:',
+    ['canon_missing'], ['canon_missing'], part='links')
+mut('og:url is not compared', ('script', LNK), "('canonical', pg.canonical), ('og:url', pg.og_url), ('JSON-LD url', pg.ld_url)", "('canonical', pg.canonical), ('JSON-LD url', pg.ld_url)",
+    ['canon_og_ld'], ['canon_og_ld'], part='links')
+mut('the JSON-LD url is not compared', ('script', LNK), "('canonical', pg.canonical), ('og:url', pg.og_url), ('JSON-LD url', pg.ld_url)", "('canonical', pg.canonical), ('og:url', pg.og_url)",
+    ['canon_og_ld'], ['canon_og_ld'], part='links')
+mut('the home page\'s own URL is index.html', ('script', LNK), "            want = site_url if rel == 'index.html' else site_url + rel", '            want = site_url + rel',
+    ['canon_home'], ['anchors_ok', 'blob_ok', 'canon_home', 'canon_og_ld', 'dir_ok', 'frag_css', 'gh_ref', 'healthy', 'md_count', 'name_attr', 'offsite', 'query', 'root_rel'], part='links')
+mut('the fragment floor is removed', ('script', LNK), '    if with_frag < a.min_fragments:', '    if False:',
+    ['floor_frag'], ['floor_frag', 'floors_default'], part='links')
+mut('the production internal-link floor is 1', ('script', LNK), "ap.add_argument('--min-internal', type=int, default=20000)", "ap.add_argument('--min-internal', type=int, default=1)",
+    ['floors_default'], ['floors_default'], part='links')
+mut('the production fragment floor is 1', ('script', LNK), "ap.add_argument('--min-fragments', type=int, default=16000)", "ap.add_argument('--min-fragments', type=int, default=1)",
+    ['floors_default'], ['floors_default'], part='links')
 mut('the rewritten floor is removed', ('script', LNK), '    if rewritten < a.min_rewritten:', '    if False:',
     ['floor_rewritten'], ['floor_rewritten'], part='links')
 mut('the anchor cross-check looks anywhere, not in headings', ('script', LNK), 'have = page(built).heading_ids', 'have = page(built).ids',
@@ -1284,8 +1328,6 @@ mut('the build is not run with --clean', ('section', 'site'), 'build --clean )',
 mut('HANDBOOK_REF is not set', ('section', 'site'), 'HANDBOOK_REF="$SITE_REF" ', '',
     ['called'], ['called'], part='site')
 mut('PYTHONPATH is not set', ('section', 'site'), 'PYTHONPATH=maintenance/site ', '',
-    ['called'], ['called'], part='site')
-mut('NO_COLOR is not set', ('section', 'site'), ' NO_COLOR=1 ', ' ',
     ['called'], ['called'], part='site')
 mut('the section does not remove its temp dir', ('section', 'site'), '    rm -rf "$SITE_TMP"\n    SITE_TMP=""', '    SITE_TMP=""',
     ['healthy', 'nopollute'], ['dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained', 'tree_copy', 'tree_deleted', 'tree_nogit'], part='site')

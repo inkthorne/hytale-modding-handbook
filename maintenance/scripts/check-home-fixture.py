@@ -26,7 +26,7 @@ A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
 MIN_CASES = 45
-MIN_MUTATIONS = 41
+MIN_MUTATIONS = 42
 fails: list[str] = []
 seen: list[str] = []
 
@@ -144,7 +144,7 @@ L_CONT = 'a line that continues a row on the next line FAILs, naming the line'
 L_CONT_OK = 'and a paragraph after a blank line, the text right under a group heading, and an indented intro line above the groups are no continuation'
 L_CONT_INDENT = 'an indented line after a blank line is the row\'s own paragraph and FAILs too'
 L_REF = 'a reference-style link in the section (full, collapsed, shortcut) FAILs, wherever its definition is'
-L_REF_OK = 'and brackets that no definition makes a link are text, no finding'
+L_REF_OK = 'and brackets that no definition makes a link are text, and a reference link below the section is no finding'
 L_JAR_CORRUPT = 'a jar that is not a zip FAILs, saying it could not be read'
 L_JAR_COUNT = 'and so does the count: --jar given, names read, none resolved or reported (the jar was never used)'
 L_NEG_BROKEN = 'a NEG that cannot be evaluated, or a check-symbols.py that does not parse, is a named FAIL, never a traceback'
@@ -193,7 +193,7 @@ if A.mutations:
             {L_NOLIST, L_SKIP_FINDINGS}),
         'the section runs to the end of the page': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines))", "if False), len(lines))",
-            {L_SECTION_END}),
+            {L_SECTION_END, L_REF_OK}),
         'the row bounds are not checked': (
             "        if not ROWS_MIN <= total <= ROWS_MAX:", "        if False:",
             {L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM}),
@@ -261,14 +261,19 @@ if A.mutations:
             "            elif kind not in ('none', None) and (prev", "            elif (prev",
             {L_CONT_OK}),
         'a reference-style link is not a finding': (
-            "            if key in defs:", "            if False:",
+            "            if start < n <= end:\n                findings.append(", "            if False:\n                findings.append(",
             {L_REF}),
-        'every bracket pair is a reference-style link, defined or not': (
-            "            if key in defs:", "            if True:",
+        'a reference-style link is a finding wherever it stands on the page': (
+            "            if start < n <= end:\n                findings.append(", "            if True:\n                findings.append(",
             {L_REF_OK}),
-        'a definition counts only inside the section': (
-            "        if n in fenced:\n            continue\n        d = DEF.match(l)", "        if n in fenced or not start < n <= end:\n            continue\n        d = DEF.match(l)",
-            {L_REF}),
+        'every bracket pair is a reference-style use (check-links.reference_uses)': (
+            "return [(ln, src) for ln, src, label in uses if label in defs]",
+            "return [(ln, src) for ln, src, label in uses if True]",
+            {L_REF_OK}, 'check-links.py'),
+        'the label of [text][label] is ignored (check-links.reference_uses)': (
+            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(2) or mm.group(1)).lower().split())))",
+            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(1)).lower().split())))",
+            {L_REF}, 'check-links.py'),
         'an unreadable jar is not a finding of its own': (
             "                findings.append(f'--jar {a.jar} could not be read: {e}')", "                pass",
             {L_JAR_CORRUPT}),
@@ -294,15 +299,16 @@ if A.mutations:
         sys.exit(1)
 
     def one(item):
-        label, (old, new, expect) = item
+        label, (old, new, expect, *rest) = item
+        target = rest[0] if rest else 'check-home.py'
         tmp = pathlib.Path(tempfile.mkdtemp())
         try:
             for f in HERE.glob('*.py'):
                 shutil.copy2(f, tmp / f.name)
-            body = (tmp / 'check-home.py').read_text()
+            body = (tmp / target).read_text()
             if body.count(old) != 1:
-                return label, None, f'text occurs {body.count(old)}x, wanted 1: the mutation is stale and measured nothing'
-            (tmp / 'check-home.py').write_text(body.replace(old, new, 1))
+                return label, None, f'text occurs {body.count(old)}x in {target}, wanted 1: the mutation is stale and measured nothing'
+            (tmp / target).write_text(body.replace(old, new, 1))
             r = subprocess.run([sys.executable, str(HERE / pathlib.Path(__file__).name), '--from-dir', str(tmp)],
                                capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
             out = r.stdout + r.stderr
@@ -491,7 +497,8 @@ check(L_REF, lambda: (broken(_REFHOME('[r6]', '[r6]: page6.md#section-6'))[1],
                       broken(_REFHOME('[]', '[page 6]: page6.md#section-6'))[1],
                       broken(_REFHOME('', '[Page 6]: page6.md#section-6'))[1]),
       ([_REFMSG('[Page 6][r6]')], [_REFMSG('[Page 6][]')], [_REFMSG('[Page 6]')]))
-check(L_REF_OK, lambda: broken(_with_api(api_row(6) + ' Pass [x][nodef] or [bare] here.'))[1], [])
+check(L_REF_OK, lambda: (broken(_with_api(api_row(6) + ' Pass [x][nodef] or [bare] here.'))[1],
+                         broken(home(tail='\nSee [the index][i].\n\n[i]: 01-index.md\n'))[1]), ([], []))
 
 # ---- the jar -----------------------------------------------------------------------------------------------
 check(L_JAR, lambda: broken(_with_api(api_row(6, recv='Ghost')))[1],

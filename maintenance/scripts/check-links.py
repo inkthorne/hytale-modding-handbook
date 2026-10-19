@@ -244,6 +244,28 @@ def link_dests(text: str, fenced):
     return sorted(out)
 
 
+def reference_uses(text: str, fenced):
+    """-> [(line number, source text)] of every reference-style use outside the lines in `fenced`: `[text][label]`,
+    `[text][]` and `[text]`, whose label some definition in `text` gives (the same definitions link_dests follows, so
+    a use this lists is one whose destination link_dests reports at the DEFINITION's line, not the use's). A bracket
+    pair no definition names is text. Used by the gates that read a list of links and want to refuse this form."""
+    defs, uses = set(), []
+    for ln, line in enumerate(text.split('\n'), 1):
+        if ln in fenced:
+            continue
+        m = mask(line)
+        d = REF_DEF.match(line)
+        if d and '\0' not in m[:d.end()]:
+            if REF_TITLE.match(line[d.end():]):
+                defs.add(' '.join(d.group(1).lower().split()))
+            continue
+        for mm in re.finditer(r'\[([^\[\]\0]*)\](?:\[([^\[\]\0]*)\])?', m):
+            if m[mm.end():mm.end() + 1] == '(':
+                continue                            # an inline link
+            uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(2) or mm.group(1)).lower().split())))
+    return [(ln, src) for ln, src, label in uses if label in defs]
+
+
 def anchors_of(text: str):
     """-> (anchors, passed_over): the anchors a page's headings define, and the number of
     heading-shaped lines that sit inside a code fence and so define none."""

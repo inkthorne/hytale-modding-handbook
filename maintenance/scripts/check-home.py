@@ -64,8 +64,6 @@ GROUPS = {'In Java': 'api', 'In JSON': 'asset'}
 FIELD = {'api': 'API', 'asset': 'Key'}
 CODE = re.compile(r'`([^`\n]+)`')
 MARKER = re.compile(r'^[ \t>]*(?:[-*+]|\d{1,9}[.)])[ \t]')
-DEF = re.compile(r'^ {0,3}\[([^\]]+)\]:[ \t]*\S')
-REF = re.compile(r'\[([^\[\]]+)\](\[([^\[\]]*)\])?')
 CONT = 'continues the row above; a row is one line, and every check on it reads that line only'
 SYMBOL = re.compile(r'\b([A-Z][A-Za-z0-9_]*)\.([a-z_][A-Za-z0-9_]*)\b')
 
@@ -146,32 +144,6 @@ def items(lines, start: int, end: int, fenced):
     return out, bad, unseen
 
 
-def reference_links(lines, start: int, end: int, fenced):
-    """-> [(line number, text)] of the reference-style links on lines start..end whose label some definition anywhere in
-    the file gives. Code spans are masked; `[text](dest)` is an inline link and `[text]` with no definition is text."""
-    defs = set()
-    for n, l in enumerate(lines, 1):
-        if n in fenced:
-            continue
-        d = DEF.match(l)
-        if d:
-            defs.add(' '.join(d.group(1).lower().split()))
-    out = []
-    for n in range(start, end + 1):
-        if n in fenced:
-            continue
-        l = re.sub(r'`[^`\n]*`', lambda m: ' ' * len(m.group(0)), lines[n - 1])
-        if DEF.match(l):
-            continue
-        for m in REF.finditer(l):
-            if m.group(2) is None and l[m.end():m.end() + 1] == '(':
-                continue
-            key = ' '.join((m.group(3) or m.group(1)).lower().split())
-            if key in defs:
-                out.append((n, m.group(0)))
-    return out
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--root', default=str(HERE.parents[1]))
@@ -225,9 +197,10 @@ def main() -> int:
             findings.append(f'docs/index.md:{n} the group `### {h}` is neither `In Java` nor `In JSON`')
         for n, why in unseen:
             findings.append(f'docs/index.md:{n} {why}')
-        for n, text in reference_links(lines, start + 1, end, fenced):
-            findings.append(f'docs/index.md:{n} has a reference-style link {text}: the gate reads inline links only, '
-                            f'so a #fragment there is unchecked')
+        for n, src in CL.reference_uses(text, fenced):
+            if start < n <= end:
+                findings.append(f'docs/index.md:{n} has a reference-style link {src}: the gate reads inline links only, '
+                                f'so a #fragment there is unchecked')
         neg, neg_why = neg_pattern()
         if neg is None:
             findings.append(neg_why)

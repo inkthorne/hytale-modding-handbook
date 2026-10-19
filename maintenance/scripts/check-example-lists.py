@@ -23,7 +23,13 @@ THE THREE LISTS, and the part of each that is the list:
 Each must link every directory of the population exactly once, with its trailing slash, and must link nothing
 under examples/ that is not one.
 
-HOW A LINK IS READ. With check-links' link_dests(), so a link in a code span or a fence is no link. The
+HOW A LINK IS READ. With check-links' link_dests(), so a link in a code span or a fence is no link; the same goes for
+the two other places GitHub renders as no link, which link_dests does not know: an HTML comment (`<!-- ... -->`, one
+line or several) and an indented code block (four spaces or a tab after a blank line, not inside a list item and not
+under a paragraph line). Both are blanked first, the line count kept. A reference-style link in a list (`[x][r]`,
+`[x][]`, or `[x]` with a definition in the file) is a FAIL: link_dests reports its destination at the definition's
+line, so the entry would be counted where it is not written and a list could be satisfied from outside its part of
+the file. The entry is written inline. The destination is read this way. The
 destination is resolved against the file's own directory, so `./custom-food/`, `custom-food/` and
 `../examples/custom-food/` all name the same directory and each list may write it the way it likes. Then:
   * under examples/ and naming a directory of the population, with a trailing slash: a list entry;
@@ -72,6 +78,45 @@ def scope_lines(text: str, how: str, fenced):
     return set(range(start + 1, end))
 
 
+LISTITEM = re.compile(r'^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]')
+
+
+def unrendered_blanked(text: str, fenced):
+    """`text` with the HTML comments and the indented code blocks replaced by spaces, newlines kept, so a link there is
+    no link and a line number still means the same line. Fenced lines are left alone (link_dests skips them) and
+    cannot open or close a comment."""
+    lines = text.split('\n')
+    probe = '\n'.join(' ' * len(l) if n in fenced else l for n, l in enumerate(lines, 1))
+    spans = [m.span() for m in re.finditer(r'<!--.*?(?:-->|\Z)', probe, re.S)]
+    chars = list(text)
+    for a, b in spans:
+        for i in range(a, b):
+            if chars[i] != '\n':
+                chars[i] = ' '
+    lines = ''.join(chars).split('\n')
+    in_list = in_code = False
+    after_blank = True
+    for n, l in enumerate(lines, 1):
+        if n in fenced:
+            in_code, after_blank = False, True
+            continue
+        if not l.strip():
+            after_blank = True
+            continue
+        if l.startswith('    ') or l.startswith('\t'):
+            if (after_blank or in_code) and not in_list:
+                in_code = True
+                lines[n - 1] = ' ' * len(l)
+        else:
+            in_code = False
+            if LISTITEM.match(l):
+                in_list = True
+            elif after_blank and not l.startswith(' '):
+                in_list = False
+        after_blank = False
+    return '\n'.join(lines)
+
+
 def population(root: pathlib.Path):
     """-> (set of directory names, set of tracked paths under examples/), or None when git cannot say."""
     r = subprocess.run(['git', '-C', str(root), 'ls-files', '--', 'examples/'], capture_output=True, text=True)
@@ -116,6 +161,11 @@ def main() -> int:
             continue
         hits = collections.defaultdict(list)
         allowed[rel] = 0
+        text = unrendered_blanked(text, fenced)
+        for ln, src in CL.reference_uses(text, fenced):
+            if ln in scope:
+                findings.append(f'{rel}:{ln} has a reference-style link {src}: write the entry as an inline link, '
+                                f'[text](dir/), so its destination is read where it stands')
         for ln, raw in CL.link_dests(text, fenced):
             if ln not in scope:
                 continue

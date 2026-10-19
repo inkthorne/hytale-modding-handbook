@@ -29,8 +29,8 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
-MIN_CASES = 29
-MIN_MUTATIONS = 27
+MIN_CASES = 35
+MIN_MUTATIONS = 40
 fails: list[str] = []
 seen: list[str] = []
 
@@ -127,11 +127,18 @@ L_FRAG = 'a fragment or a query on a directory link does not stop it being found
 L_URL = 'a URL that ends in examples/alpha/ is not a link into examples/ (a table row of examples/README.md, and examples.md)'
 L_OUT = "a link that leaves examples/ (to docs/, to the repo root) is not this gate's business"
 L_RC = 'a finding exits 1'
+L_REFLINK = 'a reference-style link in a list ([x][r], [x][], [x] with a definition) FAILs, naming the line, in all three lists'
+L_REFLINK_OK = 'and brackets no definition makes a link are text, and a reference link outside the part that is the list is no finding'
+L_COMMENT = 'a link inside an HTML comment (one line or several) is no link: it neither satisfies a list nor duplicates an entry'
+L_ICODE = 'a link inside an indented code block is no link either'
+L_ICODE_LIST = 'but an indented line that goes on with a list item is not code, and its link counts'
+L_ICODE_PARA = 'and neither is an indented line directly under a paragraph line (a lazy continuation)'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 ALL_CASES = {L_HEALTHY, L_LINE, L_TOPFILE, L_NOREADME, L_NOREADME_UT, L_UNTRACKED, L_ZERO, L_NOGIT, L_MISSING,
              L_NOSECTION, L_NOTLINKED, L_DUP, L_SLASH, L_GHOST, L_DEEPGHOST, L_DEEP, L_CODESPAN, L_FENCE, L_ALLOWED,
-             L_TOURNOT, L_ROWS, L_SECTION, L_SECTION_END, L_RESOLVE, L_FRAG, L_URL, L_OUT, L_RC}
+             L_TOURNOT, L_ROWS, L_SECTION, L_SECTION_END, L_RESOLVE, L_FRAG, L_URL, L_OUT, L_RC, L_REFLINK, L_REFLINK_OK, L_COMMENT,
+             L_ICODE, L_ICODE_LIST, L_ICODE_PARA}
 
 # ---- the mutations -----------------------------------------------------------------------------------------
 if A.mutations:
@@ -177,7 +184,7 @@ if A.mutations:
         'a directory missing from a list is not a finding': (
             "                findings.append(f'{rel} does not link examples/{d}/')",
             "                pass",
-            {L_NOTLINKED, L_TOURNOT, L_CODESPAN, L_FENCE}),
+            {L_NOTLINKED, L_TOURNOT, L_CODESPAN, L_FENCE, L_COMMENT, L_ICODE, L_REFLINK}),
         'a directory linked twice is not a finding': (
             "                findings.append(f'{rel} links examples/{d}/ {n} times (lines {\", \".join(map(str, hits[d]))})')",
             "                pass",
@@ -206,7 +213,7 @@ if A.mutations:
         'links are read from the text, code spans and all': (
             "CL.link_dests(text, fenced)",
             "[(n, m) for n, l in enumerate(text.split('\\n'), 1) if n not in fenced for m in re.findall(r'\\]\\(([^)\\s]+)', l)]",
-            {L_CODESPAN}),
+            {L_CODESPAN, L_REFLINK}),
         'links in code fences are read': (
             "CL.link_dests(text, fenced)", "CL.link_dests(text, set())",
             {L_FENCE}),
@@ -217,22 +224,22 @@ if A.mutations:
         'the link to examples/README.md is not allowed': (
             "            if segs == ['README.md']:\n                allowed[rel] += 1\n            elif name not in pop:",
             "            if False:\n                allowed[rel] += 1\n            elif name not in pop:",
-            {L_ALLOWED, L_TOURNOT}),
+            {L_ALLOWED, L_TOURNOT, L_COMMENT}),
         'the allowed links are not counted': (
             "                allowed[rel] += 1", "                pass",
             {L_ALLOWED}),
         'examples/README.md is read whole, not by its table rows': (
             "        return {n for n, l in enumerate(lines, 1) if l.lstrip().startswith('|')}",
             "        return set(range(1, len(lines) + 1))",
-            {L_ROWS}),
+            {L_ROWS, L_REFLINK}),
         'README.md is read whole, not by its section': (
             "    return set(range(start + 1, end))",
             "    return set(range(1, len(lines) + 1))",
-            {L_SECTION, L_SECTION_END}),
+            {L_SECTION, L_SECTION_END, L_REFLINK, L_REFLINK_OK}),
         'the README.md section runs to the end of the file': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines) + 1)",
             "if False), len(lines) + 1)",
-            {L_SECTION_END}),
+            {L_SECTION_END, L_REFLINK, L_REFLINK_OK}),
         'a link resolves against the repository root, not its own file': (
             "joined = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))",
             "joined = posixpath.normpath(path)",
@@ -246,6 +253,52 @@ if A.mutations:
             "    if findings:\n        return 1",
             "    if findings:\n        return 0",
             {L_RC}),
+        'a reference-style link in a list is not a finding': (
+            "            if ln in scope:\n                findings.append(f'{rel}:{ln} has a reference-style link",
+            "            if False:\n                findings.append(f'{rel}:{ln} has a reference-style link",
+            {L_REFLINK}),
+        'a reference-style link is a finding wherever it stands': (
+            "            if ln in scope:\n                findings.append(f'{rel}:{ln} has a reference-style link",
+            "            if True:\n                findings.append(f'{rel}:{ln} has a reference-style link",
+            {L_REFLINK_OK}),
+        'every bracket pair is a reference-style use (check-links.reference_uses)': (
+            "return [(ln, src) for ln, src, label in uses if label in defs]",
+            "return [(ln, src) for ln, src, label in uses if True]",
+            {L_REFLINK_OK}, 'check-links.py'),
+        'the label of [text][label] is ignored (check-links.reference_uses)': (
+            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(2) or mm.group(1)).lower().split())))",
+            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(1)).lower().split())))",
+            {L_REFLINK}, 'check-links.py'),
+        'HTML comments are links': (
+            "    spans = [m.span() for m in re.finditer(r'<!--.*?(?:-->|\\Z)', probe, re.S)]",
+            "    spans = []",
+            {L_COMMENT}),
+        'a comment opened in a code fence hides what follows': (
+            "probe = '\\n'.join(' ' * len(l) if n in fenced else l for n, l in enumerate(lines, 1))",
+            "probe = '\\n'.join(l for n, l in enumerate(lines, 1))",
+            {L_COMMENT}),
+        'an unclosed comment hides nothing': (
+            "re.finditer(r'<!--.*?(?:-->|\\Z)', probe, re.S)", "re.finditer(r'<!--.*?-->', probe, re.S)",
+            {L_COMMENT}),
+        'indented code blocks are links': (
+            "                lines[n - 1] = ' ' * len(l)", "                pass",
+            {L_ICODE}),
+        'a tab does not indent code': (
+            "if l.startswith('    ') or l.startswith('\\t'):", "if l.startswith('    '):",
+            {L_ICODE}),
+        'an indented line directly under a code line is not code': (
+            "if (after_blank or in_code) and not in_list:", "if after_blank and not in_list:",
+            {L_ICODE}),
+        'a list never ends, so code after it is a list continuation': (
+            "            elif after_blank and not l.startswith(' '):\n                in_list = False",
+            "            elif after_blank and not l.startswith(' '):\n                pass",
+            {L_ICODE}),
+        'an indented line in a list item is code': (
+            "if (after_blank or in_code) and not in_list:", "if (after_blank or in_code):",
+            {L_ICODE_LIST}),
+        'an indented line under a paragraph line is code': (
+            "if (after_blank or in_code) and not in_list:", "if not in_list:",
+            {L_ICODE_PARA}),
     }
     print(f'MUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     if len(MUTATIONS) < MIN_MUTATIONS:
@@ -256,15 +309,16 @@ if A.mutations:
         sys.exit(1)
 
     def one(item):
-        label, (old, new, expect) = item
+        label, (old, new, expect, *rest) = item
+        target = rest[0] if rest else 'check-example-lists.py'
         tmp = pathlib.Path(tempfile.mkdtemp())
         try:
             for f in HERE.glob('*.py'):
                 shutil.copy2(f, tmp / f.name)
-            body = (tmp / 'check-example-lists.py').read_text()
+            body = (tmp / target).read_text()
             if body.count(old) != 1:
-                return label, None, f'text occurs {body.count(old)}x, wanted 1: the mutation is stale and measured nothing'
-            (tmp / 'check-example-lists.py').write_text(body.replace(old, new, 1))
+                return label, None, f'text occurs {body.count(old)}x in {target}, wanted 1: the mutation is stale and measured nothing'
+            (tmp / target).write_text(body.replace(old, new, 1))
             r = subprocess.run([sys.executable, str(HERE / pathlib.Path(__file__).name), '--from-dir', str(tmp)],
                                capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
             out = r.stdout + r.stderr
@@ -378,6 +432,48 @@ check(L_URL, lambda: [
     [[], []])
 check(L_OUT, lambda: broken({'docs/examples.md': EX + '\n[i](01-index.md) [r](../README.md) [d](../docs/)\n'})[1], [])
 check(L_RC, lambda: broken({'docs/examples.md': None})[0], 1)
+
+# ---- what renders as a link --------------------------------------------------------------------------------
+_REFMSG = lambda rel, n, text: (f'{rel}:{n} has a reference-style link {text}: write the entry as an inline link, '
+                                f'[text](dir/), so its destination is read where it stands')
+check(L_REFLINK, lambda: [
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '### [beta][b]') + '\n[b]: ../examples/beta/\n'})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '### [beta][]') + '\n[beta]: ../examples/beta/\n'})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '### [beta]') + '\n[beta]: ../examples/beta/\n'})[1],
+    broken({'examples/README.md': CORPUS['examples/README.md'].replace('| [beta/](./beta/) | Plugin |', '| [beta/][b] | Plugin |')
+            + '\n[b]: ./beta/\n'})[1],
+    broken({'README.md': CORPUS['README.md'].replace('### [examples/beta/](./examples/beta/)', '### [examples/beta/][b]')
+            + '\n[b]: ./examples/beta/\n'})[1]],
+    [[_REFMSG('docs/examples.md', 5, '[beta][b]')],
+     [_REFMSG('docs/examples.md', 5, '[beta][]')],
+     [_REFMSG('docs/examples.md', 5, '[beta]')],
+     ['examples/README.md does not link examples/beta/', _REFMSG('examples/README.md', 6, '[beta/][b]')],
+     ['README.md does not link examples/beta/', _REFMSG('README.md', 12, '[examples/beta/][b]')]])
+check(L_REFLINK_OK, lambda: (broken({'docs/examples.md': EX + '\nSee [the notes] and [x][nodef].\n'})[1],
+                             broken({'README.md': CORPUS['README.md'].replace('Java.\n', 'Java, see [the docs][d].\n\n[d]: ./docs/00.md\n')})[1]),
+      ([], []))
+check(L_COMMENT, lambda: [
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '<!-- [beta](../examples/beta/) -->')})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '<!--\n[beta](../examples/beta/)\n-->')})[1],
+    broken({'docs/examples.md': EX + '\n<!-- [alpha](../examples/alpha/) -->\n'})[1],
+    broken({'docs/examples.md': EX + '\nA [tour](../examples/README.md) <!-- note --> and more.\n'})[1],
+    broken({'docs/examples.md': '# Examples\n\n```html\n<!-- open\n```\n\n### [alpha](../examples/alpha/)\n\n### [beta](../examples/beta/)\n'})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Text <!-- never closed\n[beta](../examples/beta/)\n')})[1]],
+    [['docs/examples.md does not link examples/beta/'], ['docs/examples.md does not link examples/beta/'], [], [], [],
+     ['docs/examples.md does not link examples/beta/']])
+check(L_ICODE, lambda: [
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Intro.\n\n    [beta](../examples/beta/)\n')})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Intro.\n\n\t[beta](../examples/beta/)\n')})[1],
+    broken({'docs/examples.md': EX + '\nIntro.\n\n    [alpha](../examples/alpha/)\n'})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Intro.\n\n    first line\n    [beta](../examples/beta/)\n')})[1],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)',
+                                           '- item\n\nParagraph.\n\n    [beta](../examples/beta/)\n')})[1]],
+    [['docs/examples.md does not link examples/beta/'], ['docs/examples.md does not link examples/beta/'], [],
+     ['docs/examples.md does not link examples/beta/'], ['docs/examples.md does not link examples/beta/']])
+check(L_ICODE_LIST, lambda: broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)',
+                                                                '- item\n\n    [beta](../examples/beta/)\n')})[1], [])
+check(L_ICODE_PARA, lambda: broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)',
+                                                                'Intro line\n    [beta](../examples/beta/)\n')})[1], [])
 
 # ---- the report --------------------------------------------------------------------------------------------
 check(L_ALLCASES, lambda: sorted(set(seen) - {L_ALLCASES}), sorted(ALL_CASES))

@@ -1130,7 +1130,7 @@ Root interactions are entry points triggered by player input (PRIMARY, SECONDARY
 - Define per-GameMode settings
 - Configure cooldowns
 - Specify which nested interactions to execute
-- Are referenced by items via `PrimaryInteraction`, `SecondaryInteraction`, etc.
+- Are referenced by an item's `Interactions` map, keyed by input (`Primary`, `Secondary`, `Ability1`, ...): `"Interactions": { "Primary": "Block_Primary" }` (see [the `Interactions` property](items.md#interactions-property))
 
 **Example:** `Block_Primary.json`
 ```json

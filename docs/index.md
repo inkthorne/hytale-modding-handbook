@@ -42,7 +42,7 @@ Each line links the section that does the job, names the call or key it turns on
 - **Define a crafting recipe** — [Embedded recipe](items-crafting.md#embedded-recipe-item-definition). Key: `Recipe`.
 - **Change how an NPC behaves** — [Behavior system](npc-roles.md#behavior-system-instructions). Key: `Instructions`.
 - **Spawn an NPC from an item or block** — [SpawnNPC interaction](npc-spawning.md#spawnnpc-interaction). Key: `"Type": "SpawnNPC"`.
-- **Script what happens when an item is used** — [Interactions: Quick Start](interactions.md#quick-start). Key: `"Type": "Simple"`.
+- **Script what happens when an item is used** — [the item's Interactions property](items.md#interactions-property), then [Interactions: Quick Start](interactions.md#quick-start). Key: `Interactions`. Example: [custom-food](../examples/custom-food/Server/Item/Items/Food/Food_Hearty_Snack.json) overrides what eating does, through `InteractionVars`.
 - **Customize world generation** — [Asset layout](worldgen.md#asset-layout). Key: `WorldStructures/*.json`.
 - **Animate a block** — [A door animation](blockyanim-format.md#simple-door-animation), [attaching it](blockyanim-format.md#integration-with-blocks). Key: `CustomModelAnimation`.
 

@@ -33,7 +33,7 @@ WHAT IS CHECKED
     compared (it is served at any path).
 
 FLOORS. Exit 1, whatever else is true, when fewer than --min-pages pages (every .html under SITE_DIR) were
-parsed (78 docs pages and 404.html = 79), when fewer than --min-internal internal links or --min-fragments
+parsed (79 docs pages and 404.html = 80 built today; the floor is 79), when fewer than --min-internal internal links or --min-fragments
 fragment links were resolved, or when fewer than --min-rewritten links were rewritten (9 leave docs/ today: 8
 into ../examples/ and ../CLAUDE.md). A checker that visited nothing is not a clean run, and neither is one that
 visited a third of the site: measured on this tree, 41,795 internal links and 33,792 of them with a fragment, so

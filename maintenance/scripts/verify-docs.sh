@@ -655,7 +655,7 @@ print(n)' "$SITE_TMP" > "$SITE_TMP.copied"; SITE_CP=("${PIPESTATUS[@]}")
       sed 's/\x1b\[[0-9;]*m//g' "$SITE_TMP/build.log" | sed -n '1,30p' | sed 's/^/    /'
     fi
     if [ "$SITE_HTML" -lt 79 ]; then
-      SITE_OK=0; fail "the build wrote $SITE_HTML .html file(s), at least 79 are expected (78 docs pages and 404.html)"
+      SITE_OK=0; fail "the build wrote $SITE_HTML .html file(s), at least 79 are expected (the floor is one below the 80 built: 79 docs pages and 404.html)"
     fi
     SITE_LINKS="$(python3 maintenance/scripts/check-site-links.py "$SITE_TMP/site" --repo "$SITE_REPO" --ref "$SITE_REF" --site-url "$SITE_URL" --docs docs 2>&1)"; SITE_LRC=$?
     SITE_REWRITTEN_MD="$(echo "$SITE_LINKS" | sed -n 's/^SITE .* rewritten GitHub link(s) at [^ ]* (\([0-9][0-9]*\) to \.md files)$/\1/p')"

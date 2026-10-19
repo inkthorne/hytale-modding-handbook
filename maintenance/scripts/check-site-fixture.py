@@ -853,7 +853,7 @@ def site_cases(w: World) -> dict[str, list[str]]:
         pr.append('the section left SITE_TMP set to the removed path (the EXIT trap would act on it)')
 
     v('rc', run(rc=1), hf=1, must=('FAIL  zensical build exited 1:',), must_not=('PASS',))
-    v('few_html', run(n_pages=78), hf=2, must=('FAIL  the build wrote 78 .html file(s), at least 79 are expected (78 docs pages and 404.html)',), must_not=('PASS',))
+    v('few_html', run(n_pages=78), hf=2, must=('FAIL  the build wrote 78 .html file(s), at least 79 are expected (the floor is one below the 80 built: 79 docs pages and 404.html)',), must_not=('PASS',))
     v('dead_link', run(site_edits={'index.html': page_html('home', home_body(9, SITE_REF) + '<a href="ghost.html">g</a>')}), hf=1,
       must=('FAIL  check-site-links.py found problems in the built site (exit 1):', 'ghost.html -> no such file in the built site'), must_not=('PASS',))
     extra = block('page does not exist', 'a.md', 1, 3, '# a')

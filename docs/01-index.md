@@ -19,6 +19,8 @@ page and are all listed under [By Documentation Type](#by-documentation-type) be
 
 | File | Description |
 |------|-------------|
+| [index.md](index.md) | Home: who the handbook is for, the page and section for each task (a command, an item, a drop table, a UI page and others), and how to read a page. |
+| [examples.md](examples.md) | The runnable example mods in the repository: what each demonstrates, the pages it pairs with, and how to install a pack or build and deploy a plugin. |
 | [02-structure.md](02-structure.md) | Pack vs plugin directory structure, Server/ vs Common/ directories, and manifest configuration. |
 | [interactions.md](interactions.md) | Comprehensive reference for entity interactions including combo systems, combat effects, control flow, and world manipulation. |
 | [interactions-operations.md](interactions-operations.md) | Low-level Operation system that powers interaction execution, including OperationsBuilder and label-based flow control. |

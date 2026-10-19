@@ -45,7 +45,7 @@ Tools follow the same inheritance pattern. The [Tool Items](items-tools.md) docu
 
 ## Common Tasks
 
-Home's [Find it by task](index.md#find-it-by-task) tables send each goal to the page and the section that do it, with the call or key it turns on and an example where the repository has one: a custom weapon, a custom tool, a server command, a custom UI page or HUD, interactions, crafting recipes, NPC behavior, world generation and block animation among them.
+Home's [Find it by task](index.md#find-it-by-task) lists send each goal to the page and the section that do it, with the call or key it turns on and an example where the repository has one: a custom weapon, a custom tool, a server command, a custom UI page or HUD, interactions, crafting recipes, NPC behavior, world generation and block animation among them.
 
 ## Documentation Structure
 

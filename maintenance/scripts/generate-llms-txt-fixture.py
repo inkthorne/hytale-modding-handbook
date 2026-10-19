@@ -26,6 +26,11 @@ section), runs every case against the copy, and requires the set of red labels t
 mutation. A mutation whose text no longer occurs once in its target is stale and fails the run; the IDENTITY mutation
 must leave nothing red.
 
+PINS: two cases are reddened by no mutation of a guard. The reordered-README case (G_REORDER) is reddened only by an
+output that ignores the README, which no guard of the generator is; the section's negative control is a control, not
+a guard. 'docs/index.md must be listed' reddens nearly every generator case, because Home becomes a problem in every
+corpus; its red set is written as everything but the three cases that read no corpus.
+
 Usage: python3 maintenance/scripts/generate-llms-txt-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations

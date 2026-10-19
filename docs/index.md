@@ -58,4 +58,4 @@ Each line links the section that does the job, names the API or key it turns on,
 - [Examples](examples.md): the runnable mods in the repository, with the pages each pairs with.
 - [Documentation index](01-index.md): the reference pages by topic and by type.
 - [Directory structure](02-structure.md): pack and plugin layout, and manifests.
-- [`llms.txt`](llms.txt): for AI tools, a plain-text list of the pages with a description of each.
+- [`llms.txt`](llms.txt): for AI tools, the pages grouped as in the sidebar, each with its description, plus the examples and what the checks hold.

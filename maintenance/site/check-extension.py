@@ -178,6 +178,45 @@ def _():
     return has(render('| a | b |\n|---|---|\n| `c\\|d` | x\\|y |\n\n`e\\|f`\n'), '<code>c|d</code>', '<td>x|y</td>', '<code>e\\|f</code>')
 
 
+@case('list_quote_end', 'a list straight after a quote line is a list outside the quote (GitHub), not a lazy line of the quote')
+def _():
+    out = flat(render('> quote text\n- item\n- item2\n'))
+    ok = out.startswith('<blockquote> <p>quote text</p> </blockquote> <ul> <li>item</li> <li>item2</li> </ul>')
+    out2 = flat(render('> - a\n- b\n'))
+    ok2 = '</blockquote> <ul> <li>b</li> </ul>' in out2
+    return [] if ok and ok2 else [f'got {out!r} and {out2!r}']
+
+
+@case('list_indented_code', 'a list-looking line in an indented code block gets no blank line')
+def _():
+    import html
+    out = render('Para\n\n    code line\n    - not a list\n')
+    text = html.unescape(re.sub(r'<[^>]+>', '', re.search(r'<pre.*?</pre>', out, re.S).group(0))).strip('\n')
+    return [] if text == 'code line\n- not a list' else [f'the code became {text!r}']
+
+
+@case('list_two_dot', 'text, `2. foo`, then a bullet: `2. foo` is paragraph text and the bullet starts the list (GitHub)')
+def _():
+    return has(render('Text\n2. foo\n- bar\n'), '<p>Text 2. foo</p> <ul> <li>bar</li> </ul>')
+
+
+@case('list_orphan_fence', 'a ~~~ or four-backtick fence is left untouched (no blank line inside it)')
+def _():
+    import html
+    out = ''
+    for src in ('Para\n~~~\ntext\n- inside\n~~~\n', 'Para\n````\ntext\n- inside\n```\n- still\n````\n'):
+        o = render(src)
+        t = html.unescape(re.sub(r'<[^>]+>', '', re.search(r'<pre.*?</pre>', o, re.S).group(0))).strip('\n')
+        if '\n\n' in t:
+            return [f'a blank line was inserted into the fence: {t!r}']
+    return []
+
+
+@case('escape_amp_lt', '`\\&` and `\\<` print the character without the backslash')
+def _():
+    return has(render('AT\\&T and \\<b\\> and 1\\. x'), 'AT&amp;T and &lt;b&gt; and 1. x', absent=('\\',))
+
+
 @case('base_required', 'an extension configured without the repository URL refuses to load')
 def _():
     try:

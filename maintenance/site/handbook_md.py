@@ -40,8 +40,16 @@ and this module makes the site agree with GitHub rather than the other way round
     check-links.py slugs headings with.
 (g) BACKSLASH ESCAPES. CommonMark lets a backslash escape any ASCII punctuation; Python-Markdown knows 16
     characters, so `\"Supporting\"` printed its backslashes (items-blocks.md:462). The rest are added, except
-    `&`, `<` and `|`, which it writes raw or handles elsewhere (a table cell).
+    `|`, which the tables extension handles (and (h)). `\&` and `\<` cannot be added to that list, because an escaped
+    character is written back raw and these two would be markup; `EscapedAmpLt` makes them text instead (they showed
+    their backslash; review of d361e13..9f19ac9, LOW-3).
 
+(d, refined) THE LIST BREAK follows CommonMark in what may start a list in the middle of a paragraph: a bullet or `1.`
+    indented under 4 (an indented line is code or paragraph text), never `2.` (so `Text\n2. foo\n- bar` is a paragraph and
+    then a list), and a quote that ends at a list line ends with a blank line on the list's side (`> quote\n- item` is a
+    quote and a list, not a lazy line of the quote). A page whose fences the reader refuses (~~~, four backticks,
+    unclosed) is left alone. A list straight after an html block's closing tag is refused by check-site-markdown.py:
+    GitHub keeps it as html text, Python-Markdown makes a list, and no preprocessing can reconcile that.
 (h) PIPES IN TABLE CODE. In a table cell GitHub writes `\|` as `|`, in a code span too (a row cannot hold a bare pipe,
     so the escape is the only way to show one). Python-Markdown's tables extension drops the backslash from cell text
     and keeps it inside `<code>`: 17 spans on 5 pages (camera.md 12, 02-structure.md 2, entities.md, player.md and
@@ -69,10 +77,10 @@ import re
 
 from markdown import Extension
 from markdown.blockprocessors import BlockQuoteProcessor
-from markdown.inlinepatterns import HtmlInlineProcessor
+from markdown.inlinepatterns import HtmlInlineProcessor, InlineProcessor
 from markdown.preprocessors import Preprocessor
 from markdown.treeprocessors import Treeprocessor
-from markdown.util import HTML_PLACEHOLDER_RE
+from markdown.util import HTML_PLACEHOLDER_RE, AtomicString
 from xml.etree import ElementTree as etree
 
 HERE = Path(__file__).resolve().parent
@@ -153,46 +161,85 @@ class Rewrite(Treeprocessor):
 
 
 QUOTE_PREFIX = re.compile(r"^((?:[ ]{0,3}>[ ]?)*)(.*)$")
-# A bullet, or `1.`, followed by a space and some content: what CommonMark lets interrupt a paragraph
-# (an empty item and an ordered list that starts at another number cannot).
-ITEM = re.compile(r"^[ ]*(?:[*+-]|1\.)[ ]+\S")
+# What CommonMark lets start a list in the middle of a paragraph: a bullet, or `1.`, followed by a space and some
+# content, indented under 4 (an empty item, an ordered list that starts at another number and an item indented 4 or
+# more cannot: the last is a code block or paragraph text).
+ITEM_START = re.compile(r"^[ ]{0,3}(?:[*+-]|1\.)[ ]+\S")
 ITEM_ANY = re.compile(r"^[ ]*(?:[*+-]|\d+\.)[ ]+\S")
+ITEM_LOOSE = re.compile(r"^[ ]*(?:[*+-]|1\.)[ ]+\S")      # after a closed fence the placeholder swallows any indent
 
 
 class ListBreaks(Preprocessor):
     """A blank line before a list that follows a paragraph line, as GitHub reads it. Never inside a fence."""
 
     def run(self, lines):
-        fenced = doc_fences.parse("\n".join(lines)).fence_lines
+        text = "\n".join(lines)
+        if doc_fences.orphans_of("page", text):
+            # a fence marker the shared reader refuses (~~~, four backticks, an unclosed fence): where such a fence
+            # ends is unknown here, and a blank line inserted into one changes the code. verify-docs fails these
+            # in docs/ (the fence census); do nothing rather than corrupt what the census did not see
+            return lines
+        fenced = doc_fences.parse(text).fence_lines
         out = []
         in_item = False          # inside a run of list lines (a continuation line keeps the run going)
-        prev_prefix, prev_text = "", False     # the previous line's quote prefix, and whether it was paragraph text
+        prev_prefix = ""         # the previous line's quote prefix
+        prev_text = False        # the previous line was paragraph text
+        prev_content = False     # the previous line was not blank
         prev_fence = False       # the previous line closed a fence: its placeholder would swallow an item that follows
         for no, line in enumerate(lines, 1):
             if no in fenced:
                 out.append(line)
-                in_item, prev_text, prev_prefix = False, False, ""
+                in_item, prev_text, prev_content, prev_prefix = False, False, False, ""
                 prev_fence = (no + 1) not in fenced
                 continue
             prefix, rest = QUOTE_PREFIX.match(line).groups()
             was_fence, prev_fence = prev_fence, False
-            if prefix != prev_prefix:
-                in_item, prev_text = False, False
+            changed = prefix != prev_prefix      # a quote opened or closed: a list is not the previous line's
+            indent = len(rest) - len(rest.lstrip(" "))
             if not rest.strip():
-                in_item, prev_text = False, False
-            elif ITEM.match(rest):
-                if (prev_text and not in_item) or was_fence:
+                in_item = prev_text = prev_content = False
+            elif ITEM_START.match(rest) or (was_fence and ITEM_LOOSE.match(rest)):
+                # a quote line, then a list outside it: the blank line is what ends the quote on this side
+                if (prev_text and not in_item) or was_fence or (changed and prev_content):
                     out.append(prefix.rstrip())
-                in_item, prev_text = True, False
+                in_item, prev_text, prev_content = True, False, True
             elif ITEM_ANY.match(rest):
-                in_item, prev_text = True, False
+                if in_item or (not prev_text and indent < 4):
+                    in_item, prev_text = True, False
+                else:
+                    prev_text = True      # `2. x` after a paragraph line, or indented code: text, not a list
+                prev_content = True
             else:
-                # a line of text (a thematic break and a line of html are handled by Python-Markdown itself: a blank
-                # line inserted before a list after either changes nothing, measured, so neither is special-cased)
-                prev_text = not in_item
+                # a line of text (a thematic break is handled by Python-Markdown itself: a blank line inserted before
+                # a list after one changes nothing, measured)
+                prev_text, prev_content = not in_item, True
             prev_prefix = prefix
             out.append(line)
         return out
+
+
+class EscapedAmpLt(InlineProcessor):
+    """`\\&` and `\\<` are `&` and `<`. Python-Markdown's escape list leaves them out because it writes an escaped
+    character back raw, which for these two would be markup; here the character is text and the serializer escapes it."""
+
+    def handleMatch(self, m, data):
+        return AtomicString(m.group(1)), m.start(0), m.end(0)
+
+
+class SeparateQuotes(BlockQuoteProcessor):
+    """BlockQuoteProcessor.run with the sibling merge removed: every block that starts a quote starts a box."""
+
+    def run(self, parent, blocks):
+        block = blocks.pop(0)
+        m = self.RE.search(block)
+        if m:
+            before = block[:m.start()]
+            self.parser.parseBlocks(parent, [before])
+            block = "\n".join([self.clean(line) for line in block[m.start():].split("\n")])
+        quote = etree.SubElement(parent, "blockquote")
+        self.parser.state.set("blockquote")
+        self.parser.parseChunk(quote, block)
+        self.parser.state.reset()
 
 
 class TableCodePipes(Treeprocessor):
@@ -217,22 +264,6 @@ class TableCodePipes(Treeprocessor):
                         code.text = type(code.text)(code.text.replace("\\|", "|"))
 
 
-class SeparateQuotes(BlockQuoteProcessor):
-    """BlockQuoteProcessor.run with the sibling merge removed: every block that starts a quote starts a box."""
-
-    def run(self, parent, blocks):
-        block = blocks.pop(0)
-        m = self.RE.search(block)
-        if m:
-            before = block[:m.start()]
-            self.parser.parseBlocks(parent, [before])
-            block = "\n".join([self.clean(line) for line in block[m.start():].split("\n")])
-        quote = etree.SubElement(parent, "blockquote")
-        self.parser.state.set("blockquote")
-        self.parser.parseChunk(quote, block)
-        self.parser.state.reset()
-
-
 class HandbookExtension(Extension):
     def __init__(self, **kw):
         self.config = {
@@ -250,6 +281,7 @@ class HandbookExtension(Extension):
         md.preprocessors.register(ListBreaks(md), "handbook_list_breaks", 27)
         md.parser.blockprocessors.register(SeparateQuotes(md.parser), "quote", 20)
         md.inlinePatterns.register(HtmlInlineProcessor("(" + _check_links.RAW_HTML.pattern + ")", md), "html", 90)
+        md.inlinePatterns.register(EscapedAmpLt(r"\\([&<])", md), "handbook_escaped_amp_lt", 190)
         md.ESCAPED_CHARS.extend(c for c in "\"$%',/:;=?@^~" if c not in md.ESCAPED_CHARS)
 
 

@@ -17,6 +17,11 @@ every unescaped pipe, code span or not, so `/whitelist add|remove|clear` in a ce
 permissions.md:496 at d361e13, the one case; review of d361e13..9f19ac9, MINOR-1). The site rewrites `\\|` inside
 table code to `|` (handbook_md.py, h), so writing the escape is right on both.
 
+RULE html-block-list. A list item on the line straight after the closing tag of an html block (`</div>`, `</details>`,
+`</table>` ... with no blank line between). CommonMark ends an html block at a blank line, so GitHub shows `- item` as
+html text; Python-Markdown ends the raw block at the closing tag and makes a list. The shape cannot be rendered the
+same on both, so it is refused; a blank line after the block fixes it (review of d361e13..9f19ac9, LOW-3; none in docs/).
+
 RULE list-child-indent. A child of a list item (a nested list item, or a paragraph, table or fence that follows
 a blank line inside the item) indented fewer than 4 spaces past its parent's marker. CommonMark nests a child
 indented to the parent's content (2 spaces under `- `, 3 under `1. `), which is what the docs were written to;
@@ -62,6 +67,37 @@ def heading_findings(text: str, fenced):
             if '<' in outside_code(m.group(1)):
                 out.append((no, 'heading-generic', f'a `<` outside a code span in a heading: {m.group(1)!r} (write the generic in backticks)'))
     return out, read
+
+
+_BLOCK_TAGS = ("address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|"
+               "dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|"
+               "main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|"
+               "thead|title|tr|track|ul")
+# CommonMark html blocks of types 1-6 by their opening line; they run to the next blank line.
+HTML_BLOCK = re.compile(r"^[ ]{0,3}(?:<(?:script|pre|style|textarea)(?:\s|>|$)|<!--|<\?|<![A-Z]|<!\[CDATA\[|"
+                        r"</?(?:" + _BLOCK_TAGS + r")(?:\s|/?>|$))", re.I)
+CLOSING_TAG_END = re.compile(r"</[A-Za-z][A-Za-z0-9-]*\s*>\s*$")
+ITEM_START = re.compile(r"^[ ]{0,3}(?:[*+-]|1\.)[ ]+\S")
+
+
+def html_findings(text: str, fenced):
+    """-> [(line, rule, message)]: a list item straight after an html block's closing tag."""
+    out, html, prev = [], False, ''
+    for no, line in enumerate(text.split('\n'), 1):
+        if no in fenced:
+            html, prev = False, ''
+            continue
+        rest = QUOTE.match(line).group(2)
+        if not rest.strip():
+            html, prev = False, ''
+            continue
+        if not html and HTML_BLOCK.match(rest):
+            html = True
+        elif html and ITEM_START.match(rest) and CLOSING_TAG_END.search(prev):
+            out.append((no, 'html-block-list', f'a list item straight after the closing tag of an html block (GitHub keeps it '
+                                               f'as html text, the site makes a list; put a blank line first): {rest.strip()[:50]!r}'))
+        prev = rest
+    return out
 
 
 def table_findings(text: str, fenced):
@@ -131,7 +167,7 @@ def scan_page(text: str):
     fenced = doc_fences.parse(text).fence_lines
     hs, nh = heading_findings(text, fenced)
     ls, ni = list_findings(text, fenced)
-    return hs + [(no, rule, msg) for no, rule, msg in table_findings(text, fenced)], ls, nh, ni
+    return hs + [(no, rule, msg) for no, rule, msg in table_findings(text, fenced) + html_findings(text, fenced)], ls, nh, ni
 
 
 def fix_page(text: str) -> str:

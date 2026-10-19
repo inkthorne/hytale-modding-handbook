@@ -41,10 +41,10 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 121            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
-MIN_MUTATIONS = 106
-MIN_EXT_CASES = 22
-MIN_EXT_MUTATIONS = 26
+MIN_CASES = 123            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_MUTATIONS = 109
+MIN_EXT_CASES = 27
+MIN_EXT_MUTATIONS = 31
 
 SECTION_MD = 'section "[HARD] Docs markdown renders the same on GitHub and on the site"'
 SECTION_NAV = 'section "[HARD] The sidebar is generated from README.md and holds every docs page once"'
@@ -165,6 +165,7 @@ CASE_MD = {
     'fence_adj': 'markdown: a fence straight after the item line needs no more than the content column',
     'tbl_pipe': 'markdown: a bare | in a code span on a table row FAILs with file:line, \\| is clean',
     'tbl_pipe_out': 'markdown: a | in a code span outside a table row, or inside a fence, is not a table pipe',
+    'html_list': 'markdown: a list item straight after an html block\'s closing tag FAILs; after a blank line, or inside the block, it is clean',
     'zero_pages': 'markdown: a docs tree with no page is a FAIL naming the exit status, not a clean run',
     'silent': 'markdown: a lint that exits 0 having read nothing is a FAIL, not a clean run',
     'zero_pages_figs': 'markdown: a lint that reports 0 pages beside non-zero figures is a FAIL, not a clean run',
@@ -240,6 +241,12 @@ def md_cases(w: World) -> dict[str, list[str]]:
     if ok[2] != 0 or '  FAIL  ' in ok[1]:
         res[CASE_MD['tbl_pipe']].append(f'an escaped pipe in table code was refused: {lines(ok[1])}')
     verdict('tbl_pipe_out', sec({'docs/t.md': '# T\n\nUse `a|b` here.\n\n```\n| `c|d` |\n```\n'}), hf=0, must=('PASS',), must_not=('  FAIL  ',))
+    verdict('html_list', sec({'docs/h.md': '# H\n\n<div>\nx\n</div>\n- item\n'}), hf=1,
+            must=("docs/h.md:6: html-block-list: a list item straight after the closing tag of an html block",))
+    for ok_src in ('# H\n\n<div>\nx\n</div>\n\n- item\n', '# H\n\n<div>\n- item\n</div>\n'):
+        ok = sec({'docs/h.md': ok_src})
+        if ok[2] != 0 or '  FAIL  ' in ok[1]:
+            res[CASE_MD['html_list']].append(f'refused a shape that renders the same: {ok_src!r}: {lines(ok[1])}')
     # the lint reads nothing
     verdict('zero_pages', sec({}, drop=('docs/ok.md',)), hf=1,
             must=('FAIL  check-site-markdown.py exited 2, so nothing was linted:',), must_not=('PASS',))
@@ -585,6 +592,7 @@ CASE_BUILD = {
     'rewritten_more': 'build: --rewritten-md above the explained count FAILs (a rewritten link the build did not warn about)',
     'missing_page': 'build: a page that is really missing (the link resolves inside docs/) is unexplained',
     'outside_nopath': 'build: a link out of docs/ to a path the repository does not have is unexplained',
+    'outside_repo': 'build: a link that resolves outside the repository to a path that exists is unexplained',
     'anchor': 'build: an anchor warning is unexplained, whatever the link',
     'unknown_kind': 'build: a warning of a kind never seen is unexplained',
     'not_a_target': 'build: a position that is not the target of a [text](target) link is unexplained',
@@ -628,6 +636,7 @@ def build_cases(w: World) -> dict[str, list[str]]:
         (root / 'docs').mkdir(parents=True)
         (root / 'docs' / 'page.md').write_text(f'# Page\n\n{docs_line}\n')
         (root / 'CLAUDE.md').write_text('x')
+        (root.parent / 'outside.txt').write_text('a file that exists, one level above the repository')
         (root / 'sub').mkdir()
         (root / 'sub' / 'inside.md').write_text('x')
         if not nolog:
@@ -656,6 +665,9 @@ def build_cases(w: World) -> dict[str, list[str]]:
     ghost = 'See [x](../ghost/Nope.java) here.'
     verdict('outside_nopath', run(build_log([block('page does not exist', 'page.md', 3, ghost.index('](') + 3, ghost)]), docs_line=ghost), rc=1,
             must=("resolves outside docs/ to", "which is not a path in the repository"))
+    away = 'See [x](../../outside.txt) here.'
+    verdict('outside_repo', run(build_log([block('page does not exist', 'page.md', 3, away.index('](') + 3, away)]), docs_line=away), rc=1,
+            must=("resolves outside docs/ to", "which is not a path in the repository"), must_not=('1 explained',))
     verdict('anchor', run(build_log([block('anchor does not exist', 'page.md', 3, col, src_line)])), rc=1,
             must=('FAIL  unexplained warning at page.md:3:' + str(col) + ': anchor does not exist',), must_not=('1 explained',))
     verdict('unknown_kind', run(build_log([block('something new', 'page.md', 3, col, src_line)])), rc=1,
@@ -917,7 +929,12 @@ CASE_EXT = {k: f'ext: {v}' for k, v in {
     'html_text': '<GameMode, Settings> is text, <b> is a tag',
     'escape_quote': '\\" prints the quote without its backslash',
     'base_required': 'an extension configured without the repository URL refuses to load',
-    'table_pipe': 'an escaped pipe in a code span in a table cell is a pipe, outside a table the backslash stays'}.items()}
+    'table_pipe': 'an escaped pipe in a code span in a table cell is a pipe, outside a table the backslash stays',
+    'list_quote_end': 'a list straight after a quote line is a list outside the quote',
+    'list_indented_code': 'a list-looking line in an indented code block gets no blank line',
+    'list_two_dot': 'text, `2. foo`, then a bullet: the bullet starts the list',
+    'list_orphan_fence': 'a ~~~ or four-backtick fence is left untouched',
+    'escape_amp_lt': '`\\&` and `\\<` print the character without the backslash'}.items()}
 
 
 def ext_cases(w: World) -> dict[str, list[str]]:
@@ -1060,7 +1077,7 @@ mut('IDENTITY (no change - the harness control)', ('script', CMD), '#!/usr/bin/e
 mut('the heading rule is removed', ('script', CMD), "if '<' in outside_code(m.group(1)):", 'if False:',
     ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span'])
 mut('code spans are not set aside in a heading', ('script', CMD), "return CL.CODE_SPAN.sub('', t)", 'return t',
-    ['gen_span'], ['healthy', 'gen_span', 'gen_fence', 'nest4', 'nest_ord', 'block2', 'fence_adj', 'fix', 'tbl_pipe', 'tbl_pipe_out'])
+    ['gen_span'], ['healthy', 'gen_span', 'gen_fence', 'nest4', 'nest_ord', 'block2', 'fence_adj', 'fix', 'tbl_pipe', 'tbl_pipe_out', 'html_list'])
 mut('fenced `#` lines are read as headings', ('script', CMD), '        if m and no not in fenced:', '        if m:',
     ['gen_fence'], ['gen_fence'])
 mut('the nested-item rule is removed', ('script', CMD),
@@ -1095,7 +1112,7 @@ mut('the section does not require a list item', ('section', 'md'),
     ['zero_items'], ['zero_items'])
 mut('findings are not a FAIL', ('section', 'md'),
     'elif [ "$RC" -eq 1 ]; then', 'elif false; then',
-    ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span', 'nest2', 'nest_ord', 'nest_quote', 'block2', 'fence2', 'tbl_pipe'])
+    ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span', 'nest2', 'nest_ord', 'nest_quote', 'block2', 'fence2', 'tbl_pipe', 'html_list'])
 mut('the pass line drops the denominators', ('section', 'md'),
     'pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): ', 'pass "linted: ',
     ['healthy'], ['healthy'])
@@ -1212,6 +1229,8 @@ mut('a link that resolves inside docs/ is explained', ('script', BLD), "        
     ['missing_page'], ['missing_page'], part='build')
 mut('a path outside docs/ need not exist in the repository', ('script', BLD), "        if repo_abs not in dest.parents or not dest.exists():", '        if repo_abs not in dest.parents:',
     ['outside_nopath'], ['outside_nopath'], part='build')
+mut('a path outside the repository is explained when it exists', ('script', BLD), "        if repo_abs not in dest.parents or not dest.exists():", '        if not dest.exists():',
+    ['outside_repo'], ['outside_repo'], part='build')
 mut('a position that is not a link target is explained', ('script', BLD), "        if col < 3 or text[col - 3:col - 1] != '](':", '        if False:',
     ['not_a_target'], ['not_a_target'], part='build')
 mut('the source line the build shows is not compared', ('script', BLD), "        if shown and shown[0].rstrip() != text.rstrip():", '        if False:',
@@ -1296,17 +1315,17 @@ mut('duplicate headings keep Python-Markdown\'s numbering', ('ext', EXTM), '_toc
 mut('the slug is not the character rule', ('ext', EXTM), '    return char_slug(text)', "    return text.lower().replace(' ', '-')",
     ['anchor_slug'], ['anchor_slug'], part='ext')
 mut('the list-break preprocessor is not registered', ('ext', EXTM), 'md.preprocessors.register(ListBreaks(md), "handbook_list_breaks", 27)', 'pass',
-    ['list_bullet'], ['list_after_fence', 'list_bullet', 'list_ordered', 'list_quote'], part='ext')
+    ['list_bullet'], ['list_after_fence', 'list_bullet', 'list_ordered', 'list_quote', 'list_quote_end', 'list_two_dot'], part='ext')
 mut('code fences are not skipped by the list-break preprocessor', ('ext', EXTM), '            if no in fenced:\n                out.append(line)', '            if False:\n                out.append(line)',
     ['list_fence'], ['list_after_fence', 'list_fence'], part='ext')
 mut('the quote prefix is lost on the inserted blank line', ('ext', EXTM), '                    out.append(prefix.rstrip())', "                    out.append('')",
     ['list_quote'], ['list_quote'], part='ext')
-mut('any number starts a list after a paragraph line', ('ext', EXTM), 'ITEM = re.compile(r"^[ ]*(?:[*+-]|1\\.)[ ]+\\S")', 'ITEM = re.compile(r"^[ ]*(?:[*+-]|\\d+\\.)[ ]+\\S")',
-    ['list_ordered'], ['list_ordered'], part='ext')
-mut('an item after a closed fence gets no blank line', ('ext', EXTM), 'if (prev_text and not in_item) or was_fence:', 'if (prev_text and not in_item):',
+mut('any number starts a list after a paragraph line', ('ext', EXTM), 'ITEM_START = re.compile(r"^[ ]{0,3}(?:[*+-]|1\\.)[ ]+\\S")', 'ITEM_START = re.compile(r"^[ ]{0,3}(?:[*+-]|\\d+\\.)[ ]+\\S")',
+    ['list_ordered'], ['list_ordered', 'list_two_dot'], part='ext')
+mut('an item after a closed fence gets no blank line', ('ext', EXTM), 'if (prev_text and not in_item) or was_fence or (changed and prev_content):', 'if (prev_text and not in_item) or (changed and prev_content):',
     ['list_after_fence'], ['list_after_fence'], part='ext')
-mut('a paragraph line before a list is not noticed', ('ext', EXTM), '                prev_text = not in_item\n', '                prev_text = False\n',
-    ['list_bullet'], ['list_bullet', 'list_ordered', 'list_quote'], part='ext')
+mut('a paragraph line before a list is not noticed', ('ext', EXTM), '                prev_text, prev_content = not in_item, True\n', '                prev_text, prev_content = False, True\n',
+    ['list_bullet'], ['list_bullet', 'list_ordered', 'list_quote', 'list_two_dot'], part='ext')
 mut('adjacent blockquotes merge again', ('ext', EXTM), 'md.parser.blockprocessors.register(SeparateQuotes(md.parser), "quote", 20)', 'pass',
     ['quote_two'], ['quote_two'], part='ext')
 mut('a quote with a bare > line is split', ('ext', EXTM), '        block = blocks.pop(0)\n        m = self.RE.search(block)\n        if m:\n            before', '        block = blocks.pop(0).replace("\\n>\\n", "\\n\\n>")\n        m = self.RE.search(block)\n        if m:\n            before',
@@ -1359,6 +1378,21 @@ mut('a failed copy is not read', ('section', 'site'), '    if [ "${SITE_CP[0]}" 
 mut('the build runs after a failed copy', ('section', 'site'), '    if [ "$SITE_CP_OK" -eq 1 ]; then', '    if true; then',
     ['tree_nogit'], ['tree_nogit'], part='site')
 
+mut('an html block followed by an item is not refused', ('script', CMD), "        elif html and ITEM_START.match(rest) and CLOSING_TAG_END.search(prev):", '        elif False:',
+    ['html_list'], ['html_list'], part='md')
+mut('any item in an html block is refused, closing tag or not', ('script', CMD), "        elif html and ITEM_START.match(rest) and CLOSING_TAG_END.search(prev):", '        elif html and ITEM_START.match(rest):',
+    ['html_list'], ['html_list'], part='md')
+mut('a list after a quote line stays in the quote', ('ext', EXTM), '                if (prev_text and not in_item) or was_fence or (changed and prev_content):', '                if (prev_text and not in_item) or was_fence:',
+    ['list_quote_end'], ['list_quote_end'], part='ext')
+mut('an item indented 4 starts a list', ('ext', EXTM), 'ITEM_START = re.compile(r"^[ ]{0,3}(?:[*+-]|1\\.)[ ]+\\S")', 'ITEM_START = re.compile(r"^[ ]*(?:[*+-]|1\\.)[ ]+\\S")',
+    ['list_indented_code'], ['list_indented_code'], part='ext')
+mut('`2. x` after a paragraph line starts a list run', ('ext', EXTM), '                if in_item or (not prev_text and indent < 4):', '                if True:',
+    ['list_two_dot'], ['list_two_dot'], part='ext')
+mut('a fence the reader refuses is walked anyway', ('ext', EXTM), '        if doc_fences.orphans_of("page", text):', '        if False:',
+    ['list_orphan_fence'], ['list_orphan_fence'], part='ext')
+mut('\\& and \\< are not handled', ('ext', EXTM), '        md.inlinePatterns.register(EscapedAmpLt(r"\\\\([&<])", md), "handbook_escaped_amp_lt", 190)\n', '',
+    ['escape_amp_lt'], ['escape_amp_lt'], part='ext')
+
 PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
          'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases), 'wf': (CASE_WF, wf_cases)}
 if EXT_PY:
@@ -1396,7 +1430,7 @@ def main():
             if a.verbose and not res[label]:
                 print(f'  ok   {label}')
         print(f'\nFIXTURE {len(res)} case(s): {len(res) - len(fails)} passed, {len(fails)} failed'
-              + ('' if EXT_PY else '; the extension part (22 cases, 26 mutations) was SKIPPED: no site venv at '
+              + ('' if EXT_PY else '; the extension part (27 cases, 31 mutations) was SKIPPED: no site venv at '
                  '$HANDBOOK_SITE_PY or ~/.cache/handbook-site (maintenance/scripts/site-env.sh creates it)'))
         for k, v in fails.items():
             print(f'  FAIL {k}: ' + '; '.join(v))

@@ -191,8 +191,8 @@ fi
 # trigger-volumes, universe-saves, world-events). 16 of 71 were absent when this
 # gate was written. Same reasoning as the arrears list: re-reading README cannot
 # reveal an omission, because the omission is what is missing from what you read.
-# docs/index.md is exempt — a curated "Popular references" landing page, not an
-# index of everything.
+# docs/index.md is exempt — Home, an orientation page (who the handbook is for, a task-to-section table, how to
+# read a page), not an index of everything.
 section "[HARD] Every docs page is listed in README.md"
 OUT="$(python3 - <<'RMPY'
 import glob, os, re
@@ -235,6 +235,26 @@ if [ "$RC" -eq 0 ]; then
   pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
 else
   fail "check-example-lists.py reported:"
+  echo "$OUT" | grep -E '^  (FAIL|SKIP)' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /'
+fi
+
+# Home (docs/index.md) says what the handbook is, how current, and how to read a page, and sends a goal to a section and
+# a call. README.md carries the same Verified-against paragraph, and CLAUDE.md's release step bumps both by hand. This
+# gate proves the two paragraphs agree (not that either is true) and holds the task tables to the properties that make a
+# row useful: a #fragment on every page link, a Receiver.member that check-symbols will check (and a receiver that is a
+# jar class, with the jar), 12 to 18 rows. See the header of check-home.py for what it does not hold.
+section "[HARD] Home's Verified-against paragraph is README.md's, and its task tables hold what the page claims"
+if [ -f "$JAR" ]; then
+  OUT="$(python3 maintenance/scripts/check-home.py --jar "$JAR")"
+else
+  OUT="$(python3 maintenance/scripts/check-home.py)"
+fi
+RC=$?
+echo "$OUT" | grep -E '^  INFO'
+if [ "$RC" -eq 0 ]; then
+  pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+else
+  fail "check-home.py reported:"
   echo "$OUT" | grep -E '^  (FAIL|SKIP)' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /'
 fi
 

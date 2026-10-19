@@ -45,17 +45,7 @@ Tools follow the same inheritance pattern. The [Tool Items](items-tools.md) docu
 
 ## Common Tasks
 
-| Task | Documentation |
-|------|---------------|
-| Create a custom weapon | [Weapon Items](items-weapons.md) |
-| Create a custom tool | [Tool Items](items-tools.md) |
-| Add a server command | [Commands](commands.md) |
-| Build custom UI | [UI System](ui.md) |
-| Understand interactions | [Interactions](interactions.md) |
-| Define crafting recipes | [Crafting System](items-crafting.md) |
-| Configure NPC behaviors | [NPC Roles](npc-roles.md) |
-| Customize world generation | [World Generation](worldgen.md) |
-| Animate blocks | [Block Animation Format](blockyanim-format.md) |
+Home's [Find it by task](index.md#find-it-by-task) tables send each goal to the page and the section that do it, with the call or key it turns on and an example where the repository has one: a custom weapon, a custom tool, a server command, a custom UI page or HUD, interactions, crafting recipes, NPC behavior, world generation and block animation among them.
 
 ## Documentation Structure
 

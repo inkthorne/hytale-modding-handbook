@@ -2,7 +2,7 @@
 
 A Hytale server-plugin & asset API reference, with the descriptions, gotchas, and working examples to build with.
 
-**Verified against Hytale 0.7.2 (build-34).** Each page carries its own "Verified against" stamp, and a game update can
+**Verified against Hytale 0.7.2 (build-34).** Each topic page carries its own "Verified against" stamp, and a game update can
 invalidate any of them until the next re-verification pass. Each verified build is tagged on the
 [releases page](https://github.com/inkthorne/hytale-modding-handbook/releases).
 

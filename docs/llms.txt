@@ -1,6 +1,6 @@
 # Hytale Modding Handbook
 
-> A Hytale server-plugin and asset-format API reference with descriptions, gotchas and runnable example mods, verified against Hytale 0.7.2 (build-34). `verify-docs.sh`, which the maintainer runs before each push, checks that the `com.hypixel.*` class names and `Class.member` references in the pages exist in HytaleServer.jar; that the discriminator values in JSON examples (`Type` and the like) are names the jar registers under that key; that asset ids at typed key positions in JSON examples exist in the shipped assets; that complete Java examples (those that start with `package`) and the example plugins compile against the jar; and that links and section anchors resolve. It does not machine-check JSON enum values, required keys or lists of bare method signatures.
+> A Hytale server-plugin and asset-format API reference with descriptions, gotchas and runnable example mods, verified against Hytale 0.7.2 (build-34). `verify-docs.sh`, which the maintainer runs, checks against HytaleServer.jar and the shipped assets that: the `com.hypixel.*` class names in the pages exist; `Class.member` references exist on that class, except on prose lines with a negation word (not, instead, removed and the like); `Type` and `Op` values in JSON examples are registered under that key or used under it by a shipped asset; asset ids at typed key positions in JSON examples exist; complete Java examples (those that start with `package`) and the example plugins compile; and relative links and section anchors resolve. Nothing else is machine-checked: prose and behaviour claims, calls in Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, and asset ids at untyped positions.
 
 Hytale mods are server-side Java plugins plus JSON/DSL asset packs. Start with Home, which sends each task to the section that does it.
 
@@ -8,7 +8,7 @@ The links below are the rendered pages. The markdown source of a page is `https:
 
 ## Start here
 
-- [Home](https://inkthorne.github.io/hytale-modding-handbook/index.html): Who the handbook is for, a list of tasks with the section and the Java call or JSON key that does each, how to read a page, and the game build it was verified against.
+- [Home](https://inkthorne.github.io/hytale-modding-handbook/index.html): The Hytale Modding Handbook, a server-plugin and asset API reference. Start here: who it is for, tasks with the section and the Java call or JSON key that does each, how to read a page, and the build it was verified against.
 
 ## Getting Started
 

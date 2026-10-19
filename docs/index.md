@@ -1,6 +1,6 @@
 ---
 title: Home
-description: "Who the handbook is for, a list of tasks with the section and the Java call or JSON key that does each, how to read a page, and the game build it was verified against."
+description: "The Hytale Modding Handbook, a server-plugin and asset API reference. Start here: who it is for, tasks with the section and the Java call or JSON key that does each, how to read a page, and the build it was verified against."
 nav_order: 0
 ---
 

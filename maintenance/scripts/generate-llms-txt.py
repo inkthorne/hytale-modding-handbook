@@ -26,14 +26,18 @@ raw markdown could not link the examples' directories.
 
 EXIT 2, with nothing on stdout, when the output would be wrong, which is each of: no categories; a README link whose
 page does not exist, or a page listed twice (generate-site-nav's problems); a docs page other than index.md that no
-category lists; a listed page, or Home, with no frontmatter title or no description; Home's Verified-against
+category lists; a listed page, or Home, with no frontmatter title or no description (an empty `title:` is empty, not
+the next line), or with one in a form the site's YAML reader could read differently (a block scalar, anchor, alias,
+tag or flow collection, a quoted value with an escape or doubled quote, a trailing ` #` comment, a plain `: `, a
+value that continues on the next line, a quote that does not close); Home's Verified-against
 paragraph not found exactly once; examples/README.md's table header not exactly HEADER, a row that is not four
 cells, links no example directory, repeats one, or has a Type other than Pack or Plugin; an example directory with
 no row; no tracked example directory, or no git work tree to say. The problems are listed on stderr, all of them,
 then the summary is not printed.
 
 stderr carries `LLMS <categories> categories, <pages> pages, <examples> examples` on success: the denominator
-verify-docs prints. `pages` is the number of page links in the output, Home included.
+verify-docs prints. `pages` is the number of page links in the output, Home included; verify-docs counts the distinct
+page URLs, the example tree links and the category headings itself and compares all three figures.
 """
 from __future__ import annotations
 import argparse, importlib.util, pathlib, posixpath, re, subprocess, sys, urllib.parse
@@ -54,14 +58,49 @@ SEPARATOR = re.compile(r'^\|[ \t:|-]*-[ \t:|-]*\|$')
 LINK = re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
 
 
-def field(fm: str, name: str):
-    m = re.search(rf'^{name}:\s*(.*)$', fm, re.M)
-    if not m:
-        return None
-    v = m.group(1).strip()
-    if v.startswith(('"', "'")):
-        v = v[1:-1]
-    return v or None
+def field(fm: str, name: str, where: str, problems: list):
+    r"""-> (the value of the frontmatter key `name` or None, whether the form was refused and the reason recorded).
+
+    Only the plain one-line forms are read: the site reads the same frontmatter with a YAML parser, and for these
+    forms the two agree. `[ \t]*` after the colon, never `\s*`, which crosses the newline: an empty `description:`
+    then read the next frontmatter line (`seo:`) as its value (review of 8b48c97, MAJOR-1). Refused, named, exit 2:
+    a block scalar (`>` `|`), an anchor, alias or tag (`&` `*` `!`), a flow collection (`[` `{`), a quoted value with
+    an escape or a doubled quote (`\"` or a doubled `''`), a plain value with ` #` (a comment) or `: `, a value that goes on
+    on the next, indented line, and a quote that does not close."""
+    lines = fm.split('\n')
+    at = next((i for i, l in enumerate(lines) if re.match(rf'{name}:', l)), None)
+    if at is None:
+        return None, False
+    v = lines[at][len(name) + 1:].strip(' \t')
+    cont = at + 1 < len(lines) and lines[at + 1][:1] in (' ', '\t')
+    why = None
+    if v and v[0] in '>|&*!':
+        why = f'starts with {v[0]!r} (a block scalar, anchor, alias or tag)'
+    elif cont:
+        why = 'goes on on the next line'
+    elif not v:
+        return None, False
+    elif v[0] in '[{':
+        why = 'is a flow collection'
+    elif v[0] in '"\'':
+        inner = v[1:-1]
+        if len(v) < 2 or v[-1] != v[0]:
+            why = 'has a quote that does not close'
+        elif v[0] == '"' and ('\\' in inner or '"' in inner):
+            why = 'is double-quoted with an escape'
+        elif v[0] == "'" and "'" in inner:
+            why = 'is single-quoted with a doubled quote'
+        else:
+            return (inner or None), False
+    elif re.search(r'\s#', v):
+        why = 'has a trailing comment'
+    elif ': ' in v:
+        why = "has ': ' in a plain value"
+    else:
+        return v, False
+    problems.append(f'{where} frontmatter {name} {why}: this reader and the site\'s YAML reader could disagree, '
+                    'so write a plain or simply quoted one-line value')
+    return None, True
 
 
 def page_entry(root: pathlib.Path, page: str, problems: list):
@@ -73,10 +112,10 @@ def page_entry(root: pathlib.Path, page: str, problems: list):
     if not m:
         problems.append(f'docs/{page} has no frontmatter, so no title and no description')
         return None
-    title, desc = field(m.group(1), 'title'), field(m.group(1), 'description')
-    if not title:
+    (title, t_refused), (desc, d_refused) = (field(m.group(1), k, f'docs/{page}', problems) for k in ('title', 'description'))
+    if not title and not t_refused:
         problems.append(f'docs/{page} has no frontmatter title')
-    if not desc:
+    if not desc and not d_refused:
         problems.append(f'docs/{page} has no frontmatter description')
     return (title, desc) if title and desc else None
 
@@ -92,12 +131,13 @@ def read_stamp(root: pathlib.Path, problems: list):
 
 
 def population(root: pathlib.Path, problems: list):
-    r = subprocess.run(['git', '-C', str(root), 'ls-files', '--', 'examples/'], capture_output=True, text=True)
+    r = subprocess.run(['git', '-C', str(root), 'ls-files', '-z', '--', 'examples/'], capture_output=True, text=True,
+                       encoding='utf-8')
     if r.returncode != 0:
         problems.append(f'`git ls-files examples/` failed in {root}: the examples are the tracked directories, so '
                         'the generator needs a git work tree')
         return set()
-    tracked = {p for p in r.stdout.split('\n') if p}
+    tracked = {p for p in re.split(r'[\0\n]', r.stdout) if p}      # -z: a non-ASCII name arrives raw, not quoted
     pop = {p.split('/')[1] for p in tracked if p.count('/') >= 2}
     if not pop:
         problems.append('0 example directories are tracked under examples/: a list of nothing is a broken run')
@@ -164,7 +204,7 @@ def generate(root: pathlib.Path):
         problems.append('README.md lists no categories under `## Documentation`')
     problems += NAV.generate(root)[3]
     listed = {page for _, pages in cats for _, page in pages}
-    for p in sorted(f.name for f in (root / 'docs').glob('*.md')):
+    for p in sorted(f.name for f in (root / 'docs').glob('*.md') if f.is_file()):
         if p != 'index.md' and p not in listed:
             problems.append(f'docs/{p} is listed in no README category, so in no group')
     stamp = read_stamp(root, problems)
@@ -192,13 +232,15 @@ def generate(root: pathlib.Path):
 
     out = ['# Hytale Modding Handbook', '',
            '> A Hytale server-plugin and asset-format API reference with descriptions, gotchas and runnable example '
-           f'mods, verified against {stamp}. `verify-docs.sh`, which the maintainer runs before each push, checks '
-           'that the `com.hypixel.*` class names and `Class.member` references in the pages exist in HytaleServer.jar; '
-           'that the discriminator values in JSON examples (`Type` and the like) are names the jar registers under '
-           'that key; that asset ids at typed key positions in JSON examples exist in the shipped assets; that '
-           'complete Java examples (those that start with `package`) and the example plugins compile against the '
-           'jar; and that links and section anchors resolve. It does not machine-check JSON enum values, required '
-           'keys or lists of bare method signatures.', '',
+           f'mods, verified against {stamp}. `verify-docs.sh`, which the maintainer runs, checks against '
+           'HytaleServer.jar and the shipped assets that: the `com.hypixel.*` class names in the pages exist; '
+           '`Class.member` references exist on that class, except on prose lines with a negation word (not, '
+           'instead, removed and the like); `Type` and `Op` values in JSON examples are registered under that key '
+           'or used under it by a shipped asset; asset ids at typed key positions in JSON examples exist; complete '
+           'Java examples (those that start with `package`) and the example plugins compile; and relative links '
+           'and section anchors resolve. Nothing else is machine-checked: prose and behaviour claims, calls in '
+           'Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, '
+           'and asset ids at untyped positions.', '',
            'Hytale mods are server-side Java plugins plus JSON/DSL asset packs. Start with Home, which sends each '
            'task to the section that does it.', '',
            f'The links below are the rendered pages. The markdown source of a page is `{RAW}/<file>.md`, where '

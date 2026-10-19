@@ -16,8 +16,8 @@ check returns something other than the value written for it.
   SECTION    the section is cut out of verify-docs.sh (from its `section "[HARD] llms.txt generates ...` line to the
              next `# =====` line) and run under the real section()/pass()/fail()/warn() definitions, in a temp root
              whose maintenance/scripts/generate-llms-txt.py is a STUB that prints what the case says (stdout,
-             stderr, status). The first section case is a NEGATIVE CONTROL: the section as it stood at 430bec9
-             (`generate | cmp`) must read a stub that crashes after printing the file's own text as PASS, and
+             stderr, status). The first section case is a NEGATIVE CONTROL: a TRANSCRIPTION of the section as it stood at
+             430bec9 (`generate | cmp`; its two messages are simplified, the logic is the same) must read a stub that crashes after printing the file's own text as PASS, and
              one that prints nothing as a WARN - or the run is refused, because a fixture that cannot see the
              defect certifies nothing.
 
@@ -26,10 +26,10 @@ section), runs every case against the copy, and requires the set of red labels t
 mutation. A mutation whose text no longer occurs once in its target is stale and fails the run; the IDENTITY mutation
 must leave nothing red.
 
-PINS: two cases are reddened by no mutation of a guard. The reordered-README case (G_REORDER) is reddened only by an
-output that ignores the README, which no guard of the generator is; the section's negative control is a control, not
-a guard. 'docs/index.md must be listed' reddens nearly every generator case, because Home becomes a problem in every
-corpus; its red set is written as everything but the three cases that read no corpus.
+PINS: one case is reddened by no mutation of a guard: the section's negative control, which is a control, not a guard. The
+reordered-README case (G_REORDER) is reddened only by mutations that break every corpus (Home must be listed), and
+'docs/index.md must be listed' reddens nearly every generator case, because Home becomes a problem in every corpus; its
+red set is written as everything but the three cases that read no corpus.
 
 Usage: python3 maintenance/scripts/generate-llms-txt-fixture.py [-v] [--mutations]
 """
@@ -47,8 +47,8 @@ REPO = HERE.parents[1]
 VERIFY = FROM / 'verify-docs.sh'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
-MIN_CASES = 53
-MIN_MUTATIONS = 49
+MIN_CASES = 76
+MIN_MUTATIONS = 74
 fails: list[str] = []
 seen: list[str] = []
 
@@ -81,6 +81,10 @@ CORPUS = {
     'examples/packx/x.json': '{}\n',
     'examples/hytale-paths.sh': '#!/bin/sh\n',
 }
+def fm_page(*lines):
+    return '---\n' + '\n'.join(lines) + '\n---\n\nText.\n'
+
+
 NEWDIR = {'examples/newz/README.md': '# N\n', 'examples/newz/y.json': '{}\n'}
 ROW_NEWZ = '| [newz/](./newz/) | Pack | A third example | — |\n'
 
@@ -188,11 +192,14 @@ def prelude() -> str:
 
 STUB = ('import sys\nsys.stdout.write({out!r})\nsys.stderr.write({err!r})\nopen("ran", "a").write("x")\nsys.exit({rc})\n')
 LINK = lambda n: f'- [P{n}]({SITE}/p{n}.html): d\n'
-GOOD_OUT = '# H\n\n## S\n\n' + LINK(1) + LINK(2) + LINK(3)
+EXL = lambda d: f'- [{d}/](https://github.com/inkthorne/hytale-modding-handbook/tree/main/examples/{d}/): Pack. x\n'
+GOOD_OUT = ('# H\n\n## Start here\n\n' + LINK(1) + '\n## Cat\n\n' + LINK(2) + LINK(3) + '\n## Examples\n\n' + EXL('e1') + EXL('e2')
+            + '\n## Source\n\n- [GitHub repository](https://github.com/inkthorne/hytale-modding-handbook): z\n')
 GOOD_ERR = 'LLMS 1 categories, 3 pages, 2 examples\n'
 
 
-def run_section(text, *, out=GOOD_OUT, err=GOOD_ERR, rc=0, llms='same', docs=3, tmpdir='ok', stub_name='generate-llms-txt.py'):
+def run_section(text, *, out=GOOD_OUT, err=GOOD_ERR, rc=0, llms='same', docs=3, tmpdir='ok', stub_name='generate-llms-txt.py',
+                tracked=2, git=True, dirmd=False):
     """-> (exit status, [output lines, ANSI dropped], temp entries left, whether the stub ran, HARD_FAILS)."""
     root = pathlib.Path(tempfile.mkdtemp())
     tmp = root / 'tmp'
@@ -205,6 +212,16 @@ def run_section(text, *, out=GOOD_OUT, err=GOOD_ERR, rc=0, llms='same', docs=3, 
             (root / 'docs' / f'p{i + 1}.md').write_text('x\n')
         (root / 'docs/sub').mkdir()
         (root / 'docs/sub/ignored.md').write_text('x\n')
+        if dirmd:
+            (root / 'docs/dir.md').mkdir()
+        for i in range(tracked):
+            (root / 'examples' / f'e{i + 1}').mkdir(parents=True)
+            (root / 'examples' / f'e{i + 1}' / 'README.md').write_text('x\n')
+        (root / 'examples').mkdir(exist_ok=True)
+        (root / 'examples/hytale-paths.sh').write_text('x\n')
+        if git:
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            subprocess.run(['git', '-C', str(root), 'add', '-A'], check=True)
         if llms == 'same':
             (root / 'docs/llms.txt').write_text(out)
         elif llms == 'other':
@@ -243,6 +260,19 @@ G_NOTITLE = 'a listed page without a title exits 2, naming it'
 G_NODESC = 'a listed page without a description exits 2, naming it'
 G_HOMEDESC = "Home without a description exits 2 (it is an entry like any other)"
 G_ALLPROBLEMS = 'every problem is listed, not only the first'
+G_EMPTY = 'an empty `title:` or `description:` is empty, not the next frontmatter line: exit 2 naming the missing field'
+G_Y_CONT = 'a title or description that goes on on the next, indented line exits 2, naming the form'
+G_Y_IND = 'a block scalar (> |), anchor (&), alias (*) or tag (!) as a title or description exits 2, naming the form'
+G_Y_FLOW = 'a flow collection ([ {) as a description exits 2, naming the form'
+G_Y_DQ = 'a double-quoted value with an escape or an inner quote exits 2, naming the form'
+G_Y_SQ = 'a single-quoted value with a doubled quote exits 2, naming the form'
+G_Y_UNCLOSED = 'a quote that does not close exits 2, naming the form'
+G_Y_COMMENT = 'a plain value with a trailing " #" comment exits 2, naming the form'
+G_Y_COLON = "a plain value holding ': ' exits 2, naming the form"
+G_Y_OK = "plain and quoted one-line values with # and : inside them (C#, a:b, \"x # y: z\") are read as written"
+G_SUB = 'a row whose link goes below an example directory (./plugy/sub/) exits 2, naming the line'
+G_FRAGENC = 'a fragment and a %-encoded destination in a row still name the directory'
+G_NONASCII = 'an example directory with a non-ASCII name is read and listed (git ls-files -z)'
 G_HEADER = 'an examples table whose header row is not exactly the expected one exits 2'
 G_HEADER2 = 'a header row that occurs twice exits 2'
 G_SEP = 'a header row not followed by its separator row exits 2'
@@ -264,12 +294,22 @@ G_NOEXREADME = 'no examples/README.md exits 2'
 G_STDOUT = 'a failing run writes nothing to stdout'
 G_REAL = "the real tree: docs/llms.txt equals this generator's output"
 S_NEG = 'SECTION NEGATIVE CONTROL: the section as it stood (generate | cmp) reads a crashed generator as current, and an empty one as stale'
-S_HEALTHY = 'a healthy run PASSes, with the generator\'s denominator and the page-link count in the line, HARD_FAILS 0'
+S_HEALTHY = "a healthy run PASSes, with the generator's three figures and the counts made from the output in the line, HARD_FAILS 0"
 S_RC = 'a generator that exits non-zero FAILs, naming the status and its stderr, even if its stdout equals the file'
 S_EMPTY = 'a generator that exits 0 and writes nothing FAILs, saying so'
 S_NOMARK = "a generator that prints no 'LLMS ...' denominator line FAILs"
-S_MARKBAD = 'a denominator that disagrees with the page links in the output FAILs, naming both'
-S_FEWER = 'fewer page links than docs/*.md files FAILs (and a .md in a subdirectory of docs/ is not counted)'
+S_TWO = "a generator that prints two 'LLMS ...' lines FAILs (the section used to error and PASS)"
+S_MALFORMED = "an 'LLMS' line whose figures are not digits FAILs, quoting it"
+S_MARKBAD = 'a pages figure that disagrees with the distinct page links in the output FAILs, naming both'
+S_DUPPAGE = 'a page linked twice counts once: 3 links to 2 pages FAIL against the figure and against docs/'
+S_FEWER = 'fewer distinct page links than docs/*.md files FAILs (and a .md in a subdirectory of docs/ is not counted)'
+S_MORE = 'more distinct page links than docs/*.md files FAILs too: equal, not at least'
+S_DIRMD = 'a directory named like a markdown file in docs/ is not a docs page'
+S_EXBAD = 'an examples figure that disagrees with the distinct example tree links in the output FAILs, naming both'
+S_EXDUP = 'an example linked twice counts once'
+S_EXTRACKED = 'example links that are not the tracked top-level directories of examples/ FAIL, naming both counts'
+S_GITFAIL = 'a git ls-files that fails FAILs, naming its status, and the example counts are not compared'
+S_CATBAD = "a categories figure that disagrees with the output's headings (less Start here, Examples, Source) FAILs, naming both"
 S_STALE = 'an output that differs from docs/llms.txt is a WARN with the regenerate command, not a FAIL, and no PASS'
 S_MISSING = 'a missing docs/llms.txt is a WARN naming the command'
 S_CLEAN = 'the temp dir is removed on the pass path and on the failure path'
@@ -279,12 +319,13 @@ S_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 GEN_CASES = {G_HEALTHY, G_GROUPS, G_ORDER, G_REORDER, G_LINKS, G_RAWLINE, G_TITLE, G_STAMP, G_STAMP0, G_STAMP2, G_NOCAT,
              G_UNLISTED, G_INDEX_OK, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_ALLPROBLEMS,
-             G_HEADER, G_HEADER2, G_SEP, G_NOROW, G_GHOSTROW, G_NOLINK, G_CELLS, G_DUPROW, G_BADTYPE, G_EMPTYWHAT, G_PIPE,
+             G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_Y_OK, G_SUB, G_FRAGENC,
+             G_NONASCII, G_HEADER, G_HEADER2, G_SEP, G_NOROW, G_GHOSTROW, G_NOLINK, G_CELLS, G_DUPROW, G_BADTYPE, G_EMPTYWHAT, G_PIPE,
              G_KEYED, G_TABLEORDER, G_NEWDIR, G_UNTRACKED, G_ZERO, G_NOGIT, G_NOEXREADME, G_STDOUT, G_REAL}
-SEC_CASES = {S_NEG, S_HEALTHY, S_RC, S_EMPTY, S_NOMARK, S_MARKBAD, S_FEWER, S_STALE, S_MISSING, S_CLEAN, S_MKTEMP, S_STATIC, S_ALLCASES}
+SEC_CASES = {S_NEG, S_HEALTHY, S_RC, S_EMPTY, S_NOMARK, S_TWO, S_MALFORMED, S_MARKBAD, S_DUPPAGE, S_FEWER, S_MORE, S_DIRMD, S_EXBAD, S_EXDUP, S_EXTRACKED, S_GITFAIL, S_CATBAD, S_STALE, S_MISSING, S_CLEAN, S_MKTEMP, S_STATIC, S_ALLCASES}
 ALL_CASES = GEN_CASES | SEC_CASES
 # the cases that expect a failing generator: a mutation that lets a problem through reddens the ones it hides
-FAIL_CASES = {G_NOCAT, G_UNLISTED, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_STAMP0, G_STAMP2,
+FAIL_CASES = {G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_SUB, G_NOCAT, G_UNLISTED, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_STAMP0, G_STAMP2,
               G_ALLPROBLEMS, G_HEADER, G_HEADER2, G_SEP, G_NOROW, G_GHOSTROW, G_NOLINK, G_CELLS, G_DUPROW, G_BADTYPE,
               G_EMPTYWHAT, G_ZERO, G_NOGIT, G_NOEXREADME, G_STDOUT}
 
@@ -323,16 +364,16 @@ if A.mutations:
             "        return None",
             {G_NOFM}),
         'a page without a title is listed': (
-            "    if not title:\n        problems.append(", "    if False:\n        problems.append(",
-            {G_NOTITLE, G_ALLPROBLEMS}),
+            "    if not title and not t_refused:\n        problems.append(", "    if False:\n        problems.append(",
+            {G_NOTITLE, G_ALLPROBLEMS, G_EMPTY}),
         'a page without a description is listed': (
-            "    if not desc:\n        problems.append(", "    if False:\n        problems.append(",
-            {G_NODESC, G_HOMEDESC}),
+            "    if not desc and not d_refused:\n        problems.append(", "    if False:\n        problems.append(",
+            {G_NODESC, G_HOMEDESC, G_EMPTY}),
         'only the first problem is reported': (
             "        for p in problems:\n            print(f'  FAIL  {p}', file=sys.stderr)",
             "        for p in problems[:1]:\n            print(f'  FAIL  {p}', file=sys.stderr)",
             # a row that fails leaves its directory without a row too: those two cases list two problems
-            {G_ALLPROBLEMS, G_CELLS, G_NOLINK}),
+            {G_ALLPROBLEMS, G_CELLS, G_NOLINK, G_EMPTY}),
         'problems do not stop the run': (
             "    text, ncat, npages, nex, problems = generate(root)\n    if problems:",
             "    text, ncat, npages, nex, problems = generate(root)\n    if False:",
@@ -341,6 +382,43 @@ if A.mutations:
             "    if problems:\n        for p in problems:",
             "    if problems:\n        sys.stdout.write('#')\n        for p in problems:",
             FAIL_CASES),
+        # ---- frontmatter forms
+        'an empty value reads the next frontmatter line': (
+            "    elif not v:\n        return None, False", "    elif not v:\n        return (lines[at + 1].strip() or None), False",
+            {G_EMPTY}),
+        'a value that goes on on the next line is read': (
+            "    elif cont:\n", "    elif False:\n",
+            {G_Y_CONT}),
+        'a block scalar, anchor, alias or tag is read': (
+            "    if v and v[0] in '>|&*!':", "    if False:",
+            {G_Y_IND}),
+        'a flow collection is read': (
+            "    elif v[0] in '[{':", "    elif False:",
+            {G_Y_FLOW}),
+        'a quote that does not close is read': (
+            "        if len(v) < 2 or v[-1] != v[0]:", "        if False:",
+            {G_Y_UNCLOSED}),
+        'a double-quoted escape is read': (
+            "        elif v[0] == '\"' and ('\\\\' in inner or '\"' in inner):", "        elif False:",
+            {G_Y_DQ}),
+        'a single-quoted doubled quote is read': (
+            "        elif v[0] == \"'\" and \"'\" in inner:", "        elif False:",
+            {G_Y_SQ}),
+        'a trailing comment is read': (
+            "    elif re.search(r'\\s#', v):", "    elif False:",
+            {G_Y_COMMENT}),
+        "a ': ' in a plain value is read": (
+            "    elif ': ' in v:", "    elif False:",
+            {G_Y_COLON}),
+        'a # with no space before it is a comment': (
+            "    elif re.search(r'\\s#', v):", "    elif '#' in v:",
+            {G_Y_OK}),
+        "a ':' with no space after it is a mapping": (
+            "    elif ': ' in v:", "    elif ':' in v:",
+            {G_Y_OK}),
+        'a refused value is also reported as missing': (
+            "    return None, True\n", "    return None, False\n",
+            {G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON}),
         # ---- the examples table
         'the header row is matched loosely': (
             "if l.rstrip() == HEADER]", "if l.startswith('| Example')]",
@@ -359,7 +437,7 @@ if A.mutations:
             {G_NOLINK}),
         'a row for something that is not an example directory is read': (
             "        if len(segs) != 2 or segs[0] != 'examples' or segs[1] not in pop:", "        if False:",
-            {G_GHOSTROW}),
+            {G_GHOSTROW, G_SUB}),
         'a second row for a directory is read': (
             "        if d in seen:\n            problems.append(", "        if False:\n            problems.append(",
             {G_DUPROW}),
@@ -382,7 +460,7 @@ if A.mutations:
             "    if r.returncode != 0:\n        problems.append(", "    if False:\n        problems.append(",
             {G_NOGIT}),
         'untracked directories are examples': (
-            "'ls-files', '--', 'examples/'", "'ls-files', '--cached', '--others', '--', 'examples/'",
+            "'ls-files', '-z', '--', 'examples/'", "'ls-files', '-z', '--cached', '--others', '--', 'examples/'",
             {G_UNTRACKED}),
         'cells are split on every |': (
             "re.split(r'(?<!\\\\)\\|', row)", "row.split('|')",
@@ -392,11 +470,23 @@ if A.mutations:
             {G_PIPE}),
         'rows are keyed by position': (
             "        d = segs[1]\n", "        d = sorted(pop)[len(seen)] if len(seen) < len(pop) else segs[1]\n",
-            {G_KEYED, G_DUPROW, G_NEWDIR, G_NOROW, G_LINKS, G_TABLEORDER, G_REAL}),
+            {G_KEYED, G_DUPROW, G_NEWDIR, G_NOROW, G_LINKS, G_TABLEORDER, G_REAL, G_FRAGENC, G_NONASCII}),
+        'a row below an example directory names the directory': (
+            "        if len(segs) != 2 or segs[0] != 'examples' or segs[1] not in pop:", "        if segs[0] != 'examples' or segs[1] not in pop:",
+            {G_SUB}),
+        'a fragment stays on the destination': (
+            "path = urllib.parse.unquote(m.group(1).partition('#')[0].partition('?')[0])", "path = urllib.parse.unquote(m.group(1))",
+            {G_FRAGENC}),
+        'a %-encoded destination is not decoded': (
+            "path = urllib.parse.unquote(m.group(1).partition('#')[0].partition('?')[0])", "path = m.group(1).partition('#')[0].partition('?')[0]",
+            {G_FRAGENC}),
+        'git ls-files quotes a non-ASCII name': (
+            "'ls-files', '-z', '--'", "'ls-files', '--'",
+            {G_NONASCII}),
         # ---- the output
         "the examples are sorted, not in the table's order": (
             "for d, t, w in examples]))", "for d, t, w in sorted(examples)]))",
-            {G_TABLEORDER, G_NEWDIR, G_PIPE, G_LINKS, G_KEYED, G_REAL}),
+            {G_TABLEORDER, G_NEWDIR, G_PIPE, G_LINKS, G_KEYED, G_REAL, G_FRAGENC, G_NONASCII}),
         "the pages of a category are sorted, not in README order": (
             "        for _, page in pages:\n            e = page_entry(", "        for _, page in sorted(pages, key=lambda x: x[1]):\n            e = page_entry(",
             {G_ORDER, G_TITLE, G_LINKS, G_REAL}),
@@ -405,15 +495,14 @@ if A.mutations:
             {G_GROUPS, G_REAL}),
         'the page links are the raw markdown files': (
             "{SITE}/{page[:-3]}.html", "{RAW}/{page[:-3]}.md",
-            {G_LINKS, G_RAWLINE, G_TITLE, G_REAL}),
+            {G_LINKS, G_RAWLINE, G_TITLE, G_REAL, G_Y_OK}),
         'the denominator line is not printed': (
             "    print(f'LLMS {ncat} categories, {npages} pages, {nex} examples', file=sys.stderr)", "    pass",
             {G_HEALTHY, G_NEWDIR, G_UNTRACKED}),
-        "the build is read from every page's prose, not from Home's paragraph": (
+        "the build is read from every page's prose before Home's paragraph": (
             "    found = STAMP.findall(index.read_text()) if index.is_file() else []",
-            "    found = [m for f in (root / 'docs').glob('*.md') for m in re.findall(r'Verified against ([0-9]+(?:\\.[0-9]+)*)()', f.read_text())]",
-            # the pages' prose is not Home's paragraph: with it, the cases that edit a-page lose the line they read
-            {G_STAMP, G_STAMP0, G_STAMP2, G_REAL, G_NOFM, G_NOTITLE, G_NODESC, G_ALLPROBLEMS}),
+            "    found = [m for f in (root / 'docs').glob('*.md') for m in re.findall(r'Verified against ([0-9]+(?:\\.[0-9]+)*)()', f.read_text())] or (STAMP.findall(index.read_text()) if index.is_file() else [])",
+            {G_STAMP, G_STAMP0, G_STAMP2, G_REAL}),
         # ---- verify-docs.sh: the section
         'the section reads cmp\'s status, not the generator\'s': (
             '  if [ "$LLMS_RC" -ne 0 ]; then', '  if false; then',
@@ -421,27 +510,55 @@ if A.mutations:
         'empty output is not a failure of its own': (
             '  elif [ ! -s "$LLMS_TMP/out" ]; then', '  elif false; then',
             {S_EMPTY}, SEC),
-        'a missing denominator line is not a failure': (
-            '  elif [ -z "$LLMS_MARK" ]; then', '  elif false; then',
-            {S_NOMARK}, SEC),
-        'a denominator that disagrees with the output is not a failure': (
-            '  elif [ "$LLMS_MARK" -ne "$LLMS_N" ]; then', '  elif false; then',
-            {S_MARKBAD}, SEC),
-        'fewer page links than docs files is not a failure': (
-            '  elif [ "$LLMS_N" -lt "$LLMS_DOCS" ]; then', '  elif false; then',
-            {S_FEWER}, SEC),
+        'a missing or repeated LLMS line is not a failure': (
+            '  elif [ "$LLMS_NLINES" -ne 1 ]; then', '  elif false; then',
+            {S_NOMARK, S_TWO}, SEC),
+        'an LLMS line that is not digits is not a failure': (
+            '  elif [ -z "$LLMS_FIELDS" ]; then', '  elif false; then',
+            {S_MALFORMED}, SEC),
+        'a pages figure that disagrees with the output is not a failure': (
+            '    if [ "$LLMS_MP" -ne "$LLMS_N" ]; then', '    if false; then',
+            {S_MARKBAD, S_DUPPAGE}, SEC),
+        'page links are not compared with the docs files': (
+            '    if [ "$LLMS_N" -ne "$LLMS_DOCS" ]; then', '    if false; then',
+            {S_FEWER, S_MORE, S_DUPPAGE}, SEC),
+        'at least as many page links as docs files is enough': (
+            '    if [ "$LLMS_N" -ne "$LLMS_DOCS" ]; then', '    if [ "$LLMS_N" -lt "$LLMS_DOCS" ]; then',
+            {S_MORE}, SEC),
+        'page links are counted with repeats': (
+            "\\1/p' \"$LLMS_TMP/out\" | sort -u | wc -l", "\\1/p' \"$LLMS_TMP/out\" | wc -l",
+            {S_DUPPAGE}, SEC),
         'docs files are counted below docs/ too': (
-            "find docs -maxdepth 1 -name '*.md'", "find docs -name '*.md'",
+            "find docs -maxdepth 1 -type f -name '*.md'", "find docs -type f -name '*.md'",
             # only the paths that get as far as the count: the failures before it never read it
-            {S_FEWER, S_HEALTHY, S_STALE, S_MISSING}, SEC),
+            {S_CATBAD, S_DIRMD, S_GITFAIL, S_HEALTHY, S_MISSING, S_DUPPAGE, S_MARKBAD, S_EXDUP, S_EXBAD, S_STALE, S_EXTRACKED, S_FEWER,
+             S_MORE}, SEC),
+        'a directory named like a markdown file is a docs page': (
+            "find docs -maxdepth 1 -type f -name '*.md'", "find docs -maxdepth 1 -name '*.md'",
+            {S_DIRMD}, SEC),
+        'an examples figure that disagrees with the output is not a failure': (
+            '    if [ "$LLMS_ME" -ne "$LLMS_X" ]; then', '    if false; then',
+            {S_EXBAD, S_EXDUP}, SEC),
+        'example links are counted with repeats': (
+            "[^/)]+/\\)' \"$LLMS_TMP/out\" | sort -u | wc -l", "[^/)]+/\\)' \"$LLMS_TMP/out\" | wc -l",
+            {S_EXDUP}, SEC),
+        'example links are not compared with the tracked directories': (
+            '    elif [ "$LLMS_X" -ne "$LLMS_T" ]; then', '    elif false; then',
+            {S_EXTRACKED, S_EXDUP}, SEC),
+        'a failing git ls-files is not a failure of its own': (
+            '    if [ "$LLMS_GITRC" -ne 0 ]; then', '    if false; then',
+            {S_GITFAIL}, SEC),
+        'a categories figure that disagrees with the headings is not a failure': (
+            '    if [ "$LLMS_MC" -ne "$LLMS_C" ]; then', '    if false; then',
+            {S_CATBAD}, SEC),
         'a differing file is a PASS': (
-            '    elif cmp -s "$LLMS_TMP/out" docs/llms.txt; then', '    elif true; then',
+            '      elif cmp -s "$LLMS_TMP/out" docs/llms.txt; then', '      elif true; then',
             {S_STALE}, SEC),
         'a differing file is a FAIL': (
-            '      warn "docs/llms.txt is stale', '      fail "docs/llms.txt is stale',
+            '        warn "docs/llms.txt is stale', '        fail "docs/llms.txt is stale',
             {S_STALE}, SEC),
         'a missing docs/llms.txt is passed': (
-            '    if [ ! -f docs/llms.txt ]; then\n      warn "docs/llms.txt missing', '    if false; then\n      warn "docs/llms.txt missing',
+            '      if [ ! -f docs/llms.txt ]; then\n        warn "docs/llms.txt missing', '      if false; then\n        warn "docs/llms.txt missing',
             {S_MISSING}, SEC),
         'the temp dir is left behind': (
             '  rm -rf "$LLMS_TMP"\n', '  true\n',
@@ -452,10 +569,10 @@ if A.mutations:
         'the section sets its own EXIT hook': (
             '  rm -rf "$LLMS_TMP"\n', "  rm -rf \"$LLMS_TMP\"\n  trap 'true' EXIT\n",
             {S_STATIC}, SEC),
-        'the denominator is not in the PASS line': (
-            '"llms.txt generates ($LLMS_LINE; $LLMS_N of $LLMS_DOCS docs pages linked) and docs/llms.txt matches it"',
+        'the counts are not in the PASS line': (
+            '"llms.txt generates ($LLMS_LINE; $LLMS_N of $LLMS_DOCS docs pages and $LLMS_X of $LLMS_T example directories linked, each figure counted from the output) and docs/llms.txt matches it"',
             '"llms.txt generates and docs/llms.txt matches it"',
-            {S_HEALTHY}, SEC),
+            {S_HEALTHY, S_DIRMD}, SEC),
     }
     print(f'MUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
     if len(MUTATIONS) < MIN_MUTATIONS:
@@ -479,6 +596,13 @@ if A.mutations:
             r = subprocess.run([sys.executable, str(HERE / pathlib.Path(__file__).name), '--from-dir', str(tmp)],
                                capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
             out = r.stdout + r.stderr
+            ran = re.search(r'^FIXTURE (\d+) check\(s\)', out, re.M)
+            tail = ' | '.join(out.strip().split('\n')[-3:])
+            if ran is None or int(ran.group(1)) < MIN_CASES:
+                return label, None, (f'the run printed no "FIXTURE N check(s)" line with N >= {MIN_CASES} (exit {r.returncode}), so it did not '
+                                     f'run its cases and its red set says nothing: {tail}')
+            if label.startswith('IDENTITY') and r.returncode != 0:
+                return label, None, f'the IDENTITY run exited {r.returncode}, not 0: {tail}'
             red = {l[len('  FAIL '):].split('\t')[0] for l in out.split('\n') if l.startswith('  FAIL ') and '\t' in l}
             return label, red, out
         finally:
@@ -549,11 +673,50 @@ check(G_HOMEDESC, lambda: only({'docs/index.md': CORPUS['docs/index.md'].replace
 check(G_ALLPROBLEMS, lambda: only({'docs/a-page.md': page(title=''), 'docs/c-page.md': page(title='')}),
       ['docs/a-page.md has no frontmatter title', 'docs/c-page.md has no frontmatter title'])
 
+# ---- frontmatter forms --------------------------------------------------------------------------------------
+def fm_problems(**fields):
+    """a-page's frontmatter with `fields` (key -> raw text after `key:`); -> the problems, cut at the shared explanation."""
+    r = only({'docs/a-page.md': fm_page(*[f'{k}:{v}' for k, v in fields.items()])})
+    return [b.split(': this reader')[0] for b in r] if isinstance(r, list) else r
+
+
+_A = 'docs/a-page.md frontmatter'
+check(G_EMPTY, lambda: only({'docs/a-page.md': fm_page('title:', 'description: "D"', 'seo:', '  type: X'),
+                             'docs/c-page.md': fm_page('title: "C"', 'description:', 'seo:', '  type: X')}),
+      ['docs/a-page.md has no frontmatter title', 'docs/c-page.md has no frontmatter description'])
+check(G_Y_CONT, lambda: [fm_problems(title=' "T"', description=' folded text\n  second line'),
+                         fm_problems(title=' "T"', description='\n  indented on the next line')],
+      [[f'{_A} description goes on on the next line']] * 2)
+check(G_Y_IND, lambda: [fm_problems(title=' "T"', description=' ' + v) for v in ('>-\n  text', '| \n  text', '&anchor text', '*alias', '!!str text')]
+                       + [fm_problems(title=' >', description=' "D"')],
+      [[f"{_A} description starts with {c!r} (a block scalar, anchor, alias or tag)"] for c in '>|&*!'] +
+      [[f"{_A} title starts with '>' (a block scalar, anchor, alias or tag)"]])
+check(G_Y_FLOW, lambda: [fm_problems(title=' "T"', description=' [a, b]'), fm_problems(title=' "T"', description=' {a: b}')],
+      [[f'{_A} description is a flow collection']] * 2)
+check(G_Y_DQ, lambda: [fm_problems(title=' "T"', description=' "Say \\"hi\\" now"'), fm_problems(title=' "T"', description=' "a\\nb"'),
+                       fm_problems(title=' "T"', description=' "say "hi" now"')],
+      [[f'{_A} description is double-quoted with an escape']] * 3)
+check(G_Y_SQ, lambda: fm_problems(title=' "T"', description=" 'It''s a page'"), [f'{_A} description is single-quoted with a doubled quote'])
+check(G_Y_UNCLOSED, lambda: [fm_problems(title=' "T"', description=' "never closed'), fm_problems(title=' "T"', description=' "')],
+      [[f'{_A} description has a quote that does not close']] * 2)
+check(G_Y_COMMENT, lambda: fm_problems(title=' "T"', description=' Plain text # a comment'), [f'{_A} description has a trailing comment'])
+check(G_Y_COLON, lambda: fm_problems(title=' "T"', description=' Plain: text'), [f"{_A} description has ': ' in a plain value"])
+_ok = gen({'docs/a-page.md': fm_page('title: C# and a:b', 'description: "Use # and: here"'),
+           'docs/c-page.md': fm_page("title: 'Single # q'", "description: 'single # and: here'")})
+check(G_Y_OK, lambda: (_ok[0], [l for l in links(_ok[1], 'Zed') + links(_ok[1], 'Aye') if 'a-page' in l or 'c-page' in l]),
+      (0, [f'- [C# and a:b]({SITE}/a-page.html): Use # and: here', f"- [Single # q]({SITE}/c-page.html): single # and: here"]))
+
 # ---- the examples table ------------------------------------------------------------------------------------
 def with_table(t, tail='\nNotes.\n'):
     return {'examples/README.md': '# Examples\n\n' + t + tail}
 
 
+check(G_SUB, lambda: only(with_table(TABLE + '| [sub/](./plugy/sub/) | Plugin | x | \u2014 |\n')),
+      ['examples/README.md:7 links ./plugy/sub/, which is not an example directory'])
+_fe = gen(with_table(TABLE.replace('(./plugy/)', '(./plugy/#top)').replace('(./packx/)', '(./pa%63kx/)')))
+check(G_FRAGENC, lambda: (_fe[0], [re.search(r'\[(.*?)/\]', l).group(1) for l in links(_fe[1], 'Examples')]), (0, ['plugy', 'packx']))
+_na = gen({'examples/caf\u00e9/README.md': '# C\n', 'examples/README.md': '# Examples\n\n' + TABLE + '| [caf\u00e9/](./caf\u00e9/) | Pack | Accented | \u2014 |\n'})
+check(G_NONASCII, lambda: (_na[0], [re.search(r'\[(.*?)/\]', l).group(1) for l in links(_na[1], 'Examples')]), (0, ['plugy', 'packx', 'caf\u00e9']))
 check(G_HEADER, lambda: only(with_table(TABLE.replace('| Type |', '| Kind |'))),
       ['examples/README.md holds the table header `| Example | Type | What it demonstrates | Commands |` 0 times, wanted exactly once'])
 check(G_HEADER2, lambda: only(with_table(TABLE + '\n' + TABLE)),
@@ -596,7 +759,8 @@ check(G_REAL, lambda: subprocess.run([sys.executable, str(FROM / 'generate-llms-
 
 # ---- the section cases -------------------------------------------------------------------------------------
 _sec = section_text()
-OK_PASS = (f'PASS  llms.txt generates (1 categories, 3 pages, 2 examples; 3 of 3 docs pages linked) and docs/llms.txt matches it')
+OK_PASS = ('PASS  llms.txt generates (1 categories, 3 pages, 2 examples; 3 of 3 docs pages and 2 of 2 example directories linked, '
+           'each figure counted from the output) and docs/llms.txt matches it')
 CMD = 'python3 maintenance/scripts/generate-llms-txt.py > docs/llms.txt'
 
 
@@ -638,11 +802,33 @@ check(S_RC, lambda: sec(rc=3, err='  FAIL  boom\n  FAIL  llms.txt was not genera
            'boom', 'llms.txt was not generated: 1 problem(s)']))
 check(S_EMPTY, lambda: sec(out='', err='LLMS 1 categories, 0 pages, 0 examples\n', llms='none'),
       (1, ['FAIL  generate-llms-txt.py exited 0 and wrote nothing']))
-check(S_NOMARK, lambda: sec(err=''), (1, ["FAIL  generate-llms-txt.py printed no 'LLMS <c> categories, <p> pages, <e> examples' line on stderr (got: nothing)"]))
+check(S_NOMARK, lambda: sec(err=''), (1, ["FAIL  generate-llms-txt.py printed 0 'LLMS' lines on stderr, wanted exactly 1"]))
+check(S_TWO, lambda: sec(err='LLMS 1 categories, 3 pages, 2 examples\nLLMS 1 categories, 9 pages, 2 examples\n'),
+      (1, ["FAIL  generate-llms-txt.py printed 2 'LLMS' lines on stderr, wanted exactly 1"]))
+check(S_MALFORMED, lambda: sec(err='LLMS 1 categories, x pages, 2 examples\n'),
+      (1, ["FAIL  the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with digits only (got: 1 categories, x pages, 2 examples)"]))
 check(S_MARKBAD, lambda: sec(err='LLMS 1 categories, 5 pages, 2 examples\n'),
-      (1, ['FAIL  generate-llms-txt.py says 5 pages, its output holds 3 page links']))
-check(S_FEWER, lambda: sec(docs=5, err='LLMS 1 categories, 3 pages, 2 examples\n'),
-      (1, ['FAIL  the llms.txt output links 3 page(s), docs/ holds 5 .md files: a page is missing from it']))
+      (1, ['FAIL  generate-llms-txt.py says 5 pages, its output links 3 distinct page(s)']))
+_DUP = GOOD_OUT.replace(LINK(3), LINK(1))
+check(S_DUPPAGE, lambda: sec(out=_DUP),
+      (2, ['FAIL  generate-llms-txt.py says 3 pages, its output links 2 distinct page(s)',
+           'FAIL  the llms.txt output links 2 distinct page(s), docs/ holds 3 .md files: a page is missing from it, or listed twice']))
+check(S_FEWER, lambda: sec(docs=5),
+      (1, ['FAIL  the llms.txt output links 3 distinct page(s), docs/ holds 5 .md files: a page is missing from it, or listed twice']))
+check(S_MORE, lambda: sec(docs=2),
+      (1, ['FAIL  the llms.txt output links 3 distinct page(s), docs/ holds 2 .md files: a page is missing from it, or listed twice']))
+check(S_DIRMD, lambda: sec(dirmd=True), (0, [OK_PASS]))
+check(S_EXBAD, lambda: sec(err='LLMS 1 categories, 3 pages, 5 examples\n'),
+      (1, ['FAIL  generate-llms-txt.py says 5 examples, its output links 2 distinct example directories']))
+check(S_EXDUP, lambda: sec(out=GOOD_OUT.replace(EXL('e2'), EXL('e1')), err='LLMS 1 categories, 3 pages, 2 examples\n'),
+      (2, ['FAIL  generate-llms-txt.py says 2 examples, its output links 1 distinct example directories',
+           'FAIL  the llms.txt output links 1 distinct example directories, git tracks 2 under examples/']))
+check(S_EXTRACKED, lambda: sec(tracked=3),
+      (1, ['FAIL  the llms.txt output links 2 distinct example directories, git tracks 3 under examples/']))
+check(S_GITFAIL, lambda: sec(git=False),
+      (1, ['FAIL  git ls-files -z -- examples/ failed (status 128), so the examples were not counted']))
+check(S_CATBAD, lambda: sec(err='LLMS 4 categories, 3 pages, 2 examples\n'),
+      (1, ['FAIL  generate-llms-txt.py says 4 categories, its output has 1 category headings']))
 check(S_STALE, lambda: sec(llms='other'), (0, [f'WARN  docs/llms.txt is stale \u2014 regenerate: {CMD}']))
 check(S_MISSING, lambda: sec(llms='none'), (0, [f'WARN  docs/llms.txt missing \u2014 generate: {CMD}']))
 check(S_CLEAN, lambda: (run_section(_sec)[2], run_section(_sec, rc=3, err='x\n')[2], run_section(_sec, out='')[2]), (0, 0, 0))

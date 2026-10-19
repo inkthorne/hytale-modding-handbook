@@ -27,7 +27,7 @@ BASE = 'https://github.com/o/r'
 
 def render(src: str, ref: str = 'REF') -> str:
     md = markdown.Markdown(
-        extensions=['tables', 'toc', 'pymdownx.superfences', 'handbook_md'],
+        extensions=['tables', 'toc', 'pymdownx.inlinehilite', 'pymdownx.superfences', 'handbook_md'],
         extension_configs={'toc': {'slugify': __import__('handbook_md').github(), 'permalink': False},
                            'handbook_md': {'base': BASE, 'ref': ref}})
     return md.convert(src)
@@ -171,6 +171,11 @@ def _():
 @case('escape_quote', 'escapes: \\" prints the quote without its backslash')
 def _():
     return has(render('FaceType in \\"Supporting\\" of'), 'in "Supporting" of', absent=('\\',))
+
+
+@case('table_pipe', 'an escaped pipe in a code span in a table cell is a pipe, and outside a table the backslash stays')
+def _():
+    return has(render('| a | b |\n|---|---|\n| `c\\|d` | x\\|y |\n\n`e\\|f`\n'), '<code>c|d</code>', '<td>x|y</td>', '<code>e\\|f</code>')
 
 
 @case('base_required', 'an extension configured without the repository URL refuses to load')

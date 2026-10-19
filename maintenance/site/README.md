@@ -34,3 +34,17 @@ parity comparison against GitHub's own rendering (li, ol, ul, table, tr, pre, bl
 text of every page, the heading ids); the cross-check of every anchor check-links computes against the built ids;
 `check-site-links.py`; and the negative control of the first item (a build with no extension and no heading
 fixes must fail exactly the 9 links and the anchors it did).
+
+## Accepted differences from GitHub (measured, and left)
+
+The site is meant to show what GitHub shows. These differences were found by comparing built pages with GitHub's own
+rendering and are accepted, because a reader cannot tell them apart or they cost more to remove than they are worth.
+A difference not listed here is a defect.
+
+- A code span that starts or ends with a space loses it on the site (Python-Markdown trims; CommonMark trims one space
+  from each side only when both are there): 25 spans. Spaces inside a code span are not visible.
+- A code span that holds a line break shows it as a space in one of the two renderers: 19 spans. Same look.
+- Typographic quotes and dashes: the Jekyll site printed curly quotes and en/em dashes (kramdown's smartypants);
+  GitHub and the new site print the ASCII characters as written.
+- The page title separator is ` - ` (`Commands API - Hytale Modding Handbook`), where Jekyll's was ` | `.
+- GitHub alerts (`> [!WARNING]`) are plain blockquotes with the literal `[!WARNING]` on the site, as they were on Jekyll.

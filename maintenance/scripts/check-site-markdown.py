@@ -12,6 +12,11 @@ text and anchor but keeps `<K, T>`; Python-Markdown has its own opinion of both.
 heading written ``### `Codec<T>` ``, whose anchor is `codect`. 48 headings had the raw form at d361e13
 (9 pages); the lint's population is that count, and it is 0 now.
 
+RULE table-code-pipe. A `|` inside a code span on a table row that is not written `\\|`. GitHub splits a table row on
+every unescaped pipe, code span or not, so `/whitelist add|remove|clear` in a cell made three cells (docs/
+permissions.md:496 at d361e13, the one case; review of d361e13..9f19ac9, MINOR-1). The site rewrites `\\|` inside
+table code to `|` (handbook_md.py, h), so writing the escape is right on both.
+
 RULE list-child-indent. A child of a list item (a nested list item, or a paragraph, table or fence that follows
 a blank line inside the item) indented fewer than 4 spaces past its parent's marker. CommonMark nests a child
 indented to the parent's content (2 spaces under `- `, 3 under `1. `), which is what the docs were written to;
@@ -57,6 +62,22 @@ def heading_findings(text: str, fenced):
             if '<' in outside_code(m.group(1)):
                 out.append((no, 'heading-generic', f'a `<` outside a code span in a heading: {m.group(1)!r} (write the generic in backticks)'))
     return out, read
+
+
+def table_findings(text: str, fenced):
+    """-> [(line, rule, message)]: a bare `|` in a code span on a table row (a line that starts with `|`)."""
+    out = []
+    for no, line in enumerate(text.split('\n'), 1):
+        if no in fenced:
+            continue
+        rest = QUOTE.match(line).group(2).lstrip()
+        if not rest.startswith('|'):
+            continue
+        for m in CL.CODE_SPAN.finditer(rest):
+            if re.search(r'(?<!\\)\|', m.group(2)):
+                out.append((no, 'table-code-pipe',
+                            f'a `|` inside a code span on a table row splits the cell on GitHub (write `\\|`): {m.group(0)[:60]!r}'))
+    return out
 
 
 def list_findings(text: str, fenced):
@@ -110,7 +131,7 @@ def scan_page(text: str):
     fenced = doc_fences.parse(text).fence_lines
     hs, nh = heading_findings(text, fenced)
     ls, ni = list_findings(text, fenced)
-    return hs, ls, nh, ni
+    return hs + [(no, rule, msg) for no, rule, msg in table_findings(text, fenced)], ls, nh, ni
 
 
 def fix_page(text: str) -> str:

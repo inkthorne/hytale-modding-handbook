@@ -41,10 +41,10 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 114            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
-MIN_MUTATIONS = 94
-MIN_EXT_CASES = 21
-MIN_EXT_MUTATIONS = 23
+MIN_CASES = 116            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_MUTATIONS = 98
+MIN_EXT_CASES = 22
+MIN_EXT_MUTATIONS = 26
 
 SECTION_MD = 'section "[HARD] Docs markdown renders the same on GitHub and on the site"'
 SECTION_NAV = 'section "[HARD] The sidebar is generated from README.md and holds every docs page once"'
@@ -163,6 +163,8 @@ CASE_MD = {
     'block2': 'markdown: a paragraph after a blank line inside an item at 2 FAILs, at 4 it is clean',
     'fence2': 'markdown: a fence after a blank line inside an item at 2 FAILs',
     'fence_adj': 'markdown: a fence straight after the item line needs no more than the content column',
+    'tbl_pipe': 'markdown: a bare | in a code span on a table row FAILs with file:line, \\| is clean',
+    'tbl_pipe_out': 'markdown: a | in a code span outside a table row, or inside a fence, is not a table pipe',
     'zero_pages': 'markdown: a docs tree with no page is a FAIL naming the exit status, not a clean run',
     'silent': 'markdown: a lint that exits 0 having read nothing is a FAIL, not a clean run',
     'zero_pages_figs': 'markdown: a lint that reports 0 pages beside non-zero figures is a FAIL, not a clean run',
@@ -231,6 +233,13 @@ def md_cases(w: World) -> dict[str, list[str]]:
             must=("docs/l.md:5: list-child-indent: a fence inside a list item indented 2 past the item (needs 4): '```java'",))
     verdict('fence_adj', sec({'docs/l.md': f'# L\n\n{parent}  ```java\n  int x;\n  ```\n- next item\n'}), hf=0, must=('PASS',), must_not=('  FAIL  ',))
 
+    tbl = '| a | b |\n|---|---|\n| `x|y` | z |\n'
+    verdict('tbl_pipe', sec({'docs/t.md': '# T\n\n' + tbl}), hf=1,
+            must=("docs/t.md:5: table-code-pipe: a `|` inside a code span on a table row splits the cell on GitHub (write `\\|`): '`x|y`'",))
+    ok = sec({'docs/t.md': '# T\n\n' + tbl.replace('x|y', 'x\\|y')})
+    if ok[2] != 0 or '  FAIL  ' in ok[1]:
+        res[CASE_MD['tbl_pipe']].append(f'an escaped pipe in table code was refused: {lines(ok[1])}')
+    verdict('tbl_pipe_out', sec({'docs/t.md': '# T\n\nUse `a|b` here.\n\n```\n| `c|d` |\n```\n'}), hf=0, must=('PASS',), must_not=('  FAIL  ',))
     # the lint reads nothing
     verdict('zero_pages', sec({}, drop=('docs/ok.md',)), hf=1,
             must=('FAIL  check-site-markdown.py exited 2, so nothing was linted:',), must_not=('PASS',))
@@ -865,7 +874,8 @@ CASE_EXT = {k: f'ext: {v}' for k, v in {
     'quote_one': 'a > line with nothing after it keeps one box',
     'html_text': '<GameMode, Settings> is text, <b> is a tag',
     'escape_quote': '\\" prints the quote without its backslash',
-    'base_required': 'an extension configured without the repository URL refuses to load'}.items()}
+    'base_required': 'an extension configured without the repository URL refuses to load',
+    'table_pipe': 'an escaped pipe in a code span in a table cell is a pipe, outside a table the backslash stays'}.items()}
 
 
 def ext_cases(w: World) -> dict[str, list[str]]:
@@ -1008,7 +1018,7 @@ mut('IDENTITY (no change - the harness control)', ('script', CMD), '#!/usr/bin/e
 mut('the heading rule is removed', ('script', CMD), "if '<' in outside_code(m.group(1)):", 'if False:',
     ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span'])
 mut('code spans are not set aside in a heading', ('script', CMD), "return CL.CODE_SPAN.sub('', t)", 'return t',
-    ['gen_span'], ['healthy', 'gen_span', 'gen_fence', 'nest4', 'nest_ord', 'block2', 'fence_adj', 'fix'])
+    ['gen_span'], ['healthy', 'gen_span', 'gen_fence', 'nest4', 'nest_ord', 'block2', 'fence_adj', 'fix', 'tbl_pipe', 'tbl_pipe_out'])
 mut('fenced `#` lines are read as headings', ('script', CMD), '        if m and no not in fenced:', '        if m:',
     ['gen_fence'], ['gen_fence'])
 mut('the nested-item rule is removed', ('script', CMD),
@@ -1043,7 +1053,7 @@ mut('the section does not require a list item', ('section', 'md'),
     ['zero_items'], ['zero_items'])
 mut('findings are not a FAIL', ('section', 'md'),
     'elif [ "$RC" -eq 1 ]; then', 'elif false; then',
-    ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span', 'nest2', 'nest_ord', 'nest_quote', 'block2', 'fence2'])
+    ['gen_raw'], ['gen_raw', 'gen_tag', 'gen_comma', 'gen_span', 'nest2', 'nest_ord', 'nest_quote', 'block2', 'fence2', 'tbl_pipe'])
 mut('the pass line drops the denominators', ('section', 'md'),
     'pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): ', 'pass "linted: ',
     ['healthy'], ['healthy'])
@@ -1273,6 +1283,21 @@ mut('the workflow names no shell (GitHub then runs bash -e, which has no pipefai
     ['links', 'shell'], ['links', 'shell'], part='wf')
 
 
+mut('a bare pipe in table code is not refused', ('script', CMD), "if re.search(r'(?<!\\\\)\\|', m.group(2)):", 'if False:',
+    ['tbl_pipe'], ['tbl_pipe'], part='md')
+mut('an escaped pipe in table code is refused too', ('script', CMD), "if re.search(r'(?<!\\\\)\\|', m.group(2)):", "if '|' in m.group(2):",
+    ['tbl_pipe'], ['tbl_pipe'], part='md')
+mut('the table rule reads inside code fences', ('script', CMD), "    for no, line in enumerate(text.split('\\n'), 1):\n        if no in fenced:\n            continue\n        rest = QUOTE", "    for no, line in enumerate(text.split('\\n'), 1):\n        rest = QUOTE",
+    ['tbl_pipe_out'], ['tbl_pipe_out'], part='md')
+mut('the table rule reads every line, not table rows', ('script', CMD), "        if not rest.startswith('|'):\n            continue\n        for m in CL.CODE_SPAN", "        for m in CL.CODE_SPAN",
+    ['tbl_pipe_out'], ['tbl_pipe_out'], part='md')
+mut('the table-pipe rewrite is not registered', ('ext', EXTM), '        md.treeprocessors.register(TableCodePipes(md), "handbook_table_code_pipes", 1)\n', '',
+    ['table_pipe'], ['table_pipe'], part='ext')
+mut('the pipe rewrite ignores code held in the html stash (inlinehilite)', ('ext', EXTM), '                    if m:\n                        i = int(m.group(1))', '                    if False:\n                        i = int(m.group(1))',
+    ['table_pipe'], ['table_pipe'], part='ext')
+mut('the pipe rewrite reaches code outside tables', ('ext', EXTM), '        for cell in root.iter():\n            if cell.tag in ("td", "th"):', '        for cell in [root]:\n            if True:',
+    ['table_pipe'], ['table_pipe'], part='ext')
+
 PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
          'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases), 'wf': (CASE_WF, wf_cases)}
 if EXT_PY:
@@ -1310,7 +1335,7 @@ def main():
             if a.verbose and not res[label]:
                 print(f'  ok   {label}')
         print(f'\nFIXTURE {len(res)} case(s): {len(res) - len(fails)} passed, {len(fails)} failed'
-              + ('' if EXT_PY else '; the extension part (21 cases, 23 mutations) was SKIPPED: no site venv at '
+              + ('' if EXT_PY else '; the extension part (22 cases, 26 mutations) was SKIPPED: no site venv at '
                  '$HANDBOOK_SITE_PY or ~/.cache/handbook-site (maintenance/scripts/site-env.sh creates it)'))
         for k, v in fails.items():
             print(f'  FAIL {k}: ' + '; '.join(v))

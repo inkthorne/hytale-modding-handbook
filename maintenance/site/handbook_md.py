@@ -1,4 +1,4 @@
-"""Python-Markdown extension for the handbook's Zensical build (loaded as `handbook_md` from PYTHONPATH).
+r"""Python-Markdown extension for the handbook's Zensical build (loaded as `handbook_md` from PYTHONPATH).
 
 The docs are written for GitHub: relative links, GitHub's heading anchors. Three things differ on the site,
 and this module makes the site agree with GitHub rather than the other way round. The source is never edited.
@@ -42,6 +42,13 @@ and this module makes the site agree with GitHub rather than the other way round
     characters, so `\"Supporting\"` printed its backslashes (items-blocks.md:462). The rest are added, except
     `&`, `<` and `|`, which it writes raw or handles elsewhere (a table cell).
 
+(h) PIPES IN TABLE CODE. In a table cell GitHub writes `\|` as `|`, in a code span too (a row cannot hold a bare pipe,
+    so the escape is the only way to show one). Python-Markdown's tables extension drops the backslash from cell text
+    and keeps it inside `<code>`: 17 spans on 5 pages (camera.md 12, 02-structure.md 2, entities.md, player.md and
+    trigger-volumes.md 1 each) showed `\|` where GitHub shows `|` (review of d361e13..9f19ac9, MINOR-1).
+    `TableCodePipes` removes the backslash from code inside td and th. The converse, a bare pipe inside a code span
+    on a table row, splits the cell on GitHub and is refused by check-site-markdown.py.
+
 Paths are resolved from this file, never from the working directory or an environment variable: the build
 runs in a copy of the tree (zensical writes `.cache/` beside the config), and the copy keeps the layout.
 
@@ -65,6 +72,7 @@ from markdown.blockprocessors import BlockQuoteProcessor
 from markdown.inlinepatterns import HtmlInlineProcessor
 from markdown.preprocessors import Preprocessor
 from markdown.treeprocessors import Treeprocessor
+from markdown.util import HTML_PLACEHOLDER_RE
 from xml.etree import ElementTree as etree
 
 HERE = Path(__file__).resolve().parent
@@ -187,6 +195,28 @@ class ListBreaks(Preprocessor):
         return out
 
 
+class TableCodePipes(Treeprocessor):
+    """`\\|` in a code span in a table cell is `|`, as GitHub shows it.
+
+    pymdownx.inlinehilite (enabled in zensical.toml) takes every backtick span: the <code> element holds only a
+    placeholder and the text sits in the html stash, so both places are rewritten; the first version looked at
+    code.text alone and changed nothing in the real build (measured: 18 spans still showed the backslash)."""
+
+    def run(self, root):
+        stash = self.md.htmlStash.rawHtmlBlocks
+        for cell in root.iter():
+            if cell.tag in ("td", "th"):
+                for code in cell.iter("code"):
+                    if not code.text:
+                        continue
+                    m = HTML_PLACEHOLDER_RE.fullmatch(code.text)
+                    if m:
+                        i = int(m.group(1))
+                        stash[i] = stash[i].replace("\\|", "|")
+                    elif "\\|" in code.text:
+                        code.text = type(code.text)(code.text.replace("\\|", "|"))
+
+
 class SeparateQuotes(BlockQuoteProcessor):
     """BlockQuoteProcessor.run with the sibling merge removed: every block that starts a quote starts a box."""
 
@@ -216,6 +246,7 @@ class HandbookExtension(Extension):
         if not base:
             raise ValueError("handbook_md: `base` (the repository URL) is not configured")
         md.treeprocessors.register(Rewrite(md, base, self.getConfig("ref")), "handbook_rewrite", 1)
+        md.treeprocessors.register(TableCodePipes(md), "handbook_table_code_pipes", 1)
         md.preprocessors.register(ListBreaks(md), "handbook_list_breaks", 27)
         md.parser.blockprocessors.register(SeparateQuotes(md.parser), "quote", 20)
         md.inlinePatterns.register(HtmlInlineProcessor("(" + _check_links.RAW_HTML.pattern + ")", md), "html", 90)

@@ -271,8 +271,8 @@ if A.mutations:
             "return [(ln, src) for ln, src, label in uses if True]",
             {L_REF_OK}, 'check-links.py'),
         'the label of [text][label] is ignored (check-links.reference_uses)': (
-            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(2) or mm.group(1)).lower().split())))",
-            "uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(1)).lower().split())))",
+            "            label = mm.group(2) or mm.group(1)\n            uses.append(",
+            "            label = mm.group(1)\n            uses.append(",
             {L_REF}, 'check-links.py'),
         'an unreadable jar is not a finding of its own': (
             "                findings.append(f'--jar {a.jar} could not be read: {e}')", "                pass",

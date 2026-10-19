@@ -251,9 +251,9 @@ def reference_uses(text: str, fenced):
     pair no definition names is text. Used by the gates that read a list of links and want to refuse this form."""
     defs, uses = set(), []
     for ln, line in enumerate(text.split('\n'), 1):
+        m = mask(line)
         if ln in fenced:
             continue
-        m = mask(line)
         d = REF_DEF.match(line)
         if d and '\0' not in m[:d.end()]:
             if REF_TITLE.match(line[d.end():]):
@@ -262,7 +262,8 @@ def reference_uses(text: str, fenced):
         for mm in re.finditer(r'\[([^\[\]\0]*)\](?:\[([^\[\]\0]*)\])?', m):
             if m[mm.end():mm.end() + 1] == '(':
                 continue                            # an inline link
-            uses.append((ln, line[mm.start():mm.end()], ' '.join((mm.group(2) or mm.group(1)).lower().split())))
+            label = mm.group(2) or mm.group(1)
+            uses.append((ln, line[mm.start():mm.end()], ' '.join(label.lower().split())))
     return [(ln, src) for ln, src, label in uses if label in defs]
 
 

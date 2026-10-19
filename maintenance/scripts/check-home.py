@@ -35,7 +35,8 @@ broke into four fragments, and the column that held the example was cut off. A l
     not see: a list item written any other way (`*`, `+`, `1.`, `2)`, indented, in a quote), a line that continues a
     row (directly under it, or indented after a blank line), and a reference-style link (`[x][r]`, `[x][]`, `[x]` with
     a definition anywhere in the file), whose #fragment the inline-link reader never reads. A row is one line; this
-    gate does not fold a second line into the first, it refuses it;
+    gate does not fold a second line into the first, it refuses it. A raw `<a ...>` tag in the section (outside a code
+    span) is refused for the same reason: link_dests reads markdown links only;
   * with --jar, every name read from the rows is either resolved in the jar or reported unresolved; a name that is
     neither means the jar was not used (an unreadable or empty jar is a FAIL of its own, and this says so again by count);
   * a check-symbols.py whose NEG cannot be read or evaluated is a named FAIL, and a page with no section or no list
@@ -65,6 +66,7 @@ FIELD = {'api': 'API', 'asset': 'Key'}
 CODE = re.compile(r'`([^`\n]+)`')
 MARKER = re.compile(r'^[ \t>]*(?:[-*+]|\d{1,9}[.)])[ \t]')
 CONT = 'continues the row above; a row is one line, and every check on it reads that line only'
+RAW_A = re.compile(r'<a[\s>]', re.I)
 SYMBOL = re.compile(r'\b([A-Z][A-Za-z0-9_]*)\.([a-z_][A-Za-z0-9_]*)\b')
 
 
@@ -200,6 +202,10 @@ def main() -> int:
         for n, src in CL.reference_uses(text, fenced):
             if start < n <= end:
                 findings.append(f'docs/index.md:{n} has a reference-style link {src}: the gate reads inline links only, '
+                                f'so a #fragment there is unchecked')
+        for n in range(start + 1, end + 1):
+            if n not in fenced and RAW_A.search(CL.mask(lines[n - 1])):
+                findings.append(f'docs/index.md:{n} has a raw <a> tag: the gate reads markdown links only, '
                                 f'so a #fragment there is unchecked')
         neg, neg_why = neg_pattern()
         if neg is None:

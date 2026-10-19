@@ -29,8 +29,8 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
-MIN_CASES = 35
-MIN_MUTATIONS = 40
+MIN_CASES = 41
+MIN_MUTATIONS = 46
 fails: list[str] = []
 seen: list[str] = []
 
@@ -133,12 +133,19 @@ L_COMMENT = 'a link inside an HTML comment (one line or several) is no link: it 
 L_ICODE = 'a link inside an indented code block is no link either'
 L_ICODE_LIST = 'but an indented line that goes on with a list item is not code, and its link counts'
 L_ICODE_PARA = 'and neither is an indented line directly under a paragraph line (a lazy continuation)'
+L_REFDEF = 'a reference definition inside a list, whose only use is outside it, is no entry (the list shows no link)'
+L_COMMENT_MIDLINE = 'a `<!--` in mid-line that nothing closes is text, so the links after it count'
+L_COMMENT_PARA = 'an inline comment does not reach past a blank line, so a `-->` in a later paragraph does not close it'
+L_COMMENT_INLINE = 'a closed comment in mid-line hides only itself, not the rest of its line'
+L_COMMENT_CODESPAN = 'a `<!--` and `-->` in code spans open and close nothing'
+L_COMMENT_TAIL = 'a comment that opens a line is an html block, and the rest of the line that closes it is html too, no link'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 ALL_CASES = {L_HEALTHY, L_LINE, L_TOPFILE, L_NOREADME, L_NOREADME_UT, L_UNTRACKED, L_ZERO, L_NOGIT, L_MISSING,
              L_NOSECTION, L_NOTLINKED, L_DUP, L_SLASH, L_GHOST, L_DEEPGHOST, L_DEEP, L_CODESPAN, L_FENCE, L_ALLOWED,
              L_TOURNOT, L_ROWS, L_SECTION, L_SECTION_END, L_RESOLVE, L_FRAG, L_URL, L_OUT, L_RC, L_REFLINK, L_REFLINK_OK, L_COMMENT,
-             L_ICODE, L_ICODE_LIST, L_ICODE_PARA}
+             L_ICODE, L_ICODE_LIST, L_ICODE_PARA, L_REFDEF, L_COMMENT_MIDLINE, L_COMMENT_PARA, L_COMMENT_INLINE,
+             L_COMMENT_CODESPAN, L_COMMENT_TAIL}
 
 # ---- the mutations -----------------------------------------------------------------------------------------
 if A.mutations:
@@ -184,11 +191,11 @@ if A.mutations:
         'a directory missing from a list is not a finding': (
             "                findings.append(f'{rel} does not link examples/{d}/')",
             "                pass",
-            {L_NOTLINKED, L_TOURNOT, L_CODESPAN, L_FENCE, L_COMMENT, L_ICODE, L_REFLINK}),
+            {L_NOTLINKED, L_TOURNOT, L_CODESPAN, L_FENCE, L_COMMENT, L_ICODE, L_REFLINK, L_REFDEF}),
         'a directory linked twice is not a finding': (
             "                findings.append(f'{rel} links examples/{d}/ {n} times (lines {\", \".join(map(str, hits[d]))})')",
             "                pass",
-            {L_DUP}),
+            {L_DUP, L_COMMENT_MIDLINE, L_COMMENT_PARA, L_COMMENT_INLINE, L_COMMENT_CODESPAN}),
         'a slash-less directory link is accepted': (
             "                    findings.append(f'{rel}:{ln} links {raw} without the trailing slash (write {raw}/)')",
             "                    pass",
@@ -213,7 +220,7 @@ if A.mutations:
         'links are read from the text, code spans and all': (
             "CL.link_dests(text, fenced)",
             "[(n, m) for n, l in enumerate(text.split('\\n'), 1) if n not in fenced for m in re.findall(r'\\]\\(([^)\\s]+)', l)]",
-            {L_CODESPAN, L_REFLINK}),
+            {L_CODESPAN}),
         'links in code fences are read': (
             "CL.link_dests(text, fenced)", "CL.link_dests(text, set())",
             {L_FENCE}),
@@ -231,15 +238,15 @@ if A.mutations:
         'examples/README.md is read whole, not by its table rows': (
             "        return {n for n, l in enumerate(lines, 1) if l.lstrip().startswith('|')}",
             "        return set(range(1, len(lines) + 1))",
-            {L_ROWS, L_REFLINK}),
+            {L_ROWS}),
         'README.md is read whole, not by its section': (
             "    return set(range(start + 1, end))",
             "    return set(range(1, len(lines) + 1))",
-            {L_SECTION, L_SECTION_END, L_REFLINK, L_REFLINK_OK}),
+            {L_SECTION, L_SECTION_END, L_REFLINK_OK, L_REFDEF}),
         'the README.md section runs to the end of the file': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines) + 1)",
             "if False), len(lines) + 1)",
-            {L_SECTION_END, L_REFLINK, L_REFLINK_OK}),
+            {L_SECTION_END, L_REFLINK_OK, L_REFDEF}),
         'a link resolves against the repository root, not its own file': (
             "joined = posixpath.normpath(posixpath.join(posixpath.dirname(rel), path))",
             "joined = posixpath.normpath(path)",
@@ -260,7 +267,7 @@ if A.mutations:
         'a reference-style link is a finding wherever it stands': (
             "            if ln in scope:\n                findings.append(f'{rel}:{ln} has a reference-style link",
             "            if True:\n                findings.append(f'{rel}:{ln} has a reference-style link",
-            {L_REFLINK_OK}),
+            {L_REFLINK_OK, L_REFDEF}),
         'every bracket pair is a reference-style use (check-links.reference_uses)': (
             "return [(ln, src) for ln, src, label in uses if label in defs]",
             "return [(ln, src) for ln, src, label in uses if True]",
@@ -270,16 +277,37 @@ if A.mutations:
             "            label = mm.group(1)\n            uses.append(",
             {L_REFLINK}, 'check-links.py'),
         'HTML comments are links': (
-            "    spans = [m.span() for m in re.finditer(r'<!--.*?(?:-->|\\Z)', probe, re.S)]",
-            "    spans = []",
-            {L_COMMENT}),
+            "    spans = comment_spans(probe)", "    spans = []",
+            {L_COMMENT, L_COMMENT_TAIL}),
         'a comment opened in a code fence hides what follows': (
-            "probe = '\\n'.join(' ' * len(l) if n in fenced else l for n, l in enumerate(lines, 1))",
-            "probe = '\\n'.join(l for n, l in enumerate(lines, 1))",
+            "probe = '\\n'.join(' ' * len(l) if n in fenced else CL.mask(l) for n, l in enumerate(lines, 1))",
+            "probe = '\\n'.join(CL.mask(l) for n, l in enumerate(lines, 1))",
             {L_COMMENT}),
-        'an unclosed comment hides nothing': (
-            "re.finditer(r'<!--.*?(?:-->|\\Z)', probe, re.S)", "re.finditer(r'<!--.*?-->', probe, re.S)",
+        'a <!-- in a code span opens a comment': (
+            "else CL.mask(l) for n, l in", "else l for n, l in",
+            {L_COMMENT_CODESPAN}),
+        'an unclosed block comment hides nothing': (
+            "            end = len(probe) if eol == -1 else eol",
+            "            end = m + 4 if close == -1 else (len(probe) if eol == -1 else eol)",
             {L_COMMENT}),
+        'a block comment ends at its -->, not at the end of that line': (
+            "            eol = probe.find('\\n', close) if close != -1 else -1",
+            "            eol = close + 3 if close != -1 else -1",
+            {L_COMMENT_TAIL}),
+        'an unclosed inline comment hides the rest of the file': (
+            "            if c is None:\n                i = m + 4\n                continue",
+            "            if c is None:\n                c = re.compile(r'.*', re.S).match(probe, m)",
+            {L_COMMENT_MIDLINE, L_COMMENT_PARA}),
+        'an inline comment reaches past a blank line': (
+            "INLINE_COMMENT = re.compile(r'<!--(?:(?!\\n[ \\t]*\\n).)*?-->', re.S)",
+            "INLINE_COMMENT = re.compile(r'<!--.*?-->', re.S)",
+            {L_COMMENT_PARA}),
+        'every <!-- opens an html block': (
+            "        if m - bol <= 3 and not probe[bol:m].strip(' '):", "        if True:",
+            {L_COMMENT_MIDLINE, L_COMMENT_PARA, L_COMMENT_INLINE}),
+        'a reference definition is an entry': (
+            "            if ln not in scope or ln in defined:", "            if ln not in scope:",
+            {L_REFDEF, L_REFLINK}),
         'indented code blocks are links': (
             "                lines[n - 1] = ' ' * len(l)", "                pass",
             {L_ICODE}),
@@ -444,9 +472,9 @@ check(L_REFLINK, lambda: [
             + '\n[b]: ./beta/\n'})[1],
     broken({'README.md': CORPUS['README.md'].replace('### [examples/beta/](./examples/beta/)', '### [examples/beta/][b]')
             + '\n[b]: ./examples/beta/\n'})[1]],
-    [[_REFMSG('docs/examples.md', 5, '[beta][b]')],
-     [_REFMSG('docs/examples.md', 5, '[beta][]')],
-     [_REFMSG('docs/examples.md', 5, '[beta]')],
+    [['docs/examples.md does not link examples/beta/', _REFMSG('docs/examples.md', 5, '[beta][b]')],
+     ['docs/examples.md does not link examples/beta/', _REFMSG('docs/examples.md', 5, '[beta][]')],
+     ['docs/examples.md does not link examples/beta/', _REFMSG('docs/examples.md', 5, '[beta]')],
      ['examples/README.md does not link examples/beta/', _REFMSG('examples/README.md', 6, '[beta/][b]')],
      ['README.md does not link examples/beta/', _REFMSG('README.md', 12, '[examples/beta/][b]')]])
 check(L_REFLINK_OK, lambda: (broken({'docs/examples.md': EX + '\nSee [the notes] and [x][nodef].\n'})[1],
@@ -458,9 +486,23 @@ check(L_COMMENT, lambda: [
     broken({'docs/examples.md': EX + '\n<!-- [alpha](../examples/alpha/) -->\n'})[1],
     broken({'docs/examples.md': EX + '\nA [tour](../examples/README.md) <!-- note --> and more.\n'})[1],
     broken({'docs/examples.md': '# Examples\n\n```html\n<!-- open\n```\n\n### [alpha](../examples/alpha/)\n\n### [beta](../examples/beta/)\n'})[1],
-    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Text <!-- never closed\n[beta](../examples/beta/)\n')})[1]],
+    broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', '<!-- never closed\n[beta](../examples/beta/)\n')})[1]],
     [['docs/examples.md does not link examples/beta/'], ['docs/examples.md does not link examples/beta/'], [], [], [],
      ['docs/examples.md does not link examples/beta/']])
+check(L_REFDEF, lambda: broken({'README.md': CORPUS['README.md']
+                               .replace('### [examples/beta/](./examples/beta/)\n', '### examples/beta/\n[b]: ./examples/beta/\n')
+                               .replace('Java.\n', 'Java, see [beta][b].\n')})[1],
+      ['README.md does not link examples/beta/'])
+_DUP9 = ['docs/examples.md links examples/alpha/ 2 times (lines 3, 9)']
+_DUP7 = ['docs/examples.md links examples/alpha/ 2 times (lines 3, 7)']
+check(L_COMMENT_MIDLINE, lambda: broken({'docs/examples.md': EX + '\nText <!-- never closed.\n\n[alpha](../examples/alpha/)\n'})[1], _DUP9)
+check(L_COMMENT_PARA, lambda: broken({'docs/examples.md': EX + '\nText <!-- opened here.\n\n[alpha](../examples/alpha/)\n\n'
+                                                             'and --> closed later.\n'})[1], _DUP9)
+check(L_COMMENT_INLINE, lambda: broken({'docs/examples.md': EX + '\nA <!-- c --> [alpha](../examples/alpha/) here.\n'})[1], _DUP7)
+check(L_COMMENT_CODESPAN, lambda: broken({'docs/examples.md': EX + '\nWrite `<!--` to open, as in [alpha](../examples/alpha/), '
+                                                                 'and `-->` to close.\n'})[1], _DUP7)
+# under a paragraph line, so the line that is left when only the comment is blanked is no indented code block
+check(L_COMMENT_TAIL, lambda: broken({'docs/examples.md': EX + '\nPara line.\n<!-- note --> [alpha](../examples/alpha/)\n'})[1], [])
 check(L_ICODE, lambda: [
     broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Intro.\n\n    [beta](../examples/beta/)\n')})[1],
     broken({'docs/examples.md': EX.replace('### [beta](../examples/beta/)', 'Intro.\n\n\t[beta](../examples/beta/)\n')})[1],

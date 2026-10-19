@@ -25,8 +25,8 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
-MIN_CASES = 45
-MIN_MUTATIONS = 42
+MIN_CASES = 48
+MIN_MUTATIONS = 45
 fails: list[str] = []
 seen: list[str] = []
 
@@ -149,13 +149,16 @@ L_JAR_CORRUPT = 'a jar that is not a zip FAILs, saying it could not be read'
 L_JAR_COUNT = 'and so does the count: --jar given, names read, none resolved or reported (the jar was never used)'
 L_NEG_BROKEN = 'a NEG that cannot be evaluated, or a check-symbols.py that does not parse, is a named FAIL, never a traceback'
 L_SKIP_FINDINGS = 'a SKIP (no section, no list) still prints the paragraph findings, and exits 1 for them'
+L_RAWA = 'a raw <a href> tag in the section FAILs, naming the line (link_dests reads markdown links only)'
+L_RAWA_CODE = 'and an <a> inside a code span in the section is text, no finding'
+L_RAWA_OUT = 'and a raw <a> below the section is no finding'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 ALL_CASES = {L_HEALTHY, L_LINE, L_LINE_NOJAR, L_PDIFF, L_PWRAP, L_PTAIL, L_PEND, L_PNONE, L_PTWICE, L_PFENCE, L_FILE, L_NOSECTION,
              L_NOLIST, L_SECTION_END, L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM, L_FRAG, L_FRAG_OK, L_GROUP, L_ITEMOUT, L_NOSYM,
              L_FIELD, L_NEG, L_NEG_ASSET, L_NEG_READ, L_NEG_MISSING, L_JAR, L_JAR_NESTED, L_JAR_EMPTY, L_FENCED, L_MULTI,
              L_RC, L_MARKER, L_MARKER_OK, L_CONT, L_CONT_OK, L_CONT_INDENT, L_REF, L_REF_OK, L_JAR_CORRUPT, L_JAR_COUNT,
-             L_NEG_BROKEN, L_SKIP_FINDINGS}
+             L_NEG_BROKEN, L_SKIP_FINDINGS, L_RAWA, L_RAWA_CODE, L_RAWA_OUT}
 
 # ---- the mutations -----------------------------------------------------------------------------------------
 if A.mutations:
@@ -193,7 +196,7 @@ if A.mutations:
             {L_NOLIST, L_SKIP_FINDINGS}),
         'the section runs to the end of the page': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines))", "if False), len(lines))",
-            {L_SECTION_END, L_REF_OK}),
+            {L_SECTION_END, L_REF_OK, L_RAWA_OUT}),
         'the row bounds are not checked': (
             "        if not ROWS_MIN <= total <= ROWS_MAX:", "        if False:",
             {L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM}),
@@ -274,6 +277,16 @@ if A.mutations:
             "            label = mm.group(2) or mm.group(1)\n            uses.append(",
             "            label = mm.group(1)\n            uses.append(",
             {L_REF}, 'check-links.py'),
+        'a raw <a> tag is not a finding': (
+            "            if n not in fenced and RAW_A.search(CL.mask(lines[n - 1])):", "            if False:",
+            {L_RAWA}),
+        'an <a> inside a code span is a raw tag': (
+            "RAW_A.search(CL.mask(lines[n - 1]))", "RAW_A.search(lines[n - 1])",
+            {L_RAWA_CODE}),
+        'a raw <a> is a finding anywhere on the page': (
+            "        for n in range(start + 1, end + 1):\n            if n not in fenced and RAW_A",
+            "        for n in range(1, len(lines) + 1):\n            if n not in fenced and RAW_A",
+            {L_RAWA_OUT}),
         'an unreadable jar is not a finding of its own': (
             "                findings.append(f'--jar {a.jar} could not be read: {e}')", "                pass",
             {L_JAR_CORRUPT}),
@@ -499,6 +512,12 @@ check(L_REF, lambda: (broken(_REFHOME('[r6]', '[r6]: page6.md#section-6'))[1],
       ([_REFMSG('[Page 6][r6]')], [_REFMSG('[Page 6][]')], [_REFMSG('[Page 6]')]))
 check(L_REF_OK, lambda: (broken(_with_api(api_row(6) + ' Pass [x][nodef] or [bare] here.'))[1],
                          broken(home(tail='\nSee [the index][i].\n\n[i]: 01-index.md\n'))[1]), ([], []))
+
+_RAWMSG = 'docs/index.md:20 has a raw <a> tag: the gate reads markdown links only, so a #fragment there is unchecked'
+check(L_RAWA, lambda: broken(_with_api(api_row(6).replace('[Page 6](page6.md#section-6)', '<a href="page6.md">Page 6</a>')))[1],
+      [_RAWMSG])
+check(L_RAWA_CODE, lambda: broken(home(after='\nWrite `<a href="x.md">` as a markdown link instead.\n'))[1], [])
+check(L_RAWA_OUT, lambda: broken(home(tail='\nSee <a href="01-index.md">the index</a>.\n'))[1], [])
 
 # ---- the jar -----------------------------------------------------------------------------------------------
 check(L_JAR, lambda: broken(_with_api(api_row(6, recv='Ghost')))[1],

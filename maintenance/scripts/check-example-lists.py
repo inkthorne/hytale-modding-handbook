@@ -24,12 +24,16 @@ Each must link every directory of the population exactly once, with its trailing
 under examples/ that is not one.
 
 HOW A LINK IS READ. With check-links' link_dests(), so a link in a code span or a fence is no link; the same goes for
-the two other places GitHub renders as no link, which link_dests does not know: an HTML comment (`<!-- ... -->`, one
-line or several) and an indented code block (four spaces or a tab after a blank line, not inside a list item and not
-under a paragraph line). Both are blanked first, the line count kept. A reference-style link in a list (`[x][r]`,
+the two other places GitHub renders as no link, which link_dests does not know: an HTML comment and an indented code
+block (four spaces or a tab after a blank line, not inside a list item and not under a paragraph line). Both are
+blanked first, the line count kept. A comment is read as CommonMark reads it. A `<!--` that opens a line (up to three
+spaces before it) starts an html block that runs to the end of the line holding `-->`, or to the end of the file when
+none does. A `<!--` anywhere else is an inline comment only when a `-->` closes it inside the same paragraph (no blank
+line between), and is plain text otherwise. A `<!--` in a code span or behind a backslash opens nothing. A reference-style link in a list (`[x][r]`,
 `[x][]`, or `[x]` with a definition in the file) is a FAIL: link_dests reports its destination at the definition's
 line, so the entry would be counted where it is not written and a list could be satisfied from outside its part of
-the file. The entry is written inline. The destination is read this way. The
+the file. The entry is written inline. For the same reason a reference definition is no entry wherever it stands:
+its use is what renders, and a use in a list is refused while a use outside it is not the list's. The
 destination is resolved against the file's own directory, so `./custom-food/`, `custom-food/` and
 `../examples/custom-food/` all name the same directory and each list may write it the way it likes. Then:
   * under examples/ and naming a directory of the population, with a trailing slash: a list entry;
@@ -78,6 +82,39 @@ def scope_lines(text: str, how: str, fenced):
     return set(range(start + 1, end))
 
 
+INLINE_COMMENT = re.compile(r'<!--(?:(?!\n[ \t]*\n).)*?-->', re.S)
+
+
+def comment_spans(probe: str):
+    """-> [(start, end)] of the HTML comments in `probe`, read as CommonMark reads them (see the docstring)."""
+    spans, i = [], 0
+    while (m := probe.find('<!--', i)) != -1:
+        bol = probe.rfind('\n', 0, m) + 1
+        if m - bol <= 3 and not probe[bol:m].strip(' '):
+            close = probe.find('-->', m + 4)            # an html block: to the end of the line that closes it
+            eol = probe.find('\n', close) if close != -1 else -1
+            end = len(probe) if eol == -1 else eol
+        else:
+            c = INLINE_COMMENT.match(probe, m)          # inline: closed within its paragraph, or it is text
+            if c is None:
+                i = m + 4
+                continue
+            end = c.end()
+        spans.append((m, end))
+        i = end
+    return spans
+
+
+def definition_lines(text: str, fenced):
+    """-> the lines that are reference definitions, where link_dests reports a reference link's destination."""
+    out = set()
+    for n, l in enumerate(text.split('\n'), 1):
+        d = CL.REF_DEF.match(l)
+        if n not in fenced and d and '\0' not in CL.mask(l)[:d.end()] and CL.REF_TITLE.match(l[d.end():]):
+            out.add(n)
+    return out
+
+
 LISTITEM = re.compile(r'^ {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]')
 
 
@@ -86,8 +123,8 @@ def unrendered_blanked(text: str, fenced):
     no link and a line number still means the same line. Fenced lines are left alone (link_dests skips them) and
     cannot open or close a comment."""
     lines = text.split('\n')
-    probe = '\n'.join(' ' * len(l) if n in fenced else l for n, l in enumerate(lines, 1))
-    spans = [m.span() for m in re.finditer(r'<!--.*?(?:-->|\Z)', probe, re.S)]
+    probe = '\n'.join(' ' * len(l) if n in fenced else CL.mask(l) for n, l in enumerate(lines, 1))
+    spans = comment_spans(probe)
     chars = list(text)
     for a, b in spans:
         for i in range(a, b):
@@ -162,12 +199,13 @@ def main() -> int:
         hits = collections.defaultdict(list)
         allowed[rel] = 0
         text = unrendered_blanked(text, fenced)
+        defined = definition_lines(text, fenced)
         for ln, src in CL.reference_uses(text, fenced):
             if ln in scope:
                 findings.append(f'{rel}:{ln} has a reference-style link {src}: write the entry as an inline link, '
                                 f'[text](dir/), so its destination is read where it stands')
         for ln, raw in CL.link_dests(text, fenced):
-            if ln not in scope:
+            if ln not in scope or ln in defined:
                 continue
             path = urllib.parse.unquote(raw.partition('#')[0].partition('?')[0])
             if CL.SCHEME.match(path):

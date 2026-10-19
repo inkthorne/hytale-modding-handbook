@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a complete reference for Hytale server plugin development containing:
 - **docs/**: Comprehensive API documentation. The page count is deliberately not written here — `verify-docs.sh` prints the live figure (`N page(s) measured`) on every run, and this line carried "65" for long enough to outlast three new pages.
-- **examples/**: Standalone, runnable mods — six Gradle plugin projects plus two no-code asset packs
+- **examples/**: Standalone, runnable mods — six Gradle plugin projects plus two no-code asset packs. `docs/examples.md` is the one docs list of them; `README.md`'s `## Examples` and `examples/README.md` serve GitHub readers, and all three are gated (see "Home and the examples").
 
 The docs are published at https://inkthorne.github.io/hytale-modding-handbook/, built by Zensical (`zensical.toml`, `maintenance/site/`, `.github/workflows/pages.yml`); see "The docs site" below.
 
@@ -143,7 +143,7 @@ Two habits follow from that, and both earned their place the hard way. **Audit t
 (Updates are detected automatically: `maintenance/scripts/check-for-update.sh` compares the installed jar version to the docs stamp — a weekly systemd user timer on the maintainer's machine runs it and raises a desktop notification plus `~/.cache/hytale-update-pending` when they diverge.)
 
 **End every update pass with a release.**
-- **Bump the line by hand.** The pass's last commit bumps the "Verified against Hytale X (build-N)" line at the top of `README.md` and `docs/index.md`. Do it by hand: neither the stamp regexes nor the bump `sed` that `update-build.sh` prints match that wording. That is on purpose: the line speaks for the whole handbook, so it changes only once every page stamp has.
+- **Bump the line by hand.** The pass's last commit bumps the "Verified against Hytale X (build-N)" line at the top of `README.md` and `docs/index.md`. Do it by hand: neither the stamp regexes nor the bump `sed` that `update-build.sh` prints match that wording. That is on purpose: the line speaks for the whole handbook, so it changes only once every page stamp has. Both files carry it in the paragraph that starts `**Verified against Hytale`, and `check-home.py` FAILs when the two differ, so bump both in one commit.
 - **Tag it once it is pushed.** Make an annotated tag `game-<version>`. A fix while the game is still on that build is `game-<version>-r2`, `-r3` and so on. Never move a pushed tag.
 - **Publish the release** with `gh release create game-<version> --notes-file …`. The notes give:
   - the build's breaking changes and new pages;
@@ -230,7 +230,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
     - every anchor `check-links.anchors_of` computes is a heading id of its built page;
     - floors of 79 pages, 20,000 internal links, 16,000 links with a fragment and 9 rewritten links. The two link floors are about half the measured figures, so a partial collapse fails, not only a total one. Lower them in the commit that removes pages.
 
-    Measured: 79 pages, 41,795 internal links (33,792 with a fragment), 3,311 anchors.
+    Measured at item 16 (90f8cd9): 80 pages, 42,030 internal links (33,857 with a fragment), 3,325 anchors, 35 rewritten links (10 to `.md`). The page floor (79) is one below the 80 built; docs/ holds 79 pages, and the README lists 78 of them (index.md is exempt).
 - **The workflow.** `defaults: run: shell: bash` is load-bearing. A step with no `shell:` runs `bash -e`, which has no pipefail, so `check-site-links … | tee` swallowed its failure, and a broken site would have deployed with a green run (review of d361e13..9f19ac9, MAJOR-1). `check-site-fixture.py` runs every `run:` block of pages.yml as GitHub does, with the checks stubbed to fail, and asserts each step fails.
 - **The fixture.** `check-site-fixture.py --mutations` holds all of it: 156 cases and 147 mutations, or 129 and 116 without the venv. Its docstring lists its parts.
 
@@ -239,6 +239,23 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 - A nested list item, or a block inside an item, is indented 4 spaces past its parent.
 - A `|` inside code in a table cell is written `\|`.
 - A list item does not follow an html block's closing tag without a blank line between them.
+
+**Home and the examples (item 16, 2026-10-19).** Home (`docs/index.md`) says who the handbook is for, sends each task to the section that does it, and says how to read a page. `docs/examples.md` is the one docs list of the examples; the overview points to both and no longer carries its own task table or examples list. Two [HARD] gates hold them:
+- **`check-example-lists.py`.** The population is `git ls-files examples/`: every tracked top-level directory, each of which must hold a tracked README.md. Three lists must each link every directory exactly once, with its trailing slash, and link nothing else under `examples/`:
+  - `docs/examples.md`, the whole page;
+  - `examples/README.md`, its table rows only (its `###` headings link the same directories again);
+  - `README.md`'s `## Examples` section.
+
+  Links to `examples/README.md` are allowed and counted. Links into an example's files are neither entries nor findings. Links are read with check-links' `link_dests`. It needs a git work tree; 0 directories is a FAIL. It prints `8 example dir(s); examples.md 8, examples/README.md 8, README.md 8`. CLAUDE.md's own `## Examples` list is for the maintainer and is **not gated**.
+- **`check-home.py`.**
+  - **The Verified-against paragraph.** The paragraph that starts `**Verified against Hytale` must be the same in README.md and `docs/index.md` after whitespace is collapsed, and each file must hold exactly one. It proves the two agree, not that either is true.
+  - **Home's `## Find it by task` lists.** It requires 12-18 rows; a `#fragment` on every `.md` link; a `Call:` code span holding `Receiver.member` on every row under `### In Java`, on a line check-symbols does not skip (its `NEG` words are read from check-symbols.py with `ast`); with `--jar`, each receiver a class of the jar (check-symbols passes an unresolved receiver silently); and a `Key:` code span on every row under `### In JSON`. It prints `8 API and 10 Asset key rows, 21 page link(s) …, 9 resolved in the jar`.
+  - **What it does not hold:** that a linked section answers the task, or that the call is the current way to do it. A reviewer reads each row. The rows were audited at item 16: no call or class `@Deprecated`, `InventoryComponent` rather than `Inventory`, `block-access.md` for blocks.
+- **Fixtures.** `check-example-lists-fixture.py --mutations` (29 cases, 27 mutations counting the identity control, about 11 s) and `check-home-fixture.py --mutations` (34 and 28, about 11 s). verify-docs.sh runs both; it now runs 14 fixtures.
+- **The stamp INFO.** It exempts the navigation pages {index, 00, 01, 02, examples}, and its predicate is the Doc type line carrying `**Verified against N**` (74 of 74 topic pages). It is INFO, so it cannot fail.
+- **Ungated claims on Home.** "How to read a page" was measured at item 16 and is held by nothing but that INFO: the Doc type line on 78 of 78 pages, the stamp on 74 of 74 topic pages, and a section titled exactly "Gotchas & Errors" on 60 of 78 ("most pages"). `**Package:**` is not claimed: 23 pages lack it.
+- **Rows are lists, not a table.** A four-column table broke the code names over several lines at 390 px and cut off its last column (90f8cd9). A table needs CSS in `overrides/` first.
+- **A heading that is a link slugs wrongly in check-links**, which reads raw markdown (`commandsexamplescommands`). Write the link in the body; `docs/examples.md` does. README.md's `### [examples/commands/](...)` headings have that slug, and nothing links them.
 
 **A zensical bump is its own item.** The link rewrite and the `toc.unique` patch ride on the Python-Markdown path, which upstream (`zensical/markdown/render.py`) plans to move to Rust. A bump can remove them without a warning. After one, re-run, in this order:
 1. `check-extension.py`;

@@ -42,9 +42,10 @@ def flat(html: str) -> str:
 CASES = []
 
 
-def case(name):
+def case(ident, description):
+    """A case has a short id (what check-site-fixture.py pins mutations by) and a sentence."""
     def deco(fn):
-        CASES.append((name, fn))
+        CASES.append((ident, description, fn))
         return fn
     return deco
 
@@ -56,132 +57,143 @@ def has(html, *wanted, absent=()):
 
 
 # ---- (a) links that leave docs/ ------------------------------------------------------------------------------
-@case('link: ../CLAUDE.md goes to github.com blob at the ref')
+@case('link_blob', 'link: ../CLAUDE.md goes to github.com blob at the ref')
 def _():
     return has(render('[c](../CLAUDE.md)'), f'href="{BASE}/blob/REF/CLAUDE.md"')
 
 
-@case('link: a trailing slash is a tree, and the fragment is kept')
+@case('link_tree', 'link: a trailing slash is a tree, and the fragment is kept')
 def _():
     return has(render('[d](../examples/ui/#top)'), f'href="{BASE}/tree/REF/examples/ui#top"')
 
 
-@case('link: an existing directory without a trailing slash is a tree too (examples/ exists in the tree)')
+@case('link_dir', 'link: an existing directory without a trailing slash is a tree too (examples/ exists in the tree)')
 def _():
     return has(render('[d](../examples)'), f'href="{BASE}/tree/REF/examples"')
 
 
-@case('link: a file keeps its fragment and is a blob')
+@case('link_frag', 'link: a file keeps its fragment and is a blob')
 def _():
     return has(render('[f](../examples/ui/src/Foo.java#L3)'), f'href="{BASE}/blob/REF/examples/ui/src/Foo.java#L3"')
 
 
-@case('link: the ref is the configured one')
+@case('link_ref', 'link: the ref is the configured one')
 def _():
     return has(render('[c](../CLAUDE.md)', ref='abc123'), f'href="{BASE}/blob/abc123/CLAUDE.md"')
 
 
-@case('link: inside docs/, a URL, a fragment and a path out of the repository are left alone')
+@case('link_alone', 'link: inside docs/, a URL, a fragment and a path out of the repository are left alone')
 def _():
-    return has(render('[a](other.md) [b](../docs/other.md) [c](https://x.invalid/y) [d](#frag) [e](../../out.txt) [f](/abs)'),
+    return has(render('[a](other.md) [b](../docs/other.md) [c](https://x.invalid/y) [d](#frag) [e](../../out.txt) [f](/abs) '
+                      '[g](https://x.invalid/a/../../../../x) [h](mailto:a@b.invalid)'),
                'href="other.md"', 'href="../docs/other.md"', 'href="https://x.invalid/y"', 'href="#frag"',
-               'href="../../out.txt"', 'href="/abs"', absent=('github.com',))
+               'href="../../out.txt"', 'href="/abs"', 'href="https://x.invalid/a/../../../../x"', 'href="mailto:a@b.invalid"',
+               absent=('github.com',))
 
 
 # ---- (b)/(c) anchors -------------------------------------------------------------------------------------------
-@case('anchor: a duplicate heading is x-1, x-2 (GitHub), not x_1')
+@case('anchor_dup', 'anchor: a duplicate heading is x-1, x-2 (GitHub), not x_1')
 def _():
     return has(render('## X\n\n## X\n\n## X\n'), 'id="x"', 'id="x-1"', 'id="x-2"', absent=('x_1',))
 
 
-@case('anchor: the slug is the character rule (a code-span generic, a dash, parentheses)')
+@case('anchor_slug', 'anchor: the slug is the character rule (a code-span generic, a dash, parentheses)')
 def _():
     return has(render('## `Codec<T>`\n\n## Foo — Bar\n\n## A (B)\n'), 'id="codect"', 'id="foo--bar"', 'id="a-b"')
 
 
 # ---- (d) lists -------------------------------------------------------------------------------------------------
-@case('lists: a bullet straight after a paragraph line starts a list')
+@case('list_bullet', 'lists: a bullet straight after a paragraph line starts a list')
 def _():
     return has(render('text\n- a\n- b\n'), '<p>text</p> <ul> <li>a</li> <li>b</li> </ul>')
 
 
-@case('lists: 1. starts a list after a paragraph line, 2. does not (CommonMark)')
+@case('list_ordered', 'lists: 1. starts a list after a paragraph line, 2. does not (CommonMark)')
 def _():
     return has(render('text\n1. a\n2. b\n\nmore\n2. c\n'), '<p>text</p> <ol>', '<p>more 2. c</p>')
 
 
-@case('lists: inside a blockquote too')
+@case('list_quote', 'lists: inside a blockquote too')
 def _():
     return has(render('> **Gotchas**\n> - a\n> - b\n'), '<blockquote> <p><strong>Gotchas</strong></p> <ul> <li>a</li> <li>b</li> </ul> </blockquote>')
 
 
-@case('lists: a code fence is left exactly as written (no blank line inside it)')
+@case('list_fence', 'lists: a code fence is left exactly as written (no blank line inside it)')
 def _():
     import html
-    out = render('```\n * javadoc\n- dash\n1. one\n```\n')
+    out = render('```\nintro line\n * javadoc\n- dash\n1. one\n```\n')
     text = html.unescape(re.sub(r'<[^>]+>', '', re.search(r'<pre.*?</pre>', out, re.S).group(0))).strip('\n')
-    want = ' * javadoc\n- dash\n1. one'
+    want = 'intro line\n * javadoc\n- dash\n1. one'
     return [] if text == want else [f'the fence content became {text!r}, wanted {want!r}']
 
 
-@case('lists: an item after a closed fence stays in the list')
+@case('list_after_fence', 'lists: an item after a closed fence stays in the list')
 def _():
     out = flat(render('- a\n  ```\n  x\n  ```\n- b\n'))
     return [] if out.count('<li>') == 2 and out.count('<ul>') == 1 and '<p>b</p>' in out and '- b' not in out else [f'got {out!r}']
 
 
-@case('lists: a thematic break and a line of html are not list starts')
+@case('list_not_start', 'lists: a thematic break and a line of html are not list starts')
 def _():
     return has(render('text\n\n* * *\n\n<div>\n- not a list\n</div>\n'), '<hr', '- not a list', absent=('<ul>',))
 
 
-@case('lists: a loose list stays one list (not one <ul> per item)')
+@case('list_loose', 'lists: a loose list stays one list (not one <ul> per item)')
 def _():
     out = flat(render('- a\n\n- b\n\n- c\n'))
     return [] if out.count('<ul>') == 1 and out.count('<li>') == 3 else [f'got {out!r}']
 
 
-@case('lists: a nested item at four spaces nests')
+@case('list_nested', 'lists: a nested item at four spaces nests')
 def _():
     return has(render('- a\n    - b\n- c\n'), '<li>a<ul> <li>b</li> </ul> </li>')
 
 
 # ---- (e) blockquotes -------------------------------------------------------------------------------------------
-@case('quotes: two > blocks with a blank line between are two boxes (CommonMark)')
+@case('quote_two', 'quotes: two > blocks with a blank line between are two boxes (CommonMark)')
 def _():
     out = flat(render('> a\n\n> b\n'))
     return [] if out.count('<blockquote>') == 2 else [f'got {out!r}']
 
 
-@case('quotes: a > line with nothing after it keeps one box')
+@case('quote_one', 'quotes: a > line with nothing after it keeps one box')
 def _():
     out = flat(render('> a\n>\n> b\n'))
     return [] if out.count('<blockquote>') == 1 and '<p>a</p> <p>b</p>' in out else [f'got {out!r}']
 
 
 # ---- (f) inline html, (g) escapes ----------------------------------------------------------------------------
-@case('html: <GameMode, Settings> is text (a comma makes it no tag), <b> is a tag')
+@case('html_text', 'html: <GameMode, Settings> is text (a comma makes it no tag), <b> is a tag')
 def _():
     return has(render('Map<GameMode, InteractionSettings> and <b>bold</b>'), 'Map&lt;GameMode, InteractionSettings&gt;', '<b>bold</b>')
 
 
-@case('escapes: \\" prints the quote without its backslash')
+@case('escape_quote', 'escapes: \\" prints the quote without its backslash')
 def _():
     return has(render('FaceType in \\"Supporting\\" of'), 'in "Supporting" of', absent=('\\',))
 
 
+@case('base_required', 'an extension configured without the repository URL refuses to load')
+def _():
+    try:
+        markdown.Markdown(extensions=['handbook_md']).convert('x')
+    except ValueError as e:
+        return [] if 'base' in str(e) else [f'ValueError without the word base: {e}']
+    return ['it loaded']
+
+
 def main() -> int:
     bad = 0
-    for name, fn in CASES:
+    for ident, description, fn in CASES:
         try:
             problems = fn()
         except Exception as e:          # noqa: BLE001
             problems = [f'raised {type(e).__name__}: {e}']
         if problems:
             bad += 1
-            print(f'CASE {name} FAIL {"; ".join(problems)}')
+            print(f'CASE {ident} FAIL {description} - {"; ".join(problems)}')
         else:
-            print(f'CASE {name} ok')
+            print(f'CASE {ident} ok')
     print(f'EXTENSION {len(CASES)} case(s): {len(CASES) - bad} passed, {bad} failed')
     return 1 if bad else 0
 

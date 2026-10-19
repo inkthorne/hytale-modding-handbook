@@ -149,7 +149,6 @@ QUOTE_PREFIX = re.compile(r"^((?:[ ]{0,3}>[ ]?)*)(.*)$")
 # (an empty item and an ordered list that starts at another number cannot).
 ITEM = re.compile(r"^[ ]*(?:[*+-]|1\.)[ ]+\S")
 ITEM_ANY = re.compile(r"^[ ]*(?:[*+-]|\d+\.)[ ]+\S")
-THEMATIC = re.compile(r"^[ ]{0,3}(?:(?:-[ ]*){3,}|(?:\*[ ]*){3,}|(?:_[ ]*){3,})$")
 
 
 class ListBreaks(Preprocessor):
@@ -173,15 +172,16 @@ class ListBreaks(Preprocessor):
                 in_item, prev_text = False, False
             if not rest.strip():
                 in_item, prev_text = False, False
-            elif ITEM.match(rest) and not THEMATIC.match(rest):
+            elif ITEM.match(rest):
                 if (prev_text and not in_item) or was_fence:
                     out.append(prefix.rstrip())
                 in_item, prev_text = True, False
             elif ITEM_ANY.match(rest):
                 in_item, prev_text = True, False
             else:
-                # a line of text; html (`<div>`, `</details>`) starts a raw block, where a list is not one
-                prev_text = not in_item and not rest.lstrip().startswith("<")
+                # a line of text (a thematic break and a line of html are handled by Python-Markdown itself: a blank
+                # line inserted before a list after either changes nothing, measured, so neither is special-cased)
+                prev_text = not in_item
             prev_prefix = prefix
             out.append(line)
         return out

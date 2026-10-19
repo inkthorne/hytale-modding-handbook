@@ -14,6 +14,8 @@ a red set not yet pinned is printed as MEASURED and fails the run, so a number i
              maintenance/scripts/generate-site-nav.py.
   links      maintenance/scripts/check-site-links.py on planted HTML (a built site made here, 79 small pages).
   build      maintenance/scripts/check-site-build.py on planted zensical logs.
+  ext        maintenance/site/handbook_md.py, through maintenance/site/check-extension.py run with the SITE venv's
+             python ($HANDBOOK_SITE_PY): skipped, and said so, when there is no venv; see part 6.
   site       the section "The site builds with no unexplained warning", with a stub in place of zensical (a shell
              script that copies a planted site into ./site and prints a planted log), so every branch of the
              section runs in a second, not in the 4 s a real build takes, and the real one is run by verify-docs.
@@ -39,8 +41,10 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 107
+MIN_CASES = 107            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
 MIN_MUTATIONS = 93
+MIN_EXT_CASES = 21
+MIN_EXT_MUTATIONS = 23
 
 SECTION_MD = 'section "[HARD] Docs markdown renders the same on GitHub and on the site"'
 SECTION_NAV = 'section "[HARD] The sidebar is generated from README.md and holds every docs page once"'
@@ -72,7 +76,7 @@ class World:
     """One variant of the system under test: the section texts and the scripts, possibly with ONE mutation
     applied. `run` makes a root of its own for each call, so cases never see each other's files."""
 
-    def __init__(self, base: pathlib.Path, *, section_edits=None, script_edits=None):
+    def __init__(self, base: pathlib.Path, *, section_edits=None, script_edits=None, ext_edits=None):
         self.base = base
         base.mkdir(parents=True, exist_ok=True)
         src = VERIFY.read_text()
@@ -90,6 +94,13 @@ class World:
             if body.count(old) != 1:
                 raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {body.count(old)} time(s) in {name}')
             (self.scripts / name).write_text(body.replace(old, new, 1))
+        self.site_copy = base / 'site-copy'
+        shutil.copytree(REPO / 'maintenance' / 'site', self.site_copy, ignore=shutil.ignore_patterns('__pycache__', 'requirements*'))
+        for name, (old, new) in (ext_edits or {}).items():
+            body = (self.site_copy / name).read_text()
+            if body.count(old) != 1:
+                raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {body.count(old)} time(s) in maintenance/site/{name}')
+            (self.site_copy / name).write_text(body.replace(old, new, 1))
         self.n = 0
 
     def root(self, name: str, corpus: str, files: dict | None = None, drop: tuple = ()) -> pathlib.Path:
@@ -811,6 +822,63 @@ def site_cases(w: World) -> dict[str, list[str]]:
     return res
 
 
+
+# ============================== part 6: the extension, under the site venv ==============================
+
+def site_python():
+    """The venv python the extension's cases need, or None (then the part is skipped, loudly)."""
+    py = os.environ.get('HANDBOOK_SITE_PY') or str(pathlib.Path.home() / '.cache' / 'handbook-site' / 'venv' / 'bin' / 'python')
+    if not os.access(py, os.X_OK):
+        return None
+    ok = subprocess.run([py, '-c', 'import markdown, pymdownx'], capture_output=True)
+    return py if ok.returncode == 0 else None
+
+
+EXT_PY = site_python()
+
+CASE_EXT = {k: f'ext: {v}' for k, v in {
+    'link_blob': '../CLAUDE.md goes to github.com blob at the ref',
+    'link_tree': 'a trailing slash is a tree, and the fragment is kept',
+    'link_dir': 'an existing directory without a trailing slash is a tree too',
+    'link_frag': 'a file keeps its fragment and is a blob',
+    'link_ref': 'the ref is the configured one',
+    'link_alone': 'inside docs/, a URL, a fragment and a path out of the repository are left alone',
+    'anchor_dup': 'a duplicate heading is x-1, x-2 (GitHub), not x_1',
+    'anchor_slug': 'the slug is the character rule',
+    'list_bullet': 'a bullet straight after a paragraph line starts a list',
+    'list_ordered': '1. starts a list after a paragraph line, 2. does not',
+    'list_quote': 'a list after a paragraph line inside a blockquote too',
+    'list_fence': 'a code fence is left exactly as written',
+    'list_after_fence': 'an item after a closed fence stays in the list',
+    'list_not_start': 'a thematic break and a line of html are not list starts (a pin: Python-Markdown handles both)',
+    'list_loose': 'a loose list stays one list',
+    'list_nested': 'a nested item at four spaces nests',
+    'quote_two': 'two > blocks with a blank line between are two boxes',
+    'quote_one': 'a > line with nothing after it keeps one box',
+    'html_text': '<GameMode, Settings> is text, <b> is a tag',
+    'escape_quote': '\\" prints the quote without its backslash',
+    'base_required': 'an extension configured without the repository URL refuses to load'}.items()}
+
+
+def ext_cases(w: World) -> dict[str, list[str]]:
+    tree = w.base / 'ext-tree'
+    (tree / 'maintenance').mkdir(parents=True)
+    (tree / 'examples').mkdir()
+    shutil.copytree(w.site_copy, tree / 'maintenance' / 'site')
+    (tree / 'maintenance' / 'scripts').mkdir()
+    for name in ('check-links.py', 'doc_fences.py'):
+        shutil.copy2(w.scripts / name, tree / 'maintenance' / 'scripts' / name)
+    p = subprocess.run([EXT_PY, str(tree / 'maintenance' / 'site' / 'check-extension.py')], capture_output=True, text=True,
+                       env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
+    seen = {}
+    for l in p.stdout.splitlines():
+        m = re.match(r'^CASE (\S+) (ok|FAIL)\b(.*)$', l)
+        if m:
+            seen[m.group(1)] = [] if m.group(2) == 'ok' else [m.group(3).strip()[:300]]
+    crash = [] if seen else [f'the extension failed to load or run: {(p.stderr or p.stdout)[-300:]!r}']
+    return {label: seen.get(k, crash or ['the case did not run']) for k, label in CASE_EXT.items()}
+
+
 # ============================== the mutation table ==============================
 
 MUTATIONS: dict = {}
@@ -1040,13 +1108,65 @@ mut('NO_COLOR is not set', ('section', 'site'), ' NO_COLOR=1 ', ' ',
 mut('the section does not remove its temp dir', ('section', 'site'), '    rm -rf "$SITE_TMP"\n    SITE_TMP=""', '    SITE_TMP=""',
     ['healthy', 'nopollute'], ['dead_link', 'few_html', 'garbage', 'healthy', 'issues', 'nopollute', 'rc', 'rewritten', 'unexplained'], part='site')
 
+# ---- the extension (skipped, and said so, without the site venv) ----
+EXTM = 'handbook_md.py'
+mut('the link rewrite is not registered', ('ext', EXTM), 'md.treeprocessors.register(Rewrite(md, base, self.getConfig("ref")), "handbook_rewrite", 1)', 'pass',
+    ['link_blob'], ['link_blob', 'link_dir', 'link_frag', 'link_ref', 'link_tree'], part='ext')
+mut('every rewritten link is a blob', ('ext', EXTM), 'is_dir = path.endswith("/") or (REPO / rel).is_dir()', 'is_dir = False',
+    ['link_tree'], ['link_dir', 'link_tree'], part='ext')
+mut('a directory without a trailing slash is a blob', ('ext', EXTM), 'is_dir = path.endswith("/") or (REPO / rel).is_dir()', 'is_dir = path.endswith("/")',
+    ['link_dir'], ['link_dir'], part='ext')
+mut('the fragment is dropped from a rewritten link', ('ext', EXTM), 'return url + (f"#{frag}" if frag else "")', 'return url',
+    ['link_tree'], ['link_frag', 'link_tree'], part='ext')
+mut('the configured ref is ignored', ('ext', EXTM), 'url = f"{self.base}/{\'tree\' if is_dir else \'blob\'}/{self.ref}/', 'url = f"{self.base}/{\'tree\' if is_dir else \'blob\'}/main/',
+    ['link_ref'], ['link_blob', 'link_dir', 'link_frag', 'link_ref', 'link_tree'], part='ext')
+mut('a link inside docs/ is rewritten too', ('ext', EXTM), 'if rel == "docs" or rel.startswith("docs/") or rel == ".." or rel.startswith("../"):', 'if rel == ".." or rel.startswith("../"):',
+    ['link_alone'], ['link_alone'], part='ext')
+mut('a path out of the repository is rewritten', ('ext', EXTM), 'if rel == "docs" or rel.startswith("docs/") or rel == ".." or rel.startswith("../"):', 'if rel == "docs" or rel.startswith("docs/"):',
+    ['link_alone'], ['link_alone'], part='ext')
+mut('a URL is rewritten as a path', ('ext', EXTM), 'or urllib.parse.urlsplit(href).scheme or href.startswith("//"):', ':',
+    ['link_alone'], ['link_alone'], part='ext')
+mut('a root-relative link is rewritten', ('ext', EXTM), 'if not href or href.startswith(("#", "/")) or', 'if not href or href.startswith(("#",)) or',
+    ['link_alone'], ['link_alone'], part='ext')
+mut('duplicate headings keep Python-Markdown\'s numbering', ('ext', EXTM), '_toc.unique = github_unique', 'pass',
+    ['anchor_dup'], ['anchor_dup'], part='ext')
+mut('the slug is not the character rule', ('ext', EXTM), '    return char_slug(text)', "    return text.lower().replace(' ', '-')",
+    ['anchor_slug'], ['anchor_slug'], part='ext')
+mut('the list-break preprocessor is not registered', ('ext', EXTM), 'md.preprocessors.register(ListBreaks(md), "handbook_list_breaks", 27)', 'pass',
+    ['list_bullet'], ['list_after_fence', 'list_bullet', 'list_ordered', 'list_quote'], part='ext')
+mut('code fences are not skipped by the list-break preprocessor', ('ext', EXTM), '            if no in fenced:\n                out.append(line)', '            if False:\n                out.append(line)',
+    ['list_fence'], ['list_after_fence', 'list_fence'], part='ext')
+mut('the quote prefix is lost on the inserted blank line', ('ext', EXTM), '                    out.append(prefix.rstrip())', "                    out.append('')",
+    ['list_quote'], ['list_quote'], part='ext')
+mut('any number starts a list after a paragraph line', ('ext', EXTM), 'ITEM = re.compile(r"^[ ]*(?:[*+-]|1\\.)[ ]+\\S")', 'ITEM = re.compile(r"^[ ]*(?:[*+-]|\\d+\\.)[ ]+\\S")',
+    ['list_ordered'], ['list_ordered'], part='ext')
+mut('an item after a closed fence gets no blank line', ('ext', EXTM), 'if (prev_text and not in_item) or was_fence:', 'if (prev_text and not in_item):',
+    ['list_after_fence'], ['list_after_fence'], part='ext')
+mut('a paragraph line before a list is not noticed', ('ext', EXTM), '                prev_text = not in_item\n', '                prev_text = False\n',
+    ['list_bullet'], ['list_bullet', 'list_ordered', 'list_quote'], part='ext')
+mut('adjacent blockquotes merge again', ('ext', EXTM), 'md.parser.blockprocessors.register(SeparateQuotes(md.parser), "quote", 20)', 'pass',
+    ['quote_two'], ['quote_two'], part='ext')
+mut('a quote with a bare > line is split', ('ext', EXTM), '        block = blocks.pop(0)\n        m = self.RE.search(block)\n        if m:\n            before', '        block = blocks.pop(0).replace("\\n>\\n", "\\n\\n>")\n        m = self.RE.search(block)\n        if m:\n            before',
+    ['quote_one'], ['list_quote', 'quote_one'], part='ext')
+mut('inline html is Python-Markdown\'s again', ('ext', EXTM), '        md.inlinePatterns.register(HtmlInlineProcessor("(" + _check_links.RAW_HTML.pattern + ")", md), "html", 90)\n', '',
+    ['html_text'], ['html_text'], part='ext')
+mut('the extra backslash escapes are not added', ('ext', EXTM), '        md.ESCAPED_CHARS.extend(c for c in "\\"$%\',/:;=?@^~" if c not in md.ESCAPED_CHARS)\n', '',
+    ['escape_quote'], ['escape_quote'], part='ext')
+mut('the ref comes from the environment only', ('ext', EXTM), 'self.getConfig("ref")), "handbook_rewrite"', 'os.environ.get("HANDBOOK_REF", "main")), "handbook_rewrite"',
+    ['link_ref'], ['link_blob', 'link_dir', 'link_frag', 'link_ref', 'link_tree'], part='ext')
+mut('the extension accepts a missing base', ('ext', EXTM), '        if not base:\n            raise ValueError', '        if False:\n            raise ValueError',
+    ['base_required'], ['base_required'], part='ext')
+
 PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
          'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases)}
+if EXT_PY:
+    PARTS['ext'] = (CASE_EXT, ext_cases)
 
 
 def apply_edit(where, old, new):
+    """-> (section_edits, script_edits, ext_edits)"""
     kind, name = where
-    return ({}, {name: (old, new)}) if kind == 'script' else ({name: (old, new)}, {})
+    return {'script': ({}, {name: (old, new)}, {}), 'section': ({name: (old, new)}, {}, {}), 'ext': ({}, {}, {name: (old, new)})}[kind]
 
 
 def run_part(part: str, w: World) -> dict[str, list[str]]:
@@ -1064,36 +1184,41 @@ def main():
         res: dict[str, list[str]] = {}
         for part in PARTS:
             res.update(run_part(part, World(work / f'base-{part}')))
-        if len(res) < MIN_CASES:
-            print(f'  FAIL  {len(res)} case(s) ran, floor is {MIN_CASES}. A fixture that examines nothing '
+        floor = MIN_CASES + (MIN_EXT_CASES if EXT_PY else 0)
+        if len(res) < floor:
+            print(f'  FAIL  {len(res)} case(s) ran, floor is {floor}. A fixture that examines nothing '
                   f'reports the same thing as one that passes.')
             return 1
         fails = {k: v for k, v in res.items() if v}
         for label in res:
             if a.verbose and not res[label]:
                 print(f'  ok   {label}')
-        print(f'\nFIXTURE {len(res)} case(s): {len(res) - len(fails)} passed, {len(fails)} failed')
+        print(f'\nFIXTURE {len(res)} case(s): {len(res) - len(fails)} passed, {len(fails)} failed'
+              + ('' if EXT_PY else '; the extension part (21 cases, 23 mutations) was SKIPPED: no site venv at '
+                 '$HANDBOOK_SITE_PY or ~/.cache/handbook-site (maintenance/scripts/site-env.sh creates it)'))
         for k, v in fails.items():
             print(f'  FAIL {k}: ' + '; '.join(v))
         rc = 1 if fails else 0
         if not a.mutations:
             return rc
-        if len(MUTATIONS) < MIN_MUTATIONS:
-            print(f'  FAIL  {len(MUTATIONS)} mutation(s) defined, floor is {MIN_MUTATIONS}.')
+        todo = {k: v for k, v in MUTATIONS.items() if v[3] in PARTS}
+        mfloor = MIN_MUTATIONS + (MIN_EXT_MUTATIONS if EXT_PY else 0)
+        if len(todo) < mfloor:
+            print(f'  FAIL  {len(todo)} mutation(s) defined, floor is {mfloor}.')
             return 1
         if not any(k.startswith('IDENTITY') for k in MUTATIONS):
             print('  FAIL  no IDENTITY control in MUTATIONS')
             return 1
-        print(f'\nMUTATIONS {len(MUTATIONS)} defect(s) reintroduced, expected red set asserted exactly')
+        print(f'\nMUTATIONS {len(todo)} defect(s) reintroduced, expected red set asserted exactly')
 
         def one(item):
             k, (label, (where, old, new, part, names, expect)) = item
-            sec, scr = apply_edit(where, old, new)
-            mres = run_part(part, World(work / f'm{k}', section_edits=sec, script_edits=scr))
+            sec, scr, ext = apply_edit(where, old, new)
+            mres = run_part(part, World(work / f'm{k}', section_edits=sec, script_edits=scr, ext_edits=ext))
             return label, part, names, expect, {c for c, v in mres.items() if v}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:
-            results = list(pool.map(one, enumerate(MUTATIONS.items())))
+            results = list(pool.map(one, enumerate(todo.items())))
         for label, part, names, expect, red in results:
             case = PARTS[part][0]
             full = lambda keys: {case[x] for x in keys}

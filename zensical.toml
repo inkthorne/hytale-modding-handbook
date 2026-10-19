@@ -22,7 +22,7 @@ use_directory_urls = false
 # BEGIN GENERATED NAV (maintenance/scripts/generate-site-nav.py from README.md; do not edit by hand)
 nav = [
   { "Home" = "index.md" },
-  { "Getting Started" = [ { "Overview" = "00-overview.md" }, { "Documentation Index" = "01-index.md" }, { "Pack vs Plugin Structure" = "02-structure.md" }, { "Plugin Lifecycle" = "plugin-lifecycle.md" }, { "Permissions" = "permissions.md" } ] },
+  { "Getting Started" = [ { "Overview" = "00-overview.md" }, { "Examples" = "examples.md" }, { "Documentation Index" = "01-index.md" }, { "Pack vs Plugin Structure" = "02-structure.md" }, { "Plugin Lifecycle" = "plugin-lifecycle.md" }, { "Permissions" = "permissions.md" } ] },
   { "Core Systems" = [ { "Components" = "components.md" }, { "Codecs" = "codecs.md" }, { "Networking" = "networking.md" }, { "Math" = "math.md" } ] },
   { "Commands & UI" = [ { "Commands" = "commands.md" }, { "UI" = "ui.md" }, { "UI Elements" = "ui-elements.md" }, { "UI Styling" = "ui-styling.md" }, { "UI Templates" = "ui-templates.md" }, { "UI API" = "ui-api.md" }, { "i18n" = "i18n.md" } ] },
   { "World & Environment" = [ { "World" = "world.md" }, { "World Chunks" = "world-chunks.md" }, { "Block Access" = "block-access.md" }, { "World & Chunk Lifecycle Events" = "world-lifecycle-events.md" }, { "World Events" = "world-events.md" }, { "Universes & Saves" = "universe-saves.md" }, { "Trigger Volumes" = "trigger-volumes.md" }, { "Camera" = "camera.md" }, { "Blocks" = "blocks.md" }, { "Connected Blocks" = "blocks-connected.md" }, { "Blocks Java API" = "blocks-java-api.md" }, { "Fluids" = "fluids.md" }, { "Prefabs" = "prefabs.md" }, { "Prefab Categories" = "prefabs-categories.md" }, { "Collision" = "collision.md" } ] },

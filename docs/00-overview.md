@@ -78,38 +78,7 @@ For a complete list of all documentation files with descriptions, see the [Docum
 
 ### Working Examples
 
-The `examples/` directory contains two no-code packs and six working Gradle plugin projects (see `examples/README.md` for the full tour):
-
-- **examples/custom-food/** - Pack (pure JSON): a custom food item built from a template — start here
-- **examples/custom-drop/** - Pack (pure JSON): override a creature's loot table so your item drops
-- **examples/commands/** - Command system (simple commands, position arguments)
-- **examples/ui/** - Custom UI pages and HUD management
-- **examples/inventory/** - Inventory manipulation and transactions
-- **examples/entity-count/** - ECS ticking system that pushes live entity counts to a custom HUD
-- **examples/events/** - Global event bus and an ECS `EntityEventSystem` side by side
-- **examples/item-respawner/** - Stateful placeable block: custom block-entity component, chunk-store ticking, persistence, settings GUI
-
-Packs deploy by copying the folder; each plugin can be built and deployed to test changes immediately.
-
-### Building and Deploying
-
-From any example directory:
-
-```batch
-:: Windows
-build.bat      :: Build the plugin
-deploy.bat     :: Build and deploy to the Hytale mods folder
-```
-
-```bash
-# Linux / macOS (the .bat scripts are Windows-only)
-./gradlew build  # Build the plugin (produces build/libs/*.jar)
-./deploy.sh      # Build (if needed) and deploy to the mods folder
-```
-
-Plugins are deployed to the mods folder:
-- **Windows:** `%APPDATA%\Hytale\UserData\Mods\`
-- **Linux (Flatpak launcher):** `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/`
+The repository's `examples/` directory holds no-code packs and working Gradle plugins. The [Examples](examples.md) page says what each one demonstrates, which pages of this handbook it pairs with, and how to install it, or to build and deploy it. Start with a pack: `custom-food` needs a text editor and no compiler.
 
 ### Reference Files
 

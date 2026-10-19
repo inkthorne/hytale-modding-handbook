@@ -223,6 +223,21 @@ else
   echo "$OUT" | sed -n 's/^MISSING /      not linked from README: /p'
 fi
 
+# The examples are listed in three places a reader starts from: docs/examples.md (the site), examples/README.md (what
+# GitHub shows when someone browses examples/) and README.md's `## Examples` section. Nothing tied the lists to the
+# directories or to each other. check-example-lists.py holds each to `git ls-files examples/`: every directory once, with
+# its trailing slash, nothing else. CLAUDE.md's own list of the examples is for the maintainer and is not gated.
+section "[HARD] Every example directory is linked once from each of the three lists of examples"
+OUT="$(python3 maintenance/scripts/check-example-lists.py)"
+RC=$?
+echo "$OUT" | grep -E '^  INFO'
+if [ "$RC" -eq 0 ]; then
+  pass "$(echo "$OUT" | sed -n 's/^  PASS  //p')"
+else
+  fail "check-example-lists.py reported:"
+  echo "$OUT" | grep -E '^  (FAIL|SKIP)' | sed 's/^  FAIL  /    /; s/^  SKIP  /    /'
+fi
+
 # Nothing measured page sizes before 2026-09-04, so invariant 5's arrears list
 # was only ever checked when a human chose to measure — and three pages went
 # over the line unlisted that way (npc-roles.md, then world.md and prefabs.md).
@@ -1064,22 +1079,25 @@ fi
 
 # =====================================================================
 section "[INFO] Version stamps on topic pages"
-# Topic pages should carry a build stamp so readers know what build the page
-# describes. Navigational pages (00/01/02) are exempt.
+# A topic page carries a build stamp on its **Doc type:** line, `**Verified against N**`, so readers know what build
+# the page describes; Home (docs/index.md) says so of "each topic page". The navigation pages carry none: Home, the
+# overview, the index, the structure guide and the Examples page make no claim about the game API of their own. The
+# predicate is the Doc type line's: a "Verified against" anywhere else on the page (prose, a quoted example) is not a stamp.
 python3 - <<'PY'
 import re, glob, os
-nav = {"00-overview.md", "01-index.md", "02-structure.md"}
-stamp = re.compile(r'Verified against (?:build-\d+|\d+\.\d+\.\d+)')
+nav = {"index.md", "00-overview.md", "01-index.md", "02-structure.md", "examples.md"}
+stamp = re.compile(r'^\*\*Doc type:\*\*[^\n]*\*\*Verified against \d+\.\d+\.\d+\*\*', re.M)
 missing = []
-total = 0
+total = skipped = 0
 for p in sorted(glob.glob("docs/*.md")):
     bn = os.path.basename(p)
     if bn in nav:
+        skipped += 1
         continue
     total += 1
     if not stamp.search(open(p).read()):
         missing.append(bn)
-print(f"  {total-len(missing)}/{total} topic pages carry a build stamp")
+print(f"  {total-len(missing)}/{total} topic pages carry a build stamp on their Doc type line ({skipped} navigation pages exempt)")
 for m in missing:
     print(f"      unstamped: {m}")
 PY

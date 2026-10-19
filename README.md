@@ -15,6 +15,7 @@ The [docs/](./docs/) directory contains comprehensive API documentation:
 
 ### Getting Started
 - [Overview](./docs/00-overview.md) - Introduction and getting started
+- [Examples](./docs/examples.md) - The example mods: what each demonstrates, the pages it pairs with, and how to install it or build and deploy it
 - [Documentation Index](./docs/01-index.md) - Where to find each reference page
 - [Pack vs Plugin Structure](./docs/02-structure.md) - Directory layout and manifests for packs and plugins
 - [Plugin Lifecycle](./docs/plugin-lifecycle.md) - Setup, lifecycle, and server events
@@ -181,10 +182,11 @@ build.bat        :: build
 deploy.bat       :: build and deploy to the mods folder
 ```
 
-**Linux / macOS** (use the Gradle wrapper directly — the `.bat` scripts are Windows-only):
+**Linux / bash** (the `.bat` scripts are Windows-only):
 ```bash
 cd examples/commands
-./gradlew jar    # build (produces build/libs/*.jar)
+./gradlew build  # build (produces build/libs/*.jar)
+./deploy.sh      # build (if needed) and copy the jar into the mods folder
 ```
 
 ## Deployment

@@ -191,7 +191,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 - **Why a copy of the tree.** zensical writes `.cache/` beside its config, and that cache once served a stale `HANDBOOK_REF`. Its `site_dir` and `docs_dir` must also lie inside the config's directory. So every build runs in a copy of the tree, with `build --clean`.
 - **Ignored paths.** `site/` and `.cache/` are in `.gitignore`, anchored: an unanchored `site/` also ignored `maintenance/site`.
 
-**What the extension does, and why.** Everything is measured against the live Jekyll pages and GitHub's own rendering (`POST /markdown`).
+**What the extension does, and why.** Everything was measured against the Jekyll pages as they were live before the rollout, and against GitHub's own rendering (`POST /markdown`).
 - (a) A link that leaves docs/ (`../examples/…`, `../CLAUDE.md`) becomes a github.com blob or tree link at `HANDBOOK_REF`. The source keeps relative links, so a local clone still works.
 - (b) Duplicate headings are numbered `-N`, as GitHub does; `toc.unique` numbers them `_N`.
 - (c) `toc.slugify` is check-links' `char_slug`.
@@ -220,7 +220,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
   - a list item on the line straight after an html block's closing tag. GitHub keeps it as html text, and the site makes a list.
 
   At d361e13 it reported 48 headings, 9 nested items and 6 child blocks; now 0.
-- **"The site builds with no unexplained warning."** It builds in a temp dir outside the repo (`SITE_TMP`, removed by the one EXIT trap and emptied before the trap is set). The temp dir holds a copy of what git tracks plus what it does not ignore, minus `.claude/` (551 files, 0.1 s). The copy has to hold `examples/`: the extension picks tree or blob for `../examples/ui` (no trailing slash) by asking whether the directory exists, so a copy without it built a different link than CI did. Because the copy comes from git, the section needs a git work tree: run from a `git archive` extract, it FAILs with "the section needs a git work tree". Known gaps in these gates, none of them reachable from the tree today, are listed in `maintenance/site/README.md`. It prints `P page(s) built in T s; W warning(s), E explained`. It FAILs on:
+- **"The site builds with no unexplained warning."** It builds in a temp dir outside the repo (`SITE_TMP`, removed by the one EXIT trap and emptied before the trap is set). The temp dir holds a copy of what git tracks plus what it does not ignore, minus `.claude/` (555 files at fd59eb3, 0.1 s). The copy has to hold `examples/`: the extension picks tree or blob for `../examples/ui` (no trailing slash) by asking whether the directory exists, so a copy without it built a different link than CI did. Because the copy comes from git, the section needs a git work tree: run from a `git archive` extract, it FAILs with "the section needs a git work tree". Known gaps in these gates, none of them reachable from the tree today, are listed in `maintenance/site/README.md`. It prints `P page(s) built in T s; W warning(s), E explained`. It FAILs on:
   - a `.md` in a subdirectory of docs/, checked before the venv test, so it FAILs even on a machine with no venv: the link rewrite resolves `../` against docs/ and assumes it is flat;
   - a non-zero exit, fewer than 79 `.html` files, or a TMPDIR inside the repo;
   - `check-site-build.py`, which judges zensical's output as a grammar. The one explained warning is `page does not exist` at a markdown link whose target resolves outside docs/ to an existing repo path. Its count must equal the number of rewritten `.md` links;
@@ -273,7 +273,7 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 
 **Rollout and rollback.**
 - **Rollout:** Settings > Pages > Source: GitHub Actions, then push, then watch the run.
-- **Rollback:** the Jekyll build no longer exists in the tree. To bring it back, first `git revert` item 18's removal commit, which restores `docs/_config.yml`, `docs/_sass/` and Home's `nav_order`. Then set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`.
+- **Rollback:** the Jekyll build no longer exists in the tree. To bring it back, restore its files by path, not by reverting item 18's commit (fd59eb3): that commit also touched Home's frontmatter, CLAUDE.md and zensical.toml, so a revert conflicts once any of those lines has moved (review of fd59eb3, MEDIUM-1). Run `git checkout fd59eb3^ -- docs/_config.yml docs/_sass`, and put `nav_order: 0` back in docs/index.md's frontmatter so that Home stays first in the Just the Docs nav. Then set `build_type=legacy` with `source[branch]=main` and `source[path]=/docs`, then `POST …/pages/builds`, then `gh workflow disable pages.yml`.
 
 ## Maintenance invariants
 

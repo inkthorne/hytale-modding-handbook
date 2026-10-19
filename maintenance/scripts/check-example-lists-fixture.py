@@ -19,7 +19,7 @@ every relative link.
 Usage: python3 maintenance/scripts/check-example-lists-fixture.py [-v] [--mutations]
 """
 from __future__ import annotations
-import argparse, concurrent.futures, os, pathlib, shutil, subprocess, sys, tempfile, time
+import argparse, concurrent.futures, os, pathlib, re, shutil, subprocess, sys, tempfile, time
 
 HERE = pathlib.Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
@@ -350,6 +350,13 @@ if A.mutations:
             r = subprocess.run([sys.executable, str(HERE / pathlib.Path(__file__).name), '--from-dir', str(tmp)],
                                capture_output=True, text=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
             out = r.stdout + r.stderr
+            ran = re.search(r'^FIXTURE (\d+) check\(s\)', out, re.M)
+            tail = ' | '.join(out.strip().split('\n')[-3:])
+            if ran is None or int(ran.group(1)) < MIN_CASES:
+                return label, None, (f'the run printed no "FIXTURE N check(s)" line with N >= {MIN_CASES} (exit {r.returncode}), so it did not '
+                                     f'run its cases and its red set says nothing: {tail}')
+            if label.startswith('IDENTITY') and r.returncode != 0:
+                return label, None, f'the IDENTITY run exited {r.returncode}, not 0: {tail}'
             red = {l[len('  FAIL '):].split('\t')[0] for l in out.split('\n') if l.startswith('  FAIL ') and '\t' in l}
             return label, red, out
         finally:

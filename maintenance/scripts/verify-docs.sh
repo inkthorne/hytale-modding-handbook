@@ -384,7 +384,7 @@ elif [ "$RC" -eq 1 ]; then
   fail "docs markdown that GitHub and the site would render differently:"
   echo "$OUT" | grep -E '^  FAIL' | sed 's/^  FAIL  /    /'
 else
-  pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): no generic outside a code span in a heading, no list child indented under 4"
+  pass "$MD_PAGES page(s) linted ($MD_HEADS heading(s), $MD_ITEMS list item(s) read): no generic outside a code span in a heading, no list child indented under 4, no bare pipe in table code, no list item straight after an html block"
 fi
 
 # =====================================================================

@@ -197,7 +197,8 @@ def md_cases(w: World) -> dict[str, list[str]]:
 
     base_info = 'INFO  1 page(s), 2 heading(s) and 2 list item(s) read'
     base_pass = ('PASS  1 page(s) linted (2 heading(s), 2 list item(s) read): no generic outside a code span in a '
-                 'heading, no list child indented under 4')
+                 'heading, no list child indented under 4, no bare pipe in table code, no list item straight after '
+                 'an html block')
     verdict('healthy', sec({}), hf=0, exact=[base_info, base_pass])
 
     for key, heading, text in (('gen_raw', '## Store<ECS_TYPE>', 'Store<ECS_TYPE>'),

@@ -42,9 +42,31 @@ rendering and are accepted, because a reader cannot tell them apart or they cost
 A difference not listed here is a defect.
 
 - A code span that starts or ends with a space loses it on the site (Python-Markdown trims; CommonMark trims one space
-  from each side only when both are there): 25 spans. Spaces inside a code span are not visible.
+  from each side only when both are there): 27 spans at f27da93 (25 before permissions.md's table cell was fixed and
+  its spans compared in line). Spaces inside a code span are not visible.
 - A code span that holds a line break shows it as a space in one of the two renderers: 19 spans. Same look.
 - Typographic quotes and dashes: the Jekyll site printed curly quotes and en/em dashes (kramdown's smartypants);
   GitHub and the new site print the ASCII characters as written.
 - The page title separator is ` - ` (`Commands API - Hytale Modding Handbook`), where Jekyll's was ` | `.
 - GitHub alerts (`> [!WARNING]`) are plain blockquotes with the literal `[!WARNING]` on the site, as they were on Jekyll.
+- `sitemap.xml` lists the home page as `…/index.html`, while its canonical link is the site root. Both URLs serve the
+  same page.
+
+## Known gaps in the gates (found by the verify pass of 9f19ac9..f27da93, not fixed)
+
+None occurs in the tree today. Each is either a false PASS on a shape no page uses, or a false FAIL, which fails closed.
+
+- **A reference definition inside a blockquote is not read by check-links.** In `> See [x][r].` with `> [r]: missing.md`,
+  the dead target passes. GitHub renders the link. `REF_DEF` allows no quote prefix.
+- **`table-code-pipe` reads only table rows that start with `|`.** GFM and Python-Markdown also accept rows without a
+  leading pipe, and a bare `|` in code on such a row is not flagged. Read from the code; never constructed.
+- **check-links: two false FAILs.**
+  - A code span broken over a line break is masked one line at a time, so a link-shaped text inside it is read as a link.
+  - A one-word footnote (`[^1]: Source.`) would parse as a reference definition with destination `Source.`.
+- **verify-docs.sh's copy guard: one half has no case.** The `${SITE_CP[0]}`/`${SITE_CP[1]}` status tests have no case
+  that tells them apart from the 0-file count guard on the same line. That guard already catches both failures, so this
+  is redundant, not a hole.
+- **check-links: three heading forms are not read as anchors.** An ATX heading indented 1-3 spaces, a heading inside a
+  blockquote and a setext heading are not read. A link to one FAILs although GitHub has the id.
+- **The lint misses one html shape.** A lone html tag (CommonMark's type-7 html block) followed by a list item is not
+  in the lint.

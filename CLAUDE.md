@@ -362,7 +362,7 @@ Two of the three follow-up levers are now built (2026-07-19): the **snippet-comp
 
 Regenerate and commit with `python3 maintenance/scripts/generate-llms-txt.py > docs/llms.txt` when pages, descriptions, categories or examples change.
 - **The gate.** The [HARD] section "llms.txt generates, and docs/llms.txt is current" FAILs on a generator that exits non-zero and on empty output.
-    - **The LLMS line.** The generator's stderr must carry exactly one `LLMS <c> categories, <p> pages, <e> examples` line, digits only. Two such lines made the old test error and PASS (reproduced).
+    - **The LLMS line.** The generator's stderr must carry exactly one `LLMS <c> categories, <p> pages, <e> examples` line, each figure 1-6 digits. Two such lines made the old test error and PASS (reproduced), and so did a figure of 20 digits (verify pass of 8b48c97..7096bf8, NEW-2).
     - **Each figure is recounted.** The section counts each from the output by another route, and each disagreement is its own named FAIL:
         - pages are the distinct page URLs in the output, and must also equal the number of docs/*.md files (`find -type f`; equal, not at least);
         - examples are the distinct example tree links, and must also equal the top-level directories of `git ls-files -z -- examples/`; a failing git is its own FAIL;
@@ -377,6 +377,8 @@ Regenerate and commit with `python3 maintenance/scripts/generate-llms-txt.py > d
         - a quoted value with an escape or a doubled quote, or a quote that does not close;
         - a plain value with a trailing ` #` comment or a `: `;
         - a value that continues on the next indented line;
+        - a plain YAML null (`null`, `Null`, `NULL`, `~`), which the site reads as no value, falling back to the site description;
+        - a key written twice: this reader takes the first, the site the last (verify pass NEW-1);
     - a Verified-against paragraph not found exactly once;
     - an examples table whose header is not exactly `| Example | Type | What it demonstrates | Commands |`;
     - a table row that is not four cells, that links something other than a tracked example directory (below it, or nothing), or whose Type is not Pack or Plugin;
@@ -392,9 +394,9 @@ Regenerate and commit with `python3 maintenance/scripts/generate-llms-txt.py > d
     - complete `package` examples and the example plugins compile;
     - relative links and section anchors resolve.
 
-  It then says nothing else is machine-checked: prose and behaviour claims, calls in Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, and asset ids at untyped positions. The old summary claimed "every documented JSON key traces" and "compile in CI"; CI builds the site only.
+  It then says nothing else is machine-checked: prose and behaviour claims, calls on variables in Java fragments (check-symbols reads `Receiver.member` in every java fence), JSON key names, enum values and required keys, other discriminator keys such as `Id`, and asset ids at untyped positions. The old summary claimed "every documented JSON key traces" and "compile in CI"; CI builds the site only.
 - **Home's `description:` is also the site root's meta description, og:description and WebSite JSON-LD description** (item 17's review, MEDIUM-4). Until item 17 gave Home a frontmatter description, these came from the site config: "The Hytale Modding Handbook — a server-plugin & asset API reference with the descriptions, gotchas, and working examples." The description now begins "The Hytale Modding Handbook, a server-plugin and asset API reference. Start here: ...", so it serves the site and llms.txt.
-- **The fixture.** `generate-llms-txt-fixture.py --mutations`: 76 cases, 74 mutations including the identity control, about 43 s (each section case runs `git init`).
+- **The fixture.** `generate-llms-txt-fixture.py --mutations`: 79 cases, 77 mutations including the identity control, about 48 s (each section case runs `git init`).
     - It also runs the verify-docs section as text on a stub generator, with a transcription of the old section (simplified messages) as a negative control. That control is the one pin no guard mutation reddens.
     - Its mutation runner, like check-home-fixture's and check-example-lists-fixture's, requires every child to print `FIXTURE N check(s)` with N at least MIN_CASES, and the IDENTITY child to exit 0. Before 1f0aa5a, MIN_CASES raised to 9999 left `--mutations` exiting 0 with "all expected red sets matched" in all three.
 

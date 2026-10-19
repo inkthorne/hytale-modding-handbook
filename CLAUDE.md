@@ -195,10 +195,16 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
 - (a) A link that leaves docs/ (`../examples/…`, `../CLAUDE.md`) becomes a github.com blob or tree link at `HANDBOOK_REF`. The source keeps relative links, so a local clone still works.
 - (b) Duplicate headings are numbered `-N`, as GitHub does; `toc.unique` numbers them `_N`.
 - (c) `toc.slugify` is check-links' `char_slug`.
-- (d) A list after a paragraph line is a list, in a quote and after a fence too, and never inside a fence.
+- (d) A list after a paragraph line is a list, as in CommonMark, and never inside a fence:
+  - a bullet or `1.` indented less than 4 spaces starts one, and `2.` after a paragraph line is text;
+  - an item whose quote prefix differs from the line before gets a blank line on its own side, so `> quote` followed by `- item` is a quote and then a list;
+  - an item after a closed fence gets a blank line too;
+  - a page whose fences the reader refuses (`~~~`, four backticks, unclosed) is left alone.
 - (e) Adjacent `>` blocks stay two boxes.
 - (f) Inline HTML follows CommonMark, so `<K, T>` stays text.
-- (g) Backslash escapes cover the ASCII punctuation Python-Markdown does not know.
+- (g) Backslash escapes cover the ASCII punctuation Python-Markdown does not know, `\&` and `\<` included (`EscapedAmpLt`).
+- (h) `\|` in a code span in a table cell shows as `|`, as on GitHub (`TableCodePipes`). pymdownx.inlinehilite keeps the span in the html stash, so the stash is rewritten too; a first fix that rewrote only the tree changed nothing.
+- (i) The home page's canonical link, og:url and JSON-LD url are the site root, as under Jekyll. `overrides/main.html` copies base.html's `site_meta` block to change that one line, so a zensical bump re-reads the copy.
 
 `mdx_breakless_lists` and `mdx_truly_sane_lists` are deliberately not used. The first adds a blank line inside code fences (7 of 2,066 blocks). The second splits loose lists and breaks 4-space nesting.
 
@@ -209,26 +215,38 @@ The site is Zensical's build of `docs/` (item 15, 2026-10-18; it replaced the Je
   - a docs page is missing from the sidebar or is in it twice, an entry names no file, or Home is not first.
 - **"Docs markdown renders the same on GitHub and on the site"** (`check-site-markdown.py`). It FAILs on:
   - a heading with a `<` outside a code span;
-  - a list child (an item, paragraph, table, or a fence after a blank line) indented less than 4 spaces past its parent. CommonMark nests at the content column, Python-Markdown at 4.
+  - a list child (an item, paragraph, table, or a fence after a blank line) indented less than 4 spaces past its parent. CommonMark nests at the content column, Python-Markdown at 4;
+  - a bare `|` inside a code span on a table row (write `\|`);
+  - a list item on the line straight after an html block's closing tag. GitHub keeps it as html text, and the site makes a list.
 
-  At d361e13 it reported 48 headings and 15 list children; now 0.
-- **"The site builds with no unexplained warning."** It builds in a temp dir outside the repo (`SITE_TMP`, removed by the one EXIT trap and emptied before the trap is set). It prints `P page(s) built in T s; W warning(s), E explained`. It FAILs on:
+  At d361e13 it reported 48 headings, 9 nested items and 6 child blocks; now 0.
+- **"The site builds with no unexplained warning."** It builds in a temp dir outside the repo (`SITE_TMP`, removed by the one EXIT trap and emptied before the trap is set). The temp dir holds a copy of what git tracks plus what it does not ignore, minus `.claude/` (551 files, 0.1 s). The copy has to hold `examples/`: the extension picks tree or blob for `../examples/ui` (no trailing slash) by asking whether the directory exists, so a copy without it built a different link than CI did. It prints `P page(s) built in T s; W warning(s), E explained`. It FAILs on:
   - a `.md` in a subdirectory of docs/, checked before the venv test, so it FAILs even on a machine with no venv: the link rewrite resolves `../` against docs/ and assumes it is flat;
   - a non-zero exit, fewer than 79 `.html` files, or a TMPDIR inside the repo;
   - `check-site-build.py`, which judges zensical's output as a grammar. The one explained warning is `page does not exist` at a markdown link whose target resolves outside docs/ to an existing repo path. Its count must equal the number of rewritten `.md` links;
-  - `check-site-links.py`, which uses the standard library only and shares nothing with zensical. Every same-site href and src must resolve, every fragment must be an id, and every GitHub blob or tree link at the built ref must name an existing path. The floors are 79 pages, 1 internal link and 9 rewritten links. Every anchor that `check-links.anchors_of` computes must be a heading id of its built page. Measured: 79 pages, 41,795 internal links, 3,311 anchors.
-- **The fixture.** `check-site-fixture.py --mutations` holds all three: 129 cases and 116 mutations, or 108 and 93 without the venv. Its docstring lists its parts.
+  - `check-site-links.py`, which reads the built HTML with the standard library only and does not use zensical's own validator. It shares two things with the site on purpose: `char_slug`, through the anchor cross-check, and check-links' `anchors_of`. So the cross-check cannot see a fault in the character rule; `gh-all-heading-ids.tsv` covers that (see check-links below). It requires:
+    - every same-site href and src resolves, every fragment is an id, and every GitHub blob or tree link at the built ref names an existing path;
+    - each page's canonical, og:url and JSON-LD url equal its own URL, the home page's the site root;
+    - every anchor `check-links.anchors_of` computes is a heading id of its built page;
+    - floors of 79 pages, 20,000 internal links, 16,000 links with a fragment and 9 rewritten links. The two link floors are about half the measured figures, so a partial collapse fails, not only a total one. Lower them in the commit that removes pages.
+
+    Measured: 79 pages, 41,795 internal links (33,792 with a fragment), 3,311 anchors.
+- **The workflow.** `defaults: run: shell: bash` is load-bearing. A step with no `shell:` runs `bash -e`, which has no pipefail, so `check-site-links … | tee` swallowed its failure, and a broken site would have deployed with a green run (review of d361e13..9f19ac9, MAJOR-1). `check-site-fixture.py` runs every `run:` block of pages.yml as GitHub does, with the checks stubbed to fail, and asserts each step fails.
+- **The fixture.** `check-site-fixture.py --mutations` holds all of it: 156 cases and 147 mutations, or 129 and 116 without the venv. Its docstring lists its parts.
 
 **Authoring rules those gates enforce.**
 - A generic in a heading goes in backticks: ``### `Codec<T>` `` (id `codect`).
 - A nested list item, or a block inside an item, is indented 4 spaces past its parent.
+- A `|` inside code in a table cell is written `\|`.
+- A list item does not follow an html block's closing tag without a blank line between them.
 
 **A zensical bump is its own item.** The link rewrite and the `toc.unique` patch ride on the Python-Markdown path, which upstream (`zensical/markdown/render.py`) plans to move to Rust. A bump can remove them without a warning. After one, re-run, in this order:
 1. `check-extension.py`;
 2. the parity comparison: li, ol, ul, table, tr, pre, blockquote and h2-h4 counts, the text, and the heading ids, against GitHub's rendering and the previous build;
 3. the anchor cross-check;
 4. `check-site-links.py`;
-5. the negative control: d361e13's docs, built with the character slug only, no `handbook_md` and no heading fixes, must fail exactly the 9 outside links and the 7 anchor links.
+5. the negative control: d361e13's docs, built with the character slug only, no `handbook_md` and no heading fixes, must fail exactly the 9 outside links and the 7 anchor links;
+6. the canonical check of check-site-links, and the `site_meta` copy in `overrides/main.html` against the new base.html.
 
 **Rollout and rollback.**
 - **Rollout:** Settings > Pages > Source: GitHub Actions, then push, then watch the run.
@@ -303,9 +321,15 @@ Hard-won rules from the 2026-07-19 quality pass and the 2026-09-03 0.6.3 update 
 9. **A page must render the same on GitHub and on the site.** Readers reach the docs both ways, and an anchor that works in one and not the other breaks a link silently. So:
    - a generic in a heading goes in a code span (``### `Codec<T>` ``);
    - nested list content is indented 4 spaces past its parent;
+   - a pipe in table code is written `\|`;
+   - a list item does not follow an html block's closing tag without a blank line;
    - docs/ stays flat, with no `.md` in a subdirectory.
 
-   verify-docs FAILs on each; see "The docs site".
+   verify-docs FAILs on each; see "The docs site". `maintenance/site/README.md` lists what the lint cannot see:
+   - a lone html tag (CommonMark's type-7 html block) followed by a list item;
+   - a link written over a line break;
+   - a raw `<a href>`;
+   - the differences accepted there: code spans that lose a space or hold a newline, curly quotes and dashes, the ` - ` title separator, and GitHub alerts.
 
 Two of the three follow-up levers are now built (2026-07-19): the **snippet-compilation hard gate** (`maintenance/scripts/check-snippets.py`, run by `verify-docs.sh`) — any ` ```java ` block starting with `package ` is a complete compilation unit and must compile against the jar; same-doc same-package blocks co-compile, fragments are exempt; write new walkthrough code as complete units so it opts in. (The class of bug it catches is real: 18 snippets called `sendMessage` on the entity `Player`, which has no such method — the symbol checker cannot type local variables, and its first run also exposed a fabricated `AssetStore` walkthrough.) And **`docs/llms.txt`** for AI-retrieval findability — generated from page frontmatter by `maintenance/scripts/generate-llms-txt.sh`; regenerate + commit when pages or descriptions change (verify-docs WARNs when stale). The remaining lever: expanding the coverage advisory's denominator beyond `server.core`/`component`/`math` to the `builtin.*` packages.
 
@@ -333,16 +357,21 @@ Fixtures:
   - **The trap check.** A case fails on any non-comment line of verify-docs.sh that names `trap`, other than the section's own EXIT trap. A second case shows it sees `true; trap …`, `x && trap - EXIT` and `( trap … )`. The word in a string or a trailing comment fails it too. Chain any later EXIT trap.
 - `check-double-run-fixture.py --mutations`: the double-run section run as text on stub probe scripts (a bash function behind a `python3` shim), with its own page and snapshots. 70 cases and 100 mutations counting the identity control, with the exact red set of each pinned. A negative control comes first: a page with one cell changed must FAIL. The shims are written once before the thread pool starts (a per-case write failed with ETXTBSY: 2 red of 2,592 case runs at load 50, 0 of 6,624 at load 107 after the fix). 41.5 s at load 11-20, 150 s at load 30-60; the cost is process spawns. Run by verify-docs.sh in the fixtures section.
 - `check-type-values-fixture.py --mutations`: 28 cases and 19 mutations. Its `run_wrapper()` runs verify-docs.sh's own type-values section around the checker, so the wrapper is tested for echoing a collapse guard's cause. Under review MINOR-2 it did not: the three guards printed `FAIL` at column 0, the wrapper's `^  (FAIL|SKIP)` found nothing, and it reported a misleading "stale skiplist".
-- `check-links-fixture.py --mutations`: 67 checks and 31 mutations counting the identity control (35 and 12 before item 15).
+- `check-links-fixture.py --mutations`: 85 checks and 45 mutations counting the identity control, about 3 minutes (35 and 12 before item 15, 67 and 31 when it first landed).
 - `check-site-fixture.py --mutations`: the docs-site sections; see "The docs site".
 
 **check-links slugs headings as GitHub does (item 15, 2026-10-18).** Its `slug()` drops inline HTML outside code spans, using CommonMark's open-tag grammar: `<KeyType>`, `<T>` and `<T extends Transaction>` are dropped, while `<K, T>`, `<Arg, D>` and `<ECS_TYPE>` stay as text. It is fitted to two tables:
 - `maintenance/fixtures/links/gh-heading-ids.tsv`: 51 ids read from GitHub's rendering at d361e13 with `gh api -H 'Accept: application/vnd.github.html' …/contents/docs/X.md?ref=d361e13`;
-- `gh-heading-shapes.tsv`: 42 shapes, read with `POST /markdown`.
+- `gh-heading-shapes.tsv`: 42 shapes, read with `POST /markdown`;
+- `gh-all-heading-ids.tsv`: GitHub's ids for all 3,311 headings of the 78 pages at d361e13, read with `gh api` and paired with the headings as written then. check-links-fixture rebuilds each page from its rows and requires `anchors_of()` to return exactly those ids, duplicates included. This table, not the site's anchor cross-check, is what covers the character rule, because the site shares `char_slug`.
 
-The character rule alone misses 18 of the 51. The old `slug()` lacked the rule, so links into `asset-editor.md:58` and `player.md:265` were broken on GitHub while the gate passed them.
+The character rule alone misses 18 of the 51 ids (18 anchors on 9 pages of the full table). The old `slug()` lacked the rule, so links into `asset-editor.md:58` and `player.md:265` were broken on GitHub while the gate passed them.
 
-check-links also reads every relative link target now, of any extension or a directory, and the target must exist. Before, its `LINK` regex matched `.md` targets only, so 8 links into `../examples/` were never read. Links on fenced lines are not read. A floor (`--min-other`, 1) fails a run that read no non-`.md` target. Measured at item 15: 2,302 links in 147 files (2,179 under docs/, 113 outside it, 10 in gate fixtures) and 38 non-`.md` targets (30 of them directories).
+check-links also reads every relative link target now, of any extension or a directory, and the target must exist. Before, its `LINK` regex matched `.md` targets only, so 8 links into `../examples/` were never read. Its reader (`link_dests()`, since the review of d361e13..9f19ac9, LOW-4) takes:
+- inline links and images, with nested brackets, `<…>` and balanced-parenthesis destinations, and titles;
+- reference links, through their definitions.
+
+It does not read a raw `<a href>`, a link broken over a line break, a link in a code span, or one with an escaped bracket; GitHub renders none of the last two as a link. Links on fenced lines are not read. A floor (`--min-other`, 1) fails a run that read no non-`.md` target. Measured at item 15: 2,302 links in 147 files (2,179 under docs/, 113 outside it, 10 in gate fixtures) and 38 non-`.md` targets (30 of them directories).
 
 **Headings inside fences (2026-10-16).** A `# comment` line in a bash fence matches a heading pattern, so heading readers took it for a heading. In check-links that is a phantom anchor: a link to a nonexistent section whose slug equalled the comment would pass. The four heading readers (check-links, section_binder, the doc-type `_sections`, the gotcha `## ` scan) now take headings only from lines outside `doc_fences.parse(text).fence_lines`.
 - **The tracked tree** had 7 such lines: docs/00-overview.md:105, 02-structure.md:412, i18n.md:61, ui-templates.md:451, CLAUDE.md:18 and :22, and the doctype fixture-j diagram line. No link targeted any, and no binder, doc-type, gotcha or check-defaults figure moved. check-links prints how many fenced heading-shaped lines it passed over.

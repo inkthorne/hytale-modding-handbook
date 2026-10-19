@@ -24,7 +24,7 @@ A pack deploys by copying its folder into the Hytale Mods folder. On Linux, each
 One new item, the Hearty Snack, built by extending the game's own `Template_Food`: it reuses an icon, a model and the heal and buff effects that already ship, so there is nothing to draw or compile. It teaches the pattern that most JSON modding rests on, copy a template and override a few fields.
 
 - **Code:** [examples/custom-food/](../examples/custom-food/)
-- **Install:** run `./deploy.sh` in the folder, or copy `manifest.json` and `Server/` into the Mods folder. Then `/give Food_Hearty_Snack` (`--quantity N` for more than one), and eat it in Adventure mode: the consume interaction is gated to that mode.
+- **Install:** run `./deploy.sh` in the folder, or copy the `custom-food` folder into the Mods folder (a pack is a folder with its `manifest.json` at the root). Then `/give Food_Hearty_Snack` (`--quantity N` for more than one), and eat it in Adventure mode: the consume interaction is gated to that mode.
 - **Pairs with:** [Item Definitions](items.md), [Consumable Items](items-consumables.md), [Effects & Stats](effects-stats.md).
 - **Read more:** the example's [README](../examples/custom-food/README.md) explains every field.
 
@@ -57,7 +57,7 @@ build.bat         :: compile
 deploy.bat        :: build and copy the jar into the Mods folder
 ```
 
-The Mods folder is `%APPDATA%\Hytale\UserData\Mods\` on Windows and `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/` on a Linux Flatpak launcher. Two examples register a command the game already has: `commands` adds `/tp` and `inventory` adds `/give`. Each replaces the built-in of that name, and unloading the example removes whatever holds the name until the server restarts. Their READMEs explain it; a real plugin should pick a name nothing else uses.
+The Mods folder is `%APPDATA%\Hytale\UserData\Mods\` on Windows and `~/.var/app/com.hypixel.HytaleLauncher/data/Hytale/UserData/Mods/` on a Linux Flatpak launcher. Two examples register a command the game already has: `commands` adds `/tp` and `inventory` adds `/give`. Each registers a name the game has already taken, so whichever registers last wins, with no warning, and unloading the example removes whatever holds the name until the server restarts. Their READMEs explain it; a real plugin should pick a name nothing else uses.
 
 ### commands
 

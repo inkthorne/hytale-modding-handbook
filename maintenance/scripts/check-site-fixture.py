@@ -41,8 +41,8 @@ FIX = REPO / 'maintenance' / 'fixtures' / 'site'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
 # FLOORS, as in the other fixtures: lowering one needs a reason in the commit message.
-MIN_CASES = 108            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
-MIN_MUTATIONS = 93
+MIN_CASES = 114            # without the extension part, which needs the site venv; +MIN_EXT_CASES with it
+MIN_MUTATIONS = 94
 MIN_EXT_CASES = 21
 MIN_EXT_MUTATIONS = 23
 
@@ -76,7 +76,7 @@ class World:
     """One variant of the system under test: the section texts and the scripts, possibly with ONE mutation
     applied. `run` makes a root of its own for each call, so cases never see each other's files."""
 
-    def __init__(self, base: pathlib.Path, *, section_edits=None, script_edits=None, ext_edits=None):
+    def __init__(self, base: pathlib.Path, *, section_edits=None, script_edits=None, ext_edits=None, workflow_edits=None):
         self.base = base
         base.mkdir(parents=True, exist_ok=True)
         src = VERIFY.read_text()
@@ -101,6 +101,11 @@ class World:
             if body.count(old) != 1:
                 raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {body.count(old)} time(s) in maintenance/site/{name}')
             (self.site_copy / name).write_text(body.replace(old, new, 1))
+        self.workflow = (REPO / '.github' / 'workflows' / 'pages.yml').read_text()
+        for _name, (old, new) in (workflow_edits or {}).items():
+            if self.workflow.count(old) != 1:
+                raise SystemExit(f'FAIL  mutation anchor {old!r} occurs {self.workflow.count(old)} time(s) in pages.yml')
+            self.workflow = self.workflow.replace(old, new, 1)
         self.n = 0
 
     def root(self, name: str, corpus: str, files: dict | None = None, drop: tuple = ()) -> pathlib.Path:
@@ -882,6 +887,109 @@ def ext_cases(w: World) -> dict[str, list[str]]:
     return {label: seen.get(k, crash or ['the case did not run']) for k, label in CASE_EXT.items()}
 
 
+
+# ============================== part 7: the deploy workflow's own steps ==============================
+
+CASE_WF = {
+    'control': 'workflow: with every check passing, every run: block of pages.yml succeeds',
+    'pip': 'workflow: a failing pip install fails its step',
+    'build': 'workflow: a failing zensical build fails its step',
+    'links': 'workflow: check-site-links exiting 1 fails the link step, although it is piped to tee',
+    'judge': 'workflow: check-site-build exiting 1 fails the judge step',
+    'shell': 'workflow: the shell the file selects is bash with pipefail (GitHub runs an unspecified one as `bash -e {0}`)',
+}
+
+
+def workflow_steps(text: str):
+    """-> (shell template, [(step name, run script)]) read from the workflow text the way GitHub reads it: a `run:`
+    block scalar or a one-line `run:`, `${{ github.sha }}` filled in, and the shell from `defaults.run.shell`
+    (unspecified: `bash -e {0}`; `bash`: `bash --noprofile --norc -eo pipefail {0}`)."""
+    ls = text.split('\n')
+    steps, i = [], 0
+    while i < len(ls):
+        m = re.match(r'^(\s*)run:\s*(.*)$', ls[i])
+        if m:
+            ind, rest = len(m.group(1)), m.group(2)
+            if rest.strip() in ('|', '>'):
+                body = []
+                j = i + 1
+                while j < len(ls) and (not ls[j].strip() or len(ls[j]) - len(ls[j].lstrip()) > ind):
+                    body.append(ls[j])
+                    j += 1
+                pad = min((len(b) - len(b.lstrip()) for b in body if b.strip()), default=0)
+                script = '\n'.join(b[pad:] for b in body)
+                i = j
+            else:
+                script, i = rest, i + 1
+            name = next((re.match(r'^\s*-?\s*name:\s*(.*)$', ls[k]).group(1) for k in range(i - 1, -1, -1)
+                         if re.match(r'^\s*-?\s*name:\s*', ls[k])), '?')
+            steps.append((name, script.replace('${{ github.sha }}', 'abc123def')))
+            continue
+        i += 1
+    dm = re.search(r'^defaults:\n\s+run:\n\s+shell:\s*(\S+)', text, re.M)
+    shell = 'bash --noprofile --norc -eo pipefail {0}' if dm and dm.group(1) == 'bash' else 'bash -e {0}'
+    return shell, steps
+
+
+PYSHIM = """#!/usr/bin/env bash
+case "$1 $2" in
+  "-m pip") exit "${STUB_PIP:-0}" ;;
+  "-m zensical") echo "Build started"; exit "${STUB_ZENSICAL:-0}" ;;
+esac
+exec python3 "$@"
+"""
+LINKS_STUB = ('import os, sys\nprint("SITE 79 page(s) parsed, 41795 internal link(s) resolved (33792 with a fragment), 522 off-site link(s) '
+              'counted, not fetched, 9 rewritten GitHub link(s) at abc123def (1 to .md files)")\n'
+              'print("  FAIL  planted: a dead link") if os.environ.get("STUB_LINKS") == "1" else None\n'
+              'sys.exit(int(os.environ.get("STUB_LINKS", "0")))\n')
+JUDGE_STUB = 'import os, sys\nsys.exit(int(os.environ.get("STUB_JUDGE", "0")))\n'
+
+
+def wf_cases(w: World) -> dict[str, list[str]]:
+    res: dict[str, list[str]] = {}
+    shell, steps = workflow_steps(w.workflow)
+    names = {'pip': 'Install', 'build': 'Build the site', 'links': 'Check the built links', 'judge': 'Judge the build output'}
+    found = {k: [(n, sc) for n, sc in steps if v in n] for k, v in names.items()}
+    n = [0]
+
+    def run_all(**env):
+        """Every run: block in order, in one directory, with the checks stubbed. -> {step name: exit status}"""
+        n[0] += 1
+        root = w.base / f'wf-{n[0]}'
+        (root / 'bin').mkdir(parents=True)
+        (root / 'maintenance' / 'scripts').mkdir(parents=True)
+        (root / 'bin' / 'python').write_text(PYSHIM)
+        (root / 'bin' / 'python').chmod(0o755)
+        (root / 'maintenance' / 'scripts' / 'check-site-links.py').write_text(LINKS_STUB)
+        (root / 'maintenance' / 'scripts' / 'check-site-build.py').write_text(JUDGE_STUB)
+        (root / 'zensical.toml').write_text('[project]\nsite_url = "https://x.invalid/h/"\n')
+        e = dict(os.environ, PATH=f'{root / "bin"}{os.pathsep}{os.environ["PATH"]}', **{k.upper(): str(v) for k, v in env.items()})
+        out = {}
+        for name, script in steps:
+            sh = shell.split()
+            p = subprocess.run(['bash', *sh[1:-1], '-c', script], capture_output=True, text=True, cwd=root, env=e)
+            out[name] = p.returncode
+        return out
+
+    def step_rc(key, got):
+        return got[found[key][0][0]] if found[key] else None
+
+    ctl = run_all()
+    res[CASE_WF['control']] = [f'step {k!r} exited {v} with every check passing' for k, v in ctl.items() if v != 0] + \
+        ([] if len(steps) >= 4 else [f'only {len(steps)} run: block(s) found'])
+    for key, env in (('pip', {'stub_pip': 1}), ('build', {'stub_zensical': 1}), ('links', {'stub_links': 1}), ('judge', {'stub_judge': 1})):
+        pr = []
+        if not found[key]:
+            pr.append(f'no run: block whose name contains {names[key]!r}')
+        else:
+            rc = step_rc(key, run_all(**env))
+            if rc == 0:
+                pr.append(f'step {found[key][0][0]!r} exited 0 with its check failing (shell: {shell})')
+        res[CASE_WF[key]] = pr
+    res[CASE_WF['shell']] = [] if 'pipefail' in shell else [f'the file selects `{shell}`: no pipefail']
+    return res
+
+
 # ============================== the mutation table ==============================
 
 MUTATIONS: dict = {}
@@ -1160,16 +1268,21 @@ mut('the ref comes from the environment only', ('ext', EXTM), 'self.getConfig("r
 mut('the extension accepts a missing base', ('ext', EXTM), '        if not base:\n            raise ValueError', '        if False:\n            raise ValueError',
     ['base_required'], ['base_required'], part='ext')
 
+# ---- the workflow ----
+mut('the workflow names no shell (GitHub then runs bash -e, which has no pipefail)', ('workflow', 'pages.yml'), 'defaults:\n  run:\n    shell: bash\n\n', '',
+    ['links', 'shell'], ['links', 'shell'], part='wf')
+
+
 PARTS = {'md': (CASE_MD, md_cases), 'nav': (CASE_NAV, nav_cases), 'links': (CASE_LINKS, links_cases),
-         'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases)}
+         'build': (CASE_BUILD, build_cases), 'site': (CASE_SITE, site_cases), 'wf': (CASE_WF, wf_cases)}
 if EXT_PY:
     PARTS['ext'] = (CASE_EXT, ext_cases)
 
 
 def apply_edit(where, old, new):
-    """-> (section_edits, script_edits, ext_edits)"""
+    """-> the World keyword for this edit"""
     kind, name = where
-    return {'script': ({}, {name: (old, new)}, {}), 'section': ({name: (old, new)}, {}, {}), 'ext': ({}, {}, {name: (old, new)})}[kind]
+    return {'script': 'script_edits', 'section': 'section_edits', 'ext': 'ext_edits', 'workflow': 'workflow_edits'}[kind], {name: (old, new)}
 
 
 def run_part(part: str, w: World) -> dict[str, list[str]]:
@@ -1216,8 +1329,8 @@ def main():
 
         def one(item):
             k, (label, (where, old, new, part, names, expect)) = item
-            sec, scr, ext = apply_edit(where, old, new)
-            mres = run_part(part, World(work / f'm{k}', section_edits=sec, script_edits=scr, ext_edits=ext))
+            kw, edit = apply_edit(where, old, new)
+            mres = run_part(part, World(work / f'm{k}', **{kw: edit}))
             return label, part, names, expect, {c for c, v in mres.items() if v}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:

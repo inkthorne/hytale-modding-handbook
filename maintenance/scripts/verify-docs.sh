@@ -1196,6 +1196,9 @@ section "[HARD] The gates' own fixtures pass"
 # check-site-fixture.py --mutations (the docs-site gates: the sections "Docs markdown renders the same on GitHub and on the
 # site", and, as they are added, the sidebar and the site build, each run as text in a temp root with planted defects,
 # and the scripts they call) is wired here for the same reason as the drift one.
+# check-example-lists-fixture.py --mutations (the three lists of examples against `git ls-files examples/`: 29 cases and 27
+# mutations including the identity control, each with its exact red set; ~10 s) and check-home-fixture.py --mutations (the
+# Home page's Verified-against paragraph against README.md's, and its task tables: 34 cases and 28 mutations, ~9 s) are run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -1214,6 +1217,8 @@ check-doc-fences-fixture.py --mutations
 check-asset-drift-fixture.py --mutations
 check-double-run-fixture.py --mutations
 check-site-fixture.py --mutations
+check-example-lists-fixture.py --mutations
+check-home-fixture.py --mutations
 check-update-build-fixture.py'
 # The summary prefixes each runner is expected to print. NOT `| ` — an earlier
 # version ended the alternation with a bare space, so every indented line counted,

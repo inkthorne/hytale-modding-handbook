@@ -240,10 +240,10 @@ fi
 
 # Home (docs/index.md) says what the handbook is, how current, and how to read a page, and sends a goal to a section and
 # a call. README.md carries the same Verified-against paragraph, and CLAUDE.md's release step bumps both by hand. This
-# gate proves the two paragraphs agree (not that either is true) and holds the task tables to the properties that make a
+# gate proves the two paragraphs agree (not that either is true) and holds the task lists to the properties that make a
 # row useful: a #fragment on every page link, a Receiver.member that check-symbols will check (and a receiver that is a
 # jar class, with the jar), 12 to 18 rows. See the header of check-home.py for what it does not hold.
-section "[HARD] Home's Verified-against paragraph is README.md's, and its task tables hold what the page claims"
+section "[HARD] Home's Verified-against paragraph is README.md's, and its task lists hold what the page claims"
 if [ -f "$JAR" ]; then
   OUT="$(python3 maintenance/scripts/check-home.py --jar "$JAR")"
 else
@@ -1236,7 +1236,7 @@ section "[HARD] The gates' own fixtures pass"
 # and the scripts they call) is wired here for the same reason as the drift one.
 # check-example-lists-fixture.py --mutations (the three lists of examples against `git ls-files examples/`: 29 cases and 27
 # mutations including the identity control, each with its exact red set; ~10 s) and check-home-fixture.py --mutations (the
-# Home page's Verified-against paragraph against README.md's, and its task tables: 34 cases and 28 mutations, ~9 s) are run here.
+# Home page's Verified-against paragraph against README.md's, and its task lists: 34 cases and 28 mutations, ~9 s) are run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading

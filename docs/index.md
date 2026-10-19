@@ -20,35 +20,31 @@ An intermediate reference for server plugins and asset packs. Java plugins assum
 
 ## Find it by task
 
-Each row links the section that does the job, names the call or key it turns on, and links an example where the repository has one.
+Each line links the section that does the job, names the call or key it turns on, and links an example where the repository has one.
 
 ### In Java (plugins)
 
-| Task | Start here | API | Example |
-|------|------------|-----|---------|
-| Add a chat command | [AbstractPlayerCommand](commands.md#abstractplayercommand), [registering it](commands.md#registration-example) | `CommandRegistry.registerCommand` | [CommandsPlugin](../examples/commands/src/main/java/hytale/examples/commands/CommandsPlugin.java) |
-| Listen for a player joining | [Player events](player.md#registration-example) | `EventRegistry.register` | [EventsPlugin](../examples/events/src/main/java/hytale/examples/events/EventsPlugin.java) |
-| React when a block is broken or placed | [EntityEventSystem](events.md#creating-an-entityeventsystem) | `EntityEventSystem.handle` | [BreakBlockNotifierSystem](../examples/events/src/main/java/hytale/examples/events/BreakBlockNotifierSystem.java) |
-| Run code every tick | [EntityTickingSystem](components.md#entitytickingsystemecs_type) | `EntityTickingSystem.tick` | [EntityCountTickingSystem](../examples/entity-count/src/main/java/hytale/examples/entitycount/EntityCountTickingSystem.java) |
-| Give a player an item | [Combined container in a system](inventory.md#combined-container-from-an-ecs-system-clear--grant-loadout) | `InventoryComponent.getCombined` | [GiveCommand](../examples/inventory/src/main/java/hytale/examples/inventory/GiveCommand.java) |
-| Read or set a block | [Reading](block-access.md#reading), [Writing](block-access.md#writing-with-blockoperations) | `BlockSection.get`, `BlockOperations.setBlock` | — |
-| Open a custom UI page | [UI System: Quick Start](ui.md#quick-start) | `PageManager.openCustomPage` | [MenuCommand](../examples/ui/src/main/java/hytale/examples/ui/MenuCommand.java) |
-| Show a custom HUD | [CustomUIHud](ui-api.md#customuihud) | `HudManager.addCustomHud` | [StatusHudCommand](../examples/ui/src/main/java/hytale/examples/ui/StatusHudCommand.java) |
+- **Add a chat command** — [AbstractPlayerCommand](commands.md#abstractplayercommand), [registering it](commands.md#registration-example). Call: `CommandRegistry.registerCommand`. Example: [CommandsPlugin](../examples/commands/src/main/java/hytale/examples/commands/CommandsPlugin.java).
+- **Listen for a player joining** — [Player events](player.md#registration-example). Call: `EventRegistry.register`. Example: [EventsPlugin](../examples/events/src/main/java/hytale/examples/events/EventsPlugin.java).
+- **React when a block is broken or placed** — [EntityEventSystem](events.md#creating-an-entityeventsystem). Call: `EntityEventSystem.handle`. Example: [BreakBlockNotifierSystem](../examples/events/src/main/java/hytale/examples/events/BreakBlockNotifierSystem.java).
+- **Run code every tick** — [EntityTickingSystem](components.md#entitytickingsystemecs_type). Call: `EntityTickingSystem.tick`. Example: [EntityCountTickingSystem](../examples/entity-count/src/main/java/hytale/examples/entitycount/EntityCountTickingSystem.java).
+- **Give a player an item** — [A combined container in a system](inventory.md#combined-container-from-an-ecs-system-clear--grant-loadout). Call: `InventoryComponent.getCombined`. Example: [GiveCommand](../examples/inventory/src/main/java/hytale/examples/inventory/GiveCommand.java).
+- **Read or set a block** — [Reading](block-access.md#reading), [writing](block-access.md#writing-with-blockoperations). Call: `BlockSection.get`, `BlockOperations.setBlock`.
+- **Open a custom UI page** — [UI System: Quick Start](ui.md#quick-start). Call: `PageManager.openCustomPage`. Example: [MenuCommand](../examples/ui/src/main/java/hytale/examples/ui/MenuCommand.java).
+- **Show a custom HUD** — [CustomUIHud](ui-api.md#customuihud). Call: `HudManager.addCustomHud`. Example: [StatusHudCommand](../examples/ui/src/main/java/hytale/examples/ui/StatusHudCommand.java).
 
 ### In JSON (no Java)
 
-| Task | Start here | Asset key | Example |
-|------|------------|-----------|---------|
-| Make a custom item | [Inheritance](items.md#inheritance-system) | `Parent` | [custom-food](../examples/custom-food/Server/Item/Items/Food/Food_Hearty_Snack.json) |
-| Change what a mob drops | [A creature's drop table](drops.md#creature-with-guaranteed-and-chance-drops) | `Container` | [custom-drop](../examples/custom-drop/Server/Drops/NPCs/Livestock/Drop_Chicken.json) |
-| Create a custom weapon | [Example child: Iron Sword](items-weapons.md#example-child-iron-sword) | `Parent` | — |
-| Create a custom tool | [Example child: Iron Pickaxe](items-tools.md#example-child-iron-pickaxe) | `Tool` | — |
-| Define a crafting recipe | [Embedded recipe](items-crafting.md#embedded-recipe-item-definition) | `Recipe` | — |
-| Change how an NPC behaves | [Behavior system](npc-roles.md#behavior-system-instructions) | `Instructions` | — |
-| Spawn an NPC from an item or block | [SpawnNPC interaction](npc-spawning.md#spawnnpc-interaction) | `"Type": "SpawnNPC"` | — |
-| Script what happens when an item is used | [Interactions: Quick Start](interactions.md#quick-start) | `"Type": "Simple"` | — |
-| Customize world generation | [Asset layout](worldgen.md#asset-layout) | `WorldStructures/*.json` | — |
-| Animate a block | [A door animation](blockyanim-format.md#simple-door-animation), [attaching it](blockyanim-format.md#integration-with-blocks) | `CustomModelAnimation` | — |
+- **Make a custom item** — [Inheritance](items.md#inheritance-system). Key: `Parent`. Example: [custom-food](../examples/custom-food/Server/Item/Items/Food/Food_Hearty_Snack.json).
+- **Change what a mob drops** — [A creature's drop table](drops.md#creature-with-guaranteed-and-chance-drops). Key: `Container`. Example: [custom-drop](../examples/custom-drop/Server/Drops/NPCs/Livestock/Drop_Chicken.json).
+- **Create a custom weapon** — [Example child: Iron Sword](items-weapons.md#example-child-iron-sword). Key: `Parent`.
+- **Create a custom tool** — [Example child: Iron Pickaxe](items-tools.md#example-child-iron-pickaxe). Key: `Tool`.
+- **Define a crafting recipe** — [Embedded recipe](items-crafting.md#embedded-recipe-item-definition). Key: `Recipe`.
+- **Change how an NPC behaves** — [Behavior system](npc-roles.md#behavior-system-instructions). Key: `Instructions`.
+- **Spawn an NPC from an item or block** — [SpawnNPC interaction](npc-spawning.md#spawnnpc-interaction). Key: `"Type": "SpawnNPC"`.
+- **Script what happens when an item is used** — [Interactions: Quick Start](interactions.md#quick-start). Key: `"Type": "Simple"`.
+- **Customize world generation** — [Asset layout](worldgen.md#asset-layout). Key: `WorldStructures/*.json`.
+- **Animate a block** — [A door animation](blockyanim-format.md#simple-door-animation), [attaching it](blockyanim-format.md#integration-with-blocks). Key: `CustomModelAnimation`.
 
 ## How to read a page
 

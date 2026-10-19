@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fixture for check-home.py: the gate that holds the Home page's Verified-against paragraph to README.md's and its
-task tables to the properties that make a row useful (a fragment on every page link, a Receiver.member call that
+task lists to the properties that make a row useful (a fragment on every page link, a Receiver.member call that
 check-symbols will actually check, a class that exists, a row count that keeps Home a door).
 
 THE PROTOCOL is check-links-fixture.py's, as check-example-lists-fixture.py restates it: every case is a labelled
@@ -25,7 +25,7 @@ ap.add_argument('--mutations', action='store_true')
 A = ap.parse_args()
 FROM = pathlib.Path(A.from_dir)
 
-MIN_CASES = 34
+MIN_CASES = 33
 MIN_MUTATIONS = 28
 fails: list[str] = []
 seen: list[str] = []
@@ -40,22 +40,18 @@ README = f'# R\n\n{PARA}\n\n## Documentation\n\nText.\n'
 
 def api_row(i, recv=None, extra=''):
     r = recv or RECEIVERS[i % len(RECEIVERS)]
-    return f'| Do thing {i}{extra} | [Page {i}](page{i}.md#section-{i}) | `{r}.doIt` | — |'
+    return f'- **Do thing {i}{extra}** — [Page {i}](page{i}.md#section-{i}). Call: `{r}.doIt`.'
 
 
 def asset_row(i):
-    return f'| Make asset {i} | [Page {i}](page{i}.md#section-{i}) | `{ASSETS[i % len(ASSETS)]}` | — |'
+    return f'- **Make asset {i}** — [Page {i}](page{i}.md#section-{i}). Key: `{ASSETS[i % len(ASSETS)]}`.'
 
 
-API_HEAD = '| Task | Start here | API | Example |\n|---|---|---|---|'
-ASSET_HEAD = '| Task | Start here | Asset key | Example |\n|---|---|---|---|'
-
-
-def home(api=7, asset=5, para=PARA, before='', after='', api_rows=None, asset_rows=None, tail=''):
+def home(api=7, asset=5, para=PARA, before='', after='', api_rows=None, asset_rows=None, tail='', intro=''):
     a = api_rows if api_rows is not None else [api_row(i) for i in range(api)]
     b = asset_rows if asset_rows is not None else [asset_row(100 + i) for i in range(asset)]
-    return (f'---\ntitle: Home\n---\n\n# H\n\n{para}\n\n{before}## Find it by task\n\n### In Java\n\n{API_HEAD}\n'
-            + '\n'.join(a) + f'\n\n### In JSON\n\n{ASSET_HEAD}\n' + '\n'.join(b) + f'\n{after}\n## How to read a page\n\nText.\n{tail}')
+    return (f'---\ntitle: Home\n---\n\n# H\n\n{para}\n\n{before}## Find it by task\n\n{intro}### In Java (plugins)\n\n'
+            + '\n'.join(a) + '\n\n### In JSON (no Java)\n\n' + '\n'.join(b) + f'\n{after}\n## How to read a page\n\nText.\n{tail}')
 
 
 def make_jar(path, names=RECEIVERS, nested=()):
@@ -109,7 +105,7 @@ def check(label, thunk, want):
 
 
 # ---- labels ------------------------------------------------------------------------------------------------
-L_HEALTHY = 'a Home whose paragraph matches README.md and whose tables hold the properties passes, exit 0'
+L_HEALTHY = 'a Home whose paragraph matches README.md and whose lists hold the properties passes, exit 0'
 L_LINE = 'and the PASS line counts the words, the rows by kind, the page links, the names and the names resolved'
 L_LINE_NOJAR = 'and without --jar it says the receivers were not resolved'
 L_PDIFF = 'a paragraph that differs by one word FAILs, naming the character where it differs'
@@ -121,17 +117,17 @@ L_PTWICE = 'a file with the paragraph twice FAILs, saying 2'
 L_PFENCE = 'a copy of the paragraph inside a code fence is not a paragraph'
 L_FILE = 'a missing README.md or docs/index.md FAILs, naming the file'
 L_NOSECTION = 'a Home without `## Find it by task` SKIPs, exit 2, saying it is a broken check'
-L_NOTABLE = 'a section with no table SKIPs the same way'
-L_SECTION_END = 'the section ends at the next `## ` heading, so a table after it is not read'
+L_NOLIST = 'a section with no list item SKIPs the same way'
+L_SECTION_END = 'the section ends at the next `## ` heading, so a list after it is not read'
 L_ROWS_LOW = 'fewer than 12 rows FAILs, and 12 passes'
 L_ROWS_HIGH = 'more than 18 rows FAILs, and 18 passes'
-L_ROWS_SUM = 'the rows of the two tables are added: 7 + 5 passes, and 7 alone does not'
+L_ROWS_SUM = 'the rows of the two lists are added: 7 + 5 passes, and 7 alone does not'
 L_FRAG = 'a page link without a #fragment FAILs, naming the line and the link'
 L_FRAG_OK = 'a link to a non-.md file or a URL needs no fragment'
-L_HEAD = 'a table whose third column is not headed API or Asset key FAILs, naming the header'
-L_CELLS = 'a row with other than four cells FAILs, naming the line'
-L_NOSYM = 'an API row with no Receiver.member in a code span FAILs'
-L_NOCODE = 'an Asset key row with no code span in its third cell FAILs'
+L_GROUP = 'a ### group that is neither In Java nor In JSON FAILs, naming it'
+L_ITEMOUT = 'a list item above any group FAILs, naming the line'
+L_NOSYM = 'an API row whose Call: names no Receiver.member FAILs'
+L_FIELD = 'a row without its Call: or Key: field and a code span FAILs, naming the line'
 L_NEG = 'an API row holding a word check-symbols reads as a denial FAILs, naming the word'
 L_NEG_ASSET = 'and the same word in an Asset key row is no finding (check-symbols checks no symbol there)'
 L_NEG_READ = 'the word list is check-symbols.py\'s NEG, not a copy: a word only that list holds is found'
@@ -139,14 +135,14 @@ L_NEG_MISSING = 'a check-symbols.py with no NEG assignment FAILs, saying the gat
 L_JAR = 'a receiver that is no class of the jar FAILs, naming it'
 L_JAR_NESTED = 'a nested class is a receiver by its own name'
 L_JAR_EMPTY = 'a jar with no com/hypixel class FAILs'
-L_FENCED = 'a table inside a code fence is not read'
-L_PIPE = 'a \\| inside a code span does not split the cell'
+L_FENCED = 'a list inside a code fence is not read'
+L_MULTI = 'every code span after Call: is a call: a second one that is no jar class is found'
 L_RC = 'a finding exits 1'
 L_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 ALL_CASES = {L_HEALTHY, L_LINE, L_LINE_NOJAR, L_PDIFF, L_PWRAP, L_PTAIL, L_PEND, L_PNONE, L_PTWICE, L_PFENCE, L_FILE, L_NOSECTION,
-             L_NOTABLE, L_SECTION_END, L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM, L_FRAG, L_FRAG_OK, L_HEAD, L_CELLS, L_NOSYM,
-             L_NOCODE, L_NEG, L_NEG_ASSET, L_NEG_READ, L_NEG_MISSING, L_JAR, L_JAR_NESTED, L_JAR_EMPTY, L_FENCED, L_PIPE,
+             L_NOLIST, L_SECTION_END, L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM, L_FRAG, L_FRAG_OK, L_GROUP, L_ITEMOUT, L_NOSYM,
+             L_FIELD, L_NEG, L_NEG_ASSET, L_NEG_READ, L_NEG_MISSING, L_JAR, L_JAR_NESTED, L_JAR_EMPTY, L_FENCED, L_MULTI,
              L_RC}
 
 # ---- the mutations -----------------------------------------------------------------------------------------
@@ -180,16 +176,16 @@ if A.mutations:
             "        if start is None:\n            print(f'  SKIP  docs/index.md has no",
             "        if False:\n            print(f'  SKIP  docs/index.md has no",
             {L_NOSECTION}),
-        'a section without a table does not SKIP': (
-            "        if not tabs:\n            print(", "        if False:\n            print(",
-            {L_NOTABLE}),
+        'a section without a list item does not SKIP': (
+            "        if not rows:\n            print(", "        if False:\n            print(",
+            {L_NOLIST}),
         'the section runs to the end of the page': (
             "if n not in fenced and lines[n - 1].startswith('## ')), len(lines))", "if False), len(lines))",
             {L_SECTION_END}),
         'the row bounds are not checked': (
             "        if not ROWS_MIN <= total <= ROWS_MAX:", "        if False:",
             {L_ROWS_LOW, L_ROWS_HIGH, L_ROWS_SUM}),
-        'the row count is the API table alone': (
+        'the row count is the API list alone': (
             "        total = nrows['api'] + nrows['asset']", "        total = nrows['api'] + 5",
             {L_ROWS_SUM, L_ROWS_HIGH}),
         'a page link needs no fragment': (
@@ -198,18 +194,18 @@ if A.mutations:
         'every link needs a fragment, not only .md pages': (
             "                if path.endswith('.md'):", "                if True:",
             {L_FRAG_OK}),
-        'a table header is not checked': (
-            "            if len(header) != 4 or header[2] not in KINDS:", "            if False:",
-            {L_HEAD}),
-        'a row cell count is not checked': (
-            "            if len(cells) != 4:", "            if False:",
-            {L_CELLS}),
+        'an unknown group is not a finding': (
+            "            if kind is None:\n                bad.append((n, h))", "            if False:\n                bad.append((n, h))",
+            {L_GROUP}),
+        'an item above any group is not a finding': (
+            "            if kind == 'none':\n                findings.append(", "            if False:\n                findings.append(",
+            {L_ITEMOUT}),
         'an API row needs no symbol': (
             "                if not syms:", "                if False:",
             {L_NOSYM}),
-        'an Asset key row needs no code span': (
-            "            elif not CODE.search(cells[2]):", "            elif False:",
-            {L_NOCODE}),
+        'a row needs no field': (
+            "            if not field:\n", "            if False:\n",
+            {L_FIELD}),
         'a row check-symbols would skip is not a finding': (
             "                if neg is not None and neg.search(l):", "                if False:",
             {L_NEG, L_NEG_READ}),
@@ -221,19 +217,19 @@ if A.mutations:
             {L_NEG_MISSING}),
         'a receiver need not be a class': (
             "                        if m.group(1) in jar:", "                        if True:",
-            {L_JAR}),
+            {L_JAR, L_MULTI}),
         'a nested class is a receiver by its whole name': (
             "names.add(n[:-6].rsplit('/', 1)[-1].rsplit('$', 1)[-1])", "names.add(n[:-6].rsplit('/', 1)[-1])",
             {L_JAR_NESTED}),
         'a jar with no class is fine': (
             "                if not jar:", "                if False:",
             {L_JAR_EMPTY}),
-        'tables inside code fences are read': (
-            "        if n in fenced or not l.lstrip().startswith('|'):", "        if not l.lstrip().startswith('|'):",
+        'lists inside code fences are read': (
+            "        if n in fenced:\n            continue\n        if l.startswith('### '):", "        if l.startswith('### '):",
             {L_FENCED}),
-        'a \\| splits a cell': (
-            "CELLS = re.compile(r'(?<!\\\\)\\|')", "CELLS = re.compile(r'\\|')",
-            {L_PIPE}),
+        'only the first code span after Call: is read': (
+            "(?:, )?)+)'", "(?:, )?))'",
+            {L_MULTI}),
         'a finding exits 0': (
             "    if findings:\n        return 1", "    if findings:\n        return 0",
             {L_RC}),
@@ -290,7 +286,7 @@ if A.mutations:
 _rc, _bad, _out = broken()
 check(L_HEALTHY, lambda: (_rc, _bad), (0, []))
 check(L_LINE, lambda: next((l.strip() for l in _out.split('\n') if 'PASS' in l), ''),
-      'PASS  the Verified against paragraph is the same in README.md and docs/index.md (28 words); the task tables '
+      'PASS  the Verified against paragraph is the same in README.md and docs/index.md (28 words); the task lists '
       'hold 7 API and 5 Asset key rows, 12 page link(s) all with a #fragment, 7 Receiver.member name(s) on rows '
       'check-symbols reads, 7 resolved in the jar')
 check(L_LINE_NOJAR, lambda: next((l.strip() for l in broken(jar=False)[2].split('\n') if 'PASS' in l), '')[-40:],
@@ -322,9 +318,9 @@ check(L_FILE, lambda: (broken(no_files=('README.md',))[1], broken(no_files=('doc
 # ---- the section -------------------------------------------------------------------------------------------
 _NOSEC = home().replace('## Find it by task', '## Elsewhere')
 check(L_NOSECTION, lambda: (broken(_NOSEC)[0], 'a broken check, not a clean run' in broken(_NOSEC)[2]), (2, True))
-_NOTAB = '# H\n\n' + PARA + '\n\n## Find it by task\n\nJust prose.\n\n## Next\n'
-check(L_NOTABLE, lambda: (broken(_NOTAB)[0], 'holds no table' in broken(_NOTAB)[2]), (2, True))
-_late = f'\n## Later\n\n| Task | Start here | Mystery | Example |\n|---|---|---|---|\n| x | [a](a.md) | y | z |\n'
+_NOLISTS = '# H\n\n' + PARA + '\n\n## Find it by task\n\nJust prose.\n\n## Next\n'
+check(L_NOLIST, lambda: (broken(_NOLISTS)[0], 'holds no list item' in broken(_NOLISTS)[2]), (2, True))
+_late = '\n## Later\n\n- **x** — [a](a.md). Call: `Mystery`.\n'
 check(L_SECTION_END, lambda: broken(home(after=_late))[1], [])
 
 # ---- row count ---------------------------------------------------------------------------------------------
@@ -343,35 +339,36 @@ def _with_api(row):
 
 
 check(L_FRAG, lambda: broken(_with_api(api_row(6).replace('page6.md#section-6', 'page6.md')))[1],
-      ['docs/index.md:22 links page6.md without a #fragment'])
-check(L_FRAG_OK, lambda: broken(_with_api(api_row(6).replace('| — |',
-                                                           '| [Ex](../examples/e/Ex6.java) [gh](https://example.com/x) [d](../examples/e/) |')))[1], [])
+      ['docs/index.md:20 links page6.md without a #fragment'])
+check(L_FRAG_OK, lambda: broken(_with_api(api_row(6)[:-1] + ' Example: [Ex](../examples/e/Ex6.java) [gh](https://example.com/x) '
+                                          '[d](../examples/e/).'))[1], [])
 
 # ---- structure ---------------------------------------------------------------------------------------------
-_EXTRA = '\n### Extra\n\n| Task | Start here | Mystery | Example |\n|---|---|---|---|\n| x | [a](a.md#b) | y | z |\n'
-check(L_HEAD, lambda: broken(home(after=_EXTRA))[1],
-      ["docs/index.md: a table under `## Find it by task` has the header ['Task', 'Start here', 'Mystery', 'Example'], "
-       'wanted four columns with `API` or `Asset key` third'])
-check(L_CELLS, lambda: broken(_with_api(api_row(6) + ' extra |'))[1],
-      ['docs/index.md:22 has 5 cells, wanted 4'])
-check(L_NOSYM, lambda: broken(_with_api(api_row(6).replace('`CommandRegistry.doIt`', '`doIt`').replace('`EventRegistry.doIt`', '`doIt`')
-                                        .replace('`EntityEventSystem.doIt`', '`doIt`').replace('`EntityTickingSystem.doIt`', '`doIt`')
-                                        .replace('`InventoryComponent.doIt`', '`doIt`').replace('`BlockOperations.doIt`', '`doIt`')
-                                        .replace('`PageManager.doIt`', '`doIt`')))[1],
-      ['docs/index.md:22 names no Receiver.member call in its API cell'])
-check(L_NOCODE, lambda: broken(home(asset_rows=[asset_row(100 + i) for i in range(4)] + ['| Make asset | [P](p.md#s) | Parent | — |']))[1],
-      ['docs/index.md:32 names no key or asset in a code span in its Asset key cell'])
-check(L_PIPE, lambda: broken(_with_api(api_row(6).replace('`CommandRegistry.doIt`', '`CommandRegistry.doIt` or `a\\|b`').replace(
-    '`PageManager.doIt`', '`PageManager.doIt` or `a\\|b`')))[1], [])
+_EXTRA = '\n### Extra\n\n- **x** — [a](a.md#b). Call: `A.b`.\n'
+check(L_GROUP, lambda: broken(home(after=_EXTRA))[1],
+      ['docs/index.md:30 the group `### Extra` is neither `In Java` nor `In JSON`'])
+check(L_ITEMOUT, lambda: broken(home(intro='- **x** — [a](a.md#b). Call: `A.b`.\n\n'))[1],
+      ['docs/index.md:12 is a list item above any `In Java` or `In JSON` group'])
+_NOCALL = 'doIt`.'
+check(L_NOSYM, lambda: broken(_with_api(api_row(6).replace('`' + RECEIVERS[6 % len(RECEIVERS)] + '.doIt`', '`doIt`')))[1],
+      ['docs/index.md:20 names no Receiver.member call after `Call:`'])
+check(L_FIELD, lambda: (broken(_with_api(api_row(6).replace('Call:', 'See:')))[1],
+                        broken(_with_api(api_row(6).replace('`' + RECEIVERS[6 % len(RECEIVERS)] + '.doIt`', 'doIt')))[1],
+                        broken(home(asset_rows=[asset_row(100 + i) for i in range(4)] + ['- **Make asset** — [P](p.md#s). Key: Parent.']))[1]),
+      (['docs/index.md:20 has no `Call: ` field with a code span'],
+       ['docs/index.md:20 has no `Call: ` field with a code span'],
+       ['docs/index.md:28 has no `Key: ` field with a code span']))
+check(L_MULTI, lambda: broken(_with_api(api_row(6).replace('.doIt`.', '.doIt`, `Ghost.doIt`.')))[1],
+      ['docs/index.md:20 names Ghost.doIt, and Ghost is no class of the jar'])
 
 # ---- the denial words --------------------------------------------------------------------------------------
 check(L_NEG, lambda: broken(_with_api(api_row(6, extra=' without the old route')))[1] +
                      broken(_with_api(api_row(6, extra=' that is deprecated')))[1],
-      ['docs/index.md:22 holds a word check-symbols reads as a denial ("deprecated"), so it would not check the call on this row'])
-_ASSET_NEG = home(asset_rows=[asset_row(100 + i) for i in range(4)] + ['| Make an item with no Java | [P](p.md#s) | `Parent` | — |'])
+      ['docs/index.md:20 holds a word check-symbols reads as a denial ("deprecated"), so it would not check the call on this row'])
+_ASSET_NEG = home(asset_rows=[asset_row(100 + i) for i in range(4)] + ['- **Make an item with no Java** — [P](p.md#s). Key: `Parent`.'])
 check(L_NEG_ASSET, lambda: broken(_ASSET_NEG)[1], [])
 check(L_NEG_READ, lambda: broken(_with_api(api_row(6, extra=' renamed')))[1],
-      ['docs/index.md:22 holds a word check-symbols reads as a denial ("renamed"), so it would not check the call on this row'])
+      ['docs/index.md:20 holds a word check-symbols reads as a denial ("renamed"), so it would not check the call on this row'])
 
 
 def _no_neg():
@@ -390,11 +387,11 @@ check(L_NEG_MISSING, _no_neg, ['check-symbols.py has no NEG assignment to read: 
 
 # ---- the jar -----------------------------------------------------------------------------------------------
 check(L_JAR, lambda: broken(_with_api(api_row(6, recv='Ghost')))[1],
-      ['docs/index.md:22 names Ghost.doIt, and Ghost is no class of the jar'])
+      ['docs/index.md:20 names Ghost.doIt, and Ghost is no class of the jar'])
 check(L_JAR_NESTED, lambda: broken(_with_api(api_row(6, recv='HudManager')), nested=('HudManager',))[1], [])
 check(L_JAR_EMPTY, lambda: [b.split(' ', 1)[0] + ' ' + b.split(' ', 2)[2] for b in broken(jar_names=(), nested=())[1]],
       ['--jar holds no com/hypixel class'])
-check(L_FENCED, lambda: broken(home(after='\n```md\n| Task | Start here | Mystery | Example |\n|---|---|---|---|\n| x | y | z | w |\n```\n'))[1], [])
+check(L_FENCED, lambda: broken(home(after='\n```md\n- **x** — [a](a.md). Call: `z`.\n### Bogus\n```\n'))[1], [])
 check(L_RC, lambda: broken(home(para='Other.'))[0], 1)
 
 # ---- the report --------------------------------------------------------------------------------------------

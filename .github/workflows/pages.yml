@@ -1,0 +1,82 @@
+# Builds the docs site with Zensical and deploys it to GitHub Pages (Settings > Pages > Source: GitHub Actions).
+#
+# Every push to main builds, however small: a change to the slug, a script or this file can never skip a deploy
+# (there is no `paths` filter). The build is the one verify-docs.sh makes, at the sha being deployed:
+#   - the pinned zensical, installed from maintenance/site/requirements.txt only with --require-hashes
+#     --only-binary :all: (see maintenance/site/README.md before changing the pin);
+#   - HANDBOOK_REF is the sha, so the links that leave docs/ (../examples/..., ../CLAUDE.md) point at the files
+#     as deployed, not at a branch that moves;
+#   - the output is judged by maintenance/scripts/check-site-build.py, the script verify-docs.sh runs, and the
+#     built HTML by check-site-links.py. Either failing fails the job, and nothing is uploaded.
+# Every action is pinned to a full commit sha; the comment names the version.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'   # the minor the hashed lock was measured on
+
+      - name: Install the pinned zensical (hashes required)
+        run: |
+          python -m pip install --require-hashes --only-binary :all: -r maintenance/site/requirements.txt
+
+      - name: Build the site
+        env:
+          HANDBOOK_REF: ${{ github.sha }}
+          PYTHONPATH: maintenance/site
+          NO_COLOR: '1'
+        run: |
+          rc=0
+          python -m zensical build --clean > build.log 2>&1 || rc=$?
+          cat build.log
+          exit "$rc"
+
+      - name: Check the built links
+        run: |
+          site_url="$(sed -n 's/^site_url = "\(.*\)"$/\1/p' zensical.toml)"
+          test -n "$site_url"
+          python maintenance/scripts/check-site-links.py site --repo . --ref "${{ github.sha }}" --site-url "$site_url" --docs docs | tee links.txt
+          md="$(sed -n 's/^SITE .* (\([0-9][0-9]*\) to \.md files)$/\1/p' links.txt)"
+          test -n "$md"
+          echo "rewritten .md links: $md" > rewritten.txt
+
+      - name: Judge the build output (no unexplained warning)
+        run: |
+          python maintenance/scripts/check-site-build.py build.log --docs docs --repo . --rewritten-md "$(sed -n 's/^rewritten .md links: //p' rewritten.txt)"
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

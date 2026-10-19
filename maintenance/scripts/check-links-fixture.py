@@ -78,6 +78,27 @@ def broken(root_extra_files, *extra):
     return rc, bad, out
 
 
+# ---- the link forms GitHub renders (review of d361e13..9f19ac9, LOW-4) ----
+L_REFDEF = 'a reference definition whose target is a missing file FAILs, at the definition line'
+L_REFANCHOR = 'and one whose target is a missing anchor'
+L_REFFORMS = 'a definition is used by [x][r], [r][] and [r], whatever the label case'
+L_REFLIVE = 'a reference definition to a live page and anchor is clean'
+L_REFUNUSED = 'a definition nothing uses is not a link'
+L_NESTED = 'nested brackets in the link text do not hide the link, as in [a[0]](missing.md)'
+L_NESTEDIMG = 'an image in the link text, both targets are read'
+L_NOOPEN = 'a `](x)` with no opening bracket, or whose bracket closed earlier, is no link'
+L_ANGLE = 'an angle destination may hold spaces, a dead one FAILs and a live one is clean'
+L_CODESPAN = 'a link inside a code span is no link, whatever the tick count'
+L_TICKS = 'a backtick with no closing one is literal and the link after it is read; an escaped tick opens no span'
+L_ESCAPED = 'a link with escaped brackets is no link'
+L_PARENS = 'parentheses inside a bare destination must balance, so [x](a(b).md) names a(b).md'
+NEWFORMS = {L_REFDEF, L_REFANCHOR, L_REFFORMS, L_NESTED, L_NESTEDIMG, L_ANGLE, L_PARENS, L_TICKS,
+            'the link forms keep the title form working next to the new ones'}
+L_ALL = 'anchors_of reproduces the ids GitHub gave every heading of every docs page at d361e13'
+L_ALL_N = 'the all-pages id table holds the 78 pages and 3,311 headings it was read on'
+L_ALL_OLD = 'NEGATIVE CONTROL, the character rule alone misses 18 anchors on 9 of those pages'
+L_RAWHREF = 'PIN, a raw <a href> is not read (check-links says so in its header)'
+
 # ---- labels shared by the cases and the mutations that must redden them ----------------------------
 # GitHub's own ids (gh-heading-ids.tsv, 51 headings with a `<`) and the text GitHub renders for 42 heading
 # shapes (gh-heading-shapes.tsv) are measured data, committed beside the corpus; see the README there.
@@ -133,7 +154,8 @@ if A.mutations:
     # expects one: red whenever the run SKIPs instead, like every other case that expects a finding.
     NONMD_DEAD = {L_NONMD_DEAD, L_DIR_DEAD, L_TITLE, L_IMAGE, L_ABS,
                   'a dead target in a file outside docs/ is caught too (the examples/ links)',
-                  'and it exits 1', 'and a dead one is still dead with a fragment on it'}
+                  'and it exits 1', 'and a dead one is still dead with a fragment on it', L_NESTEDIMG,
+                  'the link forms keep the title form working next to the new ones'}
     NONMD_FINDINGS = {L_NONMD_DEAD, L_DIR_DEAD, L_OUTSIDE, L_TITLE, L_IMAGE, L_ABS, L_MDFRAG_BADCHAR, L_GEN_RAW,
                       'a dead target in a file outside docs/ is caught too (the examples/ links)',
                       'and it exits 1', 'and a dead one is still dead with a fragment on it'}
@@ -161,7 +183,7 @@ if A.mutations:
             # own examples-free corpus already expects a SKIP, so it cannot see
             # this — which is why the detection has to come from the healthy-corpus
             # cases rather than from the narrowing case alone.
-            LINK_DEPENDENT | FENCED_FINDINGS | ORPHAN_CASES | WT_DENOM | NONMD_FINDINGS),
+            LINK_DEPENDENT | FENCED_FINDINGS | ORPHAN_CASES | WT_DENOM | NONMD_FINDINGS | NEWFORMS),
         'the outside-docs floor is removed': (
             """    if pop['outside'] < a.min_outside:""", '    if False:',
             {'a corpus with no links outside docs/ SKIPs, never passes',
@@ -170,8 +192,8 @@ if A.mutations:
              'the gate fixtures do not vote in the floor they are testing',
              'and the SKIP names the narrowing, not the corpus size'}),
         'the link pattern loses its path segment': (
-            r"""ANY_LINK = re.compile(r'\[([^\]]*)\]\(([^)\s]*)(?:\s+""",
-            r"""ANY_LINK = re.compile(r'\[([^\]]*)\]\(([A-Za-z0-9_.#\-]*)(?:\s+""",
+            "        while j < n and line[j] not in ' \\t':\n            if line[j] == '(':",
+            "        while j < n and line[j] not in ' \\t/':\n            if line[j] == '(':",
             # The same red set as the corpus narrowing for the link-dependent cases, and that is the
             # finding rather than a flaw: either narrowing alone makes every link outside docs/
             # invisible, so they are indistinguishable from the outside. The ORPHAN_CASES are not
@@ -179,7 +201,7 @@ if A.mutations:
             # still go red, only because the corpus's own outside link (which keeps the OUTSIDE floor
             # satisfied) is a path link: the docs/ ~~~ case and the UNCLOSED case (which brings its own
             # path link, `../../docs/alpha.md`, to clear that floor).
-            LINK_DEPENDENT | FENCED_FINDINGS | WT_DENOM | NONMD_FINDINGS | {L_COUNT}
+            LINK_DEPENDENT | FENCED_FINDINGS | WT_DENOM | NONMD_FINDINGS | NEWFORMS | {L_COUNT}
             | {'a ~~~ fence in docs/gamma.md FAILs naming both markers, and the phantom link still resolves',
                'an UNCLOSED fence outside docs/ FAILs naming its opener'}),
 
@@ -197,13 +219,13 @@ if A.mutations:
              'fixture links are still counted and reported, just not floored'}),
 
         'a missing target FILE stops being a finding': (
-            """                    if tp not in anchors:
-                        findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
-            """                    if tp not in anchors:
-                        pass""",
+            """                if tp not in anchors:
+                    findings.append(f'{rel}:{ln} -> {tgt} (no such file)')""",
+            """                if tp not in anchors:
+                    pass""",
             {'a link to a file that does not exist is caught',
              'CONTROL, a broken link in a checkout-shaped dir that is NOT .claude is a finding',
-             L_MDFRAG_BADCHAR}),
+             L_MDFRAG_BADCHAR} | (NEWFORMS - {L_REFANCHOR})),
         'headings inside code fences are read as anchors again': (
             """        if no in fenced:
             passed_over += 1
@@ -241,18 +263,18 @@ if A.mutations:
         # ---- the slug ----
         'the tag rule is dropped: the slug is the character rule alone': (
             "    return char_slug(strip_tags(t))", "    return char_slug(t)",
-            {L_IDS, L_GEN_LINK, L_GEN_RAW}),
+            {L_IDS, L_GEN_LINK, L_GEN_RAW, L_ALL}),
         'an open tag is anything up to a `>` (so <K, T> and <ECS_TYPE> are dropped)': (
             "    r'<[A-Za-z][A-Za-z0-9-]*(?:' + _ATTR + r')*\\s*/?>'      # open tag",
             "    r'<[A-Za-z][^>]*>'      # open tag",
-            {L_IDS, L_SHAPES, 'a heading that keeps its text (<K, T> is no tag) is linked by the text'}),
+            {L_IDS, L_SHAPES, 'a heading that keeps its text (<K, T> is no tag) is linked by the text', L_ALL}),
         'an open tag has no attributes (so <T extends Transaction> is kept)': (
             "    r'<[A-Za-z][A-Za-z0-9-]*(?:' + _ATTR + r')*\\s*/?>'      # open tag",
             "    r'<[A-Za-z][A-Za-z0-9-]*\\s*/?>'      # open tag",
-            {L_IDS, L_SHAPES}),
+            {L_IDS, L_SHAPES, L_ALL}),
         'code spans are not protected from the tag rule': (
             "        out.append(m.group(0))", "        out.append(RAW_HTML.sub('', m.group(0)))",
-            {L_IDS, L_SHAPES, L_CODE_KEEP}),
+            {L_IDS, L_SHAPES, L_CODE_KEEP, L_ALL}),
         'closing tags are kept': (
             "    r'|</[A-Za-z][A-Za-z0-9-]*\\s*>'                        # closing tag\n", "",
             {L_SHAPES}),
@@ -264,16 +286,16 @@ if A.mutations:
             {L_SHAPES}),
         # ---- every relative target ----
         'links in code fences are read again': (
-            "            if ln in fenced:\n                continue            # `list[i](x)` in a fence is code, not a link\n", "",
+            "        if ln in fenced:\n            continue\n        m = mask(line)\n", "        m = mask(line)\n",
             {L_FENCE_NONMD, L_FENCE_MD}),
         'a non-.md target is never looked up': (
-            "                    elif not dest.exists():", "                    elif False:",
+            "                elif not dest.exists():", "                elif False:",
             NONMD_DEAD),
         'a directory is not an existing target (only files are)': (
-            "                    elif not dest.exists():", "                    elif not dest.is_file():",
+            "                elif not dest.exists():", "                elif not dest.is_file():",
             {L_DIR_LIVE, L_COUNT}),
         'the outside-the-repository test is removed': (
-            "                    if not dest.is_relative_to(os.path.normpath(str(root))):", "                    if False:",
+            "                if not dest.is_relative_to(os.path.normpath(str(root))):", "                if False:",
             {L_OUTSIDE}),
         'a URL is read as a path': (
             "SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:|^//')", "SCHEME = re.compile(r'^\\0')",
@@ -291,10 +313,10 @@ if A.mutations:
             "    if other < a.min_other:", "    if False:",
             {L_FLOOR, L_FLOOR_MSG}),
         'a link with a title is not read': (
-            "(?:\\s+(?:\"[^\"]*\"|\\\'[^\\\']*\\\'))?\\)')", "\\)')",
-            {L_TITLE}),
+            """    if i < n and line[i] in '"\\'(':""", "    if False:",
+            {L_TITLE, 'the link forms keep the title form working next to the new ones'}),
         'an unfixable anchor skips the whole link, file included': (
-            "                        an = None\n", "                        continue\n",
+            "                    an = None\n", "                    continue\n",
             {L_MDFRAG_BADCHAR}),
         'an unfixable anchor is reported as a missing anchor': (
             "if an is not None and not re.fullmatch(r'[A-Za-z0-9_\\-]+', an):", "if False:",
@@ -302,6 +324,49 @@ if A.mutations:
         'the directories among the non-.md targets are not counted': (
             "other_dirs += dest.is_dir()", "other_dirs += 0",
             {L_COUNT}),
+        'reference definitions are not read': (
+            "    for label in used:\n        out += defs.get(label, [])", "    for label in used:\n        pass",
+            {L_REFDEF, L_REFANCHOR, L_REFFORMS, 'the link forms keep the title form working next to the new ones'} - {'the link forms keep the title form working next to the new ones'}),
+        'a definition nothing uses is read': (
+            "    for label in used:\n        out += defs.get(label, [])", "    for label in defs:\n        out += defs.get(label, [])",
+            {L_REFUNUSED}),
+        'a reference label is case-sensitive': (
+            "            used.add(' '.join((mm.group(2) or mm.group(1)).lower().split()))", "            used.add(' '.join((mm.group(2) or mm.group(1)).split()))",
+            {L_REFFORMS}),
+        'the shortcut form [r] is not a use': (
+            "(mm.group(2) or mm.group(1))", "(mm.group(2) if mm.group(2) is not None else '')",
+            {L_REFFORMS}),
+        'a `](` with no opening bracket is a link': (
+            "            if depth:\n                continue                            # a `](` with no `[` before it\n", "",
+            {L_NOOPEN, L_ESCAPED}),
+        'closing brackets are not counted back to their opener': (
+            "                if m[j] == ']':\n                    depth += 1\n", "                if False:\n                    depth += 1\n",
+            {L_NOOPEN}),
+        'an angle destination is not read': (
+            "    if i < n and line[i] == '<':\n        j = line.find('>', i + 1)", "    if False:\n        j = line.find('>', i + 1)",
+            {L_ANGLE, 'the link forms keep the title form working next to the new ones'}),
+        'code spans are not masked': (
+            "        elif c == '`':\n            opener", "        elif False:\n            opener",
+            {L_CODESPAN}),
+        'a code span closes at the first run of ticks, whatever its length': (
+            "if q.end() - q.start() == width), None)", "if True), None)",
+            {L_CODESPAN}),
+        'an unclosed tick swallows the rest of the line': (
+            "                out.append(opener.group(0))                 # an opener with no closer is literal ticks\n                i = opener.end()",
+            "                out.append('\\0' * (n - i))\n                i = n",
+            {L_TICKS}),
+        'backslash escapes are not masked': (
+            "        if c == '\\\\' and i + 1 < n and line[i + 1] in ESCAPABLE:", "        if False:",
+            {L_ESCAPED, L_TICKS}),
+        'parentheses in a bare destination do not balance': (
+            "                if depth == 0:\n                    break\n                depth -= 1", "                break",
+            {L_PARENS}),
+        'a duplicate heading is numbered x_1 as Python-Markdown does': (
+            "        got.add(b if seen[b] == 0 else f'{b}-{seen[b]}')", "        got.add(b if seen[b] == 0 else f'{b}_{seen[b]}')",
+            {L_ALL, L_ALL_OLD}),
+        'runs of spaces collapse to one hyphen (the em dash of a heading leaves two spaces, GitHub keeps both hyphens)': (
+            "    return s.replace(' ', '-')", "    return re.sub(' +', '-', s)",
+            {L_ALL, L_IDS, L_ALL_OLD, L_IDS_OLD}),
         'SKIP shares an exit code with PASS': (
             '        return 2\n    if pop', '        return 0\n    if pop',
             {'a too-small corpus SKIPs with exit 2'}),
@@ -611,6 +676,70 @@ check(L_FLOOR, lambda: subprocess.run([sys.executable, str(FROM / 'check-links.p
 check(L_FLOOR_MSG, lambda: 'has gone blind' in subprocess.run(
     [sys.executable, str(FROM / 'check-links.py'), '--root', str(CORPUS), '--min-links', '3'],
     capture_output=True, text=True).stdout, True)
+
+# ---- the link forms GitHub renders ----------------------------------------------------------------------------
+def _form(body, extra=None):
+    return broken({'docs/gamma.md': '# G\n\n## Here\n\n' + body, **(extra or {})})[1]
+
+
+_DEAD = lambda ln, tgt='missing.md': [f'docs/gamma.md:{ln} -> {tgt} (no such file)']
+check(L_REFDEF, lambda: _form('See [x][r].\n\n[r]: missing.md\n'), _DEAD(7))
+check(L_REFANCHOR, lambda: _form('See [x][r].\n\n[r]: #no-such\n'), ['docs/gamma.md:7 -> gamma.md#no-such (no such anchor)'])
+check(L_REFFORMS, lambda: [(_form(b)) for b in ('See [r][].\n\n[r]: missing.md\n', 'See [r].\n\n[r]: missing.md\n',
+                                                'See [X][R].\n\n[r]: missing.md\n', 'See [x][r].\n\n[r]: <missing.md> "a title"\n')],
+      [_DEAD(7)] * 4)
+check(L_REFLIVE, lambda: _form('See [x][r].\n\n[r]: beta.md#other-heading\n'), [])
+check(L_REFUNUSED, lambda: _form('Text.\n\n[r]: missing.md\n'), [])
+check(L_NESTED, lambda: _form('See [a[0]](missing.md).\n'), _DEAD(5))
+check(L_NESTEDIMG, lambda: _form('See [![i](pic.png)](missing.md).\n'),
+      ['docs/gamma.md:5 -> missing.md (no such file)', 'docs/gamma.md:5 -> pic.png (no such file or directory)'])
+check(L_NOOPEN, lambda: _form('Text](missing.md) and [a] b](missing.md).\n'), [])
+check(L_ANGLE, lambda: (_form('See [x](<missing file.md>).\n'), _form('See [x](<my file.md>).\n', {'docs/my file.md': '# M\n'})),
+      (_DEAD(5, 'missing file.md'), []))
+check(L_CODESPAN, lambda: _form('Write `[x](missing.md)` and ``a ` [y](missing.md) `` here.\n'), [])
+check(L_TICKS, lambda: (_form('A ` tick, then [x](missing.md).\n'), _form('Not a span: \\`[x](missing.md)` .\n')),
+      (_DEAD(5), _DEAD(5)))
+check(L_ESCAPED, lambda: _form('Write \\[x\\](missing.md) and \\[y](missing.md) literally.\n'), [])
+check(L_PARENS, lambda: _form('See [x](a(b).md).\n'), _DEAD(5, 'a(b).md'))
+check(L_RAWHREF, lambda: _form('See <a href="missing.md">x</a>.\n'), [])
+check('the link forms keep the title form working next to the new ones',
+      lambda: _form('See [x](missing.md "t") and [y][r] and ![z](<missing.png>).\n\n[r]: beta.md\n'),
+      ['docs/gamma.md:5 -> missing.md (no such file)', 'docs/gamma.md:5 -> missing.png (no such file or directory)'])
+
+# ---- GitHub's ids for every heading of every docs page (review of d361e13..9f19ac9, LOW-6) ---------------------
+# The cross-check in verify-docs compares check-links' anchors with the built ids, and both use char_slug, so a fault in
+# the character rule would pass it. This table is GitHub's own answer for all 3,311 headings (read by gh api, see the tsv
+# header); a page is rebuilt from its rows and anchors_of() must give exactly the ids GitHub gave, duplicates included.
+import collections
+ALLROWS = _tsv('gh-all-heading-ids.tsv')
+ALLPAGES = collections.OrderedDict()
+for _f, _no, _h, _i in ALLROWS:
+    ALLPAGES.setdefault(_f, []).append((_h, _i))
+
+
+def _all_mismatch():
+    bad = []
+    for f, hs in ALLPAGES.items():
+        got = CL.anchors_of('\n'.join('## ' + h for h, _ in hs))[0]
+        want = {i for _, i in hs}
+        if got != want:
+            bad.append((f, sorted(got - want), sorted(want - got)))
+    return bad
+
+
+def _all_mismatch_char_rule():
+    keep = CL.slug
+    CL.slug = CL.char_slug
+    try:
+        bad = _all_mismatch()
+    finally:
+        CL.slug = keep
+    return len(bad), sum(len(b[1]) for b in bad)
+
+
+check(L_ALL_N, lambda: (len(ALLPAGES), len(ALLROWS)), (78, 3311))
+check(L_ALL, _all_mismatch, [])
+check(L_ALL_OLD, _all_mismatch_char_rule, (9, 18))
 
 print(f'\nFIXTURE {checks} check(s): {checks - len(fails)} passed, {len(fails)} failed')
 for f in fails:

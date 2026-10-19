@@ -1,0 +1,3317 @@
+# Every heading of every docs page at d361e13 (78 pages) with the id GitHub's file renderer gave it, read 2026-10-18 with
+# `gh api -H 'Accept: application/vnd.github.html' repos/inkthorne/hytale-modding-handbook/contents/docs/X.md?ref=d361e13...`
+# (the id on the `user-content-` anchor after each h1-h6), paired in order with the page's headings outside code fences
+# as written at d361e13 (git show d361e13:docs/X.md). Columns: file<TAB>line at d361e13<TAB>heading text<TAB>GitHub id.
+# Read by check-links-fixture.py: check-links' anchors_of() of a page rebuilt from these rows must give the page's ids.
+# The heading text of 48 headings differs at HEAD (code-span form); the rows are d361e13's, not the current docs.
+00-overview.md	8	Getting Started with Hytale Modding	getting-started-with-hytale-modding
+00-overview.md	16	What This Documentation Covers	what-this-documentation-covers
+00-overview.md	27	Your First Custom Asset	your-first-custom-asset
+00-overview.md	31	Creating a Custom Weapon	creating-a-custom-weapon
+00-overview.md	42	Creating a Custom Tool	creating-a-custom-tool
+00-overview.md	46	Common Tasks	common-tasks
+00-overview.md	60	Documentation Structure	documentation-structure
+00-overview.md	77	Next Steps	next-steps
+00-overview.md	79	Working Examples	working-examples
+00-overview.md	94	Building and Deploying	building-and-deploying
+00-overview.md	114	Reference Files	reference-files
+01-index.md	8	Documentation Index	documentation-index
+01-index.md	14	Quick Reference Table	quick-reference-table
+01-index.md	76	By Documentation Type	by-documentation-type
+01-index.md	80	Java API	java-api
+01-index.md	85	JSON asset format	json-asset-format
+01-index.md	90	UI DSL	ui-dsl
+01-index.md	95	Java API + JSON asset format	java-api--json-asset-format
+01-index.md	100	Java API + Save / config file format	java-api--save--config-file-format
+01-index.md	105	Guides & Overviews	guides--overviews
+01-index.md	109	Asset Type Index	asset-type-index
+01-index.md	169	Java Class Index	java-class-index
+01-index.md	282	Topic Groups	topic-groups
+02-structure.md	8	Pack vs Plugin Directory Structure	pack-vs-plugin-directory-structure
+02-structure.md	14	Overview	overview
+02-structure.md	35	Pack Structure	pack-structure
+02-structure.md	62	Pack Manifest	pack-manifest
+02-structure.md	77	Plugin Structure	plugin-structure
+02-structure.md	103	Plugin Manifest	plugin-manifest
+02-structure.md	139	ServerVersion (target server version)	serverversion-target-server-version
+02-structure.md	175	Range syntax	range-syntax
+02-structure.md	208	Server/ vs Common/ Directories	server-vs-common-directories
+02-structure.md	212	Server/	server
+02-structure.md	225	Common/	common
+02-structure.md	237	Notable Hytale Assets	notable-hytale-assets
+02-structure.md	246	Manifest Comparison	manifest-comparison
+02-structure.md	248	Pack Manifest (No Code)	pack-manifest-no-code
+02-structure.md	261	Plugin Manifest (Code Only)	plugin-manifest-code-only
+02-structure.md	276	Plugin Manifest (Code + Assets)	plugin-manifest-code--assets
+02-structure.md	295	Examples	examples
+02-structure.md	297	Minimal Pack (Custom Weapon)	minimal-pack-custom-weapon
+02-structure.md	354	Plugin Without Assets (Commands Only)	plugin-without-assets-commands-only
+02-structure.md	370	Plugin With Assets (UI)	plugin-with-assets-ui
+02-structure.md	392	Deployment	deployment
+abilities.md	8	Abilities and Runes	abilities-and-runes
+abilities.md	36	Overview	overview
+abilities.md	61	Key Classes	key-classes
+abilities.md	84	Rune Items (`Ability`)	rune-items-ability
+abilities.md	93	ItemAbility	itemability
+abilities.md	101	CoreItemAbility	coreitemability
+abilities.md	143	SupportItemAbility	supportitemability
+abilities.md	186	Shipped runes	shipped-runes
+abilities.md	225	Ability Attributes	ability-attributes
+abilities.md	265	Ability Slots and the Rune Bag	ability-slots-and-the-rune-bag
+abilities.md	304	The Ability Bench	the-ability-bench
+abilities.md	341	`/abilities`	abilities
+abilities.md	353	Ability Keywords	ability-keywords
+abilities.md	358	AbilityKeyword	abilitykeyword
+abilities.md	391	AbilityKeywordAudit	abilitykeywordaudit
+abilities.md	415	Elements	elements
+abilities.md	417	Element	element
+abilities.md	474	Ability Interactions	ability-interactions
+abilities.md	485	LaunchAbilityProjectile	launchabilityprojectile
+abilities.md	539	SplitAbilityProjectile	splitabilityprojectile
+abilities.md	566	ApplyAbilityEffects	applyabilityeffects
+abilities.md	589	GrantAbilityCharges	grantabilitycharges
+abilities.md	646	PullEntityAbility	pullentityability
+abilities.md	673	SpawnAbilityEntity	spawnabilityentity
+abilities.md	714	TriggerAbilityFX	triggerabilityfx
+abilities.md	749	GroundedCondition	groundedcondition
+abilities.md	767	The Fireball rune, end to end	the-fireball-rune-end-to-end
+abilities.md	883	Example: a custom core rune	example-a-custom-core-rune
+abilities.md	952	Java API	java-api
+abilities.md	954	AbilitiesPlugin	abilitiesplugin
+abilities.md	975	ImpactModifiers	impactmodifiers
+abilities.md	1000	AbilityCastUtil	abilitycastutil
+abilities.md	1015	AbilityAttributeBinding	abilityattributebinding
+abilities.md	1027	Reading a player's equipped abilities	reading-a-players-equipped-abilities
+abilities.md	1052	Gotchas & Errors	gotchas--errors
+abilities.md	1092	Related	related
+adventure.md	8	Adventure API	adventure-api
+adventure.md	18	Overview	overview
+adventure.md	33	Architecture	architecture
+adventure.md	65	Key Classes	key-classes
+adventure.md	87	Adventure Events	adventure-events
+adventure.md	91	Event Summary	event-summary
+adventure.md	102	DiscoverInstanceEvent (Base Class)	discoverinstanceevent-base-class
+adventure.md	117	DiscoverInstanceEvent.Display	discoverinstanceeventdisplay
+adventure.md	132	Usage Example	usage-example
+adventure.md	169	Registration	registration
+adventure.md	180	DiscoverZoneEvent (Base Class)	discoverzoneevent-base-class
+adventure.md	192	DiscoverZoneEvent.Display	discoverzoneeventdisplay
+adventure.md	204	Usage Example	usage-example-1
+adventure.md	246	Registration	registration-1
+adventure.md	257	InstanceDiscoveryConfig	instancediscoveryconfig
+adventure.md	292	Usage Example	usage-example-2
+adventure.md	313	WorldMapTracker.ZoneDiscoveryInfo	worldmaptrackerzonediscoveryinfo
+adventure.md	331	Usage Example	usage-example-3
+adventure.md	355	WorldMapTracker	worldmaptracker
+adventure.md	382	Accessing WorldMapTracker	accessing-worldmaptracker
+adventure.md	419	Portal Worlds	portal-worlds
+adventure.md	428	PortalType	portaltype
+adventure.md	501	PortalDescription	portaldescription
+adventure.md	534	PillTag	pilltag
+adventure.md	550	PortalSpawnConfig	portalspawnconfig
+adventure.md	574	PortalKey	portalkey
+adventure.md	623	Portal and instance interactions	portal-and-instance-interactions
+adventure.md	639	TeleportInstance	teleportinstance
+adventure.md	708	HubPortal	hubportal
+adventure.md	735	Teleporter	teleporter
+adventure.md	766	AdventureMetadata	adventuremetadata
+adventure.md	801	Usage Example	usage-example-4
+adventure.md	824	Wilderness Tracking	wilderness-tracking
+adventure.md	839	WildernessConfig	wildernessconfig
+adventure.md	874	WildernessTracker	wildernesstracker
+adventure.md	911	Complete Adventure System Example	complete-adventure-system-example
+asset-editor.md	8	Asset Editor Events API	asset-editor-events-api
+asset-editor.md	16	Overview	overview
+asset-editor.md	25	Architecture	architecture
+asset-editor.md	39	Key Classes	key-classes
+asset-editor.md	54	Event Summary	event-summary
+asset-editor.md	69	EditorClientEvent<KeyType> (Base Class)	editorclientevent-base-class
+asset-editor.md	79	EditorClient	editorclient
+asset-editor.md	108	AssetEditorActivateButtonEvent	asseteditoractivatebuttonevent
+asset-editor.md	120	AssetEditorAssetCreatedEvent	asseteditorassetcreatedevent
+asset-editor.md	135	AssetEditorClientDisconnectEvent	asseteditorclientdisconnectevent
+asset-editor.md	147	AssetEditorSelectAssetEvent	asseteditorselectassetevent
+asset-editor.md	167	AssetEditorFetchAutoCompleteDataEvent	asseteditorfetchautocompletedataevent
+asset-editor.md	183	AssetEditorRequestDataSetEvent	asseteditorrequestdatasetevent
+asset-editor.md	198	AssetEditorUpdateWeatherPreviewLockEvent	asseteditorupdateweatherpreviewlockevent
+asset-editor.md	210	Usage Example	usage-example
+asset-editor.md	246	Gotchas & Errors	gotchas--errors
+assets.md	8	Assets API	assets-api
+assets.md	14	Overview	overview
+assets.md	24	Architecture	architecture
+assets.md	38	Key Classes	key-classes
+assets.md	62	AssetRegistry	assetregistry
+assets.md	67	Methods	methods
+assets.md	79	Related Registries	related-registries
+assets.md	101	Asset Store	asset-store
+assets.md	117	Prefab Store	prefab-store
+assets.md	126	Asset Types	asset-types
+assets.md	143	Model	model
+assets.md	150	Constants	constants
+assets.md	155	Key Methods	key-methods
+assets.md	209	Static Factory Methods	static-factory-methods
+assets.md	222	Usage Example	usage-example
+assets.md	245	JSON Asset Pattern	json-asset-pattern
+assets.md	300	Asset Store Pattern	asset-store-pattern
+assets.md	326	Creating Custom Asset Types	creating-custom-asset-types
+assets.md	330	When to Create Custom Assets	when-to-create-custom-assets
+assets.md	339	Asset File Structure	asset-file-structure
+assets.md	375	AssetMap Implementations	assetmap-implementations
+assets.md	400	Complete Working Example	complete-working-example
+assets.md	569	Adding Polymorphic Types	adding-polymorphic-types
+assets.md	636	Usage Examples	usage-examples
+assets.md	638	Register Custom Assets	register-custom-assets
+assets.md	652	Access Registered Assets	access-registered-assets
+assets.md	666	Using Codec Registries	using-codec-registries
+assets.md	681	Built-in Asset Access	built-in-asset-access
+assets.md	700	Common Assets (Java API)	common-assets-java-api
+assets.md	706	CommonAssetModule	commonassetmodule
+assets.md	720	CommonAssetRegistry	commonassetregistry
+assets.md	736	FileCommonAsset	filecommonasset
+assets.md	764	WordList	wordlist
+assets.md	780	Asset Utility Classes	asset-utility-classes
+assets.md	782	ColorParseUtil	colorparseutil
+assets.md	815	TempAssetIdUtil	tempassetidutil
+assets.md	825	Asset Loading	asset-loading
+assets.md	834	Overriding Base-Game Assets	overriding-base-game-assets
+assets.md	850	Load order and precedence	load-order-and-precedence
+assets.md	864	Notes	notes
+assets.md	876	Asset Events	asset-events
+assets.md	880	Event Summary	event-summary
+assets.md	893	AssetPackRegisterEvent	assetpackregisterevent
+assets.md	905	AssetPackUnregisterEvent	assetpackunregisterevent
+assets.md	917	LoadAssetEvent	loadassetevent
+assets.md	940	CommonAssetMonitorEvent	commonassetmonitorevent
+assets.md	948	SendCommonAssetsEvent	sendcommonassetsevent
+assets.md	961	PathEvent	pathevent
+assets.md	974	Asset Events Registration Example	asset-events-registration-example
+assets.md	998	Gotchas & Errors	gotchas--errors
+audio-music.md	8	Music	music
+audio-music.md	21	Overview	overview
+audio-music.md	47	Music Selectors	music-selectors
+audio-music.md	97	MusicContainer	musiccontainer
+audio-music.md	115	Container types	container-types
+audio-music.md	127	Common fields	common-fields
+audio-music.md	162	SingleTrack	singletrack
+audio-music.md	170	Random / Sequence	random--sequence
+audio-music.md	202	Horizontal	horizontal
+audio-music.md	251	Segment (layered)	segment-layered
+audio-music.md	306	Who starts music	who-starts-music
+audio-music.md	326	Music blocks and music items	music-blocks-and-music-items
+audio-music.md	333	MusicEmitterBlock	musicemitterblock
+audio-music.md	382	MusicPlayerBlock	musicplayerblock
+audio-music.md	433	The item `Music` key	the-item-music-key
+audio-music.md	462	Sync Points and Musical Time	sync-points-and-musical-time
+audio-music.md	466	BarBeatDuration	barbeatduration
+audio-music.md	481	BarBeatPosition	barbeatposition
+audio-music.md	488	MusicSyncConfig	musicsyncconfig
+audio-music.md	507	MusicTransition	musictransition
+audio-music.md	571	Stinger	stinger
+audio-music.md	611	Stinger bindings	stinger-bindings
+audio-music.md	641	Music Events	music-events
+audio-music.md	664	AudioState Transitions	audiostate-transitions
+audio-music.md	700	StateTransitionConfig	statetransitionconfig
+audio-music.md	738	State bindings	state-bindings
+audio-music.md	766	Driving Music from Java	driving-music-from-java
+audio-music.md	855	Gotchas & Errors	gotchas--errors
+audio.md	8	Audio System	audio-system
+audio.md	14	Overview	overview
+audio.md	24	Architecture	architecture
+audio.md	45	Key Classes	key-classes
+audio.md	63	Quick Navigation	quick-navigation
+audio.md	83	SoundEvents	soundevents
+audio.md	89	Directory Structure	directory-structure
+audio.md	119	Properties	properties
+audio.md	154	Layer System	layer-system
+audio.md	210	RandomSettings	randomsettings
+audio.md	224	Parent Inheritance	parent-inheritance
+audio.md	258	Examples	examples
+audio.md	333	AudioCategories	audiocategories
+audio.md	339	Directory Structure	directory-structure-1
+audio.md	349	Properties	properties-1
+audio.md	359	Hierarchy Example	hierarchy-example
+audio.md	380	Common Categories	common-categories
+audio.md	409	Ducking	ducking
+audio.md	456	AmbienceFX	ambiencefx
+audio.md	462	Directory Structure	directory-structure-2
+audio.md	478	Properties	properties-2
+audio.md	493	Conditions System	conditions-system
+audio.md	523	Tag Patterns	tag-patterns
+audio.md	546	AmbientBed	ambientbed
+audio.md	567	Emitter Sounds	emitter-sounds
+audio.md	615	Music Configuration	music-configuration
+audio.md	621	Complete Example	complete-example
+audio.md	648	Music	music
+audio.md	662	EQ (Equalizer)	eq-equalizer
+audio.md	670	Properties	properties-3
+audio.md	688	Example (EQ_Underwater)	example-eq_underwater
+audio.md	707	Reverb	reverb
+audio.md	714	Properties	properties-4
+audio.md	733	Example (Rev_Cave)	example-rev_cave
+audio.md	754	Presets	presets
+audio.md	775	ItemSounds	itemsounds
+audio.md	784	Properties	properties-5
+audio.md	793	Example (`ISS_Armor_Cloth.json`)	example-iss_armor_clothjson
+audio.md	804	Integration with Items	integration-with-items
+audio.md	817	SoundSets	soundsets
+audio.md	826	Example (`CreativePlayDefaults.json`, truncated)	example-creativeplaydefaultsjson-truncated
+audio.md	845	Playing Sounds from Java	playing-sounds-from-java
+audio.md	853	Resolving a sound-event index	resolving-a-sound-event-index
+audio.md	878	SoundCategory	soundcategory
+audio.md	887	Choosing a method	choosing-a-method
+audio.md	907	Example: a spatial impact sound on hit	example-a-spatial-impact-sound-on-hit
+audio.md	924	Validating sound-event references in custom codecs	validating-sound-event-references-in-custom-codecs
+audio.md	960	Integration with Other Systems	integration-with-other-systems
+audio.md	962	Block Sounds	block-sounds
+audio.md	1004	Interactions	interactions
+audio.md	1021	NPC Audio	npc-audio
+audio.md	1057	Weapon Audio Categories	weapon-audio-categories
+audio.md	1074	Sleep Sounds	sleep-sounds
+audio.md	1099	File Format Reference	file-format-reference
+audio.md	1122	Gotchas & Errors	gotchas--errors
+beams.md	8	Beams	beams
+beams.md	33	Overview	overview
+beams.md	48	Key Classes	key-classes
+beams.md	63	The Beam asset	the-beam-asset
+beams.md	65	Beam	beam
+beams.md	109	Shipped beams	shipped-beams
+beams.md	128	Writing a beam asset	writing-a-beam-asset
+beams.md	148	The AttachBeam interaction	the-attachbeam-interaction
+beams.md	188	An inline BeamConfig	an-inline-beamconfig
+beams.md	212	How shipped content uses beams	how-shipped-content-uses-beams
+beams.md	284	Example: a tethered bolt	example-a-tethered-bolt
+beams.md	316	Java API	java-api
+beams.md	322	BeamPlugin	beamplugin
+beams.md	331	BeamComponent	beamcomponent
+beams.md	376	AttachedBeam	attachedbeam
+beams.md	413	Walkthrough: tethers from Java	walkthrough-tethers-from-java
+beams.md	493	How beams reach clients	how-beams-reach-clients
+beams.md	535	The /beam command	the-beam-command
+beams.md	555	Gotchas & Errors	gotchas--errors
+beams.md	632	Related	related
+block-access.md	8	Block Access	block-access
+block-access.md	35	The section model	the-section-model
+block-access.md	61	Resolving a section	resolving-a-section
+block-access.md	115	Reading	reading
+block-access.md	138	Writing with BlockOperations	writing-with-blockoperations
+block-access.md	207	Breaking like a player	breaking-like-a-player
+block-access.md	223	Ticking	ticking
+block-access.md	238	Complete example	complete-example
+block-access.md	308	SectionReader	sectionreader
+block-access.md	355	SetBlockSettings	setblocksettings
+block-access.md	396	Section components	section-components
+block-access.md	400	ChunkSection	chunksection
+block-access.md	419	BlockSection	blocksection
+block-access.md	470	FluidSection	fluidsection
+block-access.md	491	BlockComponentSection	blockcomponentsection
+block-access.md	505	EnvironmentSection	environmentsection
+block-access.md	524	BlockHealthSection	blockhealthsection
+block-access.md	557	HeightmapColumn	heightmapcolumn
+block-access.md	597	Migrating from 0.6.x	migrating-from-06x
+block-access.md	633	Gotchas & Errors	gotchas--errors
+blocks-connected.md	8	Connected Blocks	connected-blocks
+blocks-connected.md	22	Connected Block Templates	connected-block-templates
+blocks-connected.md	51	Using a Connected Template	using-a-connected-template
+blocks-connected.md	76	Template Structure	template-structure
+blocks-connected.md	172	Patterned Connected Block Rule Sets	patterned-connected-block-rule-sets
+blocks-connected.md	189	The two halves	the-two-halves
+blocks-connected.md	201	The per-block binding	the-per-block-binding
+blocks-connected.md	234	The rule-set asset	the-rule-set-asset
+blocks-connected.md	290	Pattern entries	pattern-entries
+blocks-connected.md	304	Rules	rules
+blocks-connected.md	328	Shapes	shapes
+blocks-connected.md	365	Java surface	java-surface
+blocks-connected.md	420	Related Documentation	related-documentation
+blocks-java-api.md	8	Blocks Java API	blocks-java-api
+blocks-java-api.md	21	Java API Reference	java-api-reference
+blocks-java-api.md	23	BlockType	blocktype
+blocks-java-api.md	28	Constants	constants
+blocks-java-api.md	41	Static Methods	static-methods
+blocks-java-api.md	57	Core Properties	core-properties
+blocks-java-api.md	66	Material & Rendering	material--rendering
+blocks-java-api.md	75	Textures & Model	textures--model
+blocks-java-api.md	85	Sounds & Particles	sounds--particles
+blocks-java-api.md	95	Rotation & Placement	rotation--placement
+blocks-java-api.md	104	Collision & Interaction	collision--interaction
+blocks-java-api.md	116	Block States	block-states
+blocks-java-api.md	126	Movement & Support	movement--support
+blocks-java-api.md	137	Other Properties	other-properties
+blocks-java-api.md	156	BlockMaterial	blockmaterial
+blocks-java-api.md	168	Methods	methods
+blocks-java-api.md	178	Rotation	rotation
+blocks-java-api.md	192	Constants	constants-1
+blocks-java-api.md	198	Methods	methods-1
+blocks-java-api.md	246	RotationTuple	rotationtuple
+blocks-java-api.md	256	Constants	constants-2
+blocks-java-api.md	263	Factory Methods	factory-methods
+blocks-java-api.md	276	Record Components (Accessors)	record-components-accessors
+blocks-java-api.md	284	Methods	methods-2
+blocks-java-api.md	294	Usage Example	usage-example
+blocks-java-api.md	316	Gathering Drop Types	gathering-drop-types
+blocks-java-api.md	330	BlockBreakingDropType	blockbreakingdroptype
+blocks-java-api.md	343	HarvestingDropType	harvestingdroptype
+blocks-java-api.md	353	SoftBlockDropType	softblockdroptype
+blocks-java-api.md	366	BlockSupportsRequiredForType	blocksupportsrequiredfortype
+blocks-java-api.md	382	BlockMountPoint	blockmountpoint
+blocks-java-api.md	410	FallingBlockSettings	fallingblocksettings
+blocks-java-api.md	456	Bench Configuration	bench-configuration
+blocks-java-api.md	494	Bench (base class)	bench-base-class
+blocks-java-api.md	510	BenchUpgradeRequirement	benchupgraderequirement
+blocks-java-api.md	519	DiagramCraftingBench	diagramcraftingbench
+blocks-java-api.md	523	StructuralCraftingBench	structuralcraftingbench
+blocks-java-api.md	536	Farming Config Classes	farming-config-classes
+blocks-java-api.md	541	FarmingStageData	farmingstagedata
+blocks-java-api.md	563	GrowthModifierAsset	growthmodifierasset
+blocks-java-api.md	584	BlockBoundingBoxes	blockboundingboxes
+blocks-java-api.md	616	FillerBlockUtil	fillerblockutil
+blocks-java-api.md	667	World Block Access	world-block-access
+blocks-java-api.md	678	Block Ticking	block-ticking
+blocks-java-api.md	691	IBlockTickProvider & BlockTickManager	iblocktickprovider--blocktickmanager
+blocks-java-api.md	714	BlockTickStrategy	blocktickstrategy
+blocks-java-api.md	732	TickProcedure (scheduled ticks)	tickprocedure-scheduled-ticks
+blocks-java-api.md	751	RandomTickProcedure (random ticks)	randomtickprocedure-random-ticks
+blocks-java-api.md	790	Hooking custom block ticking	hooking-custom-block-ticking
+blocks-java-api.md	826	Block Events	block-events
+blocks-java-api.md	832	Event Summary	event-summary
+blocks-java-api.md	844	PlaceBlockEvent	placeblockevent
+blocks-java-api.md	864	BreakBlockEvent	breakblockevent
+blocks-java-api.md	881	DamageBlockEvent	damageblockevent
+blocks-java-api.md	899	DamageBlockEvent Usage	damageblockevent-usage
+blocks-java-api.md	938	UseBlockEvent	useblockevent
+blocks-java-api.md	952	UseBlockEvent.Pre	useblockeventpre
+blocks-java-api.md	964	UseBlockEvent.Post	useblockeventpost
+blocks-java-api.md	972	UseBlockEvent Usage	useblockevent-usage
+blocks-java-api.md	1012	Usage Examples	usage-examples
+blocks-java-api.md	1014	Handle Block Break Event	handle-block-break-event
+blocks-java-api.md	1046	Cancel Block Placement	cancel-block-placement
+blocks-java-api.md	1077	Block Health & Fragility	block-health--fragility
+blocks-java-api.md	1104	BlockHealth methods	blockhealth-methods
+blocks-java-api.md	1125	Custom Block-Entity Components	custom-block-entity-components
+blocks-java-api.md	1133	1. The component	1-the-component
+blocks-java-api.md	1167	2. Wire it to a block	2-wire-it-to-a-block
+blocks-java-api.md	1207	3. Register the component and a system	3-register-the-component-and-a-system
+blocks-java-api.md	1219	4. Tick over placed blocks	4-tick-over-placed-blocks
+blocks-java-api.md	1249	4b. Resolving the block's world position	4b-resolving-the-blocks-world-position
+blocks-java-api.md	1263	5. Spawning an item-entity from the block	5-spawning-an-item-entity-from-the-block
+blocks-java-api.md	1283	6. "Only if not already present" + surviving reloads	6-only-if-not-already-present--surviving-reloads
+blocks-java-api.md	1305	7. Editing block-entity state in-world (press-F GUI)	7-editing-block-entity-state-in-world-press-f-gui
+blocks-java-api.md	1382	Key classes for this recipe	key-classes-for-this-recipe
+blocks-java-api.md	1396	Gotchas	gotchas
+blocks-java-api.md	1410	Notes	notes
+blocks-java-api.md	1423	Gotchas & Errors	gotchas--errors
+blocks-java-api.md	1435	Related Documentation	related-documentation
+blocks.md	8	Block Definitions	block-definitions
+blocks.md	19	Quick Navigation	quick-navigation
+blocks.md	34	Overview	overview
+blocks.md	36	Architecture	architecture
+blocks.md	43	File Locations	file-locations
+blocks.md	61	Block Categories	block-categories
+blocks.md	97	Architecture	architecture-1
+blocks.md	120	Key Classes	key-classes
+blocks.md	140	Common Properties	common-properties
+blocks.md	159	Example: Simple Block Item	example-simple-block-item
+blocks.md	203	BlockType Properties	blocktype-properties
+blocks.md	207	Rendering Properties	rendering-properties
+blocks.md	224	Texture Configuration	texture-configuration
+blocks.md	273	Light Emission	light-emission
+blocks.md	288	Collision Properties	collision-properties
+blocks.md	301	Behavior Properties	behavior-properties
+blocks.md	313	Gathering Configuration	gathering-configuration
+blocks.md	352	VariantRotation	variantrotation
+blocks.md	375	Flags	flags
+blocks.md	393	Block States System	block-states-system
+blocks.md	397	State Definition Structure	state-definition-structure
+blocks.md	431	State Definition Properties	state-definition-properties
+blocks.md	454	Example: Door with Multiple States	example-door-with-multiple-states
+blocks.md	507	Roof/Corner State Example	roofcorner-state-example
+blocks.md	554	Hitbox Definitions	hitbox-definitions
+blocks.md	560	Structure	structure
+blocks.md	575	Common Hitbox Types	common-hitbox-types
+blocks.md	595	Complex Hitbox Example	complex-hitbox-example
+blocks.md	616	Sound Sets	sound-sets
+blocks.md	630	Sound Event Types	sound-event-types
+blocks.md	646	Example Sound Set	example-sound-set
+blocks.md	662	Using Sound Sets	using-sound-sets
+blocks.md	674	Common Sound Set IDs	common-sound-set-ids
+blocks.md	689	Particle Sets	particle-sets
+blocks.md	703	Particle Event Types	particle-event-types
+blocks.md	720	Example Particle Set	example-particle-set
+blocks.md	736	Using Particle Sets	using-particle-sets
+blocks.md	749	Particle Set IDs	particle-set-ids
+blocks.md	760	Fluid Blocks	fluid-blocks
+blocks.md	764	Fluid Properties	fluid-properties
+blocks.md	773	Example: Water Source	example-water-source
+blocks.md	811	Fluid FX Configuration	fluid-fx-configuration
+blocks.md	839	Ticker Configuration	ticker-configuration
+blocks.md	880	Fluid Collision Transformations	fluid-collision-transformations
+blocks.md	893	Block Interactions	block-interactions
+blocks.md	897	Interaction Slots	interaction-slots
+blocks.md	915	Example: Interactive Block	example-interactive-block
+blocks.md	933	BlockEntity Components	blockentity-components
+blocks.md	962	Block Type Lists	block-type-lists
+blocks.md	970	Available Lists	available-lists
+blocks.md	988	List Structure	list-structure
+blocks.md	1006	Visual Assets	visual-assets
+blocks.md	1008	Block Models (.blockymodel)	block-models-blockymodel
+blocks.md	1020	Block Animations (.blockyanim)	block-animations-blockyanim
+blocks.md	1032	Using Custom Models	using-custom-models
+blocks.md	1057	Per-Block Animation Speed	per-block-animation-speed
+blocks.md	1068	API	api
+blocks.md	1104	Storage and replication	storage-and-replication
+blocks.md	1121	`/blockanimspeed`	blockanimspeed
+blocks.md	1159	Quick Start Examples	quick-start-examples
+blocks.md	1165	Simple Cube Block	simple-cube-block
+blocks.md	1195	Block with Custom Model	block-with-custom-model
+blocks.md	1225	Interactive Door	interactive-door
+blocks.md	1272	Container Block	container-block
+blocks.md	1328	Block with Inheritance	block-with-inheritance
+blocks.md	1352	Notes	notes
+blocks.md	1358	Gotchas & Errors	gotchas--errors
+blocks.md	1369	Related Documentation	related-documentation
+blockyanim-format.md	8	Block Animation Format (.blockyanim)	block-animation-format-blockyanim
+blockyanim-format.md	14	Overview	overview
+blockyanim-format.md	24	Architecture	architecture
+blockyanim-format.md	38	Key Classes	key-classes
+blockyanim-format.md	48	File Location	file-location
+blockyanim-format.md	69	Frame Rate	frame-rate
+blockyanim-format.md	79	File Structure	file-structure
+blockyanim-format.md	98	Top-Level Fields	top-level-fields
+blockyanim-format.md	107	Node Animations	node-animations
+blockyanim-format.md	111	Animation Track Types	animation-track-types
+blockyanim-format.md	121	Keyframe Structure	keyframe-structure
+blockyanim-format.md	125	Position/Orientation/ShapeStretch/ShapeUvOffset Keyframes	positionorientationshapestretchshapeuvoffset-keyframes
+blockyanim-format.md	141	ShapeVisible Keyframes	shapevisible-keyframes
+blockyanim-format.md	152	Interpolation Types	interpolation-types
+blockyanim-format.md	159	Examples	examples
+blockyanim-format.md	161	Simple Door Animation	simple-door-animation
+blockyanim-format.md	196	Visibility Switching	visibility-switching
+blockyanim-format.md	219	UV Offset (Sprite Swap / Scroll)	uv-offset-sprite-swap--scroll
+blockyanim-format.md	245	Chest Opening with Multiple Nodes	chest-opening-with-multiple-nodes
+blockyanim-format.md	281	Integration with Blocks	integration-with-blocks
+blockyanim-format.md	321	Looping Behavior	looping-behavior
+blockyanim-format.md	328	Best Practices	best-practices
+blockyanim-format.md	336	Gotchas & Errors	gotchas--errors
+blockymodel-format.md	8	Block Model Format (.blockymodel)	block-model-format-blockymodel
+blockymodel-format.md	14	Overview	overview
+blockymodel-format.md	25	Architecture	architecture
+blockymodel-format.md	41	Key Classes	key-classes
+blockymodel-format.md	52	File Location	file-location
+blockymodel-format.md	81	File Structure	file-structure
+blockymodel-format.md	90	Top-Level Fields	top-level-fields
+blockymodel-format.md	101	Node Structure	node-structure
+blockymodel-format.md	116	Node Fields	node-fields
+blockymodel-format.md	130	Position and Orientation	position-and-orientation
+blockymodel-format.md	147	Shape Types	shape-types
+blockymodel-format.md	151	Box Shape	box-shape
+blockymodel-format.md	180	Quad Shape	quad-shape
+blockymodel-format.md	206	None Shape	none-shape
+blockymodel-format.md	218	Shape Properties	shape-properties
+blockymodel-format.md	220	Common Properties	common-properties
+blockymodel-format.md	231	Shading Modes	shading-modes
+blockymodel-format.md	242	Unwrap Modes	unwrap-modes
+blockymodel-format.md	252	Texture Layout	texture-layout
+blockymodel-format.md	256	Box Texture Layout	box-texture-layout
+blockymodel-format.md	273	Quad Texture Layout	quad-texture-layout
+blockymodel-format.md	285	Face Layout Properties	face-layout-properties
+blockymodel-format.md	294	Examples	examples
+blockymodel-format.md	296	Simple Single-Box Model	simple-single-box-model
+blockymodel-format.md	326	Multi-Part Model with Hierarchy	multi-part-model-with-hierarchy
+blockymodel-format.md	384	Quad-Based Foliage Model	quad-based-foliage-model
+blockymodel-format.md	431	Model with Animated Nodes	model-with-animated-nodes
+blockymodel-format.md	513	Integration with Blocks and Items	integration-with-blocks-and-items
+blockymodel-format.md	515	Block Usage	block-usage
+blockymodel-format.md	539	Item Usage	item-usage
+blockymodel-format.md	551	Best Practices	best-practices
+blockymodel-format.md	571	Gotchas & Errors	gotchas--errors
+camera.md	8	Camera Control	camera-control
+camera.md	34	The `SetServerCamera` packet	the-setservercamera-packet
+camera.md	59	`ClientCameraView`	clientcameraview
+camera.md	73	Clearing the camera	clearing-the-camera
+camera.md	87	`ServerCameraSettings`	servercamerasettings
+camera.md	146	Built-in command recipes	built-in-command-recipes
+camera.md	155	`/player camera topdown`	player-camera-topdown
+camera.md	177	`/player camera sidescroller`	player-camera-sidescroller
+camera.md	200	`/player camera reset`	player-camera-reset
+camera.md	209	`CameraDemo` — the apply-on-join + event pattern	camerademo--the-apply-on-join--event-pattern
+camera.md	220	Worked example: high third-person / MOBA (League-style) view	worked-example-high-third-person--moba-league-style-view
+camera.md	251	CameraManager	cameramanager
+camera.md	281	Toggle pattern	toggle-pattern
+camera.md	316	The `Camera` interaction (JSON)	the-camera-interaction-json
+camera.md	349	The `Camera` property (keyframe arrays)	the-camera-property-keyframe-arrays
+camera.md	383	Adjacent camera systems	adjacent-camera-systems
+camera.md	400	Gotchas & Errors	gotchas--errors
+codecs.md	8	Codecs API	codecs-api
+codecs.md	14	Overview	overview
+codecs.md	19	Architecture	architecture
+codecs.md	34	Key Classes	key-classes
+codecs.md	58	Core Codec Types	core-codec-types
+codecs.md	60	Codec<T>	codec
+codecs.md	84	Built-in Codecs	built-in-codecs
+codecs.md	88	Primitive / simple codecs	primitive--simple-codecs
+codecs.md	102	Array codecs	array-codecs
+codecs.md	112	Other built-ins	other-built-ins
+codecs.md	124	Building collection / enum codecs	building-collection--enum-codecs
+codecs.md	145	KeyedCodec<T>	keyedcodec
+codecs.md	171	Usage with ItemStack Metadata	usage-with-itemstack-metadata
+codecs.md	189	What `required` means	what-required-means
+codecs.md	207	BuilderCodec — codecs for objects	buildercodec--codecs-for-objects
+codecs.md	209	BuilderCodec<T>	buildercodec
+codecs.md	256	Defining a CODEC for an object	defining-a-codec-for-an-object
+codecs.md	294	Parent Inheritance (`InheritCodec`)	parent-inheritance-inheritcodec
+codecs.md	339	Plugin Configuration	plugin-configuration
+codecs.md	374	Codec Map Types (polymorphic / lookup codecs)	codec-map-types-polymorphic--lookup-codecs
+codecs.md	378	StringCodecMapCodec<T, C>	stringcodecmapcodect-c
+codecs.md	396	AssetCodecMapCodec<K, T>	assetcodecmapcodeck-t
+codecs.md	421	MapKeyMapCodec<V>	mapkeymapcodec
+codecs.md	441	Registering Custom Types via the Plugin Registry	registering-custom-types-via-the-plugin-registry
+codecs.md	443	CodecMapRegistry<T, C>	codecmapregistryt-c
+codecs.md	473	Example: registering a custom type into an existing string-dispatched system	example-registering-a-custom-type-into-an-existing-string-dispatched-system
+codecs.md	491	Custom Assets with Codecs	custom-assets-with-codecs
+codecs.md	521	Server-Side Codec Helpers	server-side-codec-helpers
+codecs.md	527	ProtocolCodecs	protocolcodecs
+codecs.md	562	ColorCodec	colorcodec
+codecs.md	570	WeightedMapCodec<T>	weightedmapcodec
+codecs.md	582	PairCodec	paircodec
+codecs.md	606	LayerEntryCodec	layerentrycodec
+codecs.md	623	Serialization & I/O Utilities	serialization--io-utilities
+codecs.md	627	BsonUtil	bsonutil
+codecs.md	665	HashUtil	hashutil
+codecs.md	669	FileUtil	fileutil
+codecs.md	695	MemorySegmentUtil	memorysegmentutil
+codecs.md	714	Notes	notes
+codecs.md	724	Gotchas & Errors	gotchas--errors
+collision.md	8	Collision API	collision-api
+collision.md	14	Overview	overview
+collision.md	25	Architecture	architecture
+collision.md	47	Key Classes	key-classes
+collision.md	68	Class Hierarchy	class-hierarchy
+collision.md	97	CollisionModule	collisionmodule
+collision.md	102	Getting the Module	getting-the-module
+collision.md	107	Validation Constants	validation-constants
+collision.md	115	Static Collision Methods	static-collision-methods
+collision.md	168	Instance Methods	instance-methods
+collision.md	209	CollisionResult	collisionresult
+collision.md	214	Public Fields	public-fields
+collision.md	226	Constructor	constructor
+collision.md	232	Block Collision Methods	block-collision-methods
+collision.md	242	Character Collision Methods	character-collision-methods
+collision.md	251	Slide Methods	slide-methods
+collision.md	259	Trigger Block Methods	trigger-block-methods
+collision.md	277	Pass-Through Blocks	pass-through-blocks
+collision.md	288	Damage Block Methods	damage-block-methods
+collision.md	297	Material-Based Collision	material-based-collision
+collision.md	318	Character Collision Control	character-collision-control
+collision.md	325	Overlap Detection	overlap-detection
+collision.md	333	Lifecycle	lifecycle
+collision.md	340	Debug Logging	debug-logging
+collision.md	353	BlockCollisionData	blockcollisiondata
+collision.md	360	Public Fields	public-fields-1
+collision.md	376	Methods	methods
+collision.md	386	BoxCollisionData	boxcollisiondata
+collision.md	393	Public Fields	public-fields-2
+collision.md	399	Methods	methods-1
+collision.md	406	CharacterCollisionData	charactercollisiondata
+collision.md	413	Public Fields	public-fields-3
+collision.md	421	Methods	methods-2
+collision.md	434	CollisionConfig	collisionconfig
+collision.md	439	Material Constants	material-constants
+collision.md	451	Public Fields	public-fields-4
+collision.md	475	Methods	methods-3
+collision.md	510	CollisionFilter	collisionfilter
+collision.md	515	Method	method
+collision.md	522	CollisionMaterial	collisionmaterial
+collision.md	527	Constants	constants
+collision.md	542	BasicCollisionData	basiccollisiondata
+collision.md	547	Public Fields	public-fields-5
+collision.md	553	Methods	methods-4
+collision.md	559	Static Fields	static-fields
+collision.md	567	IBlockCollisionEvaluator	iblockcollisionevaluator
+collision.md	572	Methods	methods-5
+collision.md	583	BoxBlockIntersectionEvaluator	boxblockintersectionevaluator
+collision.md	591	Box Configuration	box-configuration
+collision.md	606	Intersection Tests	intersection-tests
+collision.md	618	Query Results	query-results
+collision.md	629	CollisionModuleConfig	collisionmoduleconfig
+collision.md	634	Constants	constants-1
+collision.md	641	Methods	methods-6
+collision.md	663	CollisionDataArray<T>	collisiondataarray
+collision.md	668	Allocation	allocation
+collision.md	674	Access	access
+collision.md	685	Sorting	sorting
+collision.md	692	WorldUtil	worldutil
+collision.md	697	Material Classification	material-classification
+collision.md	705	Fluid Queries	fluid-queries
+collision.md	726	Empty-Space Scans	empty-space-scans
+collision.md	740	CollisionResultComponent	collisionresultcomponent
+collision.md	745	Getting the Component	getting-the-component
+collision.md	750	Collision Result Access	collision-result-access
+collision.md	755	Position Tracking	position-tracking
+collision.md	764	Pending Collision State	pending-collision-state
+collision.md	771	Usage with Player	usage-with-player
+collision.md	788	SimplePhysicsProvider	simplephysicsprovider
+collision.md	795	Getting an Instance	getting-an-instance
+collision.md	806	Constructors	constructors
+collision.md	816	Ticking	ticking
+collision.md	825	Configuration	configuration
+collision.md	845	State and Velocity	state-and-velocity
+collision.md	865	IBlockCollisionConsumer Callbacks	iblockcollisionconsumer-callbacks
+collision.md	878	Nested Enums	nested-enums
+collision.md	890	Usage Examples	usage-examples
+collision.md	892	Basic Collision Query	basic-collision-query
+collision.md	911	Validate Entity Position	validate-entity-position
+collision.md	929	Check for Trigger Blocks	check-for-trigger-blocks
+collision.md	940	Filter Collisions by Material	filter-collisions-by-material
+collision.md	956	Gotchas & Errors	gotchas--errors
+combat.md	8	Combat API	combat-api
+combat.md	21	Overview	overview
+combat.md	31	Architecture	architecture
+combat.md	51	Key Classes	key-classes
+combat.md	64	Damage Events (DamageEventSystem)	damage-events-damageeventsystem
+combat.md	70	Key Classes	key-classes-1
+combat.md	87	Damage Class	damage-class
+combat.md	91	Methods	methods
+combat.md	123	Important Notes	important-notes
+combat.md	132	Damage Source Types	damage-source-types
+combat.md	134	Damage.Source (Interface)	damagesource-interface
+combat.md	144	Damage.EntitySource	damageentitysource
+combat.md	161	Damage.EnvironmentSource	damageenvironmentsource
+combat.md	175	Damage.ProjectileSource	damageprojectilesource
+combat.md	188	Damage.EntityEffectSource	damageentityeffectsource
+combat.md	197	Damage.CommandSource	damagecommandsource
+combat.md	203	DamageCause	damagecause
+combat.md	209	Predefined Constants (all `@Deprecated`)	predefined-constants-all-deprecated
+combat.md	235	Obtaining a cause (non-deprecated)	obtaining-a-cause-non-deprecated
+combat.md	262	Methods	methods-1
+combat.md	276	Usage Example	usage-example
+combat.md	298	Creating a Damage Handler	creating-a-damage-handler
+combat.md	343	Registering the Damage System	registering-the-damage-system
+combat.md	354	DamageDataComponent	damagedatacomponent
+combat.md	369	KillFeedEvent	killfeedevent
+combat.md	375	KillFeedEvent.Display	killfeedeventdisplay
+combat.md	388	KillFeedEvent.KillerMessage	killfeedeventkillermessage
+combat.md	401	KillFeedEvent.DecedentMessage	killfeedeventdecedentmessage
+combat.md	415	KillFeedEvent Usage	killfeedevent-usage
+combat.md	481	Registration	registration
+combat.md	491	Kill Feed Event Flow	kill-feed-event-flow
+combat.md	509	Reacting to Death & Respawn	reacting-to-death--respawn
+combat.md	590	The death screen *is* the respawn trigger	the-death-screen-is-the-respawn-trigger
+combat.md	670	Damage Handling Examples	damage-handling-examples
+combat.md	672	Cancel Damage	cancel-damage
+combat.md	691	Modify Damage Based on Source	modify-damage-based-on-source
+combat.md	720	Notify Attacker on Hit	notify-attacker-on-hit
+combat.md	748	Stat Modification on Hit (JSON)	stat-modification-on-hit-json
+combat.md	756	EntityStatsOnHit	entitystatsonhit
+combat.md	774	Structure	structure
+combat.md	785	Available Stats	available-stats
+combat.md	792	Example: Sword Granting Signature Energy	example-sword-granting-signature-energy
+combat.md	814	Blocking Mechanics (JSON)	blocking-mechanics-json
+combat.md	820	How Blocking Reduces Damage	how-blocking-reduces-damage
+combat.md	842	Stamina Consumption on Block	stamina-consumption-on-block
+combat.md	856	Granting Stats on Successful Block	granting-stats-on-successful-block
+combat.md	889	Guard Break	guard-break
+combat.md	929	Timed Blocking and Parry Mechanics	timed-blocking-and-parry-mechanics
+combat.md	933	RunTime	runtime
+combat.md	950	FailOnDamage	failondamage
+combat.md	974	Example: Parry Window	example-parry-window
+combat.md	1007	Example: Timed Block with Maximum Duration	example-timed-block-with-maximum-duration
+combat.md	1048	Knockback System	knockback-system
+combat.md	1054	KnockbackComponent	knockbackcomponent
+combat.md	1060	Lifecycle	lifecycle
+combat.md	1066	Fields	fields
+combat.md	1078	JSON Configuration	json-configuration
+combat.md	1084	Basic Knockback	basic-knockback
+combat.md	1112	Knockback Properties	knockback-properties
+combat.md	1122	Knockback Types	knockback-types
+combat.md	1134	Knockback Resistance	knockback-resistance
+combat.md	1138	Armor Reduction	armor-reduction
+combat.md	1142	Wielding Reduction	wielding-reduction
+combat.md	1149	Related Systems	related-systems
+combat.md	1158	Applying Knockback via Code	applying-knockback-via-code
+combat.md	1181	Gotchas & Errors	gotchas--errors
+commands.md	8	Commands API	commands-api
+commands.md	14	Overview	overview
+commands.md	24	Architecture	architecture
+commands.md	38	Key Classes	key-classes
+commands.md	68	Class Hierarchy	class-hierarchy
+commands.md	95	Argument syntax (input format)	argument-syntax-input-format
+commands.md	123	AbstractPlayerCommand	abstractplayercommand
+commands.md	128	Constructors	constructors
+commands.md	149	Abstract Method to Implement	abstract-method-to-implement
+commands.md	160	Usage Example	usage-example
+commands.md	188	CommandContext	commandcontext
+commands.md	193	Methods	methods
+commands.md	207	CommandRegistry	commandregistry
+commands.md	216	Registration Example	registration-example
+commands.md	226	Tab completion (CommandManager / CommandCompletion)	tab-completion-commandmanager--commandcompletion
+commands.md	245	AbstractCommand Arguments	abstractcommand-arguments
+commands.md	250	Argument Types	argument-types
+commands.md	270	Other AbstractCommand Methods	other-abstractcommand-methods
+commands.md	332	Permission model (why a new command says "no permission")	permission-model-why-a-new-command-says-no-permission
+commands.md	367	AbstractAsyncCommand	abstractasynccommand
+commands.md	382	AbstractAsyncPlayerCommand	abstractasyncplayercommand
+commands.md	391	Constructors	constructors-1
+commands.md	398	Abstract Method to Implement	abstract-method-to-implement-1
+commands.md	417	CommandBase	commandbase
+commands.md	438	AbstractWorldCommand	abstractworldcommand
+commands.md	443	Constructors	constructors-2
+commands.md	450	Abstract Method to Implement	abstract-method-to-implement-2
+commands.md	469	Example: bulk entity operations	example-bulk-entity-operations
+commands.md	523	AbstractAsyncWorldCommand	abstractasyncworldcommand
+commands.md	548	AbstractTargetPlayerCommand	abstracttargetplayercommand
+commands.md	553	Constructors	constructors-3
+commands.md	564	Abstract Method to Implement	abstract-method-to-implement-3
+commands.md	576	Usage Example	usage-example-1
+commands.md	597	AbstractTargetPlayersCommand	abstracttargetplayerscommand
+commands.md	615	Constructors	constructors-4
+commands.md	622	Abstract Method to Implement	abstract-method-to-implement-4
+commands.md	637	Sub-commands (command collections)	sub-commands-command-collections
+commands.md	669	CommandSender	commandsender
+commands.md	676	Methods	methods-1
+commands.md	684	Implementations	implementations
+commands.md	688	Usage	usage
+commands.md	700	CommandOwner	commandowner
+commands.md	705	Methods	methods-2
+commands.md	710	Implementations	implementations-1
+commands.md	713	Usage	usage-1
+commands.md	721	CommandRegistration	commandregistration
+commands.md	726	Usage	usage-2
+commands.md	734	ArgumentType<D>	argumenttype
+commands.md	739	Key Methods	key-methods
+commands.md	752	SingleArgumentType<D>	singleargumenttype
+commands.md	761	ArgTypes	argtypes
+commands.md	766	Primitive Types	primitive-types
+commands.md	778	Player & Entity Types	player--entity-types
+commands.md	785	World & Position Types	world--position-types
+commands.md	798	Asset Types	asset-types
+commands.md	810	Game Types	game-types
+commands.md	817	Block Types	block-types
+commands.md	826	Provider keys (0.6.3+)	provider-keys-063
+commands.md	838	Other built-in types	other-built-in-types
+commands.md	860	Enum Helper	enum-helper
+commands.md	866	Usage Example	usage-example-2
+commands.md	893	Relative Position Resolution	relative-position-resolution
+commands.md	936	Custom Enum Argument Example	custom-enum-argument-example
+commands.md	960	Relative argument value types	relative-argument-value-types
+commands.md	980	Coord	coord
+commands.md	1026	RelativeInteger & RelativeFloat	relativeinteger--relativefloat
+commands.md	1041	RelativeIntegerRange	relativeintegerrange
+commands.md	1058	RelativeVector3i	relativevector3i
+commands.md	1070	RelativeIntPosition	relativeintposition
+commands.md	1086	RelativeDirection	relativedirection
+commands.md	1112	EnumArgumentType	enumargumenttype
+commands.md	1129	AssetArgumentType	assetargumenttype
+commands.md	1152	Argument<Arg, D>	argumentarg-d
+commands.md	1214	AbstractOptionalArg	abstractoptionalarg
+commands.md	1237	GeneralCommandException	generalcommandexception
+commands.md	1254	EntityRemoveCommand	entityremovecommand
+commands.md	1272	Gotchas & Errors	gotchas--errors
+components.md	8	Components (ECS) API	components-ecs-api
+components.md	14	Overview	overview
+components.md	25	Architecture	architecture
+components.md	41	Key Classes	key-classes
+components.md	83	Core Types	core-types
+components.md	85	Store<ECS_TYPE>	storeecs_type
+components.md	90	Component Operations	component-operations
+components.md	114	Entity Management	entity-management
+components.md	126	Query Entities	query-entities
+components.md	133	Iterate Entities	iterate-entities
+components.md	140	Resources (World-Level Singletons)	resources-world-level-singletons
+components.md	146	Events	events
+components.md	152	Utility	utility
+components.md	165	Ref<ECS_TYPE>	refecs_type
+components.md	170	Constructors	constructors
+components.md	176	Methods	methods
+components.md	189	Component<ECS_TYPE>	componentecs_type
+components.md	201	ComponentType<ECS_TYPE, T>	componenttypeecs_type-t
+components.md	218	ComponentAccessor<ECS_TYPE>	componentaccessorecs_type
+components.md	245	ArchetypeChunk<ECS_TYPE>	archetypechunkecs_type
+components.md	268	Query<ECS_TYPE>	queryecs_type
+components.md	275	Static Factory Methods	static-factory-methods
+components.md	290	Methods	methods-1
+components.md	303	Usage Examples	usage-examples
+components.md	354	CommandBuffer<ECS_TYPE>	commandbufferecs_type
+components.md	361	Read Operations (Immediate)	read-operations-immediate
+components.md	379	Deferred Entity Operations	deferred-entity-operations
+components.md	401	Deferred Component Operations	deferred-component-operations
+components.md	431	Event Invocation	event-invocation
+components.md	442	Custom Operations	custom-operations
+components.md	448	Parallel Processing	parallel-processing
+components.md	457	Utility	utility-1
+components.md	463	Usage Example	usage-example
+components.md	504	Blueprint and Composition Types	blueprint-and-composition-types
+components.md	506	Holder<ECS_TYPE>	holderecs_type
+components.md	529	Usage	usage
+components.md	539	Archetype<ECS_TYPE>	archetypeecs_type
+components.md	572	Resource Types	resource-types
+components.md	574	Resource<ECS_TYPE>	resourceecs_type
+components.md	583	ResourceType<ECS_TYPE, T>	resourcetypeecs_type-t
+components.md	596	Entity Hierarchy (Parent/Child, 0.7.2+)	entity-hierarchy-parentchild-072
+components.md	635	Enums	enums
+components.md	637	AddReason	addreason
+components.md	647	RemoveReason	removereason
+components.md	660	Marker Components: NonSerialized and NonTicking	marker-components-nonserialized-and-nonticking
+components.md	677	Common Store Types	common-store-types
+components.md	685	EntityStore	entitystore
+components.md	690	Static Fields	static-fields
+components.md	695	Methods	methods-2
+components.md	704	Usage	usage-1
+components.md	718	ChunkStore	chunkstore
+components.md	725	Static Fields	static-fields-1
+components.md	730	Methods	methods-3
+components.md	778	ComponentRegistry<ECS_TYPE>	componentregistryecs_type
+components.md	783	Component Registration	component-registration
+components.md	791	Resource Registration	resource-registration
+components.md	798	System Registration	system-registration
+components.md	808	Spatial Resource Registration	spatial-resource-registration
+components.md	815	Event Type Registration	event-type-registration
+components.md	823	Holder Creation	holder-creation
+components.md	829	Query Methods	query-methods
+components.md	839	TransformComponent	transformcomponent
+components.md	844	Getting the Component	getting-the-component
+components.md	849	Constructors	constructors-1
+components.md	855	Position Methods	position-methods
+components.md	862	Rotation Methods	rotation-methods
+components.md	870	Transform Access	transform-access
+components.md	876	Section Access	section-access
+components.md	887	Save Tracking (0.6.3+)	save-tracking-063
+components.md	894	Usage Example	usage-example-1
+components.md	911	Action Components	action-components
+components.md	915	The Pattern	the-pattern
+components.md	922	Teleport Module	teleport-module
+components.md	928	Factory Methods	factory-methods
+components.md	955	Usage Example	usage-example-2
+components.md	973	Direct Teleport vs Action Component	direct-teleport-vs-action-component
+components.md	986	Other Action Components	other-action-components
+components.md	997	Usage in Commands	usage-in-commands
+components.md	1024	Creating Custom Components	creating-custom-components
+components.md	1062	Entity Iteration Example	entity-iteration-example
+components.md	1079	Working with Holders	working-with-holders
+components.md	1092	Resource Example	resource-example
+components.md	1104	Ticking Systems	ticking-systems
+components.md	1108	EntityTickingSystem<ECS_TYPE>	entitytickingsystemecs_type
+components.md	1121	Methods to Override	methods-to-override
+components.md	1136	Example: Per-Player Ticking System	example-per-player-ticking-system
+components.md	1167	Registering the System	registering-the-system
+components.md	1177	Choosing a System Base Class	choosing-a-system-base-class
+components.md	1192	RefSystem<ECS_TYPE>	refsystemecs_type
+components.md	1209	HolderSystem<ECS_TYPE>	holdersystemecs_type
+components.md	1222	StoreSystem<ECS_TYPE>	storesystemecs_type
+components.md	1234	DelayedSystem<ECS_TYPE>	delayedsystemecs_type
+components.md	1247	DelayedEntitySystem<ECS_TYPE>	delayedentitysystemecs_type
+components.md	1260	WorldEventSystem<ECS_TYPE, EventType>	worldeventsystemecs_type-eventtype
+components.md	1272	RunWhenPausedSystem<ECS_TYPE>	runwhenpausedsystemecs_type
+components.md	1283	DisableProcessingAssert	disableprocessingassert
+components.md	1296	System Ordering (Dependencies)	system-ordering-dependencies
+components.md	1320	Dependency Types	dependency-types
+components.md	1341	Order and OrderPriority	order-and-orderpriority
+components.md	1356	SystemType<ECS_TYPE, T>	systemtypeecs_type-t
+components.md	1363	Spatial Queries (component.spatial)	spatial-queries-componentspatial
+components.md	1369	SpatialSystem<ECS_TYPE>	spatialsystemecs_type
+components.md	1381	SpatialResource<T, ECS_TYPE>	spatialresourcet-ecs_type
+components.md	1394	SpatialStructure<T> / KDTree<T>	spatialstructure--kdtree
+components.md	1424	SpatialData<T>	spatialdata
+components.md	1441	UnknownComponents<ECS_TYPE>	unknowncomponentsecs_type
+components.md	1458	Gotchas & Errors	gotchas--errors
+deployables.md	8	Deployables	deployables
+deployables.md	25	Packages and key classes	packages-and-key-classes
+deployables.md	39	The four config types	the-four-config-types
+deployables.md	43	Shared keys (`DeployableConfig`)	shared-keys-deployableconfig
+deployables.md	74	StatConfig (nested)	statconfig-nested
+deployables.md	87	`"Type": "Aoe"`	type-aoe
+deployables.md	105	`"Type": "Turret"`	type-turret
+deployables.md	139	`"Type": "Trap"` and `"Type": "TrapSpawner"`	type-trap-and-type-trapspawner
+deployables.md	156	The three interactions	the-three-interactions
+deployables.md	242	Components and systems	components-and-systems
+deployables.md	260	Related	related
+drops.md	8	Drop System	drop-system
+drops.md	20	Overview	overview
+drops.md	30	Architecture	architecture
+drops.md	41	Key Classes	key-classes
+drops.md	55	Quick Navigation	quick-navigation
+drops.md	75	Quick Start	quick-start
+drops.md	77	Simple Guaranteed Drop	simple-guaranteed-drop
+drops.md	94	Random Quantity Drop	random-quantity-drop
+drops.md	111	Weighted Random Selection	weighted-random-selection
+drops.md	140	Multiple Guaranteed Drops	multiple-guaranteed-drops
+drops.md	162	Empty Drop File	empty-drop-file
+drops.md	174	Reference	reference
+drops.md	176	Container Types	container-types
+drops.md	186	Container Properties	container-properties
+drops.md	201	Item Properties	item-properties
+drops.md	212	Container Type Details	container-type-details
+drops.md	214	Multiple Container	multiple-container
+drops.md	285	Choice Container	choice-container
+drops.md	354	Single Container	single-container
+drops.md	375	Empty Container	empty-container
+drops.md	399	Droplist Container	droplist-container
+drops.md	447	Drop Categories	drop-categories
+drops.md	449	Crop Drops	crop-drops
+drops.md	491	NPC Drops	npc-drops
+drops.md	560	Mining Drops	mining-drops
+drops.md	613	Plant Drops	plant-drops
+drops.md	644	Ingredient Drops	ingredient-drops
+drops.md	650	Wood Drops	wood-drops
+drops.md	690	Container Drops	container-drops
+drops.md	729	Prefab Drops	prefab-drops
+drops.md	782	Trap Drops	trap-drops
+drops.md	833	Objective Drops	objective-drops
+drops.md	843	File Organization	file-organization
+drops.md	845	Directory Structure	directory-structure
+drops.md	910	Naming Conventions	naming-conventions
+drops.md	919	Biome Variant Suffixes	biome-variant-suffixes
+drops.md	931	Integration Points	integration-points
+drops.md	933	Block Drops	block-drops
+drops.md	981	NPC Drops	npc-drops-1
+drops.md	1000	Farming Crops	farming-crops
+drops.md	1031	Prefab Containers	prefab-containers
+drops.md	1062	Complete Examples	complete-examples
+drops.md	1064	Tiered Rarity Loot Table	tiered-rarity-loot-table
+drops.md	1115	Multi-Roll Encounter Chest	multi-roll-encounter-chest
+drops.md	1194	Creature with Guaranteed and Chance Drops	creature-with-guaranteed-and-chance-drops
+drops.md	1250	Modular Drop with a Shared Droplist	modular-drop-with-a-shared-droplist
+drops.md	1284	Java API	java-api
+drops.md	1290	ItemDropList	itemdroplist
+drops.md	1304	ItemDropContainer	itemdropcontainer
+drops.md	1327	Rolling a Droplist from a Plugin	rolling-a-droplist-from-a-plugin
+drops.md	1362	Gotchas & Errors	gotchas--errors
+drops.md	1374	Related Documentation	related-documentation
+effects-stats.md	8	Effects & Stats Reference	effects--stats-reference
+effects-stats.md	18	Overview	overview
+effects-stats.md	28	Architecture	architecture
+effects-stats.md	44	Key Classes	key-classes
+effects-stats.md	58	Effects (Status Effects)	effects-status-effects
+effects-stats.md	64	Core Properties	core-properties
+effects-stats.md	81	Damage Immunity & Resistance	damage-immunity--resistance
+effects-stats.md	108	Outgoing damage	outgoing-damage
+effects-stats.md	126	Model Transformation	model-transformation
+effects-stats.md	146	Stat Modifiers	stat-modifiers
+effects-stats.md	150	Simple StatModifiers	simple-statmodifiers
+effects-stats.md	174	RawStatModifiers	rawstatmodifiers
+effects-stats.md	198	DamageCalculatorCooldown	damagecalculatorcooldown
+effects-stats.md	206	ApplicationEffects	applicationeffects
+effects-stats.md	267	StatModifierEffects	statmodifiereffects
+effects-stats.md	301	Complete Effect Examples	complete-effect-examples
+effects-stats.md	303	Simple Buff (Food Effect)	simple-buff-food-effect
+effects-stats.md	324	Regeneration Potion	regeneration-potion
+effects-stats.md	359	Stun Effect (Bomb)	stun-effect-bomb
+effects-stats.md	384	Morph Effect (Transformation Potion)	morph-effect-transformation-potion
+effects-stats.md	403	Damage Immunity (Dodge Invulnerability)	damage-immunity-dodge-invulnerability
+effects-stats.md	414	Damage Resistance (Fire Immunity)	damage-resistance-fire-immunity
+effects-stats.md	431	Applying Effects from Java	applying-effects-from-java
+effects-stats.md	491	Stat Definitions	stat-definitions
+effects-stats.md	497	Core Properties	core-properties-1
+effects-stats.md	522	Regeneration System	regeneration-system
+effects-stats.md	526	Regenerating Entry Properties	regenerating-entry-properties
+effects-stats.md	553	Condition Types	condition-types
+effects-stats.md	585	Comparison Values	comparison-values
+effects-stats.md	613	MinValueEffects / MaxValueEffects	minvalueeffects--maxvalueeffects
+effects-stats.md	692	Complete Stat Examples	complete-stat-examples
+effects-stats.md	694	Health Stat	health-stat
+effects-stats.md	737	Stamina Stat	stamina-stat
+effects-stats.md	805	Mana Stat	mana-stat
+effects-stats.md	843	Oxygen Stat	oxygen-stat
+effects-stats.md	893	Stat Modifiers from Java (Modifier & StaticModifier)	stat-modifiers-from-java-modifier--staticmodifier
+effects-stats.md	899	Modifier (abstract)	modifier-abstract
+effects-stats.md	906	StaticModifier	staticmodifier
+effects-stats.md	927	Attaching modifiers to an entity	attaching-modifiers-to-an-entity
+effects-stats.md	950	EntityStatsModule	entitystatsmodule
+effects-stats.md	969	Gotchas & Errors	gotchas--errors
+encounters.md	8	Encounter Manager	encounter-manager
+encounters.md	29	Key classes	key-classes
+encounters.md	42	Asset format — `Server/EncounterManager/<Id>.json`	asset-format--serverencountermanageridjson
+encounters.md	84	Variants and macros	variants-and-macros
+encounters.md	103	Encounter-specific core components	encounter-specific-core-components
+encounters.md	134	Binding the target: `TargetSlot`	binding-the-target-targetslot
+encounters.md	144	Tracking the audience: the `EncounterMembers` collector	tracking-the-audience-the-encountermembers-collector
+encounters.md	167	Runtime and placement	runtime-and-placement
+encounters.md	185	Rewards	rewards
+encounters.md	294	Gotchas	gotchas
+entities.md	8	Entities API	entities-api
+entities.md	14	Overview	overview
+entities.md	25	Architecture	architecture
+entities.md	41	Key Classes	key-classes
+entities.md	60	Class Hierarchy	class-hierarchy
+entities.md	71	PlayerRef	playerref
+entities.md	78	Key Methods	key-methods
+entities.md	136	Player	player
+entities.md	145	Key Methods	key-methods-1
+entities.md	218	LivingEntity	livingentity
+entities.md	223	Key Methods	key-methods-2
+entities.md	243	Entity	entity
+entities.md	248	Key Methods	key-methods-3
+entities.md	278	PlayerRef vs Player: When to Use Each	playerref-vs-player-when-to-use-each
+entities.md	282	PlayerRef — Lightweight Reference	playerref--lightweight-reference
+entities.md	293	Player — Full Component Access	player--full-component-access
+entities.md	301	Getting Player from PlayerRef	getting-player-from-playerref
+entities.md	323	Quick Reference	quick-reference
+entities.md	335	Alternative: PlayerRef.getComponent()	alternative-playerrefgetcomponent
+entities.md	347	Usage in Commands	usage-in-commands
+entities.md	367	Built-in Entity Components	built-in-entity-components
+entities.md	375	Data components	data-components
+entities.md	392	Marker / singleton components	marker--singleton-components
+entities.md	411	Usage	usage
+entities.md	438	Entity Stats (EntityStatMap)	entity-stats-entitystatmap
+entities.md	444	Getting the Component	getting-the-component
+entities.md	450	DefaultEntityStatTypes	defaultentitystattypes
+entities.md	465	Modifying Stats	modifying-stats
+entities.md	484	Suppressing changes (0.6.3+)	suppressing-changes-063
+entities.md	496	Reading Stat Values	reading-stat-values
+entities.md	505	Example: Damage Player on Hit	example-damage-player-on-hit
+entities.md	521	StatModifiersManager	statmodifiersmanager
+entities.md	526	Getting the Manager	getting-the-manager
+entities.md	532	Methods	methods
+entities.md	548	Usage Example	usage-example
+entities.md	562	Velocity API	velocity-api
+entities.md	568	Getting the Component	getting-the-component-1
+entities.md	579	Important: Player vs NPC Velocity	important-player-vs-npc-velocity
+entities.md	589	Applying Velocity to Players	applying-velocity-to-players
+entities.md	602	VelocityConfig	velocityconfig
+entities.md	608	ChangeVelocityType	changevelocitytype
+entities.md	616	Applying Velocity to NPCs/Entities	applying-velocity-to-npcsentities
+entities.md	635	Example: Launch Player Upward	example-launch-player-upward
+entities.md	648	Example: Knockback from Damage	example-knockback-from-damage
+entities.md	667	InteractionManager	interactionmanager
+entities.md	673	Tick & Lifecycle	tick--lifecycle
+entities.md	679	Chain Management	chain-management
+entities.md	694	Query	query
+entities.md	704	Rules	rules
+entities.md	710	Usage with CollisionResult	usage-with-collisionresult
+entities.md	730	Entity Events	entity-events
+entities.md	736	Event Summary	event-summary
+entities.md	746	EntityEvent	entityevent
+entities.md	758	EntityRemoveEvent	entityremoveevent
+entities.md	770	LivingEntityUseBlockEvent	livingentityuseblockevent
+entities.md	781	Usage Example	usage-example-1
+entities.md	808	Entity Events Usage Example	entity-events-usage-example
+entities.md	823	ECS Inventory Events	ecs-inventory-events
+entities.md	831	Nameplate	nameplate
+entities.md	857	DespawnComponent	despawncomponent
+entities.md	888	MovementStatesComponent	movementstatescomponent
+entities.md	911	Teleport Bookkeeping (PendingTeleport & TeleportRecord)	teleport-bookkeeping-pendingteleport--teleportrecord
+entities.md	917	PendingTeleport	pendingteleport
+entities.md	925	TeleportAckTracker	teleportacktracker
+entities.md	948	TeleportRecord	teleportrecord
+entities.md	967	Entity Tracker (EntityTrackerSystems)	entity-tracker-entitytrackersystems
+entities.md	993	FromPrefabInstance	fromprefabinstance
+entities.md	1001	EntityRegistration	entityregistration
+entities.md	1027	AnimationUtils	animationutils
+entities.md	1058	ItemUtils	itemutils
+entities.md	1084	TargetUtil	targetutil
+entities.md	1090	Look-target raycasts (from an entity's eye ray)	look-target-raycasts-from-an-entitys-eye-ray
+entities.md	1107	Area queries	area-queries
+entities.md	1129	Hitbox Collision (HitboxCollision & HitboxCollisionConfig)	hitbox-collision-hitboxcollision--hitboxcollisionconfig
+entities.md	1141	HitboxCollisionConfig (asset)	hitboxcollisionconfig-asset
+entities.md	1154	HitboxCollision (component)	hitboxcollision-component
+entities.md	1176	Gotchas & Errors	gotchas--errors
+events.md	8	Events API	events-api
+events.md	36	Overview	overview
+events.md	46	Architecture	architecture
+events.md	63	Key Classes	key-classes
+events.md	79	EventRegistry	eventregistry
+events.md	84	Basic Registration	basic-registration
+events.md	99	Keyed Registration	keyed-registration
+events.md	109	Async Registration	async-registration
+events.md	121	Global Registration	global-registration
+events.md	136	Unhandled Registration	unhandled-registration
+events.md	149	EventPriority	eventpriority
+events.md	154	Enum Values	enum-values
+events.md	171	Usage	usage
+events.md	186	Event Base Types	event-base-types
+events.md	190	IBaseEvent<KeyType>	ibaseevent
+events.md	202	IEvent<KeyType>	ievent
+events.md	216	IAsyncEvent<KeyType>	iasyncevent
+events.md	232	ICancellable	icancellable
+events.md	245	EcsEvent	ecsevent
+events.md	257	ICancellableEcsEvent	icancellableecsevent
+events.md	270	CancellableEcsEvent	cancellableecsevent
+events.md	284	Event Type Hierarchy	event-type-hierarchy
+events.md	299	EventRegistration<KeyType, EventType>	eventregistrationkeytype-eventtype
+events.md	305	Methods	methods
+events.md	317	Static Methods	static-methods
+events.md	326	Usage Example	usage-example
+events.md	356	Keyed vs Non-Keyed Events	keyed-vs-non-keyed-events
+events.md	363	Keyed Events	keyed-events
+events.md	377	Non-Keyed Events	non-keyed-events
+events.md	384	Example	example
+events.md	425	ECS Events (EntityEventSystem)	ecs-events-entityeventsystem
+events.md	430	Creating an EntityEventSystem	creating-an-entityeventsystem
+events.md	472	Registering the System	registering-the-system
+events.md	482	EntityEventSystem Methods	entityeventsystem-methods
+events.md	490	EntityEventSystem vs. WorldEventSystem	entityeventsystem-vs-worldeventsystem
+events.md	504	Common ECS Events	common-ecs-events
+events.md	528	Example: vetoing an interaction chain (0.7.2+)	example-vetoing-an-interaction-chain-072
+events.md	588	Cancellable Events	cancellable-events
+events.md	601	Checking Cancellation	checking-cancellation
+events.md	611	Event Registration Best Practices	event-registration-best-practices
+events.md	621	Gotchas & Errors	gotchas--errors
+fluids.md	8	Fluids API	fluids-api
+fluids.md	16	Overview	overview
+fluids.md	25	Architecture	architecture
+fluids.md	38	Key Classes	key-classes
+fluids.md	50	Fluid	fluid
+fluids.md	55	Constants	constants
+fluids.md	63	Identity	identity
+fluids.md	71	Properties	properties
+fluids.md	81	Interactions	interactions
+fluids.md	92	FluidTicker	fluidticker
+fluids.md	103	Ticker JSON keys	ticker-json-keys
+fluids.md	160	Java surface	java-surface
+fluids.md	218	Usage with BlockCollisionData	usage-with-blockcollisiondata
+fluids.md	236	Usage with CollisionConfig	usage-with-collisionconfig
+fluids.md	251	Gotchas & Errors	gotchas--errors
+i18n.md	8	Localization (i18n) API	localization-i18n-api
+i18n.md	14	Overview	overview
+i18n.md	21	Architecture	architecture
+i18n.md	34	Key Classes	key-classes
+i18n.md	48	Shipping translations with a plugin	shipping-translations-with-a-plugin
+i18n.md	83	GenerateDefaultLanguageEvent	generatedefaultlanguageevent
+i18n.md	99	Usage Example	usage-example
+i18n.md	121	Resolving a key to text (server-side)	resolving-a-key-to-text-server-side
+i18n.md	150	MessagesUpdated	messagesupdated
+i18n.md	175	MessageUtil — resolving and rendering messages	messageutil--resolving-and-rendering-messages
+i18n.md	200	MessageFormat — list formatting	messageformat--list-formatting
+i18n.md	225	Notes	notes
+i18n.md	233	Gotchas & Errors	gotchas--errors
+index.md	6	Hytale Modding Handbook	hytale-modding-handbook
+index.md	17	Start here	start-here
+index.md	23	Popular references	popular-references
+interactions-combat.md	8	Combat & Effects Interactions	combat--effects-interactions
+interactions-combat.md	21	Overview	overview
+interactions-combat.md	32	Architecture	architecture
+interactions-combat.md	50	Key Classes	key-classes
+interactions-combat.md	62	Quick Navigation	quick-navigation
+interactions-combat.md	77	SimpleInteraction	simpleinteraction
+interactions-combat.md	87	Purpose	purpose
+interactions-combat.md	97	Inherited Properties (from Interaction)	inherited-properties-from-interaction
+interactions-combat.md	110	SimpleInteraction-Specific Properties	simpleinteraction-specific-properties
+interactions-combat.md	117	Effects Configuration	effects-configuration
+interactions-combat.md	150	Sounds (World vs Local)	sounds-world-vs-local
+interactions-combat.md	176	Particles & Trails	particles--trails
+interactions-combat.md	198	WaitForDataFrom Enum	waitfordatafrom-enum
+interactions-combat.md	208	Key Methods	key-methods
+interactions-combat.md	220	Complete Examples	complete-examples
+interactions-combat.md	290	Common Patterns	common-patterns
+interactions-combat.md	302	Technical Notes	technical-notes
+interactions-combat.md	310	Related Interactions	related-interactions
+interactions-combat.md	319	Selector	selector
+interactions-combat.md	325	Structure	structure
+interactions-combat.md	351	Properties	properties
+interactions-combat.md	368	Selector Types	selector-types
+interactions-combat.md	370	Horizontal (Sweeping attacks)	horizontal-sweeping-attacks
+interactions-combat.md	405	AOECircle (Area of effect)	aoecircle-area-of-effect
+interactions-combat.md	470	Raycast (Straight line)	raycast-straight-line
+interactions-combat.md	491	Stab (Thrust attacks)	stab-thrust-attacks
+interactions-combat.md	516	HitEntityRules	hitentityrules
+interactions-combat.md	546	Examples	examples
+interactions-combat.md	610	DamageEntity	damageentity
+interactions-combat.md	618	Basic Structure	basic-structure
+interactions-combat.md	632	Full Structure with All Options	full-structure-with-all-options
+interactions-combat.md	670	Core Properties	core-properties
+interactions-combat.md	685	DamageCalculator Properties	damagecalculator-properties
+interactions-combat.md	696	DamageEffects Properties	damageeffects-properties
+interactions-combat.md	720	Knockback Properties	knockback-properties
+interactions-combat.md	751	EntityStatsOnHit	entitystatsonhit
+interactions-combat.md	763	ApplyForce	applyforce
+interactions-combat.md	769	Structure	structure-1
+interactions-combat.md	781	Properties	properties-1
+interactions-combat.md	809	Example: Double Jump	example-double-jump
+interactions-combat.md	825	ApplyEffect	applyeffect
+interactions-combat.md	833	Structure	structure-2
+interactions-combat.md	845	Properties	properties-2
+interactions-combat.md	860	Example: Apply Root on a Wand Hit	example-apply-root-on-a-wand-hit
+interactions-combat.md	884	ClearEntityEffect	clearentityeffect
+interactions-combat.md	890	Structure	structure-3
+interactions-combat.md	900	Properties	properties-3
+interactions-combat.md	914	Example: Strip Regen Effects on Hit	example-strip-regen-effects-on-hit
+interactions-combat.md	938	ChangeStat	changestat
+interactions-combat.md	950	Basic Structure	basic-structure-1
+interactions-combat.md	962	Properties	properties-4
+interactions-combat.md	988	StatModifiers	statmodifiers
+interactions-combat.md	1019	Behaviour Options	behaviour-options
+interactions-combat.md	1040	ValueType Options	valuetype-options
+interactions-combat.md	1059	Example: Grant Signature Energy on Block	example-grant-signature-energy-on-block
+interactions-combat.md	1092	InterruptInteraction	interruptinteraction
+interactions-combat.md	1098	Core Properties	core-properties-1
+interactions-combat.md	1108	How Interruption Works	how-interruption-works
+interactions-combat.md	1126	Entity Values	entity-values
+interactions-combat.md	1136	ExcludedTag System	excludedtag-system
+interactions-combat.md	1170	Complete Examples	complete-examples-1
+interactions-combat.md	1172	Basic Interrupt	basic-interrupt
+interactions-combat.md	1183	Stun Bomb with Immunity Check	stun-bomb-with-immunity-check
+interactions-combat.md	1248	Melee Stun Attack	melee-stun-attack
+interactions-combat.md	1276	Common Patterns	common-patterns-1
+interactions-combat.md	1285	Interrupt vs Stun	interrupt-vs-stun
+interactions-combat.md	1295	Technical Notes	technical-notes-1
+interactions-combat.md	1302	Related Interactions	related-interactions-1
+interactions-combat.md	1311	Ability Attribute Keys	ability-attribute-keys
+interactions-combat.md	1326	Gotchas & Errors	gotchas--errors
+interactions-combo.md	8	Combo System Interactions	combo-system-interactions
+interactions-combo.md	22	Overview	overview
+interactions-combo.md	32	Architecture	architecture
+interactions-combo.md	45	Key Classes	key-classes
+interactions-combo.md	55	Quick Navigation	quick-navigation
+interactions-combo.md	67	ChainingInteraction	chaininginteraction
+interactions-combo.md	73	Core Properties	core-properties
+interactions-combo.md	90	Attack Chain Timing	attack-chain-timing
+interactions-combo.md	94	Key Properties	key-properties
+interactions-combo.md	102	ChainingAllowance	chainingallowance
+interactions-combo.md	126	Cooldown & Click Queuing	cooldown--click-queuing
+interactions-combo.md	145	ChainingAllowance Timing	chainingallowance-timing
+interactions-combo.md	177	The Next Array System	the-next-array-system
+interactions-combo.md	259	ChainId and Cross-Interaction Sync	chainid-and-cross-interaction-sync
+interactions-combo.md	290	Flags System (Advanced)	flags-system-advanced
+interactions-combo.md	317	Complete Examples	complete-examples
+interactions-combo.md	404	Common Patterns	common-patterns
+interactions-combo.md	415	Related Interactions	related-interactions
+interactions-combo.md	424	FirstClickInteraction	firstclickinteraction
+interactions-combo.md	430	Core Properties	core-properties-1
+interactions-combo.md	440	How Click vs Held Detection Works	how-click-vs-held-detection-works
+interactions-combo.md	455	Basic Examples	basic-examples
+interactions-combo.md	496	Nested in Chaining	nested-in-chaining
+interactions-combo.md	553	Integration with ChainFlag	integration-with-chainflag
+interactions-combo.md	577	Common Patterns	common-patterns-1
+interactions-combo.md	586	Related Interactions	related-interactions-1
+interactions-combo.md	594	ChargingInteraction	charginginteraction
+interactions-combo.md	600	Core Properties	core-properties-2
+interactions-combo.md	619	Forks (input-while-holding)	forks-input-while-holding
+interactions-combo.md	661	The Next Map System	the-next-map-system
+interactions-combo.md	703	Effects Configuration	effects-configuration
+interactions-combo.md	735	Complete Examples	complete-examples-1
+interactions-combo.md	829	Common Patterns	common-patterns-2
+interactions-combo.md	837	Integration Notes	integration-notes
+interactions-combo.md	845	ChainFlagInteraction	chainflaginteraction
+interactions-combo.md	851	Core Properties	core-properties-3
+interactions-combo.md	859	How Flag Triggering Works	how-flag-triggering-works
+interactions-combo.md	870	Cross-Chain Communication	cross-chain-communication
+interactions-combo.md	915	Complete Examples	complete-examples-2
+interactions-combo.md	994	Common Patterns	common-patterns-3
+interactions-combo.md	1003	Related Interactions	related-interactions-2
+interactions-combo.md	1011	CancelChainInteraction	cancelchaininteraction
+interactions-combo.md	1021	Core Properties	core-properties-4
+interactions-combo.md	1030	How Chain Cancellation Works	how-chain-cancellation-works
+interactions-combo.md	1060	When to Use CancelChain	when-to-use-cancelchain
+interactions-combo.md	1067	Complete Examples	complete-examples-3
+interactions-combo.md	1175	Common Patterns	common-patterns-4
+interactions-combo.md	1185	Technical Notes	technical-notes
+interactions-combo.md	1195	Related Interactions	related-interactions-3
+interactions-combo.md	1203	Gotchas & Errors	gotchas--errors
+interactions-context.md	8	InteractionContext	interactioncontext
+interactions-context.md	18	Overview	overview
+interactions-context.md	35	Architecture	architecture
+interactions-context.md	49	Key Classes	key-classes
+interactions-context.md	61	InteractionContext Class	interactioncontext-class
+interactions-context.md	65	Core Methods	core-methods
+interactions-context.md	130	Entity References	entity-references
+interactions-context.md	132	Owning vs Executing Entity	owning-vs-executing-entity
+interactions-context.md	161	Target Entity	target-entity
+interactions-context.md	183	Item Access	item-access
+interactions-context.md	185	Held Item	held-item
+interactions-context.md	203	Ability slots (0.7.2+)	ability-slots-072
+interactions-context.md	215	Original Item Type	original-item-type
+interactions-context.md	236	Held Item Slot	held-item-slot
+interactions-context.md	245	Meta Store	meta-store
+interactions-context.md	249	Standard Meta Keys	standard-meta-keys
+interactions-context.md	269	Reading Meta Values	reading-meta-values
+interactions-context.md	291	Writing Meta Values	writing-meta-values
+interactions-context.md	304	MetaKey and the Meta Store	metakey-and-the-meta-store
+interactions-context.md	308	MetaKey<T>	metakey
+interactions-context.md	316	DynamicMetaStore	dynamicmetastore
+interactions-context.md	329	Standard Keys on Interaction Class	standard-keys-on-interaction-class
+interactions-context.md	349	Custom Meta Keys	custom-meta-keys
+interactions-context.md	369	Operation Communication Pattern	operation-communication-pattern
+interactions-context.md	390	Best Practices	best-practices
+interactions-context.md	398	InteractionVars	interactionvars
+interactions-context.md	408	Accessing InteractionVars	accessing-interactionvars
+interactions-context.md	428	Who reads them: the `Replace` interaction	who-reads-them-the-replace-interaction
+interactions-context.md	454	Item Definition with InteractionVars	item-definition-with-interactionvars
+interactions-context.md	486	Flow Control	flow-control
+interactions-context.md	488	Jumping to Labels	jumping-to-labels
+interactions-context.md	502	Operation Counter	operation-counter
+interactions-context.md	521	Chain Management	chain-management
+interactions-context.md	523	InteractionChain	interactionchain
+interactions-context.md	540	InteractionEntry	interactionentry
+interactions-context.md	550	Forking Contexts	forking-contexts
+interactions-context.md	562	Receiving Contexts	receiving-contexts
+interactions-context.md	568	Context in Custom Interactions	context-in-custom-interactions
+interactions-context.md	586	Usage Examples	usage-examples
+interactions-context.md	588	Complete Custom Operation	complete-custom-operation
+interactions-context.md	616	Conditional Branching with Meta	conditional-branching-with-meta
+interactions-context.md	646	Related Documentation	related-documentation
+interactions-context.md	655	Gotchas & Errors	gotchas--errors
+interactions-double-run.md	8	Managers with no remote client: the double run	managers-with-no-remote-client-the-double-run
+interactions-double-run.md	18	The rule	the-rule
+interactions-double-run.md	28	What the simulation pass calls (read)	what-the-simulation-pass-calls-read
+interactions-double-run.md	46	What lands (measured)	what-lands-measured
+interactions-double-run.md	84	What each run-reached type does	what-each-run-reached-type-does
+interactions-double-run.md	86	The population (counted)	the-population-counted
+interactions-double-run.md	111	Lands twice, throws or desyncs (5)	lands-twice-throws-or-desyncs-5
+interactions-double-run.md	121	The same result twice (4)	the-same-result-twice-4
+interactions-double-run.md	130	Guarded: the type runs its effect once (4)	guarded-the-type-runs-its-effect-once-4
+interactions-double-run.md	139	Once: the simulation pass does nothing (24)	once-the-simulation-pass-does-nothing-24
+interactions-double-run.md	168	Flow: the effect is the children's (8)	flow-the-effect-is-the-childrens-8
+interactions-double-run.md	181	Reads only (7)	reads-only-7
+interactions-double-run.md	193	No effect on these managers (6)	no-effect-on-these-managers-6
+interactions-double-run.md	204	Outcomes that depend on a field (counted over the run-reached objects, then those on a manager with no remote client)	outcomes-that-depend-on-a-field-counted-over-the-run-reached-objects-then-those-on-a-manager-with-no-remote-client
+interactions-double-run.md	224	Gotchas	gotchas
+interactions-double-run.md	235	The item-change check and the pass order	the-item-change-check-and-the-pass-order
+interactions-double-run.md	247	Writing your own interaction	writing-your-own-interaction
+interactions-flow.md	8	Control Flow Interactions	control-flow-interactions
+interactions-flow.md	24	Overview	overview
+interactions-flow.md	34	Architecture	architecture
+interactions-flow.md	54	Key Classes	key-classes
+interactions-flow.md	70	Quick Navigation	quick-navigation
+interactions-flow.md	94	Serial	serial
+interactions-flow.md	100	Core Properties	core-properties
+interactions-flow.md	109	Interactions Array Format	interactions-array-format
+interactions-flow.md	162	Execution Behavior	execution-behavior
+interactions-flow.md	197	Deep Nesting Patterns	deep-nesting-patterns
+interactions-flow.md	275	Complete Examples	complete-examples
+interactions-flow.md	447	Serial vs Parallel Comparison	serial-vs-parallel-comparison
+interactions-flow.md	483	Common Patterns	common-patterns
+interactions-flow.md	494	Integration with Replace	integration-with-replace
+interactions-flow.md	521	Related Interactions	related-interactions
+interactions-flow.md	531	Parallel	parallel
+interactions-flow.md	539	Core Properties	core-properties-1
+interactions-flow.md	548	Interactions Array Format	interactions-array-format-1
+interactions-flow.md	590	Execution Behavior	execution-behavior-1
+interactions-flow.md	611	Context Behavior	context-behavior
+interactions-flow.md	638	Deep Nesting Patterns	deep-nesting-patterns-1
+interactions-flow.md	700	Complete Examples	complete-examples-1
+interactions-flow.md	826	Error Handling	error-handling
+interactions-flow.md	838	Common Patterns	common-patterns-1
+interactions-flow.md	848	When to Use Parallel vs Serial	when-to-use-parallel-vs-serial
+interactions-flow.md	872	Related Interactions	related-interactions-1
+interactions-flow.md	882	Condition	condition
+interactions-flow.md	888	Core Properties	core-properties-2
+interactions-flow.md	903	Branching Behavior	branching-behavior
+interactions-flow.md	912	Execution Flow	execution-flow
+interactions-flow.md	941	Examples	examples
+interactions-flow.md	1091	Related Interactions	related-interactions-2
+interactions-flow.md	1099	StatsCondition	statscondition
+interactions-flow.md	1105	Core Properties	core-properties-3
+interactions-flow.md	1118	ValueType Reference	valuetype-reference
+interactions-flow.md	1127	Lenient Mode	lenient-mode
+interactions-flow.md	1143	Ability Costs	ability-costs
+interactions-flow.md	1155	Common Stats	common-stats
+interactions-flow.md	1164	Examples	examples-1
+interactions-flow.md	1252	Related Interactions	related-interactions-3
+interactions-flow.md	1260	EffectCondition	effectcondition
+interactions-flow.md	1266	Core Properties	core-properties-4
+interactions-flow.md	1277	Match Modes	match-modes
+interactions-flow.md	1284	Entity Reference	entity-reference
+interactions-flow.md	1292	Execution Behavior	execution-behavior-2
+interactions-flow.md	1316	Examples	examples-2
+interactions-flow.md	1460	Related Interactions	related-interactions-4
+interactions-flow.md	1469	BlockCondition	blockcondition
+interactions-flow.md	1475	Core Properties	core-properties-5
+interactions-flow.md	1484	BlockMatcher Structure	blockmatcher-structure
+interactions-flow.md	1497	Face Reference	face-reference
+interactions-flow.md	1507	StaticFace Behavior	staticface-behavior
+interactions-flow.md	1523	Examples	examples-3
+interactions-flow.md	1604	Related Interactions	related-interactions-5
+interactions-flow.md	1611	AugmentCondition	augmentcondition
+interactions-flow.md	1667	CooldownCondition	cooldowncondition
+interactions-flow.md	1673	Core Properties	core-properties-6
+interactions-flow.md	1682	Execution Flow	execution-flow-1
+interactions-flow.md	1697	Execution Behavior	execution-behavior-3
+interactions-flow.md	1708	Examples	examples-4
+interactions-flow.md	1809	Related Interactions	related-interactions-6
+interactions-flow.md	1818	TriggerCooldown	triggercooldown
+interactions-flow.md	1827	Core Properties	core-properties-7
+interactions-flow.md	1854	InteractionCooldown Configuration	interactioncooldown-configuration
+interactions-flow.md	1869	Examples	examples-5
+interactions-flow.md	1929	Usage Pattern	usage-pattern
+interactions-flow.md	1954	Related Interactions	related-interactions-7
+interactions-flow.md	1961	ResetCooldown	resetcooldown
+interactions-flow.md	1976	Core Properties	core-properties-8
+interactions-flow.md	1983	Examples	examples-6
+interactions-flow.md	2030	Related Interactions	related-interactions-8
+interactions-flow.md	2038	IncrementCooldown	incrementcooldown
+interactions-flow.md	2089	MovementCondition	movementcondition
+interactions-flow.md	2095	Core Properties	core-properties-9
+interactions-flow.md	2117	Direction Detection	direction-detection
+interactions-flow.md	2134	Execution Behavior	execution-behavior-4
+interactions-flow.md	2141	Examples	examples-7
+interactions-flow.md	2275	Related Interactions	related-interactions-9
+interactions-flow.md	2282	PlacementCountCondition	placementcountcondition
+interactions-flow.md	2288	Core Properties	core-properties-10
+interactions-flow.md	2299	Execution Flow	execution-flow-2
+interactions-flow.md	2324	Block Tracking Requirements	block-tracking-requirements
+interactions-flow.md	2357	Examples	examples-8
+interactions-flow.md	2409	Related Interactions	related-interactions-10
+interactions-flow.md	2417	Repeat	repeat
+interactions-flow.md	2423	Structure	structure
+interactions-flow.md	2445	Properties	properties
+interactions-flow.md	2471	Examples	examples-9
+interactions-flow.md	2544	Notes	notes
+interactions-flow.md	2552	Replace	replace
+interactions-flow.md	2558	Structure	structure-1
+interactions-flow.md	2571	Properties	properties-1
+interactions-flow.md	2579	DefaultOk Behavior	defaultok-behavior
+interactions-flow.md	2591	Example: Reusable Consumable Template	example-reusable-consumable-template
+interactions-flow.md	2630	RunOnBlockTypes	runonblocktypes
+interactions-flow.md	2689	Target Selectors	target-selectors
+interactions-flow.md	2697	Gotchas & Errors	gotchas--errors
+interactions-operations.md	8	Operation System	operation-system
+interactions-operations.md	18	Overview	overview
+interactions-operations.md	32	Architecture	architecture
+interactions-operations.md	50	Key Classes	key-classes
+interactions-operations.md	63	Operation Interface	operation-interface
+interactions-operations.md	69	Core Methods	core-methods
+interactions-operations.md	109	tick() vs simulateTick()	tick-vs-simulatetick
+interactions-operations.md	124	WaitForDataFrom Enum	waitfordatafrom-enum
+interactions-operations.md	138	Interaction Lifecycle	interaction-lifecycle
+interactions-operations.md	142	Overview Diagram	overview-diagram
+interactions-operations.md	164	Method Call Timing	method-call-timing
+interactions-operations.md	176	walk() Method	walk-method
+interactions-operations.md	180	Method Signature	method-signature
+interactions-operations.md	188	Collector Interface	collector-interface
+interactions-operations.md	202	Traversal Flow	traversal-flow
+interactions-operations.md	212	Collector Implementations	collector-implementations
+interactions-operations.md	220	CollectorTag	collectortag
+interactions-operations.md	237	Implementation Patterns	implementation-patterns
+interactions-operations.md	263	OperationsBuilder	operationsbuilder
+interactions-operations.md	269	Building Operation Sequences	building-operation-sequences
+interactions-operations.md	283	Basic Usage	basic-usage
+interactions-operations.md	297	Label System	label-system
+interactions-operations.md	301	Creating Labels	creating-labels
+interactions-operations.md	319	Control Flow Patterns	control-flow-patterns
+interactions-operations.md	321	Conditional Branch	conditional-branch
+interactions-operations.md	342	Early Exit	early-exit
+interactions-operations.md	357	Loop	loop
+interactions-operations.md	373	Runtime Jumps	runtime-jumps
+interactions-operations.md	391	How Interactions Compile to Operations	how-interactions-compile-to-operations
+interactions-operations.md	404	Compilation Example	compilation-example
+interactions-operations.md	457	Execution Flow	execution-flow
+interactions-operations.md	459	Frame-by-Frame Execution	frame-by-frame-execution
+interactions-operations.md	476	Operation Lifecycle	operation-lifecycle
+interactions-operations.md	487	Custom Operation Implementation	custom-operation-implementation
+interactions-operations.md	548	Common Operation Patterns	common-operation-patterns
+interactions-operations.md	550	Timed Operations	timed-operations
+interactions-operations.md	565	Conditional Completion	conditional-completion
+interactions-operations.md	580	Triggering Effects	triggering-effects
+interactions-operations.md	597	Related Documentation	related-documentation
+interactions-operations.md	606	Gotchas & Errors	gotchas--errors
+interactions-world.md	8	Entity & World Interactions	entity--world-interactions
+interactions-world.md	18	Overview	overview
+interactions-world.md	29	Architecture	architecture
+interactions-world.md	54	Key Classes	key-classes
+interactions-world.md	77	Quick Navigation	quick-navigation
+interactions-world.md	99	SpawnPrefab	spawnprefab
+interactions-world.md	105	Structure	structure
+interactions-world.md	118	Properties	properties
+interactions-world.md	135	Example: pasting a portal next to the targeted block	example-pasting-a-portal-next-to-the-targeted-block
+interactions-world.md	152	RemoveEntity	removeentity
+interactions-world.md	158	Structure	structure-1
+interactions-world.md	167	Properties	properties-1
+interactions-world.md	174	Example: Projectile self-removal on hit	example-projectile-self-removal-on-hit
+interactions-world.md	191	LaunchProjectile	launchprojectile
+interactions-world.md	203	Structure	structure-2
+interactions-world.md	212	Properties	properties-2
+interactions-world.md	232	SendMessage	sendmessage
+interactions-world.md	238	Structure	structure-3
+interactions-world.md	247	Properties	properties-3
+interactions-world.md	261	UI Interactions	ui-interactions
+interactions-world.md	263	OpenCustomUI	opencustomui
+interactions-world.md	284	Built-in Pages	built-in-pages
+interactions-world.md	346	Example: Item Repair Interaction	example-item-repair-interaction
+interactions-world.md	366	Inventory Interactions	inventory-interactions
+interactions-world.md	368	AddItem	additem
+interactions-world.md	408	EquipItem	equipitem
+interactions-world.md	420	ModifyInventory	modifyinventory
+interactions-world.md	449	Example: Consume one item only in Adventure mode (from Half_Block.json)	example-consume-one-item-only-in-adventure-mode-from-half_blockjson
+interactions-world.md	472	IncreaseBackpackCapacity	increasebackpackcapacity
+interactions-world.md	518	Block Interactions	block-interactions
+interactions-world.md	520	BreakBlock	breakblock
+interactions-world.md	548	PlaceBlock	placeblock
+interactions-world.md	572	PlaceFluid	placefluid
+interactions-world.md	603	Door	door
+interactions-world.md	644	OpenContainer	opencontainer
+interactions-world.md	667	Explode	explode
+interactions-world.md	720	ChangeState	changestate
+interactions-world.md	726	Core Properties	core-properties
+interactions-world.md	741	State Transition Map (Changes)	state-transition-map-changes
+interactions-world.md	762	Integration with Block State Definitions	integration-with-block-state-definitions
+interactions-world.md	790	Examples	examples
+interactions-world.md	792	Simple Toggle (Torch)	simple-toggle-torch
+interactions-world.md	806	Multi-State Transition (Colored Lantern)	multi-state-transition-colored-lantern
+interactions-world.md	826	One-Way Transition (Trap)	one-way-transition-trap
+interactions-world.md	839	Timed State Change (Geyser)	timed-state-change-geyser
+interactions-world.md	864	With Sound Effects (Trophy)	with-sound-effects-trophy
+interactions-world.md	882	File Locations	file-locations
+interactions-world.md	891	Related	related
+interactions-world.md	898	LaunchPadInteraction	launchpadinteraction
+interactions-world.md	948	WieldingInteraction	wieldinginteraction
+interactions-world.md	956	Core Properties	core-properties-1
+interactions-world.md	985	File Locations	file-locations-1
+interactions-world.md	1006	AngledWielding	angledwielding
+interactions-world.md	1047	DamageModifiers / KnockbackModifiers (Top-Level)	damagemodifiers--knockbackmodifiers-top-level
+interactions-world.md	1067	Forks (Guard Branching)	forks-guard-branching
+interactions-world.md	1099	Effects (Guard Start)	effects-guard-start
+interactions-world.md	1119	StaminaCost	staminacost
+interactions-world.md	1137	BlockedEffects	blockedeffects
+interactions-world.md	1150	BlockedInteractions	blockedinteractions
+interactions-world.md	1214	Failed (Guard Break)	failed-guard-break
+interactions-world.md	1235	Next (Post-Guard)	next-post-guard
+interactions-world.md	1251	Complete Examples	complete-examples
+interactions-world.md	1345	Common Patterns	common-patterns
+interactions-world.md	1355	Technical Notes	technical-notes
+interactions-world.md	1369	Related Interactions	related-interactions
+interactions-world.md	1379	Java Block Utilities	java-block-utilities
+interactions-world.md	1383	BlockHarvestUtils	blockharvestutils
+interactions-world.md	1465	PlacedByInteractionComponent	placedbyinteractioncomponent
+interactions-world.md	1487	Gotchas & Errors	gotchas--errors
+interactions.md	8	Interactions API	interactions-api
+interactions.md	21	Overview	overview
+interactions.md	31	Architecture	architecture
+interactions.md	48	Key Classes	key-classes
+interactions.md	68	Quick Navigation	quick-navigation
+interactions.md	80	Interaction Documentation Index	interaction-documentation-index
+interactions.md	145	Complete Type Registry	complete-type-registry
+interactions.md	359	Quick Start	quick-start
+interactions.md	363	Play an Animation	play-an-animation
+interactions.md	375	Play a Sound Effect	play-a-sound-effect
+interactions.md	387	Animation + Sound + Trail	animation--sound--trail
+interactions.md	401	Delay Between Actions	delay-between-actions
+interactions.md	410	Chain to Another Interaction	chain-to-another-interaction
+interactions.md	422	Reference	reference
+interactions.md	426	Class Hierarchy	class-hierarchy
+interactions.md	438	Interaction Base Class	interaction-base-class
+interactions.md	446	Getting Interactions from Assets	getting-interactions-from-assets
+interactions.md	461	Meta Keys	meta-keys
+interactions.md	488	Key Methods	key-methods
+interactions.md	525	Utility Methods	utility-methods
+interactions.md	532	Held-Item Change Behavior	held-item-change-behavior
+interactions.md	558	SimpleInstantInteraction	simpleinstantinteraction
+interactions.md	566	Key Methods	key-methods-1
+interactions.md	573	Codec	codec
+interactions.md	578	Usage	usage
+interactions.md	584	Registering a Custom Interaction Type (Java)	registering-a-custom-interaction-type-java
+interactions.md	620	Managers with no remote client: the double run	managers-with-no-remote-client-the-double-run
+interactions.md	627	SimpleBlockInteraction	simpleblockinteraction
+interactions.md	635	Key Methods	key-methods-2
+interactions.md	662	Codec	codec-1
+interactions.md	678	InteractionType Enum	interactiontype-enum
+interactions.md	686	OriginSource Enum	originsource-enum
+interactions.md	703	RelativeRotationMode Enum	relativerotationmode-enum
+interactions.md	719	InteractionModule	interactionmodule
+interactions.md	725	Key Methods	key-methods-3
+interactions.md	757	Static Fields	static-fields
+interactions.md	767	InteractionValidation	interactionvalidation
+interactions.md	800	Usage Examples	usage-examples
+interactions.md	802	Getting an Interaction	getting-an-interaction
+interactions.md	814	Checking Interaction Settings per GameMode	checking-interaction-settings-per-gamemode
+interactions.md	827	Using Meta Keys in Custom Interactions	using-meta-keys-in-custom-interactions
+interactions.md	837	Root Interaction Configuration	root-interaction-configuration
+interactions.md	860	Cooldown System	cooldown-system
+interactions.md	864	CooldownHandler	cooldownhandler
+interactions.md	887	Cooldown Configuration	cooldown-configuration
+interactions.md	927	Cooldown Interactions	cooldown-interactions
+interactions.md	941	InteractionRules	interactionrules
+interactions.md	945	Rule Types	rule-types
+interactions.md	975	JSON Configuration	json-configuration
+interactions.md	999	Common Patterns	common-patterns
+interactions.md	1021	InteractionSettings	interactionsettings
+interactions.md	1037	JSON Configuration	json-configuration-1
+interactions.md	1053	Usage in Code	usage-in-code
+interactions.md	1067	RootInteractionSettings	rootinteractionsettings
+interactions.md	1085	JSON Configuration	json-configuration-2
+interactions.md	1111	Difference from InteractionSettings	difference-from-interactionsettings
+interactions.md	1120	Root vs Nested Interactions	root-vs-nested-interactions
+interactions.md	1124	Root Interactions	root-interactions
+interactions.md	1158	Nested Interactions	nested-interactions
+interactions.md	1188	Reference Patterns	reference-patterns
+interactions.md	1218	Asset Discovery	asset-discovery
+interactions.md	1230	AttachBeam	attachbeam
+interactions.md	1274	OpenChapterRewards	openchapterrewards
+interactions.md	1318	Complete Interaction Type Reference	complete-interaction-type-reference
+interactions.md	1339	Gotchas & Errors	gotchas--errors
+inventory.md	8	Inventory API	inventory-api
+inventory.md	22	Overview	overview
+inventory.md	32	Architecture	architecture
+inventory.md	58	Key Classes	key-classes
+inventory.md	91	Inventory	inventory
+inventory.md	98	Section IDs	section-ids
+inventory.md	115	Default Capacities	default-capacities
+inventory.md	134	Get Sections	get-sections
+inventory.md	145	Combined Containers	combined-containers
+inventory.md	156	Inventory sections as components	inventory-sections-as-components
+inventory.md	193	Combined container from an ECS system (clear + grant loadout)	combined-container-from-an-ecs-system-clear--grant-loadout
+inventory.md	218	Active Slots	active-slots
+inventory.md	256	Setting the active slot (current API)	setting-the-active-slot-current-api
+inventory.md	289	Item Operations	item-operations
+inventory.md	310	Sorting & Management	sorting--management
+inventory.md	318	SmartMoveType	smartmovetype
+inventory.md	333	ItemStack	itemstack
+inventory.md	338	Constants	constants
+inventory.md	344	Constructors	constructors
+inventory.md	353	Item ID Format	item-id-format
+inventory.md	364	Validating Item IDs	validating-item-ids
+inventory.md	377	Getters	getters
+inventory.md	401	Modification Methods (Return New ItemStack)	modification-methods-return-new-itemstack
+inventory.md	427	Metadata Access	metadata-access
+inventory.md	434	Display Name & Description Overrides	display-name--description-overrides
+inventory.md	474	Comparison Methods	comparison-methods
+inventory.md	486	Network form	network-form
+inventory.md	495	Item	item
+inventory.md	500	Constants	constants-1
+inventory.md	505	Static Methods	static-methods
+inventory.md	511	Identity	identity
+inventory.md	520	Properties	properties
+inventory.md	532	Visual	visual
+inventory.md	542	Equipment Types	equipment-types
+inventory.md	552	Interactions	interactions
+inventory.md	561	State Management	state-management
+inventory.md	569	Usage Example	usage-example
+inventory.md	592	ItemContainer	itemcontainer
+inventory.md	597	Capacity	capacity
+inventory.md	603	Filtering	filtering
+inventory.md	609	Adding Items	adding-items
+inventory.md	624	Removing Items	removing-items
+inventory.md	636	Removing Materials	removing-materials
+inventory.md	648	Removing Resources	removing-resources
+inventory.md	654	Removing by Tag	removing-by-tag
+inventory.md	663	Replacing Items	replacing-items
+inventory.md	670	Moving Items	moving-items
+inventory.md	680	Utility	utility
+inventory.md	692	Events	events
+inventory.md	701	ItemContainer.ItemContainerChangeEvent	itemcontaineritemcontainerchangeevent
+inventory.md	709	Record Components	record-components
+inventory.md	716	Usage Example	usage-example-1
+inventory.md	743	Note	note
+inventory.md	751	SimpleItemContainer	simpleitemcontainer
+inventory.md	772	CombinedItemContainer	combineditemcontainer
+inventory.md	791	DelegateItemContainer	delegateitemcontainer
+inventory.md	826	SortType	sorttype
+inventory.md	843	FilterType	filtertype
+inventory.md	862	FilterActionType	filteractiontype
+inventory.md	877	SlotFilter	slotfilter
+inventory.md	882	Constants	constants-2
+inventory.md	888	Methods	methods
+inventory.md	894	Usage Example	usage-example-2
+inventory.md	909	ResourceFilter	resourcefilter
+inventory.md	916	Methods	methods-1
+inventory.md	925	Usage Example	usage-example-3
+inventory.md	934	SlotReplacementFunction	slotreplacementfunction
+inventory.md	940	Methods	methods-2
+inventory.md	947	Usage Example	usage-example-4
+inventory.md	968	MaterialQuantity	materialquantity
+inventory.md	974	Fields (protected — read through the getters)	fields-protected--read-through-the-getters
+inventory.md	985	Methods	methods-3
+inventory.md	1006	ResourceQuantity	resourcequantity
+inventory.md	1011	Fields	fields
+inventory.md	1017	Methods	methods-4
+inventory.md	1027	InternalContainerUtilMaterial	internalcontainerutilmaterial
+inventory.md	1034	Static Methods	static-methods-1
+inventory.md	1055	TestRemoveItemSlotResult	testremoveitemslotresult
+inventory.md	1061	Methods	methods-5
+inventory.md	1071	Transaction System	transaction-system
+inventory.md	1075	ActionType	actiontype
+inventory.md	1093	ItemStackTransaction	itemstacktransaction
+inventory.md	1105	Transaction Result Patterns	transaction-result-patterns
+inventory.md	1183	ListTransaction<T extends Transaction>	listtransaction
+inventory.md	1191	MoveTransaction<T extends Transaction>	movetransaction
+inventory.md	1194	TagTransaction	tagtransaction
+inventory.md	1211	Container Iteration	container-iteration
+inventory.md	1213	forEach Pattern	foreach-pattern
+inventory.md	1253	Usage Examples	usage-examples
+inventory.md	1255	Get Player Inventory	get-player-inventory
+inventory.md	1261	Check Held Item	check-held-item
+inventory.md	1271	Add Item to Inventory	add-item-to-inventory
+inventory.md	1284	Move Items Between Containers	move-items-between-containers
+inventory.md	1298	Listen for Inventory Changes	listen-for-inventory-changes
+inventory.md	1306	Sort Storage	sort-storage
+inventory.md	1311	Create ItemStack with Metadata	create-itemstack-with-metadata
+inventory.md	1319	Access via LivingEntity	access-via-livingentity
+inventory.md	1330	Crafting System	crafting-system
+inventory.md	1338	CraftingRecipe	craftingrecipe
+inventory.md	1343	Constants	constants-3
+inventory.md	1348	Static Methods	static-methods-2
+inventory.md	1355	Identity	identity-1
+inventory.md	1360	Inputs & Outputs	inputs--outputs
+inventory.md	1367	Requirements	requirements
+inventory.md	1376	Network	network
+inventory.md	1381	Usage Example	usage-example-5
+inventory.md	1415	BenchRequirement	benchrequirement
+inventory.md	1420	Fields	fields-1
+inventory.md	1429	Usage	usage
+inventory.md	1444	BenchType	benchtype
+inventory.md	1463	Crafting Events	crafting-events
+inventory.md	1467	CraftRecipeEvent	craftrecipeevent
+inventory.md	1473	Base Methods	base-methods
+inventory.md	1480	CraftRecipeEvent.Pre	craftrecipeeventpre
+inventory.md	1491	CraftRecipeEvent.Post	craftrecipeeventpost
+inventory.md	1500	Crafting Event Example	crafting-event-example
+inventory.md	1540	Crafting Event Registration	crafting-event-registration
+inventory.md	1569	Inventory Events	inventory-events
+inventory.md	1573	Event Summary	event-summary
+inventory.md	1587	InventoryChangeEvent	inventorychangeevent
+inventory.md	1600	Usage Example	usage-example-6
+inventory.md	1634	DropItemEvent	dropitemevent
+inventory.md	1658	InteractivelyPickupItemEvent	interactivelypickupitemevent
+inventory.md	1670	InventorySetActiveSlotEvent	inventorysetactiveslotevent
+inventory.md	1685	ECS Inventory Event Example	ecs-inventory-event-example
+inventory.md	1724	Registration	registration
+inventory.md	1735	Dropped-Item Entity Components	dropped-item-entity-components
+inventory.md	1743	PreventPickup	preventpickup
+inventory.md	1783	PickupItemComponent	pickupitemcomponent
+inventory.md	1815	ItemPrePhysicsSystem	itemprephysicssystem
+inventory.md	1835	Gotchas & Errors	gotchas--errors
+items-blocks.md	8	Block Items	block-items
+items-blocks.md	21	Overview	overview
+items-blocks.md	31	Architecture	architecture
+items-blocks.md	47	Key Classes	key-classes
+items-blocks.md	60	Quick Navigation	quick-navigation
+items-blocks.md	73	BlockType Properties	blocktype-properties
+items-blocks.md	79	Core Properties	core-properties
+items-blocks.md	98	Material	material
+items-blocks.md	109	DrawType	drawtype
+items-blocks.md	123	Opacity	opacity
+items-blocks.md	132	HitboxType	hitboxtype
+items-blocks.md	149	Flags	flags
+items-blocks.md	165	ParticleColor	particlecolor
+items-blocks.md	175	Textures & Models	textures--models
+items-blocks.md	177	Cube Textures	cube-textures
+items-blocks.md	238	Custom Models	custom-models
+items-blocks.md	266	Gathering & Drops	gathering--drops
+items-blocks.md	334	Light & Particles	light--particles
+items-blocks.md	336	Light	light
+items-blocks.md	347	Particles	particles
+items-blocks.md	375	Rotation & Placement	rotation--placement
+items-blocks.md	377	VariantRotation	variantrotation
+items-blocks.md	396	PlacementSettings	placementsettings
+items-blocks.md	422	Support System	support-system
+items-blocks.md	480	Block States	block-states
+items-blocks.md	486	On / Off (lights)	on--off-lights
+items-blocks.md	512	Open / Close (chests, windows)	open--close-chests-windows
+items-blocks.md	535	Doors and trapdoors	doors-and-trapdoors
+items-blocks.md	569	Connected Blocks	connected-blocks
+items-blocks.md	574	Stair	stair
+items-blocks.md	593	Roof	roof
+items-blocks.md	619	CustomTemplate	customtemplate
+items-blocks.md	653	Block Interactions	block-interactions
+items-blocks.md	658	Named Use references	named-use-references
+items-blocks.md	673	Inline Use (ChangeState)	inline-use-changestate
+items-blocks.md	710	Block Entity Components	block-entity-components
+items-blocks.md	757	Special Block Properties	special-block-properties
+items-blocks.md	759	IsDoor	isdoor
+items-blocks.md	768	MovementSettings (climbable)	movementsettings-climbable
+items-blocks.md	778	Farming & Soil	farming--soil
+items-blocks.md	782	SoilConfig (tilled soil)	soilconfig-tilled-soil
+items-blocks.md	804	Stages (growing plants/crops)	stages-growing-plantscrops
+items-blocks.md	857	HarvestCrop Interaction	harvestcrop-interaction
+items-blocks.md	936	ChangeFarmingStage Interaction	changefarmingstage-interaction
+items-blocks.md	1011	Basic Blocks	basic-blocks
+items-blocks.md	1015	Build_Grey_Cube	build_grey_cube
+items-blocks.md	1063	Soil_Dirt (template child)	soil_dirt-template-child
+items-blocks.md	1092	Furniture & Lighting	furniture--lighting
+items-blocks.md	1094	Deco_Lantern	deco_lantern
+items-blocks.md	1181	Doors & Ladders	doors--ladders
+items-blocks.md	1183	Furniture_Temple_Wind_Door_Large	furniture_temple_wind_door_large
+items-blocks.md	1231	Ladders	ladders
+items-blocks.md	1248	Containers	containers
+items-blocks.md	1250	Furniture_Kweebec_Chest_Large	furniture_kweebec_chest_large
+items-blocks.md	1295	Benches	benches
+items-blocks.md	1297	Bench_Tannery	bench_tannery
+items-blocks.md	1327	Block Item Patterns	block-item-patterns
+items-blocks.md	1334	Custom solid cube block	custom-solid-cube-block
+items-blocks.md	1357	Toggleable model light	toggleable-model-light
+items-blocks.md	1384	Interactive container	interactive-container
+items-blocks.md	1403	Block_Secondary Interaction	block_secondary-interaction
+items-blocks.md	1441	Gotchas & Errors	gotchas--errors
+items-blocks.md	1452	Related Documentation	related-documentation
+items-consumables.md	8	Consumable Items	consumable-items
+items-consumables.md	16	Overview	overview
+items-consumables.md	28	Architecture	architecture
+items-consumables.md	46	Key Classes	key-classes
+items-consumables.md	60	Quick Navigation	quick-navigation
+items-consumables.md	75	Food System	food-system
+items-consumables.md	79	Template_Food	template_food
+items-consumables.md	85	Base Properties	base-properties
+items-consumables.md	97	Interactions	interactions
+items-consumables.md	105	Tags	tags
+items-consumables.md	115	InteractionVars	interactionvars
+items-consumables.md	126	Template InteractionVars	template-interactionvars
+items-consumables.md	169	Template_Fruit	template_fruit
+items-consumables.md	177	Base Properties	base-properties-1
+items-consumables.md	192	Interactions	interactions-1
+items-consumables.md	198	Tags	tags-1
+items-consumables.md	211	ResourceTypes	resourcetypes
+items-consumables.md	225	Template_Crop_Item	template_crop_item
+items-consumables.md	231	Base Properties	base-properties-2
+items-consumables.md	245	Interactions	interactions-2
+items-consumables.md	251	Tags	tags-2
+items-consumables.md	262	ResourceTypes	resourcetypes-1
+items-consumables.md	274	Food Tiers	food-tiers
+items-consumables.md	300	Food Buff System	food-buff-system
+items-consumables.md	325	Health Regeneration Buffs	health-regeneration-buffs
+items-consumables.md	340	Meat Buffs	meat-buffs
+items-consumables.md	351	Fruit/Vegetable Buffs	fruitvegetable-buffs
+items-consumables.md	363	Example Child: Food_Bread	example-child-food_bread
+items-consumables.md	427	Food Categories	food-categories
+items-consumables.md	429	Raw Foods	raw-foods
+items-consumables.md	447	Cooked Foods	cooked-foods
+items-consumables.md	457	Prepared Foods	prepared-foods
+items-consumables.md	479	All Food Variants	all-food-variants
+items-consumables.md	497	Potion System	potion-system
+items-consumables.md	504	Potion_Template	potion_template
+items-consumables.md	511	Base Properties	base-properties-3
+items-consumables.md	520	Interactions	interactions-3
+items-consumables.md	542	Tags	tags-3
+items-consumables.md	552	BlockType (Placeable)	blocktype-placeable
+items-consumables.md	579	InteractionVars	interactionvars-1
+items-consumables.md	596	Stat Check Condition	stat-check-condition
+items-consumables.md	636	Health Potions	health-potions
+items-consumables.md	654	Example: Potion_Health	example-potion_health
+items-consumables.md	722	Stamina Potions	stamina-potions
+items-consumables.md	742	Regeneration Potions (decorative, not drinkable)	regeneration-potions-decorative-not-drinkable
+items-consumables.md	783	Morph Potions	morph-potions
+items-consumables.md	794	Morph Effect Structure	morph-effect-structure
+items-consumables.md	819	Utility Potions	utility-potions
+items-consumables.md	834	Example: Potion_Antidote	example-potion_antidote
+items-consumables.md	885	Signature Potions	signature-potions
+items-consumables.md	903	All Potion Variants	all-potion-variants
+items-consumables.md	923	Common Consumable Patterns	common-consumable-patterns
+items-consumables.md	925	Consumable Property	consumable-property
+items-consumables.md	943	ApplyEffect Interaction	applyeffect-interaction
+items-consumables.md	966	ChangeStat Interaction	changestat-interaction
+items-consumables.md	986	Consume_Charge (Food)	consume_charge-food
+items-consumables.md	1009	ModifyInventory Interaction	modifyinventory-interaction
+items-consumables.md	1028	RemoveEffect / ClearEntityEffect Interaction	removeeffect--clearentityeffect-interaction
+items-consumables.md	1047	Creating Custom Consumables	creating-custom-consumables
+items-consumables.md	1053	Custom Food Item	custom-food-item
+items-consumables.md	1091	Custom Potion Item	custom-potion-item
+items-consumables.md	1127	Related Documentation	related-documentation
+items-crafting.md	8	Crafting System	crafting-system
+items-crafting.md	16	Overview	overview
+items-crafting.md	26	Architecture	architecture
+items-crafting.md	45	Key Classes	key-classes
+items-crafting.md	57	Quick Navigation	quick-navigation
+items-crafting.md	68	Crafting Benches	crafting-benches
+items-crafting.md	72	Crafting Type Benches	crafting-type-benches
+items-crafting.md	76	Bench_WorkBench	bench_workbench
+items-crafting.md	138	Bench Configuration Properties	bench-configuration-properties
+items-crafting.md	159	Bench_Weapon	bench_weapon
+items-crafting.md	202	Bench_Armour	bench_armour
+items-crafting.md	215	Bench_Alchemy	bench_alchemy
+items-crafting.md	274	Bench_Cooking	bench_cooking
+items-crafting.md	288	Processing Type Benches	processing-type-benches
+items-crafting.md	292	Bench_Furnace	bench_furnace
+items-crafting.md	359	Processing Bench Properties	processing-bench-properties
+items-crafting.md	373	Processing Slot Properties (`Input` / `Fuel` entries)	processing-slot-properties-input--fuel-entries
+items-crafting.md	381	ExtraOutput Properties	extraoutput-properties
+items-crafting.md	389	Bench_Campfire	bench_campfire
+items-crafting.md	438	Bench_Salvage	bench_salvage
+items-crafting.md	475	Bench_Tannery	bench_tannery
+items-crafting.md	506	Tier Upgrade Slot Properties	tier-upgrade-slot-properties
+items-crafting.md	515	DiagramCrafting Type	diagramcrafting-type
+items-crafting.md	519	Bench_Armory	bench_armory
+items-crafting.md	565	DiagramCrafting Category Properties	diagramcrafting-category-properties
+items-crafting.md	581	StructuralCrafting Type	structuralcrafting-type
+items-crafting.md	585	Bench_Builders	bench_builders
+items-crafting.md	616	Recipe Structure	recipe-structure
+items-crafting.md	620	Embedded Recipe (Item Definition)	embedded-recipe-item-definition
+items-crafting.md	646	Basic Recipe Properties	basic-recipe-properties
+items-crafting.md	668	Input Types	input-types
+items-crafting.md	672	ItemId Input	itemid-input
+items-crafting.md	684	ResourceTypeId Input	resourcetypeid-input
+items-crafting.md	697	Common Resource Types	common-resource-types
+items-crafting.md	722	BenchRequirement	benchrequirement
+items-crafting.md	760	Processing Recipes	processing-recipes
+items-crafting.md	786	Salvage Recipes	salvage-recipes
+items-crafting.md	816	Salvage Recipe Properties	salvage-recipe-properties
+items-crafting.md	827	Tier System	tier-system
+items-crafting.md	831	TierLevels Configuration	tierlevels-configuration
+items-crafting.md	856	TierLevel Properties	tierlevel-properties
+items-crafting.md	865	Tier Time Reduction by Bench	tier-time-reduction-by-bench
+items-crafting.md	881	Recipe with Tier Requirement	recipe-with-tier-requirement
+items-crafting.md	898	Learning Recipes (LearnRecipe)	learning-recipes-learnrecipe
+items-crafting.md	972	API Reference	api-reference
+items-crafting.md	974	CraftingRecipe	craftingrecipe
+items-crafting.md	993	BenchRequirement	benchrequirement-1
+items-crafting.md	1005	BenchType	benchtype
+items-crafting.md	1018	CraftRecipeEvent	craftrecipeevent
+items-crafting.md	1042	Event Example	event-example
+items-crafting.md	1081	Common Patterns	common-patterns
+items-crafting.md	1083	Recipe in Item Definition	recipe-in-item-definition
+items-crafting.md	1106	Explicit Output	explicit-output
+items-crafting.md	1121	Multiple Bench Options	multiple-bench-options
+items-crafting.md	1136	All Crafting Benches	all-crafting-benches
+items-crafting.md	1163	Gotchas & Errors	gotchas--errors
+items-crafting.md	1175	Related Documentation	related-documentation
+items-tools.md	8	Tool Items	tool-items
+items-tools.md	16	Overview	overview
+items-tools.md	26	Architecture	architecture
+items-tools.md	41	Key Classes	key-classes
+items-tools.md	54	Quick Navigation	quick-navigation
+items-tools.md	81	Tool Property	tool-property
+items-tools.md	85	Tool.Specs	toolspecs
+items-tools.md	117	GatherTypes	gathertypes
+items-tools.md	151	Tool.DurabilityLossBlockTypes	tooldurabilitylossblocktypes
+items-tools.md	174	Tool.Speed	toolspeed
+items-tools.md	186	Other Tool Keys	other-tool-keys
+items-tools.md	200	BreakShape (0.6.3+)	breakshape-063
+items-tools.md	276	Material Tiers	material-tiers
+items-tools.md	297	Pickaxe	pickaxe
+items-tools.md	303	Base Properties (Tool_Pickaxe_Crude)	base-properties-tool_pickaxe_crude
+items-tools.md	313	Tool.Specs (Tool_Pickaxe_Crude)	toolspecs-tool_pickaxe_crude
+items-tools.md	330	Interactions	interactions
+items-tools.md	336	Tags	tags
+items-tools.md	346	Example Child: Iron Pickaxe	example-child-iron-pickaxe
+items-tools.md	403	Power Scaling by Tier	power-scaling-by-tier
+items-tools.md	425	All Pickaxe Variants	all-pickaxe-variants
+items-tools.md	431	Hatchet	hatchet
+items-tools.md	437	Base Properties (Tool_Hatchet_Crude)	base-properties-tool_hatchet_crude
+items-tools.md	447	Tool.Specs (Tool_Hatchet_Crude)	toolspecs-tool_hatchet_crude
+items-tools.md	462	Interactions	interactions-1
+items-tools.md	468	Tags	tags-1
+items-tools.md	478	Example Child: Iron Hatchet	example-child-iron-hatchet
+items-tools.md	522	Power Scaling by Tier	power-scaling-by-tier-1
+items-tools.md	538	All Hatchet Variants	all-hatchet-variants
+items-tools.md	544	Shovel	shovel
+items-tools.md	550	Base Properties (Tool_Shovel_Crude)	base-properties-tool_shovel_crude
+items-tools.md	560	Tool.Specs (Tool_Shovel_Crude)	toolspecs-tool_shovel_crude
+items-tools.md	568	Interactions	interactions-2
+items-tools.md	576	Tags	tags-2
+items-tools.md	586	Power Scaling by Tier	power-scaling-by-tier-2
+items-tools.md	598	All Shovel Variants	all-shovel-variants
+items-tools.md	604	Hoe	hoe
+items-tools.md	610	Base Properties (Tool_Hoe_Crude)	base-properties-tool_hoe_crude
+items-tools.md	620	Interactions	interactions-3
+items-tools.md	660	Tags	tags-3
+items-tools.md	670	All Hoe Variants	all-hoe-variants
+items-tools.md	676	Hammer	hammer
+items-tools.md	682	Base Properties (Tool_Hammer_Crude)	base-properties-tool_hammer_crude
+items-tools.md	693	Interactions	interactions-4
+items-tools.md	737	Tags	tags-4
+items-tools.md	747	All Hammer Variants	all-hammer-variants
+items-tools.md	753	Shears	shears
+items-tools.md	761	Base Properties (Tool_Shears_Basic)	base-properties-tool_shears_basic
+items-tools.md	774	Interactions	interactions-5
+items-tools.md	811	Tags	tags-5
+items-tools.md	821	All Shears Variants	all-shears-variants
+items-tools.md	827	Watering Can	watering-can
+items-tools.md	833	Base Properties (Tool_Watering_Can)	base-properties-tool_watering_can
+items-tools.md	843	State System	state-system
+items-tools.md	870	Fill and Water Interactions	fill-and-water-interactions
+items-tools.md	941	Recipe	recipe
+items-tools.md	961	All Watering Can Variants	all-watering-can-variants
+items-tools.md	967	Sickle	sickle
+items-tools.md	973	Base Properties (Tool_Sickle_Crude)	base-properties-tool_sickle_crude
+items-tools.md	988	Interactions	interactions-6
+items-tools.md	999	Tags	tags-6
+items-tools.md	1009	All Sickle Variants	all-sickle-variants
+items-tools.md	1015	Repair Kit	repair-kit
+items-tools.md	1021	Base Properties (Tool_Repair_Kit_Crude)	base-properties-tool_repair_kit_crude
+items-tools.md	1033	Interactions	interactions-7
+items-tools.md	1054	Repair Kit Tiers	repair-kit-tiers
+items-tools.md	1067	Tags	tags-7
+items-tools.md	1077	All Repair Kit Variants	all-repair-kit-variants
+items-tools.md	1083	Capture Crate	capture-crate
+items-tools.md	1089	Base Properties (Tool_Capture_Crate)	base-properties-tool_capture_crate
+items-tools.md	1100	Interactions	interactions-8
+items-tools.md	1135	Tags	tags-8
+items-tools.md	1139	All Capture Crate Variants	all-capture-crate-variants
+items-tools.md	1145	Feedbag	feedbag
+items-tools.md	1151	Base Properties (Tool_Feedbag)	base-properties-tool_feedbag
+items-tools.md	1163	Interactions	interactions-9
+items-tools.md	1184	Tags	tags-9
+items-tools.md	1194	All Feedbag Variants	all-feedbag-variants
+items-tools.md	1200	Fertilizer	fertilizer
+items-tools.md	1208	Base Properties (Tool_Fertilizer)	base-properties-tool_fertilizer
+items-tools.md	1224	Interactions	interactions-10
+items-tools.md	1251	Tags	tags-10
+items-tools.md	1261	All Fertilizer Variants	all-fertilizer-variants
+items-tools.md	1269	Common Tool Patterns	common-tool-patterns
+items-tools.md	1271	BreakBlock Interaction	breakblock-interaction
+items-tools.md	1323	ChangeBlock Interaction	changeblock-interaction
+items-tools.md	1341	Tool Durability	tool-durability
+items-tools.md	1362	Sound Sets	sound-sets
+items-tools.md	1371	Builder Tool Args	builder-tool-args
+items-tools.md	1424	Arg Types	arg-types
+items-tools.md	1446	ToolArg (Base Class)	toolarg-base-class
+items-tools.md	1464	ToolArgException	toolargexception
+items-tools.md	1477	Related Documentation	related-documentation
+items-weapons.md	8	Weapon Items	weapon-items
+items-weapons.md	18	Overview	overview
+items-weapons.md	28	Architecture	architecture
+items-weapons.md	45	Key Classes	key-classes
+items-weapons.md	58	Quick Navigation	quick-navigation
+items-weapons.md	82	Handedness (one- vs two-handed)	handedness-one--vs-two-handed
+items-weapons.md	101	Template_Weapon_Sword	template_weapon_sword
+items-weapons.md	107	Base Properties	base-properties
+items-weapons.md	120	Interactions	interactions
+items-weapons.md	128	Tags	tags
+items-weapons.md	139	Weapon Stats	weapon-stats
+items-weapons.md	157	InteractionVars	interactionvars
+items-weapons.md	171	Example Child: Iron Sword	example-child-iron-sword
+items-weapons.md	276	Damage Scaling by Tier	damage-scaling-by-tier
+items-weapons.md	293	All Sword Variants	all-sword-variants
+items-weapons.md	299	Template_Weapon_Daggers	template_weapon_daggers
+items-weapons.md	305	Base Properties	base-properties-1
+items-weapons.md	318	Interactions	interactions-1
+items-weapons.md	326	Tags	tags-1
+items-weapons.md	337	Weapon Stats	weapon-stats-1
+items-weapons.md	356	Signature Ready Effects	signature-ready-effects
+items-weapons.md	401	Template_Weapon_Shield	template_weapon_shield
+items-weapons.md	407	Base Properties	base-properties-2
+items-weapons.md	418	Interactions	interactions-2
+items-weapons.md	425	Tags	tags-2
+items-weapons.md	436	InteractionVars	interactionvars-1
+items-weapons.md	447	Template InteractionVars	template-interactionvars
+items-weapons.md	492	Template_Weapon_Battleaxe	template_weapon_battleaxe
+items-weapons.md	498	Base Properties	base-properties-3
+items-weapons.md	511	Interactions	interactions-3
+items-weapons.md	519	Tags	tags-3
+items-weapons.md	530	Weapon Stats	weapon-stats-2
+items-weapons.md	548	Template_Weapon_Shortbow	template_weapon_shortbow
+items-weapons.md	554	Base Properties	base-properties-4
+items-weapons.md	567	Interactions	interactions-4
+items-weapons.md	579	Tags	tags-4
+items-weapons.md	590	Weapon Stats	weapon-stats-3
+items-weapons.md	617	Arrow Consumption (as of 0.6.3)	arrow-consumption-as-of-063
+items-weapons.md	666	Charge-Based Damage	charge-based-damage
+items-weapons.md	685	InteractionVars	interactionvars-2
+items-weapons.md	702	Signature Ready Appearance	signature-ready-appearance
+items-weapons.md	732	Template_Weapon_Mace	template_weapon_mace
+items-weapons.md	738	Base Properties	base-properties-5
+items-weapons.md	751	Interactions	interactions-5
+items-weapons.md	759	Tags	tags-5
+items-weapons.md	770	Weapon Stats	weapon-stats-4
+items-weapons.md	788	Template_Weapon_Crossbow	template_weapon_crossbow
+items-weapons.md	794	Base Properties	base-properties-6
+items-weapons.md	808	Interactions	interactions-6
+items-weapons.md	821	Tags	tags-6
+items-weapons.md	832	Weapon Stats	weapon-stats-5
+items-weapons.md	873	DisplayEntityStatsHUD	displayentitystatshud
+items-weapons.md	883	InteractionVars	interactionvars-3
+items-weapons.md	909	Ammo Consumption	ammo-consumption
+items-weapons.md	928	Reload System	reload-system
+items-weapons.md	955	Common Weapon Patterns	common-weapon-patterns
+items-weapons.md	957	DurabilityCondition Interaction	durabilitycondition-interaction
+items-weapons.md	1000	UseEntity Interaction	useentity-interaction
+items-weapons.md	1041	Damage Calculator	damage-calculator
+items-weapons.md	1078	Stamina Cost for Blocking	stamina-cost-for-blocking
+items-weapons.md	1102	Blocked Effects	blocked-effects
+items-weapons.md	1114	Entity Stats On Hit	entity-stats-on-hit
+items-weapons.md	1127	Impact Sounds (and silent weapons)	impact-sounds-and-silent-weapons
+items-weapons.md	1145	Sound Sets	sound-sets
+items-weapons.md	1157	Related Documentation	related-documentation
+items.md	8	Item Definitions	item-definitions
+items.md	14	Overview	overview
+items.md	24	Architecture	architecture
+items.md	42	Key Classes	key-classes
+items.md	56	Quick Navigation	quick-navigation
+items.md	75	Common Properties	common-properties
+items.md	101	TranslationProperties	translationproperties
+items.md	117	IconProperties	iconproperties
+items.md	137	PlayerAnimationsId	playeranimationsid
+items.md	175	Scale	scale
+items.md	191	BlockType	blocktype
+items.md	217	Utility	utility
+items.md	240	Quality System	quality-system
+items.md	262	Example	example
+items.md	274	Inheritance System	inheritance-system
+items.md	278	Template (Parent)	template-parent
+items.md	302	Child Item (Inherits & Overrides)	child-item-inherits--overrides
+items.md	336	InteractionVars System	interactionvars-system
+items.md	340	How It Works	how-it-works
+items.md	375	Common InteractionVar Patterns	common-interactionvar-patterns
+items.md	424	Tags System	tags-system
+items.md	450	Categories System	categories-system
+items.md	483	ResourceTypes System	resourcetypes-system
+items.md	491	Example ResourceType	example-resourcetype
+items.md	504	Using in Items	using-in-items
+items.md	516	Using in Recipes	using-in-recipes
+items.md	542	Interactions Property	interactions-property
+items.md	569	Weapon Property	weapon-property
+items.md	596	Recipe Property	recipe-property
+items.md	634	ItemAppearanceConditions	itemappearanceconditions
+items.md	669	Quick Start Examples	quick-start-examples
+items.md	671	Basic Weapon	basic-weapon
+items.md	708	Basic Food	basic-food
+items.md	732	Fieldcraft Categories	fieldcraft-categories
+items.md	768	Builder Tool Item References	builder-tool-item-references
+items.md	807	Gotchas & Errors	gotchas--errors
+items.md	817	Related Documentation	related-documentation
+math.md	8	Math / Vector API	math--vector-api
+math.md	12	Overview	overview
+math.md	31	Core Types	core-types
+math.md	44	Advanced Types	advanced-types
+math.md	54	Architecture	architecture
+math.md	84	JOML vectors in one minute	joml-vectors-in-one-minute
+math.md	108	Vector3d	vector3d
+math.md	114	Creating Vectors	creating-vectors
+math.md	130	Accessors & Assignment	accessors--assignment
+math.md	140	Arithmetic	arithmetic
+math.md	154	Vector Math	vector-math
+math.md	174	Rounding & Conversion	rounding--conversion
+math.md	189	Vector3dUtil	vector3dutil
+math.md	197	Constants	constants
+math.md	212	Helpers	helpers
+math.md	234	Codec	codec
+math.md	243	Vector3i	vector3i
+math.md	256	Vector3iUtil	vector3iutil
+math.md	282	Vector3f	vector3f
+math.md	296	Rotation3f	rotation3f
+math.md	303	Conventions	conventions
+math.md	309	Constants	constants-1
+math.md	317	Construction & Accessors	construction--accessors
+math.md	332	Arithmetic & Axis Helpers	arithmetic--axis-helpers
+math.md	345	Interpolation & Look-At (static)	interpolation--look-at-static
+math.md	361	Non-finite guard	non-finite-guard
+math.md	368	Applying a Rotation	applying-a-rotation
+math.md	380	Transform	transform
+math.md	386	Getting Transform	getting-transform
+math.md	401	Accessing Components	accessing-components
+math.md	411	Direction Calculations	direction-calculations
+math.md	426	Relative-Transform Flags	relative-transform-flags
+math.md	438	Location	location
+math.md	461	TransformComponent	transformcomponent
+math.md	468	Getting the Component	getting-the-component
+math.md	477	Reading Position/Rotation	reading-positionrotation
+math.md	485	Modifying Position/Rotation	modifying-positionrotation
+math.md	497	Chunk-section linkage (0.6.3+)	chunk-section-linkage-063
+math.md	508	Transform vs TransformComponent	transform-vs-transformcomponent
+math.md	520	Common Patterns	common-patterns
+math.md	522	Calculate Direction Between Entities	calculate-direction-between-entities
+math.md	530	Apply Knockback	apply-knockback
+math.md	541	Check Distance	check-distance
+math.md	554	Get Block Position from Entity	get-block-position-from-entity
+math.md	561	Look At Target	look-at-target
+math.md	573	Matrix4d	matrix4d
+math.md	587	Axis	axis
+math.md	593	Values	values
+math.md	601	Methods	methods
+math.md	622	Box (AABB)	box-aabb
+math.md	629	Construction	construction
+math.md	642	Dimensions	dimensions
+math.md	656	Center Points	center-points
+math.md	664	Modification	modification
+math.md	684	Collision Detection	collision-detection
+math.md	693	Combining Boxes	combining-boxes
+math.md	701	Block Iteration	block-iteration
+math.md	715	Block Shape Iteration	block-shape-iteration
+math.md	723	Key Classes	key-classes
+math.md	738	The callback contract	the-callback-contract
+math.md	798	BlockUtil — coordinate packing	blockutil--coordinate-packing
+math.md	812	Line & Spiral Iteration	line--spiral-iteration
+math.md	818	LineIterator	lineiterator
+math.md	832	SpiralIterator	spiraliterator
+math.md	854	VectorBoxUtil & VectorSphereUtil	vectorboxutil--vectorsphereutil
+math.md	884	MathUtil	mathutil
+math.md	890	Constants	constants-2
+math.md	898	Rounding	rounding
+math.md	910	Clamping	clamping
+math.md	920	Random	random
+math.md	928	Interpolation	interpolation
+math.md	938	Angle Utilities	angle-utilities
+math.md	946	Near-Zero Checks	near-zero-checks
+math.md	956	Length Calculations	length-calculations
+math.md	965	Min/Max	minmax
+math.md	974	Vector Rotation	vector-rotation
+math.md	983	Hit-Normal Helpers	hit-normal-helpers
+math.md	990	Distance to Line	distance-to-line
+math.md	998	Bit Packing	bit-packing
+math.md	1010	FastRandom & RandomExtra	fastrandom--randomextra
+math.md	1014	FastRandom	fastrandom
+math.md	1028	RandomExtra	randomextra
+math.md	1060	RaycastAABB	raycastaabb
+math.md	1089	Range	range
+math.md	1105	Minor Utilities & Codecs	minor-utilities--codecs
+math.md	1119	Gotchas & Errors	gotchas--errors
+mounts.md	8	Mounts & Seating	mounts--seating
+mounts.md	21	Packages and key classes	packages-and-key-classes
+mounts.md	37	The three JSON entry points	the-three-json-entry-points
+mounts.md	47	Mount (interaction)	mount-interaction
+mounts.md	68	Seating (interaction)	seating-interaction
+mounts.md	88	SpawnMinecart (interaction)	spawnminecart-interaction
+mounts.md	132	Mount (NPC action)	mount-npc-action
+mounts.md	155	BlockMountAPI (Java)	blockmountapi-java
+mounts.md	187	Components	components
+mounts.md	206	Commands	commands
+mounts.md	219	Related	related
+networking.md	8	Networking API	networking-api
+networking.md	12	Overview	overview
+networking.md	16	Architecture	architecture
+networking.md	27	Key Classes	key-classes
+networking.md	45	Class Hierarchy	class-hierarchy
+networking.md	56	NetworkSerializable	networkserializable
+networking.md	61	Methods	methods
+networking.md	66	Usage	usage
+networking.md	82	Direction	direction
+networking.md	87	Fields	fields
+networking.md	94	Constructors	constructors
+networking.md	101	Serialization	serialization
+networking.md	132	Constants	constants
+networking.md	141	Other Methods	other-methods
+networking.md	148	Usage Example	usage-example
+networking.md	165	WaitForDataFrom	waitfordatafrom
+networking.md	170	Values	values
+networking.md	178	Methods	methods-1
+networking.md	192	Usage Example	usage-example-1
+networking.md	211	Context	context
+networking.md	218	Notes	notes
+networking.md	227	Packet Handler Hierarchy	packet-handler-hierarchy
+networking.md	254	IPacketHandler	ipackethandler
+networking.md	267	SubPacketHandler	subpackethandler
+networking.md	309	IWorldPacketHandler	iworldpackethandler
+networking.md	334	GenericPacketHandler	genericpackethandler
+networking.md	355	Login pipeline (engine plumbing)	login-pipeline-engine-plumbing
+networking.md	367	ServerManager	servermanager
+networking.md	374	Methods	methods-2
+networking.md	404	ProtocolVersion	protocolversion
+networking.md	423	PlayerAuthentication	playerauthentication
+networking.md	448	NetworkSerializer	networkserializer
+networking.md	466	Asset Packet Generators	asset-packet-generators
+networking.md	474	AssetPacketGenerator	assetpacketgenerator
+networking.md	485	SimpleAssetPacketGenerator	simpleassetpacketgenerator
+networking.md	504	ClientFeatureRegistration	clientfeatureregistration
+networking.md	530	Voice Chat	voice-chat
+networking.md	536	Key Classes	key-classes-1
+networking.md	545	Control surface	control-surface
+networking.md	563	Server-originated audio and voice interception (0.6.3+)	server-originated-audio-and-voice-interception-063
+networking.md	578	Gotchas & Errors	gotchas--errors
+npc-combat.md	8	NPC Combat	npc-combat
+npc-combat.md	14	Melee attacks without a CAE	melee-attacks-without-a-cae
+npc-combat.md	31	The interaction-var chain	the-interaction-var-chain
+npc-combat.md	61	Melee hits are directional swept arcs — NPCs can miss	melee-hits-are-directional-swept-arcs--npcs-can-miss
+npc-combat.md	80	Serializing a flock swarm — native take-turns can't hard-gate it	serializing-a-flock-swarm--native-take-turns-cant-hard-gate-it
+npc-combat.md	98	Combat Action Evaluator (CAE)	combat-action-evaluator-cae
+npc-combat.md	102	CAE Structure	cae-structure
+npc-combat.md	178	Response Curves	response-curves
+npc-combat.md	218	Condition Types	condition-types
+npc-roles.md	8	NPC Roles	npc-roles
+npc-roles.md	18	Overview	overview
+npc-roles.md	29	Architecture	architecture
+npc-roles.md	44	Key Classes	key-classes
+npc-roles.md	57	Directory Structure	directory-structure
+npc-roles.md	73	Role Types	role-types
+npc-roles.md	87	Abstract Templates	abstract-templates
+npc-roles.md	112	Variants	variants
+npc-roles.md	195	Parameters System	parameters-system
+npc-roles.md	199	Value and Description	value-and-description
+npc-roles.md	216	Computed Values	computed-values
+npc-roles.md	232	Key Properties	key-properties
+npc-roles.md	236	Basic Properties	basic-properties
+npc-roles.md	246	Movement Properties	movement-properties
+npc-roles.md	258	Detection Properties	detection-properties
+npc-roles.md	267	Combat Properties	combat-properties
+npc-roles.md	277	Behavior Properties	behavior-properties
+npc-roles.md	285	Memory Properties	memory-properties
+npc-roles.md	297	Attitude System	attitude-system
+npc-roles.md	301	Attitude Values	attitude-values
+npc-roles.md	311	Attitude Definition Structure	attitude-definition-structure
+npc-roles.md	341	NPC Categories	npc-categories
+npc-roles.md	345	Creature	creature
+npc-roles.md	357	Aquatic	aquatic
+npc-roles.md	365	Avian	avian
+npc-roles.md	373	Intelligent	intelligent
+npc-roles.md	383	Other Categories	other-categories
+npc-roles.md	395	Motion Controllers	motion-controllers
+npc-roles.md	407	Walk Configuration Example	walk-configuration-example
+npc-roles.md	429	Fly Configuration Example	fly-configuration-example
+npc-roles.md	452	Separation & avoidance steering	separation--avoidance-steering
+npc-roles.md	463	Neighbour scope (who gets pushed)	neighbour-scope-who-gets-pushed
+npc-roles.md	467	Separation keys	separation-keys
+npc-roles.md	488	Avoidance keys	avoidance-keys
+npc-roles.md	500	Minimal example	minimal-example
+npc-roles.md	527	Behavior System (Instructions)	behavior-system-instructions
+npc-roles.md	531	States	states
+npc-roles.md	547	Sensors	sensors
+npc-roles.md	565	Actions	actions
+npc-roles.md	584	BodyMotion	bodymotion
+npc-roles.md	609	Instruction Tree Example	instruction-tree-example
+npc-roles.md	649	Sensor → BodyMotion target hand-off	sensor--bodymotion-target-hand-off
+npc-roles.md	653	Entity-sensor slots: `Filters`, `Prioritiser`, `Collector`	entity-sensor-slots-filters-prioritiser-collector
+npc-roles.md	694	Randomized instructions (Type: Random)	randomized-instructions-type-random
+npc-roles.md	729	Timed switch example	timed-switch-example
+npc-roles.md	766	Forcing a re-roll: `Name` + `ResetInstructions`	forcing-a-re-roll-name--resetinstructions
+npc-roles.md	782	The `Attack` action	the-attack-action
+npc-roles.md	812	Marked targets (`LockedTarget`) and the `Target` sensor	marked-targets-lockedtarget-and-the-target-sensor
+npc-roles.md	848	Alarms (`SetAlarm` / `Alarm`)	alarms-setalarm--alarm
+npc-roles.md	864	Flags (`SetFlag` / `Flag`)	flags-setflag--flag
+npc-roles.md	877	`ActionList` blocking semantics (multi-tick sequences)	actionlist-blocking-semantics-multi-tick-sequences
+npc-roles.md	889	Registering custom core components (Java)	registering-custom-core-components-java
+npc-roles.md	925	The custom-`BodyMotion` contract	the-custom-bodymotion-contract
+npc-roles.md	974	Facing: orientation is emergent from the active motion	facing-orientation-is-emergent-from-the-active-motion
+npc-roles.md	1007	Inline behavior with a Generic role	inline-behavior-with-a-generic-role
+npc-roles.md	1029	Registering a custom sensor	registering-a-custom-sensor
+npc-roles.md	1066	Components	components
+npc-roles.md	1072	Sensor Components	sensor-components
+npc-roles.md	1091	Instruction Components	instruction-components
+npc-roles.md	1105	Action List Components	action-list-components
+npc-roles.md	1122	Groups	groups
+npc-roles.md	1128	Group Definition	group-definition
+npc-roles.md	1148	Beacon messaging	beacon-messaging
+npc-roles.md	1161	SendBeacon	sendbeacon
+npc-roles.md	1236	Flocks	flocks
+npc-roles.md	1249	Weighted Sizes	weighted-sizes
+npc-roles.md	1278	Flocks at runtime (driving the engine flock from Java)	flocks-at-runtime-driving-the-engine-flock-from-java
+npc-roles.md	1284	Creating a flock	creating-a-flock
+npc-roles.md	1296	Recruiting members	recruiting-members
+npc-roles.md	1306	Queries	queries
+npc-roles.md	1312	Leaving and dissolving	leaving-and-dissolving
+npc-roles.md	1316	Leader death is auto-handled	leader-death-is-auto-handled
+npc-roles.md	1322	Gotcha — a brand-new flock reports 0 members for the rest of the tick	gotcha--a-brand-new-flock-reports-0-members-for-the-rest-of-the-tick
+npc-roles.md	1337	Gotcha — `FlockPlugin.getFlock` takes a *member* ref, not the flock entity	gotcha--flockplugingetflock-takes-a-member-ref-not-the-flock-entity
+npc-roles.md	1352	Spawning	spawning
+npc-roles.md	1361	Testing roles in-game	testing-roles-in-game
+npc-roles.md	1365	Spawning NPCs (`/npc spawn`)	spawning-npcs-npc-spawn
+npc-roles.md	1399	Removing NPCs	removing-npcs
+npc-roles.md	1412	Debug overlay (`/npc debug`)	debug-overlay-npc-debug
+npc-roles.md	1442	Combat	combat
+npc-roles.md	1451	Reference Summary	reference-summary
+npc-roles.md	1453	Key File Locations	key-file-locations
+npc-roles.md	1467	Asset Statistics	asset-statistics
+npc-roles.md	1483	Gotchas & Errors	gotchas--errors
+npc-spawning.md	8	NPC Spawning	npc-spawning
+npc-spawning.md	14	Spawn Beacons	spawn-beacons
+npc-spawning.md	18	Beacon Properties	beacon-properties
+npc-spawning.md	39	Beacon Example	beacon-example
+npc-spawning.md	77	Zone-Based Organization	zone-based-organization
+npc-spawning.md	96	Companion Block Spawners	companion-block-spawners
+npc-spawning.md	110	The recipe asset	the-recipe-asset
+npc-spawning.md	179	How it resolves	how-it-resolves
+npc-spawning.md	208	Java surface	java-surface
+npc-spawning.md	255	SpawnNPC Interaction	spawnnpc-interaction
+npc-spawning.md	287	WeightedEntityIds entries	weightedentityids-entries
+npc-spawning.md	342	Manual Spawn Markers	manual-spawn-markers
+npc-spawning.md	360	Marker position validation (0.7.2+)	marker-position-validation-072
+npc-spawning.md	382	TriggerSpawnMarkers	triggerspawnmarkers
+npc.md	8	NPC API	npc-api
+npc.md	14	Overview	overview
+npc.md	23	Architecture	architecture
+npc.md	39	Key Classes	key-classes
+npc.md	52	Quick Navigation	quick-navigation
+npc.md	60	NPC Events	npc-events
+npc.md	64	AllNPCsLoadedEvent	allnpcsloadedevent
+npc.md	84	LoadedNPCEvent	loadednpcevent
+npc.md	103	BuilderInfo	builderinfo
+npc.md	109	Identity	identity
+npc.md	117	Builder Access	builder-access
+npc.md	123	Validation State	validation-state
+npc.md	132	State Management	state-management
+npc.md	141	Removal	removal
+npc.md	148	Usage Example	usage-example
+npc.md	164	Sensor Events	sensor-events
+npc.md	172	SensorEvent (Base Class)	sensorevent-base-class
+npc.md	189	SensorEntityEvent	sensorentityevent
+npc.md	197	EventSearchType Enum	eventsearchtype-enum
+npc.md	212	Builder Classes	builder-classes
+npc.md	216	BuilderSensorEvent	buildersensorevent
+npc.md	227	BuilderSensorEntityEvent	buildersensorentityevent
+npc.md	239	Sensor Usage Notes	sensor-usage-notes
+npc.md	247	Example: Listen for NPC Loading	example-listen-for-npc-loading
+npc.md	276	Integration with AI Systems	integration-with-ai-systems
+npc.md	280	Sensor Detection Flow	sensor-detection-flow
+npc.md	287	Example: Custom NPC Behavior on Player Detection	example-custom-npc-behavior-on-player-detection
+npc.md	305	Gotchas & Errors	gotchas--errors
+permissions.md	8	Permissions API	permissions-api
+permissions.md	20	Overview	overview
+permissions.md	31	Architecture	architecture
+permissions.md	49	Key Classes	key-classes
+permissions.md	64	PermissionHolder	permissionholder
+permissions.md	72	Methods	methods
+permissions.md	105	Groups & Roles	groups--roles
+permissions.md	131	Permission Node & Group Naming	permission-node--group-naming
+permissions.md	170	PermissionsModule	permissionsmodule
+permissions.md	221	Custom PermissionProvider	custom-permissionprovider
+permissions.md	246	Usage	usage
+permissions.md	248	Check Permission in Command	check-permission-in-command
+permissions.md	263	With Default Value	with-default-value
+permissions.md	272	Command Permissions	command-permissions
+permissions.md	319	Permission Commands (in-game)	permission-commands-in-game
+permissions.md	344	Permission Events	permission-events
+permissions.md	352	Event Summary	event-summary
+permissions.md	362	PlayerGroupEvent	playergroupevent
+permissions.md	377	PlayerPermissionChangeEvent	playerpermissionchangeevent
+permissions.md	398	GroupPermissionChangeEvent	grouppermissionchangeevent
+permissions.md	415	Permission Events Usage Example	permission-events-usage-example
+permissions.md	455	Access Control (Bans & Join Permission)	access-control-bans--join-permission
+permissions.md	474	Key Classes	key-classes-1
+permissions.md	487	AccessControlModule entry points	accesscontrolmodule-entry-points
+permissions.md	517	Gotchas & Errors	gotchas--errors
+player.md	8	Player API	player-api
+player.md	14	Overview	overview
+player.md	27	Architecture	architecture
+player.md	46	Key Classes	key-classes
+player.md	57	Message	message
+player.md	62	Static Factory Methods	static-factory-methods
+player.md	71	Formatting (Fluent API)	formatting-fluent-api
+player.md	83	Parameters (for translations)	parameters-for-translations
+player.md	94	Composition	composition
+player.md	102	Getters	getters
+player.md	120	FormattedMessage (Internal)	formattedmessage-internal
+player.md	126	Simple Message	simple-message
+player.md	131	Formatted Message	formatted-message
+player.md	140	Translation with Parameters	translation-with-parameters
+player.md	148	Joining Messages	joining-messages
+player.md	157	Broadcast to World	broadcast-to-world
+player.md	164	HiddenPlayersManager	hiddenplayersmanager
+player.md	169	Getting the Manager	getting-the-manager
+player.md	174	Methods	methods
+player.md	181	Usage Example	usage-example
+player.md	212	Player Events	player-events
+player.md	218	Event Summary	event-summary
+player.md	246	Registration Example	registration-example
+player.md	269	PlayerInteractEvent	playerinteractevent
+player.md	280	Methods	methods-1
+player.md	296	InteractionType	interactiontype
+player.md	302	Enum Values by Category	enum-values-by-category
+player.md	366	Reacting to Interactions (InteractionChainStartEvent)	reacting-to-interactions-interactionchainstartevent
+player.md	425	ChangeGameModeEvent	changegamemodeevent
+player.md	431	Methods	methods-2
+player.md	440	GameMode Enum	gamemode-enum
+player.md	449	Usage Example	usage-example-1
+player.md	492	Registration	registration
+player.md	505	RemovedPlayerFromWorldEvent	removedplayerfromworldevent
+player.md	538	Crafting Events	crafting-events
+player.md	544	Cosmetics (Player Skins & Emotes)	cosmetics-player-skins--emotes
+player.md	550	Key Classes	key-classes-1
+player.md	563	CosmeticsModule methods	cosmeticsmodule-methods
+player.md	575	CosmeticRegistry accessors	cosmeticregistry-accessors
+player.md	597	PlayerSkinComponent	playerskincomponent
+player.md	621	PlayerCreativeSettings	playercreativesettings
+player.md	653	Spectator Mode	spectator-mode
+player.md	671	Spectating (component)	spectating-component
+player.md	694	Spectator game-mode assets	spectator-game-mode-assets
+player.md	707	SpectateControl interaction	spectatecontrol-interaction
+player.md	737	SpectatorSystems	spectatorsystems
+player.md	747	SpectatingHud	spectatinghud
+player.md	759	Elsewhere in the engine	elsewhere-in-the-engine
+player.md	774	`/spectate`	spectate
+player.md	806	Movement Settings (MovementManager & MovementConfig)	movement-settings-movementmanager--movementconfig
+player.md	815	MovementConfig (asset)	movementconfig-asset
+player.md	825	MovementManager (component)	movementmanager-component
+player.md	840	Changing a player's movement at runtime	changing-a-players-movement-at-runtime
+player.md	865	PlayerInput	playerinput
+player.md	878	InputUpdate implementations	inputupdate-implementations
+player.md	910	Persistent Player Data (PlayerConfigData)	persistent-player-data-playerconfigdata
+player.md	916	PlayerConfigData	playerconfigdata
+player.md	933	PlayerWorldData	playerworlddata
+player.md	950	PlayerRespawnPointData	playerrespawnpointdata
+player.md	954	Bed Interaction	bed-interaction
+player.md	1021	Container Windows	container-windows
+player.md	1027	ContainerBlockWindow	containerblockwindow
+player.md	1051	MaterialContainerWindow & MaterialExtraResourcesSection	materialcontainerwindow--materialextraresourcessection
+player.md	1065	Choice Pages	choice-pages
+player.md	1080	Subclassing	subclassing
+player.md	1110	Gotchas & Errors	gotchas--errors
+plugin-lifecycle.md	8	Plugin Lifecycle API	plugin-lifecycle-api
+plugin-lifecycle.md	14	Overview	overview
+plugin-lifecycle.md	24	Architecture	architecture
+plugin-lifecycle.md	43	Key Classes	key-classes
+plugin-lifecycle.md	64	Class Hierarchy	class-hierarchy
+plugin-lifecycle.md	71	JavaPlugin	javaplugin
+plugin-lifecycle.md	85	Required Constructor	required-constructor
+plugin-lifecycle.md	92	PluginBase	pluginbase
+plugin-lifecycle.md	97	Lifecycle Methods	lifecycle-methods
+plugin-lifecycle.md	112	Registries (from PluginBase)	registries-from-pluginbase
+plugin-lifecycle.md	127	Configuration	configuration
+plugin-lifecycle.md	136	Utility Methods	utility-methods
+plugin-lifecycle.md	154	Base permission and generated command permissions	base-permission-and-generated-command-permissions
+plugin-lifecycle.md	162	Accessing Core Modules	accessing-core-modules
+plugin-lifecycle.md	166	Standard Pattern	standard-pattern
+plugin-lifecycle.md	174	Common Modules	common-modules
+plugin-lifecycle.md	187	Usage Example	usage-example
+plugin-lifecycle.md	208	When to Use Modules	when-to-use-modules
+plugin-lifecycle.md	217	JavaPluginInit	javaplugininit
+plugin-lifecycle.md	232	PluginState	pluginstate
+plugin-lifecycle.md	250	Usage Example	usage-example-1
+plugin-lifecycle.md	259	PluginIdentifier	pluginidentifier
+plugin-lifecycle.md	264	Methods	methods
+plugin-lifecycle.md	271	Usage Example	usage-example-2
+plugin-lifecycle.md	279	PluginManifest	pluginmanifest
+plugin-lifecycle.md	284	Identity	identity
+plugin-lifecycle.md	292	Metadata	metadata
+plugin-lifecycle.md	299	Dependencies	dependencies
+plugin-lifecycle.md	307	Other	other
+plugin-lifecycle.md	316	manifest.json	manifestjson
+plugin-lifecycle.md	320	Required Fields	required-fields
+plugin-lifecycle.md	328	Optional Fields	optional-fields
+plugin-lifecycle.md	344	Minimal Example	minimal-example
+plugin-lifecycle.md	354	Full Example	full-example
+plugin-lifecycle.md	376	Field Details	field-details
+plugin-lifecycle.md	378	IncludesAssetPack	includesassetpack
+plugin-lifecycle.md	387	Dependencies Format	dependencies-format
+plugin-lifecycle.md	398	Authors Format	authors-format
+plugin-lifecycle.md	411	PluginManager	pluginmanager
+plugin-lifecycle.md	445	ModConfig	modconfig
+plugin-lifecycle.md	471	SchemaGenerator	schemagenerator
+plugin-lifecycle.md	497	DebugUtils	debugutils
+plugin-lifecycle.md	541	IMetaStoreImpl	imetastoreimpl
+plugin-lifecycle.md	560	HytaleLogger	hytalelogger
+plugin-lifecycle.md	565	Getting a Logger	getting-a-logger
+plugin-lifecycle.md	575	Logging Methods (Fluent API)	logging-methods-fluent-api
+plugin-lifecycle.md	591	Log Levels	log-levels
+plugin-lifecycle.md	598	Configuration	configuration-1
+plugin-lifecycle.md	605	Usage Example	usage-example-3
+plugin-lifecycle.md	622	Usage Example	usage-example-4
+plugin-lifecycle.md	675	Server Lifecycle Events	server-lifecycle-events
+plugin-lifecycle.md	687	ShutdownEvent ordering	shutdownevent-ordering
+plugin-lifecycle.md	703	PrepareUniverseEvent	prepareuniverseevent
+plugin-lifecycle.md	719	Usage Example	usage-example-5
+plugin-lifecycle.md	741	Plugin Events	plugin-events
+plugin-lifecycle.md	747	Event Summary	event-summary
+plugin-lifecycle.md	756	PluginEvent (Base Class)	pluginevent-base-class
+plugin-lifecycle.md	766	PluginSetupEvent	pluginsetupevent
+plugin-lifecycle.md	770	Constructor	constructor
+plugin-lifecycle.md	776	Inherited Methods	inherited-methods
+plugin-lifecycle.md	782	Usage Example	usage-example-6
+plugin-lifecycle.md	803	Complete Lifecycle Example	complete-lifecycle-example
+plugin-lifecycle.md	854	Gotchas & Errors	gotchas--errors
+prefabs-categories.md	8	Prefab Categories	prefab-categories
+prefabs-categories.md	18	Overview	overview
+prefabs-categories.md	26	Architecture	architecture
+prefabs-categories.md	46	Key Classes	key-classes
+prefabs-categories.md	63	Quick Navigation	quick-navigation
+prefabs-categories.md	86	Naming Conventions	naming-conventions
+prefabs-categories.md	90	General Pattern	general-pattern
+prefabs-categories.md	96	Common Patterns	common-patterns
+prefabs-categories.md	112	Growth Stage Naming (Trees)	growth-stage-naming-trees
+prefabs-categories.md	124	Biome Variant Suffixes	biome-variant-suffixes
+prefabs-categories.md	145	Orbis	orbis
+prefabs-categories.md	167	Trees	trees
+prefabs-categories.md	174	Directory Structure	directory-structure
+prefabs-categories.md	194	Tree Species	tree-species
+prefabs-categories.md	213	Tree Variants	tree-variants
+prefabs-categories.md	227	Example: Oak Tree at Stage 2	example-oak-tree-at-stage-2
+prefabs-categories.md	239	Rock Formations	rock-formations
+prefabs-categories.md	246	Directory Structure	directory-structure-1
+prefabs-categories.md	268	Subcategories	subcategories
+prefabs-categories.md	283	Material Variants (`Rocks/` subdirectories)	material-variants-rocks-subdirectories
+prefabs-categories.md	307	Size Variants	size-variants
+prefabs-categories.md	320	Example: Sandstone Arch	example-sandstone-arch
+prefabs-categories.md	328	NPC Structures	npc-structures
+prefabs-categories.md	335	Directory Structure	directory-structure-2
+prefabs-categories.md	356	Factions	factions
+prefabs-categories.md	370	Building-Type Directories	building-type-directories
+prefabs-categories.md	387	Example: Kweebec Well	example-kweebec-well
+prefabs-categories.md	400	Monuments	monuments
+prefabs-categories.md	407	Directory Structure	directory-structure-3
+prefabs-categories.md	424	Categories	categories
+prefabs-categories.md	434	Encounter Types	encounter-types
+prefabs-categories.md	450	Incidental Structures	incidental-structures
+prefabs-categories.md	460	Example: Mage Tower	example-mage-tower
+prefabs-categories.md	475	Mineshafts	mineshafts
+prefabs-categories.md	482	Directory Structure	directory-structure-4
+prefabs-categories.md	497	Component Types	component-types
+prefabs-categories.md	508	Connection System	connection-system
+prefabs-categories.md	515	Example: Surface Shaft	example-surface-shaft
+prefabs-categories.md	528	Dungeons	dungeons
+prefabs-categories.md	535	Directory Structure	directory-structure-5
+prefabs-categories.md	556	Dungeon Types	dungeon-types
+prefabs-categories.md	574	Room Types	room-types
+prefabs-categories.md	578	Example: Goblin Lair Room	example-goblin-lair-room
+prefabs-categories.md	590	Caves	caves
+prefabs-categories.md	597	Directory Structure	directory-structure-6
+prefabs-categories.md	613	Categories	categories-1
+prefabs-categories.md	625	Resource Nodes	resource-nodes
+prefabs-categories.md	633	Plants	plants
+prefabs-categories.md	640	Directory Structure	directory-structure-7
+prefabs-categories.md	662	Categories	categories-2
+prefabs-categories.md	681	Spawn	spawn
+prefabs-categories.md	688	Directory Structure	directory-structure-8
+prefabs-categories.md	702	Types	types
+prefabs-categories.md	711	Example: Spawn Tree Spawner	example-spawn-tree-spawner
+prefabs-categories.md	748	PrefabList Integration	prefablist-integration
+prefabs-categories.md	752	Example: Birch Trees PrefabList	example-birch-trees-prefablist
+prefabs-categories.md	771	Example: Boulders PrefabList	example-boulders-prefablist
+prefabs-categories.md	789	Gotchas & Errors	gotchas--errors
+prefabs-categories.md	799	Related Documentation	related-documentation
+prefabs.md	8	Prefabs API	prefabs-api
+prefabs.md	14	Overview	overview
+prefabs.md	24	Architecture	architecture
+prefabs.md	41	Key Classes	key-classes
+prefabs.md	67	Quick Navigation	quick-navigation
+prefabs.md	78	Class Hierarchy	class-hierarchy
+prefabs.md	94	PrefabStore	prefabstore
+prefabs.md	99	Constants	constants
+prefabs.md	106	Getting the Store	getting-the-store
+prefabs.md	111	Loading Prefabs	loading-prefabs
+prefabs.md	138	Saving Prefabs	saving-prefabs
+prefabs.md	158	PrefabFormat (0.6.3+)	prefabformat-063
+prefabs.md	165	Path Queries	path-queries
+prefabs.md	189	Usage Example	usage-example
+prefabs.md	204	BlockSelection	blockselection
+prefabs.md	209	Constructors	constructors
+prefabs.md	216	Position & Bounds	position--bounds
+prefabs.md	242	Content Info	content-info
+prefabs.md	251	Block Access	block-access
+prefabs.md	263	Adding Content	adding-content
+prefabs.md	291	Iteration	iteration
+prefabs.md	298	Placement	placement
+prefabs.md	330	Transformation	transformation
+prefabs.md	355	Copying from World	copying-from-world
+prefabs.md	369	Usage Example	usage-example-1
+prefabs.md	390	Rotation Example	rotation-example
+prefabs.md	401	PrefabRotation	prefabrotation
+prefabs.md	406	Enum Values	enum-values
+prefabs.md	419	Methods	methods
+prefabs.md	446	Usage Example	usage-example-2
+prefabs.md	460	PrefabEntry	prefabentry
+prefabs.md	465	Record Components	record-components
+prefabs.md	473	Methods	methods-1
+prefabs.md	484	PrefabWeights	prefabweights
+prefabs.md	489	Constants	constants-1
+prefabs.md	498	Constructors	constructors-1
+prefabs.md	504	Weight Management	weight-management
+prefabs.md	514	Random Selection	random-selection
+prefabs.md	523	Serialization	serialization
+prefabs.md	529	Usage Example	usage-example-3
+prefabs.md	549	Prefab Exceptions	prefab-exceptions
+prefabs.md	554	PrefabLoadException	prefabloadexception
+prefabs.md	566	PrefabSaveException	prefabsaveexception
+prefabs.md	580	PrefabCopyableComponent	prefabcopyablecomponent
+prefabs.md	601	SelectionManager & SelectionProvider	selectionmanager--selectionprovider
+prefabs.md	629	RotateBlockMode	rotateblockmode
+prefabs.md	649	FeedbackConsumer	feedbackconsumer
+prefabs.md	661	BlockFilter	blockfilter
+prefabs.md	666	Filter string syntax	filter-string-syntax
+prefabs.md	682	Key members	key-members
+prefabs.md	712	The Prefab Buffer Pipeline	the-prefab-buffer-pipeline
+prefabs.md	732	PrefabLoader	prefabloader
+prefabs.md	749	PrefabBufferUtil	prefabbufferutil
+prefabs.md	775	PrefabBuffer & IPrefabBuffer	prefabbuffer--iprefabbuffer
+prefabs.md	838	PrefabBufferCall	prefabbuffercall
+prefabs.md	851	PrefabUtil	prefabutil
+prefabs.md	918	Buffer pipeline example	buffer-pipeline-example
+prefabs.md	944	PrefabSpawnerBlock	prefabspawnerblock
+prefabs.md	969	PrefabListAsset	prefablistasset
+prefabs.md	995	Prefab Events	prefab-events
+prefabs.md	1003	Event Summary	event-summary
+prefabs.md	1012	PrefabPasteEvent	prefabpasteevent
+prefabs.md	1027	PrefabPlaceEntityEvent	prefabplaceentityevent
+prefabs.md	1040	Prefab Events Usage	prefab-events-usage
+prefabs.md	1109	Registration	registration
+prefabs.md	1121	Complete Usage Example	complete-usage-example
+prefabs.md	1170	Prefab File Format	prefab-file-format
+prefabs.md	1174	File Locations	file-locations
+prefabs.md	1185	Root Schema (Version 8)	root-schema-version-8
+prefabs.md	1200	Block Entry Properties	block-entry-properties
+prefabs.md	1222	Components Structure	components-structure
+prefabs.md	1251	Fluid Entry Properties	fluid-entry-properties
+prefabs.md	1280	Entity Entries	entity-entries
+prefabs.md	1310	Complete Examples	complete-examples
+prefabs.md	1380	PrefabList Files	prefablist-files
+prefabs.md	1423	Integration Points	integration-points
+prefabs.md	1427	Drop System Integration	drop-system-integration
+prefabs.md	1449	Interaction System Integration	interaction-system-integration
+prefabs.md	1469	Event Handling	event-handling
+prefabs.md	1493	World Generation Integration	world-generation-integration
+prefabs.md	1515	Notes	notes
+prefabs.md	1526	Gotchas & Errors	gotchas--errors
+prefabs.md	1538	Related Documentation	related-documentation
+projectiles.md	8	Projectiles API	projectiles-api
+projectiles.md	14	Overview	overview
+projectiles.md	24	Architecture	architecture
+projectiles.md	42	Key Classes	key-classes
+projectiles.md	60	Class Hierarchy	class-hierarchy
+projectiles.md	77	Two Projectile Schemas (Simple vs Config)	two-projectile-schemas-simple-vs-config
+projectiles.md	97	Gotchas authoring config-projectile `Interactions`	gotchas-authoring-config-projectile-interactions
+projectiles.md	119	ProjectileModule	projectilemodule
+projectiles.md	124	Getting the Module	getting-the-module
+projectiles.md	129	Key Methods	key-methods
+projectiles.md	195	ProjectileConfig	projectileconfig
+projectiles.md	202	Getting Configs from Assets	getting-configs-from-assets
+projectiles.md	212	Key Methods	key-methods-1
+projectiles.md	256	BallisticData	ballisticdata
+projectiles.md	261	Methods	methods
+projectiles.md	273	PhysicsConfig	physicsconfig
+projectiles.md	278	Methods	methods-1
+projectiles.md	295	StandardPhysicsConfig	standardphysicsconfig
+projectiles.md	302	Constants	constants
+projectiles.md	307	Key Methods	key-methods-2
+projectiles.md	338	GroundFollowPhysicsConfig	groundfollowphysicsconfig
+projectiles.md	356	ImpactConsumer	impactconsumer
+projectiles.md	361	Method	method
+projectiles.md	376	BounceConsumer	bounceconsumer
+projectiles.md	381	Method	method-1
+projectiles.md	392	BallisticDataProvider	ballisticdataprovider
+projectiles.md	397	Method	method-2
+projectiles.md	402	Implementations	implementations
+projectiles.md	407	Projectile Component	projectile-component
+projectiles.md	414	Getting the Component	getting-the-component
+projectiles.md	422	PredictedProjectile	predictedprojectile
+projectiles.md	429	Getting the Component	getting-the-component-1
+projectiles.md	437	Methods	methods-2
+projectiles.md	449	Usage Example	usage-example
+projectiles.md	461	StandardPhysicsProvider	standardphysicsprovider
+projectiles.md	468	Getting the Component	getting-the-component-2
+projectiles.md	476	Constants	constants-1
+projectiles.md	483	State Enum	state-enum
+projectiles.md	489	Physics Configuration	physics-configuration
+projectiles.md	494	Position and Movement	position-and-movement
+projectiles.md	502	Ground and Fluid State	ground-and-fluid-state
+projectiles.md	512	Bounce Tracking	bounce-tracking
+projectiles.md	524	Collision Data	collision-data
+projectiles.md	534	Fluid Interaction	fluid-interaction
+projectiles.md	546	Collision Providers	collision-providers
+projectiles.md	554	Physics State	physics-state
+projectiles.md	565	Callbacks	callbacks
+projectiles.md	573	World and Entity	world-and-entity
+projectiles.md	580	Collision Handling (IBlockCollisionConsumer)	collision-handling-iblockcollisionconsumer
+projectiles.md	594	Tick Methods	tick-methods
+projectiles.md	600	Usage Example	usage-example-1
+projectiles.md	628	ProjectileInteraction	projectileinteraction
+projectiles.md	636	Key Methods	key-methods-3
+projectiles.md	657	Usage Examples	usage-examples
+projectiles.md	659	Spawning a Projectile	spawning-a-projectile
+projectiles.md	682	Checking if Entity is a Projectile	checking-if-entity-is-a-projectile
+projectiles.md	692	Spawning Particles from Java	spawning-particles-from-java
+projectiles.md	727	Gotchas & Errors	gotchas--errors
+singleplayer.md	8	Singleplayer API	singleplayer-api
+singleplayer.md	16	Overview	overview
+singleplayer.md	22	Architecture	architecture
+singleplayer.md	32	Key Classes	key-classes
+singleplayer.md	41	SingleplayerRequestAccessEvent	singleplayerrequestaccessevent
+singleplayer.md	55	Usage Example	usage-example
+singleplayer.md	73	SingleplayerModule	singleplayermodule
+singleplayer.md	106	Notes	notes
+singleplayer.md	113	Gotchas & Errors	gotchas--errors
+tasks.md	8	Tasks API	tasks-api
+tasks.md	14	Overview	overview
+tasks.md	21	Architecture	architecture
+tasks.md	29	Key Classes	key-classes
+tasks.md	36	TaskRegistry	taskregistry
+tasks.md	43	Methods	methods
+tasks.md	53	TaskRegistration	taskregistration
+tasks.md	60	Methods	methods-1
+tasks.md	70	Usage Example	usage-example
+tasks.md	87	Usage Examples	usage-examples
+tasks.md	89	Simple Async Task	simple-async-task
+tasks.md	101	Scheduled Task	scheduled-task
+tasks.md	121	Task with Completion Handler	task-with-completion-handler
+tasks.md	138	Notes	notes
+tasks.md	143	What "cleanup" actually does	what-cleanup-actually-does
+tasks.md	159	Gotchas & Errors	gotchas--errors
+trigger-volumes.md	8	Trigger Volumes	trigger-volumes
+trigger-volumes.md	26	Architecture	architecture
+trigger-volumes.md	52	Effect asset JSON	effect-asset-json
+trigger-volumes.md	84	Top-level fields	top-level-fields
+trigger-volumes.md	96	Effect entry fields	effect-entry-fields
+trigger-volumes.md	108	Built-in effect types	built-in-effect-types
+trigger-volumes.md	157	The `ShowEventTitle` interaction is a different type with the same name	the-showeventtitle-interaction-is-a-different-type-with-the-same-name
+trigger-volumes.md	237	Conditions	conditions
+trigger-volumes.md	259	Rules	rules
+trigger-volumes.md	278	TriggerEventType	triggereventtype
+trigger-volumes.md	297	EntityTargetType	entitytargettype
+trigger-volumes.md	305	Extending: a custom effect in Java	extending-a-custom-effect-in-java
+trigger-volumes.md	360	Custom conditions	custom-conditions
+trigger-volumes.md	366	TriggerContext	triggercontext
+trigger-volumes.md	393	Runtime API	runtime-api
+trigger-volumes.md	395	TriggerVolume (component)	triggervolume-component
+trigger-volumes.md	420	TriggerVolumeManager (per-world resource)	triggervolumemanager-per-world-resource
+trigger-volumes.md	439	TriggerVolumeEvent	triggervolumeevent
+trigger-volumes.md	449	Shapes	shapes
+trigger-volumes.md	459	Commands (tooling)	commands-tooling
+trigger-volumes.md	483	Gotchas & Errors	gotchas--errors
+ui-api.md	8	UI Java API	ui-java-api
+ui-api.md	14	Overview	overview
+ui-api.md	24	Architecture	architecture
+ui-api.md	47	Key Classes	key-classes
+ui-api.md	73	Quick Navigation	quick-navigation
+ui-api.md	96	Positioning Classes	positioning-classes
+ui-api.md	98	Anchor	anchor
+ui-api.md	121	Area	area
+ui-api.md	133	Value<T>	value
+ui-api.md	151	UICommandBuilder	uicommandbuilder
+ui-api.md	156	Element Operations	element-operations
+ui-api.md	162	Append Operations	append-operations
+ui-api.md	181	Insert Operations	insert-operations
+ui-api.md	187	Set Property Operations	set-property-operations
+ui-api.md	207	Get Commands	get-commands
+ui-api.md	214	UIEventBuilder	uieventbuilder
+ui-api.md	230	EventData	eventdata
+ui-api.md	235	CustomUIEventBindingType	customuieventbindingtype
+ui-api.md	274	Usage Example	usage-example
+ui-api.md	284	Player UI Managers	player-ui-managers
+ui-api.md	298	PageManager	pagemanager
+ui-api.md	330	Page Enum	page-enum
+ui-api.md	372	CustomUIPage	customuipage
+ui-api.md	396	Subclasses	subclasses
+ui-api.md	405	CustomPageLifetime	custompagelifetime
+ui-api.md	413	Implementation Example	implementation-example
+ui-api.md	441	.ui File Requirements	ui-file-requirements
+ui-api.md	447	Event Handling in Custom Pages	event-handling-in-custom-pages
+ui-api.md	477	Live updates & page replacement	live-updates--page-replacement
+ui-api.md	515	EventTitleUtil — centered titles & banners	eventtitleutil--centered-titles--banners
+ui-api.md	580	Registering Pages for OpenCustomUI	registering-pages-for-opencustomui
+ui-api.md	584	Simple Registration	simple-registration
+ui-api.md	610	Custom Supplier Registration	custom-supplier-registration
+ui-api.md	669	CustomPageSupplier Interface	custompagesupplier-interface
+ui-api.md	691	Specialized Registration Methods	specialized-registration-methods
+ui-api.md	700	Complete Example	complete-example
+ui-api.md	778	WindowManager	windowmanager
+ui-api.md	812	Window Class	window-class
+ui-api.md	847	Window Subclasses	window-subclasses
+ui-api.md	856	WindowType Enum	windowtype-enum
+ui-api.md	877	OpenWindow	openwindow
+ui-api.md	894	Usage Example	usage-example-1
+ui-api.md	910	HudManager	hudmanager
+ui-api.md	947	HudComponent Enum	hudcomponent-enum
+ui-api.md	988	Usage Example	usage-example-2
+ui-api.md	1009	CustomUIHud	customuihud
+ui-api.md	1014	API	api
+ui-api.md	1042	CustomUIHud vs Native HUD Components	customuihud-vs-native-hud-components
+ui-api.md	1066	Obtaining ECS Context for UI Operations	obtaining-ecs-context-for-ui-operations
+ui-api.md	1102	Implementation Example	implementation-example-1
+ui-api.md	1144	Dynamic Updates	dynamic-updates
+ui-api.md	1177	show() vs update() Relationship	show-vs-update-relationship
+ui-api.md	1186	UICommandBuilder Method Support	uicommandbuilder-method-support
+ui-api.md	1203	Element Targeting Syntax	element-targeting-syntax
+ui-api.md	1243	Event Handling	event-handling
+ui-api.md	1255	Multiple HUDs	multiple-huds
+ui-api.md	1274	.ui File Example (StatusHud.ui)	ui-file-example-statushudui
+ui-api.md	1295	Manifest Requirements	manifest-requirements
+ui-api.md	1310	Removing Custom HUD	removing-custom-hud
+ui-api.md	1319	Managing HUD State Across Players	managing-hud-state-across-players
+ui-api.md	1420	Choosing Between CustomUIPage and CustomUIHud	choosing-between-customuipage-and-customuihud
+ui-api.md	1443	HotbarManager	hotbarmanager
+ui-api.md	1463	File Browser System	file-browser-system
+ui-api.md	1465	FileBrowserConfig	filebrowserconfig
+ui-api.md	1492	FileBrowserConfig.Builder	filebrowserconfigbuilder
+ui-api.md	1513	ServerFileBrowser	serverfilebrowser
+ui-api.md	1557	Usage Example	usage-example-3
+ui-api.md	1576	Asset Pack Save Browser	asset-pack-save-browser
+ui-api.md	1584	AssetPackSaveBrowserConfig	assetpacksavebrowserconfig
+ui-api.md	1592	AssetPackSaveBrowser	assetpacksavebrowser
+ui-api.md	1633	AssetPackSaveBrowserEventData	assetpacksavebrowsereventdata
+ui-api.md	1655	Embedding pattern	embedding-pattern
+ui-api.md	1696	NotificationUtil — toast notifications	notificationutil--toast-notifications
+ui-api.md	1749	WindowCloseEvent	windowcloseevent
+ui-api.md	1758	Usage Example	usage-example-4
+ui-api.md	1772	Supporting Classes	supporting-classes
+ui-api.md	1774	LocalizableString	localizablestring
+ui-api.md	1777	DropdownEntryInfo	dropdownentryinfo
+ui-api.md	1780	ItemGridSlot	itemgridslot
+ui-api.md	1783	PatchStyle	patchstyle
+ui-api.md	1788	Usage Examples	usage-examples
+ui-api.md	1790	Create and Update Custom UI	create-and-update-custom-ui
+ui-api.md	1812	Show/Hide HUD Components	showhide-hud-components
+ui-api.md	1824	Open Custom Page	open-custom-page
+ui-api.md	1833	Window Management	window-management
+ui-api.md	1847	Notes	notes
+ui-api.md	1855	Gotchas & Errors	gotchas--errors
+ui-api.md	1872	Related Documentation	related-documentation
+ui-elements.md	8	UI Elements Reference	ui-elements-reference
+ui-elements.md	16	Quick Navigation	quick-navigation
+ui-elements.md	38	Overview	overview
+ui-elements.md	48	Architecture	architecture
+ui-elements.md	63	Key Classes	key-classes
+ui-elements.md	80	Container Elements	container-elements
+ui-elements.md	82	Group	group
+ui-elements.md	121	Text Elements	text-elements
+ui-elements.md	123	Label	label
+ui-elements.md	155	TimerLabel	timerlabel
+ui-elements.md	175	HotkeyLabel	hotkeylabel
+ui-elements.md	197	Button Elements	button-elements
+ui-elements.md	199	Button	button
+ui-elements.md	225	TextButton	textbutton
+ui-elements.md	258	BackButton	backbutton
+ui-elements.md	280	ActionButton	actionbutton
+ui-elements.md	300	Input Elements	input-elements
+ui-elements.md	302	TextField	textfield
+ui-elements.md	330	CompactTextField	compacttextfield
+ui-elements.md	359	MultilineTextField	multilinetextfield
+ui-elements.md	382	NumberField	numberfield
+ui-elements.md	404	CheckBox	checkbox
+ui-elements.md	433	Slider	slider
+ui-elements.md	457	FloatSlider	floatslider
+ui-elements.md	481	DropdownBox	dropdownbox
+ui-elements.md	514	DropdownEntry	dropdownentry
+ui-elements.md	525	ColorPickerDropdownBox	colorpickerdropdownbox
+ui-elements.md	547	Display Elements	display-elements
+ui-elements.md	549	Sprite	sprite
+ui-elements.md	573	AssetImage	assetimage
+ui-elements.md	595	ItemSlot	itemslot
+ui-elements.md	619	ProgressBar	progressbar
+ui-elements.md	646	CircularProgressBar	circularprogressbar
+ui-elements.md	680	Navigation Elements	navigation-elements
+ui-elements.md	682	TabNavigation	tabnavigation
+ui-elements.md	693	TabButton	tabbutton
+ui-elements.md	726	Gotchas & Errors	gotchas--errors
+ui-elements.md	734	Related Documentation	related-documentation
+ui-styling.md	8	UI Styling & Layout	ui-styling--layout
+ui-styling.md	16	Quick Navigation	quick-navigation
+ui-styling.md	31	Overview	overview
+ui-styling.md	41	Architecture	architecture
+ui-styling.md	52	Key Classes	key-classes
+ui-styling.md	67	Anchor System	anchor-system
+ui-styling.md	71	Properties	properties
+ui-styling.md	84	Filling the Parent	filling-the-parent
+ui-styling.md	99	Examples	examples
+ui-styling.md	129	LayoutMode	layoutmode
+ui-styling.md	133	Values	values
+ui-styling.md	152	Examples	examples-1
+ui-styling.md	187	FlexWeight	flexweight
+ui-styling.md	206	Padding	padding
+ui-styling.md	210	Formats	formats
+ui-styling.md	219	Examples	examples-2
+ui-styling.md	249	Backgrounds	backgrounds
+ui-styling.md	253	Color Format	color-format
+ui-styling.md	266	Texture Background	texture-background
+ui-styling.md	273	Object Format	object-format
+ui-styling.md	280	9-Slice Patches (PatchStyle)	9-slice-patches-patchstyle
+ui-styling.md	313	Style Properties	style-properties
+ui-styling.md	317	Font Properties	font-properties
+ui-styling.md	327	Color Properties	color-properties
+ui-styling.md	334	Alignment Properties	alignment-properties
+ui-styling.md	341	Text Properties	text-properties
+ui-styling.md	349	Other Element-Level Styling Properties	other-element-level-styling-properties
+ui-styling.md	361	Example	example
+ui-styling.md	376	Using Style Variables	using-style-variables
+ui-styling.md	397	State-Based Styling	state-based-styling
+ui-styling.md	401	Available Visual States	available-visual-states
+ui-styling.md	412	Sound States	sound-states
+ui-styling.md	441	Button Syntax	button-syntax
+ui-styling.md	457	TextButton Syntax	textbutton-syntax
+ui-styling.md	486	Styling Differences	styling-differences
+ui-styling.md	494	Reusable Button Styles	reusable-button-styles
+ui-styling.md	534	Complete Example	complete-example
+ui-styling.md	590	Gotchas & Errors	gotchas--errors
+ui-styling.md	600	Related Documentation	related-documentation
+ui-templates.md	8	UI Templates, Variables & Localization	ui-templates-variables--localization
+ui-templates.md	16	Quick Navigation	quick-navigation
+ui-templates.md	32	Overview	overview
+ui-templates.md	42	Architecture	architecture
+ui-templates.md	54	Key Classes	key-classes
+ui-templates.md	69	File Imports	file-imports
+ui-templates.md	75	Syntax	syntax
+ui-templates.md	81	Path Resolution	path-resolution
+ui-templates.md	96	Accessing Members of an Import	accessing-members-of-an-import
+ui-templates.md	112	Template Instantiation	template-instantiation
+ui-templates.md	136	Syntax	syntax-1
+ui-templates.md	153	Example	example
+ui-templates.md	178	Common Templates in `Common.ui`	common-templates-in-commonui
+ui-templates.md	196	Filling Template Slots	filling-template-slots
+ui-templates.md	221	Variables	variables
+ui-templates.md	225	Syntax	syntax-2
+ui-templates.md	231	Variable Types	variable-types
+ui-templates.md	274	Typed Constructors	typed-constructors
+ui-templates.md	301	Using Variables	using-variables
+ui-templates.md	328	Variable Scope	variable-scope
+ui-templates.md	358	Spread Operator	spread-operator
+ui-templates.md	362	Syntax	syntax-3
+ui-templates.md	381	Example	example-1
+ui-templates.md	401	Composing Styles	composing-styles
+ui-templates.md	423	Localization	localization
+ui-templates.md	427	Syntax	syntax-4
+ui-templates.md	433	Example	example-2
+ui-templates.md	446	Server-Side Registration	server-side-registration
+ui-templates.md	462	Dynamic Text with Placeholders	dynamic-text-with-placeholders
+ui-templates.md	471	Best Practices	best-practices
+ui-templates.md	479	Element References	element-references
+ui-templates.md	483	Syntax	syntax-5
+ui-templates.md	489	Element Targeting Syntax	element-targeting-syntax
+ui-templates.md	506	In Event Bindings	in-event-bindings
+ui-templates.md	516	In UICommandBuilder	in-uicommandbuilder
+ui-templates.md	553	In .ui Files	in-ui-files
+ui-templates.md	588	ID Requirements	id-requirements
+ui-templates.md	610	Patterns & Best Practices	patterns--best-practices
+ui-templates.md	612	Reusable Component Files	reusable-component-files
+ui-templates.md	634	Theme Variables	theme-variables
+ui-templates.md	689	Common Mistakes	common-mistakes
+ui-templates.md	743	Gotchas & Errors	gotchas--errors
+ui-templates.md	751	Related Documentation	related-documentation
+ui.md	8	UI System	ui-system
+ui.md	16	Quick Navigation	quick-navigation
+ui.md	27	Overview	overview
+ui.md	44	Architecture	architecture
+ui.md	72	Architecture	architecture-1
+ui.md	88	Key Classes	key-classes
+ui.md	102	Quick Start	quick-start
+ui.md	104	1. Create a .ui File	1-create-a-ui-file
+ui.md	134	2. Create a Custom Page Class	2-create-a-custom-page-class
+ui.md	151	3. Open the Page	3-open-the-page
+ui.md	158	4. Update Manifest	4-update-manifest
+ui.md	173	DSL Syntax Summary	dsl-syntax-summary
+ui.md	175	Basic Structure	basic-structure
+ui.md	188	Key Rules	key-rules
+ui.md	196	Common Patterns	common-patterns
+ui.md	236	File Requirements	file-requirements
+ui.md	238	Directory Structure	directory-structure
+ui.md	251	Manifest Configuration	manifest-configuration
+ui.md	261	File Paths in Code	file-paths-in-code
+ui.md	273	UI Types	ui-types
+ui.md	281	Pages	pages
+ui.md	291	Windows	windows
+ui.md	301	HUD	hud
+ui.md	314	Entity-Attached UI	entity-attached-ui
+ui.md	320	Architecture	architecture-2
+ui.md	334	Key Classes	key-classes-1
+ui.md	359	Event Handling	event-handling
+ui.md	363	Register Events	register-events
+ui.md	375	Handle Events	handle-events
+ui.md	387	Common Event Types	common-event-types
+ui.md	398	Gotchas & Errors	gotchas--errors
+ui.md	406	Related Documentation	related-documentation
+universe-saves.md	8	Universes & Save Format	universes--save-format
+universe-saves.md	21	Overview	overview
+universe-saves.md	30	Architecture	architecture
+universe-saves.md	53	The save / server `config.json`	the-save--server-configjson
+universe-saves.md	92	Defaults — the spawn world	defaults--the-spawn-world
+universe-saves.md	122	The per-world `config.json`	the-per-world-configjson
+universe-saves.md	163	WorldGen — binding to a structure	worldgen--binding-to-a-structure
+universe-saves.md	181	The "crossroads" is the CreativeHub plugin	the-crossroads-is-the-creativehub-plugin
+universe-saves.md	206	A universe runs many worlds at once	a-universe-runs-many-worlds-at-once
+universe-saves.md	233	Worked example: a flat PvP arena server	worked-example-a-flat-pvp-arena-server
+universe-saves.md	259	Workflow: a creative-authored world → dedicated server	workflow-a-creative-authored-world--dedicated-server
+universe-saves.md	266	Where your authored blocks live	where-your-authored-blocks-live
+universe-saves.md	275	Steps	steps
+universe-saves.md	348	Updating a world on a running server	updating-a-world-on-a-running-server
+universe-saves.md	377	Update the build, not the identity	update-the-build-not-the-identity
+universe-saves.md	395	Programmatic persistence (plugin API)	programmatic-persistence-plugin-api
+universe-saves.md	402	Chunk storage providers	chunk-storage-providers
+universe-saves.md	463	Read-only storage and validation (0.7.2)	read-only-storage-and-validation-072
+universe-saves.md	476	ChunkSavingSystems	chunksavingsystems
+universe-saves.md	499	Resource storage providers	resource-storage-providers
+universe-saves.md	509	Universe resources	universe-resources
+universe-saves.md	605	Data stores — plugin key/value persistence	data-stores--plugin-keyvalue-persistence
+universe-saves.md	638	StorageManager	storagemanager
+universe-saves.md	653	Chunk-format migrations	chunk-format-migrations
+universe-saves.md	673	Gotchas & Errors	gotchas--errors
+universe-saves.md	698	Related Documentation	related-documentation
+world-chunks.md	8	World Chunks	world-chunks
+world-chunks.md	27	ChunkGrid and ChunkStore	chunkgrid-and-chunkstore
+world-chunks.md	79	GetChunkFlags	getchunkflags
+world-chunks.md	104	WorldChunk	worldchunk
+world-chunks.md	162	ChunkFlag	chunkflag
+world-chunks.md	189	Cubic sections	cubic-sections
+world-chunks.md	231	ChunkColumn	chunkcolumn
+world-chunks.md	249	ChunkLightData	chunklightdata
+world-chunks.md	275	Supporting classes	supporting-classes
+world-chunks.md	289	ChunkTracker	chunktracker
+world-chunks.md	296	Getting the Component	getting-the-component
+world-chunks.md	303	Chunk Visibility	chunk-visibility
+world-chunks.md	313	ChunkVisibility Enum	chunkvisibility-enum
+world-chunks.md	321	Section Loading Rates	section-loading-rates
+world-chunks.md	331	Load Radius	load-radius
+world-chunks.md	340	Statistics	statistics
+world-chunks.md	347	Lifecycle	lifecycle
+world-chunks.md	356	Constants	constants
+world-chunks.md	366	Usage Example	usage-example
+world-chunks.md	379	Gotchas & Errors	gotchas--errors
+world-events.md	8	World Events	world-events
+world-events.md	26	Packages and key classes	packages-and-key-classes
+world-events.md	51	Asset format	asset-format
+world-events.md	53	`Server/WorldEvent/Event/<Id>.json` — `WorldEventAsset`	serverworldeventeventidjson--worldeventasset
+world-events.md	101	`Server/WorldEvent/Stage/<Id>.json` — `StageAsset`	serverworldeventstageidjson--stageasset
+world-events.md	140	Conditions	conditions
+world-events.md	156	Registered by other plugins	registered-by-other-plugins
+world-events.md	170	Spawners (`LocationCondition.Content[]`)	spawners-locationconditioncontent
+world-events.md	183	Actions	actions
+world-events.md	203	Context keys	context-keys
+world-events.md	233	Runtime model	runtime-model
+world-events.md	269	Starting and stopping events	starting-and-stopping-events
+world-events.md	271	From gameplay config (`Server/GameplayConfigs/*.json`)	from-gameplay-config-servergameplayconfigsjson
+world-events.md	291	Turning events off for one world	turning-events-off-for-one-world
+world-events.md	305	Global events (`GlobalWorldEventManager`)	global-events-globalworldeventmanager
+world-events.md	325	From interactions	from-interactions
+world-events.md	337	From commands	from-commands
+world-events.md	345	From Java	from-java
+world-events.md	365	Observing and driving events from a plugin	observing-and-driving-events-from-a-plugin
+world-events.md	397	Gotchas	gotchas
+world-lifecycle-events.md	8	World & Chunk Lifecycle Events	world--chunk-lifecycle-events
+world-lifecycle-events.md	18	World Events	world-events
+world-lifecycle-events.md	24	Event Summary	event-summary
+world-lifecycle-events.md	36	WorldEvent (Base Class)	worldevent-base-class
+world-lifecycle-events.md	46	AddWorldEvent	addworldevent
+world-lifecycle-events.md	58	RemoveWorldEvent	removeworldevent
+world-lifecycle-events.md	78	StartWorldEvent	startworldevent
+world-lifecycle-events.md	88	AllWorldsLoadedEvent	allworldsloadedevent
+world-lifecycle-events.md	101	World Events Registration Example	world-events-registration-example
+world-lifecycle-events.md	135	Chunk Events	chunk-events
+world-lifecycle-events.md	141	Event Summary	event-summary-1
+world-lifecycle-events.md	154	ChunkEvent (Base Class)	chunkevent-base-class
+world-lifecycle-events.md	170	ChunkSaveEvent	chunksaveevent
+world-lifecycle-events.md	186	ChunkUnloadEvent	chunkunloadevent
+world-lifecycle-events.md	205	MoonPhaseChangeEvent	moonphasechangeevent
+world-lifecycle-events.md	220	ChunkPreLoadProcessEvent	chunkpreloadprocessevent
+world-lifecycle-events.md	253	ChunkSectionPreLoadProcessEvent	chunksectionpreloadprocessevent
+world-lifecycle-events.md	282	Chunk Events Usage Notes	chunk-events-usage-notes
+world.md	8	World API	world-api
+world.md	24	Overview	overview
+world.md	34	Architecture	architecture
+world.md	52	Key Classes	key-classes
+world.md	78	World	world
+world.md	83	Core Properties	core-properties
+world.md	95	Configuration	configuration
+world.md	108	Players	players
+world.md	132	Entities	entities
+world.md	143	ECS Stores	ecs-stores
+world.md	158	Messaging	messaging
+world.md	163	Features	features
+world.md	173	Other	other
+world.md	193	PlayerUtil	playerutil
+world.md	218	Usage Example	usage-example
+world.md	231	Usage Example	usage-example-1
+world.md	252	Configuration Classes	configuration-classes
+world.md	254	GameplayConfig	gameplayconfig
+world.md	259	Getting the Config	getting-the-config
+world.md	269	Key Methods	key-methods
+world.md	299	Constants	constants
+world.md	307	WorldConfig	worldconfig
+world.md	320	Key Methods	key-methods-1
+world.md	340	Constants	constants-1
+world.md	347	Usage Example	usage-example-2
+world.md	361	Tag-based exceptions (0.7.2)	tag-based-exceptions-072
+world.md	387	DeathConfig	deathconfig
+world.md	392	Key Methods	key-methods-2
+world.md	407	ItemsLossMode Enum	itemslossmode-enum
+world.md	417	Usage Example	usage-example-3
+world.md	425	Respawn flow	respawn-flow
+world.md	440	Controlling Respawn Location	controlling-respawn-location
+world.md	522	World Time	world-time
+world.md	527	WorldTimeResource	worldtimeresource
+world.md	572	Usage Example	usage-example-4
+world.md	585	TimeResource	timeresource
+world.md	602	Game Flags	game-flags
+world.md	622	GameFlagsResource	gameflagsresource
+world.md	657	Persistence	persistence
+world.md	668	Asset-authorable interactions	asset-authorable-interactions
+world.md	725	`/gameflags`	gameflags
+world.md	755	ClientFeature	clientfeature
+world.md	760	Values	values
+world.md	778	Methods	methods
+world.md	786	Usage Example	usage-example-5
+world.md	805	World Map Markers	world-map-markers
+world.md	810	WorldMapManager.MarkerProvider	worldmapmanagermarkerprovider
+world.md	833	MapMarkerBuilder	mapmarkerbuilder
+world.md	855	MarkersCollector	markerscollector
+world.md	868	Usage Example	usage-example-6
+world.md	890	RevealMapMarkersInView	revealmapmarkersinview
+world.md	931	World Paths	world-paths
+world.md	956	Other World Classes	other-world-classes
+world.md	966	Gotchas & Errors	gotchas--errors
+worldgen-biomes.md	8	Biome System	biome-system
+worldgen-biomes.md	20	Overview	overview
+worldgen-biomes.md	30	Architecture	architecture
+worldgen-biomes.md	44	Key Classes	key-classes
+worldgen-biomes.md	59	Quick Navigation	quick-navigation
+worldgen-biomes.md	74	File Location & Naming	file-location--naming
+worldgen-biomes.md	99	Top-Level Structure	top-level-structure
+worldgen-biomes.md	141	Terrain	terrain
+worldgen-biomes.md	201	MaterialProvider	materialprovider
+worldgen-biomes.md	238	Provider node types	provider-node-types
+worldgen-biomes.md	287	Props	props
+worldgen-biomes.md	335	EnvironmentProvider	environmentprovider
+worldgen-biomes.md	359	Weather forecasts (WeatherForecast)	weather-forecasts-weatherforecast
+worldgen-biomes.md	392	TintProvider	tintprovider
+worldgen-biomes.md	438	Minimal Biome Example	minimal-biome-example
+worldgen-biomes.md	474	Gotchas & Errors	gotchas--errors
+worldgen-biomes.md	482	Related Documentation	related-documentation
+worldgen-caves.md	8	Caves	caves
+worldgen-caves.md	28	Overview	overview
+worldgen-caves.md	37	Architecture	architecture
+worldgen-caves.md	51	Key Classes	key-classes
+worldgen-caves.md	64	Quick Navigation	quick-navigation
+worldgen-caves.md	78	Where caves live	where-caves-live
+worldgen-caves.md	100	How carving works	how-carving-works
+worldgen-caves.md	146	Anatomy of a cave field	anatomy-of-a-cave-field
+worldgen-caves.md	151	The `Graph` density node	the-graph-density-node
+worldgen-caves.md	177	The generator file	the-generator-file
+worldgen-caves.md	216	Volcanic example	volcanic-example
+worldgen-caves.md	246	Building blocks	building-blocks
+worldgen-caves.md	250	Confine carving to a depth band	confine-carving-to-a-depth-band
+worldgen-caves.md	272	Wall pinch with Pow/Abs	wall-pinch-with-powabs
+worldgen-caves.md	289	What does NOT exist	what-does-not-exist
+worldgen-caves.md	309	Gotchas	gotchas
+worldgen-caves.md	316	Related Documentation	related-documentation
+worldgen-prefabs.md	8	Props & Structure Placement	props--structure-placement
+worldgen-prefabs.md	26	Overview	overview
+worldgen-prefabs.md	36	Architecture	architecture
+worldgen-prefabs.md	57	Key Classes	key-classes
+worldgen-prefabs.md	75	Quick Navigation	quick-navigation
+worldgen-prefabs.md	92	Where props live	where-props-live
+worldgen-prefabs.md	104	Biome Props array	biome-props-array
+worldgen-prefabs.md	149	Assignment node types	assignment-node-types
+worldgen-prefabs.md	189	Delimiters	delimiters
+worldgen-prefabs.md	213	Prop types	prop-types
+worldgen-prefabs.md	217	Prefab	prefab
+worldgen-prefabs.md	252	Cluster	cluster
+worldgen-prefabs.md	282	Column	column
+worldgen-prefabs.md	300	Cuboid	cuboid
+worldgen-prefabs.md	313	Union	union
+worldgen-prefabs.md	318	Other prop types	other-prop-types
+worldgen-prefabs.md	329	Density	density
+worldgen-prefabs.md	365	Directionality & Scanner	directionality--scanner
+worldgen-prefabs.md	405	Block masks	block-masks
+worldgen-prefabs.md	428	Positions & PropDistributions	positions--propdistributions
+worldgen-prefabs.md	473	Worked examples	worked-examples
+worldgen-prefabs.md	491	What does NOT exist	what-does-not-exist
+worldgen-prefabs.md	506	Gotchas & Errors	gotchas--errors
+worldgen-prefabs.md	535	Related Documentation	related-documentation
+worldgen-terrain.md	8	Terrain Density Graphs	terrain-density-graphs
+worldgen-terrain.md	22	Overview	overview
+worldgen-terrain.md	33	Architecture	architecture
+worldgen-terrain.md	48	Key Classes	key-classes
+worldgen-terrain.md	65	Quick Navigation	quick-navigation
+worldgen-terrain.md	82	Where terrain lives	where-terrain-lives
+worldgen-terrain.md	111	Node anatomy	node-anatomy
+worldgen-terrain.md	135	The DAOTerrain node	the-daoterrain-node
+worldgen-terrain.md	170	Density node families	density-node-families
+worldgen-terrain.md	179	Combiners	combiners
+worldgen-terrain.md	188	Unary math	unary-math
+worldgen-terrain.md	197	Range remapping	range-remapping
+worldgen-terrain.md	218	Noise nodes	noise-nodes
+worldgen-terrain.md	220	SimplexNoise2D	simplexnoise2d
+worldgen-terrain.md	246	SimplexNoise3D	simplexnoise3d
+worldgen-terrain.md	260	CellNoise2D	cellnoise2d
+worldgen-terrain.md	268	Shaping nodes	shaping-nodes
+worldgen-terrain.md	270	CurveMapper	curvemapper
+worldgen-terrain.md	293	Distance	distance
+worldgen-terrain.md	300	BaseHeight	baseheight
+worldgen-terrain.md	318	Reuse: Cache, Exported, Imported	reuse-cache-exported-imported
+worldgen-terrain.md	344	MaterialProvider	materialprovider
+worldgen-terrain.md	361	Provider types observed	provider-types-observed
+worldgen-terrain.md	391	Materials	materials
+worldgen-terrain.md	426	Worked example: Plains1_Oak	worked-example-plains1_oak
+worldgen-terrain.md	456	What does NOT exist	what-does-not-exist
+worldgen-terrain.md	469	Gotchas & Errors	gotchas--errors
+worldgen-terrain.md	503	Related Documentation	related-documentation
+worldgen-zones.md	8	World Structures (Zones)	world-structures-zones
+worldgen-zones.md	31	Overview	overview
+worldgen-zones.md	40	Architecture	architecture
+worldgen-zones.md	53	Key Classes	key-classes
+worldgen-zones.md	67	Quick Navigation	quick-navigation
+worldgen-zones.md	80	Top-Level Structure	top-level-structure
+worldgen-zones.md	119	Biome Assignment (NoiseRange)	biome-assignment-noiserange
+worldgen-zones.md	151	Density	density
+worldgen-zones.md	198	Framework	framework
+worldgen-zones.md	203	DecimalConstants	decimalconstants
+worldgen-zones.md	229	Positions	positions
+worldgen-zones.md	255	SpawnPositions	spawnpositions
+worldgen-zones.md	298	Complete Examples	complete-examples
+worldgen-zones.md	300	Regional zone — `WorldStructures/Regions/Zone1_Plains1.json`	regional-zone--worldstructuresregionszone1_plains1json
+worldgen-zones.md	350	Fallback-only structure — `WorldStructures/Default_Flat.json`	fallback-only-structure--worldstructuresdefault_flatjson
+worldgen-zones.md	377	Gotchas & Errors	gotchas--errors
+worldgen-zones.md	399	Related Documentation	related-documentation
+worldgen.md	8	World Generation	world-generation
+worldgen.md	27	Overview	overview
+worldgen.md	37	Architecture	architecture
+worldgen.md	57	Key Classes	key-classes
+worldgen.md	74	Quick Navigation	quick-navigation
+worldgen.md	86	Asset Layout	asset-layout
+worldgen.md	135	The Node-Graph Model	the-node-graph-model
+worldgen.md	165	Common conventions	common-conventions
+worldgen.md	176	Noise parameters	noise-parameters
+worldgen.md	193	Node Families	node-families
+worldgen.md	197	Density nodes (the core)	density-nodes-the-core
+worldgen.md	248	Material providers	material-providers
+worldgen.md	275	Provider / selection nodes	provider--selection-nodes
+worldgen.md	283	Prop / placement nodes	prop--placement-nodes
+worldgen.md	302	Settings	settings
+worldgen.md	332	Reading the Assets	reading-the-assets
+worldgen.md	342	Java World Generator API	java-world-generator-api
+worldgen.md	352	IWorldGen	iworldgen
+worldgen.md	402	IWorldGenProvider	iworldgenprovider
+worldgen.md	435	FlatWorldGenProvider (`Type: "Flat"`)	flatworldgenprovider-type-flat
+worldgen.md	458	VoidWorldGenProvider (`Type: "Void"`)	voidworldgenprovider-type-void
+worldgen.md	464	GeneratedChunk and its buffers	generatedchunk-and-its-buffers
+worldgen.md	529	WorldGenTimingsCollector	worldgentimingscollector
+worldgen.md	546	WorldGenLoadException	worldgenloadexception
+worldgen.md	558	WorldGenChunksClearedEvent	worldgenchunksclearedevent
+worldgen.md	571	Gotchas & Errors	gotchas--errors
+worldgen.md	587	Related Documentation	related-documentation

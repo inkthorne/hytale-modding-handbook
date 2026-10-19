@@ -70,6 +70,12 @@ is neither a URL (`scheme:`), a `//` URL nor a bare `#fragment` must resolve to 
 the root. Fragments are checked on `.md` targets only. Links on lines inside a code fence are not links
 (`list[i](x)` is code), so they are not read; none exists in the tree today.
 
+WHICH LINKS ARE READ (review of d361e13..9f19ac9, LOW-4). `[text](dest "title")` with nested brackets in the text and
+`<...>` or balanced-parenthesis destinations, `![alt](dest)`, and reference links `[x][r]`, `[r][]` and `[r]` through
+their `[r]: dest` definitions (a definition nothing uses is not a link, as on GitHub). Not read, and said so here: a raw
+`<a href="...">` or `<img src>`, and a link whose text or destination runs over a line break. Not links, and not read:
+anything inside an inline code span, and a link with an escaped bracket. The reader is `link_dests()` below.
+
 Usage: python3 maintenance/scripts/check-links.py [--root DIR] [--min-outside N] [--min-other N]
 Exit 0 pass, 1 findings, 2 SKIP (the corpus is absent or implausible).
 """
@@ -126,13 +132,116 @@ def slug(t: str) -> str:
     return char_slug(strip_tags(t))
 
 HEADING = re.compile(r'^#{1,6}\s+(.*?)\s*#*$')
-# Every link, `[text](target)` with an optional title; main() classifies the target. A fragment is read as
-# an anchor only inside `[A-Za-z0-9_-]`, because `slug()` strips everything else from a heading, so no
-# anchor outside that class can ever be VALID. The failure mode is therefore "an unfixable link is
-# skipped rather than reported", not "a broken link passes" - audited, not live on build-26, and stated
-# here so the next reader does not have to re-derive it.
-ANY_LINK = re.compile(r'\[([^\]]*)\]\(([^)\s]*)(?:\s+(?:"[^"]*"|\'[^\']*\'))?\)')
+# What a link is. Every `[text](dest "title")`, `[text][label]`, `[label][]` and `[label]` whose label has a definition
+# `[label]: dest "title"`, and an image `![alt](dest)`, in the lines outside code fences. A destination is a bare run
+# without spaces (parentheses inside it must balance) or `<...>`, which may hold spaces. Link text may nest brackets
+# (`[a[0]](x.md)`, `[![i](pic.png)](x.md)`). A link inside an inline code span, or with its brackets escaped with a
+# backslash, is no link and is not read. Not read: a raw `<a href="...">`, a link whose text or destination runs over
+# a line break, and a reference definition nothing uses (GitHub renders none of them as a link).
+# A fragment is read as an anchor only inside `[A-Za-z0-9_-]`, because `slug()` strips everything else from a heading, so
+# no anchor outside that class can ever be VALID. The failure mode is therefore "an unfixable link is skipped rather
+# than reported", not "a broken link passes" - audited, not live on build-26, and stated here so the next reader does
+# not have to re-derive it.
 SCHEME = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]*:|^//')
+REF_DEF = re.compile(r'^ {0,3}\[((?:[^\]\\]|\\.)+)\]:[ \t]*(<[^<>\n]*>|\S+)')
+REF_TITLE = re.compile(r"""^\s*(?:"[^"]*"|'[^']*'|\([^)]*\))?\s*$""")
+ESCAPABLE = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
+TICKS = re.compile(r'`+')
+
+
+def mask(line: str) -> str:
+    """`line` with every backslash escape and every inline code span (its ticks included) replaced by NULs of the same
+    length, so a bracket there is not a bracket and an index into the result is an index into `line`."""
+    out, i, n = [], 0, len(line)
+    while i < n:
+        c = line[i]
+        if c == '\\' and i + 1 < n and line[i + 1] in ESCAPABLE:
+            out.append('\0\0')
+            i += 2
+        elif c == '`':
+            opener = TICKS.match(line, i)
+            width = opener.end() - i
+            close = next((q for q in TICKS.finditer(line, opener.end()) if q.end() - q.start() == width), None)
+            if close is None:
+                out.append(opener.group(0))                 # an opener with no closer is literal ticks
+                i = opener.end()
+            else:
+                out.append('\0' * (close.end() - i))
+                i = close.end()
+        else:
+            out.append(c)
+            i += 1
+    return ''.join(out)
+
+
+def parse_dest(line: str, i: int):
+    """The destination (and an optional title) of an inline link whose `(` is at line[i-1]:
+    -> (dest, index after the closing parenthesis), or None when it is no link."""
+    n = len(line)
+    while i < n and line[i] in ' \t':
+        i += 1
+    if i < n and line[i] == '<':
+        j = line.find('>', i + 1)
+        if j == -1:
+            return None
+        dest, i = line[i + 1:j], j + 1
+    else:
+        depth, j = 0, i
+        while j < n and line[j] not in ' \t':
+            if line[j] == '(':
+                depth += 1
+            elif line[j] == ')':
+                if depth == 0:
+                    break
+                depth -= 1
+            j += 1
+        dest, i = line[i:j], j
+    while i < n and line[i] in ' \t':
+        i += 1
+    if i < n and line[i] in '"\'(':
+        j = line.find(')' if line[i] == '(' else line[i], i + 1)
+        if j == -1:
+            return None
+        i = j + 1
+        while i < n and line[i] in ' \t':
+            i += 1
+    if i < n and line[i] == ')':
+        return dest, i + 1
+    return None
+
+
+def link_dests(text: str, fenced):
+    """-> [(line number, raw destination)] of every link in `text` outside the lines in `fenced` (see above)."""
+    out, defs, used = [], {}, set()
+    for ln, line in enumerate(text.split('\n'), 1):
+        if ln in fenced:
+            continue
+        m = mask(line)
+        d = REF_DEF.match(line)
+        if d and '\0' not in m[:d.end()]:
+            if REF_TITLE.match(line[d.end():]):
+                defs.setdefault(' '.join(d.group(1).lower().split()), []).append((ln, d.group(2).strip('<>')))
+            continue
+        for mm in re.finditer(r'\]\(', m):
+            depth, j = 1, mm.start() - 1
+            while j >= 0 and depth:
+                if m[j] == ']':
+                    depth += 1
+                elif m[j] == '[':
+                    depth -= 1
+                j -= 1
+            if depth:
+                continue                            # a `](` with no `[` before it
+            r = parse_dest(line, mm.end())
+            if r:
+                out.append((ln, r[0]))
+        for mm in re.finditer(r'\[([^\[\]\0]*)\](?:\[([^\[\]\0]*)\])?', m):
+            if m[mm.end():mm.end() + 1] == '(':
+                continue                            # an inline link, read above
+            used.add(' '.join((mm.group(2) or mm.group(1)).lower().split()))
+    for label in used:
+        out += defs.get(label, [])
+    return sorted(out)
 
 
 def anchors_of(text: str):
@@ -212,49 +321,45 @@ def main() -> int:
             findings.append(f'{rel}:{no}: fence census orphan ({why})')
             orphans += 1
         fenced = doc_fences.parse(texts[p]).fence_lines
-        for ln, line in enumerate(texts[p].split('\n'), 1):
-            if ln in fenced:
-                continue            # `list[i](x)` in a fence is code, not a link
-            for m in ANY_LINK.finditer(line):
-                raw = m.group(2)
-                if not raw or SCHEME.match(raw):
-                    continue        # empty, or a URL: counted nowhere, fetched never
-                path, _, frag = raw.partition('#')
-                path = urllib.parse.unquote(path.partition('?')[0])
-                if not path:
-                    tgt, an = None, frag            # `#fragment`: this file
-                elif path.endswith('.md'):
-                    tgt, an = path, frag or None
-                else:
-                    tgt, an = path, None            # any other target must exist; its fragment is not read
-                if tgt is None or tgt.endswith('.md'):
-                    # An anchor outside `[A-Za-z0-9_-]` can never be VALID (slug() strips everything else), so
-                    # the link is skipped, as before, rather than reported: unfixable, not broken.
-                    if an is not None and not re.fullmatch(r'[A-Za-z0-9_\-]+', an):
-                        if tgt is None:
-                            continue
-                        an = None
-                    if tgt is None and not an:
+        for ln, raw in link_dests(texts[p], fenced):
+            if not raw or SCHEME.match(raw):
+                continue        # empty, or a URL: counted nowhere, fetched never
+            path, _, frag = raw.partition('#')
+            path = urllib.parse.unquote(path.partition('?')[0])
+            if not path:
+                tgt, an = None, frag            # `#fragment`: this file
+            elif path.endswith('.md'):
+                tgt, an = path, frag or None
+            else:
+                tgt, an = path, None            # any other target must exist; its fragment is not read
+            if tgt is None or tgt.endswith('.md'):
+                # An anchor outside `[A-Za-z0-9_-]` can never be VALID (slug() strips everything else), so
+                # the link is skipped, as before, rather than reported: unfixable, not broken.
+                if an is not None and not re.fullmatch(r'[A-Za-z0-9_\-]+', an):
+                    if tgt is None:
                         continue
-                    pop[bucket] += 1
-                    tp = str(p) if tgt is None else where(p, tgt)
-                    if tp not in anchors:
-                        findings.append(f'{rel}:{ln} -> {tgt} (no such file)')
-                    elif an is not None and an not in anchors[tp]:
-                        findings.append(f'{rel}:{ln} -> {tgt or p.name}#{an} (no such anchor)')
-                    elif a.verbose:
-                        print(f'  ok    {rel}:{ln} -> {tgt or ""}#{an or ""}')
+                    an = None
+                if tgt is None and not an:
+                    continue
+                pop[bucket] += 1
+                tp = str(p) if tgt is None else where(p, tgt)
+                if tp not in anchors:
+                    findings.append(f'{rel}:{ln} -> {tgt} (no such file)')
+                elif an is not None and an not in anchors[tp]:
+                    findings.append(f'{rel}:{ln} -> {tgt or p.name}#{an} (no such anchor)')
+                elif a.verbose:
+                    print(f'  ok    {rel}:{ln} -> {tgt or ""}#{an or ""}')
+            else:
+                other += 1
+                dest = pathlib.Path(where(p, path))
+                if not dest.is_relative_to(os.path.normpath(str(root))):
+                    findings.append(f'{rel}:{ln} -> {raw} (outside the repository)')
+                elif not dest.exists():
+                    findings.append(f'{rel}:{ln} -> {raw} (no such file or directory)')
                 else:
-                    other += 1
-                    dest = pathlib.Path(where(p, path))
-                    if not dest.is_relative_to(os.path.normpath(str(root))):
-                        findings.append(f'{rel}:{ln} -> {raw} (outside the repository)')
-                    elif not dest.exists():
-                        findings.append(f'{rel}:{ln} -> {raw} (no such file or directory)')
-                    else:
-                        other_dirs += dest.is_dir()
-                        if a.verbose:
-                            print(f'  ok    {rel}:{ln} -> {raw}')
+                    other_dirs += dest.is_dir()
+                    if a.verbose:
+                        print(f'  ok    {rel}:{ln} -> {raw}')
 
     total = sum(pop.values())
     print(f'  INFO  {total} markdown link(s) in {len(files)} file(s): '

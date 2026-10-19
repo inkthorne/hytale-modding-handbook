@@ -95,3 +95,17 @@ both broken on GitHub.
 Links to anything but a `.md` page are checked for existence too (eight `../examples/` links and the README's
 directory links were not read before). The fixture's non-.md cases add files to the corpus and never rely on
 its own three pages, for the reason above: a case that starves the corpus reports no findings.
+
+## All 3,311 headings, read through GitHub (LOW-6 of the review of d361e13..9f19ac9)
+
+`gh-all-heading-ids.tsv` holds every heading of all 78 pages at d361e13 with the id GitHub's file renderer gave it, read
+with `gh api` (the `user-content-` id after each h1-h6) and paired in order with the page's headings as written at
+d361e13. The earlier `gh-heading-ids.tsv` is the 51 generic headings only. The site's anchor cross-check compares
+check-links' anchors with the built pages' ids, and both use `char_slug`, so a fault in the character rule would pass it;
+this table is the check that does not share it. check-links-fixture.py rebuilds each page from its rows and demands that
+`anchors_of()` returns exactly GitHub's ids, duplicate numbering included, and asserts the negative control: the
+character rule alone misses 18 anchors on 9 pages. Rows are keyed by d361e13's file and line; the 48 headings that
+changed to the code-span form at HEAD keep their d361e13 text here. Nothing regenerates the table.
+
+The cases for link forms (reference definitions, nested brackets, angle destinations, code spans, escapes, balanced
+parentheses) build one-page corpora in `broken()`; none needs a file here.

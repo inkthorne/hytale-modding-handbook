@@ -1238,9 +1238,9 @@ section "[HARD] The gates' own fixtures pass"
 # mutations including the identity control, each with its exact red set; ~25 s) and check-home-fixture.py --mutations (the
 # Home page's Verified-against paragraph against README.md's, and its task lists: 48 cases and 45 mutations, ~25 s) are run here.
 # generate-llms-txt-fixture.py --mutations (docs/llms.txt's generator on throwaway git repositories, and the "llms.txt generates, and
-# docs/llms.txt is current" section above run as text on a stub generator: 76 cases and 74 mutations including the identity control,
+# docs/llms.txt is current" section above run as text on a stub generator: 79 cases and 77 mutations including the identity control,
 # each with its exact red set, after a negative control that a transcription of the section's old `generate | cmp` form reads a
-# crashed generator as current; ~43 s) is run here.
+# crashed generator as current; ~48 s) is run here.
 # Floors: MIN_MUTATIONS in each --mutations runner, and FIX_RAN below.
 # One runner per LINE, because two of them carry an argument and word-splitting a
 # space-separated variable turns `--mutations` into a runner of its own. Reading
@@ -1760,7 +1760,8 @@ section "[HARD] llms.txt generates, and docs/llms.txt is current"
 # status (until 2026-10-19 `generate | cmp` took cmp's status, so a generator that crashed after printing the file's
 # own text read as current, and one that printed nothing read as stale), and FAILs on a non-zero status and on empty
 # output. The generator's one stderr line, `LLMS <c> categories, <p> pages, <e> examples`, must be there exactly once with
-# digits only, and each of its three figures must equal a count made here by another route (review of 8b48c97, LOW-1
+# 1-6 digits per figure (a longer run of digits made `[ -ne ]` error and the section PASS: verify pass of
+# 8b48c97..7096bf8, NEW-2), and each of its three figures must equal a count made here by another route (review of 8b48c97, LOW-1
 # and LOW-2): pages = the DISTINCT page URLs in the output, which must also equal the number of docs/*.md files;
 # examples = the distinct example tree links in the output, which must also equal the tracked top-level directories of
 # examples/ (`git ls-files -z`); categories = the `## ` headings other than Start here, Examples and Source. Each
@@ -1775,7 +1776,7 @@ else
   LLMS_RC=$?
   LLMS_NLINES="$(grep -c '^LLMS ' "$LLMS_TMP/err")"
   LLMS_LINE="$(sed -n 's/^LLMS //p' "$LLMS_TMP/err")"
-  LLMS_FIELDS="$(printf '%s\n' "$LLMS_LINE" | sed -n 's/^\([0-9][0-9]*\) categories, \([0-9][0-9]*\) pages, \([0-9][0-9]*\) examples$/\1 \2 \3/p')"
+  LLMS_FIELDS="$(printf '%s\n' "$LLMS_LINE" | sed -n 's/^\([0-9]\{1,6\}\) categories, \([0-9]\{1,6\}\) pages, \([0-9]\{1,6\}\) examples$/\1 \2 \3/p')"
   LLMS_MC="${LLMS_FIELDS%% *}"; LLMS_REST="${LLMS_FIELDS#* }"; LLMS_MP="${LLMS_REST%% *}"; LLMS_ME="${LLMS_REST#* }"
   LLMS_N="$(sed -n 's/^- \[[^]]*\](\(https:\/\/inkthorne\.github\.io\/hytale-modding-handbook\/[^)]*\.html\)).*$/\1/p' "$LLMS_TMP/out" | sort -u | wc -l)"
   LLMS_DOCS="$(find docs -maxdepth 1 -type f -name '*.md' | wc -l)"
@@ -1793,7 +1794,7 @@ else
   elif [ "$LLMS_NLINES" -ne 1 ]; then
     fail "generate-llms-txt.py printed $LLMS_NLINES 'LLMS' lines on stderr, wanted exactly 1"
   elif [ -z "$LLMS_FIELDS" ]; then
-    fail "the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with digits only (got: ${LLMS_LINE:-nothing})"
+    fail "the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with 1-6 digits each (got: ${LLMS_LINE:-nothing})"
   else
     if [ "$LLMS_MP" -ne "$LLMS_N" ]; then
       LLMS_BAD=1; fail "generate-llms-txt.py says $LLMS_MP pages, its output links $LLMS_N distinct page(s)"

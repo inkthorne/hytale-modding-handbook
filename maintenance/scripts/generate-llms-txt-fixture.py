@@ -47,8 +47,8 @@ REPO = HERE.parents[1]
 VERIFY = FROM / 'verify-docs.sh'
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
 
-MIN_CASES = 76
-MIN_MUTATIONS = 74
+MIN_CASES = 79
+MIN_MUTATIONS = 77
 fails: list[str] = []
 seen: list[str] = []
 
@@ -269,6 +269,8 @@ G_Y_SQ = 'a single-quoted value with a doubled quote exits 2, naming the form'
 G_Y_UNCLOSED = 'a quote that does not close exits 2, naming the form'
 G_Y_COMMENT = 'a plain value with a trailing " #" comment exits 2, naming the form'
 G_Y_COLON = "a plain value holding ': ' exits 2, naming the form"
+G_Y_NULL = 'a plain YAML null (null, Null, NULL, ~) as a title or description exits 2, naming the form'
+G_Y_DUP = 'a title or description key written twice exits 2, naming the form (the site reads the last, this reader the first)'
 G_Y_OK = "plain and quoted one-line values with # and : inside them (C#, a:b, \"x # y: z\") are read as written"
 G_SUB = 'a row whose link goes below an example directory (./plugy/sub/) exits 2, naming the line'
 G_FRAGENC = 'a fragment and a %-encoded destination in a row still name the directory'
@@ -299,6 +301,7 @@ S_RC = 'a generator that exits non-zero FAILs, naming the status and its stderr,
 S_EMPTY = 'a generator that exits 0 and writes nothing FAILs, saying so'
 S_NOMARK = "a generator that prints no 'LLMS ...' denominator line FAILs"
 S_TWO = "a generator that prints two 'LLMS ...' lines FAILs (the section used to error and PASS)"
+S_LONG = "an 'LLMS' figure of more than 6 digits FAILs as malformed (it made `[ -ne ]` error and the section PASS)"
 S_MALFORMED = "an 'LLMS' line whose figures are not digits FAILs, quoting it"
 S_MARKBAD = 'a pages figure that disagrees with the distinct page links in the output FAILs, naming both'
 S_DUPPAGE = 'a page linked twice counts once: 3 links to 2 pages FAIL against the figure and against docs/'
@@ -319,13 +322,13 @@ S_ALLCASES = 'ALL_CASES lists exactly the labels the fixture checks'
 
 GEN_CASES = {G_HEALTHY, G_GROUPS, G_ORDER, G_REORDER, G_LINKS, G_RAWLINE, G_TITLE, G_STAMP, G_STAMP0, G_STAMP2, G_NOCAT,
              G_UNLISTED, G_INDEX_OK, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_ALLPROBLEMS,
-             G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_Y_OK, G_SUB, G_FRAGENC,
+             G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_Y_NULL, G_Y_DUP, G_Y_OK, G_SUB, G_FRAGENC,
              G_NONASCII, G_HEADER, G_HEADER2, G_SEP, G_NOROW, G_GHOSTROW, G_NOLINK, G_CELLS, G_DUPROW, G_BADTYPE, G_EMPTYWHAT, G_PIPE,
              G_KEYED, G_TABLEORDER, G_NEWDIR, G_UNTRACKED, G_ZERO, G_NOGIT, G_NOEXREADME, G_STDOUT, G_REAL}
-SEC_CASES = {S_NEG, S_HEALTHY, S_RC, S_EMPTY, S_NOMARK, S_TWO, S_MALFORMED, S_MARKBAD, S_DUPPAGE, S_FEWER, S_MORE, S_DIRMD, S_EXBAD, S_EXDUP, S_EXTRACKED, S_GITFAIL, S_CATBAD, S_STALE, S_MISSING, S_CLEAN, S_MKTEMP, S_STATIC, S_ALLCASES}
+SEC_CASES = {S_NEG, S_HEALTHY, S_RC, S_EMPTY, S_NOMARK, S_TWO, S_LONG, S_MALFORMED, S_MARKBAD, S_DUPPAGE, S_FEWER, S_MORE, S_DIRMD, S_EXBAD, S_EXDUP, S_EXTRACKED, S_GITFAIL, S_CATBAD, S_STALE, S_MISSING, S_CLEAN, S_MKTEMP, S_STATIC, S_ALLCASES}
 ALL_CASES = GEN_CASES | SEC_CASES
 # the cases that expect a failing generator: a mutation that lets a problem through reddens the ones it hides
-FAIL_CASES = {G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_SUB, G_NOCAT, G_UNLISTED, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_STAMP0, G_STAMP2,
+FAIL_CASES = {G_EMPTY, G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_Y_NULL, G_Y_DUP, G_SUB, G_NOCAT, G_UNLISTED, G_TWICE, G_MISSINGFILE, G_NOFM, G_NOTITLE, G_NODESC, G_HOMEDESC, G_STAMP0, G_STAMP2,
               G_ALLPROBLEMS, G_HEADER, G_HEADER2, G_SEP, G_NOROW, G_GHOSTROW, G_NOLINK, G_CELLS, G_DUPROW, G_BADTYPE,
               G_EMPTYWHAT, G_ZERO, G_NOGIT, G_NOEXREADME, G_STDOUT}
 
@@ -390,7 +393,7 @@ if A.mutations:
             "    elif cont:\n", "    elif False:\n",
             {G_Y_CONT}),
         'a block scalar, anchor, alias or tag is read': (
-            "    if v and v[0] in '>|&*!':", "    if False:",
+            "    elif v and v[0] in '>|&*!':", "    elif False:",
             {G_Y_IND}),
         'a flow collection is read': (
             "    elif v[0] in '[{':", "    elif False:",
@@ -418,7 +421,16 @@ if A.mutations:
             {G_Y_OK}),
         'a refused value is also reported as missing': (
             "    return None, True\n", "    return None, False\n",
-            {G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON}),
+            {G_Y_CONT, G_Y_IND, G_Y_FLOW, G_Y_DQ, G_Y_SQ, G_Y_UNCLOSED, G_Y_COMMENT, G_Y_COLON, G_Y_NULL, G_Y_DUP}),
+        'a YAML null is read as text': (
+            "    elif v in ('null', 'Null', 'NULL', '~'):", "    elif False:",
+            {G_Y_NULL}),
+        'a key written twice is read, first one wins': (
+            "    if len(ats) > 1:", "    if False:",
+            {G_Y_DUP}),
+        'an LLMS figure of any length is accepted': (
+            "\\([0-9]\\{1,6\\}\\) categories", "\\([0-9][0-9]*\\) categories",
+            {S_LONG}, SEC),
         # ---- the examples table
         'the header row is matched loosely': (
             "if l.rstrip() == HEADER]", "if l.startswith('| Example')]",
@@ -515,7 +527,7 @@ if A.mutations:
             {S_NOMARK, S_TWO}, SEC),
         'an LLMS line that is not digits is not a failure': (
             '  elif [ -z "$LLMS_FIELDS" ]; then', '  elif false; then',
-            {S_MALFORMED}, SEC),
+            {S_MALFORMED, S_LONG}, SEC),
         'a pages figure that disagrees with the output is not a failure': (
             '    if [ "$LLMS_MP" -ne "$LLMS_N" ]; then', '    if false; then',
             {S_MARKBAD, S_DUPPAGE}, SEC),
@@ -701,6 +713,11 @@ check(G_Y_UNCLOSED, lambda: [fm_problems(title=' "T"', description=' "never clos
       [[f'{_A} description has a quote that does not close']] * 2)
 check(G_Y_COMMENT, lambda: fm_problems(title=' "T"', description=' Plain text # a comment'), [f'{_A} description has a trailing comment'])
 check(G_Y_COLON, lambda: fm_problems(title=' "T"', description=' Plain: text'), [f"{_A} description has ': ' in a plain value"])
+check(G_Y_NULL, lambda: [fm_problems(title=' "T"', description=' ' + v) for v in ('null', 'Null', 'NULL', '~')]
+                        + [fm_problems(title=' ~', description=' "D"')],
+      [[f'{_A} description is a YAML null (the site reads no value)']] * 4 + [[f'{_A} title is a YAML null (the site reads no value)']])
+check(G_Y_DUP, lambda: [b.split(': this reader')[0] for b in only({'docs/a-page.md': fm_page('title: "T"', 'description: "D1"', 'description: "D2"')})],
+      [f'{_A} description is written 2 times (this reader takes the first, the site the last)'])
 _ok = gen({'docs/a-page.md': fm_page('title: C# and a:b', 'description: "Use # and: here"'),
            'docs/c-page.md': fm_page("title: 'Single # q'", "description: 'single # and: here'")})
 check(G_Y_OK, lambda: (_ok[0], [l for l in links(_ok[1], 'Zed') + links(_ok[1], 'Aye') if 'a-page' in l or 'c-page' in l]),
@@ -805,8 +822,11 @@ check(S_EMPTY, lambda: sec(out='', err='LLMS 1 categories, 0 pages, 0 examples\n
 check(S_NOMARK, lambda: sec(err=''), (1, ["FAIL  generate-llms-txt.py printed 0 'LLMS' lines on stderr, wanted exactly 1"]))
 check(S_TWO, lambda: sec(err='LLMS 1 categories, 3 pages, 2 examples\nLLMS 1 categories, 9 pages, 2 examples\n'),
       (1, ["FAIL  generate-llms-txt.py printed 2 'LLMS' lines on stderr, wanted exactly 1"]))
+_LONG = ('1234567 categories, 3 pages, 2 examples', '1 categories, 1234567 pages, 2 examples', '1 categories, 3 pages, 1234567 examples')
+check(S_LONG, lambda: [sec(err=f'LLMS {l}\n') for l in _LONG],
+      [(1, [f"FAIL  the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with 1-6 digits each (got: {l})"]) for l in _LONG])
 check(S_MALFORMED, lambda: sec(err='LLMS 1 categories, x pages, 2 examples\n'),
-      (1, ["FAIL  the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with digits only (got: 1 categories, x pages, 2 examples)"]))
+      (1, ["FAIL  the generator's 'LLMS' line is not 'LLMS <c> categories, <p> pages, <e> examples' with 1-6 digits each (got: 1 categories, x pages, 2 examples)"]))
 check(S_MARKBAD, lambda: sec(err='LLMS 1 categories, 5 pages, 2 examples\n'),
       (1, ['FAIL  generate-llms-txt.py says 5 pages, its output links 3 distinct page(s)']))
 _DUP = GOOD_OUT.replace(LINK(3), LINK(1))

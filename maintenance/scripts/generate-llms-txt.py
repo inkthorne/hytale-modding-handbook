@@ -21,7 +21,8 @@ WHAT IT READS, and nothing is typed into the output by hand except the summary s
 
 EVERY LINK to a page is the rendered `.html` page, the form a person cites. One line says where the markdown source
 of a page is, for a tool that wants fences and tables verbatim. No size is claimed for either: measured on the
-site's own build, the text of commands.html is within 5% of commands.md (the sidebar costs 2.6-4.3 KB a page), and
+site's own build, the text of a page's html is within 10% of its markdown (commands 57,455 characters against
+58,982, items 25,137 against 27,400; the sidebar costs 2.6-4.3 KB a page), and
 raw markdown could not link the examples' directories.
 
 EXIT 2, with nothing on stdout, when the output would be wrong, which is each of: no categories; a README link whose
@@ -29,7 +30,7 @@ page does not exist, or a page listed twice (generate-site-nav's problems); a do
 category lists; a listed page, or Home, with no frontmatter title or no description (an empty `title:` is empty, not
 the next line), or with one in a form the site's YAML reader could read differently (a block scalar, anchor, alias,
 tag or flow collection, a quoted value with an escape or doubled quote, a trailing ` #` comment, a plain `: `, a
-value that continues on the next line, a quote that does not close); Home's Verified-against
+value that continues on the next line, a quote that does not close, a plain YAML null, a key written twice); Home's Verified-against
 paragraph not found exactly once; examples/README.md's table header not exactly HEADER, a row that is not four
 cells, links no example directory, repeats one, or has a Type other than Pack or Plugin; an example directory with
 no row; no tracked example directory, or no git work tree to say. The problems are listed on stderr, all of them,
@@ -66,20 +67,26 @@ def field(fm: str, name: str, where: str, problems: list):
     then read the next frontmatter line (`seo:`) as its value (review of 8b48c97, MAJOR-1). Refused, named, exit 2:
     a block scalar (`>` `|`), an anchor, alias or tag (`&` `*` `!`), a flow collection (`[` `{`), a quoted value with
     an escape or a doubled quote (`\"` or a doubled `''`), a plain value with ` #` (a comment) or `: `, a value that goes on
-    on the next, indented line, and a quote that does not close."""
+    on the next, indented line, a quote that does not close, a plain YAML null (`null`, `~`: the site reads no value
+    and falls back), and a key written twice (the site takes the last; verify pass of 8b48c97..7096bf8, NEW-1)."""
     lines = fm.split('\n')
-    at = next((i for i, l in enumerate(lines) if re.match(rf'{name}:', l)), None)
-    if at is None:
+    ats = [i for i, l in enumerate(lines) if re.match(rf'{name}:', l)]
+    if not ats:
         return None, False
+    at = ats[0]
     v = lines[at][len(name) + 1:].strip(' \t')
     cont = at + 1 < len(lines) and lines[at + 1][:1] in (' ', '\t')
     why = None
-    if v and v[0] in '>|&*!':
+    if len(ats) > 1:
+        why = f'is written {len(ats)} times (this reader takes the first, the site the last)'
+    elif v and v[0] in '>|&*!':
         why = f'starts with {v[0]!r} (a block scalar, anchor, alias or tag)'
     elif cont:
         why = 'goes on on the next line'
     elif not v:
         return None, False
+    elif v in ('null', 'Null', 'NULL', '~'):
+        why = 'is a YAML null (the site reads no value)'
     elif v[0] in '[{':
         why = 'is a flow collection'
     elif v[0] in '"\'':
@@ -238,8 +245,8 @@ def generate(root: pathlib.Path):
            'instead, removed and the like); `Type` and `Op` values in JSON examples are registered under that key '
            'or used under it by a shipped asset; asset ids at typed key positions in JSON examples exist; complete '
            'Java examples (those that start with `package`) and the example plugins compile; and relative links '
-           'and section anchors resolve. Nothing else is machine-checked: prose and behaviour claims, calls in '
-           'Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, '
+           'and section anchors resolve. Nothing else is machine-checked: prose and behaviour claims, calls on '
+           'variables in Java fragments, JSON key names, enum values and required keys, other discriminator keys such as `Id`, '
            'and asset ids at untyped positions.', '',
            'Hytale mods are server-side Java plugins plus JSON/DSL asset packs. Start with Home, which sends each '
            'task to the section that does it.', '',
